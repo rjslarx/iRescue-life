@@ -1,0 +1,55 @@
+The Email Template
+Subject: Action Required: Documents needed to accept donations Pre-header: Please read this before setting up your payouts.
+
+Hi [Admin Name],
+
+Welcome to iRescue.life! Your website shell is ready. To start accepting donations and adoption fees, we need to connect your rescue to the banking system.
+
+Already use Stripe? Great! You won't need to hunt for documents. Just have your Stripe email and password ready. When you click "Connect," simply log in and authorize our app.
+
+We partner with Stripe, the same payment processor used by Amazon and Google, to handle your money securely. Because you will be processing financial transactions, federal law requires Stripe to verify your organization's identity.
+
+Please have the following 4 items ready before you start the setup:
+
+1. Your Organization’s Legal Info
+Legal Name: This must match your IRS determination letter exactly. (e.g., if the IRS lists you as "The Humane Society of X," do not write "Humane Society of X").
+
+EIN (Tax ID): Your 9-digit federal tax ID.
+
+Physical Address: The official operating address of the rescue.
+
+2. The "Representative" Info
+Stripe requires one specific person (usually the Treasurer, President, or Director) to act as the account controller. This is the step where most people get stuck.
+
+Home Address: You must use the personal home address of the representative, not the shelter’s address.
+
+Date of Birth: Required for identity verification.
+
+SSN (Last 4 Digits): You will need the last 4 digits of the representative's Social Security Number.
+
+Note: This is for a "Soft Identity Check" (KYC) required by banking laws. It is not a credit check and will not affect your credit score.
+
+3. Banking Details
+Routing Number and Account Number for where you want the donations deposited.
+
+4. Your "Statement Descriptor"
+This is the text that appears on a donor's credit card statement. It should be your organization's name (e.g., "HAPPY PAWS RESCUE") so donors recognize the charge.
+
+🔒 Security Note: iRescue.life never sees or stores your Social Security Number or Bank Account details. When you click "Connect," you will be redirected to Stripe’s own secure government-grade vault to enter this data. We only see a "Success" message once you are verified.
+
+[Button: Connect My Bank Account]
+
+The "In-App" Modal Version
+When they click "Enable Donations" inside the dashboard, show this pop-up before redirecting them to Stripe.
+
+Stop! Do you have your info ready?
+
+To prevent your verification from failing, please ensure you have:
+
+[ ] The IRS Letter: Ensure you type your Legal Name exactly as it appears on your 501(c)(3) letter.
+
+[ ] The Representative: The person filling this out must provide their personal home address and last 4 of SSN. (Using the rescue's address or EIN here will cause the verification to fail).
+
+[ ] Bank Routing Number.
+
+Ready? [Proceed to Stripe Secure Setup]

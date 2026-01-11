@@ -1,0 +1,69 @@
+Module 1: Volunteer & Foster Management
+This is often the most chaotic part of a foster-based rescue. These features would save hundreds of hours in back-and-forth emails and Facebook messages.
+
+Volunteer & Transport Calendar:
+
+What it is: A central, master calendar for the rescue. Admins and Staff can post "opportunities" or "tasks" that need to be filled (e.s., "Driver needed for vet run," "Adoption event handler," "Grant writing help").
+
+Why it's useful: Volunteers with the "volunteer" role can log in, see the calendar, and sign up for a slot directly. It eliminates the "Who can drive on Tuesday?" emails.
+
+Foster Portal Enhancements:
+
+What it is: A dedicated section in the foster's dashboard for support.
+
+Supply Request Form: A simple form where a foster can request food, medicine, crates, etc. This creates a "task" for the admin or supply coordinator.
+
+Medical Triage Form: A simple "My foster is sick" form that asks key questions (symptoms, urgency) and immediately pings the staff/medical lead.
+
+Module 2: Application & Adopter Workflow
+This moves you from just storing data to managing a process.
+
+Application Workflow Manager (Kanban Board):
+
+What it is: Instead of a simple list, you see all applications for an animal on a "Trello-style" kanban board with columns like "New," "In Progress," "Vet Reference Check," "Home Visit," "Approved," "Denied."
+
+Why it's useful: The entire team can see an application's status at a glance. You can drag-and-drop applicants, add internal notes ("Spoke to vet, all good"), and @-mention other staff members for review.
+
+Email Template Automation:
+
+What it is: A feature built into the Application Manager. When you move an applicant to a new column (e.g., "Approved"), you can click a button to send a pre-written email template.
+
+Why it's useful: Saves massive amounts of time. You'd have templates for "Application Received," "Approved - Next Steps," "Denied," and "We Need Your Vet Info."
+
+Module 3: Reporting & Finance
+This is for the Board Members and Admins, helping them move from "rescuing" to "running an organization."
+
+Automated Reporting Dashboard:
+
+What it is: A high-level dashboard (visible to "admin" and "board_member" roles) that auto-calculates key metrics from your Firestore data.
+
+Why it's useful: Provides instant, shareable answers to the most important questions for grants and board meetings, such as:
+
+Total Intakes vs. Total Adoptions (This Month / YTD)
+
+Average Length of Stay (from "Intake" status to "Adopted" status)
+
+Total Donations vs. Total Expenditures (This Month / YTD)
+
+Number of Active Fosters
+
+Donor Management (Mini-CRM):
+
+What it is: A new top-level "Contacts" collection. When someone donates or adopts, they are added to this list. The system would link all their activities.
+
+Why it's useful: You can see a person's complete history. "Jane Doe adopted 'Buddy' in 2023 and has donated 3 times for a total of $250." This is crucial for sending targeted donation appeals and end-of-year tax receipts.
+
+Module 4: Public Site & Fundraising
+These are simple additions to the public-facing subdomain that directly increase engagement and funding.
+
+"Sponsor a Pet" Feature:
+
+What it is: On each adoptable animal's public page, next to the "Adopt Me" button, you add a "Sponsor Me!" button.
+
+Why it's useful: This button links to the main donation form but pre-fills the animal's name in a "Donation in honor of..." field. This is a powerful way for people who can't adopt to give money, especially for special-needs or long-term animals.
+
+"Happy Tails" / Alumni Gallery:
+
+What it is: A page on the public site showcasing success stories.
+
+Why it's useful: Builds social proof and emotional connection, which drives both adoptions and donations. You could even create a special "Alumni" role where adopters can log in and submit their own photos and updates.

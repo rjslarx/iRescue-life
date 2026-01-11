@@ -1,0 +1,161 @@
+This module must be associated with a central Animal profile and provide a robust, auditable history of all medical care.
+
+Core Data Models (Schema): Please define the following data models and their relationships:
+
+Animal: The central object. Must include fields like tenant_id, name, status (e.g., "Available", "Medical Hold"), species, breed, sex, neuter_status, date_of_birth, microchip_number, and a highly-visible medical_alert_memo (string).
+
+MedicalExam (SOAP): A record of a clinical exam.
+
+animal_id (links to Animal)
+
+exam_type (e.g., "Intake", "Recheck", "Adoption")
+
+exam_date (datetime)
+
+performed_by (string or user_id)
+
+subjective (text)
+
+objective (text, for vitals like weight, temp)
+
+assessment (text)
+
+plan (text)
+
+structured_fields (JSON/object for key-value pairs like "Body Condition", "Dental", "Skin").
+
+VaccineRecord:
+
+animal_id
+
+item_name (e.g., "DA2PP", "Rabies")
+
+date_given (datetime)
+
+date_due (datetime, nullable)
+
+manufacturer (string, nullable)
+
+lot_number (string, nullable)
+
+administered_by (string or user_id)
+
+DiagnosticTest:
+
+animal_id
+
+test_name (e.g., "FeLV/FIV Snap Test", "Heartworm Antigen", "Fecal Exam")
+
+test_date (datetime)
+
+result (string, e.g., "Positive", "Negative")
+
+ProcedureLog:
+
+animal_id
+
+procedure_name (e.g., "Spay", "Neuter", "Dental Cleaning", "Amputation")
+
+procedure_date (datetime)
+
+veterinarian (string)
+
+notes (text, for anesthesia, suture type, etc.)
+
+MedicationLog (e-MAR): This is the most complex model. It needs to create both the "prescription" and the "doses."
+
+Prescription (Parent Object):
+
+animal_id
+
+medication_name (string)
+
+dosage (string, e.g., "50mg")
+
+route (string, e.g., "PO", "SQ")
+
+frequency (string, e.g., "BID", "SID")
+
+start_date (datetime)
+
+end_date (datetime)
+
+notes (text)
+
+Dose (Child Object):
+
+prescription_id
+
+due_date (datetime)
+
+status (e.g., "Due", "Given", "Skipped")
+
+given_at (datetime, nullable)
+
+administered_by (user_id, nullable)
+
+MedicalFile:
+
+animal_id
+
+file_name (string)
+
+file_url (string, points to storage like S3/Firebase Storage)
+
+upload_date (datetime)
+
+description (string)
+
+Key Features & UI to Build:
+
+Animal Medical Dashboard (Main UI):
+
+Create a single page for each animal that shows all medical data.
+
+At the top, display the medical_alert_memo.
+
+Use tabs for:
+
+"At a Glance": Key info like neuter_status, weight_log (chart), and a grid of all VaccineRecord and DiagnosticTest results.
+
+"Medical History": A single, chronological, read-only feed of all associated records (Exams, Vaccines, Meds, Procedures, etc.).
+
+"Exams & Procedures": A list of all MedicalExam and ProcedureLog records, with a button to "Add New Exam."
+
+"Medications (e-MAR)": A view of all current and past Prescription records. This is where a user "prescribes" a new medication. It should also show the log of individual Dose records for each prescription.
+
+"Files": A gallery/list of all MedicalFile uploads.
+
+Global "Medical Task" Dashboard:
+
+Create a global page (not tied to one animal) that queries all animals in the tenant's system.
+
+It must show all Dose records where status is "Due" and due_date is "Today."
+
+This is the daily "To-Do List" for staff. It must be a checklist where a user can click "Administer," which updates the Dose record's status to "Given" and timestamps it.
+
+This dashboard should also have tabs for "Animals Due for Vaccines" (querying VaccineRecord date_due) and "Upcoming Vet Appointments."
+
+Printable Health Record:
+
+Add a "Print to PDF" button on the Animal Medical Dashboard.
+
+This must generate a clean, public-facing PDF summary (for adopters) that includes:
+
+Animal's name, species, breed, age, neuter status.
+
+A formatted table of all VaccineRecord items (Item, Date Given, Date Due).
+
+A table of DiagnosticTest results.
+
+The ProcedureLog entry for "Spay" or "Neuter."
+
+Controlled Substance Log (Pro-Level):
+
+Create a separate and immutable log (entries cannot be deleted, only amended with a correction note).
+
+This log tracks a "bottle" of a controlled substance.
+
+Log Entry Fields: Date, Drug_Name, Bottle_ID, Animal_ID, Amount_Used (mL), Amount_Wasted (mL), Remaining_Balance (mL), Administered_By (User Signature).
+
+This must be compliant with DEA record-keeping requirements.

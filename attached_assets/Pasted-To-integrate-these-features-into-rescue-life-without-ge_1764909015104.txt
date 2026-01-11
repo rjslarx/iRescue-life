@@ -1,0 +1,58 @@
+To integrate these features into rescue.life without getting bogged down in code, you need to think like a Product Manager. You are building "bridges" between your users' daily data and these external watchdogs.
+Here is the architectural guide for building these four integrations, focusing on Data Strategy, User Experience (UX), and Compliance Logic.
+1. The "Shelter Animals Count" (SAC) Bridge
+The Goal: Turn your user's daily intake/outcome data into a monthly CSV file that satisfies the national database standard.
+The Data Strategy (The "Matrix" Logic)
+SAC requires data to be "bucketed" very specifically. Your database must map to their "Basic Data Matrix."
+ * Age Logic: You must enforce a hard rule for "Adult" vs. "Juvenile." SAC uses 5 months as the cutoff.
+   * System Requirement: When a user enters an animal, you must require a Date of Birth (or estimated age). Your system must then calculate their age at the time of the event (intake or outcome) to bucket them correctly.
+ * Species Logic: Strictly separate Dogs and Cats. (Rabbits/others go into "Other").
+The Integration Flow
+ * Mapping Wizard: When a tenant first sets up their account, force them to map their custom status (e.g., "Found in field") to a SAC Standard status (e.g., "Stray/At Large"). Save this mapping.
+ * The "End of Month" Check: On the 1st of every month, your system runs a background check.
+   * Check: Do Total Intakes + Beginning Count equal Total Outcomes + Ending Count?
+   * Action: If yes, generate a "Verified SAC CSV." If no, flag the specific animal records causing the math error (e.g., a dog marked "Adopted" but never marked "Received").
+ * Export: Provide a button: "Download SAC Monthly Report." This file should be pre-formatted to match the SAC import template exactly, allowing the user to simply upload it to the SAC portal.
+2. The "Transparency Vault" (For Candid/GuideStar)
+The Goal: Create a permanent, public-facing "Compliance URL" for each tenant that they can submit to Candid as their proof of transparency.
+The UX Workflow
+Instead of making users hunt for documents, build a "Get Platinum" progress bar on their dashboard.
+ * Step 1: Document Slots: Create specific upload slots for the "Big 4" documents. Do not allow generic uploads; label them clearly:
+   * Slot A: IRS Letter of Determination (501c3)
+   * Slot B: Most Recent Form 990 (Tax Return)
+   * Slot C: Audited Financials
+   * Slot D: Board of Directors List (must include demographics metadata)
+ * Step 2: The "Metric Picker" (Platinum Requirement): Candid's Platinum seal requires sharing a "Metric of Success."
+   * Feature: Build a selector that lets the user choose a live metric from your database (e.g., "Annual Adoptions," "Save Rate," "Spay/Neuter Count").
+   * Automation: Once selected, your system auto-updates this number on their public profile every month.
+ * Step 3: Public Profile Generation:
+   * Output: Generate a clean URL (e.g., rescue.life/transparency/[org-name]).
+   * Design: This page should look like a certificate. It displays the documents and the live metric. The user copies this URL and pastes it into their GuideStar profile.
+3. The "Impact Dashboard" (Charity Navigator)
+The Goal: Automate the calculation of the "Live Release Rate" (LRR) so users can display it proudly on their own websites.
+The Calculation Engine
+You need to build a "Stats Engine" that runs nightly using the Asilomar Accords formula. This is the industry standard.
+ * The Formula: 
+ * Critical Exclusions: You must give users a "Toggle" in their settings: "Exclude Owner-Requested Euthanasia (ORE)?"
+   * Why: Some rescues perform euthanasia as a public service for sick pets. This shouldn't hurt their "Save Rate." If checked, your system removes these specific records from the denominator.
+The Widget Integration
+ * The "Live Badge": Create a small snippet of HTML code (an iframe or script) that the user can copy-paste into their WordPress or Wix footer.
+ * Function: This badge fetches the LRR from your system in real-time. It displays: "98% Save Rate | Verified by iRescue.life". This builds trust for them and marketing for you.
+4. GreatNonprofits Review Automation
+The Goal: Systematically capture positive reviews from happy adopters without the rescue having to ask.
+The "Review Loop" Workflow
+This integration is about timing. You don't want to ask for a review the second they adopt (they are too busy).
+ * The Trigger: Your system detects when an animal's status changes to "Adopted Final."
+ * The Delay: A background timer waits 7 days. (This is the "Honeymoon Phase" where the adopter is happiest).
+ * The "Ask": Your system sends a branded email to the adopter.
+   * Subject: "How is Fido doing?"
+   * Content: "We hope you are happy... Please help us save more lives by rating your experience."
+   * The Link: Connect this button to the GreatNonprofits API. If that is too complex initially, simply link it to the rescue's GreatNonprofits profile page.
+ * The Feedback Loop: If GreatNonprofits provides a "Read API," pull their star rating back into your dashboard so the rescue admin sees their score rising (e.g., "You have 4.9 Stars on GreatNonprofits!").
+Summary of Architecture
+| Integration | Primary Value | Key Data Requirement | "Secret Sauce" Feature |
+|---|---|---|---|
+| SAC | Saves ~4 hours/month | Age Calculation (<5mo vs >5mo) | The "Math Check" before export to prevent errors. |
+| Candid | Grant Eligibility | Document Storage (PDFs) | The "Public Transparency URL" they can share. |
+| Charity Navigator | Donor Trust | Outcome Types (Live vs. Died) | The "Live Badge" widget for their website. |
+| GreatNonprofits | Reputation | Adopter Email + 7 Day Delay | Automated "Honeymoon Phase" email triggers. |

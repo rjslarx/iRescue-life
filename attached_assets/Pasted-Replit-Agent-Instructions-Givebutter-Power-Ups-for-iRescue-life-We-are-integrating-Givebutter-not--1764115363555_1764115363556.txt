@@ -1,0 +1,94 @@
+Replit Agent Instructions: Givebutter Power-Ups for iRescue.life
+
+We are integrating Givebutter not just for simple payments, but to power "Social Fundraising" for our tenant rescues.
+
+API Reference: https://givebutter.com/docs/api
+
+Core Feature: The "Medical Fund" Generator
+
+The Problem: A rescue gets a dog with a broken leg ($3k vet bill). They need to fundraise FAST.
+The Solution: One-click campaign generation from the Dog Profile.
+
+1. Backend Service (services/givebutterService.js)
+
+Function: createMedicalCampaign(dogName, goal, bio, imageUrl, apiKey)
+
+Action: POST to /v1/campaigns
+
+Payload:
+
+title: Emergency Fund: Help Save ${dogName}
+
+goal: 3000.00
+
+description: bio (Pass the dog's medical story)
+
+cover_image: imageUrl
+
+Return: Save the campaign_slug and url to the Animal record in our DB.
+
+Power-Up 1: Smart QR Codes for Kennel Cards
+
+The "Cool" Factor: When a rescue goes to an adoption event, people walk by the crates. We want a feature where the Admin clicks "Print Kennel Card" and it generates a PDF with a QR code that links directly to that specific dog's fund.
+
+Implementation Logic
+
+Library: qrcode (Node.js) + pdfkit (or similar PDF generator).
+
+Input: The givebutterUrl we saved earlier.
+
+Output: A printable PDF showing the Dog's Photo, Name, Bio, and the QR Code with the text "Scan to donate to my care!"
+
+Power-Up 2: The "Wall of Love" (Real-Time Ticker)
+
+The "Cool" Factor: On the tenant's public site, show a live feed of donations to build social proof (FOMO).
+
+Implementation Logic
+
+Frontend Component: DonorTicker.tsx
+
+API Call: GET /v1/transactions (filtered by campaign_id).
+
+Display: A scrolling list or fading cards:
+
+"Sarah M. donated $50 for Rex! 🐾" > "Anonymous donated $20 just now!"
+
+Optimization: Cache this data for 5-10 minutes to avoid hitting API limits.
+
+Power-Up 3: Automated "Thank You" Texts (via Twilio)
+
+The "Cool" Factor: Combine the Givebutter Webhook with our Twilio integration.
+
+Implementation Logic
+
+Trigger: Givebutter Webhook (transaction.succeeded).
+
+Action: Check if the donor provided a phone number.
+
+Logic:
+
+if (transaction.phone_number) {
+   twilioService.sendSms(
+     transaction.phone_number, 
+     `Thank you for donating to ${dogName}! Here is a photo of him saying thanks: ${dogPhotoUrl}`
+   );
+}
+
+
+Why: This creates an insane level of donor loyalty.
+
+Database Schema Updates
+
+Animal Table:
+
+medical_fund_goal (Decimal)
+
+medical_fund_raised (Decimal) - Updated via webhook
+
+givebutter_url (String)
+
+givebutter_qr_code (String/Blob) - Cached QR image URL
+
+DonationLog Table:
+
+To store individual transactions for the "Wall of Love" without querying Givebutter API constantly.

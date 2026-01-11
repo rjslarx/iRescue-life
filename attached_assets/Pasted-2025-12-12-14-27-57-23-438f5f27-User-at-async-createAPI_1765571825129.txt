@@ -1,0 +1,115 @@
+2025-12-12 14:27:57.23
+438f5f27
+User
+at async createAPIRequestAsync (/home/runner/workspace/node_modules/googleapis-common/build/src/apirequest.js:308:25)
+2025-12-12 14:27:57.23
+438f5f27
+User
+method: 'GET',
+2025-12-12 14:27:57.23
+438f5f27
+User
+origin: 'https://www.googleapis.com',
+2025-12-12 14:27:57.23
+438f5f27
+User
+at async _DriveService.listSharedDrives (file:///home/runner/workspace/dist/index.js:4788:28)
+2025-12-12 14:27:57.23
+438f5f27
+User
+url: URL {
+2025-12-12 14:27:57.23
+438f5f27
+User
+pathname: '/drive/v3/drives',
+2025-12-12 14:27:57.23
+438f5f27
+User
+host: 'www.googleapis.com',
+2025-12-12 14:27:57.23
+438f5f27
+User
+Drive list shared drives error: GaxiosError: Request had insufficient authentication scopes.
+2025-12-12 14:27:57.23
+438f5f27
+User
+password: '',
+2025-12-12 14:28:29.96
+438f5f27
+User
+paramsSerializer: [Function (anonymous)],
+2025-12-12 14:28:29.96
+438f5f27
+User
+at async OAuth2Client.requestAsync (/home/runner/workspace/node_modules/googleapis-common/node_modules/google-auth-library/build/src/auth/oauth2client.js:463:20)
+2025-12-12 14:28:29.96
+438f5f27
+User
+host: 'www.googleapis.com',
+2025-12-12 14:28:29.96
+438f5f27
+User
+'user-agent': 'google-api-nodejs-client/8.0.0 (gzip)',
+2025-12-12 14:28:29.96
+438f5f27
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2025-12-12 14:28:29.96
+438f5f27
+User
+protocol: 'https:',
+2025-12-12 14:28:29.96
+438f5f27
+User
+at async createAPIRequestAsync (/home/runner/workspace/node_modules/googleapis-common/build/src/apirequest.js:308:25)
+2025-12-12 14:28:29.96
+438f5f27
+User
+url: URL {
+2025-12-12 14:28:29.96
+438f5f27
+User
+authorization: '< - See `errorRedactor` option in `gaxios` for configuration>.',
+2025-12-12 14:28:29.96
+438f5f27
+User
+origin: 'https://www.googleapis.com',
+2025-12-12 14:28:29.96
+438f5f27
+User
+Drive list shared drives error: GaxiosError: Request had insufficient authentication scopes.
+2025-12-12 14:28:29.96
+438f5f27
+User
+username: '',
+2025-12-12 14:28:29.96
+438f5f27
+User
+pathname: '/drive/v3/drives',
+2025-12-12 14:28:29.96
+438f5f27
+User
+at Gaxios._request (/home/runner/workspace/node_modules/googleapis-common/node_modules/gaxios/build/cjs/src/gaxios.js:155:23)
+2025-12-12 14:28:29.96
+438f5f27
+User
+href: 'https://www.googleapis.com/drive/v3/drives?pageSize=100&fields=drives%28id%2C%20name%29',
+
+2025-12-12 14:28:29.96
+438f5f27
+User
+at async _DriveService.listSharedDrives (file:///home/runner/workspace/dist/index.js:4788:28)
+2025-12-12 14:28:29.96
+438f5f27
+User
+password: '',
+2025-12-12 14:28:29.96
+438f5f27
+User
+validateStatus: [Function (anonymous)],
+
+Collapse
+
+Wrap
+
+Colors

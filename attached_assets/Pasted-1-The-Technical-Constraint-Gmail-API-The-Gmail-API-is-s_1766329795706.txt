@@ -1,0 +1,43 @@
+1. The Technical Constraint (Gmail API)
+The Gmail API is strict about "spoofing." You cannot simply type noreply@haseya.org into your code and expect it to work if the tenant logged in as volunteer@haseya.org.
+
+The Rule: The "From" address in your API call must match the authenticated user or a pre-verified alias in their Gmail settings.
+
+What happens if you fake it: If volunteer@haseya.org is the connected user, but you try to send as noreply@irescue.life, Gmail will either:
+
+Rewrite the header to say: volunteer@haseya.org (on behalf of irescue.life) (which looks unprofessional/phishy).
+
+Reject the message entirely.
+
+2. Strategic Advice: Kill the "Noreply"
+I strongly recommend you advise your tenants against using "noreply" addresses.
+
+Deliverability: "Noreply" addresses trigger spam filters more often because they signal one-way communication, which email providers (like Gmail/Yahoo) dislike.
+
+Donor Engagement: Nonprofits thrive on engagement. If a donor hits "Reply" to say, "I love this dog, how can I donate?" and it bounces, the nonprofit loses money.
+
+The Better Alternative: Use news@haseya.org, updates@haseya.org, or community@haseya.org.
+
+3. How to Implement This (The "Alias" Method)
+Since you want the email to look professional (e.g., news@haseya.org) but the tenant might have connected with a personal account (jane.doe@haseya.org), here is the workflow you should build:
+
+Tenant Setup (Inside Google Workspace): Instruct the tenant to go to their Gmail Settings -> Accounts -> "Send mail as".
+
+They should add the generic alias here (e.g., add news@haseya.org as an alias for jane@haseya.org).
+
+Platform Setup (Inside iRescue.life):
+
+When the tenant is setting up their newsletter, query the Gmail API users.settings.sendAs.list endpoint.
+
+Dropdown Menu: Show them a list of all their available aliases.
+
+Selection: Let them pick "News news@haseya.org" as the sender for that specific campaign.
+
+This ensures the email is technically valid (passing SPF/DKIM checks) and professionally branded to the tenant.
+
+Summary Checklist for Success
+[ ] FROM Address: Use the tenant's domain (@haseya.org).
+
+[ ] Prefix: Avoid noreply. Suggest news, info, or hello.
+
+[ ] Technical: Ensure the tenant has added this address as an alias in their Gmail settings before your app tries to send from it.

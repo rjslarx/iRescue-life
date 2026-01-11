@@ -1,0 +1,68 @@
+The Recommended Flow: "Sign, then Pay"
+Step 1: The Signature (Legal Commitment)
+
+The adopter reads the terms (e.g., "I promise to keep the dog on a leash," "I will return the dog to the rescue if I can't keep it").
+
+They sign the document digitally.
+
+System Status: "Pending Payment" (The contract is signed but not yet executed).
+
+Step 2: The Payment (Financial Commitment)
+
+Immediately after signing, the screen redirects: "Thank you for signing. To finalize the adoption, please submit the $300 adoption fee."
+
+They enter their credit card (via Stripe).
+
+Step 3: Execution (Finalization)
+
+The payment succeeds.
+
+The system automatically countersigns the contract (or stamps it "Final").
+
+The PDF is generated and emailed to both parties.
+
+System Status: "Adopted" (Inventory count updates).
+
+Why NOT "Pay First"?
+If you make them pay first, you create a legal headache:
+
+Scenario: They pay the $300. Then they read the contract and see a clause they hate (e.g., "Rescue creates right to do home checks"). They refuse to sign.
+
+The Problem: You now have their money but no legal agreement. The rescue has to issue a refund, pay stripe fees on the refund, and deal with an angry customer.
+
+The Rule: Always get the legal agreement before taking the money.
+
+Why Link Them? (The "Revenue Assurance" Argument)
+This is vital for your business model, especially for your Free Tier tenants.
+
+If Unlinked: A volunteer might have the adopter sign on an iPad, then say, "Just Venmo me the $300."
+
+Result: You (iRescue) lose your transaction fee. The rescue loses the data record.
+
+If Linked: The volunteer says, "Fill this out on the iPad." The adopter signs and is forced to the Stripe payment screen to finish the process.
+
+Result: You capture the fee. The database is perfect.
+
+The "Cash Exception" (Real World Reality)
+Sometimes Grandma wants to pay the $300 with a check or cash. You cannot block the adoption because she doesn't have a credit card.
+
+The Fix: On the Admin side (Volunteer view), add a "Bypass Payment" toggle inside the contract flow.
+
+Default: Adopter sees Credit Card form.
+
+Admin Override: Volunteer clicks "Record Offline Payment (Cash/Check)."
+
+Result: The contract moves to "Final" without a Stripe charge.
+
+Summary Technical Logic
+Route: /adoption/contract/:id
+
+Action: User signs -> POST /api/sign.
+
+Response: Server saves signature, returns { redirectUrl: '/adoption/payment/:id' }.
+
+Action: User pays -> POST /api/charge.
+
+Webhook: Stripe says payment_intent.succeeded.
+
+Server: Updates Contract to status: 'active', emails PDF, marks Dog as status: 'adopted'.

@@ -1,0 +1,32 @@
+The Goal:
+Create a function called send_campaign(user, recipients, subject, body) that intelligently routes emails to avoid spam filters.
+Logic Requirements:
+1. Priority Check (Gmail Integration)
+• First, check if the user has valid Google OAuth tokens stored in the database.
+• If YES (Use Gmail API):
+• Use the gmail.send scope credentials.
+• CRITICAL (Anti-Spam): You must implement a 2-second delay (sleep) between every single email sent in the loop. The Gmail API has a rate limit of ~1 request/sec; exceeding this will trigger a 429 error and flag the account for spam.
+• Handle OAuth token refreshes automatically if the token is expired.
+• Log these as "Sent via Gmail Integration."
+2. Fallback Path (Resend API)
+• If NO Gmail Integration (Use Resend):
+• Use the resend library.
+• CRITICAL (DMARC Compliance):
+• The from address MUST be hardcoded to my verified domain: Adoption Alerts <notifications@irescue.life> (or similar). Do NOT try to put the user's email in the from field, or it will bounce.
+• The reply_to field MUST be set to the user.email (the tenant's actual email address). This ensures replies go to the tenant, not the system.
+• Log these as "Sent via Resend Fallback."
+3. Error Handling
+• If the Gmail path fails (e.g., token revoked), catch the error and automatically retry sending that specific email using the Resend Fallback method immediately.
+Please write the Python code for this logic, assuming we are using a standard database model for User that stores google_token and email.
+🧠 Why this prompt works (The "Under the Hood" details)
+Here is a breakdown of why I included specific instructions in the prompt above:
+1. The "2-Second Delay" Instruction
+• Why: Replit Agents code very fast and often use simple for loops. A simple loop for email in list: send() will fire 50 emails in 200 milliseconds.
+• Result without this: Google sees a machine-gun burst of traffic, returns a 429 Too Many Requests error, and potentially locks the tenant's account. The delay makes it look like a human clicking "Send" repeatedly.
+2. The "Reply-To" vs "From" Instruction
+• Why: The Agent might intuitively think: "If the user is Robby, I should set the Sender to Robby."
+• Result without this: If Resend sends an email saying From: robby@gmail.com, Gmail's servers will see the IP address belongs to Resend, not Google. This fails the DMARC check and the email is rejected or sent to Spam.
+• The Fix: By forcing the Agent to use notifications@irescue.life as the sender and robby@gmail.com as the Reply-To, you pass the security check while keeping the user experience correct.
+3. The "Auto-Retry" Instruction
+• Why: Google tokens expire.
+• Result without this: A tenant thinks they are connected, but their token is dead. They send a newsletter, and it fails silently. The "Retry on Fail" logic ensures the email still gets delivered via the fallback method so you don't lose that communication.

@@ -1,0 +1,179 @@
+This is an excellent and logical expansion of the concept. By integrating the staff/volunteer portal directly into the subdomain, you create a single, unified hub for each rescue. This is a much stronger and more useful product.
+
+Here is an updated, comprehensive prompt for an AI-powered developer, incorporating all your new requirements.
+
+---
+
+### **Prompt: Generate a Full-Stack Animal Rescue Portal (V2) on Firebase**
+
+**You are an expert full-stack developer specializing in Next.js and Firebase.**
+
+**Your task is to generate the foundational code, file structure, and Firebase architecture for a multi-tenant "All-in-One Animal Rescue Portal."**
+
+### **Core Concept**
+
+The application is a multi-tenant SaaS platform. A new animal rescue can sign up on the main website (`app.myrescueportal.com`). Upon signup, they choose a unique subdomain (e.g., `sunnypaws`).
+
+This subdomain (`sunnypaws.myrescueportal.com`) becomes their complete, all-in-one portal.
+
+1.  **Public-Facing Site:** By default, the subdomain (`sunnypaws.myrescueportal.com`) is a public website showing their adoptable animals, 'about us' page, and a donation form.
+2.  **Private Internal Portal:** The subdomain *also* has a secure login (`sunnypaws.myrescueportal.com/login`) for that rescue's internal team (staff, fosters, volunteers, board). Once logged in, they access a private dashboard (`.../dashboard`) with features based on their specific role.
+
+### **Technology Stack**
+
+* **Frontend:** Next.js (App Router) with React and Tailwind CSS.
+* **Backend:** Firebase
+* **Database:** Firestore
+* **Authentication:** Firebase Authentication
+* **File Storage:** Firebase Storage (animal photos, medical documents, imported spreadsheets)
+* **Backend Logic:** Cloud Functions for Firebase
+* **Hosting:** Firebase Hosting (configured for dynamic subdomains)
+
+---
+
+### **1. Firestore Data Models (Expanded)**
+
+Please define the following Firestore collections:
+
+* **`rescues` (Collection)**
+    * *Document ID: `rescueId`*
+    * `name`: (String) "Sunny Paws Rescue"
+    * `subdomain`: (String) "sunnypaws"
+    * `logoUrl`: (String)
+    * `websiteSettings`: (Map) { `primaryColor`, `aboutUsText`, `donationPageHeader` }
+
+* **`users` (Collection)**
+    * *Document ID: `firebaseAuthUid`*
+    * `email`: (String)
+    * `rescueId`: (String) "Links to the `rescues` collection"
+    * `name`: (String) "Jane Doe"
+    * `role`: (String) "admin", "board_member", "staff", "foster", "volunteer"
+
+* **`animals` (Collection)** (No change)
+    * *Document ID: `animalId`*
+    * `rescueId`: (String)
+    * `name`: (String) "Buddy"
+    * `status`: (String) "Intake", "Foster", "Available", "Adopted"
+    * `bio`: (String)
+    * `photos`: (Array of Strings) "URLs from Firebase Storage"
+    * `fosterId`: (String) "Links to a `users` doc with 'foster' role"
+    * **`medical` (Sub-collection)**: { `date`, `type`, `notes`, `fileUrl` }
+
+* **`applications` (Collection)** (No change)
+    * `rescueId`, `animalId`, `applicantName`, `status`, `formData`
+
+* **`donations` (NEW Collection)**
+    * *Document ID: `donationId`*
+    * `rescueId`: (String)
+    * `donorName`: (String)
+    * `donorEmail`: (String)
+    * `amount`: (Number)
+    * `date`: (Timestamp)
+    * `source`: (String) "Online Form", "QuickBooks Import", "Manual Entry"
+    * `notes`: (String, optional)
+
+* **`expenditures` (NEW Collection)**
+    * *Document ID: `expenditureId`*
+    * `rescueId`: (String)
+    * `date`: (Timestamp)
+    * `vendor`: (String)
+    * `amount`: (Number)
+    * `category`: (String) "Vet", "Food", "Supplies", "Admin", "Transport"
+    * `notes`: (String, optional)
+    * `receiptUrl`: (String, optional) "URL from Firebase Storage"
+
+---
+
+### **2. Key Features to Build**
+
+Please generate the components and logic for these features, all routed dynamically by subdomain.
+
+#### **A. Main App Site (`app.myrescueportal.com`)**
+
+1.  **Marketing Homepage:** A simple landing page.
+2.  **Signup Flow:**
+    * A multi-step form for a *new rescue* to register.
+    * **On Submit:** Triggers the `onCreateUser` Cloud Function to create the new Firebase Auth user, the `rescues` doc, and the `users` doc for the first "admin".
+
+#### **B. Public-Facing Subdomain Site (`[subdomain].myrescueportal.com`)**
+
+1.  **Dynamic Homepage (`/app/[subdomain]/page.tsx`):**
+    * Parses the `subdomain` from the URL.
+    * Fetches the `rescue` doc for branding.
+    * Fetches all `animals` where `rescueId` matches AND `status` == "Available".
+    * Displays a public list of these animals.
+    * Includes a "Login" button that links to `/[subdomain]/login`.
+2.  **Public Donation Page (`/app/[subdomain]/donate/page.tsx`):**
+    * A simple form (Name, Email, Amount).
+    * On submit, this form *directly* creates a new document in the `donations` collection with the `rescueId` and `source: "Online Form"`. (This requires specific, more open Firestore rules).
+3.  **Login Page (`/app/[subdomain]/login/page.tsx`):**
+    * A login form for that rescue's *internal team*.
+    * On login, it authenticates with Firebase Auth and redirects to `/[subdomain]/dashboard`.
+
+#### **C. Secure Internal Portal (`[subdomain].myrescueportal.com/dashboard`)**
+
+1.  **Protected Layout (`/app/[subdomain]/dashboard/layout.tsx`):**
+    * This is the core of the portal. It must:
+        1.  Check for an active Firebase Auth session. If no user, redirect to the `/[subdomain]/login` page.
+        2.  Fetch the user's document from the `users` collection.
+        3.  **Critical:** Verify that the logged-in user's `rescueId` matches the `rescueId` associated with the subdomain. If they don't match, log them out or show an error.
+        4.  Store the user's `role` (e.g., in React Context) to control what they see.
+
+2.  **Role-Based Navigation:** The dashboard's navigation menu must change based on the user's `role`:
+    * **"admin" / "board_member":** Sees all links: Dashboard, Animals, Applications, Team, Finance.
+    * **"staff":** Sees: Dashboard, Animals, Applications.
+    * **"foster":** Sees *only*: My Fosters.
+    * **"volunteer":** Sees: Volunteer Tasks (e.g., read-only animal list, event calendar).
+
+3.  **Finance Module (`/dashboard/finance`):**
+    * Visible only to "admin" and "board_member" roles.
+    * Displays tables for `donations` and `expenditures` (fetched from Firestore).
+    * Includes simple forms for *manual entry* of a donation or expense.
+    * **QuickBooks Import Feature:**
+        1.  A file upload component (`<input type="file" accept=".csv" />`).
+        2.  On upload, saves the file to Firebase Storage at `imports/{rescueId}/quickbooks_{timestamp}.csv`.
+        3.  This upload **must trigger** the `onQuickBooksImport` Cloud Function.
+
+---
+
+### **3. Required Cloud Functions**
+
+Please generate the Firebase Cloud Functions:
+
+1.  **`onCreateUser` (Auth Trigger):**
+    * Fires when a new rescue signs up.
+    * Creates the `rescues` doc and the initial `users` doc (with `role: "admin"`).
+2.  **`onQuickBooksImport` (Storage Trigger):**
+    * Fires when a file is uploaded to the `imports/` path in Storage.
+    * The function must:
+        1.  Download the CSV file.
+        2.  Parse the CSV (assume a simple format: `Date,Amount,Name/Vendor,Category`).
+        3.  Get the `rescueId` from the file's path.
+        4.  Loop through the rows. If `Amount` is positive, create a doc in `donations`. If negative, create a doc in `expenditures`.
+        5.  Move the processed file to an `imports/processed/` folder.
+
+### **4. Required Firestore Security Rules**
+
+Generate the `firestore.rules` file to handle this new complexity.
+
+* **`rescues`:** Should be globally readable (so subdomains can fetch branding). Writable only by that rescue's `admin`.
+* **`users`:** A user can read/write their *own* doc. An `admin` can read/write any `user` doc with the same `rescueId`.
+* **`animals`:**
+    * **Read:** Publicly readable if `status == "Available"`. All statuses are readable if the user is logged in and their `rescueId` matches.
+    * **Write:** Allowed if user's `rescueId` matches and role is `admin`, `staff`, or `foster` (fosters can only edit *their* assigned animals).
+* **`donations` / `expenditures`:**
+    * **Read/Write:** Allowed only if user's `rescueId` matches AND role is `admin` or `board_member`.
+    * **Create (for `donations` only):** Allow *public create* (from the donation form) but with strict validation (must have `rescueId`, `amount`, `donorName`).
+* **`applications`:**
+    * **Create:** Allow public create (from the animal page).
+    * **Read/Write:** Allowed if user's `rescueId` matches and role is `admin` or `staff`.
+
+---
+
+### **Your Task:**
+
+1.  **Generate the file/folder structure** for this Next.js (App Router) project.
+2.  **Generate the code for the advanced Firestore security rules** as described above.
+3.  **Generate the code for the main protected portal layout** (`/app/[subdomain]/dashboard/layout.tsx`), showing the auth check, role check, and context provider.
+4.  **Generate the code for the Finance page** (`/app/[subdomain]/dashboard/finance/page.tsx`), showing the manual entry forms and the QuickBooks CSV upload component.
+5.  **Generate the code for the two required Cloud Functions** (`onCreateUser` and `onQuickBooksImport`) in TypeScript.

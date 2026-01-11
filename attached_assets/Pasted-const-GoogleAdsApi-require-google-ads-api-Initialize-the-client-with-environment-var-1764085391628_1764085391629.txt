@@ -1,0 +1,56 @@
+const { GoogleAdsApi } = require('google-ads-api');
+
+// Initialize the client with environment variables
+// You will need a Google Ads Developer Token (Basic Access is fine)
+const client = new GoogleAdsApi({
+  client_id: process.env.GOOGLE_ADS_CLIENT_ID,
+  client_secret: process.env.GOOGLE_ADS_CLIENT_SECRET,
+  developer_token: process.env.GOOGLE_ADS_DEVELOPER_TOKEN,
+});
+
+/**
+ * Uploads a conversion to Google Ads when an application is submitted.
+ * @param {string} customerId - The nonprofit's Google Ads Customer ID (e.g., '123-456-7890')
+ * @param {string} gclid - The Google Click ID captured from the frontend
+ * @param {string} conversionActionId - The ID of the specific conversion action (e.g., "Submit Application")
+ */
+async function uploadConversion(customerId, gclid, conversionActionId) {
+  if (!gclid) {
+    console.log('No GCLID provided. Skipping Google Ads upload (Organic traffic).');
+    return;
+  }
+
+  const customer = client.Customer({
+    customer_id: customerId.replace(/-/g, ''), // Remove dashes
+    refresh_token: process.env.GOOGLE_ADS_REFRESH_TOKEN, // Ideally stored per-tenant in DB
+  });
+
+  try {
+    // Defines the conversion event
+    const clickConversion = {
+      gclid: gclid,
+      conversion_action: `customers/${customerId.replace(/-/g, '')}/conversionActions/${conversionActionId}`,
+      conversion_date_time: new Date().toISOString().replace('T', ' ').slice(0, 19) + "+00:00", // Format: 'yyyy-mm-dd hh:mm:ss+|-hh:mm'
+      conversion_value: 1.0, // Arbitrary value for non-monetary goals
+      currency_code: 'USD',
+    };
+
+    // Uploads the conversion
+    const result = await customer.conversionUploads.uploadClickConversions([
+      clickConversion,
+    ]);
+
+    // Check for partial errors (common in Google Ads API)
+    if (result.partial_failure_error) {
+      console.error('Google Ads Partial Error:', result.partial_failure_error);
+    } else {
+      console.log(`Successfully uploaded conversion for GCLID: ${gclid}`);
+    }
+
+  } catch (error) {
+    console.error('Failed to upload conversion to Google Ads:', error);
+    // Don't crash the app if ads fail; just log it.
+  }
+}
+
+module.exports = { uploadConversion };

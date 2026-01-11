@@ -1,0 +1,82 @@
+1. The High-Level Workflow (Visual)
+This Mermaid diagram outlines the logic flow from the Sender creating the trip to the Receiver accepting the data.
+
+Code snippet
+
+sequenceDiagram
+    participant Sender as Sender (Rescue A)
+    participant DB as iRescue Database
+    participant Driver as Driver (Mobile View)
+    participant Receiver as Receiver (Rescue B)
+
+    Note over Sender, DB: Phase 1: Planning
+    Sender->>DB: Create New Transport (Date, Vehicle, Route)
+    Sender->>DB: Add Animals to Manifest
+    DB->>DB: VALIDATION CHECK (Is CVI/Health Cert present?)
+    alt Missing CVI
+        DB-->>Sender: Error: "Fluffy is missing Health Cert"
+    else All Good
+        DB-->>Sender: Animals Added. Status: "Planned"
+    end
+
+    Note over Sender, Driver: Phase 2: Active Transport
+    Sender->>DB: Click "Depart"
+    DB-->>Driver: Activate Mobile Run Sheet
+    Driver->>DB: Log "Stop 1 Reached" (Geolocation Tag)
+    DB-->>Receiver: Notification: "Transport Arriving Soon"
+
+    Note over Driver, Receiver: Phase 3: The Handover
+    Driver->>Receiver: Show QR Code / Digital Manifest
+    Receiver->>Driver: Digital Signature on Driver's Device
+    Driver->>DB: Upload Signature. Status: "Delivered"
+
+    Note over Receiver, DB: Phase 4: Data Transfer
+    Receiver->>DB: Click "Import Animals"
+    loop For Each Animal
+        DB->>DB: CLONE RECORD (Medical, Bio, Photos)
+        DB->>DB: Create NEW Animal Record linked to Receiver's Org ID
+        DB->>DB: Mark Sender's Record as "Outcome: Transferred"
+    end
+    DB-->>Receiver: Success! 10 Animals added to your Roster.
+2. Database Schema (For Replit)
+To make this work, you need to tell Replit to add specific tables. The logic relies on a "Many-to-Many" relationship because one Transport can have many animals, and one animal could theoretically be on multiple transports over its life.
+
+New Tables Needed:
+
+TransportTrip
+
+id (UUID)
+
+organization_id (The Sender)
+
+driver_name (String)
+
+vehicle_id (Link to asset, optional)
+
+status (Enum: Planned, In_Transit, Completed, Cancelled)
+
+departure_date (DateTime)
+
+TransportStop (The Logistics)
+
+transport_id (Link to Trip)
+
+location_name (e.g., "Memphis Hub")
+
+address (String)
+
+arrival_time_est (DateTime)
+
+order_index (Int - 1st stop, 2nd stop, etc.)
+
+TransportManifestItem (The Animals on the Bus)
+
+transport_id (Link to Trip)
+
+animal_id (Link to the specific dog)
+
+destination_org_id (Link to the Receiver - Crucial for the "Collaboration Hub")
+
+is_delivered (Boolean)
+
+received_at (DateTime - when the receiver accepted them)

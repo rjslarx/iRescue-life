@@ -1,0 +1,105 @@
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Calendar, Clock, MapPin, ExternalLink } from "lucide-react";
+import { format } from "date-fns";
+import { Link } from "wouter";
+
+interface EventCardProps {
+  id: string;
+  title: string;
+  description?: string | null;
+  startTime: Date | string;
+  endTime: Date | string;
+  location?: string | null;
+  customPageSlug?: string | null;
+  calendarType: "events" | "fundraising";
+  calendarColor?: string;
+}
+
+export default function EventCard({ 
+  id,
+  title, 
+  description, 
+  startTime,
+  endTime,
+  location,
+  customPageSlug,
+  calendarType,
+  calendarColor = "#3b82f6"
+}: EventCardProps) {
+  const start = typeof startTime === 'string' ? new Date(startTime) : startTime;
+  const end = typeof endTime === 'string' ? new Date(endTime) : endTime;
+  
+  const eventTypeLabel = calendarType === "fundraising" ? "Fundraiser" : "Event";
+  const eventTypeColor = calendarType === "fundraising" ? "bg-green-500/10 text-green-700 dark:text-green-400" : "bg-blue-500/10 text-blue-700 dark:text-blue-400";
+
+  const cardContent = (
+    <Card 
+      className="overflow-hidden hover-elevate cursor-pointer"
+      data-testid={`card-event-${title.toLowerCase().replace(/\s/g, '-')}`}>
+      <div 
+        className="h-2" 
+        style={{ backgroundColor: calendarColor }}
+      />
+      <CardContent className="p-6 space-y-4">
+        <div className="space-y-2">
+          <div className="flex items-start justify-between gap-2">
+            <h3 className="font-display text-xl font-semibold leading-tight" data-testid={`text-event-title-${title.toLowerCase().replace(/\s/g, '-')}`}>
+              {title}
+            </h3>
+            <Badge variant="secondary" className={`shrink-0 ${eventTypeColor}`}>
+              {eventTypeLabel}
+            </Badge>
+          </div>
+          {description && (
+            <p className="text-sm leading-relaxed text-muted-foreground line-clamp-2">
+              {description}
+            </p>
+          )}
+        </div>
+
+        <div className="space-y-2 text-sm">
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Calendar className="h-4 w-4 shrink-0" />
+            <span data-testid="text-event-date">
+              {format(start, "EEEE, MMMM d, yyyy")}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Clock className="h-4 w-4 shrink-0" />
+            <span data-testid="text-event-time">
+              {format(start, "h:mm a")} - {format(end, "h:mm a")}
+            </span>
+          </div>
+          {location && (
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <MapPin className="h-4 w-4 shrink-0" />
+              <span className="line-clamp-1" data-testid="text-event-location">
+                {location}
+              </span>
+            </div>
+          )}
+        </div>
+      </CardContent>
+      <CardFooter className="pt-0 px-6 pb-6">
+        <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+          <ExternalLink className="h-4 w-4" />
+          <span>Click to learn more</span>
+        </div>
+      </CardFooter>
+    </Card>
+  );
+
+  // Link to custom page if available, otherwise event detail page
+  const linkHref = customPageSlug ? `/${customPageSlug}` : `/event/${id}`;
+  
+  return (
+    <Link 
+      href={linkHref}
+      className="block no-underline"
+      data-testid={`link-event-${title.toLowerCase().replace(/\s/g, '-')}`}
+    >
+      {cardContent}
+    </Link>
+  );
+}

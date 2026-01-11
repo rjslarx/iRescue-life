@@ -1,0 +1,50 @@
+This is a "Master Prompt" you can copy and paste directly into the Replit Agent (or any AI coding assistant). It contains the strict IRS logic so the Agent builds the compliance features correctly from the start.
+Copy & Paste this into Replit:
+PROJECT: IRS-Compliant Donation Receipt Microservice
+GOAL:
+Build a Python/Flask application that generates and emails IRS-compliant PDF tax receipts for a 501(c)(3) dog rescue. This service will receive donation data via a webhook (JSON) and output a PDF receipt via email.
+TECH STACK:
+ * Framework: Flask
+ * PDF Generation: xhtml2pdf (preferred) or WeasyPrint
+ * Email: sendgrid (using SendGridAPIClient)
+ * Security: Token-based authentication for the API endpoint.
+COMPLIANCE LOGIC (STRICT):
+You must implement the following logic to ensure IRS compliance. Do not deviate from these rules:
+ * The "Magic Language" Rule:
+   Every PDF must contain this exact phrase visibly: "No goods or services were provided in exchange for this contribution."
+ * Cash vs. In-Kind Logic:
+   * IF the donation type is "Cash" (money, check, online):
+     * The PDF MUST show the specific dollar amount (e.g., "$100.00").
+   * IF the donation type is "In-Kind" (goods, supplies):
+     * The PDF MUST NOT show a dollar value.
+     * Instead, it must show a Description field (e.g., "5 bags of dog food").
+     * If the input JSON contains a dollar value for an In-Kind donation, ignore it in the PDF generation and only print the description.
+ * Vehicle Exclusion (Safety Guardrail):
+   * If the input description contains the words "car," "boat," "vehicle," or "trailer," the system should NOT generate a receipt.
+   * Instead, return a JSON response: {"status": "manual_review", "message": "Vehicle donations require Form 1098-C. Receipt not generated."}
+DATA STRUCTURE (JSON INPUT):
+The API should accept a POST request with this JSON body:
+{
+  "donor_name": "String",
+  "donor_email": "String",
+  "date": "YYYY-MM-DD",
+  "type": "Cash" OR "In-Kind",
+  "amount": "Float" (Required if Cash),
+  "description": "String" (Required if In-Kind, e.g. "Towels"),
+  "transaction_id": "String"
+}
+
+OUTPUT REQUIREMENTS:
+ * PDF Filename: Receipt_[TransactionID].pdf
+ * Email Subject: "Official Tax Receipt - [Date]"
+ * Email Body: A polite, generic thank you message that references the rescue's name.
+Please write the main.py application code, the templates/receipt.html template with the required legal text, and a requirements.txt file.
+Why this prompt works (The "Why" for you)
+ * The "Vehicle Exclusion": This is critical. If your system automatically sends a standard PDF receipt for a donated car, you are violating IRS rules (which require Form 1098-C). This prompt forces the AI to build a "safety switch" that stops the process so you can handle cars manually.
+ * The "In-Kind" Logic: Most developers (and AIs) accidentally put a dollar sign on everything. This prompt explicitly forbids the AI from putting a dollar value on goods, which protects you from liability.
+ * The "Magic Language": By hard-coding the "No goods or services" phrase in the prompt, you ensure the receipt is valid for deductions over $250.
+Next Step for You
+Once the Replit Agent builds this, you will need to add your Organization Name and EIN (Tax ID) into the HTML template it creates.
+Do you want me to generate the HTML template right now so you can just paste it into the file the Agent creates, ensuring it looks professional?
+Creating a Webhook Listener with Python
+This video is relevant because it explains the core concept of a "Webhook Listener," which is the exact mechanism your Replit agent will use to receive data from your main website and trigger the receipt generation.

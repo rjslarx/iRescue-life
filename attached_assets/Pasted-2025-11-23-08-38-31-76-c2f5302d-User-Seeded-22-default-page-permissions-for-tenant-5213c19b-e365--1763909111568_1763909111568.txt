@@ -1,0 +1,115 @@
+2025-11-23 08:38:31.76
+c2f5302d
+User
+Seeded 22 default page permissions for tenant 5213c19b-e365-4bdd-a356-7651b27ad33e
+2025-11-23 08:38:56.86
+c2f5302d
+User
+[TENANT DEBUG] POST /api/platform/create-subscription - hostname: irescue.life, x-tenant-id: platform, session.tenantId: undefined
+2025-11-23 08:38:56.86
+c2f5302d
+User
+🚀 [CREATE-SUBSCRIPTION] Endpoint called
+2025-11-23 08:38:56.87
+c2f5302d
+User
+tier: 'starter'
+2025-11-23 08:38:56.87
+c2f5302d
+User
+email: 'rstelly3@gmail.com',
+2025-11-23 08:38:56.87
+c2f5302d
+User
+priceId: 'price_1SWdXULzdp6pTJ6iYl8BPJx8',
+2025-11-23 08:38:56.87
+c2f5302d
+User
+rescueName: 'Turbeau1',
+2025-11-23 08:38:56.87
+c2f5302d
+User
+💳 [CREATE-SUBSCRIPTION] Request data: {
+2025-11-23 08:38:56.87
+c2f5302d
+User
+}
+2025-11-23 08:38:56.87
+c2f5302d
+User
+tenantId: '5213c19b-e365-4bdd-a356-7651b27ad33e',
+2025-11-23 08:38:59.01
+c2f5302d
+User
+💰 [CREATE-SUBSCRIPTION] Creating Stripe customer...
+2025-11-23 08:38:59.33
+c2f5302d
+User
+🔄 [CREATE-SUBSCRIPTION] Creating Stripe subscription with 30-day trial...
+2025-11-23 08:38:59.33
+c2f5302d
+User
+✅ [CREATE-SUBSCRIPTION] Stripe customer created: cus_TTbeNo3P5SUMSr
+2025-11-23 08:39:00.39
+c2f5302d
+User
+}
+2025-11-23 08:39:00.39
+c2f5302d
+User
+status: 'trialing',
+2025-11-23 08:39:00.39
+c2f5302d
+User
+trial_end: 1766500739
+2025-11-23 08:39:00.39
+c2f5302d
+User
+✅ [CREATE-SUBSCRIPTION] Stripe subscription created: {
+2025-11-23 08:39:00.39
+c2f5302d
+User
+id: 'sub_1SWeRLLzdp6pTJ6inUkw5pEl',
+2025-11-23 08:39:00.42
+c2f5302d
+User
+}
+2025-11-23 08:39:00.42
+c2f5302d
+User
+hasClientSecret: false
+2025-11-23 08:39:00.42
+c2f5302d
+User
+customerId: 'cus_TTbeNo3P5SUMSr',
+2025-11-23 08:39:00.42
+c2f5302d
+User
+subscriptionId: 'sub_1SWeRLLzdp6pTJ6inUkw5pEl',
+2025-11-23 08:39:00.42
+c2f5302d
+User
+✅ [CREATE-SUBSCRIPTION] Subscription creation complete! {
+2025-11-23 08:39:00.42
+c2f5302d
+User
+isTrialing: true,
+2025-11-23 08:39:00.42
+c2f5302d
+User
+2:39:00 PM [express] POST /api/platform/create-subscription 200 in 3561ms :: {"subscriptionId":"sub_…
+2025-11-23 08:39:00.53
+c2f5302d
+User
+[TENANT DEBUG] POST /api/platform/finalize-subscription - hostname: irescue.life, x-tenant-id: platform, session.tenantId: undefined
+
+2025-11-23 08:39:00.57
+c2f5302d
+User
+2:39:00 PM [express] POST /api/platform/finalize-subscription 200 in 33ms :: {"success":true,"messag…
+
+Collapse
+
+Wrap
+
+Colors

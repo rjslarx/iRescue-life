@@ -1,0 +1,94 @@
+npm notice
+npm notice New major version of npm available! 10.8.2 -> 11.6.4
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.6.4
+npm notice To update run: npm install -g npm@11.6.4
+npm notice
+
+Attempt 1 of 5...
+
+
+> rest-express@1.0.0 db:push
+> drizzle-kit push
+
+
+No config path provided, using default 'drizzle.config.ts'
+
+Reading config file '/home/runner/workspace/drizzle.config.ts'
+
+Using 'pg' driver for database querying
+
+[⣷] Pulling schema from database...
+
+[⣯] Pulling schema from database...
+
+[⣟] Pulling schema from database...
+
+[⡿] Pulling schema from database...
+
+error: The endpoint has been disabled. Enable it using Neon API and retry.
+    at /home/runner/workspace/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async Object.query (/home/runner/workspace/node_modules/drizzle-kit/bin.cjs:80601:26)
+    at async fromDatabase2 (/home/runner/workspace/node_modules/drizzle-kit/bin.cjs:19253:25) {
+  length: 88,
+  severity: 'ERROR',
+  code: 'XX000',
+  detail: undefined,
+  hint: undefined,
+  position: undefined,
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: undefined,
+  line: undefined,
+  routine: undefined
+}
+
+✓ Database schema pushed successfully
+🌱 Seeding database...
+
+Starting database seed...
+
+⚠️  DEVELOPMENT ONLY: Do not use this seed script in production!
+
+Seed failed: error: The endpoint has been disabled. Enable it using Neon API and retry.
+    at /home/runner/workspace/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async <anonymous> (/home/runner/workspace/node_modules/src/node-postgres/session.ts:104:19)
+    at async seed (/home/runner/workspace/server/seed.ts:16:22) {
+  length: 88,
+  severity: 'ERROR',
+  code: 'XX000',
+  detail: undefined,
+  hint: undefined,
+  position: undefined,
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: undefined,
+  line: undefined,
+  routine: undefined
+}
+
+⚠️ Database seeding skipped (database may not be ready yet)
+✅ Deployment build complete!
+
+2025-12-07T16:46:22Z info: Pushing pid1 binary layer...
+2025-12-07T16:46:23Z info: Pushing hosting layer...
+2025-12-07T16:46:23Z info: Pushing Repl layer...
+2025-12-07T16:46:24Z info: Created hosting layer
+2025-12-07T16:46:25Z info: Created pid1 binary layer
+2025-12-07T16:47:19Z info: Created Repl layer
+2025-12-07T16:47:22Z info: Pushed image manifest
+2025-12-07T16:47:24Z info: Pushed soci index manifest
+2025-12-07T16:47:24Z info: Pushed referrer manifest

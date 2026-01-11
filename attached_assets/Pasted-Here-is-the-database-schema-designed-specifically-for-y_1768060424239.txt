@@ -1,0 +1,83 @@
+Here is the database schema designed specifically for your "Vertical SaaS" model.
+I have written this in PostgreSQL syntax (the industry standard for modern SaaS apps like Supabase, Neon, or Heroku), but the logic applies to MySQL as well.
+Key Design Principles used here:
+ * Money is Integers: We store money in cents (e.g., $10.00 is stored as 1000). Never use "Float" for money, or you will get math errors like $10.0000001.
+ * Multi-Tenancy: Every single query must include tenant_id so one rescue never sees another's data.
+ * Offline Support: The Stripe fields are nullable so you can store cash/check donations in the same table.
+The SQL Schema
+-- 1. DONORS TABLE (The Humans)
+-- We separate this so if "Jane Doe" donates 5 times, you have one profile for her.
+CREATE TABLE donors (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id UUID NOT NULL REFERENCES tenants(id), -- Critical for security
+    email TEXT,
+    first_name TEXT,
+    last_name TEXT,
+    phone TEXT,
+    total_lifetime_value INTEGER DEFAULT 0, -- Auto-calculated cache (optional but fast)
+    last_donation_date TIMESTAMP,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Index for searching donors quickly
+CREATE INDEX idx_donors_tenant_email ON donors(tenant_id, email);
+
+
+-- 2. DONATIONS TABLE (The Money)
+CREATE TABLE donations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id UUID NOT NULL REFERENCES tenants(id),
+    donor_id UUID REFERENCES donors(id), -- Link to the human
+
+    -- FINANCIALS (Stored in Cents)
+    amount_gross INTEGER NOT NULL,      -- Total amount charged (e.g., 10330 for $103.30)
+    amount_net INTEGER NOT NULL,        -- What the rescue keeps (e.g., 10000 for $100.00)
+    fee_platform INTEGER DEFAULT 0,     -- Your cut (iRescue fee)
+    fee_stripe INTEGER DEFAULT 0,       -- Stripe's processing fee
+    
+    -- METADATA
+    currency TEXT DEFAULT 'usd',
+    status TEXT NOT NULL CHECK (status IN ('succeeded', 'pending', 'failed', 'refunded')),
+    payment_method TEXT NOT NULL,       -- 'card', 'apple_pay', 'cash', 'check'
+    is_fee_covered BOOLEAN DEFAULT FALSE, -- Did they check the box?
+    
+    -- ATTRIBUTION (Where did the money come from?)
+    dog_id UUID,                        -- Optional: Linked to specific animal
+    campaign_id UUID,                   -- Optional: "Giving Tuesday 2025"
+    admin_notes TEXT,                   -- "Check #405 from Grandma Smith"
+
+    -- STRIPE RECONCILIATION
+    stripe_payment_intent_id TEXT,      -- The critical ID for refunds (pi_12345...)
+    stripe_charge_id TEXT,              -- Older ID style, good backup (ch_12345...)
+
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Indexes for your Dashboard Charts
+CREATE INDEX idx_donations_tenant_date ON donations(tenant_id, created_at);
+CREATE INDEX idx_donations_dog ON donations(dog_id);
+
+Why I included specific columns:
+1. amount_gross vs amount_net
+You need both to show the "Money Left on the Table" widget.
+ * Formula: amount_gross - amount_net = Total Fees.
+ * If fee_platform > 0, you know they are on the Free plan.
+2. stripe_payment_intent_id
+This is the most important technical field.
+ * When a user asks for a refund, you cannot just delete the row. You have to send this specific ID back to Stripe's API to initiate the refund.
+ * If this is NULL, you know it was an offline donation (Cash/Check) and you can't refund it via API.
+3. dog_id
+This enables a powerful feature: "Total Raised per Dog."
+ * Scenario: A dog needs a $3,000 surgery.
+ * Feature: You can show a progress bar on that dog's profile: "$1,500 of $3,000 raised."
+ * The Query: SELECT SUM(amount_net) FROM donations WHERE dog_id = 'rex_uuid'.
+4. donor_id (The Relationship)
+By separating Donors from Donations, you can build a "VIP List."
+ * Query: "Show me all donors who gave more than $1,000 last year."
+ * Without this separation, you have to try to match strings like "John Smith" and "John A. Smith," which is a nightmare.
+One Recommendation for your Code
+When a donation comes in via Stripe webhook:
+ * First: Check if a donor with that email already exists for this tenant_id.
+ * If Yes: Use their donor_id.
+ * If No: Create a new row in the donors table first, then create the donation.
+Next Step: Would you like to see the SQL Query that powers the main dashboard chart: "Revenue for the last 30 days, grouped by day"? (This is usually the hardest query for beginners to write efficiently).

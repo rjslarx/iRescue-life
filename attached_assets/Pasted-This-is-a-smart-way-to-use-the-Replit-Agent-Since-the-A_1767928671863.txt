@@ -1,0 +1,40 @@
+This is a smart way to use the Replit Agent. Since the Agent works best with clear, step-by-step instructions, I have broken this down into two specific prompts you can copy and paste directly into the Replit Agent chat window.
+These prompts instruct the Agent to set up the file structure, the licensing, and the specific "payment logic" that ensures you get paid even if someone self-hosts the free version.
+Phase 1: The "Open Source Setup" Prompt
+Copy and paste this into Replit Agent first. This establishes the legal and structural foundation.
+> Prompt for Agent:
+> I need to prepare this project to be Open Sourced on GitHub. Please perform the following tasks:
+>  * Create a LICENSE file: Create a new file named LICENSE in the root directory. Paste the full text of the GNU AGPLv3 license into it. This is crucial to ensure that anyone who modifies and hosts this app must also share their code.
+>  * Create a README.md: Create a professional README.md file with the following sections:
+>    * Project Title: iRescue.life
+>    * Description: An open-source animal rescue management platform.
+>    * Self-Hosting (Free): Instructions on how to fork this repo and run it on Replit or a local server.
+>    * Managed Hosting (Paid): A placeholder link: "Don't want to manage servers? Sign up for our fully managed cloud version here: [Link Pending]"
+>    * Contributing: A brief note welcoming pull requests.
+>  * Git Configuration: Ensure a .gitignore file exists and includes standard exclusions (like node_modules, .env, __pycache__, and sensitive secret files).
+> Please generate these files now.
+> 
+Phase 2: The "Revenue Logic" Prompt
+Once Phase 1 is done, paste this prompt. This is the logic that distinguishes the "Free" version from the "Hosted" version and ensures you get your transaction fees.
+> Prompt for Agent:
+> Now I need to implement the business logic for the "Free vs. Hosted" models using a feature flag approach. Please refactor the payment/donation processing code with the following logic:
+>  * Create a Config Variable: Create a global configuration variable or environment variable check called IS_HOSTED_PLATFORM.
+>    * If the app is running in my paid cloud environment, this will be True.
+>    * If a user downloads and self-hosts the app (Free version), this defaults to False.
+>  * Implement the "Paw Pay" Logic (Stripe Connect):
+>    * Write a function for processing payments (donations or adoption fees).
+>    * Logic: When a payment is processed:
+>      * Check IS_HOSTED_PLATFORM.
+>      * If FALSE (Self-Hosted): The system must enforce a mandatory "Platform Fee" (Application Fee). Hardcode a default fee (e.g., 1.5%) that is routed to my platform's Stripe Connect account.
+>      * If TRUE (Hosted/Paid): The system should look up the user's subscription tier in the database. If they are on a "Premium" plan, set the Platform Fee to 0% (or a lower rate).
+>  * Environment Protection: Ensure that the STRIPE_CONNECT_PLATFORM_ID (my account ID) is hardcoded or set as a default in the config, so that self-hosted versions default to paying a commission to the main iRescue project unless they actively strip that code out.
+> Please write the code to handle this conditional logic in our payment controller.
+> 
+Important Note for You (The Founder)
+When the Replit Agent writes the code for Phase 2, it will likely use a payment processor like Stripe.
+For the "Free" version to actually pay you, you will need to use Stripe Connect.
+ * How it works: You (iRescue) are the "Platform." The rescues are the "Connected Accounts."
+ * The Code: The Agent will use a parameter called application_fee_amount.
+   * Self-Hosted users process $100 donation -> Stripe sends $98.50 to the Rescue -> Stripe sends $1.50 to You.
+Next Step:
+Once the Agent finishes this code, you will need to get your Stripe Publishable Key and Secret Key. Would you like me to explain where to find those in the Stripe Dashboard?
