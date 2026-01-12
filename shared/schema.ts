@@ -758,6 +758,7 @@ export const payments = pgTable("payments", {
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
   donorId: uuid("donor_id").references(() => donors.id, { onDelete: 'set null' }),
   stripePaymentIntentId: text("stripe_payment_intent_id"),
+  stripeCheckoutSessionId: text("stripe_checkout_session_id"), // For ACH async payment tracking
   stripeInvoiceId: text("stripe_invoice_id"), // For subscription payments
   subscriptionId: uuid("subscription_id").references(() => subscriptions.id, { onDelete: 'set null' }),
   amount: integer("amount").notNull(), // Amount in cents

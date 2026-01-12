@@ -118,6 +118,9 @@ export class StripeService {
         tenantId: tenant.id,
         ...params.metadata,
       },
+      payment_method_types: params.isRecurring 
+        ? ['card'] 
+        : ['card', 'us_bank_account'],
     };
 
     if (params.isRecurring) {

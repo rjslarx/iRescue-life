@@ -12576,6 +12576,11 @@ Submitted: ${new Date().toLocaleString()}
             }
           }
 
+          // For ACH payments, payment_status may be 'unpaid' until bank transfer completes
+          // We still create the donor and payment record, but mark status appropriately
+          const isPaymentComplete = session.payment_status === 'paid';
+          const paymentStatus = isPaymentComplete ? 'succeeded' : 'pending';
+
           let donor = await db
             .select()
             .from(donors)
@@ -12594,10 +12599,10 @@ Submitted: ${new Date().toLocaleString()}
               email: customerEmail,
               name: customerName,
               stripeCustomerId: session.customer,
-              totalDonated: session.amount_total || 0,
-              lastDonationDate: new Date(),
+              totalDonated: isPaymentComplete ? (session.amount_total || 0) : 0,
+              lastDonationDate: isPaymentComplete ? new Date() : null,
             }).returning();
-          } else {
+          } else if (isPaymentComplete) {
             [donor] = await db
               .update(donors)
               .set({
@@ -12613,15 +12618,16 @@ Submitted: ${new Date().toLocaleString()}
             tenantId: tenant.id,
             donorId: donor.id,
             stripePaymentIntentId: session.payment_intent,
+            stripeCheckoutSessionId: session.id,
             amount: session.amount_total || 0,
             currency: session.currency || 'usd',
-            status: 'succeeded',
+            status: paymentStatus,
             paymentMethod: 'stripe',
             isRecurring: session.mode === 'subscription',
             message: session.metadata?.message,
           });
 
-          // Send thank-you email to donor
+          // Send appropriate email based on payment status
           try {
             const { EmailService } = await import('./lib/email-service');
             const emailService = await EmailService.forTenant(tenant.id);
@@ -12633,7 +12639,6 @@ Submitted: ${new Date().toLocaleString()}
               }).format((session.amount_total || 0) / 100);
 
               const isRecurring = session.mode === 'subscription';
-              const donationType = isRecurring ? 'recurring donation' : 'donation';
               const dateFormatted = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
               
               // Escape user-provided content to prevent XSS
@@ -12641,19 +12646,22 @@ Submitted: ${new Date().toLocaleString()}
               const safeTenantName = escapeHtml(tenant.name);
               const safeMessage = escapeHtml(session.metadata?.message);
               const safeEin = escapeHtml(tenant.ein);
-
-              const recurringNote = isRecurring 
-                ? '<p>Your recurring donation will automatically process each month. You can manage your subscription at any time.</p>' 
-                : '';
+              const einSection = safeEin ? ` EIN: ${safeEin}` : '';
               const messageSection = safeMessage 
                 ? `<p style="margin: 5px 0;"><strong>Your message:</strong> ${safeMessage}</p>` 
                 : '';
-              const einSection = safeEin ? ` EIN: ${safeEin}` : '';
 
-              await emailService.send({
-                to: customerEmail,
-                subject: `Thank you for your ${donationType} to ${safeTenantName}!`,
-                html: `
+              if (isPaymentComplete) {
+                // Card payment - send immediate thank-you
+                const donationType = isRecurring ? 'recurring donation' : 'donation';
+                const recurringNote = isRecurring 
+                  ? '<p>Your recurring donation will automatically process each month. You can manage your subscription at any time.</p>' 
+                  : '';
+
+                await emailService.send({
+                  to: customerEmail,
+                  subject: `Thank you for your ${donationType} to ${safeTenantName}!`,
+                  html: `
 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
   <h2 style="color: #2563eb;">Thank You, ${safeCustomerName}!</h2>
   
@@ -12679,13 +12687,53 @@ Submitted: ${new Date().toLocaleString()}
     This email serves as your donation confirmation. An official tax receipt may be sent separately.
   </p>
 </div>
-                `.trim()
-              });
-              console.log(`[Webhook] Thank-you email sent to ${customerEmail} for donation to ${tenant.name}`);
+                  `.trim()
+                });
+                console.log(`[Webhook] Thank-you email sent to ${customerEmail} for donation to ${tenant.name}`);
+              } else {
+                // ACH payment pending - send processing notice
+                console.log(`[Webhook] ACH payment pending for ${customerEmail}, session ${session.id}`);
+                await emailService.send({
+                  to: customerEmail,
+                  subject: `Your bank transfer to ${safeTenantName} is processing`,
+                  html: `
+<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <h2 style="color: #2563eb;">Thank You, ${safeCustomerName}!</h2>
+  
+  <p>We've received your bank transfer donation request of <strong>${amountFormatted}</strong> to ${safeTenantName}.</p>
+  
+  <div style="background: #fef3c7; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #f59e0b;">
+    <p style="margin: 0; color: #92400e;"><strong>Your bank transfer is processing</strong></p>
+    <p style="margin: 5px 0 0 0; color: #92400e; font-size: 14px;">ACH bank transfers typically take 3-5 business days to complete. We'll send you a confirmation email once your donation has been received.</p>
+  </div>
+  
+  <div style="background: #f3f4f6; padding: 15px; border-radius: 8px; margin: 20px 0;">
+    <p style="margin: 5px 0;"><strong>Amount:</strong> ${amountFormatted}</p>
+    <p style="margin: 5px 0;"><strong>Date Initiated:</strong> ${dateFormatted}</p>
+    <p style="margin: 5px 0;"><strong>Payment Method:</strong> Bank Transfer (ACH)</p>
+    ${messageSection}
+  </div>
+  
+  <p>Thank you for choosing to support our mission. Your generosity makes a real difference!</p>
+  
+  <p>With gratitude,<br/>
+  <strong>The ${safeTenantName} Team</strong></p>
+  
+  <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;" />
+  
+  <p style="font-size: 12px; color: #6b7280;">
+    ${safeTenantName} is a registered 501(c)(3) nonprofit organization.${einSection}<br/>
+    A tax receipt will be sent once your bank transfer has been processed.
+  </p>
+</div>
+                  `.trim()
+                });
+                console.log(`[Webhook] ACH pending notice sent to ${customerEmail} for donation to ${tenant.name}`);
+              }
             }
           } catch (emailError) {
             // Don't fail the webhook if email fails - log and continue
-            console.error('[Webhook] Failed to send thank-you email:', emailError);
+            console.error('[Webhook] Failed to send email:', emailError);
           }
 
           if (session.subscription) {
@@ -12841,6 +12889,170 @@ Submitted: ${new Date().toLocaleString()}
                 eq(subscriptions.stripeSubscriptionId, subscription.id)
               )
             );
+          break;
+        }
+
+        case 'checkout.session.async_payment_succeeded': {
+          const session = event.data.object as any;
+          console.log(`[Webhook] ACH payment succeeded for session ${session.id}`);
+          
+          // Update the pending payment to succeeded
+          const [updatedPayment] = await db
+            .update(payments)
+            .set({ status: 'succeeded' })
+            .where(
+              and(
+                eq(payments.tenantId, tenant.id),
+                eq(payments.stripeCheckoutSessionId, session.id)
+              )
+            )
+            .returning();
+
+          if (updatedPayment) {
+            // Update donor totals now that payment succeeded
+            const donor = await db
+              .select()
+              .from(donors)
+              .where(eq(donors.id, updatedPayment.donorId!))
+              .limit(1)
+              .then(rows => rows[0]);
+
+            if (donor) {
+              await db
+                .update(donors)
+                .set({
+                  totalDonated: (donor.totalDonated || 0) + updatedPayment.amount,
+                  lastDonationDate: new Date(),
+                })
+                .where(eq(donors.id, donor.id));
+
+              // Send thank-you email now that ACH payment cleared
+              try {
+                const { EmailService } = await import('./lib/email-service');
+                const emailService = await EmailService.forTenant(tenant.id);
+                
+                if (emailService && donor.email) {
+                  const amountFormatted = new Intl.NumberFormat('en-US', {
+                    style: 'currency',
+                    currency: updatedPayment.currency || 'usd'
+                  }).format(updatedPayment.amount / 100);
+
+                  const dateFormatted = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+                  const safeDonorName = escapeHtml(donor.name);
+                  const safeTenantName = escapeHtml(tenant.name);
+                  const safeEin = escapeHtml(tenant.ein);
+                  const einSection = safeEin ? ` EIN: ${safeEin}` : '';
+
+                  await emailService.send({
+                    to: donor.email,
+                    subject: `Your bank transfer donation to ${safeTenantName} has been received!`,
+                    html: `
+<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <h2 style="color: #2563eb;">Thank You, ${safeDonorName}!</h2>
+  
+  <p>Great news! Your bank transfer donation of <strong>${amountFormatted}</strong> to ${safeTenantName} has been successfully processed.</p>
+  
+  <div style="background: #f3f4f6; padding: 15px; border-radius: 8px; margin: 20px 0;">
+    <p style="margin: 5px 0;"><strong>Amount:</strong> ${amountFormatted}</p>
+    <p style="margin: 5px 0;"><strong>Date Cleared:</strong> ${dateFormatted}</p>
+    <p style="margin: 5px 0;"><strong>Payment Method:</strong> Bank Transfer (ACH)</p>
+  </div>
+  
+  <p>Your support makes a real difference in the lives of the animals we rescue and care for. Thank you for choosing to give via bank transfer!</p>
+  
+  <p>With heartfelt gratitude,<br/>
+  <strong>The ${safeTenantName} Team</strong></p>
+  
+  <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;" />
+  
+  <p style="font-size: 12px; color: #6b7280;">
+    ${safeTenantName} is a registered 501(c)(3) nonprofit organization.${einSection}<br/>
+    This email serves as your donation confirmation.
+  </p>
+</div>
+                    `.trim()
+                  });
+                  console.log(`[Webhook] ACH payment confirmation email sent to ${donor.email}`);
+                }
+              } catch (emailError) {
+                console.error('[Webhook] Failed to send ACH payment confirmation email:', emailError);
+              }
+            }
+          }
+          break;
+        }
+
+        case 'checkout.session.async_payment_failed': {
+          const session = event.data.object as any;
+          console.log(`[Webhook] ACH payment failed for session ${session.id}`);
+          
+          // Update the pending payment to failed
+          const [failedPayment] = await db
+            .update(payments)
+            .set({ status: 'failed' })
+            .where(
+              and(
+                eq(payments.tenantId, tenant.id),
+                eq(payments.stripeCheckoutSessionId, session.id)
+              )
+            )
+            .returning();
+
+          // Notify donor that their bank transfer failed
+          if (failedPayment) {
+            const donor = await db
+              .select()
+              .from(donors)
+              .where(eq(donors.id, failedPayment.donorId!))
+              .limit(1)
+              .then(rows => rows[0]);
+
+            if (donor) {
+              try {
+                const { EmailService } = await import('./lib/email-service');
+                const emailService = await EmailService.forTenant(tenant.id);
+                
+                if (emailService && donor.email) {
+                  const amountFormatted = new Intl.NumberFormat('en-US', {
+                    style: 'currency',
+                    currency: failedPayment.currency || 'usd'
+                  }).format(failedPayment.amount / 100);
+
+                  const safeDonorName = escapeHtml(donor.name);
+                  const safeTenantName = escapeHtml(tenant.name);
+
+                  await emailService.send({
+                    to: donor.email,
+                    subject: `Your bank transfer to ${safeTenantName} could not be completed`,
+                    html: `
+<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <h2 style="color: #dc2626;">Bank Transfer Update</h2>
+  
+  <p>Hi ${safeDonorName},</p>
+  
+  <p>Unfortunately, your bank transfer donation of <strong>${amountFormatted}</strong> to ${safeTenantName} could not be completed.</p>
+  
+  <div style="background: #fef2f2; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #dc2626;">
+    <p style="margin: 0; color: #991b1b;"><strong>Payment Failed</strong></p>
+    <p style="margin: 5px 0 0 0; color: #991b1b; font-size: 14px;">This can happen if there were insufficient funds, the account was closed, or bank details were incorrect.</p>
+  </div>
+  
+  <p>If you'd still like to support our mission, you can try again with a different payment method or contact your bank for more information.</p>
+  
+  <p>Thank you for your intended support. We appreciate your generosity!</p>
+  
+  <p>Best regards,<br/>
+  <strong>The ${safeTenantName} Team</strong></p>
+</div>
+                    `.trim()
+                  });
+                  console.log(`[Webhook] ACH failure notification sent to ${donor.email}`);
+                }
+              } catch (emailError) {
+                console.error('[Webhook] Failed to send ACH failure notification:', emailError);
+              }
+            }
+          }
           break;
         }
       }
