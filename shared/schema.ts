@@ -2512,21 +2512,63 @@ export type GrantDocument = typeof grantDocuments.$inferSelect;
 // Smart Adoption Workflow Tables
 // ============================================================================
 
+// Contract template section types for guided builder
+export type ContractTemplateSection = {
+  id: string;
+  type: 'header' | 'paragraph' | 'terms' | 'signature' | 'custom';
+  title: string;
+  content: string; // Can contain {{placeholder}} variables
+  required: boolean;
+  order: number;
+};
+
+// Available placeholder variables for contract templates
+export const CONTRACT_PLACEHOLDER_KEYS = [
+  // Adopter info
+  '{{adopter_name}}',
+  '{{adopter_email}}',
+  '{{adopter_phone}}',
+  '{{adopter_address}}',
+  // Animal info
+  '{{animal_name}}',
+  '{{animal_species}}',
+  '{{animal_breed}}',
+  '{{animal_age}}',
+  '{{animal_color}}',
+  '{{animal_sex}}',
+  '{{animal_microchip}}',
+  // Organization info
+  '{{org_name}}',
+  '{{org_email}}',
+  '{{org_phone}}',
+  '{{org_address}}',
+  // Adoption details
+  '{{adoption_fee}}',
+  '{{adoption_date}}',
+  '{{staff_name}}',
+] as const;
+
 // Adoption Contract Templates table - customizable contract templates per tenant
 export const adoptionContractTemplates = pgTable("adoption_contract_templates", {
   id: serial("id").primaryKey(),
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
   name: text("name").notNull(), // e.g., "Standard Adoption Contract"
+  description: text("description"), // Optional description of the template
   version: text("version").notNull().default("1.0"),
+  editorMode: text("editor_mode").notNull().default("richText").$type<"richText" | "guided">(),
   htmlTemplate: text("html_template").notNull(), // HTML with {{mustache}} placeholders
+  guidedSections: jsonb("guided_sections").$type<ContractTemplateSection[]>(), // For guided builder mode
   isDefault: boolean("is_default").notNull().default(false),
+  isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
   updatedBy: uuid("updated_by").references(() => users.id),
 });
 
 export const insertAdoptionContractTemplateSchema = createInsertSchema(adoptionContractTemplates).omit({
   id: true,
   createdAt: true,
+  updatedAt: true,
 });
 export type InsertAdoptionContractTemplate = z.infer<typeof insertAdoptionContractTemplateSchema>;
 export type AdoptionContractTemplate = typeof adoptionContractTemplates.$inferSelect;
