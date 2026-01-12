@@ -2573,6 +2573,31 @@ export const insertAdoptionContractTemplateSchema = createInsertSchema(adoptionC
 export type InsertAdoptionContractTemplate = z.infer<typeof insertAdoptionContractTemplateSchema>;
 export type AdoptionContractTemplate = typeof adoptionContractTemplates.$inferSelect;
 
+// Foster Contract Templates table - customizable foster care agreement templates per tenant
+export const fosterContractTemplates = pgTable("foster_contract_templates", {
+  id: serial("id").primaryKey(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  name: text("name").notNull(), // e.g., "Standard Foster Care Agreement"
+  description: text("description"), // Optional description of the template
+  version: text("version").notNull().default("1.0"),
+  editorMode: text("editor_mode").notNull().default("richText").$type<"richText" | "guided">(),
+  htmlTemplate: text("html_template").notNull(), // HTML with {{mustache}} placeholders
+  guidedSections: jsonb("guided_sections").$type<ContractTemplateSection[]>(), // For guided builder mode
+  isDefault: boolean("is_default").notNull().default(false),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  updatedBy: uuid("updated_by").references(() => users.id),
+});
+
+export const insertFosterContractTemplateSchema = createInsertSchema(fosterContractTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertFosterContractTemplate = z.infer<typeof insertFosterContractTemplateSchema>;
+export type FosterContractTemplate = typeof fosterContractTemplates.$inferSelect;
+
 // Adoption Checkout Sessions table - manages the end-to-end adoption checkout process
 export const adoptionCheckoutSessions = pgTable("adoption_checkout_sessions", {
   id: uuid("id").primaryKey().defaultRandom(),

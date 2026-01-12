@@ -6074,6 +6074,195 @@ Crawl-delay: 1
   });
 
   // ============================================================================
+  // Foster Contract Template Routes
+  // ============================================================================
+
+  /**
+   * GET /api/foster-contract-templates
+   * List all foster contract templates for tenant (staff only)
+   */
+  app.get('/api/foster-contract-templates', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      const { getAllFosterTemplates, FOSTER_MERGE_FIELDS } = await import('./services/foster-contract-template');
+      const templates = await getAllFosterTemplates(req.tenant!.id);
+      res.json({ templates, mergeFields: FOSTER_MERGE_FIELDS });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/foster-contract-templates
+   * Create new foster contract template (admin only)
+   */
+  app.post('/api/foster-contract-templates', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+    try {
+      const { createFosterTemplate, validateFosterTemplate } = await import('./services/foster-contract-template');
+      const { insertFosterContractTemplateSchema } = await import('@shared/schema');
+      
+      const validation = validateFosterTemplate(req.body.htmlTemplate || '');
+      if (!validation.valid) {
+        return res.status(400).json({ 
+          error: 'Invalid template HTML', 
+          validationErrors: validation.errors 
+        });
+      }
+
+      const data = insertFosterContractTemplateSchema.parse({
+        ...req.body,
+        tenantId: req.tenant!.id,
+        updatedBy: req.user!.id,
+      });
+      
+      const template = await createFosterTemplate(data);
+      res.json({ template, message: 'Foster template created successfully' });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * PUT /api/foster-contract-templates/:id
+   * Update foster contract template (admin only)
+   */
+  app.put('/api/foster-contract-templates/:id', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+    try {
+      const { updateFosterTemplate, validateFosterTemplate } = await import('./services/foster-contract-template');
+      const { insertFosterContractTemplateSchema } = await import('@shared/schema');
+      
+      if (req.body.htmlTemplate) {
+        const validation = validateFosterTemplate(req.body.htmlTemplate);
+        if (!validation.valid) {
+          return res.status(400).json({ 
+            error: 'Invalid template HTML', 
+            validationErrors: validation.errors 
+          });
+        }
+      }
+
+      const updateSchema = insertFosterContractTemplateSchema.partial().omit({ tenantId: true });
+      const validatedUpdates = updateSchema.parse(req.body);
+
+      const updates = {
+        ...validatedUpdates,
+        updatedBy: req.user!.id,
+      };
+
+      const template = await updateFosterTemplate(req.params.id, req.tenant!.id, updates);
+      
+      if (!template) {
+        return res.status(404).json({ error: 'Foster template not found' });
+      }
+
+      res.json({ template, message: 'Foster template updated successfully' });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * DELETE /api/foster-contract-templates/:id
+   * Delete foster contract template (admin only)
+   */
+  app.delete('/api/foster-contract-templates/:id', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+    try {
+      const { deleteFosterTemplate, getFosterTemplateById } = await import('./services/foster-contract-template');
+      
+      const template = await getFosterTemplateById(req.params.id, req.tenant!.id);
+      if (template?.isDefault) {
+        return res.status(400).json({ error: 'Cannot delete the default template. Set another template as default first.' });
+      }
+      
+      await deleteFosterTemplate(req.params.id, req.tenant!.id);
+      res.json({ success: true, message: 'Foster template deleted successfully' });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * PUT /api/foster-contract-templates/:id/set-default
+   * Set foster template as default for tenant (admin only)
+   */
+  app.put('/api/foster-contract-templates/:id/set-default', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+    try {
+      const { setDefaultFosterTemplate } = await import('./services/foster-contract-template');
+      
+      const template = await setDefaultFosterTemplate(req.params.id, req.tenant!.id);
+      
+      if (!template) {
+        return res.status(404).json({ error: 'Foster template not found' });
+      }
+
+      res.json({ template, message: 'Foster template set as default successfully' });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/foster-contract-templates/:id/preview
+   * Generate preview HTML with sample merge data (admin/staff only)
+   */
+  app.get('/api/foster-contract-templates/:id/preview', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      const { getFosterTemplateById, mergeFosterPlaceholders } = await import('./services/foster-contract-template');
+      const DOMPurify = (await import('isomorphic-dompurify')).default;
+      
+      const template = await getFosterTemplateById(req.params.id, req.tenant!.id);
+      
+      if (!template) {
+        return res.status(404).json({ error: 'Foster template not found' });
+      }
+
+      const sampleData = {
+        organization_name: req.tenant!.name,
+        foster_parent_name: 'Jane Smith',
+        foster_email: 'jane.smith@example.com',
+        foster_phone: '(555) 987-6543',
+        foster_address: '456 Oak Avenue, Petville, ST 67890',
+        foster_start_date: new Date().toLocaleDateString(),
+        animal_name: 'Max',
+        animal_species: 'Dog',
+        animal_breed: 'Labrador Mix',
+        animal_sex: 'Male',
+        animal_age: '2 years',
+        animal_microchip: '985112012345678',
+        contract_date: new Date().toLocaleDateString(),
+        signature_image_url: '/placeholder-signature.png',
+        signed_timestamp: new Date().toISOString(),
+        signed_ip: '192.168.1.100',
+      };
+
+      const mergedHtml = mergeFosterPlaceholders(template.htmlTemplate, sampleData);
+      
+      const sanitizedHtml = DOMPurify.sanitize(mergedHtml, {
+        ALLOWED_TAGS: ['html', 'head', 'body', 'title', 'meta', 'style', 'link', 'div', 'span', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'strong', 'em', 'u', 'br', 'hr', 'ul', 'ol', 'li', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'img', 'a'],
+        ALLOWED_ATTR: ['class', 'id', 'style', 'href', 'src', 'alt', 'title', 'target', 'colspan', 'rowspan'],
+        ALLOW_DATA_ATTR: false,
+      });
+      
+      res.json({ html: sanitizedHtml });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/foster-contract-templates/ensure-default
+   * Ensure a default foster template exists for tenant (staff only)
+   */
+  app.get('/api/foster-contract-templates/ensure-default', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      const { ensureDefaultFosterTemplate } = await import('./services/foster-contract-template');
+      const template = await ensureDefaultFosterTemplate(req.tenant!.id, req.tenant!.name);
+      res.json({ template, message: 'Default foster template ensured' });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // ============================================================================
   // Adoption Form Fields Routes (Customizable Form Questions)
   // ============================================================================
 
