@@ -1,44 +1,23 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { loadStripe } from "@stripe/stripe-js";
-import { Elements, CardElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { Building2, CreditCard, CheckCircle2, AlertCircle, ArrowRight, ArrowLeft, Loader2 } from "lucide-react";
+import { Building2, CheckCircle2, AlertCircle, ArrowRight, Loader2 } from "lucide-react";
 import { z } from "zod";
 
-// Initialize Stripe
-// In development, prefer TESTING keys but fall back to regular keys
-// In production, use production keys
-const isDevelopment = import.meta.env.DEV;
-const stripePublicKey = isDevelopment 
-  ? (import.meta.env.TESTING_VITE_STRIPE_PUBLIC_KEY || import.meta.env.VITE_STRIPE_PUBLIC_KEY)
-  : import.meta.env.VITE_STRIPE_PUBLIC_KEY;
-
-const stripePromise = stripePublicKey ? loadStripe(stripePublicKey) : null;
-
-// Stripe Price IDs from environment variables
-// In development, prefer test keys but fall back to regular keys
-const stripeProfessionalPriceId = isDevelopment 
-  ? (import.meta.env.TESTING_VITE_STRIPE_PROFESSIONAL_PRICE_ID || import.meta.env.VITE_STRIPE_PROFESSIONAL_PRICE_ID)
-  : import.meta.env.VITE_STRIPE_PROFESSIONAL_PRICE_ID;
-
-const arePriceIdsConfigured = !!stripeProfessionalPriceId;
 
 // Two-tier pricing model:
 // - Free: No payment required, 5% platform fee on donations
-// - Professional: Monthly subscription, 0% platform fee, plus optional custom domain & Google Workspace
+// - Professional: $39/mo subscription, 0% platform fee
 const PRICING = {
   free: {
     price: 0,
-    priceId: "", // No subscription required for free tier
     name: "Free",
     features: [
       "Unlimited animals",
@@ -49,7 +28,6 @@ const PRICING = {
   },
   professional: {
     price: 39,
-    priceId: stripeProfessionalPriceId || "",
     name: "Professional",
     features: [
       "Unlimited animals",
@@ -63,9 +41,7 @@ const PRICING = {
   },
 };
 
-type Tier = keyof typeof PRICING;
-
-// Step 1: Organization Details Schema
+// Organization Details Schema
 const organizationSchema = z.object({
   rescueName: z.string().min(1, "Rescue name is required"),
   subdomain: z.string()
@@ -81,302 +57,9 @@ const organizationSchema = z.object({
 
 type OrganizationFormData = z.infer<typeof organizationSchema>;
 
-// Payment Form Component (uses Stripe Elements hooks)
-function PaymentForm({
-  tier,
-  tenantId,
-  email,
-  rescueName,
-  onSuccess,
-  onBack,
-}: {
-  tier: Tier;
-  tenantId: string;
-  email: string;
-  rescueName: string;
-  onSuccess: (subdomain: string) => void;
-  onBack: () => void;
-}) {
-  const stripe = useStripe();
-  const elements = useElements();
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const { toast } = useToast();
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-
-    // Validate price ID is configured
-    if (!PRICING[tier].priceId) {
-      setError("Stripe price configuration is missing. Please contact support.");
-      return;
-    }
-
-    if (!stripe || !elements) {
-      setError("Stripe has not loaded yet. Please try again.");
-      return;
-    }
-
-    const cardElement = elements.getElement(CardElement);
-    if (!cardElement) {
-      setError("Card element not found. Please refresh the page.");
-      return;
-    }
-
-    setIsProcessing(true);
-
-    try {
-      // Step 1: Create subscription and get client secret
-      const subscriptionResponse = await apiRequest("POST", "/api/platform/create-subscription", {
-        tenantId,
-        email,
-        rescueName,
-        priceId: PRICING[tier].priceId,
-        tier,
-      });
-
-      // Check if the response is ok (status 200-299)
-      if (!subscriptionResponse.ok) {
-        const errorData = await subscriptionResponse.json();
-        throw new Error(errorData.message || errorData.error || "Failed to create subscription. Please try again.");
-      }
-
-      const { clientSecret, subscriptionId, requiresPayment } = await subscriptionResponse.json();
-
-      // If this is a trial, no payment is required upfront
-      if (!requiresPayment) {
-        // Directly finalize the subscription without payment
-        const finalizeResponse = await apiRequest("POST", "/api/platform/finalize-subscription", {
-          tenantId,
-          subscriptionId,
-          skipPaymentIntent: true,
-        });
-
-        if (!finalizeResponse.ok) {
-          const errorData = await finalizeResponse.json();
-          throw new Error(errorData.message || "Failed to activate your trial. Please contact support.");
-        }
-
-        const finalizeData = await finalizeResponse.json();
-
-        toast({
-          title: "Trial activated!",
-          description: "Your 30-day free trial has started.",
-        });
-
-        onSuccess(finalizeData.subdomain);
-        return;
-      }
-
-      if (!clientSecret) {
-        throw new Error("Failed to create subscription. Please try again or contact support.");
-      }
-
-      // Step 2: Confirm payment with Stripe
-      const { error: confirmError, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
-        payment_method: {
-          card: cardElement,
-          billing_details: {
-            email,
-            name: rescueName,
-          },
-        },
-      });
-
-      if (confirmError) {
-        // Handle specific Stripe error messages
-        let userMessage = confirmError.message;
-        if (confirmError.type === "card_error") {
-          if (confirmError.code === "card_declined") {
-            userMessage = "Your card was declined. Please try a different card.";
-          } else if (confirmError.code === "insufficient_funds") {
-            userMessage = "Your card has insufficient funds. Please try a different card.";
-          } else if (confirmError.code === "expired_card") {
-            userMessage = "Your card has expired. Please use a different card.";
-          } else if (confirmError.code === "incorrect_cvc") {
-            userMessage = "The security code (CVC) is incorrect. Please check and try again.";
-          } else if (confirmError.code === "processing_error") {
-            userMessage = "An error occurred while processing your card. Please try again.";
-          }
-        }
-        throw new Error(userMessage || "Payment failed. Please try again.");
-      }
-
-      // Handle payment intent status
-      if (paymentIntent?.status === "succeeded") {
-        // Step 3: Finalize subscription on backend - verify and persist subscription data
-        try {
-          const finalizeResponse = await apiRequest("POST", "/api/platform/finalize-subscription", {
-            tenantId,
-            subscriptionId,
-          });
-
-          if (!finalizeResponse.ok) {
-            const errorData = await finalizeResponse.json();
-            throw new Error(errorData.message || errorData.error || "Failed to finalize subscription. Please contact support.");
-          }
-
-          const finalizeData = await finalizeResponse.json();
-          
-          if (!finalizeData.success) {
-            throw new Error("Subscription verification failed. Please contact support with your payment confirmation.");
-          }
-
-          toast({
-            title: "Payment successful!",
-            description: "Your subscription has been activated.",
-          });
-          
-          // Get subdomain from sessionStorage
-          const subdomain = sessionStorage.getItem("signup_subdomain") || "";
-          onSuccess(subdomain);
-        } catch (finalizeError: any) {
-          console.error("Finalize subscription error:", finalizeError);
-          // Payment succeeded but finalization failed - show helpful error
-          const errorMessage = finalizeError.message || "Payment was processed but we couldn't activate your subscription. Please contact support with your payment confirmation.";
-          throw new Error(errorMessage);
-        }
-      } else if (paymentIntent?.status === "requires_action") {
-        // Payment requires additional authentication (3D Secure)
-        throw new Error("Your card requires additional authentication. Please contact your card issuer.");
-      } else if (paymentIntent?.status === "requires_payment_method") {
-        throw new Error("Payment failed. Please try a different payment method.");
-      } else {
-        throw new Error("Payment was not successful. Please try again or contact support.");
-      }
-    } catch (err: any) {
-      console.error("Payment error:", err);
-      const errorMessage = err.message || "Payment processing failed. Please try again.";
-      setError(errorMessage);
-      toast({
-        title: "Payment failed",
-        description: errorMessage,
-        variant: "destructive",
-      });
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const cardElementOptions = {
-    style: {
-      base: {
-        fontSize: "16px",
-        color: "hsl(var(--foreground))",
-        fontFamily: "Inter, system-ui, sans-serif",
-        "::placeholder": {
-          color: "hsl(var(--muted-foreground))",
-        },
-      },
-      invalid: {
-        color: "hsl(var(--destructive))",
-      },
-    },
-  };
-
-  // Calculate trial end date (30 days from now)
-  const trialEndDate = new Date();
-  trialEndDate.setDate(trialEndDate.getDate() + 30);
-  const formattedTrialEndDate = trialEndDate.toLocaleDateString('en-US', { 
-    month: 'long', 
-    day: 'numeric', 
-    year: 'numeric' 
-  });
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      {error && (
-        <Alert variant="destructive" data-testid="alert-payment-error">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
-
-      {/* Trial Information Alert */}
-      <Alert className="bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800" data-testid="alert-trial-info">
-        <CheckCircle2 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-        <AlertDescription className="text-blue-900 dark:text-blue-100">
-          <p className="font-semibold mb-1">30-Day Free Trial</p>
-          <p className="text-sm">
-            You won't be charged today. Your free trial starts immediately and ends on <strong>{formattedTrialEndDate}</strong>. 
-            After the trial, you'll be charged ${PRICING[tier].price}/month. Cancel anytime before {formattedTrialEndDate} to avoid charges.
-          </p>
-        </AlertDescription>
-      </Alert>
-
-      <div className="rounded-md border bg-card p-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="font-semibold text-lg">{PRICING[tier].name} Plan</h3>
-            <p className="text-sm text-muted-foreground">
-              ${PRICING[tier].price}/month
-            </p>
-          </div>
-          <Badge variant="secondary">{tier}</Badge>
-        </div>
-        <ul className="space-y-2 text-sm">
-          {PRICING[tier].features.map((feature, index) => (
-            <li key={index} className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-primary" />
-              <span>{feature}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="card-element">Card Information</Label>
-        <div
-          id="card-element"
-          className="rounded-md border bg-background p-3"
-          data-testid="input-card-element"
-        >
-          <CardElement options={cardElementOptions} />
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Your payment information is securely processed by Stripe
-        </p>
-      </div>
-
-      <div className="flex gap-3">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={onBack}
-          disabled={isProcessing}
-          data-testid="button-back"
-        >
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back
-        </Button>
-        <Button
-          type="submit"
-          className="flex-1"
-          disabled={!stripe || isProcessing || !PRICING[tier].priceId}
-          data-testid="button-complete-payment"
-        >
-          {isProcessing ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Starting Your Trial...
-            </>
-          ) : (
-            <>
-              Start Free Trial
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </>
-          )}
-        </Button>
-      </div>
-    </form>
-  );
-}
-
 // Main Component
 export default function TenantSignupPage() {
-  const [step, setStep] = useState(1);
-  const [tier, setTier] = useState<Tier>("free");
+  const [startProTrial, setStartProTrial] = useState(false);
   const [formData, setFormData] = useState<OrganizationFormData>({
     rescueName: "",
     subdomain: "",
@@ -384,8 +67,6 @@ export default function TenantSignupPage() {
     password: "",
     confirmPassword: "",
   });
-  const [tenantId, setTenantId] = useState<string | null>(null);
-  const [subdomain, setSubdomain] = useState<string>("");
   const [errors, setErrors] = useState<Partial<Record<keyof OrganizationFormData, string>>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [subdomainCheckStatus, setSubdomainCheckStatus] = useState<{
@@ -395,18 +76,6 @@ export default function TenantSignupPage() {
   }>({ checking: false, available: null, message: "" });
   const { toast } = useToast();
   const [, navigate] = useLocation();
-
-  const totalSteps = 3;
-  const progress = (step / totalSteps) * 100;
-
-  // Get tier from URL query params on mount
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const tierParam = urlParams.get("tier");
-    if (tierParam && (tierParam === "free" || tierParam === "professional")) {
-      setTier(tierParam);
-    }
-  }, []);
 
   // Check subdomain availability (debounced)
   useEffect(() => {
@@ -447,7 +116,7 @@ export default function TenantSignupPage() {
     }
   };
 
-  const validateStep1 = (): boolean => {
+  const validateForm = (): boolean => {
     try {
       organizationSchema.parse(formData);
       setErrors({});
@@ -473,10 +142,10 @@ export default function TenantSignupPage() {
     }
   };
 
-  const handleStep1Submit = async (e: React.FormEvent) => {
+  const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!validateStep1()) {
+    if (!validateForm()) {
       toast({
         title: "Validation error",
         description: "Please fix the errors before continuing",
@@ -494,7 +163,7 @@ export default function TenantSignupPage() {
         subdomain: formData.subdomain,
         adminEmail: formData.adminEmail,
         adminPassword: formData.password,
-        tier,
+        startProTrial: startProTrial,
       });
 
       const data = await response.json();
@@ -505,21 +174,21 @@ export default function TenantSignupPage() {
         // Store subdomain for later retrieval
         sessionStorage.setItem("signup_subdomain", data.subdomain);
         
-        // Free tier: skip payment, go directly to success
-        if (tier === "free") {
-          toast({
-            title: "Account created!",
-            description: "Your free account is ready to use.",
-          });
-          navigate(`/platform/signup/success?subdomain=${data.subdomain}`);
-        } else {
-          // Professional tier: proceed to payment
-          setStep(2);
-          toast({
-            title: "Organization created!",
-            description: "Now let's set up your payment method.",
-          });
-        }
+        // Account is now active immediately (Free or Pro trial)
+        const successMessage = startProTrial 
+          ? "Your 14-day Pro trial has started! Enjoy 0% platform fees."
+          : "Your free account is ready to use.";
+        
+        toast({
+          title: "Account created!",
+          description: successMessage,
+        });
+        
+        // Navigate to success page with trial info
+        const successUrl = startProTrial 
+          ? `/platform/signup/success?subdomain=${data.subdomain}&trial=true`
+          : `/platform/signup/success?subdomain=${data.subdomain}`;
+        navigate(successUrl);
       } else {
         throw new Error(data.message || "Failed to create organization");
       }
@@ -535,63 +204,25 @@ export default function TenantSignupPage() {
     }
   };
 
-  const handlePaymentSuccess = (successSubdomain: string) => {
-    sessionStorage.removeItem("signup_subdomain");
-    // Redirect to success page with subdomain
-    navigate(`/platform/signup/success?subdomain=${successSubdomain}`);
-  };
-
-  const handleBackFromPayment = () => {
-    setStep(1);
-  };
-
-  const handleGoToLogin = () => {
-    // Redirect to tenant-specific login page using path-based routing
-    window.location.href = `https://irescue.life/${subdomain}/login`;
-  };
-
   return (
     <div className="flex min-h-screen items-center justify-center bg-muted/30 p-6">
       <Card className="w-full max-w-2xl">
         <CardHeader className="space-y-4">
           <div className="flex items-center gap-3">
-            {step === 1 && <Building2 className="h-6 w-6 text-primary" />}
-            {step === 2 && <CreditCard className="h-6 w-6 text-primary" />}
-            {step === 3 && <CheckCircle2 className="h-6 w-6 text-primary" />}
-            <CardTitle className="text-2xl">
-              {step === 1 && "Create Your Account"}
-              {step === 2 && "Complete Your Subscription"}
-              {step === 3 && "Welcome to iRescue!"}
-            </CardTitle>
+            <Building2 className="h-6 w-6 text-primary" />
+            <CardTitle className="text-2xl">Create Your Free Account</CardTitle>
           </div>
-          {step < 3 && (
-            <>
-              <CardDescription>
-                Step {step} of {totalSteps - 1}
-              </CardDescription>
-              <Progress value={progress} className="h-2" data-testid="progress-indicator" />
-            </>
-          )}
+          <CardDescription>
+            Get started with iRescue.life - no payment required
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          {tier === "professional" && !arePriceIdsConfigured && (
-            <Alert variant="destructive" className="mb-6" data-testid="alert-missing-price-ids">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                Payment system is not configured. VITE_STRIPE_PROFESSIONAL_PRICE_ID is missing.
-                Please contact support to complete your signup for the Professional tier.
-              </AlertDescription>
-            </Alert>
-          )}
-          {/* Step 1: Organization Details */}
-          {step === 1 && (
-            <form onSubmit={handleStep1Submit} className="space-y-6">
-              <Alert className="bg-blue-50 border-blue-200 dark:bg-blue-950 dark:border-blue-800" data-testid="alert-custom-domain-info">
-                <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                <AlertDescription className="text-blue-800 dark:text-blue-100">
-                  <strong>Your Portal URL:</strong> Access your portal at irescue.life/youridentifier. 
-                  {tier === "free" && " Want your own professional domain (e.g., happypaws.org)? Upgrade to Professional to enable custom domain integration."}
-                  {tier === "professional" && " As a Professional subscriber, you can configure a custom domain (e.g., happypaws.org) in settings after signup."}
+          <form onSubmit={handleFormSubmit} className="space-y-6">
+              <Alert className="bg-green-50 border-green-200 dark:bg-green-950 dark:border-green-800" data-testid="alert-free-account-info">
+                <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+                <AlertDescription className="text-green-800 dark:text-green-100">
+                  <strong>Free Forever:</strong> Create your account instantly with no payment required. 
+                  Start a 14-day Pro trial anytime to try premium features, then continue free or upgrade.
                 </AlertDescription>
               </Alert>
 
@@ -638,7 +269,7 @@ export default function TenantSignupPage() {
                     />
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Your trial portal URL. Upgrade later to use your own custom domain.
+                    Your portal URL. Upgrade to Professional for custom domain support.
                   </p>
                   {subdomainCheckStatus.checking && (
                     <p className="text-sm text-muted-foreground" data-testid="text-subdomain-checking">
@@ -726,86 +357,75 @@ export default function TenantSignupPage() {
                   )}
                 </div>
 
-                <div className="rounded-md bg-muted p-4 space-y-2">
-                  <p className="text-sm font-medium">Selected Plan</p>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-semibold">{PRICING[tier].name}</p>
-                      <p className="text-xs text-muted-foreground">${PRICING[tier].price}/month</p>
+                {/* Pro Trial Option */}
+                <div className="rounded-md border border-primary/30 bg-primary/5 p-4 space-y-3">
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      id="start-pro-trial"
+                      checked={startProTrial}
+                      onChange={(e) => setStartProTrial(e.target.checked)}
+                      className="mt-1 h-4 w-4 rounded border-gray-300"
+                      data-testid="checkbox-start-pro-trial"
+                    />
+                    <div className="flex-1">
+                      <Label htmlFor="start-pro-trial" className="text-sm font-medium cursor-pointer">
+                        Start 14-day Pro trial (optional)
+                      </Label>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Try Professional features free for 14 days: 0% platform fees, 10,000 emails/month.
+                        No payment required. After trial ends, you'll continue on the Free tier.
+                      </p>
                     </div>
-                    <Badge variant="secondary" data-testid="text-selected-tier">
-                      {tier}
-                    </Badge>
                   </div>
                 </div>
-              </div>
 
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={isLoading || !subdomainCheckStatus.available || !arePriceIdsConfigured}
-                data-testid="button-continue-to-payment"
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Creating Organization...
-                  </>
-                ) : (
-                  <>
-                    Continue to Payment
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </>
-                )}
-              </Button>
-            </form>
-          )}
-
-          {/* Step 2: Payment */}
-          {step === 2 && tenantId && stripePromise && arePriceIdsConfigured && (
-            <Elements stripe={stripePromise}>
-              <PaymentForm
-                tier={tier}
-                tenantId={tenantId}
-                email={formData.adminEmail}
-                rescueName={formData.rescueName}
-                onSuccess={handlePaymentSuccess}
-                onBack={handleBackFromPayment}
-              />
-            </Elements>
-          )}
-
-          {/* Step 3: Success */}
-          {step === 3 && (
-            <div className="space-y-6 text-center">
-              <div className="flex justify-center">
-                <div className="rounded-full bg-green-500/10 p-4">
-                  <CheckCircle2 className="h-12 w-12 text-green-600" data-testid="icon-success" />
+                {/* Plan Summary */}
+                <div className="rounded-md bg-muted p-4 space-y-2">
+                  <p className="text-sm font-medium">{startProTrial ? 'Starting with Pro Trial' : 'Free Plan'}</p>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-semibold">
+                        {startProTrial ? PRICING.professional.name : PRICING.free.name}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {startProTrial ? '14-day free trial, then Free tier' : 'Free forever, upgrade anytime'}
+                      </p>
+                    </div>
+                    <Badge variant={startProTrial ? "default" : "secondary"} data-testid="text-selected-tier">
+                      {startProTrial ? 'Pro Trial' : 'Free'}
+                    </Badge>
+                  </div>
+                  <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+                    {(startProTrial ? PRICING.professional.features : PRICING.free.features).slice(0, 4).map((feature, index) => (
+                      <li key={index} className="flex items-center gap-1">
+                        <CheckCircle2 className="h-3 w-3 text-primary" />
+                        <span>{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               </div>
-              <div className="space-y-2">
-                <h3 className="text-xl font-semibold" data-testid="text-success-title">
-                  Your account is ready!
-                </h3>
-                <p className="text-muted-foreground" data-testid="text-success-message">
-                  Your subscription has been activated and your rescue portal is all set up.
-                </p>
-              </div>
-              <div className="rounded-md border bg-muted/50 p-4 space-y-2">
-                <p className="text-sm font-medium">Your Trial Portal URL:</p>
-                <p className="text-sm font-mono text-primary" data-testid="text-portal-url">
-                  https://irescue.life/{subdomain}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Upgrade to use your own custom domain (e.g., happypaws.org)
-                </p>
-              </div>
-              <Button onClick={handleGoToLogin} className="w-full" data-testid="button-go-to-login">
-                Go to Login
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </div>
-          )}
+
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={isLoading || !subdomainCheckStatus.available}
+              data-testid="button-create-account"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Creating Account...
+                </>
+              ) : (
+                <>
+                  {startProTrial ? 'Start Pro Trial' : 'Create Free Account'}
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </>
+              )}
+            </Button>
+          </form>
         </CardContent>
       </Card>
     </div>

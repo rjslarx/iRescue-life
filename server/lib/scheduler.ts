@@ -208,6 +208,33 @@ export function initializeScheduler() {
   });
 
   console.log(`✓ Newsletter batch processor scheduled for: ${newsletterBatchSchedule} (UTC)`);
+
+  // Schedule Pro trial expiration check daily at 3:00 AM UTC
+  // "0 3 * * *" means: at minute 0, hour 3, every day
+  // This reverts expired Pro trials back to Free tier
+  const trialExpirationSchedule = process.env.TRIAL_EXPIRATION_SCHEDULE || "0 3 * * *";
+  
+  cron.schedule(trialExpirationSchedule, async () => {
+    console.log("⏰ Running Pro trial expiration check...");
+    try {
+      const { runTrialExpirationCheck } = await import("./trial-expiration");
+      const result = await runTrialExpirationCheck();
+      if (result.expiredCount > 0) {
+        console.log(`✓ Trial expiration: ${result.expiredCount} trials expired, ${result.emailsSent} notification emails sent`);
+      } else {
+        console.log(`✓ Trial expiration: No trials expired`);
+      }
+      if (result.errors.length > 0) {
+        console.warn(`⚠️ Trial expiration errors: ${result.errors.join('; ')}`);
+      }
+    } catch (error) {
+      console.error(`❌ Trial expiration check failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }, {
+    timezone: "UTC"
+  });
+
+  console.log(`✓ Trial expiration check scheduled for: ${trialExpirationSchedule} (UTC)`);
   
   // Log next scheduled run times
   const nextMidnight = new Date();

@@ -1469,7 +1469,7 @@ export class EmailService {
             </div>
             <div class="content">
               <div class="alert success">
-                <strong>Your account is ready!</strong> Your 30-day free trial has started, and your admin credentials are active.
+                <strong>Your account is ready!</strong> Your Free account is now active, and you can optionally start a 14-day Pro trial anytime.
               </div>
 
               <p style="font-size: 16px; margin: 20px 0;">Hi there!</p>
@@ -1597,7 +1597,7 @@ export class EmailService {
                 <p style="margin: 0 0 15px 0; color: #4b5563; font-size: 16px;"><strong>Your Account Details:</strong></p>
                 <p style="margin: 5px 0; color: #6b7280;">Organization: <strong>${tenantData.rescueName}</strong></p>
                 <p style="margin: 5px 0; color: #6b7280;">Plan: <strong>${tenantData.tier.charAt(0).toUpperCase() + tenantData.tier.slice(1)}</strong></p>
-                <p style="margin: 5px 0; color: #6b7280;">Trial Period: <strong>30 days</strong></p>
+                <p style="margin: 5px 0; color: #6b7280;">Pro Trial: <strong>14 days (available anytime)</strong></p>
               </div>
 
               <div style="background: #f3f4f6; border-radius: 6px; padding: 16px; margin: 20px 0;">
@@ -1666,6 +1666,144 @@ export class EmailService {
       }
     } catch (error) {
       console.error('❌ [EMAIL SERVICE] Error sending tenant welcome email:', error);
+    }
+  }
+
+  /**
+   * Send Pro trial expired notification to tenant admin
+   * Notifies them that their trial has ended and they've been moved to Free tier
+   */
+  static async sendProTrialExpiredEmail(tenantData: {
+    rescueName: string;
+    adminEmail: string;
+    subdomain: string;
+  }): Promise<void> {
+    console.log('⏰ [EMAIL SERVICE] sendProTrialExpiredEmail called for:', tenantData.adminEmail);
+    
+    const platformApiKey = process.env.PLATFORM_RESEND_API_KEY;
+
+    if (!platformApiKey) {
+      console.error('❌ [EMAIL SERVICE] Platform API key not configured - skipping trial expired email');
+      return;
+    }
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-radius: 8px 8px 0 0; text-align: center; }
+            .content { background: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px; }
+            .alert { background: #dbeafe; border-left: 4px solid #3b82f6; padding: 16px; margin: 20px 0; border-radius: 4px; }
+            .warning { background: #fef3c7; border-left-color: #f59e0b; }
+            .footer { text-align: center; margin-top: 20px; color: #6b7280; font-size: 14px; }
+            .btn { display: inline-block; background: #667eea; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 10px 0; }
+            .comparison { width: 100%; border-collapse: collapse; margin: 20px 0; }
+            .comparison th, .comparison td { padding: 12px; text-align: left; border: 1px solid #e5e7eb; }
+            .comparison th { background: #f3f4f6; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1 style="margin: 0; font-size: 28px;">Your Pro Trial Has Ended</h1>
+              <p style="margin: 15px 0 0 0; opacity: 0.9;">${tenantData.rescueName}</p>
+            </div>
+            <div class="content">
+              <p style="font-size: 16px; margin: 20px 0;">Hi there!</p>
+              
+              <p style="margin: 10px 0;">Your 14-day Professional trial has ended, and your account has been moved to the <strong>Free tier</strong>.</p>
+              
+              <div class="alert warning">
+                <strong>What's Changed:</strong>
+                <ul style="margin: 10px 0 0 0; padding-left: 20px;">
+                  <li>Platform fees are now 5% (was 0% on Pro)</li>
+                  <li>Email limit is now 500/month (was 10,000 on Pro)</li>
+                </ul>
+              </div>
+
+              <p style="margin: 20px 0;"><strong>Good news:</strong> Your portal and all your data remain fully accessible! The Free tier includes all core features.</p>
+
+              <h2 style="color: #374151; margin-top: 30px;">Upgrade to Professional</h2>
+              <p>Ready to eliminate platform fees and unlock higher limits? Upgrade to Professional for just $39/month:</p>
+              
+              <table class="comparison">
+                <tr>
+                  <th>Feature</th>
+                  <th>Free</th>
+                  <th>Professional</th>
+                </tr>
+                <tr>
+                  <td>Platform Fee</td>
+                  <td>5%</td>
+                  <td><strong>0%</strong></td>
+                </tr>
+                <tr>
+                  <td>Monthly Emails</td>
+                  <td>500</td>
+                  <td><strong>10,000</strong></td>
+                </tr>
+                <tr>
+                  <td>Custom Domain</td>
+                  <td>-</td>
+                  <td><strong>Included</strong></td>
+                </tr>
+              </table>
+
+              <div style="text-align: center; margin: 30px 0;">
+                <a href="https://irescue.life/${tenantData.subdomain}/staff/login" class="btn">Log In to Upgrade</a>
+              </div>
+
+              <div style="background: #f3f4f6; border-radius: 6px; padding: 16px; margin: 20px 0;">
+                <p style="margin: 0; font-size: 14px; color: #6b7280;">
+                  <strong>Questions?</strong> Contact us at <a href="mailto:support@irescue.life" style="color: #667eea;">support@irescue.life</a>
+                </p>
+              </div>
+            </div>
+            <div class="footer">
+              <p>Thank you for being part of the iRescue.life community!</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    try {
+      const subject = cleanSubjectLine('Your Pro Trial Has Ended - Continue on Free or Upgrade');
+      const plainText = htmlToPlainText(html);
+      const unsubscribeHeader = generateUnsubscribeHeader(tenantData.adminEmail, tenantData.subdomain);
+      
+      const response = await fetch(`${RESEND_API_URL}/emails`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${platformApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: 'iRescue.life <noreply@irescue.life>',
+          to: tenantData.adminEmail,
+          subject,
+          html,
+          text: plainText,
+          headers: {
+            'List-Unsubscribe': unsubscribeHeader,
+            'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+          },
+        }),
+      });
+
+      const result = await response.json() as ResendResponse;
+      
+      if (result.error) {
+        console.error('❌ [EMAIL SERVICE] Failed to send trial expired email:', result.error);
+      } else {
+        console.log(`✅ [EMAIL SERVICE] Trial expired email sent to ${tenantData.adminEmail}! Email ID: ${result.id}`);
+      }
+    } catch (error) {
+      console.error('❌ [EMAIL SERVICE] Error sending trial expired email:', error);
     }
   }
 

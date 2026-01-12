@@ -819,8 +819,9 @@ Crawl-delay: 1
 
   /**
    * POST /api/auth/platform/signup
-   * Create new tenant for platform signup flow (without payment yet)
-   * This creates the tenant but keeps it in 'trial' status until payment is completed
+   * Create new tenant for platform signup flow
+   * New tenants start on Free tier with 'active' status immediately (no payment required)
+   * They can optionally start a 14-day Pro trial later
    */
   app.post('/api/auth/platform/signup', signupLimiter, async (req, res, next) => {
     try {
@@ -829,7 +830,7 @@ Crawl-delay: 1
         subdomain: z.string().min(1, "Identifier is required").regex(/^[a-z0-9]+$/, "Identifier must contain only lowercase letters and numbers"),
         adminEmail: z.string().email("Valid email is required"),
         adminPassword: z.string().min(8, "Password must be at least 8 characters"),
-        tier: z.enum(['free', 'professional']).optional().default('free'),
+        startProTrial: z.boolean().optional().default(false), // Option to start Pro trial immediately
       });
 
       const data = signupSchema.parse(req.body);
@@ -855,7 +856,7 @@ Crawl-delay: 1
         await db.delete(tenants).where(eq(tenants.id, existingTenant.id));
       }
 
-      // Create tenant with trial status (payment will be completed in next step)
+      // Create tenant (base creation uses schema defaults: Free tier, active status)
       console.log(`[PLATFORM SIGNUP] Creating tenant for ${data.subdomain}`);
       const result = await createTenantWithAdmin({
         rescueName: data.rescueName,
@@ -866,15 +867,25 @@ Crawl-delay: 1
       });
       console.log(`[PLATFORM SIGNUP] Tenant created: ${result.tenant.id}, User: ${result.user.id}`);
 
-      // Update tenant with subscription tier (keep as 'pending' until payment completes)
+      // Determine subscription status based on whether they want a Pro trial
+      const subscriptionTier = data.startProTrial ? 'professional' : 'free';
+      const subscriptionStatus = data.startProTrial ? 'trial' : 'active';
+      const trialEndsAt = data.startProTrial ? new Date(Date.now() + 14 * 24 * 60 * 60 * 1000) : null;
+      const proTrialUsed = data.startProTrial;
+      const emailQuotaLimit = data.startProTrial ? 10000 : 500;
+
+      // Update tenant with subscription settings
       await db
         .update(tenants)
         .set({
-          subscriptionTier: data.tier,
-          subscriptionStatus: 'pending', // Stay pending until payment completes
+          subscriptionTier: subscriptionTier as any,
+          subscriptionStatus: subscriptionStatus as any,
+          trialEndsAt,
+          proTrialUsed,
+          emailQuotaLimit,
         })
         .where(eq(tenants.id, result.tenant.id));
-      console.log(`[PLATFORM SIGNUP] Tenant ${result.tenant.id} updated with tier ${data.tier}`);
+      console.log(`[PLATFORM SIGNUP] Tenant ${result.tenant.id} activated on ${subscriptionTier} tier${data.startProTrial ? ' with 14-day Pro trial' : ''}`);
 
       // VERIFICATION: Double-check that both tenant and user exist AND user has admin role
       const [finalTenant] = await db
@@ -905,14 +916,43 @@ Crawl-delay: 1
 
       console.log(`[PLATFORM SIGNUP] SUCCESS: Tenant ${data.subdomain} created with admin user ${data.adminEmail}`);
 
-      // NOTE: Welcome emails are NOT sent here - they're sent after payment/trial activation
-      // in the finalize-subscription endpoint to avoid sending emails for abandoned signups
+      // Send welcome emails now that account is immediately active
+      try {
+        const { EmailService } = await import('./lib/email-service');
+        
+        // Send notification to platform admin
+        await EmailService.sendNewTenantNotification({
+          rescueName: finalTenant.name,
+          subdomain: finalTenant.subdomain,
+          adminEmail: data.adminEmail,
+          tier: subscriptionTier as any,
+        });
+        console.log('[PLATFORM SIGNUP] Admin notification sent successfully');
+
+        // Send welcome email to tenant admin
+        await EmailService.sendTenantWelcomeEmail({
+          rescueName: finalTenant.name,
+          adminEmail: data.adminEmail,
+          subdomain: finalTenant.subdomain,
+          tier: subscriptionTier as any,
+        });
+        console.log('[PLATFORM SIGNUP] Tenant welcome email sent successfully');
+      } catch (emailError) {
+        // Don't fail signup if email sending fails
+        console.error('[PLATFORM SIGNUP] Failed to send welcome emails (non-blocking):', emailError);
+      }
+
+      const tierMessage = data.startProTrial 
+        ? 'Your 14-day Pro trial has started! Enjoy all Pro features.'
+        : 'Your Free account is now active! You can upgrade to Pro anytime.';
 
       res.json({
         success: true,
         tenantId: result.tenant.id,
         subdomain: result.tenant.subdomain,
-        message: 'Tenant created successfully. Please complete payment to activate.',
+        tier: subscriptionTier,
+        trialEndsAt: trialEndsAt?.toISOString() || null,
+        message: `Account created successfully. ${tierMessage}`,
       });
     } catch (error: any) {
       console.error('[PLATFORM SIGNUP] ERROR:', error);
@@ -962,6 +1002,82 @@ Crawl-delay: 1
         message: isAvailable ? 'This identifier is available' : 'This identifier is already taken'
       });
     } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/platform/start-pro-trial
+   * Start a 14-day Pro trial for an existing Free tier tenant
+   * Each tenant can only use the Pro trial once
+   */
+  app.post('/api/platform/start-pro-trial', requireAuth, async (req, res, next) => {
+    try {
+      if (!req.tenant) {
+        return res.status(400).json({ 
+          error: 'Tenant required', 
+          message: 'No organization found for this request.' 
+        });
+      }
+
+      // Check if already on Pro tier
+      if (req.tenant.subscriptionTier === 'professional' && req.tenant.subscriptionStatus === 'active') {
+        return res.status(400).json({
+          error: 'Already Professional',
+          message: 'Your organization is already on the Professional plan.'
+        });
+      }
+
+      // Check if already on Pro trial
+      if (req.tenant.subscriptionStatus === 'trial') {
+        return res.status(400).json({
+          error: 'Trial active',
+          message: 'You already have an active Pro trial.',
+          trialEndsAt: req.tenant.trialEndsAt?.toISOString()
+        });
+      }
+
+      // Check if Pro trial was already used
+      if (req.tenant.proTrialUsed) {
+        return res.status(400).json({
+          error: 'Trial already used',
+          message: 'Your organization has already used the free 14-day Pro trial. Please upgrade to continue with Pro features.'
+        });
+      }
+
+      // Start the 14-day Pro trial
+      const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+
+      const [updatedTenant] = await db
+        .update(tenants)
+        .set({
+          subscriptionTier: 'professional',
+          subscriptionStatus: 'trial',
+          trialEndsAt,
+          proTrialUsed: true,
+          emailQuotaLimit: 10000, // Pro tier email quota
+        })
+        .where(eq(tenants.id, req.tenant.id))
+        .returning();
+
+      if (!updatedTenant) {
+        return res.status(500).json({
+          error: 'Update failed',
+          message: 'Failed to start Pro trial. Please try again.'
+        });
+      }
+
+      console.log(`[PRO TRIAL] Started 14-day Pro trial for tenant ${req.tenant.subdomain}, ends at ${trialEndsAt.toISOString()}`);
+
+      res.json({
+        success: true,
+        message: 'Your 14-day Pro trial has started! Enjoy 0% platform fees and 10,000 emails/month.',
+        tier: 'professional',
+        status: 'trial',
+        trialEndsAt: trialEndsAt.toISOString(),
+      });
+    } catch (error) {
+      console.error('[PRO TRIAL] Error starting trial:', error);
       next(error);
     }
   });
