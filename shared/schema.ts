@@ -50,8 +50,9 @@ export const tenants = pgTable("tenants", {
   lastEmailQuotaReset: timestamp("last_email_quota_reset").notNull().defaultNow(), // Last time counter was reset
   // Platform subscription management
   subscriptionTier: text("subscription_tier").notNull().default("free").$type<"free" | "professional">(),
-  subscriptionStatus: text("subscription_status").notNull().default("pending").$type<"pending" | "active" | "trial" | "cancelled" | "suspended">(),
-  trialEndsAt: timestamp("trial_ends_at"), // When trial expires
+  subscriptionStatus: text("subscription_status").notNull().default("active").$type<"pending" | "active" | "trial" | "cancelled" | "suspended">(),
+  trialEndsAt: timestamp("trial_ends_at"), // When Pro trial expires
+  proTrialUsed: boolean("pro_trial_used").notNull().default(false), // Whether tenant has used their free 14-day Pro trial
   // Stripe subscription tracking (for platform-level billing)
   stripeCustomerId: text("stripe_customer_id"), // Stripe customer ID for this tenant
   stripeSubscriptionId: text("stripe_subscription_id"), // Active Stripe subscription ID
