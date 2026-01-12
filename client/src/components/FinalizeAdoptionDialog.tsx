@@ -7,20 +7,30 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
-import { Loader2, Send, Link as LinkIcon, X, CheckCircle2 } from "lucide-react";
+import { Loader2, Send, Link as LinkIcon, X, CheckCircle2, FileText, Star } from "lucide-react";
 import type { Animal, Application, Grant, Tenant } from "@shared/schema";
+
+interface ContractTemplate {
+  id: number;
+  name: string;
+  description?: string;
+  isDefault: boolean;
+  version: string;
+}
 
 const formSchema = z.object({
   applicationId: z.string().min(1, "Please select an adopter"),
   baseFee: z.string().min(1, "Adoption fee is required"),
   donationBoost: z.string().optional(),
   grantId: z.string().optional(),
+  contractTemplateId: z.string().optional(),
   coverFees: z.boolean().default(false),
 });
 
@@ -53,6 +63,14 @@ export function FinalizeAdoptionDialog({ open, onOpenChange, animal }: FinalizeA
     enabled: open,
   });
 
+  const { data: contractTemplatesData } = useQuery<{ templates: ContractTemplate[] }>({
+    queryKey: ['/api/contract-templates'],
+    enabled: open,
+  });
+
+  const contractTemplates = contractTemplatesData?.templates || [];
+  const defaultTemplate = contractTemplates.find(t => t.isDefault);
+
   const approvedApplications = applicationsData?.applications.filter(
     app => app.stage === 'approved'
   ) || [];
@@ -67,9 +85,16 @@ export function FinalizeAdoptionDialog({ open, onOpenChange, animal }: FinalizeA
       applicationId: "",
       baseFee: animal.adoptionFee || "200",
       donationBoost: "0",
+      contractTemplateId: "",
       coverFees: false,
     },
   });
+
+  useEffect(() => {
+    if (open && defaultTemplate && !form.getValues('contractTemplateId')) {
+      form.setValue('contractTemplateId', defaultTemplate.id.toString());
+    }
+  }, [open, defaultTemplate, form]);
 
   useEffect(() => {
     if (open && animal.adoptionFee) {
@@ -341,6 +366,47 @@ export function FinalizeAdoptionDialog({ open, onOpenChange, animal }: FinalizeA
                     </div>
                   </CardContent>
                 </Card>
+              )}
+
+              {contractTemplates.length > 0 && (
+                <FormField
+                  control={form.control}
+                  name="contractTemplateId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center gap-2">
+                        <FileText className="h-4 w-4" />
+                        Adoption Contract Template
+                      </FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value || ""}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-contract-template">
+                            <SelectValue placeholder="Select a contract template (optional)" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {contractTemplates.map((template) => (
+                            <SelectItem key={template.id} value={template.id.toString()}>
+                              <div className="flex items-center gap-2">
+                                {template.name}
+                                {template.isDefault && (
+                                  <Badge variant="secondary" className="text-xs">
+                                    <Star className="h-2 w-2 mr-1" />
+                                    Default
+                                  </Badge>
+                                )}
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>
+                        The adopter will be asked to sign this contract during checkout
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               )}
 
               <DialogFooter>

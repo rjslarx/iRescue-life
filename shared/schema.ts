@@ -2581,6 +2581,7 @@ export const adoptionCheckoutSessions = pgTable("adoption_checkout_sessions", {
   animalId: uuid("animal_id").notNull().references(() => animals.id, { onDelete: 'cascade' }),
   adopterContactId: uuid("adopter_contact_id").references(() => contacts.id, { onDelete: 'set null' }),
   grantId: uuid("grant_id").references(() => grants.id, { onDelete: 'set null' }), // Optional, for subsidized adoptions
+  contractTemplateId: integer("contract_template_id").references(() => adoptionContractTemplates.id, { onDelete: 'set null' }), // Optional contract template
   staffInitiatedBy: uuid("staff_initiated_by").notNull().references(() => users.id, { onDelete: 'cascade' }),
   baseFee: text("base_fee").notNull(), // Adoption fee amount (stored as text for precision)
   donationBoost: text("donation_boost").default("0"),

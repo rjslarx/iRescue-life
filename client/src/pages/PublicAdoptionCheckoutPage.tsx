@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { SignatureCanvas } from "@/components/SignatureCanvas";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, CheckCircle2, ChevronLeft, ChevronRight, Heart, AlertCircle, FileText, CreditCard } from "lucide-react";
+import { Loader2, CheckCircle2, ChevronLeft, ChevronRight, Heart, AlertCircle, FileText, CreditCard, Download } from "lucide-react";
 import { Elements, CardElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { loadStripe } from "@stripe/stripe-js";
 
@@ -42,6 +42,7 @@ interface SessionData {
     donationBoost: string;
     totals: { subtotal: string; fees: string; total: string };
     expiresAt: string;
+    contractTemplateId?: number;
   };
   animal: {
     id: string;
@@ -53,6 +54,15 @@ interface SessionData {
   applicant: {
     name: string;
     email: string;
+    phone?: string;
+    address?: string;
+  };
+  contract?: {
+    html: string;
+    name: string;
+  };
+  organization?: {
+    name: string;
   };
   feeConfig?: FeeConfig;
 }
@@ -436,6 +446,101 @@ function PaymentForm({
   );
 }
 
+function SuccessStep({ token, animalName }: { token: string; animalName: string }) {
+  const { toast } = useToast();
+  const [downloading, setDownloading] = useState(false);
+
+  const handleDownloadContract = async () => {
+    setDownloading(true);
+    try {
+      const response = await apiRequest('GET', `/api/public/adoption-checkouts/${token}/contract`);
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to get contract');
+      }
+      const data = await response.json();
+      
+      if (data.contractPdfUrl) {
+        window.open(data.contractPdfUrl, '_blank');
+      } else {
+        toast({
+          title: "Contract not ready",
+          description: "Your contract is being generated. Please try again in a moment.",
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: "Download failed",
+        description: error.message || "Please try again or check your email for the contract",
+        variant: "destructive",
+      });
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  return (
+    <div className="text-center space-y-6">
+      <Card className="bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800">
+        <CardContent className="pt-8 pb-8">
+          <div className="flex flex-col items-center gap-4">
+            <div className="rounded-full bg-green-100 dark:bg-green-900 p-3">
+              <CheckCircle2 className="h-16 w-16 text-green-600 dark:text-green-400" />
+            </div>
+            <h2 className="text-3xl font-bold text-green-900 dark:text-green-100">
+              Adoption Complete!
+            </h2>
+            <p className="text-green-700 dark:text-green-300 max-w-md">
+              Congratulations on adopting {animalName}! We're so excited for your new journey together.
+            </p>
+            <Button
+              onClick={handleDownloadContract}
+              disabled={downloading}
+              className="mt-4"
+              variant="outline"
+              data-testid="button-download-contract"
+            >
+              {downloading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Getting contract...
+                </>
+              ) : (
+                <>
+                  <Download className="mr-2 h-4 w-4" />
+                  Download Signed Contract
+                </>
+              )}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>What's Next?</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-left">
+          <p className="text-sm">
+            <strong>Check your email for:</strong>
+          </p>
+          <ul className="space-y-2 text-sm text-muted-foreground ml-4">
+            <li>• Signed adoption contract (PDF)</li>
+            <li>• Payment receipt</li>
+            <li>• {animalName}'s medical records</li>
+            <li>• Care instructions and tips</li>
+          </ul>
+          <Separator className="my-4" />
+          <p className="text-sm text-muted-foreground">
+            We'll follow up with you in a few days to see how {animalName} is settling in. 
+            If you have any questions, don't hesitate to reach out!
+          </p>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 function PublicAdoptionCheckoutPageContent() {
   const { token } = useParams<{ token: string }>();
   const { toast } = useToast();
@@ -514,7 +619,7 @@ function PublicAdoptionCheckoutPageContent() {
     );
   }
 
-  const { session, animal, applicant, feeConfig } = sessionData;
+  const { session, animal, applicant, feeConfig, contract, organization } = sessionData;
 
   const stepProgress = {
     review: 33,
@@ -646,43 +751,55 @@ function PublicAdoptionCheckoutPageContent() {
           <div className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle>Adoption Contract</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  {contract?.name || "Adoption Contract"}
+                </CardTitle>
                 <CardDescription>Please read and sign the adoption agreement</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 {/* Contract Terms */}
-                <div className="max-h-64 overflow-y-auto border rounded-lg p-4 bg-muted/30">
-                  <h4 className="font-semibold mb-3">Terms and Conditions</h4>
-                  <div className="space-y-3 text-sm">
-                    <p>
-                      <strong>1. Veterinary Care:</strong> You agree to provide necessary veterinary care, 
-                      including annual check-ups, vaccinations, and treatment for any illnesses or injuries.
-                    </p>
-                    <p>
-                      <strong>2. Living Conditions:</strong> The animal will be kept as an indoor pet and 
-                      provided with adequate food, water, shelter, exercise, and companionship.
-                    </p>
-                    <p>
-                      <strong>3. Spay/Neuter:</strong> If the animal is not already spayed/neutered, you 
-                      agree to have this procedure completed within 30 days of adoption.
-                    </p>
-                    <p>
-                      <strong>4. Identification:</strong> You agree to ensure the animal wears identification 
-                      tags and to update microchip registration with current contact information.
-                    </p>
-                    <p>
-                      <strong>5. No Transfer:</strong> You agree not to sell, give away, or transfer ownership 
-                      of the animal without written consent from the rescue organization.
-                    </p>
-                    <p>
-                      <strong>6. Return Policy:</strong> If you can no longer care for the animal, you agree 
-                      to contact the rescue organization to arrange for the animal's return.
-                    </p>
-                    <p>
-                      <strong>7. Non-Refundable Fee:</strong> The adoption fee is non-refundable and helps 
-                      cover medical expenses, food, and shelter for animals in our care.
-                    </p>
-                  </div>
+                <div className="max-h-96 overflow-y-auto border rounded-lg p-4 bg-muted/30">
+                  {contract?.html ? (
+                    <div 
+                      className="prose prose-sm dark:prose-invert max-w-none"
+                      dangerouslySetInnerHTML={{ __html: contract.html }}
+                    />
+                  ) : (
+                    <>
+                      <h4 className="font-semibold mb-3">Terms and Conditions</h4>
+                      <div className="space-y-3 text-sm">
+                        <p>
+                          <strong>1. Veterinary Care:</strong> You agree to provide necessary veterinary care, 
+                          including annual check-ups, vaccinations, and treatment for any illnesses or injuries.
+                        </p>
+                        <p>
+                          <strong>2. Living Conditions:</strong> The animal will be kept as an indoor pet and 
+                          provided with adequate food, water, shelter, exercise, and companionship.
+                        </p>
+                        <p>
+                          <strong>3. Spay/Neuter:</strong> If the animal is not already spayed/neutered, you 
+                          agree to have this procedure completed within 30 days of adoption.
+                        </p>
+                        <p>
+                          <strong>4. Identification:</strong> You agree to ensure the animal wears identification 
+                          tags and to update microchip registration with current contact information.
+                        </p>
+                        <p>
+                          <strong>5. No Transfer:</strong> You agree not to sell, give away, or transfer ownership 
+                          of the animal without written consent from the rescue organization.
+                        </p>
+                        <p>
+                          <strong>6. Return Policy:</strong> If you can no longer care for the animal, you agree 
+                          to contact the rescue organization to arrange for the animal's return.
+                        </p>
+                        <p>
+                          <strong>7. Non-Refundable Fee:</strong> The adoption fee is non-refundable and helps 
+                          cover medical expenses, food, and shelter for animals in our care.
+                        </p>
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 <Separator />
@@ -758,45 +875,10 @@ function PublicAdoptionCheckoutPageContent() {
 
         {/* Step 4: Success */}
         {currentStep === "success" && (
-          <div className="text-center space-y-6">
-            <Card className="bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800">
-              <CardContent className="pt-8 pb-8">
-                <div className="flex flex-col items-center gap-4">
-                  <div className="rounded-full bg-green-100 dark:bg-green-900 p-3">
-                    <CheckCircle2 className="h-16 w-16 text-green-600 dark:text-green-400" />
-                  </div>
-                  <h2 className="text-3xl font-bold text-green-900 dark:text-green-100">
-                    Adoption Complete!
-                  </h2>
-                  <p className="text-green-700 dark:text-green-300 max-w-md">
-                    Congratulations on adopting {animal.name}! We're so excited for your new journey together.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>What's Next?</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3 text-left">
-                <p className="text-sm">
-                  <strong>Check your email for:</strong>
-                </p>
-                <ul className="space-y-2 text-sm text-muted-foreground ml-4">
-                  <li>• Signed adoption contract (PDF)</li>
-                  <li>• Payment receipt</li>
-                  <li>• {animal.name}'s medical records</li>
-                  <li>• Care instructions and tips</li>
-                </ul>
-                <Separator className="my-4" />
-                <p className="text-sm text-muted-foreground">
-                  We'll follow up with you in a few days to see how {animal.name} is settling in. 
-                  If you have any questions, don't hesitate to reach out!
-                </p>
-              </CardContent>
-            </Card>
-          </div>
+          <SuccessStep 
+            token={token!}
+            animalName={animal.name}
+          />
         )}
       </div>
     </div>

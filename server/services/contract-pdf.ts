@@ -3,7 +3,7 @@ import sharp from 'sharp';
 import DOMPurify from 'isomorphic-dompurify';
 import { objectStorageClient } from '../objectStorage';
 import { db } from '../db';
-import { animals, contacts, applications, tenants, type AdoptionCheckoutSession } from '@shared/schema';
+import { animals, contacts, applications, tenants, adoptionContractTemplates, type AdoptionCheckoutSession } from '@shared/schema';
 import { eq } from 'drizzle-orm';
 import { getDefaultTemplate, ensureDefaultTemplate, mergePlaceholders, type MergeData } from './contract-template';
 
@@ -81,6 +81,50 @@ async function uploadPdfToStorage(pdfBuffer: Buffer): Promise<string> {
 
   // Return public URL
   return `/objects/contracts/${file.name.split('/').pop()}`;
+}
+
+/**
+ * Generate a time-limited signed URL for downloading a contract PDF
+ * @param contractPath - The internal path to the contract (e.g., /objects/contracts/filename.pdf)
+ * @param ttlSec - Time to live in seconds (default: 900 = 15 minutes)
+ * @returns Signed URL for secure download
+ */
+export async function generateSignedContractUrl(contractPath: string, ttlSec: number = 900): Promise<string> {
+  const privateObjectDir = process.env.PRIVATE_OBJECT_DIR;
+  if (!privateObjectDir) {
+    throw new Error('PRIVATE_OBJECT_DIR not configured');
+  }
+
+  // Parse the contract path to get bucket and object name
+  // contractPath is like /objects/contracts/contract_123_abc.pdf
+  const filename = contractPath.split('/').pop();
+  if (!filename) {
+    throw new Error('Invalid contract path');
+  }
+
+  const objectPath = `${privateObjectDir}/contracts/${filename}`;
+  const pathParts = objectPath.split('/');
+  const bucketName = pathParts[1];
+  const objectName = pathParts.slice(2).join('/');
+
+  const bucket = objectStorageClient.bucket(bucketName);
+  const file = bucket.file(objectName);
+
+  // Check if file exists
+  const [exists] = await file.exists();
+  if (!exists) {
+    throw new Error('Contract file not found');
+  }
+
+  // Generate signed URL using Google Cloud Storage
+  const [signedUrl] = await file.getSignedUrl({
+    version: 'v4',
+    action: 'read',
+    expires: Date.now() + ttlSec * 1000,
+    responseDisposition: `attachment; filename="adoption-contract-${filename}"`,
+  });
+
+  return signedUrl;
 }
 
 /**
@@ -416,8 +460,23 @@ export async function generateAdoptionContractPDF(
     adopterPhone = application?.applicantPhone || '';
   }
 
-  // Fetch default contract template for tenant (or create one if it doesn't exist)
-  let template = await getDefaultTemplate(session.tenantId);
+  // Fetch contract template - prefer session's contractTemplateId, fall back to default
+  let template;
+  
+  if (session.contractTemplateId) {
+    // Use the specific template selected for this adoption
+    const [selectedTemplate] = await db
+      .select()
+      .from(adoptionContractTemplates)
+      .where(eq(adoptionContractTemplates.id, session.contractTemplateId))
+      .limit(1);
+    template = selectedTemplate;
+  }
+  
+  // Fall back to default template if no specific template selected or not found
+  if (!template) {
+    template = await getDefaultTemplate(session.tenantId);
+  }
   
   if (!template) {
     // Ensure tenant has a default template (creates one if needed)

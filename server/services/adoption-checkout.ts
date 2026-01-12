@@ -172,6 +172,7 @@ export async function createCheckoutSession(
     animalId: string;
     adopterContactId?: string;
     grantId?: string;
+    contractTemplateId?: number;
     staffInitiatedBy: string;
     baseFee: string;
     donationBoost?: string;
@@ -263,6 +264,7 @@ export async function createCheckoutSession(
       animalId: data.animalId,
       adopterContactId: data.adopterContactId,
       grantId: data.grantId,
+      contractTemplateId: data.contractTemplateId,
       staffInitiatedBy: data.staffInitiatedBy,
       baseFee: data.baseFee,
       donationBoost: data.donationBoost || '0',

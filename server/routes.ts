@@ -5305,6 +5305,7 @@ Crawl-delay: 1
         animalId: z.string().uuid(),
         adopterContactId: z.string().uuid().optional(),
         grantId: z.string().uuid().optional(),
+        contractTemplateId: z.string().optional(),
         baseFee: z.string(),
         donationBoost: z.string().optional(),
         coverFees: z.boolean().optional(),
@@ -5332,6 +5333,7 @@ Crawl-delay: 1
       
       const result = await createCheckoutSession(req.tenant!.id, {
         ...data,
+        contractTemplateId: data.contractTemplateId ? parseInt(data.contractTemplateId) : undefined,
         staffInitiatedBy: req.user!.id,
       });
 
@@ -5549,6 +5551,53 @@ Crawl-delay: 1
         .where(eq(tenants.id, session.tenantId))
         .limit(1);
 
+      // Fetch contract template if selected
+      let contractData: { html: string; name: string } | null = null;
+      if (session.contractTemplateId) {
+        const { adoptionContractTemplates } = await import('@shared/schema');
+        const DOMPurify = (await import('isomorphic-dompurify')).default;
+        const [template] = await db
+          .select()
+          .from(adoptionContractTemplates)
+          .where(eq(adoptionContractTemplates.id, session.contractTemplateId))
+          .limit(1);
+        
+        if (template) {
+          // Replace merge fields with actual data
+          const mergeFieldValues: Record<string, string> = {
+            '{{adopter_name}}': application?.applicantName || '',
+            '{{adopter_email}}': application?.applicantEmail || '',
+            '{{adopter_phone}}': application?.applicantPhone || '',
+            '{{adopter_address}}': application?.applicantAddress || '',
+            '{{animal_name}}': animal?.name || '',
+            '{{animal_species}}': animal?.species || '',
+            '{{animal_breed}}': animal?.breed || '',
+            '{{animal_age}}': animal?.age?.toString() || '',
+            '{{animal_sex}}': animal?.sex || '',
+            '{{organization_name}}': tenant?.name || '',
+            '{{contract_date}}': new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
+            '{{adoption_fee}}': `$${session.baseFee}`,
+          };
+          
+          let processedHtml = template.htmlTemplate;
+          for (const [placeholder, value] of Object.entries(mergeFieldValues)) {
+            processedHtml = processedHtml.replace(new RegExp(placeholder.replace(/[{}]/g, '\\$&'), 'g'), value);
+          }
+          
+          // Sanitize HTML server-side to prevent XSS
+          const sanitizedHtml = DOMPurify.sanitize(processedHtml, {
+            ALLOWED_TAGS: ['div', 'span', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'strong', 'em', 'u', 'br', 'hr', 'ul', 'ol', 'li', 'table', 'thead', 'tbody', 'tr', 'th', 'td'],
+            ALLOWED_ATTR: ['class', 'style'],
+            ALLOW_DATA_ATTR: false,
+          });
+          
+          contractData = {
+            html: sanitizedHtml,
+            name: template.name,
+          };
+        }
+      }
+
       // Calculate fee info for display
       const platformFeePercent = getPlatformFeePercent(tenant?.subscriptionTier || 'free');
       
@@ -5562,6 +5611,7 @@ Crawl-delay: 1
           expiresAt: session.expiresAt,
           signedAt: session.signedAt,
           paidAt: session.paidAt,
+          contractTemplateId: session.contractTemplateId,
         },
         animal: animal ? {
           id: animal.id,
@@ -5573,7 +5623,11 @@ Crawl-delay: 1
         applicant: application ? {
           name: application.applicantName,
           email: application.applicantEmail,
+          phone: application.applicantPhone,
+          address: application.applicantAddress,
         } : null,
+        contract: contractData,
+        organization: tenant ? { name: tenant.name } : null,
         // Fee configuration for adopter display
         feeConfig: {
           passFeesToAdopter: tenant?.passFeesToAdopter || false,
@@ -5785,6 +5839,61 @@ Crawl-delay: 1
         signedAt: session.signedAt,
         paidAt: session.paidAt,
         isComplete: session.status === 'completed',
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/public/adoption-checkouts/:token/contract
+   * Download signed contract PDF (public, token-protected)
+   * Security: Only allows download after session is completed (signed + paid)
+   * Returns a time-limited signed URL (valid for 15 minutes)
+   */
+  app.get('/api/public/adoption-checkouts/:token/contract', async (req, res, next) => {
+    try {
+      const { getCheckoutSessionByToken } = await import('./services/adoption-checkout');
+      const { adoptionContracts } = await import('@shared/schema');
+      const { generateSignedContractUrl } = await import('./services/contract-pdf');
+      
+      const session = await getCheckoutSessionByToken(req.params.token);
+
+      if (!session) {
+        return res.status(404).json({ error: 'Session not found or expired' });
+      }
+
+      // Security: Only allow downloading contract after session is completed (signed + paid)
+      // This ensures the adopter has fully completed the process before accessing their contract
+      if (session.status !== 'completed') {
+        return res.status(403).json({ error: 'Contract is not yet available. Please complete the adoption process first.' });
+      }
+
+      // Verify signature exists
+      if (!session.signedAt) {
+        return res.status(400).json({ error: 'Contract has not been signed yet' });
+      }
+
+      // Fetch the contract record
+      const [contract] = await db
+        .select()
+        .from(adoptionContracts)
+        .where(eq(adoptionContracts.sessionId, session.id))
+        .limit(1);
+
+      if (!contract || !contract.contractPdfUrl) {
+        return res.status(404).json({ error: 'Signed contract not found' });
+      }
+
+      // Generate time-limited signed URL (15 minutes expiry) for secure download
+      const signedUrl = await generateSignedContractUrl(contract.contractPdfUrl, 900);
+
+      res.json({
+        contractPdfUrl: signedUrl,
+        signedAt: contract.signedAt,
+        signerName: contract.signerName,
+        signerEmail: contract.signerEmail,
+        expiresIn: 900, // URL expires in 15 minutes
       });
     } catch (error) {
       next(error);
