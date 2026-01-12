@@ -167,7 +167,12 @@ export async function resolveTenant(req: Request, res: Response, next: NextFunct
       
       // If no path-based tenant, fall back to x-tenant-id header or session
       if (!subdomain) {
-        const tenantIdentifier = (req.headers['x-tenant-id'] as string) || req.session.tenantId || null;
+        // Validate session tenantId is a proper UUID before using it
+        const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        const sessionTenantId = req.session.tenantId && uuidPattern.test(req.session.tenantId) 
+          ? req.session.tenantId 
+          : null;
+        const tenantIdentifier = (req.headers['x-tenant-id'] as string) || sessionTenantId || null;
         
         // Check if this is a platform admin request (x-tenant-id = "platform")
         if (tenantIdentifier === PLATFORM_SUBDOMAIN) {
@@ -247,7 +252,12 @@ export async function resolveTenant(req: Request, res: Response, next: NextFunct
           }
         } else if (hostname === PLATFORM_DOMAIN || hostname === 'www.' + PLATFORM_DOMAIN) {
           // If it's just "irescue.life" or "www.irescue.life", check for x-tenant-id header as fallback
-          const tenantIdentifier = (req.headers['x-tenant-id'] as string) || req.session.tenantId || null;
+          // Validate session tenantId is a proper UUID before using it
+          const uuidPatternCheck = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+          const sessionTenantIdProd = req.session.tenantId && uuidPatternCheck.test(req.session.tenantId) 
+            ? req.session.tenantId 
+            : null;
+          const tenantIdentifier = (req.headers['x-tenant-id'] as string) || sessionTenantIdProd || null;
           
           // Check if this is a platform admin request
           if (tenantIdentifier === PLATFORM_SUBDOMAIN) {

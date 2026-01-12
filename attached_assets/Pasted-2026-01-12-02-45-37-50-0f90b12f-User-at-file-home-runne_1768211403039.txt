@@ -1,0 +1,108 @@
+2026-01-12 02:45:37.50
+0f90b12f
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:684:26
+2026-01-12 02:45:37.50
+0f90b12f
+User
+at Object.startActiveSpan (file:///home/runner/workspace/node_modules/drizzle-orm/tracing.js:8:14)
+2026-01-12 02:45:37.50
+0f90b12f
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:708:19
+2026-01-12 02:45:37.50
+0f90b12f
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:63:22
+2026-01-12 02:45:37.50
+0f90b12f
+User
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:33)
+2026-01-12 02:45:37.50
+0f90b12f
+User
+at PgSelectBase._prepare (file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:683:19)
+2026-01-12 02:45:37.50
+0f90b12f
+User
+TypeError: Cannot convert undefined or null to object
+2026-01-12 02:45:37.50
+0f90b12f
+User
+at Array.reduce ()
+2026-01-12 02:45:37.50
+0f90b12f
+User
+at Object.startActiveSpan (file:///home/runner/workspace/node_modules/drizzle-orm/tracing.js:8:14)
+2026-01-12 02:45:37.50
+0f90b12f
+User
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:17)
+2026-01-12 02:45:37.50
+0f90b12f
+User
+at Function.entries ()
+2026-01-12 02:45:37.79
+0f90b12f
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-01-12 02:45:37.79
+0f90b12f
+User
+at /home/runner/workspace/node_modules/pg-pool/index.js:45:11
+2026-01-12 02:45:37.79
+0f90b12f
+User
+at async file:///home/runner/workspace/dist/index.js:35956:22
+2026-01-12 02:45:37.79
+0f90b12f
+User
+at async file:///home/runner/workspace/node_modules/drizzle-orm/node-postgres/session.js:83:22
+2026-01-12 02:45:37.79
+0f90b12f
+User
+error: invalid input syntax for type uuid: "admin"
+2026-01-12 02:46:08.14
+0f90b12f
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:684:26
+2026-01-12 02:46:08.14
+0f90b12f
+User
+at Array.reduce ()
+2026-01-12 02:46:08.14
+0f90b12f
+User
+at PgSelectBase._prepare (file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:683:19)
+2026-01-12 02:46:08.14
+0f90b12f
+User
+at Object.startActiveSpan (file:///home/runner/workspace/node_modules/drizzle-orm/tracing.js:8:14)
+2026-01-12 02:46:08.14
+0f90b12f
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:63:22
+2026-01-12 02:46:08.14
+0f90b12f
+User
+at Object.startActiveSpan (file:///home/runner/workspace/node_modules/drizzle-orm/tracing.js:8:14)
+2026-01-12 02:46:08.14
+0f90b12f
+User
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:33)
+2026-01-12 02:46:08.14
+0f90b12f
+User
+TypeError: Cannot convert undefined or null to object
+2026-01-12 02:46:08.14
+0f90b12f
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:708:19
+2026-01-12 02:46:08.14
+0f90b12f
+User
+at Function.entries ()
+2026-01-12 02:46:08.14
+0f90b12f
+User
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizz
