@@ -486,8 +486,7 @@ export default function SettingsPage() {
         { label: "Settings" }
       ]}
     >
-      <div className="flex-1 overflow-auto p-6">
-            {isLoading ? (
+      {isLoading ? (
               <div className="flex items-center justify-center h-64" data-testid="loading-settings">
                 <Loader2 className="h-8 w-8 animate-spin" />
               </div>
@@ -2511,7 +2510,6 @@ export default function SettingsPage() {
                 <RescueGroupsImporter />
               </div>
             )}
-      </div>
     </DashboardLayout>
   );
 }
