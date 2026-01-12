@@ -15,7 +15,7 @@ import { usePlatformAdmin } from "@/hooks/usePlatformAdmin";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Building2, Users, PawPrint, CheckCircle, XCircle, Plus, Edit, UserCircle, Globe, Send, Loader2, ShieldCheck, ShieldX, CreditCard, Banknote } from "lucide-react";
+import { Building2, Users, PawPrint, CheckCircle, XCircle, Plus, Edit, UserCircle, Globe, Send, Loader2, ShieldCheck, ShieldX } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
@@ -26,7 +26,6 @@ interface Tenant {
   contactEmail: string | null;
   customDomain: string | null;
   customDomainVerified: boolean;
-  allowAlternativePayments: boolean;
   isActive: boolean;
   createdAt: string;
   stats: {
@@ -188,29 +187,6 @@ export default function TenantsPage() {
     onError: (error: any) => {
       toast({
         title: "Failed to update domain verification",
-        description: error.message || "Please try again later.",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const toggleAlternativePaymentsMutation = useMutation({
-    mutationFn: async ({ tenantId, allowAlternativePayments }: { tenantId: string; allowAlternativePayments: boolean }) => {
-      const response = await apiRequest('PATCH', `/api/admin/tenants/${tenantId}/alternative-payments`, {
-        allowAlternativePayments,
-      });
-      return response.json();
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/platform/tenants'] });
-      toast({
-        title: data.tenant?.allowAlternativePayments ? "Alternative payments enabled" : "Alternative payments disabled",
-        description: data.message,
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Failed to update alternative payments",
         description: error.message || "Please try again later.",
         variant: "destructive",
       });
@@ -430,36 +406,6 @@ export default function TenantsPage() {
                                 )}
                               </div>
                             )}
-                            <div className="flex flex-col gap-2 border-t pt-3 mt-2">
-                              <div className="text-xs text-muted-foreground font-medium">Alternative Payments</div>
-                              <Button
-                                size="sm"
-                                variant={tenant.allowAlternativePayments ? "default" : "outline"}
-                                onClick={() => toggleAlternativePaymentsMutation.mutate({ 
-                                  tenantId: tenant.id, 
-                                  allowAlternativePayments: !tenant.allowAlternativePayments 
-                                })}
-                                disabled={toggleAlternativePaymentsMutation.isPending}
-                                data-testid={`button-toggle-alt-payments-${tenant.subdomain}`}
-                                className="w-full"
-                              >
-                                {toggleAlternativePaymentsMutation.isPending ? (
-                                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                                ) : tenant.allowAlternativePayments ? (
-                                  <Banknote className="h-3 w-3 mr-1" />
-                                ) : (
-                                  <CreditCard className="h-3 w-3 mr-1" />
-                                )}
-                                {tenant.allowAlternativePayments 
-                                  ? "PayPal/Venmo Enabled" 
-                                  : "Enable PayPal/Venmo"}
-                              </Button>
-                              {tenant.allowAlternativePayments && (
-                                <p className="text-[10px] text-muted-foreground">
-                                  This rescue can accept PayPal, Venmo, and Cash App without Stripe
-                                </p>
-                              )}
-                            </div>
                           </div>
                         </div>
                       </CardContent>

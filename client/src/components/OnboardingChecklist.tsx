@@ -47,8 +47,8 @@ export function OnboardingChecklist({ tenant, animalCount = 0, hasPlatformEmailK
     {
       id: "payments",
       title: "Add Payment Integration",
-      description: "Enable Stripe or PayPal to accept donations",
-      completed: tenant.stripeEnabled || tenant.paypalEnabled || !!(tenant.paypalUsername),
+      description: "Enable Stripe to accept donations",
+      completed: tenant.stripeEnabled,
       icon: <DollarSign className="h-4 w-4" />,
       actionLabel: "Configure Payments",
       actionLink: "/dashboard/settings",

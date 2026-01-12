@@ -508,7 +508,6 @@ router.get('/tenants', async (req, res, next) => {
         contactEmail: tenants.contactEmail,
         customDomain: tenants.customDomain,
         customDomainVerified: tenants.customDomainVerified,
-        allowAlternativePayments: tenants.allowAlternativePayments,
         isActive: tenants.isActive,
         createdAt: tenants.createdAt,
       })

@@ -78,22 +78,10 @@ const brandingSettingsSchema = z.object({
   sponsorLogos: z.array(sponsorLogoSchema).optional(),
 });
 
-const paymentSettingsSchema = z.object({
-  paypalUsername: z.string().optional(),
-  venmoUsername: z.string().optional(),
-  cashappUsername: z.string().optional(),
-  stripeLink: z.string().url().optional().or(z.literal("")),
-});
-
 const stripeSettingsSchema = z.object({
   stripePublishableKey: z.string().min(1, "Publishable key is required").startsWith("pk_", "Must be a valid publishable key"),
   stripeSecretKey: z.string().min(1, "Secret key is required").startsWith("sk_", "Must be a valid secret key"),
   stripeWebhookSecret: z.string().optional(),
-});
-
-const paypalSettingsSchema = z.object({
-  paypalClientId: z.string().min(1, "Client ID is required"),
-  paypalClientSecret: z.string().min(1, "Client Secret is required"),
 });
 
 const emailSettingsSchema = z.object({
@@ -125,9 +113,7 @@ const donationSectionSchema = z.object({
 
 type BrandingSettingsData = z.infer<typeof brandingSettingsSchema>;
 type DonationSectionData = z.infer<typeof donationSectionSchema>;
-type PaymentSettingsData = z.infer<typeof paymentSettingsSchema>;
 type StripeSettingsData = z.infer<typeof stripeSettingsSchema>;
-type PayPalSettingsData = z.infer<typeof paypalSettingsSchema>;
 type EmailSettingsData = z.infer<typeof emailSettingsSchema>;
 type CustomDomainData = z.infer<typeof customDomainSchema>;
 type TwilioSettingsData = z.infer<typeof twilioSettingsSchema>;
@@ -208,27 +194,6 @@ export default function SettingsPage() {
     },
   });
 
-  const updateSettingsMutation = useMutation({
-    mutationFn: async (settings: PaymentSettingsData) => {
-      const response = await apiRequest('PATCH', '/api/tenant/settings', settings);
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/tenant/settings'] });
-      toast({
-        title: "Settings saved",
-        description: "Your payment settings have been updated successfully.",
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Failed to save settings",
-        description: error.message || "Please try again later.",
-        variant: "destructive",
-      });
-    },
-  });
-
   const updateStripeMutation = useMutation({
     mutationFn: async (settings: StripeSettingsData) => {
       const response = await apiRequest('PATCH', '/api/tenant/settings/stripe', settings);
@@ -270,30 +235,6 @@ export default function SettingsPage() {
       toast({
         title: "Failed to update fee settings",
         description: error.message || "Please try again later.",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const updatePayPalMutation = useMutation({
-    mutationFn: async (settings: PayPalSettingsData) => {
-      const response = await apiRequest('PATCH', '/api/tenant/settings/paypal', settings);
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/tenant/settings'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/tenant'] });
-      toast({
-        title: "PayPal configured",
-        description: "Your PayPal API integration is now active for syncing transactions.",
-      });
-      // Don't reset the form - keep the user's entered values visible
-      // since we can't display encrypted credentials from the server
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Failed to configure PayPal",
-        description: error.message || "Please verify your API credentials and try again.",
         variant: "destructive",
       });
     },
@@ -444,36 +385,12 @@ export default function SettingsPage() {
     } : undefined,
   });
 
-  const form = useForm<PaymentSettingsData>({
-    resolver: zodResolver(paymentSettingsSchema),
-    defaultValues: {
-      paypalUsername: data?.tenant?.paypalUsername || "",
-      venmoUsername: data?.tenant?.venmoUsername || "",
-      cashappUsername: data?.tenant?.cashappUsername || "",
-      stripeLink: data?.tenant?.stripeLink || "",
-    },
-    values: data?.tenant ? {
-      paypalUsername: data.tenant.paypalUsername || "",
-      venmoUsername: data.tenant.venmoUsername || "",
-      cashappUsername: data.tenant.cashappUsername || "",
-      stripeLink: data.tenant.stripeLink || "",
-    } : undefined,
-  });
-
   const stripeForm = useForm<StripeSettingsData>({
     resolver: zodResolver(stripeSettingsSchema),
     defaultValues: {
       stripePublishableKey: "",
       stripeSecretKey: "",
       stripeWebhookSecret: "",
-    },
-  });
-
-  const paypalForm = useForm<PayPalSettingsData>({
-    resolver: zodResolver(paypalSettingsSchema),
-    defaultValues: {
-      paypalClientId: "",
-      paypalClientSecret: "",
     },
   });
 
@@ -545,16 +462,8 @@ export default function SettingsPage() {
     updateBrandingMutation.mutate(data);
   };
 
-  const onSubmit = (data: PaymentSettingsData) => {
-    updateSettingsMutation.mutate(data);
-  };
-
   const onSubmitStripe = (data: StripeSettingsData) => {
     updateStripeMutation.mutate(data);
-  };
-
-  const onSubmitPayPal = (data: PayPalSettingsData) => {
-    updatePayPalMutation.mutate(data);
   };
 
   const onSubmitTwilio = (data: TwilioSettingsData) => {
@@ -1454,121 +1363,6 @@ export default function SettingsPage() {
                 <Card>
                   <CardHeader>
                     <div className="flex items-center gap-2">
-                      <DollarSign className="h-5 w-5" />
-                      <CardTitle>Payment Integration</CardTitle>
-                    </div>
-                    <CardDescription>
-                      Configure payment links for donations. Visitors will see buttons to donate via these services.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <Form {...form}>
-                      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                        <FormField
-                          control={form.control}
-                          name="paypalUsername"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>PayPal Username</FormLabel>
-                              <FormControl>
-                                <Input 
-                                  placeholder="yourname" 
-                                  data-testid="input-paypal-username"
-                                  {...field} 
-                                />
-                              </FormControl>
-                              <FormDescription>
-                                Your PayPal.me username (e.g., "yourname" for paypal.me/yourname)
-                              </FormDescription>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={form.control}
-                          name="venmoUsername"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Venmo Username</FormLabel>
-                              <FormControl>
-                                <Input 
-                                  placeholder="@yourname" 
-                                  data-testid="input-venmo-username"
-                                  {...field} 
-                                />
-                              </FormControl>
-                              <FormDescription>
-                                Your Venmo username (e.g., "@yourname")
-                              </FormDescription>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={form.control}
-                          name="cashappUsername"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Cash App Username</FormLabel>
-                              <FormControl>
-                                <Input 
-                                  placeholder="$yourname" 
-                                  data-testid="input-cashapp-username"
-                                  {...field} 
-                                />
-                              </FormControl>
-                              <FormDescription>
-                                Your Cash App cashtag (e.g., "$yourname")
-                              </FormDescription>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <Separator />
-
-                        <FormField
-                          control={form.control}
-                          name="stripeLink"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Stripe Payment Link</FormLabel>
-                              <FormControl>
-                                <Input 
-                                  placeholder="https://donate.stripe.com/..." 
-                                  data-testid="input-stripe-link"
-                                  {...field} 
-                                />
-                              </FormControl>
-                              <FormDescription>
-                                Optional: Your custom Stripe payment link URL
-                              </FormDescription>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <div className="flex justify-end">
-                          <Button 
-                            type="submit" 
-                            disabled={updateSettingsMutation.isPending}
-                            data-testid="button-save-settings"
-                          >
-                            {updateSettingsMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                            <Save className="h-4 w-4 mr-2" />
-                            Save Settings
-                          </Button>
-                        </div>
-                      </form>
-                    </Form>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <div className="flex items-center gap-2">
                       <Heart className="h-5 w-5" />
                       <CardTitle>Donation Section</CardTitle>
                     </div>
@@ -1972,106 +1766,6 @@ export default function SettingsPage() {
                             {updateStripeMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                             <Save className="h-4 w-4 mr-2" />
                             {data?.tenant?.stripeEnabled ? "Update Stripe Keys" : "Enable Stripe"}
-                          </Button>
-                        </div>
-                      </form>
-                    </Form>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <DollarSign className="h-5 w-5" />
-                        <CardTitle>PayPal API Integration</CardTitle>
-                      </div>
-                      {data?.tenant?.paypalEnabled && (
-                        <div className="flex items-center gap-2 text-sm text-green-600">
-                          <CheckCircle2 className="h-4 w-4" />
-                          <span>Active</span>
-                        </div>
-                      )}
-                    </div>
-                    <CardDescription>
-                      Configure PayPal API credentials to accept PayPal payments in your shop checkout and sync transaction history.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {data?.tenant?.paypalEnabled ? (
-                      <Alert>
-                        <CheckCircle2 className="h-4 w-4" />
-                        <AlertDescription>
-                          PayPal API is configured and active. Customers can now pay with PayPal in your shop, and you can sync transactions from the Finance page.
-                        </AlertDescription>
-                      </Alert>
-                    ) : (
-                      <Alert>
-                        <AlertCircle className="h-4 w-4" />
-                        <AlertDescription>
-                          PayPal API is not configured. Add your REST API credentials below to enable PayPal checkout in your shop. Get your credentials at <a href="https://developer.paypal.com/dashboard/" target="_blank" rel="noopener noreferrer" className="underline">developer.paypal.com</a>.
-                        </AlertDescription>
-                      </Alert>
-                    )}
-
-                    <Separator />
-
-                    <Form {...paypalForm}>
-                      <form onSubmit={paypalForm.handleSubmit(onSubmitPayPal)} className="space-y-4">
-                        <FormField
-                          control={paypalForm.control}
-                          name="paypalClientId"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Client ID</FormLabel>
-                              <FormControl>
-                                <Input 
-                                  placeholder="Your PayPal Client ID" 
-                                  className="font-mono"
-                                  data-testid="input-paypal-client-id"
-                                  {...field} 
-                                />
-                              </FormControl>
-                              <FormDescription>
-                                Your PayPal REST API Client ID from the Developer Dashboard
-                              </FormDescription>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={paypalForm.control}
-                          name="paypalClientSecret"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Client Secret</FormLabel>
-                              <FormControl>
-                                <Input 
-                                  type="password"
-                                  placeholder="Your PayPal Client Secret" 
-                                  className="font-mono"
-                                  data-testid="input-paypal-client-secret"
-                                  {...field} 
-                                />
-                              </FormControl>
-                              <FormDescription>
-                                Your PayPal REST API Client Secret - kept encrypted in our database
-                              </FormDescription>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <div className="flex justify-end pt-2">
-                          <Button 
-                            type="submit" 
-                            disabled={updatePayPalMutation.isPending}
-                            data-testid="button-save-paypal"
-                          >
-                            {updatePayPalMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                            <Save className="h-4 w-4 mr-2" />
-                            {data?.tenant?.paypalEnabled ? "Update PayPal Credentials" : "Enable PayPal API"}
                           </Button>
                         </div>
                       </form>

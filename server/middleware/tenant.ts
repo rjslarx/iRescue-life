@@ -23,15 +23,9 @@ export interface TenantContext {
     warningColor?: string;
     destructiveColor?: string;
   };
-  paypalUsername?: string | null;
-  venmoUsername?: string | null;
-  cashappUsername?: string | null;
   stripeLink?: string | null;
   stripeEnabled?: boolean;
   stripePublishableKey?: string | null;
-  paypalEnabled?: boolean;
-  paypalClientIdEncrypted?: string | null;
-  paypalClientSecretEncrypted?: string | null;
   resendEnabled?: boolean;
   resendFromEmail?: string | null;
   resendFromName?: string | null;
@@ -319,15 +313,9 @@ export async function resolveTenant(req: Request, res: Response, next: NextFunct
           customDomainVerified: tenants.customDomainVerified,
           branding: tenants.branding,
           isActive: tenants.isActive,
-          paypalUsername: tenants.paypalUsername,
-          venmoUsername: tenants.venmoUsername,
-          cashappUsername: tenants.cashappUsername,
           stripeLink: tenants.stripeLink,
           stripeEnabled: tenants.stripeEnabled,
           stripePublishableKey: tenants.stripePublishableKey,
-          paypalEnabled: tenants.paypalEnabled,
-          paypalClientIdEncrypted: tenants.paypalClientIdEncrypted,
-          paypalClientSecretEncrypted: tenants.paypalClientSecretEncrypted,
           resendEnabled: tenants.resendEnabled,
           resendFromEmail: tenants.resendFromEmail,
           resendFromName: tenants.resendFromName,
@@ -388,15 +376,9 @@ export async function resolveTenant(req: Request, res: Response, next: NextFunct
         customDomain: tenant.customDomain,
         customDomainVerified: tenant.customDomainVerified,
         branding: tenant.branding as TenantContext['branding'],
-        paypalUsername: tenant.paypalUsername,
-        venmoUsername: tenant.venmoUsername,
-        cashappUsername: tenant.cashappUsername,
         stripeLink: tenant.stripeLink,
         stripeEnabled: tenant.stripeEnabled,
         stripePublishableKey: tenant.stripePublishableKey,
-        paypalEnabled: tenant.paypalEnabled,
-        paypalClientIdEncrypted: tenant.paypalClientIdEncrypted,
-        paypalClientSecretEncrypted: tenant.paypalClientSecretEncrypted,
         resendEnabled: tenant.resendEnabled,
         resendFromEmail: tenant.resendFromEmail,
         resendFromName: tenant.resendFromName,

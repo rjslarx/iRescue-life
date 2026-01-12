@@ -5192,7 +5192,7 @@ Crawl-delay: 1
         baseFee: z.string(),
         donationBoost: z.string().optional(),
         coverFees: z.boolean().optional(),
-        processor: z.enum(['stripe', 'paypal', 'square']).optional(),
+        processor: z.enum(['stripe']).optional(),
       });
 
       const data = sessionSchema.parse(req.body);
@@ -5275,7 +5275,7 @@ Crawl-delay: 1
         donationBoost: z.string().optional(),
         coverFees: z.boolean().optional(),
         grantId: z.string().uuid().optional(),
-        processor: z.enum(['stripe', 'paypal', 'square']).optional(),
+        processor: z.enum(['stripe']).optional(),
       });
 
       const updates = updateSchema.parse(req.body);
@@ -5586,9 +5586,8 @@ Crawl-delay: 1
       }
 
       const paymentSchema = z.object({
-        processor: z.enum(['stripe', 'paypal', 'square']),
+        processor: z.enum(['stripe']),
         paymentMethodId: z.string().optional(),
-        paypalOrderId: z.string().optional(),
         // Validate donationBoost: must be numeric string, >= 0, reasonable upper limit
         donationBoost: z.string()
           .optional()
@@ -6978,80 +6977,7 @@ Crawl-delay: 1
     }
   });
 
-  /**
-   * POST /api/finance/sync-paypal
-   * Sync PayPal transactions (admin only)
-   */
-  app.post('/api/finance/sync-paypal', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
-    try {
-      const { paypalService } = await import('./lib/paypal-service');
-      const { donations } = await import('@shared/schema');
-
-      // Check if PayPal is configured
-      if (!req.tenant!.paypalEnabled || !req.tenant!.paypalClientIdEncrypted || !req.tenant!.paypalClientSecretEncrypted) {
-        return res.status(400).json({ 
-          error: "PayPal API is not configured. Please add your PayPal credentials in Settings." 
-        });
-      }
-
-      // Get date range from request (default to last 30 days)
-      const syncSchema = z.object({
-        startDate: z.string().optional(),
-        endDate: z.string().optional(),
-      });
-
-      const { startDate, endDate } = syncSchema.parse(req.body);
-
-      // Default to last 30 days if not specified
-      const end = endDate || new Date().toISOString().split('T')[0];
-      const start = startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-
-      // Fetch transactions from PayPal
-      const transactions = await paypalService.fetchTransactions(
-        req.tenant!.paypalClientIdEncrypted,
-        req.tenant!.paypalClientSecretEncrypted,
-        start,
-        end
-      );
-
-      const results = { imported: 0, skipped: 0, errors: [] as string[] };
-
-      // Process each transaction
-      for (const transaction of transactions) {
-        try {
-          const donation = paypalService.parseDonation(transaction);
-          
-          // Skip non-donation transactions
-          if (!donation) {
-            results.skipped++;
-            continue;
-          }
-
-          // Add tenant ID
-          const donationData = {
-            ...donation,
-            tenantId: req.tenant!.id,
-          };
-
-          // Insert donation
-          await db.insert(donations).values([donationData as any]);
-          results.imported++;
-        } catch (error: any) {
-          results.errors.push(`Transaction ${transaction.transaction_info.transaction_id}: ${error.message}`);
-        }
-      }
-
-      res.json({ 
-        success: true, 
-        imported: results.imported,
-        skipped: results.skipped,
-        total: transactions.length,
-        errors: results.errors.slice(0, 10), // Return first 10 errors only
-      });
-    } catch (error: any) {
-      next(error);
-    }
-  });
+  // PayPal sync route removed - Stripe is the sole payment processor
 
   /**
    * GET /api/donors
@@ -10477,9 +10403,6 @@ Submitted: ${new Date().toLocaleString()}
   app.patch('/api/tenant/settings', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
     try {
       const settingsSchema = z.object({
-        paypalUsername: z.string().optional(),
-        venmoUsername: z.string().optional(),
-        cashappUsername: z.string().optional(),
         stripeLink: z.string().url().optional().or(z.literal("")),
         passFeesToAdopter: z.boolean().optional(),
       });
@@ -10489,9 +10412,6 @@ Submitted: ${new Date().toLocaleString()}
       // Only include fields that are actually provided (not undefined)
       // This prevents overwriting existing values with null
       const settingsToUpdate: Record<string, any> = {};
-      if (parsedSettings.paypalUsername !== undefined) settingsToUpdate.paypalUsername = parsedSettings.paypalUsername;
-      if (parsedSettings.venmoUsername !== undefined) settingsToUpdate.venmoUsername = parsedSettings.venmoUsername;
-      if (parsedSettings.cashappUsername !== undefined) settingsToUpdate.cashappUsername = parsedSettings.cashappUsername;
       if (parsedSettings.stripeLink !== undefined) settingsToUpdate.stripeLink = parsedSettings.stripeLink;
       if (parsedSettings.passFeesToAdopter !== undefined) settingsToUpdate.passFeesToAdopter = parsedSettings.passFeesToAdopter;
 
@@ -10651,45 +10571,7 @@ Submitted: ${new Date().toLocaleString()}
     }
   });
 
-  /**
-   * PATCH /api/tenant/settings/paypal
-   * Configure PayPal API credentials (admin only)
-   */
-  app.patch('/api/tenant/settings/paypal', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
-    try {
-      const { encrypt } = await import('./lib/encryption');
-      const { clearTenantPayPalCache } = await import('./paypal');
-
-      const paypalSettingsSchema = z.object({
-        paypalClientId: z.string().min(1, "Client ID is required"),
-        paypalClientSecret: z.string().min(1, "Client Secret is required"),
-      });
-
-      const settings = paypalSettingsSchema.parse(req.body);
-
-      // Encrypt the credentials
-      const encryptedClientId = encrypt(settings.paypalClientId);
-      const encryptedClientSecret = encrypt(settings.paypalClientSecret);
-
-      // Update tenant settings
-      const [updatedTenant] = await db
-        .update(tenants)
-        .set({
-          paypalClientIdEncrypted: encryptedClientId,
-          paypalClientSecretEncrypted: encryptedClientSecret,
-          paypalEnabled: true,
-        })
-        .where(eq(tenants.id, req.tenant!.id))
-        .returning();
-
-      // Clear cached PayPal client for this tenant
-      clearTenantPayPalCache(req.tenant!.id);
-
-      res.json({ success: true, tenant: updatedTenant });
-    } catch (error) {
-      next(error);
-    }
-  });
+  // PayPal settings route removed - Stripe is the sole payment processor
 
   /**
    * POST /api/animals/:id/flyer
@@ -14490,69 +14372,7 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
     }
   });
 
-  /**
-   * PATCH /api/admin/tenants/:id/alternative-payments
-   * Toggle alternative payment methods (PayPal, Venmo, Cash App) for a tenant
-   * This allows specific rescues to accept payments without Stripe Connect (platform admin only)
-   */
-  app.patch('/api/admin/tenants/:id/alternative-payments', requireAuth, async (req, res, next) => {
-    try {
-      // Only platform admins can toggle alternative payments
-      if (!req.user?.roles.includes('platform_admin')) {
-        return res.status(403).json({ error: 'Platform admin access required' });
-      }
-
-      const updateSchema = z.object({
-        allowAlternativePayments: z.boolean(),
-      });
-
-      const { allowAlternativePayments } = updateSchema.parse(req.body);
-
-      // Get the tenant first
-      const [tenant] = await db
-        .select({
-          id: tenants.id,
-          subdomain: tenants.subdomain,
-          name: tenants.name,
-        })
-        .from(tenants)
-        .where(eq(tenants.id, req.params.id))
-        .limit(1);
-
-      if (!tenant) {
-        return res.status(404).json({ error: 'Tenant not found' });
-      }
-
-      // Update the alternative payments setting
-      const [updated] = await db
-        .update(tenants)
-        .set({ 
-          allowAlternativePayments,
-        })
-        .where(eq(tenants.id, req.params.id))
-        .returning({
-          id: tenants.id,
-          subdomain: tenants.subdomain,
-          name: tenants.name,
-          allowAlternativePayments: tenants.allowAlternativePayments,
-          paypalUsername: tenants.paypalUsername,
-          venmoUsername: tenants.venmoUsername,
-          cashappUsername: tenants.cashappUsername,
-        });
-
-      console.log(`[ALTERNATIVE PAYMENTS] Platform admin ${req.user.email} ${allowAlternativePayments ? 'enabled' : 'disabled'} alternative payments for tenant ${tenant.subdomain}`);
-
-      res.json({
-        success: true,
-        tenant: updated,
-        message: allowAlternativePayments 
-          ? `Alternative payment methods (PayPal, Venmo, Cash App) have been enabled for ${tenant.name}. They can now accept payments without Stripe Connect.`
-          : `Alternative payment methods have been disabled. This tenant will need to set up Stripe Connect to accept payments.`,
-      });
-    } catch (error) {
-      next(error);
-    }
-  });
+  // Alternative payments route removed - Stripe is the sole payment processor
 
   /**
    * POST /api/admin/fix-animal-photo-acls

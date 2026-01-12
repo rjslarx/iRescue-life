@@ -8,8 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Heart, AlertCircle, ExternalLink, QrCode, CheckCircle2, Smartphone, Download, Copy, Check } from "lucide-react";
-import { SiPaypal, SiVenmo, SiCashapp } from "react-icons/si";
+import { ExternalLink, QrCode, CheckCircle2, Smartphone, Download, Copy, Check } from "lucide-react";
 import type { Tenant } from "@shared/schema";
 import { useState, useEffect } from "react";
 
@@ -91,10 +90,6 @@ export default function DonationPageSettingsPage() {
   }
 
   const tenant = data?.tenant;
-  const paypalUsername = (tenant as any)?.paypalUsername;
-  const venmoUsername = (tenant as any)?.venmoUsername;
-  const cashappUsername = (tenant as any)?.cashappUsername;
-  const hasPaymentApps = paypalUsername || venmoUsername || cashappUsername;
   const hasDonationUrl = (tenant as any)?.donationLandingButtonUrl || (tenant as any)?.stripeEnabled;
 
   return (
@@ -257,29 +252,6 @@ export default function DonationPageSettingsPage() {
                 {hasDonationUrl && (
                   <p className="text-xs text-muted-foreground">
                     Using: {(tenant as any)?.donationLandingButtonUrl ? 'Custom URL' : 'Stripe Checkout'}
-                  </p>
-                )}
-              </div>
-
-              <div className="border-t pt-3 space-y-3">
-                <span className="text-sm font-medium">Payment App Buttons</span>
-                <div className="grid grid-cols-3 gap-2">
-                  <div className={`flex flex-col items-center gap-1 p-2 rounded border ${paypalUsername ? 'border-green-500 bg-green-50 dark:bg-green-950' : 'border-muted'}`}>
-                    <SiPaypal className={`h-5 w-5 ${paypalUsername ? 'text-[#003087]' : 'text-muted-foreground'}`} />
-                    <span className="text-xs">{paypalUsername ? 'Active' : 'Not set'}</span>
-                  </div>
-                  <div className={`flex flex-col items-center gap-1 p-2 rounded border ${venmoUsername ? 'border-green-500 bg-green-50 dark:bg-green-950' : 'border-muted'}`}>
-                    <SiVenmo className={`h-5 w-5 ${venmoUsername ? 'text-[#3D95CE]' : 'text-muted-foreground'}`} />
-                    <span className="text-xs">{venmoUsername ? 'Active' : 'Not set'}</span>
-                  </div>
-                  <div className={`flex flex-col items-center gap-1 p-2 rounded border ${cashappUsername ? 'border-green-500 bg-green-50 dark:bg-green-950' : 'border-muted'}`}>
-                    <SiCashapp className={`h-5 w-5 ${cashappUsername ? 'text-[#00D632]' : 'text-muted-foreground'}`} />
-                    <span className="text-xs">{cashappUsername ? 'Active' : 'Not set'}</span>
-                  </div>
-                </div>
-                {!hasPaymentApps && (
-                  <p className="text-xs text-muted-foreground">
-                    Configure payment app usernames in Settings → Integrations to show these buttons
                   </p>
                 )}
               </div>

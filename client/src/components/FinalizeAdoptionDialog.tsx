@@ -22,7 +22,6 @@ const formSchema = z.object({
   donationBoost: z.string().optional(),
   grantId: z.string().optional(),
   coverFees: z.boolean().default(false),
-  processor: z.enum(["stripe", "paypal", "square"]).default("stripe"),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -69,7 +68,6 @@ export function FinalizeAdoptionDialog({ open, onOpenChange, animal }: FinalizeA
       baseFee: animal.adoptionFee || "200",
       donationBoost: "0",
       coverFees: false,
-      processor: "stripe",
     },
   });
 
@@ -344,29 +342,6 @@ export function FinalizeAdoptionDialog({ open, onOpenChange, animal }: FinalizeA
                   </CardContent>
                 </Card>
               )}
-
-              <FormField
-                control={form.control}
-                name="processor"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Payment Processor</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger data-testid="select-processor">
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="stripe">Stripe</SelectItem>
-                        <SelectItem value="paypal">PayPal</SelectItem>
-                        <SelectItem value="square">Square</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
 
               <DialogFooter>
                 <Button

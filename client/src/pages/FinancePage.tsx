@@ -90,28 +90,6 @@ export default function FinancePage() {
     },
   });
 
-  const syncPayPalMutation = useMutation({
-    mutationFn: async () => {
-      const response = await apiRequest('POST', '/api/finance/sync-paypal', {});
-      return response.json();
-    },
-    onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/finance'] });
-      
-      toast({
-        title: "PayPal Sync Complete",
-        description: `Successfully imported ${result.imported} transactions from PayPal. (${result.skipped} skipped)`,
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "PayPal Sync Failed",
-        description: error.message || "Please verify your PayPal credentials in Settings.",
-        variant: "destructive",
-      });
-    },
-  });
-
   // Transform backend data to FinanceTable format
   // Convert numeric strings from database to numbers for calculations
   const donations = (data?.donations || []).map(d => ({
@@ -354,10 +332,7 @@ export default function FinancePage() {
                 onAddDonation={handleAddDonation}
                 onAddExpenditure={handleAddExpenditure}
                 onUploadCSV={handleUploadCSV}
-                onSyncPayPal={() => syncPayPalMutation.mutate()}
                 isImporting={importCSVMutation.isPending}
-                isSyncing={syncPayPalMutation.isPending}
-                paypalEnabled={tenantData?.tenant?.paypalEnabled || false}
               />
             )}
       </div>

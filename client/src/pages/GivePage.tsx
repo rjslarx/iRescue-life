@@ -3,7 +3,6 @@ import { useTenant } from "@/contexts/TenantContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader2, Heart, Mail, ExternalLink } from "lucide-react";
-import { SiPaypal, SiVenmo, SiCashapp } from "react-icons/si";
 import type { Tenant } from "@shared/schema";
 
 export default function GivePage() {
@@ -49,40 +48,10 @@ export default function GivePage() {
   
   const mailingAddress = (tenant as any).donationLandingMailingAddress || 
     tenant.footerAddress;
-
-  const paypalUsername = (tenant as any).paypalUsername;
-  const venmoUsername = (tenant as any).venmoUsername;
-  const cashappUsername = (tenant as any).cashappUsername;
-  
-  const hasPaymentApps = paypalUsername || venmoUsername || cashappUsername;
   
   const handleDonateClick = () => {
     if (buttonUrl) {
       window.open(buttonUrl, '_blank', 'noopener,noreferrer');
-    }
-  };
-
-  const handlePayPalClick = () => {
-    if (paypalUsername) {
-      // Strip @ symbol if present - PayPal.me URLs use just the username
-      const username = paypalUsername.startsWith('@') ? paypalUsername.slice(1) : paypalUsername;
-      window.open(`https://paypal.me/${username}`, '_blank', 'noopener,noreferrer');
-    }
-  };
-
-  const handleVenmoClick = () => {
-    if (venmoUsername) {
-      // Strip @ symbol if present - Venmo URLs use just the username
-      const username = venmoUsername.startsWith('@') ? venmoUsername.slice(1) : venmoUsername;
-      window.open(`https://venmo.com/${username}`, '_blank', 'noopener,noreferrer');
-    }
-  };
-
-  const handleCashAppClick = () => {
-    if (cashappUsername) {
-      // Strip $ symbol if present - Cash App URLs need just the username with $
-      const tag = cashappUsername.startsWith('$') ? cashappUsername.slice(1) : cashappUsername;
-      window.open(`https://cash.app/$${tag}`, '_blank', 'noopener,noreferrer');
     }
   };
   
@@ -123,7 +92,7 @@ export default function GivePage() {
           </Button>
         )}
         
-        {!buttonUrl && !hasPaymentApps && (
+        {!buttonUrl && (
           <Card className="bg-muted/50">
             <CardContent className="pt-6">
               <p className="text-muted-foreground text-sm">
@@ -131,50 +100,6 @@ export default function GivePage() {
               </p>
             </CardContent>
           </Card>
-        )}
-
-        {hasPaymentApps && (
-          <div className="space-y-3 pt-2">
-            <p className="text-sm text-muted-foreground">Or use a payment app:</p>
-            <div className="flex flex-wrap justify-center gap-3">
-              {paypalUsername && (
-                <Button
-                  variant="outline"
-                  size="lg"
-                  onClick={handlePayPalClick}
-                  className="flex-1 min-w-[120px] max-w-[160px] py-5"
-                  data-testid="button-paypal"
-                >
-                  <SiPaypal className="w-5 h-5 mr-2 text-[#003087]" />
-                  PayPal
-                </Button>
-              )}
-              {venmoUsername && (
-                <Button
-                  variant="outline"
-                  size="lg"
-                  onClick={handleVenmoClick}
-                  className="flex-1 min-w-[120px] max-w-[160px] py-5"
-                  data-testid="button-venmo"
-                >
-                  <SiVenmo className="w-5 h-5 mr-2 text-[#3D95CE]" />
-                  Venmo
-                </Button>
-              )}
-              {cashappUsername && (
-                <Button
-                  variant="outline"
-                  size="lg"
-                  onClick={handleCashAppClick}
-                  className="flex-1 min-w-[120px] max-w-[160px] py-5"
-                  data-testid="button-cashapp"
-                >
-                  <SiCashapp className="w-5 h-5 mr-2 text-[#00D632]" />
-                  Cash App
-                </Button>
-              )}
-            </div>
-          </div>
         )}
         
         {mailingAddress && (

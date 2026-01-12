@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Plus, Upload, DollarSign, TrendingUp, TrendingDown, RefreshCw, FileText, Mail, MoreHorizontal, Loader2, Package, Gift, Repeat, CalendarDays } from "lucide-react";
+import { Plus, Upload, DollarSign, TrendingUp, TrendingDown, FileText, Mail, MoreHorizontal, Loader2, Package, Gift, Repeat, CalendarDays } from "lucide-react";
 import AnnualGivingSummary from "./AnnualGivingSummary";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -55,13 +55,10 @@ interface FinanceTableProps {
   onAddDonation?: (donation: Omit<Donation, 'id'>) => void;
   onAddExpenditure?: (expenditure: Omit<Expenditure, 'id'> & { grantId?: string | null }) => void;
   onUploadCSV?: (file: File, type: 'donations' | 'expenditures') => void;
-  onSyncPayPal?: () => void;
   isImporting?: boolean;
-  isSyncing?: boolean;
-  paypalEnabled?: boolean;
 }
 
-export default function FinanceTable({ donations, expenditures, grants, onAddDonation, onAddExpenditure, onUploadCSV, onSyncPayPal, isImporting, isSyncing, paypalEnabled }: FinanceTableProps) {
+export default function FinanceTable({ donations, expenditures, grants, onAddDonation, onAddExpenditure, onUploadCSV, isImporting }: FinanceTableProps) {
   const { toast } = useToast();
   const [donationForm, setDonationForm] = useState({ 
     donorName: "", 
@@ -271,26 +268,6 @@ export default function FinanceTable({ donations, expenditures, grants, onAddDon
             </TabsTrigger>
             <TabsTrigger value="import">Import CSV</TabsTrigger>
           </TabsList>
-          {paypalEnabled && (
-            <Button
-              onClick={onSyncPayPal}
-              disabled={isSyncing}
-              variant="outline"
-              data-testid="button-sync-paypal"
-            >
-              {isSyncing ? (
-                <>
-                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                  Syncing...
-                </>
-              ) : (
-                <>
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Sync PayPal
-                </>
-              )}
-            </Button>
-          )}
         </div>
 
         <TabsContent value="donations" className="space-y-4">

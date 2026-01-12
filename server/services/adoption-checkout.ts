@@ -176,7 +176,7 @@ export async function createCheckoutSession(
     baseFee: string;
     donationBoost?: string;
     coverFees?: boolean;
-    processor?: 'stripe' | 'paypal' | 'square';
+    processor?: 'stripe';
   }
 ): Promise<{ session: AdoptionCheckoutSession; token: string }> {
   // Validate application belongs to tenant
@@ -341,7 +341,7 @@ export async function updateCheckoutSession(
     donationBoost: string;
     coverFees: boolean;
     grantId: string;
-    processor: 'stripe' | 'paypal' | 'square';
+    processor: 'stripe';
   }>
 ): Promise<AdoptionCheckoutSession | null> {
   // Fetch current session
@@ -722,10 +722,9 @@ export async function createAdoptionPaymentIntent(
 export async function processPayment(
   sessionId: string,
   paymentData: {
-    processor: 'stripe' | 'paypal' | 'square';
+    processor: 'stripe';
     paymentIntentId?: string; // For Stripe - the confirmed PaymentIntent ID
     paymentMethodId?: string; // For Stripe - if confirming server-side
-    paypalOrderId?: string; // For PayPal
   }
 ): Promise<AdoptionPayment> {
   const [session] = await db
@@ -786,8 +785,6 @@ export async function processPayment(
       // Fallback for testing without Stripe
       chargeId = paymentIntentId || 'ch_' + crypto.randomBytes(12).toString('hex');
     }
-  } else if (paymentData.processor === 'paypal') {
-    chargeId = paymentData.paypalOrderId || 'paypal_' + crypto.randomBytes(12).toString('hex');
   } else {
     throw new Error('Unsupported payment processor');
   }

@@ -9,7 +9,6 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DollarSign, ExternalLink, Loader2, Gift, ArrowRight, Lock, Shield, Heart, Star, Users, Home, HandHeart, PawPrint, HeartHandshake } from "lucide-react";
-import { SiPaypal, SiCashapp } from "react-icons/si";
 import { Link } from "wouter";
 import type { Tenant } from "@shared/schema";
 
@@ -176,18 +175,8 @@ export default function DonationForm({ sponsoredAnimalName, tenant }: DonationFo
   // Check if Stripe is configured for donations
   const hasStripe = Boolean(tenant?.stripeEnabled);
   
-  // Check if alternative payment methods are enabled (only when platform admin allows)
-  const hasAlternativePayments = Boolean(
-    tenant?.allowAlternativePayments && (
-      tenant?.paypalUsername || 
-      tenant?.venmoUsername || 
-      tenant?.cashappUsername
-    )
-  );
-
   const hasPaymentMethods = Boolean(
     hasStripe ||
-    hasAlternativePayments ||
     tenant?.stripeLink
   );
 
@@ -247,24 +236,9 @@ export default function DonationForm({ sponsoredAnimalName, tenant }: DonationFo
   const feesCoveredDisplay = feeData?.feesCovered ? (feeData.feesCovered / 100).toFixed(2) : '0.00';
   const totalWithFeesDisplay = feeData?.totalAmount ? (feeData.totalAmount / 100).toFixed(2) : (amount || parseFloat(customAmount) || 0).toFixed(2);
 
-  const handlePaymentMethodClick = (method: 'paypal' | 'venmo' | 'cashapp' | 'stripe') => {
-    let url = '';
-    switch (method) {
-      case 'paypal':
-        url = `https://paypal.me/${tenant?.paypalUsername}`;
-        break;
-      case 'venmo':
-        url = `https://venmo.com/${tenant?.venmoUsername}`;
-        break;
-      case 'cashapp':
-        url = `https://cash.app/${tenant?.cashappUsername}`;
-        break;
-      case 'stripe':
-        url = tenant?.stripeLink || '';
-        break;
-    }
-    if (url) {
-      window.open(url, '_blank');
+  const handleStripeLinkClick = () => {
+    if (tenant?.stripeLink) {
+      window.open(tenant.stripeLink, '_blank');
     }
   };
 
@@ -448,7 +422,7 @@ export default function DonationForm({ sponsoredAnimalName, tenant }: DonationFo
           </div>
         )}
 
-        {(tenant?.paypalUsername || tenant?.venmoUsername || tenant?.cashappUsername || tenant?.stripeLink) && (
+        {tenant?.stripeLink && (
           <>
             {tenant?.stripeEnabled && (
               <div className="relative my-6">
@@ -461,65 +435,22 @@ export default function DonationForm({ sponsoredAnimalName, tenant }: DonationFo
             <div className="space-y-3 p-6 pt-0">
               {!tenant?.stripeEnabled && <p className="text-sm font-medium">Quick Donate</p>}
               <div className="grid grid-cols-2 gap-3">
-                {tenant?.paypalUsername && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => handlePaymentMethodClick('paypal')}
-                    className="flex items-center justify-center gap-2"
-                    data-testid="button-paypal"
-                  >
-                    <SiPaypal className="h-4 w-4" />
-                    PayPal
-                    <ExternalLink className="h-3 w-3 ml-auto" />
-                  </Button>
-                )}
-                {tenant?.venmoUsername && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => handlePaymentMethodClick('venmo')}
-                    className="flex items-center justify-center gap-2"
-                    data-testid="button-venmo"
-                  >
-                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M20.6 5.4c.9 1.4 1.4 3.2 1.4 5.3 0 5.9-4.9 12.7-8.9 12.7h-4L5.4 5.4h4.3l2.4 13.1c1.6-2.7 3.8-7.1 3.8-10.4 0-1.5-.3-2.6-.8-3.5l4.5-.2z"/>
-                    </svg>
-                    Venmo
-                    <ExternalLink className="h-3 w-3 ml-auto" />
-                  </Button>
-                )}
-                {tenant?.cashappUsername && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => handlePaymentMethodClick('cashapp')}
-                    className="flex items-center justify-center gap-2"
-                    data-testid="button-cashapp"
-                  >
-                    <SiCashapp className="h-4 w-4" />
-                    Cash App
-                    <ExternalLink className="h-3 w-3 ml-auto" />
-                  </Button>
-                )}
-                {tenant?.stripeLink && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => handlePaymentMethodClick('stripe')}
-                    className="flex items-center justify-center gap-2"
-                    data-testid="button-stripe"
-                  >
-                    <DollarSign className="h-4 w-4" />
-                    Stripe
-                    <ExternalLink className="h-3 w-3 ml-auto" />
-                  </Button>
-                )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleStripeLinkClick}
+                  className="flex items-center justify-center gap-2"
+                  data-testid="button-stripe"
+                >
+                  <DollarSign className="h-4 w-4" />
+                  Stripe
+                  <ExternalLink className="h-3 w-3 ml-auto" />
+                </Button>
               </div>
               <p className="text-xs text-muted-foreground text-center">
                 {tenant?.stripeEnabled 
                   ? "External payment links open in new tab"
-                  : "Click a payment method to donate via your preferred service"}
+                  : "Click to donate via Stripe"}
               </p>
             </div>
           </>

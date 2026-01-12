@@ -16,12 +16,6 @@ import {
 import { eq, and, desc, asc, sql, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import Stripe from 'stripe';
-import { 
-  createPaypalOrder, 
-  capturePaypalOrder, 
-  loadPaypalDefault,
-  isTenantPayPalConfigured,
-} from '../paypal';
 
 const router = Router();
 
@@ -129,8 +123,7 @@ router.get('/products/:slug', requireTenant, async (req, res, next) => {
 
 /**
  * POST /api/shop/checkout
- * Create an order and optionally a Stripe PaymentIntent
- * Supports both Stripe and PayPal payment methods
+ * Create an order and a Stripe PaymentIntent
  */
 router.post('/checkout', requireTenant, async (req, res, next) => {
   try {
@@ -152,26 +145,16 @@ router.post('/checkout', requireTenant, async (req, res, next) => {
         country: z.string().min(1).default('US'),
       }).optional(),
       customerNotes: z.string().optional(),
-      paymentMethod: z.enum(['stripe', 'paypal']).optional().default('stripe'),
     });
 
     const data = checkoutSchema.parse(req.body);
     const tenant = req.tenant!;
 
-    // Check if the selected payment method is available
+    // Check if Stripe is configured
     const stripeAvailable = tenant.stripeEnabled && tenant.stripeSecretKeyEncrypted;
-    const paypalAvailable = isTenantPayPalConfigured(tenant);
 
-    if (data.paymentMethod === 'stripe' && !stripeAvailable) {
+    if (!stripeAvailable) {
       return res.status(400).json({ error: 'Stripe payments are not configured for this organization' });
-    }
-    
-    if (data.paymentMethod === 'paypal' && !paypalAvailable) {
-      return res.status(400).json({ error: 'PayPal payments are not configured' });
-    }
-
-    if (!stripeAvailable && !paypalAvailable) {
-      return res.status(400).json({ error: 'No payment methods are configured for this organization' });
     }
 
     // Fetch products and calculate totals
@@ -370,7 +353,7 @@ router.post('/checkout', requireTenant, async (req, res, next) => {
         totalAmount: totalAmount.toFixed(2),
       });
     } else {
-      // PayPal - just return the order info, PayPal payment will be created on the frontend
+      // Non-Stripe checkout - just return the order info without payment intent
       res.json({
         orderId: order.id,
         orderNumber: order.orderNumber,
@@ -1127,121 +1110,6 @@ router.get('/admin/stats', requireTenant, requireAuth, async (req, res, next) =>
       revenue: parseFloat(revenue.total || '0').toFixed(2),
       orders: orderCounts,
       products: productCounts,
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-// ============================================================================
-// PayPal Payment Routes
-// ============================================================================
-
-/**
- * GET /api/shop/paypal/setup
- * Get PayPal client token for SDK initialization
- */
-router.get('/paypal/setup', requireTenant, async (req, res, next) => {
-  try {
-    await loadPaypalDefault(req, res);
-  } catch (error) {
-    next(error);
-  }
-});
-
-/**
- * POST /api/shop/paypal/order
- * Create a PayPal order
- */
-router.post('/paypal/order', requireTenant, async (req, res, next) => {
-  try {
-    await createPaypalOrder(req, res);
-  } catch (error) {
-    next(error);
-  }
-});
-
-/**
- * POST /api/shop/paypal/order/:orderID/capture
- * Capture a PayPal order after approval
- */
-router.post('/paypal/order/:orderID/capture', requireTenant, async (req, res, next) => {
-  try {
-    await capturePaypalOrder(req, res);
-  } catch (error) {
-    next(error);
-  }
-});
-
-/**
- * GET /api/shop/paypal/available
- * Check if PayPal is configured for this tenant
- */
-router.get('/paypal/available', requireTenant, async (req, res) => {
-  res.json({ available: isTenantPayPalConfigured(req.tenant!) });
-});
-
-/**
- * POST /api/shop/checkout/paypal-confirm
- * Confirm payment was successful via PayPal and finalize the order
- */
-router.post('/checkout/paypal-confirm', requireTenant, async (req, res, next) => {
-  try {
-    const { orderId, paypalOrderId, paypalCaptureId } = req.body;
-
-    if (!orderId || !paypalOrderId) {
-      return res.status(400).json({ error: 'Order ID and PayPal Order ID are required' });
-    }
-
-    const [order] = await db
-      .select()
-      .from(shopOrders)
-      .where(
-        and(
-          eq(shopOrders.id, orderId),
-          eq(shopOrders.tenantId, req.tenant!.id)
-        )
-      );
-
-    if (!order) {
-      return res.status(404).json({ error: 'Order not found' });
-    }
-
-    // Update order status
-    await db.update(shopOrders)
-      .set({ 
-        paymentStatus: 'paid',
-        paymentMethod: 'paypal',
-        paypalOrderId: paypalOrderId,
-        paypalCaptureId: paypalCaptureId,
-        updatedAt: new Date(),
-      })
-      .where(eq(shopOrders.id, order.id));
-
-    // Update inventory for variants
-    const orderItems = await db
-      .select()
-      .from(shopOrderItems)
-      .where(eq(shopOrderItems.orderId, order.id));
-
-    for (const item of orderItems) {
-      if (item.variantId) {
-        await db.update(shopProductVariants)
-          .set({ 
-            inventory: sql`${shopProductVariants.inventory} - ${item.quantity}` 
-          })
-          .where(eq(shopProductVariants.id, item.variantId));
-      }
-    }
-
-    res.json({ 
-      success: true,
-      order: {
-        ...order,
-        paymentStatus: 'paid',
-        paymentMethod: 'paypal',
-        items: orderItems,
-      }
     });
   } catch (error) {
     next(error);

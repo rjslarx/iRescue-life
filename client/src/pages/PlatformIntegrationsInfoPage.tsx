@@ -28,19 +28,6 @@ export default function PlatformIntegrationsInfoPage() {
       status: "Active"
     },
     {
-      name: "PayPal",
-      category: "Payments",
-      icon: CreditCard,
-      description: "Offer PayPal as an alternative payment option for donors who prefer it.",
-      features: [
-        "One-click donations",
-        "Trusted payment brand",
-        "Mobile-friendly checkout",
-        "International currency support"
-      ],
-      status: "Active"
-    },
-    {
       name: "Resend",
       category: "Email",
       icon: Mail,

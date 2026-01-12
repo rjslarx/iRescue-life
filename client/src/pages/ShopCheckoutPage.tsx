@@ -4,7 +4,6 @@ import { useLocation, Link } from "wouter";
 import { useTenant } from "@/contexts/TenantContext";
 import { useSEO } from "@/hooks/useSEO";
 import PublicHeader from "@/components/PublicHeader";
-import PayPalButton from "@/components/PayPalButton";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,7 +21,7 @@ import {
   Package,
   Ticket,
 } from "lucide-react";
-import { SiPaypal, SiStripe } from "react-icons/si";
+import { SiStripe } from "react-icons/si";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { apiRequest } from "@/lib/queryClient";
@@ -38,7 +37,7 @@ interface CartItem {
   quantity: number;
 }
 
-type PaymentMethod = 'stripe' | 'paypal';
+type PaymentMethod = 'stripe';
 
 function StripeCheckoutForm({ 
   orderId, 
@@ -181,13 +180,8 @@ export default function ShopCheckoutPage() {
     queryKey: ['/api/tenant'],
   });
 
-  const { data: paypalData } = useQuery<{ available: boolean }>({
-    queryKey: ['/api/shop/paypal/available'],
-  });
-
   const tenant = tenantData?.tenant;
   const rescueName = tenant?.name || "Shop";
-  const paypalAvailable = paypalData?.available ?? false;
 
   useSEO({
     title: `Checkout - ${rescueName} Shop`,
@@ -297,31 +291,8 @@ export default function ShopCheckoutPage() {
     checkoutMutation.mutate();
   };
 
-  const handlePayPalSuccess = (data: any) => {
-    toast({
-      title: "Payment successful!",
-      description: "Thank you for your purchase. You will receive a confirmation email shortly.",
-    });
-    setLocation(`${basePath}/shop/order/${orderNumber}`);
-  };
-
-  const handlePayPalError = (error: any) => {
-    toast({
-      title: "Payment failed",
-      description: error?.error || "An error occurred processing your PayPal payment.",
-      variant: "destructive",
-    });
-  };
-
-  const handlePayPalCancel = () => {
-    toast({
-      title: "Payment cancelled",
-      description: "Your PayPal payment was cancelled.",
-    });
-  };
-
   const stripeEnabled = tenant?.stripeEnabled;
-  const hasPaymentMethods = stripeEnabled || paypalAvailable;
+  const hasPaymentMethods = stripeEnabled;
 
   if (!hasPaymentMethods) {
     return (
@@ -520,18 +491,6 @@ export default function ShopCheckoutPage() {
                           </Label>
                         </div>
                       )}
-                      {paypalAvailable && (
-                        <div className="flex items-center space-x-3 p-3 border rounded-md hover-elevate cursor-pointer">
-                          <RadioGroupItem value="paypal" id="paypal" data-testid="radio-paypal" />
-                          <Label htmlFor="paypal" className="flex items-center gap-2 cursor-pointer flex-1">
-                            <SiPaypal className="h-5 w-5 text-[#003087]" />
-                            <div>
-                              <span className="font-medium">PayPal</span>
-                              <p className="text-xs text-muted-foreground">Pay with your PayPal account</p>
-                            </div>
-                          </Label>
-                        </div>
-                      )}
                     </RadioGroup>
                   </CardContent>
                 </Card>
@@ -580,30 +539,6 @@ export default function ShopCheckoutPage() {
                       basePath={basePath}
                     />
                   </Elements>
-                </CardContent>
-              </Card>
-            ) : paymentMethod === 'paypal' && orderId ? (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <SiPaypal className="h-5 w-5 text-[#003087]" />
-                    PayPal Payment
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Click the button below to complete your payment securely with PayPal.
-                  </p>
-                  <PayPalButton
-                    amount={subtotal.toFixed(2)}
-                    currency="USD"
-                    intent="CAPTURE"
-                    orderId={orderId}
-                    orderNumber={orderNumber!}
-                    onSuccess={handlePayPalSuccess}
-                    onError={handlePayPalError}
-                    onCancel={handlePayPalCancel}
-                  />
                 </CardContent>
               </Card>
             ) : (
