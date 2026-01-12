@@ -5853,11 +5853,11 @@ Crawl-delay: 1
    */
   app.get('/api/public/adoption-checkouts/:token/contract', async (req, res, next) => {
     try {
-      const { getCheckoutSessionByToken } = await import('./services/adoption-checkout');
+      const { getCheckoutSessionByTokenForDownload } = await import('./services/adoption-checkout');
       const { adoptionContracts } = await import('@shared/schema');
       const { generateSignedContractUrl } = await import('./services/contract-pdf');
       
-      const session = await getCheckoutSessionByToken(req.params.token);
+      const session = await getCheckoutSessionByTokenForDownload(req.params.token);
 
       if (!session) {
         return res.status(404).json({ error: 'Session not found or expired' });

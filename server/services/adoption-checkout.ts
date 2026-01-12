@@ -24,7 +24,7 @@ import {
   type AdoptionPayment,
   type Tenant,
 } from '@shared/schema';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, sql } from 'drizzle-orm';
 import { EmailService } from '../lib/email-service';
 import { stripeService } from '../lib/stripe-service';
 import { generatePaymentReceiptPDF } from './payment-receipt-pdf';
@@ -302,6 +302,7 @@ export async function getCheckoutSession(tenantId: string, sessionId: string): P
 
 /**
  * Get checkout session by token (public access)
+ * Only returns sessions with status 'initiated' that haven't expired
  */
 export async function getCheckoutSessionByToken(token: string): Promise<AdoptionCheckoutSession | null> {
   // This is a bit inefficient but secure - we need to check all sessions
@@ -315,6 +316,43 @@ export async function getCheckoutSessionByToken(token: string): Promise<Adoption
     const isValid = await bcrypt.compare(token, session.secureTokenHash);
     if (isValid && new Date() <= session.expiresAt) {
       return session;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Get checkout session by token for any status (for contract downloads)
+ * Includes completed sessions but enforces a download window (7 days after completion)
+ * Security: Token access expires 7 days after adoption completion to limit exposure
+ */
+export async function getCheckoutSessionByTokenForDownload(token: string): Promise<AdoptionCheckoutSession | null> {
+  // Get all active sessions (initiated, awaiting_signature, awaiting_payment) 
+  // and recently completed sessions (within 7 days of completion)
+  const allSessions = await db
+    .select()
+    .from(adoptionCheckoutSessions)
+    .where(
+      sql`(${adoptionCheckoutSessions.status} IN ('initiated', 'awaiting_signature', 'awaiting_payment', 'completed'))`
+    );
+
+  for (const session of allSessions) {
+    const isValid = await bcrypt.compare(token, session.secureTokenHash);
+    if (!isValid) continue;
+
+    // For non-completed sessions, check expiry
+    if (session.status !== 'completed') {
+      if (new Date() <= session.expiresAt) {
+        return session;
+      }
+    } else {
+      // For completed sessions, allow download within 7 days of payment
+      // This limits the exposure window for leaked tokens
+      const downloadWindow = 7 * 24 * 60 * 60 * 1000; // 7 days in ms
+      if (session.paidAt && (Date.now() - new Date(session.paidAt).getTime()) <= downloadWindow) {
+        return session;
+      }
     }
   }
 

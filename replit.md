@@ -33,7 +33,9 @@ The platform includes a complete native e-signature system for adoption contract
 - **Native E-Signature:** Uses signature_pad library for browser-based signature capture
 - **PDF Generation:** Puppeteer generates PDF contracts with embedded signature, IP address, and timestamp for legal verification
 - **Secure Storage:** Signed contracts stored in object storage with access controlled by session completion status
-- **Contract Download:** Adopters can download signed PDF contracts after completing the adoption process
+- **Contract Download:** Adopters can download signed PDF contracts after completing the adoption process using time-limited signed URLs (15-minute expiry)
+- **Security:** Server-side HTML sanitization with DOMPurify prevents XSS in contract templates, and GCS v4 signed URLs provide secure, time-limited access to contract PDFs
+- **Access Control:** Contract downloads require session status 'completed' (signed + paid), with a 7-day download window after adoption completion to limit token exposure
 
 **Technical Implementations:**
 The "Paw Pay" platform fee system uses Stripe Connect with a "SaaS + 0%" two-tier model:
