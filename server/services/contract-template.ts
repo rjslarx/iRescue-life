@@ -289,213 +289,110 @@ export async function ensureDefaultTemplate(tenantId: string, tenantName?: strin
     }
   }
 
-  // Create default template
+  // Create default template - Professional adoption contract
   const organizationName = tenantName || 'Animal Rescue Organization';
   const defaultHtml = `<!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Adoption Contract</title>
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    body {
-      font-family: 'Arial', sans-serif;
-      line-height: 1.6;
-      color: #333;
-      padding: 40px;
-      max-width: 800px;
-      margin: 0 auto;
-    }
-    h1 {
-      color: #1a1a1a;
-      font-size: 28px;
-      margin-bottom: 10px;
-      border-bottom: 3px solid #4F46E5;
-      padding-bottom: 10px;
-    }
-    h2 {
-      color: #2d2d2d;
-      font-size: 20px;
-      margin-top: 30px;
-      margin-bottom: 15px;
-    }
-    p {
-      margin-bottom: 12px;
-    }
-    .header {
-      text-align: center;
-      margin-bottom: 40px;
-    }
-    .section {
-      margin-bottom: 30px;
-    }
-    .info-grid {
-      display: grid;
-      grid-template-columns: 150px 1fr;
-      gap: 10px;
-      margin: 20px 0;
-    }
-    .info-label {
-      font-weight: bold;
-      color: #555;
-    }
-    .info-value {
-      color: #333;
-    }
-    .terms {
-      margin: 20px 0;
-      padding: 20px;
-      background: #f9f9f9;
-      border-left: 4px solid #4F46E5;
-    }
-    .terms ol {
-      margin-left: 20px;
-    }
-    .terms li {
-      margin-bottom: 12px;
-    }
-    .signature-section {
-      margin-top: 50px;
-      border-top: 2px solid #ddd;
-      padding-top: 30px;
-    }
-    .signature-box {
-      margin: 20px 0;
-      padding: 20px;
-      border: 2px solid #ddd;
-      background: white;
-    }
-    .signature-image {
-      max-width: 400px;
-      height: auto;
-      border-bottom: 2px solid #333;
-      padding-bottom: 10px;
-    }
-    .footer {
-      margin-top: 50px;
-      text-align: center;
-      font-size: 12px;
-      color: #777;
-      border-top: 1px solid #ddd;
-      padding-top: 20px;
-    }
-    .fee-breakdown {
-      background: #f5f5f5;
-      padding: 15px;
-      border-radius: 5px;
-      margin: 15px 0;
-    }
-    .fee-row {
-      display: flex;
-      justify-content: space-between;
-      padding: 5px 0;
-    }
-    .fee-total {
-      font-weight: bold;
-      font-size: 18px;
-      border-top: 2px solid #333;
-      margin-top: 10px;
-      padding-top: 10px;
-    }
-  </style>
+<style>
+  body { font-family: 'Helvetica', 'Arial', sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 40px; }
+  h1 { text-align: center; border-bottom: 2px solid #333; padding-bottom: 10px; }
+  h2 { font-size: 1.2em; background-color: #f4f4f4; padding: 5px; border-left: 5px solid #333; margin-top: 30px; }
+  .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }
+  .info-item { background: #fafafa; padding: 10px; border: 1px solid #ddd; }
+  .label { font-weight: bold; font-size: 0.9em; color: #666; display: block; }
+  .value { font-size: 1.1em; }
+  .terms-list { padding-left: 20px; }
+  .terms-list li { margin-bottom: 10px; }
+  .signature-block { margin-top: 50px; background-color: #f9f9f9; padding: 20px; border: 1px dashed #ccc; }
+  .digital-stamp { font-size: 0.8em; color: #888; margin-top: 10px; font-family: 'Courier New', monospace; }
+  .fee-summary { text-align: right; font-size: 1.2em; margin-top: 20px; }
+</style>
 </head>
 <body>
-  <div class="header">
-    <h1>{{organization_name}} - Adoption Agreement</h1>
-    <p>This Adoption Agreement is entered into on {{contract_date}}</p>
-  </div>
 
-  <div class="section">
-    <h2>Adopter Information</h2>
-    <div class="info-grid">
-      <div class="info-label">Name:</div>
-      <div class="info-value">{{adopter_name}}</div>
-      <div class="info-label">Email:</div>
-      <div class="info-value">{{adopter_email}}</div>
-      <div class="info-label">Phone:</div>
-      <div class="info-value">{{adopter_phone}}</div>
-      <div class="info-label">Address:</div>
-      <div class="info-value">{{adopter_address}}</div>
+  <h1>Adoption Agreement</h1>
+  <p style="text-align: center;"><strong>{{organization_name}}</strong></p>
+
+  <h2>1. The Parties</h2>
+  <div class="info-grid">
+    <div class="info-item">
+      <span class="label">Adopter Name:</span>
+      <span class="value">{{adopter_name}}</span>
+    </div>
+    <div class="info-item">
+      <span class="label">Date:</span>
+      <span class="value">{{contract_date}}</span>
+    </div>
+    <div class="info-item">
+      <span class="label">Email:</span>
+      <span class="value">{{adopter_email}}</span>
+    </div>
+    <div class="info-item">
+      <span class="label">Phone:</span>
+      <span class="value">{{adopter_phone}}</span>
+    </div>
+    <div class="info-item" style="grid-column: span 2;">
+      <span class="label">Address:</span>
+      <span class="value">{{adopter_address}}</span>
     </div>
   </div>
 
-  <div class="section">
-    <h2>Animal Information</h2>
-    <div class="info-grid">
-      <div class="info-label">Name:</div>
-      <div class="info-value">{{animal_name}}</div>
-      <div class="info-label">Species:</div>
-      <div class="info-value">{{animal_species}}</div>
-      <div class="info-label">Breed:</div>
-      <div class="info-value">{{animal_breed}}</div>
-      <div class="info-label">Age:</div>
-      <div class="info-value">{{animal_age}}</div>
-      <div class="info-label">Sex:</div>
-      <div class="info-value">{{animal_sex}}</div>
+  <h2>2. The Animal</h2>
+  <p>The Adopter agrees to adopt the animal described below (the "Animal"):</p>
+  <div class="info-grid">
+    <div class="info-item">
+      <span class="label">Name:</span>
+      <span class="value">{{animal_name}}</span>
+    </div>
+    <div class="info-item">
+      <span class="label">Species/Breed:</span>
+      <span class="value">{{animal_species}} / {{animal_breed}}</span>
+    </div>
+    <div class="info-item">
+      <span class="label">Sex:</span>
+      <span class="value">{{animal_sex}}</span>
+    </div>
+    <div class="info-item">
+      <span class="label">Age (Approx):</span>
+      <span class="value">{{animal_age}}</span>
     </div>
   </div>
 
-  <div class="section">
-    <h2>Adoption Fee</h2>
-    <div class="fee-breakdown">
-      <div class="fee-row">
-        <span>Adoption Fee:</span>
-        <span>$\{{adoption_fee}}</span>
-      </div>
-      <div class="fee-row">
-        <span>Donation:</span>
-        <span>$\{{donation_amount}}</span>
-      </div>
-      <div class="fee-row fee-total">
-        <span>Total Paid:</span>
-        <span>$\{{total_amount}}</span>
-      </div>
-    </div>
+  <h2>3. Terms and Conditions</h2>
+  <p>By signing this Agreement, the Adopter agrees to the following terms:</p>
+  <ol class="terms-list">
+    <li><strong>Standard of Care:</strong> The Adopter agrees to provide the Animal with fresh water, wholesome food, adequate exercise, and shelter at all times. The Animal will be treated as a family companion.</li>
+    <li><strong>Medical Care:</strong> The Adopter agrees to provide veterinary care as needed, including annual vaccinations and heartworm prevention.</li>
+    <li><strong>No Transfer of Ownership:</strong> The Adopter shall not sell, give away, or otherwise transfer the Animal to any third party, shelter, or research facility.</li>
+    <li><strong>Return Policy:</strong> If, for any reason, the Adopter is unable to keep the Animal, the Adopter agrees to return the Animal to <strong>{{organization_name}}</strong>.</li>
+    <li><strong>Liability Waiver:</strong> The Adopter assumes all responsibility for the Animal's actions and releases <strong>{{organization_name}}</strong> from any liability for damage or injury caused by the Animal after the date of this Agreement.</li>
+  </ol>
+
+  <h2>4. Adoption Fees</h2>
+  <div class="fee-summary">
+    <p>Adoption Fee: <strong>{{adoption_fee}}</strong></p>
+    <p>Additional Donation: <strong>{{donation_amount}}</strong></p>
+    <p style="border-top: 1px solid #ccc; padding-top: 5px;">Total Received: <strong>{{total_amount}}</strong></p>
   </div>
 
-  <div class="section">
-    <h2>Terms and Conditions</h2>
-    <div class="terms">
-      <p><strong>By signing this contract, the adopter agrees to the following terms:</strong></p>
-      <ol>
-        <li><strong>Veterinary Care:</strong> The adopter agrees to provide necessary veterinary care, including annual check-ups, vaccinations, and treatment for any illnesses or injuries.</li>
-        <li><strong>Living Conditions:</strong> The animal will be kept as an indoor pet and provided with adequate food, water, shelter, exercise, and companionship.</li>
-        <li><strong>Spay/Neuter:</strong> If the animal is not already spayed/neutered, the adopter agrees to have this procedure completed within 30 days of adoption.</li>
-        <li><strong>Identification:</strong> The adopter agrees to ensure the animal wears identification tags and to update microchip registration with current contact information.</li>
-        <li><strong>No Transfer:</strong> The adopter agrees not to sell, give away, or transfer ownership of the animal without written consent from {{organization_name}}.</li>
-        <li><strong>Return Policy:</strong> If the adopter can no longer care for the animal, they agree to contact {{organization_name}} to arrange for the animal's return.</li>
-        <li><strong>Home Visits:</strong> The adopter agrees to allow {{organization_name}} to conduct follow-up home visits to ensure the animal's welfare.</li>
-        <li><strong>Non-Refundable Fee:</strong> The adoption fee is non-refundable and helps cover medical expenses, food, and shelter for animals in our care.</li>
-      </ol>
-    </div>
-  </div>
-
-  <div class="signature-section">
-    <h2>Adopter Signature</h2>
-    <p>By signing below, I acknowledge that I have read, understand, and agree to abide by all terms and conditions stated in this adoption contract.</p>
+  <h2>5. Execution</h2>
+  <div class="signature-block">
+    <p>I, <strong>{{adopter_name}}</strong>, certify that the information provided is true and I understand and agree to the terms of this Adoption Agreement.</p>
     
-    <div class="signature-box">
-      <img src="{{signature_image_url}}" alt="Signature" class="signature-image" />
-      <p style="margin-top: 10px;"><strong>Name:</strong> {{adopter_name}}</p>
-      <p><strong>Date:</strong> {{contract_date}}</p>
-      <p><strong>Email:</strong> {{adopter_email}}</p>
+    <div style="margin: 20px 0; border-bottom: 1px solid #000; display: inline-block; min-width: 300px;">
+      <img src="{{signature_image_url}}" alt="Adopter Signature" style="max-height: 80px;" />
     </div>
+    <br>
+    <strong>Signature of Adopter</strong>
     
-    <div style="margin-top: 15px; padding: 10px; background: #f5f5f5; border-radius: 4px; font-size: 11px; color: #666;">
-      <p style="margin: 0;"><strong>Digital Signature Verification</strong></p>
-      <p style="margin: 5px 0 0 0;">Signed: {{signed_timestamp}} | IP Address: {{signed_ip}}</p>
+    <div class="digital-stamp">
+      <p>Digitally Signed via iRescue.life</p>
+      <p>Timestamp: {{signed_timestamp}}</p>
+      <p>IP Address: {{signed_ip}}</p>
     </div>
   </div>
 
-  <div class="footer">
-    <p>This is a legal document. Please retain a copy for your records.</p>
-    <p>{{organization_name}} - Committed to animal welfare</p>
-  </div>
 </body>
 </html>`;
 
