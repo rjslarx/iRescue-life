@@ -12310,25 +12310,29 @@ Submitted: ${new Date().toLocaleString()}
         return res.status(400).send('Missing or invalid authorization parameters');
       }
       
-      // Validate CSRF token from session if available
-      // Note: Session may not be available in cross-domain OAuth flows (dev -> prod redirect)
-      // In that case, we rely on Stripe's OAuth security (single-use auth code, verified redirect URI)
+      // Validate CSRF token from session (Strict Mode)
+      // Rejects requests with mismatched CSRF tokens to prevent CSRF attacks
       const sessionState = (req.session as any)?.stripeConnectState;
       if (sessionState) {
-        // Session exists - validate CSRF token
-        const STATE_MAX_AGE_MS = 15 * 60 * 1000; // 15 minutes
-        if (csrfTokenFromState && sessionState.token !== csrfTokenFromState) {
-          console.warn('[STRIPE CALLBACK] CSRF token mismatch - continuing with Stripe verification');
+        // Session exists - enforce strict CSRF validation
+        if (!csrfTokenFromState || sessionState.token !== csrfTokenFromState) {
+          console.error('[STRIPE CALLBACK] CSRF token mismatch - rejecting request (Strict Mode)');
+          // Clear the state from session
+          delete (req.session as any).stripeConnectState;
+          return res.status(403).send('CSRF validation failed. Please try connecting your Stripe account again.');
         }
         if (sessionState.tenantId !== tenantIdFromState) {
-          console.warn('[STRIPE CALLBACK] Tenant ID mismatch in session state');
+          console.error('[STRIPE CALLBACK] Tenant ID mismatch in session state - rejecting request');
+          delete (req.session as any).stripeConnectState;
+          return res.status(403).send('Session mismatch. Please try connecting your Stripe account again.');
         }
         // Clear the state from session (one-time use)
         delete (req.session as any).stripeConnectState;
       } else {
-        // Session not available - this is normal for cross-domain OAuth flows
-        // Security is maintained by: (1) Stripe's single-use auth code, (2) verified redirect URI
-        console.log('[STRIPE CALLBACK] No session state - cross-domain OAuth flow (normal for dev->prod)');
+        // No session state - reject in strict mode
+        // This prevents callbacks without a valid session
+        console.error('[STRIPE CALLBACK] No session state found - rejecting request (Strict Mode)');
+        return res.status(403).send('Session expired or invalid. Please try connecting your Stripe account again.');
       }
       
       const tenantId = tenantIdFromState;
