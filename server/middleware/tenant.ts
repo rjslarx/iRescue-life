@@ -187,7 +187,7 @@ export async function resolveTenant(req: Request, res: Response, next: NextFunct
         }
         
         // Check if it's a UUID (tenant ID from session) or a subdomain (from header)
-        const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        // Note: uuidPattern already declared above
         if (uuidPattern.test(tenantIdentifier)) {
           tenantId = tenantIdentifier;
         } else {
