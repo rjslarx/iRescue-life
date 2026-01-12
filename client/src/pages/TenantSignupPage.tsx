@@ -169,11 +169,6 @@ export default function TenantSignupPage() {
       const data = await response.json();
 
       if (data.success && data.tenantId) {
-        setTenantId(data.tenantId);
-        setSubdomain(data.subdomain);
-        // Store subdomain for later retrieval
-        sessionStorage.setItem("signup_subdomain", data.subdomain);
-        
         // Account is now active immediately (Free or Pro trial)
         const successMessage = startProTrial 
           ? "Your 14-day Pro trial has started! Enjoy 0% platform fees."
