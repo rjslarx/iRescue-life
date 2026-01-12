@@ -61,14 +61,6 @@ PUBLIC_OBJECT_SEARCH_PATHS=<automatically-set-by-replit>
 PRIVATE_OBJECT_DIR=<automatically-set-by-replit>
 ```
 
-#### Optional Payment Processors
-
-```bash
-# PayPal (optional)
-PAYPAL_CLIENT_ID=<your-paypal-client-id>
-PAYPAL_CLIENT_SECRET=<your-paypal-client-secret>
-```
-
 ---
 
 ## 2. Custom Domain Setup

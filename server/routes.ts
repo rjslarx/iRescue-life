@@ -19570,7 +19570,7 @@ The platform includes these features:
 - Animal Management: Track animals from intake to adoption with photos, medical records, and status updates
 - Medical Records & Billing: Comprehensive medical tracking (exams, vaccines, diagnostics, procedures, medications) with integrated billing
 - Application Workflow: Kanban-style adoption application processing
-- Donation Processing: Stripe and PayPal integration with recurring donations
+- Donation Processing: Stripe integration with recurring donations
 - Event & Volunteer Management: Calendar system with volunteer signups
 - Supply Wishlist: Public wishlist with multi-retailer support
 - Contact Management: Centralized directory of adopters, donors, volunteers, and fosters

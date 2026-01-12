@@ -26,11 +26,9 @@ interface OptionalEnvVars {
   PLATFORM_RESEND_API_KEY?: string;
   RESEND_API_KEY?: string;
   
-  // Payment Processors
+  // Payment Processors (Stripe only)
   STRIPE_SECRET_KEY?: string;
   VITE_STRIPE_PUBLIC_KEY?: string;
-  PAYPAL_CLIENT_ID?: string;
-  PAYPAL_CLIENT_SECRET?: string;
   
   // Platform Configuration (Paw Pay / Free vs Hosted)
   IS_HOSTED_PLATFORM?: string;  // Set to 'true' for managed hosting, defaults to 'false' for self-hosted

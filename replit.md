@@ -61,7 +61,6 @@ Email/password authentication uses bcrypt and Express sessions. Features include
   - **Required env var:** `STRIPE_CLIENT_ID` (starts with `ca_...`) - find in Stripe Dashboard > Settings > Connect > Settings
   - **For test mode:** `TESTING_STRIPE_CLIENT_ID` can be set separately
   - **Endpoints:** `GET /api/stripe/connect` (get OAuth URL), `GET /api/stripe/callback` (OAuth callback handler), `POST /api/stripe/connect/disconnect` (revoke access), `GET /api/stripe/connect/status` (check connection)
-- **Alternative Payment Methods Bypass:** Platform admins can enable specific tenants to use PayPal, Venmo, and Cash App for donations and adoption fees without requiring Stripe Connect setup. Toggle via Platform Admin > Tenants page. Enabled tenants can configure their PayPal/Venmo/CashApp usernames in Settings. Useful for small local rescues that prefer simpler payment methods. Field: `allowAlternativePayments` in tenants table. Endpoint: `PATCH /api/admin/tenants/:id/alternative-payments`.
 - **Donor Covers Fees Feature:** Checkbox on donation forms allowing donors to add processing fees so 100% of their intended donation goes to the rescue. Calculates gross-up amount to cover both Stripe processing fees (2.2% + $0.30) and platform fees (if applicable). Default-checked as studies show 60-80% of donors opt-in. For paid tiers with 0% platform fee, this effectively makes donations "free" for rescues when donors cover fees.
 - **Encryption:** AES-256-GCM for sensitive data.
 - **Unified File Storage (TenantFileStorage):** Hybrid storage prioritizing Google Drive (if Google Workspace connected with Shared Drive) and falling back to Replit object storage. Features a structured Google Drive folder system per animal ID and tenant-scoped paths for Replit storage. Private files require authenticated access; public files are universally accessible. Tenant organizational documents (insurance, bylaws, policies, etc.) are uploaded to the `04_General_Docs` folder in Google Drive when connected, with storage type and Drive file ID tracked in the database.
@@ -73,8 +72,7 @@ Email/password authentication uses bcrypt and Express sessions. Features include
 - **Google Workspace Integration:** Optional tenant-level integration for Gmail API, Google Calendar sync, and Google Drive storage, secured with OAuth 2.0. CASA-optimized OAuth scopes: `gmail.send` (sensitive), `calendar` (restricted but necessary), `drive.file` (non-sensitive), `userinfo.email` (non-sensitive). Manual sender name/email configuration replaces auto-detected Send As aliases to avoid restricted `gmail.settings.basic` scope requiring expensive CASA security assessment ($15K-75K). Shared Drive selection via Google Picker API (visual browser) or manual ID entry for `drive.file` scope limitations. Requires `GOOGLE_PICKER_API_KEY` environment variable (browser API key restricted to Picker API in Google Cloud Console). Animal Medical Documents section includes "Select from Google Drive" button (when Drive enabled) using Google Picker to attach Drive files as metadata-only links (driveFileId, fileName, fileUrl, mimeType, iconLink) stored in `animalDriveFiles` table - no file content downloaded. Drive files display with Drive badge and external link icon; removing a link doesn't delete the file from Google Drive.
 
 ## Recent Changes (January 2026)
-- **Open Source Preparation:** Removed proprietary Givebutter and Zeffy payment integrations. Stripe is now the only default payment processor.
-- **Alternative Payment Methods:** PayPal, Venmo, and Cash App are only available when platform admin explicitly enables `allowAlternativePayments` for specific tenants.
+- **Open Source Preparation:** Removed all proprietary and alternative payment integrations (Givebutter, Zeffy, PayPal, Venmo, Cash App). Stripe is now the sole payment processor.
 - **License:** GNU AGPLv3 for open source release.
 - **Dev Routing Fix:** On development hosts (localhost, replit.dev, replit.app), the root `/` now loads the demo tenant directly without path-based routing. Path-based routes like `/demo/*` still work. This fixes blank page issues caused by wouter base path mismatches.
 
@@ -86,8 +84,7 @@ Email/password authentication uses bcrypt and Express sessions. Features include
 - **Reserved Paths:** `platform`, `api` are reserved and not treated as tenant slugs
 
 ## External Dependencies
-- **Stripe:** Primary payment gateway (donations, adoption fees, subscriptions).
-- **PayPal:** Alternative payment for shop (when enabled by platform admin).
+- **Stripe:** Sole payment gateway (donations, adoption fees, subscriptions).
 - **Resend:** Email delivery service.
 - **Google APIs:** OAuth 2.0, Gmail API, Calendar API, Drive API.
 - **PostgreSQL:** Primary database.
