@@ -26,9 +26,6 @@ export const tenants = pgTable("tenants", {
   customDomain: text("custom_domain").unique(), // e.g., "fluffypaws.org" or "www.fluffypaws.org"
   customDomainVerified: boolean("custom_domain_verified").notNull().default(false),
   // Payment integration settings
-  paypalUsername: text("paypal_username"), // PayPal.me username
-  venmoUsername: text("venmo_username"), // @username
-  cashappUsername: text("cashapp_username"), // $username
   stripeLink: text("stripe_link"), // Custom Stripe payment link
   // Stripe settings (encrypted API keys per tenant)
   stripePublishableKey: text("stripe_publishable_key"), // Publishable key (safe to expose)
@@ -37,14 +34,8 @@ export const tenants = pgTable("tenants", {
   stripeEnabled: boolean("stripe_enabled").notNull().default(false), // Whether Stripe is configured
   stripeConnectedAccountId: text("stripe_connected_account_id"), // Stripe Connect account ID (Standard Connect - tenant owns account)
   stripeConnectedAt: timestamp("stripe_connected_at"), // When Stripe was connected via OAuth
-  // Alternative payment methods (platform admin can enable to bypass Stripe Connect requirement)
-  allowAlternativePayments: boolean("allow_alternative_payments").notNull().default(false), // Platform admin toggle to allow PayPal/Venmo/CashApp without Stripe
   // Adoption fee settings
   passFeesToAdopter: boolean("pass_fees_to_adopter").notNull().default(false), // Whether to add processing + platform fees to adoption fee (paid by adopter)
-  // PayPal API settings (encrypted credentials per tenant)
-  paypalClientIdEncrypted: text("paypal_client_id_encrypted"), // Encrypted PayPal Client ID
-  paypalClientSecretEncrypted: text("paypal_client_secret_encrypted"), // Encrypted PayPal Client Secret
-  paypalEnabled: boolean("paypal_enabled").notNull().default(false), // Whether PayPal API is configured
   // Email service settings (encrypted API keys per tenant)
   resendApiKeyEncrypted: text("resend_api_key_encrypted"), // Resend API key for transactional emails
   resendFromEmail: text("resend_from_email"), // From email address (e.g., noreply@rescue.org)
@@ -687,7 +678,7 @@ export const applications = pgTable("applications", {
   adoptionFeeStatus: text("adoption_fee_status").notNull().default("pending").$type<"pending" | "paid" | "waived">(),
   adoptionFeeAmount: numeric("adoption_fee_amount", { precision: 10, scale: 2 }), // Amount paid
   adoptionFeePaidAt: timestamp("adoption_fee_paid_at"), // When the fee was paid
-  adoptionFeePaymentSource: text("adoption_fee_payment_source").$type<"stripe" | "cash" | "check" | "paypal" | "venmo" | "cashapp" | "other">(), // Payment method
+  adoptionFeePaymentSource: text("adoption_fee_payment_source").$type<"stripe" | "cash" | "check" | "other">(), // Payment method
   adoptionFeeTransactionId: text("adoption_fee_transaction_id"), // External transaction ID from payment processor
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -772,7 +763,7 @@ export const payments = pgTable("payments", {
   amount: integer("amount").notNull(), // Amount in cents
   currency: text("currency").notNull().default("usd"),
   status: text("status").notNull().$type<"pending" | "succeeded" | "failed" | "refunded">(),
-  paymentMethod: text("payment_method").$type<"stripe" | "paypal" | "venmo" | "cashapp" | "manual">(),
+  paymentMethod: text("payment_method").$type<"stripe" | "manual">(),
   isRecurring: boolean("is_recurring").notNull().default(false),
   message: text("message"), // Optional donor message
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -2550,7 +2541,7 @@ export const adoptionCheckoutSessions = pgTable("adoption_checkout_sessions", {
   baseFee: text("base_fee").notNull(), // Adoption fee amount (stored as text for precision)
   donationBoost: text("donation_boost").default("0"),
   coverFees: boolean("cover_fees").default(false),
-  processor: text("processor").notNull().default("stripe").$type<"stripe" | "paypal" | "square">(),
+  processor: text("processor").notNull().default("stripe").$type<"stripe">(),
   paymentIntentId: text("payment_intent_id"), // Stripe PaymentIntent ID
   status: text("status").notNull().default("initiated").$type<"initiated" | "awaiting_signature" | "awaiting_payment" | "completed" | "cancelled" | "expired">(),
   secureTokenHash: text("secure_token_hash").notNull(), // Hashed token for public link
@@ -2598,7 +2589,7 @@ export type AdoptionContract = typeof adoptionContracts.$inferSelect;
 export const adoptionPayments = pgTable("adoption_payments", {
   id: serial("id").primaryKey(),
   sessionId: uuid("session_id").notNull().references(() => adoptionCheckoutSessions.id, { onDelete: 'cascade' }),
-  processor: text("processor").notNull().$type<"stripe" | "paypal" | "square">(),
+  processor: text("processor").notNull().$type<"stripe">(),
   amountBreakdown: jsonb("amount_breakdown").notNull().$type<{ baseFee: string; donationBoost: string; processingFee: string; total: string }>(),
   receiptUrl: text("receipt_url"), // PDF receipt URL
   chargeId: text("charge_id"), // Processor's charge/transaction ID
@@ -2868,13 +2859,10 @@ export const shopOrders = pgTable("shop_orders", {
   totalAmount: text("total_amount").notNull(),
   // Payment status
   paymentStatus: text("payment_status").notNull().default("pending").$type<"pending" | "processing" | "paid" | "failed" | "refunded" | "partially_refunded">(),
-  paymentMethod: text("payment_method").$type<"stripe" | "paypal">(),
+  paymentMethod: text("payment_method").$type<"stripe">(),
   // Stripe payment tracking
   stripePaymentIntentId: text("stripe_payment_intent_id"),
   stripeChargeId: text("stripe_charge_id"),
-  // PayPal payment tracking
-  paypalOrderId: text("paypal_order_id"),
-  paypalCaptureId: text("paypal_capture_id"),
   // Fulfillment status (for physical products)
   fulfillmentStatus: text("fulfillment_status").notNull().default("unfulfilled").$type<"unfulfilled" | "processing" | "shipped" | "delivered" | "cancelled">(),
   trackingNumber: text("tracking_number"),
