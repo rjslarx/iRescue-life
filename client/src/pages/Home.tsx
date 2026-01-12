@@ -556,16 +556,9 @@ export default function Home() {
       <section className="py-12 sm:py-20 bg-primary/5">
         <div className="max-w-6xl mx-auto px-6">
           {contentModules.length > 0 ? (
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {/* Left content module(s) */}
-              {contentModules[0] && (
-                <div className="w-full">
-                  <ContentModuleCard module={contentModules[0]} testId="content-module-0" />
-                </div>
-              )}
-
-              {/* Center - Support Our Mission (Donation Form) */}
-              <div className="w-full lg:col-span-1">
+            <div className="flex flex-col gap-8">
+              {/* Donation section - always first/top */}
+              <div className="w-full max-w-2xl mx-auto">
                 <div className="text-center mb-8">
                   <h2 className="font-display text-2xl sm:text-3xl md:text-4xl font-bold mb-3 sm:mb-4" data-testid="text-donation-heading">
                     {(tenant as any)?.donationSection?.sectionHeading || "Support Our Mission"}
@@ -579,19 +572,14 @@ export default function Home() {
                 />
               </div>
 
-              {/* Right content module(s) */}
-              {contentModules[1] && (
-                <div className="w-full">
-                  <ContentModuleCard module={contentModules[1]} testId="content-module-1" />
-                </div>
-              )}
-
-              {/* Additional modules (if more than 2) - each in its own column */}
-              {contentModules.slice(2).map((module, idx) => (
-                <div key={module.id} className="w-full">
-                  <ContentModuleCard module={module} testId={`content-module-${idx + 2}`} />
-                </div>
-              ))}
+              {/* Content modules - single column on mobile/tablet, multi-column on desktop */}
+              <div className="grid gap-6 grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3">
+                {contentModules.map((module, idx) => (
+                  <div key={module.id} className="w-full">
+                    <ContentModuleCard module={module} testId={`content-module-${idx}`} />
+                  </div>
+                ))}
+              </div>
             </div>
           ) : (
             <div className="max-w-2xl mx-auto">
