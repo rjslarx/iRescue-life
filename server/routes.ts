@@ -12675,6 +12675,21 @@ Submitted: ${new Date().toLocaleString()}
             break;
           }
 
+          // Idempotency check: Skip if this payment was already processed
+          if (session.payment_intent) {
+            const existingPayment = await db
+              .select({ id: payments.id })
+              .from(payments)
+              .where(eq(payments.stripePaymentIntentId, session.payment_intent))
+              .limit(1)
+              .then(rows => rows[0]);
+
+            if (existingPayment) {
+              console.log(`[Webhook] Payment ${session.payment_intent} already processed, skipping (idempotency)`);
+              return res.status(200).json({ received: true, idempotent: true });
+            }
+          }
+
           let donor = await db
             .select()
             .from(donors)
@@ -12805,6 +12820,21 @@ Submitted: ${new Date().toLocaleString()}
         case 'invoice.payment_succeeded': {
           const invoice = event.data.object as any;
           if (!invoice.subscription) break;
+
+          // Idempotency check: Skip if this invoice payment was already processed
+          if (invoice.id) {
+            const existingPayment = await db
+              .select({ id: payments.id })
+              .from(payments)
+              .where(eq(payments.stripeInvoiceId, invoice.id))
+              .limit(1)
+              .then(rows => rows[0]);
+
+            if (existingPayment) {
+              console.log(`[Webhook] Invoice ${invoice.id} already processed, skipping (idempotency)`);
+              return res.status(200).json({ received: true, idempotent: true });
+            }
+          }
 
           const donor = await db
             .select()
