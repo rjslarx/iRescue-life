@@ -572,8 +572,8 @@ export default function Home() {
                 />
               </div>
 
-              {/* Content modules - single column on mobile/tablet, multi-column on desktop */}
-              <div className="grid gap-6 grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3">
+              {/* Content modules - single column on mobile, two columns on tablet, three on desktop */}
+              <div className="grid gap-6 grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
                 {contentModules.map((module, idx) => (
                   <div key={module.id} className="w-full">
                     <ContentModuleCard module={module} testId={`content-module-${idx}`} />
