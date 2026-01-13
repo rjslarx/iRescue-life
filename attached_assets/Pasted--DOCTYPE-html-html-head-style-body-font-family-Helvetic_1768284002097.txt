@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+  body { font-family: 'Helvetica', 'Arial', sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; }
+  h1 { text-align: center; border-bottom: 2px solid #333; padding-bottom: 10px; }
+  h2 { font-size: 1.2em; background-color: #e8f4f8; padding: 5px; border-left: 5px solid #007bff; margin-top: 30px; } /* Blue accent for Foster */
+  .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }
+  .info-item { background: #fafafa; padding: 10px; border: 1px solid #ddd; }
+  .label { font-weight: bold; font-size: 0.9em; color: #666; display: block; }
+  .value { font-size: 1.1em; }
+  .terms-list { padding-left: 20px; }
+  .terms-list li { margin-bottom: 10px; }
+  .signature-block { margin-top: 50px; background-color: #f9f9f9; padding: 20px; border: 1px dashed #ccc; }
+  .digital-stamp { font-size: 0.8em; color: #888; margin-top: 10px; font-family: 'Courier New', monospace; }
+  .warning-box { background-color: #fff3cd; border: 1px solid #ffeeba; padding: 15px; margin: 20px 0; border-left: 5px solid #ffc107; }
+</style>
+</head>
+<body>
+
+  <h1>Foster Care Agreement</h1>
+  <p style="text-align: center;"><strong>{{organization_name}}</strong></p>
+
+  <h2>1. The Parties</h2>
+  <div class="info-grid">
+    <div class="info-item">
+      <span class="label">Foster Parent Name:</span>
+      <span class="value">{{foster_parent_name}}</span>
+    </div>
+    <div class="info-item">
+      <span class="label">Start Date:</span>
+      <span class="value">{{foster_start_date}}</span>
+    </div>
+    <div class="info-item">
+      <span class="label">Email:</span>
+      <span class="value">{{foster_email}}</span>
+    </div>
+    <div class="info-item">
+      <span class="label">Phone:</span>
+      <span class="value">{{foster_phone}}</span>
+    </div>
+    <div class="info-item" style="grid-column: span 2;">
+      <span class="label">Address:</span>
+      <span class="value">{{foster_address}}</span>
+    </div>
+  </div>
+
+  <h2>2. The Foster Animal</h2>
+  <p>The Foster Parent agrees to provide temporary care for:</p>
+  <div class="info-grid">
+    <div class="info-item">
+      <span class="label">Name:</span>
+      <span class="value">{{animal_name}}</span>
+    </div>
+    <div class="info-item">
+      <span class="label">Species/Breed:</span>
+      <span class="value">{{animal_species}} / {{animal_breed}}</span>
+    </div>
+    <div class="info-item">
+      <span class="label">Sex:</span>
+      <span class="value">{{animal_sex}}</span>
+    </div>
+    <div class="info-item">
+      <span class="label">ID / Microchip:</span>
+      <span class="value">{{animal_microchip}}</span>
+    </div>
+  </div>
+
+  <h2>3. Terms of Foster Care</h2>
+  <div class="warning-box">
+    <strong>IMPORTANT:</strong> The Animal remains the sole property of <strong>{{organization_name}}</strong>. The Foster Parent has no authority to adopt out, sell, or transfer the Animal to any third party.
+  </div>
+  <ol class="terms-list">
+    <li><strong>Temporary Custody:</strong> I understand that I am providing temporary care for the Animal and that ownership remains with the Rescue. I agree to return the Animal immediately upon request.</li>
+    <li><strong>Medical Authorization:</strong> I will not arrange for veterinary care without prior approval from the Rescue, except in a life-threatening emergency. I understand the Rescue is responsible for authorized medical expenses, but I am responsible for unauthorized expenses.</li>
+    <li><strong>Adoption Process:</strong> I understand that I cannot "promise" the Animal to friends or family. All potential adopters must go through the Rescue's official application process.</li>
+    <li><strong>Care Standards:</strong> I agree to keep the Animal indoors as a household pet and will never leave the Animal outdoors unsupervised or off-leash in an unfenced area.</li>
+  </ol>
+
+  <h2>4. Liability Waiver</h2>
+  <p>I acknowledge that animals can be unpredictable. By signing below, I voluntarily release <strong>{{organization_name}}</strong> from any and all liability for:
+  <ul class="terms-list">
+    <li>Personal injury (bites, scratches, etc.) to myself or household members.</li>
+    <li>Damage to personal property (furniture, carpets, vehicles, etc.).</li>
+    <li>Injury or illness transmitted to my own personal pets.</li>
+  </ul>
+  <p><em>I confirm my own pets are up-to-date on vaccinations and spayed/neutered.</em></p>
+
+  <h2>5. Execution</h2>
+  <div class="signature-block">
+    <p>I, <strong>{{foster_parent_name}}</strong>, have read and understood this Agreement. I agree to act as a volunteer Foster Parent under these terms.</p>
+    
+    <div style="margin: 20px 0; border-bottom: 1px solid #000; display: inline-block; min-width: 300px;">
+      <img src="{{signature_image_url}}" alt="Foster Signature" style="max-height: 80px;" />
+    </div>
+    <br>
+    <strong>Signature of Foster Parent</strong>
+    
+    <div class="digital-stamp">
+      <p>Digitally Signed via iRescue.life</p>
+      <p>Timestamp: {{signed_timestamp}}</p>
+      <p>IP Address: {{signed_ip}}</p>
+    </div>
+  </div>
+
+</body>
+</html>

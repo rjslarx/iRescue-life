@@ -5910,7 +5910,11 @@ Crawl-delay: 1
    */
   app.get('/api/contract-templates', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
     try {
-      const { getAllTemplates, MERGE_FIELDS } = await import('./services/contract-template');
+      const { getAllTemplates, ensureDefaultTemplate, MERGE_FIELDS } = await import('./services/contract-template');
+      
+      // Ensure a default template exists for new tenants
+      await ensureDefaultTemplate(req.tenant!.id);
+      
       const templates = await getAllTemplates(req.tenant!.id);
       res.json({ templates, mergeFields: MERGE_FIELDS });
     } catch (error) {
@@ -6083,7 +6087,11 @@ Crawl-delay: 1
    */
   app.get('/api/foster-contract-templates', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
     try {
-      const { getAllFosterTemplates, FOSTER_MERGE_FIELDS } = await import('./services/foster-contract-template');
+      const { getAllFosterTemplates, ensureDefaultFosterTemplate, FOSTER_MERGE_FIELDS } = await import('./services/foster-contract-template');
+      
+      // Ensure a default template exists for new tenants
+      await ensureDefaultFosterTemplate(req.tenant!.id, req.tenant!.name);
+      
       const templates = await getAllFosterTemplates(req.tenant!.id);
       res.json({ templates, mergeFields: FOSTER_MERGE_FIELDS });
     } catch (error) {
