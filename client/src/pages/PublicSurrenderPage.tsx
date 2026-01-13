@@ -18,22 +18,25 @@ import { Heart, AlertCircle, Info, Upload, X, Loader2 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { buildTenantUrl, getTenantHeaders } from "@/lib/tenantApi";
 import { useSEO } from "@/hooks/useSEO";
+import { useTenant } from "@/contexts/TenantContext";
 import { insertAnimalSurrenderSchema, type InsertAnimalSurrender, type Tenant, type SurrenderFormField } from "@shared/schema";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export default function PublicSurrenderPage() {
   const { toast } = useToast();
+  const { tenantId } = useTenant();
 
+  // Include tenantId in queryKey to prevent stale data flash when switching between tenant sites
   const { data: tenantData } = useQuery<{ tenant: Tenant }>({
-    queryKey: ['/api/tenant'],
+    queryKey: ['/api/tenant', tenantId],
   });
 
   const { data: customFieldsData } = useQuery<{ fields: SurrenderFormField[] }>({
-    queryKey: ['/api/surrender-form-fields'],
+    queryKey: ['/api/surrender-form-fields', tenantId],
   });
 
   const { data: formSettingsData } = useQuery<{ setting: { introText: string | null } }>({
-    queryKey: ['/api/form-settings', 'surrender'],
+    queryKey: ['/api/form-settings', 'surrender', tenantId],
   });
 
   const tenant = tenantData?.tenant;

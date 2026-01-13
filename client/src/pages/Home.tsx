@@ -211,22 +211,23 @@ function sanitizeBgImage(url: string | undefined): string | undefined {
 }
 
 export default function Home() {
-  const { basePath } = useTenant();
+  const { basePath, tenantId } = useTenant();
   const [donationDialogOpen, setDonationDialogOpen] = useState(false);
   const [adoptionDialogOpen, setAdoptionDialogOpen] = useState(false);
   const [selectedAnimal, setSelectedAnimal] = useState<Animal | null>(null);
   const [sponsorAnimalName, setSponsorAnimalName] = useState<string | null>(null);
 
+  // Include tenantId in queryKey to prevent stale data flash when switching between tenant sites
   const { data: animalsData, isLoading: isLoadingAnimals } = useQuery<{ animals: Animal[] }>({
-    queryKey: ['/api/animals'],
+    queryKey: ['/api/animals', tenantId],
   });
 
   const { data: tenantData } = useQuery<{ tenant: Tenant }>({
-    queryKey: ['/api/tenant'],
+    queryKey: ['/api/tenant', tenantId],
   });
 
   const { data: customPagesData } = useQuery<{ pages: CustomPage[] }>({
-    queryKey: ['/api/custom-pages'],
+    queryKey: ['/api/custom-pages', tenantId],
   });
 
   const { data: eventsData, isLoading: isLoadingEvents } = useQuery<{ 
@@ -243,15 +244,15 @@ export default function Home() {
       calendarType: "events" | "fundraising";
     }> 
   }>({
-    queryKey: ['/api/public-events'],
+    queryKey: ['/api/public-events', tenantId],
   });
 
   const { data: happyTailsData, isLoading: isLoadingHappyTails } = useQuery<{ happyTails: HappyTail[] }>({
-    queryKey: ['/api/happy-tails'],
+    queryKey: ['/api/happy-tails', tenantId],
   });
 
   const { data: contentModulesData } = useQuery<{ modules: ContentModule[] }>({
-    queryKey: ['/api/content-modules'],
+    queryKey: ['/api/content-modules', tenantId],
   });
 
   const animals = animalsData?.animals || [];

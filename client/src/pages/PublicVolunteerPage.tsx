@@ -18,6 +18,7 @@ import { Calendar, Clock, MapPin, Users, Heart, Upload, X, Loader2 } from "lucid
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { buildTenantUrl, getTenantHeaders } from "@/lib/tenantApi";
 import { useSEO } from "@/hooks/useSEO";
+import { useTenant } from "@/contexts/TenantContext";
 import type { VolunteerOpportunity, Tenant, InsertVolunteerApplication, VolunteerFormField } from "@shared/schema";
 import { insertVolunteerApplicationSchema } from "@shared/schema";
 import { VolunteerSignupDialog } from "@/components/VolunteerSignupDialog";
@@ -29,31 +30,33 @@ import { FormDescription } from "@/components/ui/form";
 
 export default function PublicVolunteerPage() {
   const { toast } = useToast();
+  const { tenantId } = useTenant();
   const [signupDialog, setSignupDialog] = useState<{opportunityId: string, title: string} | null>(null);
   
   const { data: userData } = useQuery<{ user: any }>({
     queryKey: ['/api/me'],
   });
 
+  // Include tenantId in queryKey to prevent stale data flash when switching between tenant sites
   const { data: tenantData } = useQuery<{ tenant: Tenant }>({
-    queryKey: ['/api/tenant'],
+    queryKey: ['/api/tenant', tenantId],
   });
 
   // Load form intro text
   const { data: formSettingsData } = useQuery<{ setting: { introText: string | null } }>({
-    queryKey: ['/api/form-settings', 'volunteer'],
+    queryKey: ['/api/form-settings', 'volunteer', tenantId],
   });
 
   // Load custom form fields
   const { data: customFieldsData } = useQuery<{ fields: VolunteerFormField[] }>({
-    queryKey: ['/api/volunteer-form-fields'],
+    queryKey: ['/api/volunteer-form-fields', tenantId],
   });
   const customFields = customFieldsData?.fields || [];
 
   const { data: opportunitiesData, isLoading: isLoadingOpportunities } = useQuery<{ 
     opportunities: (VolunteerOpportunity & { isSignedUp?: boolean })[] 
   }>({
-    queryKey: ['/api/volunteer-opportunities'],
+    queryKey: ['/api/volunteer-opportunities', tenantId],
   });
 
   const opportunities = opportunitiesData?.opportunities || [];

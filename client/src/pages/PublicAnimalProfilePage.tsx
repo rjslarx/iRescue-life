@@ -36,20 +36,21 @@ import dogPhoto from '@assets/generated_images/Golden_retriever_dog_portrait_fde
 
 export default function PublicAnimalProfilePage() {
   const { animalId } = useParams<{ animalId: string }>();
-  const { basePath } = useTenant();
+  const { basePath, tenantId } = useTenant();
   const { toast } = useToast();
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const [donationDialogOpen, setDonationDialogOpen] = useState(false);
   const [adoptionDialogOpen, setAdoptionDialogOpen] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  // Include tenantId in queryKey to prevent stale data flash when switching between tenant sites
   const { data: animalData, isLoading: isLoadingAnimal } = useQuery<{ animal: Animal }>({
-    queryKey: ['/api/animals', animalId],
+    queryKey: ['/api/animals', animalId, tenantId],
     enabled: !!animalId,
   });
 
   const { data: tenantData } = useQuery<{ tenant: Tenant }>({
-    queryKey: ['/api/tenant'],
+    queryKey: ['/api/tenant', tenantId],
   });
 
   const animal = animalData?.animal;
