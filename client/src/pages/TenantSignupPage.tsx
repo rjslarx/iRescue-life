@@ -23,7 +23,7 @@ const PRICING = {
       "Unlimited animals",
       "500 emails/month",
       "Basic reporting",
-      "5% platform fee on donations",
+      "5% platform fee on donations & adoptions",
     ],
   },
   professional: {

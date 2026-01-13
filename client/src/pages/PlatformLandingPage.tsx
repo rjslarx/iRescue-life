@@ -857,7 +857,7 @@ export default function PlatformLandingPage() {
                   <span className="text-4xl font-bold">$0</span>
                   <span className="text-muted-foreground">/mo</span>
                 </div>
-                <p className="text-sm text-muted-foreground mt-2">5% platform fee on donations</p>
+                <p className="text-sm text-muted-foreground mt-2">5% platform fee on donations & adoptions</p>
               </CardHeader>
               <CardContent className="space-y-4">
                 <ul className="space-y-3 text-sm">
@@ -970,7 +970,7 @@ export default function PlatformLandingPage() {
                       <td colSpan={3} className="py-2 px-6 font-semibold text-[#5B7B6B]">Pricing & Fees</td>
                     </tr>
                     <tr>
-                      <td className="py-3 px-6">Platform Fee on Donations</td>
+                      <td className="py-3 px-6">Platform Fee on Donations & Adoptions</td>
                       <td className="py-3 px-6 text-center font-medium">5%</td>
                       <td className="py-3 px-6 text-center font-medium text-[#5B7B6B]">0%</td>
                     </tr>
