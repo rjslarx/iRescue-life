@@ -18,23 +18,26 @@ import { Heart, Home, Users, Upload, X, Loader2 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { buildTenantUrl, getTenantHeaders } from "@/lib/tenantApi";
 import { useSEO } from "@/hooks/useSEO";
+import { useTenant } from "@/contexts/TenantContext";
 import { insertFosterApplicationSchema, type InsertFosterApplication, type Tenant, type FosterFormField } from "@shared/schema";
 
 export default function PublicFosterPage() {
   const { toast } = useToast();
+  const { tenantId } = useTenant();
 
+  // Include tenantId in queryKey to prevent stale data flash when switching between tenant sites
   const { data: tenantData } = useQuery<{ tenant: Tenant }>({
-    queryKey: ['/api/tenant'],
+    queryKey: ['/api/tenant', tenantId],
   });
 
   // Load custom form fields
   const { data: customFieldsData } = useQuery<{ fields: FosterFormField[] }>({
-    queryKey: ['/api/foster-form-fields'],
+    queryKey: ['/api/foster-form-fields', tenantId],
   });
 
   // Load form intro text
   const { data: formSettingsData } = useQuery<{ setting: { introText: string | null } }>({
-    queryKey: ['/api/form-settings', 'foster'],
+    queryKey: ['/api/form-settings', 'foster', tenantId],
   });
 
   const form = useForm<InsertFosterApplication & { customResponses?: Record<string, any> }>({

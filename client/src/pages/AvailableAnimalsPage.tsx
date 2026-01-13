@@ -22,7 +22,7 @@ import type { Animal, Tenant, Page } from "@shared/schema";
 import dogPhoto from '@assets/generated_images/Golden_retriever_dog_portrait_fdeb8a78.png';
 
 export default function AvailableAnimalsPage() {
-  const { basePath } = useTenant();
+  const { basePath, tenantId } = useTenant();
   const [donationDialogOpen, setDonationDialogOpen] = useState(false);
   const [adoptionDialogOpen, setAdoptionDialogOpen] = useState(false);
   const [selectedAnimal, setSelectedAnimal] = useState<Animal | null>(null);
@@ -31,16 +31,17 @@ export default function AvailableAnimalsPage() {
   const [speciesFilter, setSpeciesFilter] = useState<string>("all");
   const [ageFilter, setAgeFilter] = useState<string>("all");
 
+  // Include tenantId in queryKey to prevent stale data flash when switching between tenant sites
   const { data: animalsData, isLoading: isLoadingAnimals } = useQuery<{ animals: Animal[] }>({
-    queryKey: ['/api/animals'],
+    queryKey: ['/api/animals', tenantId],
   });
 
   const { data: tenantData } = useQuery<{ tenant: Tenant }>({
-    queryKey: ['/api/tenant'],
+    queryKey: ['/api/tenant', tenantId],
   });
 
   const { data: pagesData } = useQuery<{ pages: Page[] }>({
-    queryKey: ['/api/pages'],
+    queryKey: ['/api/pages', tenantId],
   });
 
   const animals = animalsData?.animals || [];
