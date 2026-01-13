@@ -42,9 +42,35 @@ export const getQueryFn: <T>(options: {
   async ({ queryKey }) => {
     const tenantHeaders = getTenantHeaders();
     
-    // Join all elements of the query key to form the URL path
-    // This supports hierarchical paths like ['/api/animals', animalId, 'files']
-    const url = queryKey.join("/");
+    // Build URL from query key elements
+    // - If first element is a complete URL (starts with /api), use only that as the URL
+    //   Additional elements like tenantId are for cache separation, not URL building
+    // - For hierarchical paths like ['/api/animals', animalId, 'files'], join them
+    // - Detect cache-only elements: if an element looks like a tenant ID (stored in headers),
+    //   don't include it in the URL path
+    const firstKey = String(queryKey[0]);
+    let url: string;
+    
+    if (queryKey.length === 1) {
+      // Simple case: single URL string
+      url = firstKey;
+    } else {
+      // Multiple elements: determine if second element is a URL path segment or cache key
+      // If the first element is a complete API path like '/api/animals' and the second
+      // element is used in x-tenant-id header, it's for caching only
+      const tenantId = typeof window !== 'undefined' ? localStorage.getItem('rescue_portal_tenant') : null;
+      const filteredKeys = queryKey.filter((key, index) => {
+        if (index === 0) return true; // Always include first element
+        const keyStr = String(key);
+        // Exclude keys that match tenantId (these are cache-busting only)
+        if (keyStr === tenantId) return false;
+        // Exclude undefined/null strings
+        if (keyStr === 'undefined' || keyStr === 'null') return false;
+        return true;
+      });
+      url = filteredKeys.join("/");
+    }
+    
     const tenantUrl = buildTenantUrl(url);
     
     const res = await fetch(tenantUrl, {
