@@ -1,0 +1,66 @@
+Here is a draft layout for the iRescue.life Admin Dashboard.
+The goal of this screen is "Instant Clarity." A volunteer should be able to log in, sip their coffee, and in 5 seconds know exactly what needs their attention (Money, Dogs, or Paperwork).
+The Layout Strategy: The "F-Pattern"
+We will organize the screen based on how the human eye scans:
+ * Top Row: Critical Numbers (KPIs).
+ * Left Column: The Big Trends (Charts).
+ * Right Column: Urgent "To-Do" Items (Action Center).
+The Wireframe (Text Mockup)
++-----------------------------------------------------------------------+
+|  [Logo] Happy Paws Rescue   ( PRO PLAN )      [View Live Site] [User] |
++-----------------------------------------------------------------------+
+|                                                                       |
+|  +----------------+  +----------------+  +----------------+           |
+|  |  THIS MONTH    |  |  PENDING APPS  |  |  ACTIVE DOGS   |           |
+|  |   $4,250.00    |  |       3        |  |      14        |           |
+|  |  [+12% vs last]|  |  [Review Now]  |  |  [Add New]     |           |
+|  +----------------+  +----------------+  +----------------+           |
+|                                                                       |
+|   +------------------------------------+  +-----------------------+   |
+|   |  REVENUE TREND (Last 30 Days)      |  |  NEEDS ATTENTION      |   |
+|   |                                    |  |                       |   |
+|   |       / \                          |  | [!] 2 Dogs need       |   |
+|   |     _/   \    /--\                 |  |     Rabies Update     |   |
+|   |   _/      \  /    \                |  |                       |   |
+|   |  /         \/      \_              |  | [!] 1 Application     |   |
+|   |                                    |  |     waiting 3+ days   |   |
+|   | [Last Donation: $50 - 2m ago]      |  |                       |   |
+|   +------------------------------------+  | [!] Upgrade to PRO    |   |
+|                                           |     Save $124/mo!     |   |
+|   +------------------------------------+  +-----------------------+   |
+|   |  RECENT DONATIONS (Live Feed)      |                          |   |
+|   |                                    |  +-----------------------+   |
+|   |  Bob Smith   $100   (Covered Fee)  |  |  QUICK LINKS          |   |
+|   |  Jane Doe    $25    (Fee: $1.03)   |  |  > Print Cage Cards   |   |
+|   |  Mike R.     $500   (Check)        |  |  > Email Newsletter   |   |
+|   |                                    |  |  > Year-End Reports   |   |
+|   +------------------------------------+  +-----------------------+   |
++-----------------------------------------------------------------------+
+
+Detailed Breakdown of Widgets
+1. The "Money Left on the Table" Widget (Crucial)
+ * Where: In the "Needs Attention" or Top Row area.
+ * Logic:
+   * If User is FREE: Calculate 5% of their total donations this month. Display: "You lost $215 in fees this month. Upgrade for $49 to keep it next time."
+   * If User is PRO: Display: "You saved $215 in fees this month!" (Positive reinforcement).
+2. The "Action Center" (Right Column)
+This is the "Brain" of the operation. Instead of making them click into "Dogs" to find problems, surface them here:
+ * Red Flags: "Bella's Rabies vaccine expires in 3 days."
+ * Stalled Workflow: "Application for 'Rex' has been unread for 48 hours."
+ * Inventory: "You are out of Foster Contracts (0 left)."
+3. The "Live Feed" (Bottom Left)
+Seeing donations come in real-time is addictive (dopamine hit).
+ * Include: Name, Amount, Dog Name (if they sponsored a specific dog), and a badge for "Fees Covered".
+ * Why: Seeing "Fees Covered" repeatedly reinforces that your software is working for them.
+4. The "Quick Add" FAB (Floating Action Button)
+In the bottom right corner of the screen, always have a floating + button that expands into:
+ * + Add Dog
+ * + Record Offline Donation (Cash/Check)
+ * + Create Application
+Phase 1: What to Build First? (MVP)
+Don't try to build all of this on day one. Start with the "Three Pillars":
+ * Donation Total (Stripe API pull).
+ * Dog Count (Database count).
+ * Recent Transactions List.
+Everything else (Trends, Alerts, Quick Links) can be added in version 1.1.
+Next Step: Would you like the Database Schema (SQL structure) for how to store the Dogs, Donations, and Applications to make this dashboard possible?
