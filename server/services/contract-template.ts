@@ -246,33 +246,6 @@ export async function setDefaultTemplate(id: string, tenantId: string): Promise<
 }
 
 /**
- * Ensure a default adoption template exists for a tenant
- * Creates the standard adoption agreement if no templates exist
- */
-export async function ensureDefaultTemplate(tenantId: string): Promise<AdoptionContractTemplate | null> {
-  const existing = await getAllTemplates(tenantId);
-  
-  if (existing.length > 0) {
-    // Templates exist, return the default one
-    return await getDefaultTemplate(tenantId);
-  }
-  
-  // No templates exist, create the default adoption agreement
-  const defaultTemplate: InsertAdoptionContractTemplate = {
-    tenantId,
-    name: 'Standard Adoption Agreement',
-    description: 'Professional adoption contract template with all required legal terms and conditions.',
-    version: '1.0',
-    editorMode: 'richText',
-    htmlTemplate: DEFAULT_ADOPTION_CONTRACT_HTML,
-    isDefault: true,
-    isActive: true,
-  };
-  
-  return await createTemplate(defaultTemplate);
-}
-
-/**
  * HTML-escape a string to prevent XSS injection
  * Converts potentially dangerous HTML characters to their entity equivalents
  */
