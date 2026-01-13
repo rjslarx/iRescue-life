@@ -5913,7 +5913,7 @@ Crawl-delay: 1
       const { getAllTemplates, ensureDefaultTemplate, MERGE_FIELDS } = await import('./services/contract-template');
       
       // Ensure a default template exists for new tenants
-      await ensureDefaultTemplate(req.tenant!.id);
+      await ensureDefaultTemplate(req.tenant!.id, req.tenant!.name);
       
       const templates = await getAllTemplates(req.tenant!.id);
       res.json({ templates, mergeFields: MERGE_FIELDS });
