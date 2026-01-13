@@ -138,17 +138,19 @@ export default function DonationForm({ sponsoredAnimalName, tenant }: DonationFo
   const oneTimeButtonText = donationSection.oneTimeButtonText || "One-Time";
   const monthlyButtonText = donationSection.monthlyButtonText || "Monthly";
   
-  // One-time donation preset amounts
-  const oneTimeAmounts: number[] = donationSection.oneTimeAmounts || [10, 20, 50, 100];
+  // One-time donation preset amounts (6 amounts in 3x2 grid like reference image)
+  const oneTimeAmounts: number[] = donationSection.oneTimeAmounts || [250, 100, 50, 30, 25, 10];
+  // Monthly preset amounts
+  const monthlyAmounts: number[] = donationSection.monthlyAmounts || [100, 50, 25, 20, 15, 10];
   const showCustomAmount = donationSection.showCustomAmount !== false;
   
   // Mailing address settings
   const mailingAddressLabel = donationSection.mailingAddressLabel || "Prefer to mail a check? Send to:";
   const donateMailingAddress = donationSection.donateMailingAddress || (tenant as any)?.footerAddress;
   
-  // Initialize amount with first one-time preset or 10 for monthly
+  // Initialize amount with a reasonable default
   const [isMonthly, setIsMonthly] = useState(true);
-  const [amount, setAmount] = useState<number | null>(sponsoredAnimalName ? 25 : 10);
+  const [amount, setAmount] = useState<number | null>(sponsoredAnimalName ? 25 : 30);
   const [customAmount, setCustomAmount] = useState("");
   const [donorCoversFees, setDonorCoversFees] = useState(true); // Default checked
 
@@ -244,8 +246,8 @@ export default function DonationForm({ sponsoredAnimalName, tenant }: DonationFo
 
   const handleSelectType = (monthly: boolean) => {
     setIsMonthly(monthly);
-    // Use first preset amount for one-time, or 10 for monthly
-    setAmount(monthly ? 10 : (oneTimeAmounts[0] || 10));
+    // Default to $30 for both one-time and monthly (middle-ground popular amount)
+    setAmount(30);
     setCustomAmount("");
   };
 
@@ -306,55 +308,64 @@ export default function DonationForm({ sponsoredAnimalName, tenant }: DonationFo
                 }`}
                 data-testid="option-monthly"
               >
+                <Heart className={`h-4 w-4 ${isMonthly ? 'fill-current' : ''}`} />
                 {monthlyButtonText}
-                {isMonthly && (
-                  <span className="text-xs bg-primary-foreground/20 px-1.5 py-0.5 rounded">
-                    Most Popular
-                  </span>
-                )}
               </button>
             </div>
 
-            {/* One-time preset amount buttons */}
-            {!isMonthly && (
-              <div className="grid grid-cols-4 gap-2">
-                {oneTimeAmounts.map((presetAmount: number) => (
-                  <button
-                    key={presetAmount}
-                    type="button"
-                    onClick={() => {
-                      setAmount(presetAmount);
-                      setCustomAmount("");
-                    }}
-                    className={`py-3 px-2 rounded-lg border-2 text-sm font-medium transition-all ${
-                      amount === presetAmount && !customAmount
-                        ? 'border-primary bg-primary/10 text-foreground' 
-                        : 'border-border bg-background text-muted-foreground hover:border-muted-foreground/50'
-                    }`}
-                    data-testid={`button-amount-${presetAmount}`}
-                  >
-                    ${presetAmount}
-                  </button>
-                ))}
-              </div>
-            )}
+            {/* Heading between toggle and amounts */}
+            <p className="text-center text-sm font-medium text-foreground">
+              {isMonthly ? "Be Their Monthly Hero" : "Be Their Hero"}
+            </p>
+
+            {/* Preset amount buttons - 3x2 grid like reference image */}
+            <div className="grid grid-cols-3 gap-2">
+              {(isMonthly ? monthlyAmounts : oneTimeAmounts).map((presetAmount: number) => (
+                <button
+                  key={presetAmount}
+                  type="button"
+                  onClick={() => {
+                    setAmount(presetAmount);
+                    setCustomAmount("");
+                  }}
+                  className={`py-3 px-2 rounded-lg border-2 text-sm font-medium transition-all ${
+                    amount === presetAmount && !customAmount
+                      ? 'border-primary bg-primary/5 text-primary' 
+                      : 'border-border bg-background text-muted-foreground hover:border-muted-foreground/50'
+                  }`}
+                  data-testid={`button-amount-${presetAmount}`}
+                >
+                  ${presetAmount}
+                </button>
+              ))}
+            </div>
 
             {showCustomAmount && (
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground text-lg">$</span>
                 <Input
                   type="text"
                   inputMode="decimal"
-                  placeholder={isMonthly ? "Custom monthly amount" : "Custom amount"}
-                  value={customAmount}
+                  placeholder="0"
+                  value={customAmount || (amount?.toString() || '')}
                   onChange={(e) => {
                     const value = e.target.value.replace(/[^0-9.]/g, '');
                     setCustomAmount(value);
                     if (value) {
                       setAmount(null);
+                    } else {
+                      // Reset to default when cleared
+                      setAmount(30);
                     }
                   }}
-                  className="h-12 text-base pl-7"
+                  onFocus={() => {
+                    // When user focuses the input, switch to custom mode
+                    if (amount) {
+                      setCustomAmount(amount.toString());
+                      setAmount(null);
+                    }
+                  }}
+                  className="h-14 text-2xl pl-10 font-medium"
                   data-testid="input-custom-amount"
                 />
               </div>
