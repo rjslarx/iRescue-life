@@ -5288,6 +5288,104 @@ Crawl-delay: 1
     }
   });
 
+  /**
+   * POST /api/applications/approve-and-send
+   * Approve an application and optionally create checkout session + send contract for e-signature
+   * This is the automated adoption workflow trigger
+   */
+  app.post('/api/applications/approve-and-send', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      const { updateApplicationStage, getApplicationById } = await import('./services/applications');
+      const { createCheckoutSession, sendCheckoutLink } = await import('./services/adoption-checkout');
+      const { adoptionCheckoutSessions } = await import('@shared/schema');
+      
+      const approveSchema = z.object({
+        applicationId: z.string().uuid(),
+        sendContract: z.boolean().default(false),
+        baseFee: z.string().optional(),
+        grantId: z.string().uuid().optional().nullable(),
+        contractTemplateId: z.string().optional().nullable(),
+      });
+      
+      const { applicationId, sendContract, baseFee, grantId, contractTemplateId } = approveSchema.parse(req.body);
+      
+      // Get the application details
+      const application = await getApplicationById(req.tenant!.id, applicationId);
+      if (!application) {
+        return res.status(404).json({ error: 'Application not found' });
+      }
+      
+      // Validate contract template if sending contract
+      let parsedTemplateId: number | undefined;
+      if (sendContract) {
+        // Validate that contractTemplateId is provided and is a valid positive integer
+        if (!contractTemplateId || contractTemplateId.trim() === '') {
+          return res.status(400).json({ 
+            error: 'Contract template required', 
+            message: 'A contract template must be selected to send an agreement' 
+          });
+        }
+        
+        parsedTemplateId = parseInt(contractTemplateId, 10);
+        if (isNaN(parsedTemplateId) || parsedTemplateId <= 0) {
+          return res.status(400).json({ 
+            error: 'Invalid contract template', 
+            message: 'Please select a valid contract template' 
+          });
+        }
+      }
+      
+      // Update application stage to approved
+      const updatedApplication = await updateApplicationStage(req.tenant!.id, applicationId, 'approved');
+      if (!updatedApplication) {
+        return res.status(500).json({ error: 'Failed to update application status' });
+      }
+      
+      let contractSent = false;
+      let checkoutSession = null;
+      
+      // If sendContract is true, create checkout session and send contract email
+      if (sendContract && parsedTemplateId) {
+        // Create checkout session - this generates and stores the secure token
+        const sessionResult = await createCheckoutSession(req.tenant!.id, {
+          applicationId,
+          animalId: application.animalId,
+          staffInitiatedBy: req.user!.id,
+          baseFee: baseFee || '200',
+          grantId: grantId || undefined,
+          contractTemplateId: parsedTemplateId,
+        });
+        
+        checkoutSession = sessionResult.session;
+        // Use the token returned by createCheckoutSession - it matches the stored hash
+        const token = sessionResult.token;
+        
+        // Update session status to awaiting_signature
+        await db
+          .update(adoptionCheckoutSessions)
+          .set({
+            status: 'awaiting_signature',
+            updatedAt: new Date(),
+          })
+          .where(eq(adoptionCheckoutSessions.id, checkoutSession.id));
+        
+        // Send the checkout link email
+        await sendCheckoutLink(checkoutSession.id, token, 'email');
+        
+        contractSent = true;
+      }
+      
+      res.json({ 
+        success: true, 
+        application: updatedApplication,
+        contractSent,
+        checkoutSession: checkoutSession ? { id: checkoutSession.id } : null,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   // ============================================================================
   // Adoption Checkout Routes - Smart Adoption Workflow
   // ============================================================================
@@ -5645,10 +5743,11 @@ Crawl-delay: 1
   /**
    * POST /api/public/adoption-checkouts/:token/sign
    * Submit signature for contract (public, token-protected)
+   * After signing, automatically sends payment link email to adopter
    */
   app.post('/api/public/adoption-checkouts/:token/sign', async (req, res, next) => {
     try {
-      const { getCheckoutSessionByToken, captureSignature } = await import('./services/adoption-checkout');
+      const { getCheckoutSessionByToken, captureSignature, sendPaymentLinkEmail } = await import('./services/adoption-checkout');
       
       const session = await getCheckoutSessionByToken(req.params.token);
 
@@ -5670,6 +5769,15 @@ Crawl-delay: 1
         ipAddress: req.ip,
         userAgent: req.get('user-agent'),
       });
+
+      // Automatically send payment link email after signature
+      // This continues the automated workflow: approval -> contract signing -> payment
+      try {
+        await sendPaymentLinkEmail(session.id, req.params.token);
+      } catch (emailError) {
+        console.error('Failed to send payment link email:', emailError);
+        // Don't fail the signature capture if email fails
+      }
 
       res.json({ success: true, contract: { id: contract.id } });
     } catch (error: any) {
