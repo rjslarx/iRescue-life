@@ -4,6 +4,7 @@ import KanbanBoard from "@/components/KanbanBoard";
 import { AdoptionDialog } from "@/components/AdoptionDialog";
 import { AssignFosterDialog } from "@/components/AssignFosterDialog";
 import { FinalizeAdoptionDialog } from "@/components/FinalizeAdoptionDialog";
+import { ApproveAndSendAgreementDialog } from "@/components/ApproveAndSendAgreementDialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -15,11 +16,22 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import type { Application, ApplicationWithAnimal, Animal, Tenant, AdoptionCheckoutSession } from "@shared/schema";
 import DashboardLayout from "@/components/DashboardLayout";
 
+interface ApprovalApplicationData {
+  id: string;
+  applicantName: string;
+  applicantEmail: string;
+  applicantPhone: string;
+  animalId: string;
+  animalName?: string;
+}
+
 export default function ApplicationsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [adoptionDialogOpen, setAdoptionDialogOpen] = useState(false);
   const [finalizeDialogOpen, setFinalizeDialogOpen] = useState(false);
+  const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
+  const [applicationToApprove, setApplicationToApprove] = useState<ApprovalApplicationData | null>(null);
 
   const { data: tenantData } = useQuery<{ tenant: Tenant }>({
     queryKey: ['/api/tenant'],
@@ -178,6 +190,25 @@ export default function ApplicationsPage() {
   };
 
   const handleMoveApplication = (applicationId: string, newStage: string) => {
+    // If moving to "approved", show the approval dialog with option to send contract
+    if (newStage === 'approved') {
+      const fullApp = data?.applications.find(a => a.id === applicationId);
+      if (fullApp) {
+        const animal = animals.find(a => a.id === fullApp.animalId);
+        setApplicationToApprove({
+          id: fullApp.id,
+          applicantName: fullApp.applicantName,
+          applicantEmail: fullApp.applicantEmail,
+          applicantPhone: fullApp.applicantPhone,
+          animalId: fullApp.animalId,
+          animalName: animal?.name || fullApp.animalName,
+        });
+        setApprovalDialogOpen(true);
+        return;
+      }
+    }
+    
+    // For other stage changes, just update the stage directly
     updateStageMutation.mutate({ id: applicationId, stage: newStage });
   };
 
@@ -383,6 +414,22 @@ export default function ApplicationsPage() {
           animal={selectedAnimal}
         />
       )}
+
+      {/* Approve and Send Agreement Dialog */}
+      <ApproveAndSendAgreementDialog
+        open={approvalDialogOpen}
+        onOpenChange={(open) => {
+          setApprovalDialogOpen(open);
+          if (!open) {
+            setApplicationToApprove(null);
+          }
+        }}
+        application={applicationToApprove}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ['/api/applications'] });
+          queryClient.invalidateQueries({ queryKey: ['/api/adoptions/checkouts'] });
+        }}
+      />
     </DashboardLayout>
   );
 }

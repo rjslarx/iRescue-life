@@ -571,6 +571,109 @@ export async function sendCheckoutLink(
 }
 
 /**
+ * Send payment link email after signature is captured
+ * Called automatically after contract signing to continue the adoption workflow
+ */
+export async function sendPaymentLinkEmail(
+  sessionId: string,
+  token: string
+): Promise<void> {
+  const [session] = await db
+    .select()
+    .from(adoptionCheckoutSessions)
+    .where(eq(adoptionCheckoutSessions.id, sessionId))
+    .limit(1);
+
+  if (!session) {
+    throw new Error('Session not found');
+  }
+
+  // Get adopter contact info
+  let email: string;
+  let name: string;
+
+  if (session.adopterContactId) {
+    const [contact] = await db
+      .select()
+      .from(contacts)
+      .where(eq(contacts.id, session.adopterContactId))
+      .limit(1);
+
+    if (contact) {
+      email = contact.email;
+      name = contact.name;
+    } else {
+      const [application] = await db
+        .select()
+        .from(applications)
+        .where(eq(applications.id, session.applicationId))
+        .limit(1);
+      email = application?.applicantEmail || '';
+      name = application?.applicantName || '';
+    }
+  } else {
+    const [application] = await db
+      .select()
+      .from(applications)
+      .where(eq(applications.id, session.applicationId))
+      .limit(1);
+
+    if (!application) {
+      throw new Error('Application not found');
+    }
+
+    email = application.applicantEmail;
+    name = application.applicantName;
+  }
+
+  // Get animal details
+  const [animal] = await db
+    .select()
+    .from(animals)
+    .where(eq(animals.id, session.animalId))
+    .limit(1);
+
+  if (!animal) {
+    throw new Error('Animal not found');
+  }
+
+  const emailService = await EmailService.forTenant(session.tenantId);
+  if (!emailService) {
+    console.error('Email service not configured for payment link - skipping');
+    return;
+  }
+
+  const checkoutUrl = `${process.env.BASE_URL || 'https://app.irescue.life'}/adoption-checkout/${token}`;
+  const totals = session.totals as { subtotal: string; fees: string; total: string } | null;
+
+  const html = `
+    <h2>Contract Signed - Complete Payment for ${animal.name}</h2>
+    <p>Dear ${name},</p>
+    <p>Thank you for signing the adoption contract for <strong>${animal.name}</strong>!</p>
+    <p>Your contract has been signed and recorded. The final step is to complete the adoption fee payment.</p>
+    <p><strong>Adoption Fee:</strong> $${session.baseFee}</p>
+    ${session.donationBoost && parseFloat(session.donationBoost) > 0 ? `<p><strong>Additional Donation:</strong> $${session.donationBoost}</p>` : ''}
+    ${totals ? `<p><strong>Total:</strong> $${totals.total}</p>` : ''}
+    <p><a href="${checkoutUrl}" style="display: inline-block; padding: 12px 24px; background-color: #4F46E5; color: white; text-decoration: none; border-radius: 6px; margin: 20px 0;">Complete Payment</a></p>
+    <p>Once payment is received, the adoption will be finalized and ${animal.name} will officially be yours!</p>
+    <p>This link will expire in 72 hours.</p>
+    <p>If you have any questions, please don't hesitate to contact us.</p>
+  `;
+
+  try {
+    await emailService.sendEmail({
+      to: email,
+      subject: `Complete Payment for ${animal.name}'s Adoption`,
+      html,
+    });
+    console.log(`Payment link email sent to ${email} for session ${sessionId}`);
+  } catch (error) {
+    console.error('Failed to send payment link email:', error);
+    // Don't throw - we don't want to fail the signature capture
+  }
+}
+
+/**
  * Cancel a checkout session
  */
 export async function cancelCheckoutSession(tenantId: string, sessionId: string): Promise<AdoptionCheckoutSession | null> {
