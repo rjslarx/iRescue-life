@@ -37,6 +37,7 @@ import NewsletterCampaignsPage from "@/pages/NewsletterCampaignsPage";
 import NewsletterDesignerPage from "@/pages/NewsletterDesignerPage";
 import DocumentsPage from "@/pages/DocumentsPage";
 import ContractTemplatesPage from "@/pages/ContractTemplatesPage";
+import FosterContractTemplatesPage from "@/pages/FosterContractTemplatesPage";
 import SettingsPage from "@/pages/SettingsPage";
 import ContentPagesPage from "@/pages/ContentPagesPage";
 import ContentModulesPage from "@/pages/ContentModulesPage";
@@ -222,6 +223,7 @@ function RouterSwitch() {
       </Route>
       <ProtectedRoute path="/dashboard/documents" pageId="documents" component={DocumentsPage} />
       <ProtectedRoute path="/dashboard/contract-templates" pageId="settings" component={ContractTemplatesPage} />
+      <ProtectedRoute path="/dashboard/foster-contract-templates" pageId="settings" component={FosterContractTemplatesPage} />
       <ProtectedRoute path="/dashboard/website-builder" pageId="custom-pages" component={WebsiteBuilderPage} />
       <ProtectedRoute path="/dashboard/content-modules" pageId="content-modules" component={ContentModulesPage} />
       <ProtectedRoute path="/dashboard/settings" pageId="branding" component={SettingsPage} />
