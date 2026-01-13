@@ -573,10 +573,10 @@ export default function Home() {
                 />
               </div>
 
-              {/* Content modules - single column on mobile, two columns on tablet, three on desktop */}
-              <div className="grid gap-6 grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
+              {/* Content modules - flexbox layout that centers items and adapts to count */}
+              <div className="flex flex-wrap justify-center gap-6">
                 {contentModules.map((module, idx) => (
-                  <div key={module.id} className="w-full">
+                  <div key={module.id} className="w-full sm:w-[calc(50%-0.75rem)] xl:w-[calc(33.333%-1rem)] max-w-md">
                     <ContentModuleCard module={module} testId={`content-module-${idx}`} />
                   </div>
                 ))}
