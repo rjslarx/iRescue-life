@@ -1,0 +1,160 @@
+2026-01-12 23:01:22.48
+e30eabd7
+User
+at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)
+2026-01-12 23:01:22.48
+e30eabd7
+User
+^
+2026-01-12 23:01:22.48
+e30eabd7
+User
+at TLSSocket. (/home/runner/workspace/node_modules/pg-protocol/dist/index.js:11:42)
+2026-01-12 23:01:22.48
+e30eabd7
+User
+port: 5432,
+2026-01-12 23:01:22.48
+e30eabd7
+User
+at Client._handleErrorMessage (/home/runner/workspace/node_modules/pg/lib/client.js:361:12)
+2026-01-12 23:01:22.48
+e30eabd7
+User
+code: '57P01',
+2026-01-12 23:01:22.48
+e30eabd7
+User
+host: 'ep-cold-truth-aelbjfhc.c-2.us-east-2.aws.neon.tech',
+2026-01-12 23:01:22.48
+e30eabd7
+User
+at Client._handleErrorEvent (/home/runner/workspace/node_modules/pg/lib/client.js:350:10)
+2026-01-12 23:01:22.48
+e30eabd7
+User
+at TLSSocket. (/home/runner/workspace/node_modules/pg-protocol/dist/index.js:11:42)
+2026-01-12 23:01:22.48
+e30eabd7
+User
+replication: undefined,
+2026-01-12 23:01:22.48
+e30eabd7
+User
+where: undefined,
+2026-01-12 23:01:22.48
+e30eabd7
+User
+position: undefined,
+2026-01-12 23:01:22.48
+e30eabd7
+User
+severity: 'FATAL',
+2026-01-12 23:01:22.48
+e30eabd7
+User
+at TLSSocket.emit (node:events:524:28)
+2026-01-12 23:01:22.48
+e30eabd7
+User
+length: 116,
+2026-01-12 23:01:22.48
+e30eabd7
+User
+file: 'postgres.c',
+2026-01-12 23:01:22.48
+e30eabd7
+User
+at addChunk (node:internal/streams/readable:561:12) {
+2026-01-12 23:01:22.48
+e30eabd7
+User
+at TLSWrap.onStreamRead (node:internal/stream_base_commons:191:23)
+2026-01-12 23:01:22.48
+e30eabd7
+User
+statement_timeout: false,
+2026-01-12 23:01:22.48
+e30eabd7
+User
+at Parser.handlePacket (/home/runner/workspace/node_modules/pg-protocol/dist/parser.js:122:29)
+2026-01-12 23:01:22.48
+e30eabd7
+User
+database: 'neondb',
+2026-01-12 23:01:22.48
+e30eabd7
+User
+schema: undefined,
+2026-01-12 23:01:22.48
+e30eabd7
+User
+host: 'ep-cold-truth-aelbjfhc.c-2.us-east-2.aws.neon.tech',
+2026-01-12 23:01:22.48
+e30eabd7
+User
+Emitted 'error' event on BoundPool instance at:
+2026-01-12 23:01:22.48
+e30eabd7
+User
+user: 'neondb_owner',
+2026-01-12 23:01:22.48
+e30eabd7
+User
+line: '3289',
+2026-01-12 23:01:22.48
+e30eabd7
+User
+_events: [Object: null prototype] { error: [Function (anonymous)] },
+2026-01-12 23:01:22.48
+e30eabd7
+User
+fallback_application_name: undefined,
+2026-01-12 23:01:22.48
+e30eabd7
+User
+table: undefined,
+2026-01-12 23:01:22.48
+e30eabd7
+User
+at Parser.parse (/home/runner/workspace/node_modules/pg-protocol/dist/parser.js:36:17)
+2026-01-12 23:01:22.48
+e30eabd7
+User
+at addChunk (node:internal/streams/readable:561:12)
+2026-01-12 23:01:22.48
+e30eabd7
+User
+},
+2026-01-12 23:01:22.48
+e30eabd7
+User
+at Readable.push (node:internal/streams/readable:392:5)
+2026-01-12 23:01:22.48
+e30eabd7
+User
+at Client.emit (node:events:524:28)
+2026-01-12 23:01:25.82
+e30eabd7
+User
+npm notice
+2026-01-12 23:01:25.82
+e30eabd7
+User
+npm notice New major version of npm available! 10.8.2 -> 11.7.0
+2026-01-12 23:01:25.82
+e30eabd7
+User
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.7.0
+2026-01-12 23:01:25.82
+e30eabd7
+User
+npm notice
+2026-01-12 23:01:25.82
+e30eabd7
+User
+npm notice To update run: npm install -g npm@11.7.0
+2026-01-12 23:01:25.85
+e30eabd7
+System
+command finished with error [npm run start]: exit status 1
