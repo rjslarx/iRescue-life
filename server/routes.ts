@@ -7318,6 +7318,109 @@ Crawl-delay: 1
   });
 
   /**
+   * POST /api/donations/offline
+   * Quick record of offline donation (cash, check, other) - email optional
+   */
+  app.post('/api/donations/offline', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      const { donations, donors } = await import('@shared/schema');
+      const { eq, and } = await import('drizzle-orm');
+      
+      const offlineDonationSchema = z.object({
+        donorName: z.string().min(1),
+        donorEmail: z.string().email().nullable().optional(),
+        amount: z.number().positive(),
+        paymentMethod: z.enum(['cash', 'check', 'other']),
+        checkNumber: z.string().nullable().optional(),
+        notes: z.string().nullable().optional(),
+        donationDate: z.string().transform(s => new Date(s)),
+      });
+      
+      const data = offlineDonationSchema.parse(req.body);
+      
+      // Convert dollars to cents for storage
+      const amountInCents = Math.round(data.amount * 100);
+      
+      let donorId: string | null = null;
+      
+      // If email provided, find or create donor
+      if (data.donorEmail) {
+        let [existingDonor] = await db.select()
+          .from(donors)
+          .where(and(
+            eq(donors.tenantId, req.tenant!.id),
+            eq(donors.email, data.donorEmail)
+          ));
+        
+        if (!existingDonor) {
+          [existingDonor] = await db.insert(donors)
+            .values({
+              tenantId: req.tenant!.id,
+              email: data.donorEmail,
+              name: data.donorName,
+              totalDonated: amountInCents,
+              lastDonationDate: data.donationDate,
+            })
+            .returning();
+        } else {
+          await db.update(donors)
+            .set({
+              totalDonated: existingDonor.totalDonated + amountInCents,
+              lastDonationDate: data.donationDate,
+            })
+            .where(eq(donors.id, existingDonor.id));
+        }
+        donorId = existingDonor.id;
+      }
+      
+      // Build notes with payment method info
+      let fullNotes = data.paymentMethod === 'check' && data.checkNumber 
+        ? `Check #${data.checkNumber}` 
+        : data.paymentMethod.charAt(0).toUpperCase() + data.paymentMethod.slice(1);
+      if (data.notes) {
+        fullNotes += ` - ${data.notes}`;
+      }
+      
+      // Create donation record
+      // Note: donorEmail is NOT NULL in schema, use empty string if not provided
+      const [donation] = await db.insert(donations)
+        .values({
+          tenantId: req.tenant!.id,
+          donorId: donorId,
+          donorName: data.donorName,
+          donorEmail: data.donorEmail || '',
+          donationType: 'cash',
+          amount: amountInCents,
+          message: fullNotes,
+          source: 'offline',
+          date: data.donationDate,
+        })
+        .returning();
+      
+      // Log activity
+      try {
+        const { logActivity } = await import('./lib/activity-logger');
+        await logActivity({
+          tenantId: req.tenant!.id,
+          userId: req.user!.id,
+          entityType: 'Donation',
+          entityId: donation.id,
+          action: 'created',
+          description: `recorded $${data.amount.toFixed(2)} ${data.paymentMethod} donation from ${data.donorName}`,
+          category: 'finance',
+          metadata: { paymentMethod: data.paymentMethod, amount: amountInCents, checkNumber: data.checkNumber }
+        });
+      } catch (logError) {
+        console.error('Failed to log donation activity:', logError);
+      }
+      
+      res.json({ success: true, donation });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * POST /api/donations/:id/generate-receipt
    * Generate IRS-compliant PDF receipt (admin only)
    */

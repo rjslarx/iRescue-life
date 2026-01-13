@@ -2,6 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import StatsCard from "@/components/StatsCard";
 import { OnboardingChecklist } from "@/components/OnboardingChecklist";
+import { FloatingActionButton } from "@/components/FloatingActionButton";
+import { RecordOfflineDonationDialog } from "@/components/RecordOfflineDonationDialog";
 import { Heart, FileText, Users, DollarSign, Package, MessageSquare, PawPrint, AlertTriangle, Calendar, Pill, Clock, Home, Loader2, AlertCircle, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -78,6 +80,7 @@ export default function Dashboard() {
   const [supplyDialogOpen, setSupplyDialogOpen] = useState(false);
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
   const [selectedAnimal, setSelectedAnimal] = useState<{id: string, name: string} | null>(null);
+  const [offlineDonationDialogOpen, setOfflineDonationDialogOpen] = useState(false);
 
   const { data: statsData, isLoading: isLoadingStats } = useQuery<{
     stats: {
@@ -742,6 +745,17 @@ export default function Dashboard() {
         />
       </>
     )}
+
+    {/* Floating Action Button - Only for admin/staff */}
+    {(user?.activeRole === 'admin' || user?.activeRole === 'staff') && (
+      <FloatingActionButton onRecordDonation={() => setOfflineDonationDialogOpen(true)} />
+    )}
+
+    {/* Record Offline Donation Dialog */}
+    <RecordOfflineDonationDialog
+      open={offlineDonationDialogOpen}
+      onOpenChange={setOfflineDonationDialogOpen}
+    />
     </>
   );
 }
