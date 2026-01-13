@@ -31,6 +31,7 @@ import { usePagePermissions } from "@/hooks/usePagePermissions";
 import {
   LayoutDashboard,
   Heart,
+  HeartHandshake,
   FileText,
   Users,
   DollarSign,
@@ -334,6 +335,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
         { title: "Calendar Management", url: "/dashboard/calendar-management", icon: CalendarCog },
         { title: "Documents", url: "/dashboard/documents", icon: FolderOpen, usesGoogleDrive: true },
         { title: "Contract Templates", url: "/dashboard/contract-templates", icon: FileSignature, usesGoogleDrive: true },
+        { title: "Foster Contracts", url: "/dashboard/foster-contract-templates", icon: HeartHandshake },
         { title: "Site Permissions", url: "/dashboard/site-permissions", icon: Shield },
         { title: "Compliance & Watchdog", url: "/dashboard/compliance", icon: Shield },
         { title: "Platform Integrations", url: "/dashboard/platform-integrations", icon: Plug2 },
@@ -393,6 +395,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
         { title: "Calendar", url: "/dashboard/calendar", icon: Calendar },
         { title: "Documents", url: "/dashboard/documents", icon: FolderOpen, usesGoogleDrive: true },
         { title: "Contract Templates", url: "/dashboard/contract-templates", icon: FileSignature, usesGoogleDrive: true },
+        { title: "Foster Contracts", url: "/dashboard/foster-contract-templates", icon: HeartHandshake },
         { title: "Analytics & Reports", url: "/dashboard/analytics", icon: BarChart3 },
         { title: "Happy Tails", url: "/dashboard/happy-tails", icon: Smile, usesGoogleDrive: true },
         { title: "Settings", url: "/dashboard/settings", icon: Settings },
