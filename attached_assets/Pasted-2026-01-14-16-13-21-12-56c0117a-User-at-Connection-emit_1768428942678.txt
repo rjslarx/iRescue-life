@@ -1,0 +1,108 @@
+2026-01-14 16:13:21.12
+56c0117a
+User
+at Connection.emit (node:events:524:28)
+2026-01-14 16:13:21.12
+56c0117a
+User
+node:events:502
+2026-01-14 16:13:21.12
+56c0117a
+User
+detail: undefined,
+2026-01-14 16:13:21.12
+56c0117a
+User
+at /home/runner/workspace/node_modules/pg/lib/connection.js:116:12
+2026-01-14 16:13:21.12
+56c0117a
+User
+^
+2026-01-14 16:13:21.12
+56c0117a
+User
+at Parser.handlePacket (/home/runner/workspace/node_modules/pg-protocol/dist/parser.js:122:29)
+2026-01-14 16:13:21.12
+56c0117a
+User
+at Parser.parse (/home/runner/workspace/node_modules/pg-protocol/dist/parser.js:35:38)
+2026-01-14 16:13:21.12
+56c0117a
+User
+at TLSSocket.emit (node:events:524:28)
+2026-01-14 16:13:21.12
+56c0117a
+User
+_maxListeners: undefined,
+2026-01-14 16:13:21.12
+56c0117a
+User
+Emitted 'error' event on BoundPool instance at:
+2026-01-14 16:13:21.12
+56c0117a
+User
+at Client.idleListener (/home/runner/workspace/node_modules/pg-pool/index.js:62:10)
+2026-01-14 16:13:21.12
+56c0117a
+User
+error: terminating connection due to administrator command
+2026-01-14 16:13:21.12
+56c0117a
+User
+client: Client {
+2026-01-14 16:13:21.12
+56c0117a
+User
+isDomainSocket: false,
+2026-01-14 16:13:21.12
+56c0117a
+User
+at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)
+2026-01-14 16:13:21.12
+56c0117a
+User
+position: undefined,
+2026-01-14 16:13:21.12
+56c0117a
+User
+at addChunk (node:internal/streams/readable:561:12) {
+2026-01-14 16:13:21.12
+56c0117a
+User
+at TLSSocket. (/home/runner/workspace/node_modules/pg-protocol/dist/index.js:11:42)
+2026-01-14 16:13:21.12
+56c0117a
+User
+at TLSWrap.onStreamRead (node:internal/stream_base_commons:191:23)
+2026-01-14 16:13:21.12
+56c0117a
+User
+ssl: {},
+2026-01-14 16:13:21.12
+56c0117a
+User
+connectionParameters: ConnectionParameters {
+2026-01-14 16:13:21.12
+56c0117a
+User
+binary: false,
+2026-01-14 16:13:21.12
+56c0117a
+User
+at TLSSocket.emit (node:events:524:28)
+2026-01-14 16:13:21.12
+56c0117a
+User
+file: 'postgres.c',
+2026-01-14 16:13:21.12
+56c0117a
+User
+line: '3289',
+2026-01-14 16:13:21.12
+56c0117a
+User
+code: '57P01',
+2026-01-14 16:13:21.12
+56c0117a
+User
+where: undefined,
