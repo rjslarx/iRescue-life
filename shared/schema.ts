@@ -143,6 +143,11 @@ export const tenants = pgTable("tenants", {
   // Footer customization
   footerHours: text("footer_hours"), // Business hours (e.g., "Mon-Fri: 9am-5pm, Sat: 10am-4pm")
   footerAddress: text("footer_address"), // Physical address
+  // Social media links
+  socialFacebook: text("social_facebook"), // Facebook page URL
+  socialInstagram: text("social_instagram"), // Instagram profile URL
+  socialYoutube: text("social_youtube"), // YouTube channel URL
+  socialTiktok: text("social_tiktok"), // TikTok profile URL
   sponsorLogos: jsonb("sponsor_logos").$type<{
     id: string;
     imageUrl: string;

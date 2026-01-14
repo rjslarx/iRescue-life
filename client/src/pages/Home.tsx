@@ -18,6 +18,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
+import { SiFacebook, SiInstagram, SiYoutube, SiTiktok } from "react-icons/si";
 import { useSEO } from "@/hooks/useSEO";
 import type { Animal, Tenant, CustomPage, HappyTail, ContentModule } from "@shared/schema";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -660,6 +661,58 @@ export default function Home() {
                   <p className="text-muted-foreground" data-testid="text-footer-hours">
                     {tenant.footerHours}
                   </p>
+                )}
+                {(tenant?.socialFacebook || tenant?.socialInstagram || tenant?.socialYoutube || tenant?.socialTiktok) && (
+                  <div className="flex items-center gap-3 mt-3" data-testid="social-media-links">
+                    {tenant?.socialFacebook && (
+                      <a 
+                        href={tenant.socialFacebook} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-muted-foreground hover:text-foreground transition-colors"
+                        data-testid="link-social-facebook"
+                        aria-label="Facebook"
+                      >
+                        <SiFacebook className="h-5 w-5" />
+                      </a>
+                    )}
+                    {tenant?.socialInstagram && (
+                      <a 
+                        href={tenant.socialInstagram} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-muted-foreground hover:text-foreground transition-colors"
+                        data-testid="link-social-instagram"
+                        aria-label="Instagram"
+                      >
+                        <SiInstagram className="h-5 w-5" />
+                      </a>
+                    )}
+                    {tenant?.socialYoutube && (
+                      <a 
+                        href={tenant.socialYoutube} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-muted-foreground hover:text-foreground transition-colors"
+                        data-testid="link-social-youtube"
+                        aria-label="YouTube"
+                      >
+                        <SiYoutube className="h-5 w-5" />
+                      </a>
+                    )}
+                    {tenant?.socialTiktok && (
+                      <a 
+                        href={tenant.socialTiktok} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-muted-foreground hover:text-foreground transition-colors"
+                        data-testid="link-social-tiktok"
+                        aria-label="TikTok"
+                      >
+                        <SiTiktok className="h-5 w-5" />
+                      </a>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
