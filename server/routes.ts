@@ -13165,6 +13165,8 @@ Submitted: ${new Date().toLocaleString()}
       const platformFeePercent = getPlatformFeePercent(tenant.subscriptionTier || 'free');
 
       const baseUrl = `${req.protocol}://${req.get('host')}`;
+      // Include tenant subdomain path for proper redirect back to tenant's page
+      const tenantPath = tenant.subdomain ? `/${tenant.subdomain}` : '';
       
       const session = await stripeService.createCheckoutSession(tenant, {
         amount: chargeAmount,
@@ -13172,8 +13174,8 @@ Submitted: ${new Date().toLocaleString()}
         customerEmail: data.customerEmail,
         isRecurring: data.isRecurring,
         interval: data.interval,
-        successUrl: `${baseUrl}/?donation=success&session_id={CHECKOUT_SESSION_ID}`,
-        cancelUrl: `${baseUrl}/?donation=cancelled`,
+        successUrl: `${baseUrl}${tenantPath}/?donation=success&session_id={CHECKOUT_SESSION_ID}`,
+        cancelUrl: `${baseUrl}${tenantPath}/?donation=cancelled`,
         platformFeeAmount: platformFeeAmount,
         connectedAccountId: tenant.stripeConnectedAccountId || undefined,
         metadata: {
