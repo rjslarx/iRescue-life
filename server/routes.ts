@@ -13196,8 +13196,22 @@ Submitted: ${new Date().toLocaleString()}
       }
 
       res.json({ sessionId: session.id, url: session.url });
-    } catch (error) {
-      next(error);
+    } catch (error: any) {
+      console.error('[Stripe Checkout Error]', {
+        message: error?.message,
+        type: error?.type,
+        code: error?.code,
+        statusCode: error?.statusCode,
+        tenantId: req.tenant?.id,
+        stack: error?.stack?.split('\n').slice(0, 5).join('\n'),
+      });
+      
+      // Return a more descriptive error to the client
+      const errorMessage = error?.message || 'Failed to create checkout session';
+      res.status(error?.statusCode || 500).json({ 
+        error: errorMessage,
+        code: error?.code,
+      });
     }
   });
 
