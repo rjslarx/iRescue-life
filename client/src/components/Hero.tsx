@@ -94,12 +94,16 @@ export default function Hero({
   const hasThreeDoors = heroLayoutType === 'three_doors';
 
   return (
-    <section className="relative min-h-[400px] sm:min-h-[450px] md:min-h-[500px] w-full overflow-hidden">
+    <section className="relative min-h-[400px] sm:min-h-[450px] md:min-h-[500px] w-full overflow-visible">
       <div 
-        className="absolute inset-0"
-        style={{ backgroundImage: `url(${backgroundImage})`, backgroundSize: 'cover', backgroundPosition: 'center' }}
-      />
-      <div className="absolute inset-0 bg-gradient-to-br from-black/70 via-black/50 to-black/30" />
+        className="absolute inset-0 overflow-hidden"
+      >
+        <div 
+          className="absolute inset-0"
+          style={{ backgroundImage: `url(${backgroundImage})`, backgroundSize: 'cover', backgroundPosition: 'center' }}
+        />
+        <div className="absolute inset-0 bg-gradient-to-br from-black/70 via-black/50 to-black/30" />
+      </div>
       
       <div className="relative container flex flex-col h-full px-4 sm:px-6 py-8 sm:py-12">
         <div className="flex flex-col lg:flex-row items-center justify-between w-full gap-8 lg:gap-12 flex-1">
@@ -136,13 +140,17 @@ export default function Hero({
 
         </div>
 
-        {/* Three Doors Layout - Positioned at bottom of hero, colored headers overlap image */}
-        {hasThreeDoors && (
-          <div className="mt-auto" data-testid="three-doors-container">
-            <ThreeDoors basePath={basePath} config={threeDoorsConfig} />
-          </div>
-        )}
       </div>
+
+      {/* Three Doors Layout - Positioned at bottom of hero, extending below */}
+      {hasThreeDoors && (
+        <div 
+          className="absolute bottom-0 left-0 right-0 z-10 translate-y-1/2" 
+          data-testid="three-doors-container"
+        >
+          <ThreeDoors basePath={basePath} config={threeDoorsConfig} />
+        </div>
+      )}
 
       {/* Action Circle - Hidden on mobile, shown on md+ with absolute positioning */}
       {hasActionCircle && (

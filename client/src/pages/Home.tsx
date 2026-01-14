@@ -429,9 +429,9 @@ export default function Home() {
         heroButton2Text={tenant?.heroButton2Text}
       />
       
-      {/* Spacer for Three Doors overlap - accommodates the bottom half of the doors */}
+      {/* Spacer for Three Doors that extend below hero */}
       {tenant?.heroLayoutType === 'three_doors' && (
-        <div className="h-24 sm:h-28 bg-background" />
+        <div className="h-20 sm:h-24 bg-background" />
       )}
 
       {upcomingEvents.length > 0 && (
