@@ -142,14 +142,21 @@ export default function Hero({
 
       </div>
 
-      {/* Three Doors Layout - Positioned at bottom of hero, colored headers overlap image */}
+      {/* Three Doors Layout - Normal flow on mobile, overlapping on larger screens */}
       {hasThreeDoors && (
-        <div 
-          className="absolute bottom-0 left-0 right-0 z-10 translate-y-[calc(60%+3px)]" 
-          data-testid="three-doors-container"
-        >
-          <ThreeDoors basePath={basePath} config={threeDoorsConfig} />
-        </div>
+        <>
+          {/* Mobile: Normal stacked layout below hero */}
+          <div className="sm:hidden relative z-10 pt-6 pb-4 bg-background" data-testid="three-doors-container-mobile">
+            <ThreeDoors basePath={basePath} config={threeDoorsConfig} />
+          </div>
+          {/* Desktop: Positioned at bottom of hero, colored headers overlap image */}
+          <div 
+            className="hidden sm:block absolute bottom-0 left-0 right-0 z-10 translate-y-[calc(60%+3px)]" 
+            data-testid="three-doors-container"
+          >
+            <ThreeDoors basePath={basePath} config={threeDoorsConfig} />
+          </div>
+        </>
       )}
 
       {/* Action Circle - Hidden on mobile, shown on md+ with absolute positioning */}
