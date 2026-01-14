@@ -422,6 +422,7 @@ export default function Home() {
         onDonate={() => setDonationDialogOpen(true)}
         actionCircle={tenant?.actionCircle as any}
         heroLayoutType={(tenant?.heroLayoutType as 'none' | 'action_circle' | 'three_doors') || 'none'}
+        threeDoorsConfig={tenant?.threeDoorsConfig as any}
         basePath={basePath}
         heroHeadline={tenant?.heroHeadline}
         heroButtonText={tenant?.heroButtonText}

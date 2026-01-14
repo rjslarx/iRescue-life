@@ -73,6 +73,29 @@ export interface TenantContext {
     monthlyButtonText?: string;
   };
   heroLayoutType?: 'none' | 'action_circle' | 'three_doors';
+  threeDoorsConfig?: {
+    door1?: {
+      title?: string;
+      description?: string;
+      linkText?: string;
+      linkUrl?: string;
+      icon?: 'paw' | 'home' | 'heart' | 'dollar';
+    };
+    door2?: {
+      title?: string;
+      description?: string;
+      linkText?: string;
+      linkUrl?: string;
+      icon?: 'paw' | 'home' | 'heart' | 'dollar';
+    };
+    door3?: {
+      title?: string;
+      description?: string;
+      linkText?: string;
+      linkUrl?: string;
+      icon?: 'paw' | 'home' | 'heart' | 'dollar';
+    };
+  };
 }
 
 // Extend Express Request type to include tenant and platform admin flag
@@ -340,6 +363,7 @@ export async function resolveTenant(req: Request, res: Response, next: NextFunct
           sponsorLogos: tenants.sponsorLogos,
           donationSection: tenants.donationSection,
           heroLayoutType: tenants.heroLayoutType,
+          threeDoorsConfig: tenants.threeDoorsConfig,
         })
         .from(tenants)
         .where(whereClause!)
@@ -404,6 +428,7 @@ export async function resolveTenant(req: Request, res: Response, next: NextFunct
         sponsorLogos: tenant.sponsorLogos as TenantContext['sponsorLogos'],
         donationSection: tenant.donationSection as TenantContext['donationSection'],
         heroLayoutType: tenant.heroLayoutType as TenantContext['heroLayoutType'],
+        threeDoorsConfig: tenant.threeDoorsConfig as TenantContext['threeDoorsConfig'],
       };
       
       // Set cookie for PWA manifest resolution on path-based tenants
