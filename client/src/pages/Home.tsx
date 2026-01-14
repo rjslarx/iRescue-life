@@ -421,6 +421,7 @@ export default function Home() {
         onViewAnimals={() => document.getElementById('animals')?.scrollIntoView({ behavior: 'smooth' })}
         onDonate={() => setDonationDialogOpen(true)}
         actionCircle={tenant?.actionCircle as any}
+        heroLayoutType={(tenant?.heroLayoutType as 'none' | 'action_circle' | 'three_doors') || 'none'}
         basePath={basePath}
         heroHeadline={tenant?.heroHeadline}
         heroButtonText={tenant?.heroButtonText}
