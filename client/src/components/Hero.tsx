@@ -136,9 +136,9 @@ export default function Hero({
 
         </div>
 
-        {/* Three Doors Layout - Positioned at bottom of hero */}
+        {/* Three Doors Layout - Positioned at bottom of hero, overlapping edge */}
         {hasThreeDoors && (
-          <div className="mt-auto pt-6" data-testid="three-doors-container">
+          <div className="mt-auto pt-8 translate-y-[60px] sm:translate-y-[70px]" data-testid="three-doors-container">
             <ThreeDoors basePath={basePath} config={threeDoorsConfig} />
           </div>
         )}
