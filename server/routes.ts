@@ -12086,6 +12086,10 @@ Submitted: ${new Date().toLocaleString()}
         footerText: z.string().optional(),
         footerHours: z.string().optional(),
         footerAddress: z.string().optional(),
+        socialFacebook: z.string().url().optional().or(z.literal("")),
+        socialInstagram: z.string().url().optional().or(z.literal("")),
+        socialYoutube: z.string().url().optional().or(z.literal("")),
+        socialTiktok: z.string().url().optional().or(z.literal("")),
         sponsorLogos: z.array(sponsorLogoSchema).optional(),
       });
 
@@ -12107,6 +12111,10 @@ Submitted: ${new Date().toLocaleString()}
       if (settings.footerText !== undefined) updateData.footerText = settings.footerText || null;
       if (settings.footerHours !== undefined) updateData.footerHours = settings.footerHours || null;
       if (settings.footerAddress !== undefined) updateData.footerAddress = settings.footerAddress || null;
+      if (settings.socialFacebook !== undefined) updateData.socialFacebook = settings.socialFacebook || null;
+      if (settings.socialInstagram !== undefined) updateData.socialInstagram = settings.socialInstagram || null;
+      if (settings.socialYoutube !== undefined) updateData.socialYoutube = settings.socialYoutube || null;
+      if (settings.socialTiktok !== undefined) updateData.socialTiktok = settings.socialTiktok || null;
       if (settings.sponsorLogos !== undefined) updateData.sponsorLogos = settings.sponsorLogos || null;
       
       // Handle branding colors (stored in jsonb)

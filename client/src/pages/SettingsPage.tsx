@@ -75,6 +75,10 @@ const brandingSettingsSchema = z.object({
   footerText: z.string().optional(),
   footerHours: z.string().optional(),
   footerAddress: z.string().optional(),
+  socialFacebook: z.string().url().optional().or(z.literal("")),
+  socialInstagram: z.string().url().optional().or(z.literal("")),
+  socialYoutube: z.string().url().optional().or(z.literal("")),
+  socialTiktok: z.string().url().optional().or(z.literal("")),
   sponsorLogos: z.array(sponsorLogoSchema).optional(),
 });
 
@@ -354,6 +358,10 @@ export default function SettingsPage() {
       footerText: data?.tenant?.footerText || "",
       footerHours: data?.tenant?.footerHours || "",
       footerAddress: data?.tenant?.footerAddress || "",
+      socialFacebook: data?.tenant?.socialFacebook || "",
+      socialInstagram: data?.tenant?.socialInstagram || "",
+      socialYoutube: data?.tenant?.socialYoutube || "",
+      socialTiktok: data?.tenant?.socialTiktok || "",
       sponsorLogos: (data?.tenant?.sponsorLogos as any[]) || [],
     },
     values: data?.tenant ? {
@@ -381,6 +389,10 @@ export default function SettingsPage() {
       footerText: data.tenant.footerText || "",
       footerHours: data.tenant.footerHours || "",
       footerAddress: data.tenant.footerAddress || "",
+      socialFacebook: data.tenant.socialFacebook || "",
+      socialInstagram: data.tenant.socialInstagram || "",
+      socialYoutube: data.tenant.socialYoutube || "",
+      socialTiktok: data.tenant.socialTiktok || "",
       sponsorLogos: (data.tenant.sponsorLogos as any[]) || [],
     } : undefined,
   });
@@ -1214,6 +1226,87 @@ export default function SettingsPage() {
                             </FormItem>
                           )}
                         />
+
+                        <Separator />
+
+                        <div className="space-y-4">
+                          <h4 className="text-sm font-medium">Social Media Links</h4>
+                          <p className="text-xs text-muted-foreground">Add links to your social media profiles to display in the footer</p>
+                          
+                          <div className="grid gap-4 sm:grid-cols-2">
+                            <FormField
+                              control={brandingForm.control}
+                              name="socialFacebook"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Facebook</FormLabel>
+                                  <FormControl>
+                                    <Input 
+                                      placeholder="https://facebook.com/yourrescue" 
+                                      data-testid="input-social-facebook"
+                                      {...field} 
+                                    />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+
+                            <FormField
+                              control={brandingForm.control}
+                              name="socialInstagram"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Instagram</FormLabel>
+                                  <FormControl>
+                                    <Input 
+                                      placeholder="https://instagram.com/yourrescue" 
+                                      data-testid="input-social-instagram"
+                                      {...field} 
+                                    />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+
+                            <FormField
+                              control={brandingForm.control}
+                              name="socialYoutube"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>YouTube</FormLabel>
+                                  <FormControl>
+                                    <Input 
+                                      placeholder="https://youtube.com/@yourrescue" 
+                                      data-testid="input-social-youtube"
+                                      {...field} 
+                                    />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+
+                            <FormField
+                              control={brandingForm.control}
+                              name="socialTiktok"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>TikTok</FormLabel>
+                                  <FormControl>
+                                    <Input 
+                                      placeholder="https://tiktok.com/@yourrescue" 
+                                      data-testid="input-social-tiktok"
+                                      {...field} 
+                                    />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          </div>
+                        </div>
 
                         <Separator />
 
