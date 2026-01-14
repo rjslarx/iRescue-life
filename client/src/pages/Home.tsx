@@ -428,6 +428,11 @@ export default function Home() {
         heroButtonText={tenant?.heroButtonText}
         heroButton2Text={tenant?.heroButton2Text}
       />
+      
+      {/* Spacer for Three Doors overlap */}
+      {tenant?.heroLayoutType === 'three_doors' && (
+        <div className="h-16 sm:h-20 bg-background" />
+      )}
 
       {upcomingEvents.length > 0 && (
         <section className="py-12 sm:py-20 bg-primary/5">
