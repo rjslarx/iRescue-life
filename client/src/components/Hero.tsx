@@ -151,7 +151,7 @@ export default function Hero({
           </div>
           {/* Desktop: Positioned at bottom of hero, colored headers overlap image */}
           <div 
-            className="hidden sm:block absolute bottom-0 left-0 right-0 z-10 translate-y-[calc(60%+3px)]" 
+            className="hidden sm:block absolute bottom-0 left-0 right-0 z-10 translate-y-[calc(60%+4px)]" 
             data-testid="three-doors-container"
           >
             <ThreeDoors basePath={basePath} config={threeDoorsConfig} />
