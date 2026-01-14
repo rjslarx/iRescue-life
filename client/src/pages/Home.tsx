@@ -223,7 +223,7 @@ export default function Home() {
     queryKey: ['/api/animals', tenantId],
   });
 
-  const { data: tenantData } = useQuery<{ tenant: Tenant }>({
+  const { data: tenantData, isLoading: isLoadingTenant } = useQuery<{ tenant: Tenant }>({
     queryKey: ['/api/tenant', tenantId],
   });
 
@@ -370,8 +370,9 @@ export default function Home() {
   };
 
   // Use tenant branding or fallback to defaults
-  const rescueName = tenant?.name || "Sunny Paws Rescue";
-  const rescueTagline = tenant?.tagline || "Saving lives, one paw at a time. Help us find loving homes for animals in need.";
+  // Show loading state to prevent flash of incorrect branding
+  const rescueName = tenant?.name || "";
+  const rescueTagline = tenant?.tagline || "";
   const rescueHeroImage = tenant?.heroImageUrl || heroImage;
 
   // SEO configuration
@@ -390,6 +391,15 @@ export default function Home() {
     linkUrl?: string;
     style?: "info" | "warning" | "urgent";
   } | null;
+
+  // Show loading state while tenant data is being fetched to prevent branding flash
+  if (isLoadingTenant || !tenant) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="animate-pulse text-muted-foreground">Loading...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
