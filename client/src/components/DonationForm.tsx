@@ -168,7 +168,7 @@ export default function DonationForm({ sponsoredAnimalName, tenant }: DonationFo
     hasPlatformFee: boolean;
     isPaidTier: boolean;
   }>({
-    queryKey: ['/api/stripe/fee-calculation', { amount: currentAmountCents }],
+    queryKey: [`/api/stripe/fee-calculation?amount=${currentAmountCents}`, currentAmountCents],
     enabled: currentAmountCents >= 100 && tenant?.stripeEnabled === true,
   });
   
