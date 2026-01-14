@@ -431,7 +431,7 @@ export default function Home() {
       
       {/* Spacer for Three Doors that extend below hero */}
       {tenant?.heroLayoutType === 'three_doors' && (
-        <div className="h-20 sm:h-24 bg-background" />
+        <div className="h-32 sm:h-40 bg-background" />
       )}
 
       {upcomingEvents.length > 0 && (
