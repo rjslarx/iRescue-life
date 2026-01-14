@@ -72,6 +72,7 @@ export interface TenantContext {
     oneTimeButtonText?: string;
     monthlyButtonText?: string;
   };
+  heroLayoutType?: 'none' | 'action_circle' | 'three_doors';
 }
 
 // Extend Express Request type to include tenant and platform admin flag
@@ -338,6 +339,7 @@ export async function resolveTenant(req: Request, res: Response, next: NextFunct
           footerAddress: tenants.footerAddress,
           sponsorLogos: tenants.sponsorLogos,
           donationSection: tenants.donationSection,
+          heroLayoutType: tenants.heroLayoutType,
         })
         .from(tenants)
         .where(whereClause!)
@@ -401,6 +403,7 @@ export async function resolveTenant(req: Request, res: Response, next: NextFunct
         footerAddress: tenant.footerAddress,
         sponsorLogos: tenant.sponsorLogos as TenantContext['sponsorLogos'],
         donationSection: tenant.donationSection as TenantContext['donationSection'],
+        heroLayoutType: tenant.heroLayoutType as TenantContext['heroLayoutType'],
       };
       
       // Set cookie for PWA manifest resolution on path-based tenants
