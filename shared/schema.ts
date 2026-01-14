@@ -117,6 +117,30 @@ export const tenants = pgTable("tenants", {
   }>(),
   // Hero layout type: 'none', 'action_circle', or 'three_doors'
   heroLayoutType: text("hero_layout_type").default("none"),
+  // Three Doors configuration - allows customization of each door
+  threeDoorsConfig: jsonb("three_doors_config").$type<{
+    door1?: {
+      title?: string;
+      description?: string;
+      linkText?: string;
+      linkUrl?: string;
+      icon?: 'paw' | 'home' | 'heart' | 'dollar';
+    };
+    door2?: {
+      title?: string;
+      description?: string;
+      linkText?: string;
+      linkUrl?: string;
+      icon?: 'paw' | 'home' | 'heart' | 'dollar';
+    };
+    door3?: {
+      title?: string;
+      description?: string;
+      linkText?: string;
+      linkUrl?: string;
+      icon?: 'paw' | 'home' | 'heart' | 'dollar';
+    };
+  }>(),
   // Mascot widget configuration (fixed video in corner with speech bubble)
   mascot: jsonb("mascot").$type<{
     enabled?: boolean;

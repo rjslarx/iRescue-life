@@ -1,13 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
-import { Save, Loader2, Circle, LayoutGrid, Ban, Info } from 'lucide-react';
+import { Loader2, Circle, LayoutGrid, Ban } from 'lucide-react';
 import { ActionCircleSettings } from './ActionCircleSettings';
+import { ThreeDoorsSettings } from './ThreeDoorsSettings';
 import type { Tenant } from '@shared/schema';
 
 type HeroLayoutType = 'none' | 'action_circle' | 'three_doors';
@@ -127,12 +126,15 @@ export function HeroLayoutSettings({ tenant }: HeroLayoutSettingsProps) {
       )}
 
       {currentLayoutType === 'three_doors' && (
-        <Alert>
-          <Info className="h-4 w-4" />
-          <AlertDescription>
-            The Three Doors layout automatically uses your site's primary and accent colors. No additional configuration is needed.
-          </AlertDescription>
-        </Alert>
+        <div className="pt-6 border-t space-y-4">
+          <div>
+            <h4 className="font-medium">Three Doors Configuration</h4>
+            <p className="text-sm text-muted-foreground">
+              Customize the text and links for each door. Leave fields empty to use the defaults.
+            </p>
+          </div>
+          <ThreeDoorsSettings tenant={tenant} />
+        </div>
       )}
     </div>
   );

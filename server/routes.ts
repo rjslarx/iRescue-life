@@ -12243,6 +12243,49 @@ Submitted: ${new Date().toLocaleString()}
   });
 
   /**
+   * PATCH /api/tenant/settings/three-doors
+   * Update Three Doors configuration (admin only)
+   */
+  app.patch('/api/tenant/settings/three-doors', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+    try {
+      const doorSchema = z.object({
+        title: z.string().max(50).optional(),
+        description: z.string().max(100).optional(),
+        linkText: z.string().max(50).optional(),
+        linkUrl: z.string().max(200).optional(),
+        icon: z.enum(['paw', 'home', 'heart', 'dollar']).optional(),
+      }).optional();
+
+      const threeDoorsSchema = z.object({
+        door1: doorSchema,
+        door2: doorSchema,
+        door3: doorSchema,
+      });
+
+      const settings = threeDoorsSchema.parse(req.body);
+
+      // Get existing config and merge
+      const existingConfig = (req.tenant as any)?.threeDoorsConfig || {};
+      const updatedConfig = {
+        door1: settings.door1 ? { ...existingConfig.door1, ...settings.door1 } : existingConfig.door1,
+        door2: settings.door2 ? { ...existingConfig.door2, ...settings.door2 } : existingConfig.door2,
+        door3: settings.door3 ? { ...existingConfig.door3, ...settings.door3 } : existingConfig.door3,
+      };
+
+      // Update tenant settings
+      const [updatedTenant] = await db
+        .update(tenants)
+        .set({ threeDoorsConfig: updatedConfig })
+        .where(eq(tenants.id, req.tenant!.id))
+        .returning();
+
+      res.json({ success: true, tenant: updatedTenant });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * PATCH /api/tenant/settings/mascot
    * Update mascot widget configuration (admin only)
    */

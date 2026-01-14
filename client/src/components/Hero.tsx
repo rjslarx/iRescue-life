@@ -32,6 +32,30 @@ const POSITION_CLASSES: Record<CirclePosition, string> = {
   'center': 'top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2',
 };
 
+interface ThreeDoorsConfig {
+  door1?: {
+    title?: string;
+    description?: string;
+    linkText?: string;
+    linkUrl?: string;
+    icon?: 'paw' | 'home' | 'heart' | 'dollar';
+  };
+  door2?: {
+    title?: string;
+    description?: string;
+    linkText?: string;
+    linkUrl?: string;
+    icon?: 'paw' | 'home' | 'heart' | 'dollar';
+  };
+  door3?: {
+    title?: string;
+    description?: string;
+    linkText?: string;
+    linkUrl?: string;
+    icon?: 'paw' | 'home' | 'heart' | 'dollar';
+  };
+}
+
 interface HeroProps {
   rescueName: string;
   tagline: string;
@@ -40,6 +64,7 @@ interface HeroProps {
   onDonate?: () => void;
   actionCircle?: ActionCircleConfig;
   heroLayoutType?: HeroLayoutType;
+  threeDoorsConfig?: ThreeDoorsConfig;
   basePath?: string;
   heroHeadline?: string | null;
   heroButtonText?: string | null;
@@ -54,6 +79,7 @@ export default function Hero({
   onDonate,
   actionCircle,
   heroLayoutType = 'none',
+  threeDoorsConfig,
   basePath = '',
   heroHeadline,
   heroButtonText,
@@ -113,7 +139,7 @@ export default function Hero({
         {/* Three Doors Layout - Positioned at bottom of hero */}
         {hasThreeDoors && (
           <div className="mt-auto pt-6" data-testid="three-doors-container">
-            <ThreeDoors basePath={basePath} />
+            <ThreeDoors basePath={basePath} config={threeDoorsConfig} />
           </div>
         )}
       </div>
