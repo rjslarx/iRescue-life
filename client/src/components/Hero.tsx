@@ -145,7 +145,7 @@ export default function Hero({
       {/* Three Doors Layout - Positioned at bottom of hero, colored headers overlap image */}
       {hasThreeDoors && (
         <div 
-          className="absolute bottom-0 left-0 right-0 z-10 translate-y-[70%]" 
+          className="absolute bottom-0 left-0 right-0 z-10 translate-y-[60%]" 
           data-testid="three-doors-container"
         >
           <ThreeDoors basePath={basePath} config={threeDoorsConfig} />
