@@ -429,9 +429,9 @@ export default function Home() {
         heroButton2Text={tenant?.heroButton2Text}
       />
       
-      {/* Spacer for Three Doors that extend below hero */}
+      {/* Spacer for Three Doors that extend below hero - only needed on larger screens */}
       {tenant?.heroLayoutType === 'three_doors' && (
-        <div className="h-28 sm:h-32 bg-background" />
+        <div className="hidden sm:block h-32 bg-background" />
       )}
 
       {upcomingEvents.length > 0 && (
