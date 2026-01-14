@@ -53,9 +53,9 @@ function Door({ icon, title, description, linkText, linkUrl, colorClass, textCol
           <span className={`${textColorClass} font-bold text-lg uppercase tracking-wide`}>{title}</span>
         </div>
         <div className="bg-card rounded-b-lg shadow-lg py-4 px-6 w-full border border-t-0">
-          <p className="text-muted-foreground text-sm mb-2">{description}</p>
-          <span className="text-primary font-semibold text-sm hover:underline">
-            [ {linkText} ]
+          <p className="text-muted-foreground text-sm mb-3">{description}</p>
+          <span className="inline-block bg-primary text-primary-foreground font-semibold text-sm px-4 py-1.5 rounded-full shadow-sm group-hover:shadow-md transition-shadow">
+            {linkText}
           </span>
         </div>
       </div>
