@@ -153,8 +153,9 @@ export class StripeService {
             destination: params.connectedAccountId,
           },
           // Apply platform fee percent for recurring payments (only if fee > 0)
+          // Stripe requires application_fee_percent to have at most 2 decimal places
           ...(collectPlatformFee && params.platformFeeAmount ? {
-            application_fee_percent: (params.platformFeeAmount / params.amount) * 100,
+            application_fee_percent: Math.round((params.platformFeeAmount / params.amount) * 10000) / 100,
           } : {}),
         } : {}),
       };
