@@ -103,7 +103,7 @@ export default function ThreeDoors({ basePath = '', config }: ThreeDoorsProps) {
   const doorConfigs = [config?.door1, config?.door2, config?.door3];
 
   return (
-    <div className="w-full">
+    <div className="w-full translate-y-[50%]">
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-3xl mx-auto px-4">
         {DEFAULT_DOORS.map((defaultDoor, index) => {
           const customConfig = doorConfigs[index];
