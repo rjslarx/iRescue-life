@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
 import ActionCircle from "./ActionCircle";
+import ThreeDoors from "./ThreeDoors";
 
 interface ActionConfig {
   imageUrl?: string;
@@ -10,6 +11,7 @@ interface ActionConfig {
 
 type CirclePosition = 'top-right' | 'bottom-right' | 'center';
 type CircleSize = 'sm' | 'md' | 'lg';
+type HeroLayoutType = 'none' | 'action_circle' | 'three_doors';
 
 interface ActionCircleConfig {
   enabled?: boolean;
@@ -37,6 +39,7 @@ interface HeroProps {
   onViewAnimals?: () => void;
   onDonate?: () => void;
   actionCircle?: ActionCircleConfig;
+  heroLayoutType?: HeroLayoutType;
   basePath?: string;
   heroHeadline?: string | null;
   heroButtonText?: string | null;
@@ -50,14 +53,19 @@ export default function Hero({
   onViewAnimals, 
   onDonate,
   actionCircle,
+  heroLayoutType = 'none',
   basePath = '',
   heroHeadline,
   heroButtonText,
   heroButton2Text
 }: HeroProps) {
   // Check if action circle has any configured images
-  const hasActionCircle = actionCircle?.enabled && actionCircle?.actions && 
+  const hasActionCircle = heroLayoutType === 'action_circle' && 
+    actionCircle?.enabled && actionCircle?.actions && 
     Object.values(actionCircle.actions).some(action => action?.imageUrl);
+  
+  // Check if three doors layout is enabled
+  const hasThreeDoors = heroLayoutType === 'three_doors';
 
   return (
     <section className="relative min-h-[400px] sm:min-h-[450px] md:min-h-[500px] w-full overflow-hidden">
@@ -67,8 +75,8 @@ export default function Hero({
       />
       <div className="absolute inset-0 bg-gradient-to-br from-black/70 via-black/50 to-black/30" />
       
-      <div className="relative container flex h-full items-center px-4 sm:px-6 py-8 sm:py-12">
-        <div className="flex flex-col lg:flex-row items-center justify-between w-full gap-8 lg:gap-12">
+      <div className="relative container flex flex-col h-full px-4 sm:px-6 py-8 sm:py-12">
+        <div className="flex flex-col lg:flex-row items-center justify-between w-full gap-8 lg:gap-12 flex-1">
           {/* Left side - Text content */}
           <div className="max-w-2xl space-y-4 sm:space-y-6 text-white text-center lg:text-left">
             <h1 className="font-display text-3xl sm:text-4xl md:text-5xl font-bold leading-tight tracking-tight lg:text-6xl">
@@ -101,6 +109,13 @@ export default function Hero({
           </div>
 
         </div>
+
+        {/* Three Doors Layout - Positioned at bottom of hero */}
+        {hasThreeDoors && (
+          <div className="mt-auto pt-6" data-testid="three-doors-container">
+            <ThreeDoors basePath={basePath} />
+          </div>
+        )}
       </div>
 
       {/* Action Circle - Hidden on mobile, shown on md+ with absolute positioning */}

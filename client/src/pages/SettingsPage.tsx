@@ -16,6 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { CustomDomainSettings } from "@/components/CustomDomainSettings";
 import { ActionCircleSettings } from "@/components/ActionCircleSettings";
+import { HeroLayoutSettings } from "@/components/HeroLayoutSettings";
 import MascotSettings from "@/components/MascotSettings";
 import NotificationSettings from "@/components/NotificationSettings";
 import MedicalReminderSettings from "@/components/MedicalReminderSettings";
@@ -1427,19 +1428,19 @@ export default function SettingsPage() {
                   </CardContent>
                 </Card>
 
-                {/* Action Circle Configuration */}
+                {/* Hero Layout Configuration */}
                 <Card>
                   <CardHeader>
                     <div className="flex items-center gap-2">
                       <Palette className="h-5 w-5" />
-                      <CardTitle>Hero Action Circle</CardTitle>
+                      <CardTitle>Hero Layout</CardTitle>
                     </div>
                     <CardDescription>
-                      Configure the rotating action circle that appears on your homepage hero section. Upload images for each action type to enable this feature.
+                      Choose how to display action items in your homepage hero section.
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-6">
-                    <ActionCircleSettings tenant={data?.tenant} />
+                    <HeroLayoutSettings tenant={data?.tenant} />
                   </CardContent>
                 </Card>
 

@@ -115,6 +115,8 @@ export const tenants = pgTable("tenants", {
       donate?: { imageUrl?: string; title?: string; description?: string };
     };
   }>(),
+  // Hero layout type: 'none', 'action_circle', or 'three_doors'
+  heroLayoutType: text("hero_layout_type").default("none"),
   // Mascot widget configuration (fixed video in corner with speech bubble)
   mascot: jsonb("mascot").$type<{
     enabled?: boolean;

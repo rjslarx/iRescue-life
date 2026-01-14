@@ -12218,6 +12218,31 @@ Submitted: ${new Date().toLocaleString()}
   });
 
   /**
+   * PATCH /api/tenant/settings/hero-layout
+   * Update hero layout type (admin only)
+   */
+  app.patch('/api/tenant/settings/hero-layout', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+    try {
+      const heroLayoutSchema = z.object({
+        heroLayoutType: z.enum(['none', 'action_circle', 'three_doors']),
+      });
+
+      const settings = heroLayoutSchema.parse(req.body);
+
+      // Update tenant settings
+      const [updatedTenant] = await db
+        .update(tenants)
+        .set({ heroLayoutType: settings.heroLayoutType })
+        .where(eq(tenants.id, req.tenant!.id))
+        .returning();
+
+      res.json({ success: true, tenant: updatedTenant });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * PATCH /api/tenant/settings/mascot
    * Update mascot widget configuration (admin only)
    */
