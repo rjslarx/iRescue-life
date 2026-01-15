@@ -328,13 +328,15 @@ export function mergePlaceholders(htmlTemplate: string, data: Partial<MergeData>
 
 /**
  * Validate template HTML
+ * Returns warnings for missing structure/fields, but only blocks on security issues
  */
-export function validateTemplateHtml(html: string): { valid: boolean; errors: string[] } {
+export function validateTemplateHtml(html: string): { valid: boolean; errors: string[]; warnings: string[] } {
   const errors: string[] = [];
+  const warnings: string[] = [];
 
-  // Check for basic HTML structure
+  // Check for basic HTML structure - just a warning, templates can work without full structure
   if (!html.includes('<html') && !html.includes('<body')) {
-    errors.push('Template should include basic HTML structure (<html> and <body> tags)');
+    warnings.push('Template does not include full HTML structure (<html> and <body> tags). Consider adding them for best results.');
   }
 
   // HTML5 void elements that don't require closing tags
@@ -349,34 +351,31 @@ export function validateTemplateHtml(html: string): { valid: boolean; errors: st
   
   const closeTags = html.match(/<\/([a-z]+)>/gi) || [];
   
-  // More lenient check - only flag if significantly unbalanced
+  // More lenient check - only warn if significantly unbalanced
   if (openTags.length > closeTags.length + 10) {
-    errors.push('Template may have unclosed HTML tags');
+    warnings.push('Template may have unclosed HTML tags');
   }
 
-  // Check for potentially dangerous scripts (should be caught by DOMPurify, but double-check)
+  // Check for potentially dangerous scripts - this IS an error
   if (html.includes('<script')) {
-    errors.push('Templates should not contain <script> tags for security reasons');
+    errors.push('Templates cannot contain <script> tags for security reasons');
   }
 
-  // Warn about missing common merge fields
-  const hasOrganizationName = html.includes('{{organization_name}}');
-  const hasAdopterName = html.includes('{{adopter_name}}');
-  const hasAnimalName = html.includes('{{animal_name}}');
-
-  if (!hasOrganizationName) {
-    errors.push('Warning: Template does not include {{organization_name}}');
+  // Warn about missing common merge fields (optional, informational only)
+  if (!html.includes('{{organization_name}}')) {
+    warnings.push('Template does not include {{organization_name}}');
   }
-  if (!hasAdopterName) {
-    errors.push('Warning: Template does not include {{adopter_name}}');
+  if (!html.includes('{{adopter_name}}')) {
+    warnings.push('Template does not include {{adopter_name}}');
   }
-  if (!hasAnimalName) {
-    errors.push('Warning: Template does not include {{animal_name}}');
+  if (!html.includes('{{animal_name}}')) {
+    warnings.push('Template does not include {{animal_name}}');
   }
 
   return {
-    valid: errors.filter(e => !e.startsWith('Warning:')).length === 0,
-    errors
+    valid: errors.length === 0,
+    errors,
+    warnings
   };
 }
 

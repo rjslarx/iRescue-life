@@ -6055,7 +6055,7 @@ Crawl-delay: 1
       });
 
       const template = await createTemplate(data);
-      res.json({ template });
+      res.json({ template, warnings: validation.warnings });
     } catch (error) {
       next(error);
     }
@@ -6070,8 +6070,10 @@ Crawl-delay: 1
       const { updateTemplate, validateTemplateHtml } = await import('./services/contract-template');
       
       // Validate template HTML if it's being updated
+      let warnings: string[] = [];
       if (req.body.htmlTemplate) {
         const validation = validateTemplateHtml(req.body.htmlTemplate);
+        warnings = validation.warnings;
         if (!validation.valid) {
           return res.status(400).json({ 
             error: 'Invalid template HTML', 
@@ -6090,8 +6092,8 @@ Crawl-delay: 1
       if (!template) {
         return res.status(404).json({ error: 'Template not found' });
       }
-
-      res.json({ template });
+      
+      res.json({ template, warnings });
     } catch (error) {
       next(error);
     }
