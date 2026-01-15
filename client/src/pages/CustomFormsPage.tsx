@@ -258,7 +258,7 @@ export default function CustomFormsPage() {
   const previewMutation = useMutation({
     mutationFn: async (id: string) => {
       const response = await apiRequest('GET', `/api/custom-forms/${id}/preview`);
-      return response;
+      return response.json();
     },
     onSuccess: (data: { html: string }) => {
       setPreviewHtml(data.html);
@@ -275,15 +275,18 @@ export default function CustomFormsPage() {
 
   const sendMutation = useMutation({
     mutationFn: async ({ formId, data }: { formId: string; data: SendFormData }) => {
-      return apiRequest('POST', `/api/custom-forms/${formId}/send`, data);
+      const response = await apiRequest('POST', `/api/custom-forms/${formId}/send`, data);
+      return response.json();
     },
-    onSuccess: (data: { formUrl: string }) => {
+    onSuccess: (data: { formUrl: string; emailSent?: boolean }) => {
       setFormLink(data.formUrl);
       queryClient.invalidateQueries({ queryKey: ['/api/custom-forms', selectedForm?.id, 'submissions'] });
       sendForm.reset();
       toast({
-        title: "Form sent",
-        description: "Form link has been created. Share it with the recipient.",
+        title: data.emailSent ? "Form emailed" : "Form link created",
+        description: data.emailSent 
+          ? "The form has been emailed to the recipient."
+          : "Copy the link below to share with the recipient.",
       });
     },
     onError: (error: any) => {
@@ -911,7 +914,7 @@ export default function CustomFormsPage() {
                   <DialogFooter>
                     <Button type="submit" disabled={sendMutation.isPending} data-testid="button-send-form">
                       <Send className="h-4 w-4 mr-2" />
-                      {sendMutation.isPending ? "Creating Link..." : "Create Form Link"}
+                      {sendMutation.isPending ? "Sending..." : "Send Form"}
                     </Button>
                   </DialogFooter>
                 </form>

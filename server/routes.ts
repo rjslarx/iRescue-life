@@ -6590,12 +6590,12 @@ Crawl-delay: 1
 
   /**
    * POST /api/custom-forms/:id/send
-   * Send a form to someone to fill out (creates a pending submission)
+   * Send a form to someone to fill out (creates a pending submission and emails them)
    */
   app.post('/api/custom-forms/:id/send', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
     try {
-      const { getFormById, createSubmission, generateSecureToken } = await import('./services/custom-form');
-      const { insertCustomFormSubmissionSchema } = await import('@shared/schema');
+      const { getFormById, createSubmission, generateSecureToken, updateSubmission } = await import('./services/custom-form');
+      const { EmailService } = await import('./lib/email-service');
       
       const form = await getFormById(req.params.id, req.tenant!.id);
       if (!form) {
@@ -6629,8 +6629,7 @@ Crawl-delay: 1
         status: 'pending',
       });
 
-      // TODO: Send email to signer with link to complete form
-      // For now, return the token so it can be shared
+      // Build the form URL
       const subdomain = req.tenant!.subdomain;
       const baseUrl = process.env.NODE_ENV === 'production' 
         ? `https://${subdomain}.irescue.life`
@@ -6638,10 +6637,59 @@ Crawl-delay: 1
       
       const formUrl = `${baseUrl}/forms/sign/${token}`;
 
+      // Try to send email to signer
+      let emailSent = false;
+      try {
+        const emailService = await EmailService.forTenant(req.tenant!.id);
+        if (emailService) {
+          const tenantName = req.tenant!.name;
+          const emailResult = await emailService.send({
+            to: signerEmail,
+            subject: `${tenantName}: Please complete "${form.name}"`,
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2 style="color: #333;">Hello ${signerName},</h2>
+                <p>${tenantName} has sent you a form to complete:</p>
+                <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                  <h3 style="margin-top: 0; color: #333;">${form.name}</h3>
+                  ${form.description ? `<p style="color: #666;">${form.description}</p>` : ''}
+                </div>
+                <p>Please click the button below to complete the form:</p>
+                <div style="text-align: center; margin: 30px 0;">
+                  <a href="${formUrl}" style="background: #4f46e5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">Complete Form</a>
+                </div>
+                <p style="color: #666; font-size: 14px;">This link will expire in 72 hours.</p>
+                <p style="color: #666; font-size: 14px;">If the button doesn't work, copy and paste this link into your browser:</p>
+                <p style="word-break: break-all; font-size: 12px; color: #888;">${formUrl}</p>
+                <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
+                <p style="color: #888; font-size: 12px;">This email was sent by ${tenantName} via iRescue.life</p>
+              </div>
+            `,
+          });
+          
+          if (emailResult.success) {
+            emailSent = true;
+            // Update submission to record that email was sent
+            await updateSubmission(submission.id, req.tenant!.id, { emailedAt: new Date() });
+            console.log(`[CustomForms] Email sent to ${signerEmail} for form ${form.id}`);
+          } else {
+            console.warn(`[CustomForms] Failed to send email to ${signerEmail}:`, emailResult.error);
+          }
+        } else {
+          console.warn(`[CustomForms] No email service available for tenant ${req.tenant!.id}`);
+        }
+      } catch (emailError) {
+        console.error(`[CustomForms] Error sending form email:`, emailError);
+        // Don't fail the whole request if email fails - just log and continue
+      }
+
       res.json({ 
         submission, 
         formUrl,
-        message: 'Form submission created. Share this link with the signer.' 
+        emailSent,
+        message: emailSent 
+          ? 'Form has been emailed to the recipient.' 
+          : 'Form link created. Share this link with the recipient.'
       });
     } catch (error) {
       next(error);
