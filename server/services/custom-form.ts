@@ -466,7 +466,8 @@ function generateQuestionBuilderHtml(
     let displayAnswer = '';
     
     if (question.type === 'checkbox') {
-      displayAnswer = answer ? 'Yes' : 'No';
+      // Checkbox values are stored as strings 'true' or 'false'
+      displayAnswer = answer === 'true' || answer === true ? 'Yes' : 'No';
     } else if (answer !== undefined && answer !== null && answer !== '') {
       displayAnswer = escapeHtml(String(answer));
     } else {
