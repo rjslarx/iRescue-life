@@ -1,0 +1,112 @@
+================================================================================
+                    iRescue.life MERGE FIELDS REFERENCE
+================================================================================
+
+Use these placeholders in your templates. They will be automatically replaced
+with actual values when the form/contract is generated.
+
+================================================================================
+CONTRACT TEMPLATES (Adoption Contracts)
+================================================================================
+
+ORGANIZATION
+  {{organization_name}}     - Organization name
+
+ADOPTER INFORMATION
+  {{adopter_name}}          - Adopter full name
+  {{adopter_email}}         - Adopter email
+  {{adopter_phone}}         - Adopter phone
+  {{adopter_address}}       - Adopter address
+
+ANIMAL INFORMATION
+  {{animal_name}}           - Animal name
+  {{animal_species}}        - Animal species
+  {{animal_breed}}          - Animal breed
+  {{animal_age}}            - Animal age
+  {{animal_sex}}            - Animal sex/gender
+
+PAYMENT DETAILS
+  {{adoption_fee}}          - Adoption fee amount
+  {{donation_amount}}       - Donation amount (if any)
+  {{total_amount}}          - Total amount paid
+
+SIGNATURE & VERIFICATION
+  {{contract_date}}         - Contract signing date
+  {{signature_image_url}}   - Signature image URL
+  {{signed_timestamp}}      - Signature timestamp (ISO format)
+  {{signed_ip}}             - Signer IP address (for legal verification)
+
+
+================================================================================
+CUSTOM FORMS - STANDALONE TYPE
+================================================================================
+
+Use for: Clinic intake forms, volunteer waivers, general agreements
+
+SIGNER INFORMATION
+  {{signer_name}}           - Full name of the person signing
+  {{signer_email}}          - Email address of the signer
+  {{signer_phone}}          - Phone number of the signer
+  {{date}}                  - Current date
+  {{organization_name}}     - Organization name
+
+SIGNATURE & VERIFICATION
+  {{signature_image_url}}   - Signature image URL
+  {{signed_timestamp}}      - Signature timestamp (ISO format)
+  {{signed_ip}}             - Signer IP address (for legal verification)
+
+
+================================================================================
+CUSTOM FORMS - ANIMAL-SPECIFIC TYPE
+================================================================================
+
+Use for: Foster agreements, medical release forms, transport waivers
+(Includes ALL standalone fields plus the following)
+
+ANIMAL INFORMATION
+  {{animal_name}}           - Animal name
+  {{animal_species}}        - Animal species (Dog, Cat, etc.)
+  {{animal_breed}}          - Animal breed
+  {{animal_age}}            - Animal age
+  {{animal_sex}}            - Animal sex/gender
+  {{animal_color}}          - Animal color/markings
+  {{animal_microchip}}      - Microchip number
+  {{animal_weight}}         - Animal weight
+
+
+================================================================================
+USAGE EXAMPLES
+================================================================================
+
+Example 1: Simple paragraph
+-----------
+I, {{adopter_name}}, agree to adopt {{animal_name}} from {{organization_name}}.
+
+Example 2: Info display
+-----------
+<div class="info-item">
+  <span class="label">Adopter:</span>
+  <span class="value">{{adopter_name}}</span>
+</div>
+
+Example 3: Signature block
+-----------
+<div class="signature-block">
+  <img src="{{signature_image_url}}" alt="Signature" />
+  <p>Signed: {{signed_timestamp}}</p>
+  <p>IP: {{signed_ip}}</p>
+</div>
+
+
+================================================================================
+NOTES
+================================================================================
+
+- All merge fields are case-sensitive
+- Fields are replaced only when the form/contract is generated
+- Signature fields (signature_image_url, signed_timestamp, signed_ip) are 
+  populated after the recipient signs
+- Empty fields will display as blank if data is not available
+- Use HTML formatting in your templates for proper display
+
+================================================================================
