@@ -321,10 +321,7 @@ export default function ContractTemplatesPage() {
   // Create mutation
   const createMutation = useMutation({
     mutationFn: async (templateData: TemplateFormData) => {
-      return apiRequest(getApiEndpoint(activeContractType), {
-        method: 'POST',
-        body: JSON.stringify(templateData),
-      });
+      return apiRequest('POST', getApiEndpoint(activeContractType), templateData);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [getApiEndpoint(activeContractType)] });
@@ -347,10 +344,7 @@ export default function ContractTemplatesPage() {
   // Update mutation
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: TemplateFormData }) => {
-      return apiRequest(`${getApiEndpoint(activeContractType)}/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify(data),
-      });
+      return apiRequest('PUT', `${getApiEndpoint(activeContractType)}/${id}`, data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [getApiEndpoint(activeContractType)] });
@@ -374,9 +368,7 @@ export default function ContractTemplatesPage() {
   // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
-      return apiRequest(`${getApiEndpoint(activeContractType)}/${id}`, {
-        method: 'DELETE',
-      });
+      return apiRequest('DELETE', `${getApiEndpoint(activeContractType)}/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [getApiEndpoint(activeContractType)] });
@@ -399,9 +391,7 @@ export default function ContractTemplatesPage() {
   // Set default mutation
   const setDefaultMutation = useMutation({
     mutationFn: async (id: number) => {
-      return apiRequest(`${getApiEndpoint(activeContractType)}/${id}/set-default`, {
-        method: 'PUT',
-      });
+      return apiRequest('PUT', `${getApiEndpoint(activeContractType)}/${id}/set-default`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [getApiEndpoint(activeContractType)] });

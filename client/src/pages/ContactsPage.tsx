@@ -195,10 +195,7 @@ export default function ContactsPage() {
   const createContactMutation = useMutation({
     mutationFn: async (data: ContactFormData) => {
       const tags = data.tags ? data.tags.split(',').map(t => t.trim()).filter(Boolean) : [];
-      return apiRequest('/api/contacts', {
-        method: 'POST',
-        body: JSON.stringify({ ...data, tags }),
-      });
+      return apiRequest('POST', '/api/contacts', { ...data, tags });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/contacts'] });

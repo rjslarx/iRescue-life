@@ -2334,10 +2334,7 @@ function PendingTransfersTab({
 
   const acceptMutation = useMutation({
     mutationFn: async (transferId: string) => {
-      const response = await apiRequest(`/api/transport/pending-transfers/${transferId}/accept`, {
-        method: 'POST',
-      });
-      return response.json();
+      return await apiRequest('POST', `/api/transport/pending-transfers/${transferId}/accept`);
     },
     onSuccess: (data) => {
       toast({
@@ -2358,11 +2355,7 @@ function PendingTransfersTab({
 
   const declineMutation = useMutation({
     mutationFn: async ({ transferId, reason }: { transferId: string; reason: string }) => {
-      const response = await apiRequest(`/api/transport/pending-transfers/${transferId}/decline`, {
-        method: 'POST',
-        body: JSON.stringify({ reason }),
-      });
-      return response.json();
+      return await apiRequest('POST', `/api/transport/pending-transfers/${transferId}/decline`, { reason });
     },
     onSuccess: () => {
       toast({

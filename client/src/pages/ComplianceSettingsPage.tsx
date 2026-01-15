@@ -86,10 +86,7 @@ export default function ComplianceSettingsPage() {
   // Update SAC Settings Mutation
   const updateSacSettings = useMutation({
     mutationFn: async (settings: Partial<SacSettings>) => {
-      return apiRequest("/api/compliance/sac/settings", {
-        method: "PUT",
-        body: JSON.stringify(settings),
-      });
+      return apiRequest("PUT", "/api/compliance/sac/settings", settings);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/compliance/sac/settings"] });
@@ -103,10 +100,7 @@ export default function ComplianceSettingsPage() {
   // Generate SAC Report Mutation
   const generateReport = useMutation({
     mutationFn: async ({ month, year }: { month: number; year: number }) => {
-      return apiRequest("/api/compliance/sac/generate", {
-        method: "POST",
-        body: JSON.stringify({ month, year }),
-      });
+      return apiRequest("POST", "/api/compliance/sac/generate", { month, year });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/compliance/sac/reports"] });
@@ -120,10 +114,7 @@ export default function ComplianceSettingsPage() {
   // Update Impact Settings Mutation
   const updateImpactSettings = useMutation({
     mutationFn: async (settings: any) => {
-      return apiRequest("/api/compliance/impact/settings", {
-        method: "PUT",
-        body: JSON.stringify(settings),
-      });
+      return apiRequest("PUT", "/api/compliance/impact/settings", settings);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/compliance/impact/settings"] });
@@ -137,9 +128,7 @@ export default function ComplianceSettingsPage() {
   // Calculate Impact Stats Mutation
   const calculateStats = useMutation({
     mutationFn: async () => {
-      return apiRequest("/api/compliance/impact/calculate", {
-        method: "POST",
-      });
+      return apiRequest("POST", "/api/compliance/impact/calculate");
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/compliance/impact/stats"] });
@@ -153,10 +142,7 @@ export default function ComplianceSettingsPage() {
   // Update Transparency Vault Settings Mutation
   const updateVaultSettings = useMutation({
     mutationFn: async (settings: any) => {
-      return apiRequest("/api/compliance/transparency-vault/settings", {
-        method: "PUT",
-        body: JSON.stringify(settings),
-      });
+      return apiRequest("PUT", "/api/compliance/transparency-vault/settings", settings);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/compliance/transparency-vault/settings"] });
@@ -170,10 +156,7 @@ export default function ComplianceSettingsPage() {
   // Update GreatNonprofits Settings Mutation
   const updateReviewSettings = useMutation({
     mutationFn: async (settings: any) => {
-      return apiRequest("/api/compliance/reviews/settings", {
-        method: "PUT",
-        body: JSON.stringify(settings),
-      });
+      return apiRequest("PUT", "/api/compliance/reviews/settings", settings);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/compliance/reviews/settings"] });
