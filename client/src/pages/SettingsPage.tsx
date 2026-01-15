@@ -73,6 +73,8 @@ const brandingSettingsSchema = z.object({
   destructiveColor: z.string().optional(),
   contactEmail: z.string().email().optional().or(z.literal("")),
   contactPhone: z.string().optional(),
+  formNotificationsEnabled: z.boolean().optional(),
+  formNotificationEmail: z.string().email().optional().or(z.literal("")),
   footerText: z.string().optional(),
   footerHours: z.string().optional(),
   footerAddress: z.string().optional(),
@@ -356,6 +358,8 @@ export default function SettingsPage() {
       destructiveColor: (data?.tenant?.branding as any)?.destructiveColor || "",
       contactEmail: data?.tenant?.contactEmail || "",
       contactPhone: data?.tenant?.contactPhone || "",
+      formNotificationsEnabled: data?.tenant?.formNotificationsEnabled || false,
+      formNotificationEmail: data?.tenant?.formNotificationEmail || "",
       footerText: data?.tenant?.footerText || "",
       footerHours: data?.tenant?.footerHours || "",
       footerAddress: data?.tenant?.footerAddress || "",
@@ -387,6 +391,8 @@ export default function SettingsPage() {
       destructiveColor: (data.tenant.branding as any)?.destructiveColor || "",
       contactEmail: data.tenant.contactEmail || "",
       contactPhone: data.tenant.contactPhone || "",
+      formNotificationsEnabled: data.tenant.formNotificationsEnabled || false,
+      formNotificationEmail: data.tenant.formNotificationEmail || "",
       footerText: data.tenant.footerText || "",
       footerHours: data.tenant.footerHours || "",
       footerAddress: data.tenant.footerAddress || "",
@@ -1164,6 +1170,61 @@ export default function SettingsPage() {
                             </FormItem>
                           )}
                         />
+
+                        <Separator />
+
+                        <div className="space-y-4">
+                          <h4 className="text-sm font-medium">Form Submission Notifications</h4>
+                          <p className="text-sm text-muted-foreground">
+                            Receive email notifications when forms are submitted (adoption, foster, volunteer, surrender applications).
+                          </p>
+
+                          <FormField
+                            control={brandingForm.control}
+                            name="formNotificationsEnabled"
+                            render={({ field }) => (
+                              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                                <div className="space-y-0.5">
+                                  <FormLabel className="text-base">Enable Form Notifications</FormLabel>
+                                  <FormDescription>
+                                    Send email alerts when applications are submitted
+                                  </FormDescription>
+                                </div>
+                                <FormControl>
+                                  <Switch
+                                    checked={field.value}
+                                    onCheckedChange={field.onChange}
+                                    data-testid="switch-form-notifications"
+                                  />
+                                </FormControl>
+                              </FormItem>
+                            )}
+                          />
+
+                          <FormField
+                            control={brandingForm.control}
+                            name="formNotificationEmail"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Notification Email</FormLabel>
+                                <FormControl>
+                                  <Input 
+                                    type="email"
+                                    placeholder="notifications@yourrescue.org" 
+                                    data-testid="input-notification-email"
+                                    {...field} 
+                                  />
+                                </FormControl>
+                                <FormDescription>
+                                  Email address to receive form submission alerts. Falls back to Contact Email if not set.
+                                </FormDescription>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+
+                        <Separator />
 
                         <FormField
                           control={brandingForm.control}

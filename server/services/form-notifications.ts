@@ -140,9 +140,9 @@ View in Dashboard: ${baseUrl}${dashboardPath}
 This notification was sent because form submission notifications are enabled for your organization.
     `.trim();
 
-    const { emailService } = await import('../lib/email');
+    const { EmailService } = await import('../lib/email-service');
+    const emailService = new EmailService(data.tenantId);
     await emailService.sendEmail({
-      tenantId: data.tenantId,
       to: recipientEmail,
       subject,
       html: htmlBody,
