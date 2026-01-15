@@ -6173,7 +6173,9 @@ Crawl-delay: 1
       const mergedHtml = mergePlaceholders(template.htmlTemplate, sampleData);
       
       // Sanitize HTML before sending to client to prevent XSS
+      // WHOLE_DOCUMENT: true is required to preserve <html>, <head>, <body> tags
       const sanitizedHtml = DOMPurify.sanitize(mergedHtml, {
+        WHOLE_DOCUMENT: true,
         ALLOWED_TAGS: ['html', 'head', 'body', 'title', 'meta', 'style', 'link', 'div', 'span', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'strong', 'em', 'u', 'br', 'hr', 'ul', 'ol', 'li', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'img', 'a'],
         ALLOWED_ATTR: ['class', 'id', 'style', 'href', 'src', 'alt', 'title', 'target', 'colspan', 'rowspan'],
         ALLOW_DATA_ATTR: false,
@@ -6352,7 +6354,9 @@ Crawl-delay: 1
 
       const mergedHtml = mergeFosterPlaceholders(template.htmlTemplate, sampleData);
       
+      // WHOLE_DOCUMENT: true is required to preserve <html>, <head>, <body> tags
       const sanitizedHtml = DOMPurify.sanitize(mergedHtml, {
+        WHOLE_DOCUMENT: true,
         ALLOWED_TAGS: ['html', 'head', 'body', 'title', 'meta', 'style', 'link', 'div', 'span', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'strong', 'em', 'u', 'br', 'hr', 'ul', 'ol', 'li', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'img', 'a'],
         ALLOWED_ATTR: ['class', 'id', 'style', 'href', 'src', 'alt', 'title', 'target', 'colspan', 'rowspan'],
         ALLOW_DATA_ATTR: false,

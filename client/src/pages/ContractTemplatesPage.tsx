@@ -416,6 +416,7 @@ export default function ContractTemplatesPage() {
     },
     onSuccess: (data) => {
       const sanitizedHtml = DOMPurify.sanitize(data.html, {
+        WHOLE_DOCUMENT: true,
         ALLOWED_TAGS: ['html', 'head', 'body', 'title', 'meta', 'style', 'link', 'div', 'span', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'strong', 'em', 'u', 'br', 'hr', 'ul', 'ol', 'li', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'img', 'a'],
         ALLOWED_ATTR: ['class', 'id', 'style', 'href', 'src', 'alt', 'title', 'target', 'colspan', 'rowspan'],
         ALLOW_DATA_ATTR: false,
