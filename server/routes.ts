@@ -6861,20 +6861,38 @@ Crawl-delay: 1
               pdfUrl: pdfResult.pdfUrl,
             });
             
-            // Create document record if tenant has documents system
+            // Create document record in documents system
             try {
-              const { documents, insertDocumentSchema } = await import('@shared/schema');
-              await db.insert(documents).values({
-                tenantId: submission.tenantId,
-                title: `${form.name} - ${submission.signerName}`,
-                description: `Signed form submitted on ${new Date().toLocaleDateString()}`,
-                fileUrl: pdfResult.pdfUrl,
-                fileType: 'application/pdf',
-                category: 'forms',
-                createdAt: new Date(),
-                updatedAt: new Date(),
-              });
-              console.log(`[CustomForms] Document record created for submission ${submission.id}`);
+              const { documents } = await import('@shared/schema');
+              const fileName = `${form.name.replace(/\s+/g, '_')}_${submission.signerName.replace(/\s+/g, '_')}_${Date.now()}.pdf`;
+              
+              // Get first admin user for uploadedBy field
+              const { users } = await import('@shared/schema');
+              const [adminUser] = await db.select({ id: users.id })
+                .from(users)
+                .where(and(
+                  eq(users.tenantId, submission.tenantId),
+                  eq(users.role, 'admin')
+                ))
+                .limit(1);
+              
+              if (adminUser) {
+                await db.insert(documents).values({
+                  tenantId: submission.tenantId,
+                  title: `${form.name} - ${submission.signerName}`,
+                  description: `Signed form submitted on ${new Date().toLocaleDateString()}`,
+                  fileUrl: pdfResult.pdfUrl,
+                  fileName: fileName,
+                  fileSize: 50000, // Approximate PDF size
+                  category: 'forms',
+                  uploadedBy: adminUser.id,
+                  storageType: 'replit_object_storage',
+                  updatedAt: new Date(),
+                });
+                console.log(`[CustomForms] Document record created for submission ${submission.id}`);
+              } else {
+                console.warn(`[CustomForms] No admin user found to set as uploadedBy for document`);
+              }
             } catch (docError) {
               console.warn(`[CustomForms] Could not create document record:`, docError);
             }
