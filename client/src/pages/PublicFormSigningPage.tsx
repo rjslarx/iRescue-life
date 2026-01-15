@@ -58,7 +58,7 @@ interface SubmitResponse {
   downloadUrl?: string;
 }
 
-function renderMergeFields(html: string, data: FormData): string {
+function renderMergeFields(html: string, data: FormData, customFieldValues?: Record<string, string>): string {
   let rendered = html;
   
   const signerFields: Record<string, string> = {
@@ -85,6 +85,25 @@ function renderMergeFields(html: string, data: FormData): string {
     Object.entries(animalFields).forEach(([field, value]) => {
       rendered = rendered.replace(new RegExp(field.replace(/[{}]/g, '\\$&'), 'g'), value);
     });
+  }
+  
+  // Replace custom field placeholders with either entered values or visual indicators
+  if (data.form.customFields && data.form.customFields.length > 0) {
+    for (const field of data.form.customFields) {
+      const placeholder = `{{${field.fieldKey}}}`;
+      const escapedPlaceholder = placeholder.replace(/[{}]/g, '\\$&');
+      const enteredValue = customFieldValues?.[field.fieldKey];
+      
+      if (enteredValue) {
+        // Show the entered value with a highlight
+        const displayValue = `<span style="background-color: #e8f4e8; padding: 0 4px; border-radius: 2px;">${enteredValue}</span>`;
+        rendered = rendered.replace(new RegExp(escapedPlaceholder, 'g'), displayValue);
+      } else {
+        // Show a visual placeholder indicating where to fill in
+        const visualPlaceholder = `<span style="background-color: #fff3cd; padding: 2px 6px; border-radius: 4px; font-style: italic; color: #856404; border: 1px dashed #856404;">[${field.name} - fill in below]</span>`;
+        rendered = rendered.replace(new RegExp(escapedPlaceholder, 'g'), visualPlaceholder);
+      }
+    }
   }
   
   return DOMPurify.sanitize(rendered, {
@@ -237,7 +256,7 @@ export default function PublicFormSigningPage() {
     );
   }
 
-  const renderedHtml = renderMergeFields(data.form.htmlTemplate, data);
+  const renderedHtml = renderMergeFields(data.form.htmlTemplate, data, customFieldValues);
 
   return (
     <div className="min-h-screen bg-muted/30 py-8 px-4">
