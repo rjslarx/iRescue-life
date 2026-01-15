@@ -6843,6 +6843,7 @@ Submitted: ${new Date().toLocaleString()}
           creationMode: form.creationMode || 'template',
           requiresSignature: form.requiresSignature,
           htmlTemplate: form.htmlTemplate,
+          customFields: form.customFields,
           questions: form.questions,
           introText: form.introText,
         },
