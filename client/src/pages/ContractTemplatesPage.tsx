@@ -412,9 +412,7 @@ export default function ContractTemplatesPage() {
   // Preview mutation
   const previewMutation = useMutation({
     mutationFn: async (id: number) => {
-      const response = await fetch(`${getApiEndpoint(activeContractType)}/${id}/preview`);
-      if (!response.ok) throw new Error('Failed to generate preview');
-      return response.json();
+      return apiRequest('GET', `${getApiEndpoint(activeContractType)}/${id}/preview`);
     },
     onSuccess: (data) => {
       const sanitizedHtml = DOMPurify.sanitize(data.html, {
