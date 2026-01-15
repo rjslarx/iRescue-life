@@ -3,10 +3,24 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CheckCircle2, AlertCircle, FileSignature, Loader2 } from "lucide-react";
 import SignaturePad from "signature_pad";
 import DOMPurify from "dompurify";
+
+interface CustomFormField {
+  id: string;
+  name: string;
+  fieldKey: string;
+  type: "text" | "textarea" | "checkbox" | "number" | "date" | "email" | "phone";
+  required: boolean;
+  placeholder?: string;
+  defaultValue?: string;
+}
 
 interface FormData {
   form: {
@@ -16,6 +30,7 @@ interface FormData {
     formType: string;
     requiresSignature: boolean;
     htmlTemplate: string;
+    customFields?: CustomFormField[];
   };
   submission: {
     id: number;
@@ -84,6 +99,7 @@ export default function PublicFormSigningPage() {
   const { token } = useParams<{ token: string }>();
   const [isComplete, setIsComplete] = useState(false);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({});
   const signatureCanvasRef = useRef<HTMLCanvasElement>(null);
   const signaturePadRef = useRef<SignaturePad | null>(null);
 
@@ -116,12 +132,12 @@ export default function PublicFormSigningPage() {
     }
   }, [data]);
 
-  const submitMutation = useMutation<SubmitResponse, Error, { signatureData: string }>({
-    mutationFn: async ({ signatureData }) => {
+  const submitMutation = useMutation<SubmitResponse, Error, { signatureData: string; formData?: Record<string, string> }>({
+    mutationFn: async ({ signatureData, formData }) => {
       const response = await fetch(`/api/public/forms/${token}/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ signatureData }),
+        body: JSON.stringify({ signatureData, formData }),
       });
       if (!response.ok) {
         const result = await response.json();
@@ -137,18 +153,34 @@ export default function PublicFormSigningPage() {
     },
   });
 
+  const handleCustomFieldChange = (fieldKey: string, value: string) => {
+    setCustomFieldValues(prev => ({
+      ...prev,
+      [fieldKey]: value,
+    }));
+  };
+
   const handleClearSignature = () => {
     signaturePadRef.current?.clear();
   };
 
   const handleSubmit = () => {
+    // Validate required custom fields
+    const customFields = data?.form.customFields || [];
+    for (const field of customFields) {
+      if (field.required && !customFieldValues[field.fieldKey]) {
+        alert(`Please fill in the required field: ${field.name}`);
+        return;
+      }
+    }
+
     if (data?.form.requiresSignature && (!signaturePadRef.current || signaturePadRef.current.isEmpty())) {
       alert('Please sign the form before submitting');
       return;
     }
     
     const signatureData = signaturePadRef.current?.toDataURL('image/png') || '';
-    submitMutation.mutate({ signatureData });
+    submitMutation.mutate({ signatureData, formData: customFieldValues });
   };
 
   if (isLoading) {
@@ -239,6 +271,60 @@ export default function PublicFormSigningPage() {
             />
           </CardContent>
         </Card>
+
+        {/* Custom Input Fields */}
+        {data.form.customFields && data.form.customFields.length > 0 && (
+          <Card data-testid="custom-fields-card">
+            <CardHeader>
+              <CardTitle className="text-lg">Additional Information</CardTitle>
+              <CardDescription>
+                Please fill in the following fields
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {data.form.customFields.map((field) => (
+                <div key={field.id} className="space-y-2">
+                  <Label htmlFor={`field-${field.fieldKey}`}>
+                    {field.name}
+                    {field.required && <span className="text-destructive ml-1">*</span>}
+                  </Label>
+                  {field.type === 'textarea' ? (
+                    <Textarea
+                      id={`field-${field.fieldKey}`}
+                      placeholder={field.placeholder || ''}
+                      value={customFieldValues[field.fieldKey] || ''}
+                      onChange={(e) => handleCustomFieldChange(field.fieldKey, e.target.value)}
+                      data-testid={`input-${field.fieldKey}`}
+                    />
+                  ) : field.type === 'checkbox' ? (
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`field-${field.fieldKey}`}
+                        checked={customFieldValues[field.fieldKey] === 'true'}
+                        onCheckedChange={(checked) => 
+                          handleCustomFieldChange(field.fieldKey, checked ? 'true' : 'false')
+                        }
+                        data-testid={`input-${field.fieldKey}`}
+                      />
+                      <Label htmlFor={`field-${field.fieldKey}`} className="text-sm font-normal">
+                        {field.placeholder || 'Yes'}
+                      </Label>
+                    </div>
+                  ) : (
+                    <Input
+                      id={`field-${field.fieldKey}`}
+                      type={field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : field.type === 'email' ? 'email' : field.type === 'phone' ? 'tel' : 'text'}
+                      placeholder={field.placeholder || ''}
+                      value={customFieldValues[field.fieldKey] || ''}
+                      onChange={(e) => handleCustomFieldChange(field.fieldKey, e.target.value)}
+                      data-testid={`input-${field.fieldKey}`}
+                    />
+                  )}
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
 
         {data.form.requiresSignature && (
           <Card data-testid="signature-card">

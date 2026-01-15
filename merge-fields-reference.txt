@@ -75,6 +75,42 @@ ANIMAL INFORMATION
 
 
 ================================================================================
+CUSTOM INPUT FIELDS (User-Defined)
+================================================================================
+
+You can create custom input fields in the Custom Forms builder. When you add
+a custom field, it automatically becomes a merge field you can use in your
+HTML template.
+
+HOW TO CREATE CUSTOM FIELDS:
+1. Go to Custom Forms > New Form (or Edit existing form)
+2. Click "Add Field" under "Custom Input Fields"
+3. Enter a Field Label (display name) and Field Key (for merge field)
+4. Choose a field type: Text, Text Area, Email, Phone, Number, Date, Checkbox
+5. The field becomes available as {{field_key}} in the merge fields picker
+
+EXAMPLE:
+If you create a field with:
+  - Label: "Emergency Contact"
+  - Key: "emergency_contact"
+
+You can use it in your template as:
+  Emergency Contact: {{emergency_contact}}
+
+The signer will see an input field to enter the emergency contact information,
+and their input will be merged into the final PDF.
+
+FIELD TYPES:
+  text      - Single line text input
+  textarea  - Multi-line text input
+  email     - Email address with validation
+  phone     - Phone number input
+  number    - Numeric input
+  date      - Date picker
+  checkbox  - Yes/No checkbox
+
+
+================================================================================
 USAGE EXAMPLES
 ================================================================================
 

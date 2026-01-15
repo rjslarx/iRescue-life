@@ -4268,10 +4268,9 @@ export type CustomFormField = {
   id: string;
   name: string; // Display label
   fieldKey: string; // Used for merge field: {{field_key}}
-  type: "text" | "textarea" | "select" | "checkbox" | "number" | "date" | "email" | "phone";
+  type: "text" | "textarea" | "checkbox" | "number" | "date" | "email" | "phone";
   required: boolean;
   placeholder?: string;
-  options?: string[]; // For select fields
   defaultValue?: string;
 };
 

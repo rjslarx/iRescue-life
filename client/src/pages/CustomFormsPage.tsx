@@ -54,6 +54,16 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 
+interface CustomFormField {
+  id: string;
+  name: string;
+  fieldKey: string;
+  type: "text" | "textarea" | "checkbox" | "number" | "date" | "email" | "phone";
+  required: boolean;
+  placeholder?: string;
+  defaultValue?: string;
+}
+
 interface CustomForm {
   id: string;
   tenantId: string;
@@ -61,6 +71,7 @@ interface CustomForm {
   description?: string;
   formType: 'animal_specific' | 'standalone';
   htmlTemplate: string;
+  customFields?: CustomFormField[];
   requiresSignature: boolean;
   isActive: boolean;
   isPublic: boolean;
@@ -137,6 +148,11 @@ export default function CustomFormsPage() {
   const [isFieldsPanelOpen, setIsFieldsPanelOpen] = useState(false);
   const [formLink, setFormLink] = useState<string>("");
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+  const [customFields, setCustomFields] = useState<CustomFormField[]>([]);
+  const [isAddFieldOpen, setIsAddFieldOpen] = useState(false);
+  const [newFieldName, setNewFieldName] = useState("");
+  const [newFieldKey, setNewFieldKey] = useState("");
+  const [newFieldType, setNewFieldType] = useState<CustomFormField['type']>("text");
 
   const createForm = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -339,6 +355,11 @@ export default function CustomFormsPage() {
 
   const handleEdit = (form: CustomForm) => {
     setSelectedForm(form);
+    setCustomFields(form.customFields || []);
+    setNewFieldName("");
+    setNewFieldKey("");
+    setNewFieldType("text");
+    setIsAddFieldOpen(false);
     editForm.reset({
       name: form.name,
       description: form.description || "",
@@ -349,6 +370,16 @@ export default function CustomFormsPage() {
       isPublic: form.isPublic,
     });
     setIsEditDialogOpen(true);
+  };
+
+  const handleCreate = () => {
+    setCustomFields([]);
+    setNewFieldName("");
+    setNewFieldKey("");
+    setNewFieldType("text");
+    setIsAddFieldOpen(false);
+    createForm.reset();
+    setIsCreateDialogOpen(true);
   };
 
   const handleDelete = (form: CustomForm) => {
@@ -404,13 +435,37 @@ export default function CustomFormsPage() {
     });
   };
 
+  const addCustomField = (field: Omit<CustomFormField, 'id'>) => {
+    const newField: CustomFormField = {
+      ...field,
+      id: crypto.randomUUID(),
+    };
+    setCustomFields([...customFields, newField]);
+  };
+
+  const removeCustomField = (fieldId: string) => {
+    setCustomFields(customFields.filter(f => f.id !== fieldId));
+  };
+
+  const updateCustomField = (fieldId: string, updates: Partial<CustomFormField>) => {
+    setCustomFields(customFields.map(f => 
+      f.id === fieldId ? { ...f, ...updates } : f
+    ));
+  };
+
+  // Generate merge fields for custom fields
+  const customFieldsMergeFields: MergeFields = customFields.reduce((acc, field) => {
+    acc[`{{${field.fieldKey}}}`] = field.name;
+    return acc;
+  }, {} as MergeFields);
+
   const onSubmitCreate = (data: FormData) => {
-    createMutation.mutate(data);
+    createMutation.mutate({ ...data, customFields } as any);
   };
 
   const onSubmitEdit = (data: FormData) => {
     if (selectedForm) {
-      updateMutation.mutate({ id: selectedForm.id, data });
+      updateMutation.mutate({ id: selectedForm.id, data: { ...data, customFields } as any });
     }
   };
 
@@ -424,9 +479,15 @@ export default function CustomFormsPage() {
     ? createForm.watch('formType') 
     : editForm.watch('formType');
   
-  const currentMergeFields = currentFormType === 'animal_specific' 
+  const baseMergeFields = currentFormType === 'animal_specific' 
     ? mergeFields.animal_specific 
     : mergeFields.standalone;
+  
+  // Combine base merge fields with custom field merge fields
+  const currentMergeFields = {
+    ...baseMergeFields,
+    ...customFieldsMergeFields,
+  };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -557,11 +618,125 @@ export default function CustomFormsPage() {
           />
         </div>
 
+        {/* Custom Input Fields Section */}
+        <Collapsible open={isAddFieldOpen} onOpenChange={setIsAddFieldOpen}>
+          <div className="flex items-center justify-between">
+            <Label className="text-sm font-medium">Custom Input Fields</Label>
+            <CollapsibleTrigger asChild>
+              <Button type="button" variant="outline" size="sm">
+                <Plus className="h-4 w-4 mr-1" />
+                Add Field
+              </Button>
+            </CollapsibleTrigger>
+          </div>
+          <CollapsibleContent className="mt-2">
+            <div className="rounded-md border p-3 bg-muted/50 space-y-3">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label className="text-xs">Field Label</Label>
+                  <Input 
+                    value={newFieldName}
+                    onChange={(e) => setNewFieldName(e.target.value)}
+                    placeholder="e.g., Emergency Contact"
+                    className="mt-1"
+                    data-testid="input-new-field-name"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Field Key (for merge)</Label>
+                  <Input 
+                    value={newFieldKey}
+                    onChange={(e) => setNewFieldKey(e.target.value)}
+                    placeholder="e.g., emergency_contact"
+                    className="mt-1"
+                    data-testid="input-new-field-key"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label className="text-xs">Field Type</Label>
+                  <Select value={newFieldType} onValueChange={(v) => setNewFieldType(v as CustomFormField['type'])}>
+                    <SelectTrigger className="mt-1" data-testid="select-new-field-type">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="text">Text (single line)</SelectItem>
+                      <SelectItem value="textarea">Text Area (multi-line)</SelectItem>
+                      <SelectItem value="email">Email</SelectItem>
+                      <SelectItem value="phone">Phone</SelectItem>
+                      <SelectItem value="number">Number</SelectItem>
+                      <SelectItem value="date">Date</SelectItem>
+                      <SelectItem value="checkbox">Checkbox (Yes/No)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-end gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => {
+                      if (newFieldName && newFieldKey) {
+                        const sanitizedKey = newFieldKey.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+                        addCustomField({
+                          name: newFieldName,
+                          fieldKey: sanitizedKey,
+                          type: newFieldType,
+                          required: false,
+                        });
+                        setNewFieldName('');
+                        setNewFieldKey('');
+                        setNewFieldType('text');
+                        toast({
+                          title: "Field added",
+                          description: `You can now use {{${sanitizedKey}}} in your template`,
+                        });
+                      }
+                    }}
+                    data-testid="button-add-custom-field"
+                  >
+                    Add
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+
+        {/* Show existing custom fields */}
+        {customFields.length > 0 && (
+          <div className="space-y-2">
+            <Label className="text-xs text-muted-foreground">Defined Custom Fields:</Label>
+            <div className="flex flex-wrap gap-2">
+              {customFields.map((field) => (
+                <Badge 
+                  key={field.id} 
+                  variant="secondary"
+                  className="flex items-center gap-1 pr-1"
+                >
+                  <span>{field.name}</span>
+                  <span className="text-muted-foreground text-xs">{`{{${field.fieldKey}}}`}</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-4 w-4 ml-1 hover:bg-destructive/20"
+                    onClick={() => removeCustomField(field.id)}
+                    data-testid={`button-remove-field-${field.fieldKey}`}
+                  >
+                    <XCircle className="h-3 w-3" />
+                  </Button>
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+
         <Collapsible open={isFieldsPanelOpen} onOpenChange={setIsFieldsPanelOpen}>
           <CollapsibleTrigger asChild>
             <Button type="button" variant="outline" size="sm" className="w-full">
               <ChevronDown className={`h-4 w-4 mr-2 transition-transform ${isFieldsPanelOpen ? 'rotate-180' : ''}`} />
-              Available Merge Fields
+              Available Merge Fields ({Object.keys(currentMergeFields).length})
             </Button>
           </CollapsibleTrigger>
           <CollapsibleContent className="mt-2">
@@ -574,7 +749,7 @@ export default function CustomFormsPage() {
                   <Button
                     key={field}
                     type="button"
-                    variant="secondary"
+                    variant={customFieldsMergeFields[field] ? "default" : "secondary"}
                     size="sm"
                     onClick={() => insertPlaceholder(field)}
                     title={description}
@@ -633,7 +808,7 @@ export default function CustomFormsPage() {
               Create and manage forms with e-signature capability
             </p>
           </div>
-          <Button onClick={() => setIsCreateDialogOpen(true)} data-testid="button-create-form">
+          <Button onClick={handleCreate} data-testid="button-create-form">
             <Plus className="h-4 w-4 mr-2" />
             New Form
           </Button>
@@ -660,7 +835,7 @@ export default function CustomFormsPage() {
             <p className="text-muted-foreground mb-4">
               Create your first custom form to collect signatures and information.
             </p>
-            <Button onClick={() => setIsCreateDialogOpen(true)} data-testid="button-create-first-form">
+            <Button onClick={handleCreate} data-testid="button-create-first-form">
               <Plus className="h-4 w-4 mr-2" />
               Create Your First Form
             </Button>

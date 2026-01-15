@@ -455,11 +455,18 @@ export async function renderFormHtml(
     html = html.replace(new RegExp(placeholder.replace(/[{}]/g, '\\$&'), 'g'), value);
   }
   
-  // Replace any custom form data fields
+  // Replace any custom form data fields (escape HTML to prevent XSS)
   if (submission.formData) {
     for (const [key, value] of Object.entries(submission.formData)) {
       const placeholder = `{{${key}}}`;
-      html = html.replace(new RegExp(placeholder.replace(/[{}]/g, '\\$&'), 'g'), String(value));
+      // HTML-escape user-provided values to prevent XSS
+      const escapedValue = String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+      html = html.replace(new RegExp(placeholder.replace(/[{}]/g, '\\$&'), 'g'), escapedValue);
     }
   }
   
