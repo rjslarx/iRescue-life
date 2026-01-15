@@ -130,6 +130,322 @@ const sendFormSchema = z.object({
 
 type SendFormData = z.infer<typeof sendFormSchema>;
 
+// FormEditor component - defined at module level to prevent recreation on parent rerenders
+interface FormEditorProps {
+  form: ReturnType<typeof useForm<FormData>>; 
+  onSubmit: (data: FormData) => void;
+  isPending: boolean;
+  customFields: CustomFormField[];
+  addCustomField: (field: Omit<CustomFormField, 'id'>) => void;
+  removeCustomField: (id: string) => void;
+  currentMergeFields: MergeFields;
+  insertPlaceholder: (field: string) => void;
+  toast: ReturnType<typeof import("@/hooks/use-toast").useToast>['toast'];
+}
+
+function FormEditor({ 
+  form, 
+  onSubmit, 
+  isPending,
+  customFields,
+  addCustomField,
+  removeCustomField,
+  currentMergeFields,
+  insertPlaceholder,
+  toast,
+}: FormEditorProps) {
+  // Local state for new field inputs to prevent parent rerenders
+  const [localFieldName, setLocalFieldName] = useState("");
+  const [localFieldKey, setLocalFieldKey] = useState("");
+  const [localFieldType, setLocalFieldType] = useState<CustomFormField['type']>("text");
+  const [localIsAddFieldOpen, setLocalIsAddFieldOpen] = useState(false);
+  const [localIsFieldsPanelOpen, setLocalIsFieldsPanelOpen] = useState(false);
+  
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <FormField
+          control={form.control}
+          name="name"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Form Name</FormLabel>
+              <FormControl>
+                <Input 
+                  placeholder="e.g., Spay/Neuter Consent Form" 
+                  {...field} 
+                  data-testid="input-form-name"
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="description"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Description (optional)</FormLabel>
+              <FormControl>
+                <Input 
+                  placeholder="Brief description of this form" 
+                  {...field} 
+                  data-testid="input-form-description"
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="formType"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Form Type</FormLabel>
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <FormControl>
+                  <SelectTrigger data-testid="select-form-type">
+                    <SelectValue placeholder="Select form type" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value="standalone">
+                    <div className="flex items-center gap-2">
+                      <Users className="h-4 w-4" />
+                      <span>Standalone (not linked to animal)</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="animal_specific">
+                    <div className="flex items-center gap-2">
+                      <PawPrint className="h-4 w-4" />
+                      <span>Animal-Specific (linked to an animal)</span>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <FormDescription>
+                {field.value === 'animal_specific' 
+                  ? "This form will be linked to a specific animal and can use animal merge fields."
+                  : "This form is standalone and not linked to any animal."}
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <div className="flex items-center gap-6">
+          <FormField
+            control={form.control}
+            name="requiresSignature"
+            render={({ field }) => (
+              <FormItem className="flex items-center gap-2">
+                <FormControl>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                    data-testid="switch-requires-signature"
+                  />
+                </FormControl>
+                <FormLabel className="!mt-0">Requires Signature</FormLabel>
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="isActive"
+            render={({ field }) => (
+              <FormItem className="flex items-center gap-2">
+                <FormControl>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                    data-testid="switch-is-active"
+                  />
+                </FormControl>
+                <FormLabel className="!mt-0">Active</FormLabel>
+              </FormItem>
+            )}
+          />
+        </div>
+
+        {/* Custom Input Fields Section */}
+        <Collapsible open={localIsAddFieldOpen} onOpenChange={setLocalIsAddFieldOpen}>
+          <div className="flex items-center justify-between">
+            <Label className="text-sm font-medium">Custom Input Fields</Label>
+            <CollapsibleTrigger asChild>
+              <Button type="button" variant="outline" size="sm">
+                <Plus className="h-4 w-4 mr-1" />
+                Add Field
+              </Button>
+            </CollapsibleTrigger>
+          </div>
+          <CollapsibleContent className="mt-2">
+            <div className="rounded-md border p-3 bg-muted/50 space-y-3">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label className="text-xs">Field Label</Label>
+                  <Input 
+                    value={localFieldName}
+                    onChange={(e) => setLocalFieldName(e.target.value)}
+                    placeholder="e.g., Emergency Contact"
+                    className="mt-1"
+                    data-testid="input-new-field-name"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Field Key (for merge)</Label>
+                  <Input 
+                    value={localFieldKey}
+                    onChange={(e) => setLocalFieldKey(e.target.value)}
+                    placeholder="e.g., emergency_contact"
+                    className="mt-1"
+                    data-testid="input-new-field-key"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label className="text-xs">Field Type</Label>
+                  <Select value={localFieldType} onValueChange={(v) => setLocalFieldType(v as CustomFormField['type'])}>
+                    <SelectTrigger className="mt-1" data-testid="select-new-field-type">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="text">Text (single line)</SelectItem>
+                      <SelectItem value="textarea">Text Area (multi-line)</SelectItem>
+                      <SelectItem value="email">Email</SelectItem>
+                      <SelectItem value="phone">Phone</SelectItem>
+                      <SelectItem value="number">Number</SelectItem>
+                      <SelectItem value="date">Date</SelectItem>
+                      <SelectItem value="checkbox">Checkbox (Yes/No)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-end gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => {
+                      if (localFieldName && localFieldKey) {
+                        const sanitizedKey = localFieldKey.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+                        addCustomField({
+                          name: localFieldName,
+                          fieldKey: sanitizedKey,
+                          type: localFieldType,
+                          required: false,
+                        });
+                        setLocalFieldName('');
+                        setLocalFieldKey('');
+                        setLocalFieldType('text');
+                        toast({
+                          title: "Field added",
+                          description: `You can now use {{${sanitizedKey}}} in your template`,
+                        });
+                      }
+                    }}
+                    data-testid="button-add-custom-field"
+                  >
+                    Add
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+
+        {/* Show existing custom fields */}
+        {customFields.length > 0 && (
+          <div className="space-y-2">
+            <Label className="text-xs text-muted-foreground">Defined Custom Fields:</Label>
+            <div className="flex flex-wrap gap-2">
+              {customFields.map((field) => (
+                <Badge 
+                  key={field.id} 
+                  variant="secondary"
+                  className="flex items-center gap-1 pr-1"
+                >
+                  <span>{field.name}</span>
+                  <span className="text-muted-foreground text-xs">{`{{${field.fieldKey}}}`}</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-4 w-4 ml-1 hover:bg-destructive/20"
+                    onClick={() => removeCustomField(field.id)}
+                    data-testid={`button-remove-field-${field.fieldKey}`}
+                  >
+                    <XCircle className="h-3 w-3" />
+                  </Button>
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <Collapsible open={localIsFieldsPanelOpen} onOpenChange={setLocalIsFieldsPanelOpen}>
+          <CollapsibleTrigger asChild>
+            <Button type="button" variant="outline" size="sm" className="w-full">
+              <ChevronDown className={`h-4 w-4 mr-2 transition-transform ${localIsFieldsPanelOpen ? 'rotate-180' : ''}`} />
+              Available Merge Fields ({Object.keys(currentMergeFields).length})
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="mt-2">
+            <div className="grid grid-cols-2 gap-2 p-3 bg-muted rounded-md">
+              {Object.entries(currentMergeFields).map(([field, description]) => (
+                <Button
+                  key={field}
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="justify-start font-mono text-xs h-auto py-2"
+                  onClick={() => insertPlaceholder(field)}
+                  data-testid={`button-insert-${field.replace(/[{}]/g, '')}`}
+                >
+                  <Copy className="h-3 w-3 mr-2 flex-shrink-0" />
+                  <span className="truncate">{field}</span>
+                </Button>
+              ))}
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+
+        <FormField
+          control={form.control}
+          name="htmlTemplate"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Form Content (HTML)</FormLabel>
+              <FormControl>
+                <Textarea
+                  placeholder="Paste your HTML form content here. Use merge fields like {{signer_name}} for dynamic content."
+                  className="min-h-[300px] font-mono text-sm"
+                  {...field}
+                  data-testid="textarea-html-template"
+                />
+              </FormControl>
+              <FormDescription>
+                Use HTML to design your form. Include merge fields that will be replaced with actual data.
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <DialogFooter>
+          <Button type="submit" disabled={isPending} data-testid="button-submit-form">
+            {isPending ? "Saving..." : "Save Form"}
+          </Button>
+        </DialogFooter>
+      </form>
+    </Form>
+  );
+}
+
 export default function CustomFormsPage() {
   const { user } = useAuth();
   const { tenant } = useTenant();
@@ -502,299 +818,6 @@ export default function CustomFormsPage() {
     }
   };
 
-  const FormEditor = ({ form, onSubmit, isPending }: { 
-    form: ReturnType<typeof useForm<FormData>>; 
-    onSubmit: (data: FormData) => void;
-    isPending: boolean;
-  }) => (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-        <FormField
-          control={form.control}
-          name="name"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Form Name</FormLabel>
-              <FormControl>
-                <Input 
-                  placeholder="e.g., Spay/Neuter Consent Form" 
-                  {...field} 
-                  data-testid="input-form-name"
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="description"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Description (optional)</FormLabel>
-              <FormControl>
-                <Input 
-                  placeholder="Brief description of this form" 
-                  {...field} 
-                  data-testid="input-form-description"
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="formType"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Form Type</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
-                <FormControl>
-                  <SelectTrigger data-testid="select-form-type">
-                    <SelectValue placeholder="Select form type" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  <SelectItem value="standalone">
-                    <div className="flex items-center gap-2">
-                      <Users className="h-4 w-4" />
-                      <span>Standalone (not linked to animal)</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="animal_specific">
-                    <div className="flex items-center gap-2">
-                      <PawPrint className="h-4 w-4" />
-                      <span>Animal-Specific (linked to an animal)</span>
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-              <FormDescription>
-                {field.value === 'animal_specific' 
-                  ? "This form will be linked to a specific animal and can use animal merge fields."
-                  : "This form is standalone and not linked to any animal."}
-              </FormDescription>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <div className="flex items-center gap-6">
-          <FormField
-            control={form.control}
-            name="requiresSignature"
-            render={({ field }) => (
-              <FormItem className="flex items-center gap-2">
-                <FormControl>
-                  <Switch
-                    checked={field.value}
-                    onCheckedChange={field.onChange}
-                    data-testid="switch-requires-signature"
-                  />
-                </FormControl>
-                <FormLabel className="!mt-0">Requires Signature</FormLabel>
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="isActive"
-            render={({ field }) => (
-              <FormItem className="flex items-center gap-2">
-                <FormControl>
-                  <Switch
-                    checked={field.value}
-                    onCheckedChange={field.onChange}
-                    data-testid="switch-is-active"
-                  />
-                </FormControl>
-                <FormLabel className="!mt-0">Active</FormLabel>
-              </FormItem>
-            )}
-          />
-        </div>
-
-        {/* Custom Input Fields Section */}
-        <Collapsible open={isAddFieldOpen} onOpenChange={setIsAddFieldOpen}>
-          <div className="flex items-center justify-between">
-            <Label className="text-sm font-medium">Custom Input Fields</Label>
-            <CollapsibleTrigger asChild>
-              <Button type="button" variant="outline" size="sm">
-                <Plus className="h-4 w-4 mr-1" />
-                Add Field
-              </Button>
-            </CollapsibleTrigger>
-          </div>
-          <CollapsibleContent className="mt-2">
-            <div className="rounded-md border p-3 bg-muted/50 space-y-3">
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <Label className="text-xs">Field Label</Label>
-                  <Input 
-                    value={newFieldName}
-                    onChange={(e) => setNewFieldName(e.target.value)}
-                    placeholder="e.g., Emergency Contact"
-                    className="mt-1"
-                    data-testid="input-new-field-name"
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs">Field Key (for merge)</Label>
-                  <Input 
-                    value={newFieldKey}
-                    onChange={(e) => setNewFieldKey(e.target.value)}
-                    placeholder="e.g., emergency_contact"
-                    className="mt-1"
-                    data-testid="input-new-field-key"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <Label className="text-xs">Field Type</Label>
-                  <Select value={newFieldType} onValueChange={(v) => setNewFieldType(v as CustomFormField['type'])}>
-                    <SelectTrigger className="mt-1" data-testid="select-new-field-type">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="text">Text (single line)</SelectItem>
-                      <SelectItem value="textarea">Text Area (multi-line)</SelectItem>
-                      <SelectItem value="email">Email</SelectItem>
-                      <SelectItem value="phone">Phone</SelectItem>
-                      <SelectItem value="number">Number</SelectItem>
-                      <SelectItem value="date">Date</SelectItem>
-                      <SelectItem value="checkbox">Checkbox (Yes/No)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex items-end gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={() => {
-                      if (newFieldName && newFieldKey) {
-                        const sanitizedKey = newFieldKey.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
-                        addCustomField({
-                          name: newFieldName,
-                          fieldKey: sanitizedKey,
-                          type: newFieldType,
-                          required: false,
-                        });
-                        setNewFieldName('');
-                        setNewFieldKey('');
-                        setNewFieldType('text');
-                        toast({
-                          title: "Field added",
-                          description: `You can now use {{${sanitizedKey}}} in your template`,
-                        });
-                      }
-                    }}
-                    data-testid="button-add-custom-field"
-                  >
-                    Add
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </CollapsibleContent>
-        </Collapsible>
-
-        {/* Show existing custom fields */}
-        {customFields.length > 0 && (
-          <div className="space-y-2">
-            <Label className="text-xs text-muted-foreground">Defined Custom Fields:</Label>
-            <div className="flex flex-wrap gap-2">
-              {customFields.map((field) => (
-                <Badge 
-                  key={field.id} 
-                  variant="secondary"
-                  className="flex items-center gap-1 pr-1"
-                >
-                  <span>{field.name}</span>
-                  <span className="text-muted-foreground text-xs">{`{{${field.fieldKey}}}`}</span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-4 w-4 ml-1 hover:bg-destructive/20"
-                    onClick={() => removeCustomField(field.id)}
-                    data-testid={`button-remove-field-${field.fieldKey}`}
-                  >
-                    <XCircle className="h-3 w-3" />
-                  </Button>
-                </Badge>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <Collapsible open={isFieldsPanelOpen} onOpenChange={setIsFieldsPanelOpen}>
-          <CollapsibleTrigger asChild>
-            <Button type="button" variant="outline" size="sm" className="w-full">
-              <ChevronDown className={`h-4 w-4 mr-2 transition-transform ${isFieldsPanelOpen ? 'rotate-180' : ''}`} />
-              Available Merge Fields ({Object.keys(currentMergeFields).length})
-            </Button>
-          </CollapsibleTrigger>
-          <CollapsibleContent className="mt-2">
-            <div className="rounded-md border p-3 bg-muted/50">
-              <p className="text-sm text-muted-foreground mb-2">
-                Click on a field to insert it at your cursor position:
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {Object.entries(currentMergeFields).map(([field, description]) => (
-                  <Button
-                    key={field}
-                    type="button"
-                    variant={customFieldsMergeFields[field] ? "default" : "secondary"}
-                    size="sm"
-                    onClick={() => insertPlaceholder(field)}
-                    title={description}
-                    data-testid={`button-insert-${field.replace(/[{}]/g, '')}`}
-                  >
-                    <Copy className="h-3 w-3 mr-1" />
-                    {field}
-                  </Button>
-                ))}
-              </div>
-            </div>
-          </CollapsibleContent>
-        </Collapsible>
-
-        <FormField
-          control={form.control}
-          name="htmlTemplate"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Form Content (HTML)</FormLabel>
-              <FormControl>
-                <Textarea
-                  placeholder="Paste your HTML form content here. Use merge fields like {{signer_name}} for dynamic content."
-                  className="min-h-[300px] font-mono text-sm"
-                  {...field}
-                  data-testid="textarea-html-template"
-                />
-              </FormControl>
-              <FormDescription>
-                Use HTML to design your form. Include merge fields that will be replaced with actual data.
-              </FormDescription>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <DialogFooter>
-          <Button type="submit" disabled={isPending} data-testid="button-submit-form">
-            {isPending ? "Saving..." : "Save Form"}
-          </Button>
-        </DialogFooter>
-      </form>
-    </Form>
-  );
-
   return (
     <DashboardLayout>
       <div className="p-4 md:p-6 space-y-6">
@@ -938,6 +961,12 @@ export default function CustomFormsPage() {
               form={createForm} 
               onSubmit={onSubmitCreate} 
               isPending={createMutation.isPending}
+              customFields={customFields}
+              addCustomField={addCustomField}
+              removeCustomField={removeCustomField}
+              currentMergeFields={currentMergeFields}
+              insertPlaceholder={insertPlaceholder}
+              toast={toast}
             />
           </DialogContent>
         </Dialog>
@@ -954,6 +983,12 @@ export default function CustomFormsPage() {
               form={editForm} 
               onSubmit={onSubmitEdit} 
               isPending={updateMutation.isPending}
+              customFields={customFields}
+              addCustomField={addCustomField}
+              removeCustomField={removeCustomField}
+              currentMergeFields={currentMergeFields}
+              insertPlaceholder={insertPlaceholder}
+              toast={toast}
             />
           </DialogContent>
         </Dialog>
