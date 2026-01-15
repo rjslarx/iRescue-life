@@ -5233,7 +5233,7 @@ Crawl-delay: 1
   app.post('/api/applications', requireTenant, async (req, res, next) => {
     try {
       const { createApplication } = await import('./services/applications');
-      const { insertApplicationSchema } = await import('@shared/schema');
+      const { insertApplicationSchema, animals, inboundEmails } = await import('@shared/schema');
       
       const { gclid, ...applicationData } = req.body;
       const data = insertApplicationSchema.omit({ tenantId: true }).parse({
@@ -5243,6 +5243,73 @@ Crawl-delay: 1
       });
       
       const application = await createApplication(req.tenant!.id, data);
+      
+      // Get animal name for notifications
+      let animalName = 'Unknown Animal';
+      try {
+        const [animal] = await db
+          .select({ name: animals.name })
+          .from(animals)
+          .where(eq(animals.id, data.animalId))
+          .limit(1);
+        if (animal) {
+          animalName = animal.name;
+        }
+      } catch (err) {
+        console.error('Failed to fetch animal name for notification:', err);
+      }
+      
+      // Create inbox notification (like foster/volunteer/surrender)
+      try {
+        const emailSubject = `New Adoption Application from ${data.applicantName}`;
+        const emailBody = `
+Adoption Application Received
+
+Animal: ${animalName}
+
+Applicant Information:
+Name: ${data.applicantName}
+Email: ${data.applicantEmail}
+Phone: ${data.applicantPhone || 'Not provided'}
+Address: ${data.address || 'Not provided'}
+
+Additional Information:
+${data.notes || 'None provided'}
+
+Application ID: ${application.id}
+Submitted: ${new Date().toLocaleString()}
+        `.trim();
+
+        await db.insert(inboundEmails).values({
+          tenantId: req.tenant!.id,
+          messageId: `adoption-app-${application.id}`,
+          from: data.applicantEmail,
+          fromName: data.applicantName,
+          to: `${req.tenant!.subdomain}@mail.irescue.life`,
+          subject: emailSubject,
+          textBody: emailBody,
+          htmlBody: emailBody.replace(/\n/g, '<br>'),
+          status: 'unprocessed',
+        });
+      } catch (error) {
+        console.error('Failed to create inbound email record:', error);
+      }
+      
+      // Send email notification to staff if enabled
+      try {
+        const { sendFormSubmissionNotification } = await import('./services/form-notifications');
+        await sendFormSubmissionNotification({
+          formType: 'adoption',
+          tenantId: req.tenant!.id,
+          applicantName: data.applicantName,
+          applicantEmail: data.applicantEmail,
+          applicantPhone: data.applicantPhone,
+          applicationId: application.id,
+          animalName,
+        });
+      } catch (error) {
+        console.error('Failed to send form notification email:', error);
+      }
       
       if (gclid && application) {
         try {
@@ -9516,6 +9583,22 @@ Submitted: ${new Date().toLocaleString()}
         console.error('Failed to create inbound email record:', error);
       }
 
+      // Send email notification to staff if enabled
+      try {
+        const { sendFormSubmissionNotification } = await import('./services/form-notifications');
+        await sendFormSubmissionNotification({
+          formType: 'foster',
+          tenantId: req.tenant!.id,
+          applicantName: data.applicantName,
+          applicantEmail: data.applicantEmail,
+          applicantPhone: data.applicantPhone,
+          applicationId: application.id,
+          additionalDetails: `Home Type: ${data.homeType}, Has Yard: ${data.hasYard ? 'Yes' : 'No'}`,
+        });
+      } catch (error) {
+        console.error('Failed to send form notification email:', error);
+      }
+
       res.json({ 
         success: true, 
         application,
@@ -9770,6 +9853,22 @@ Submitted: ${new Date().toLocaleString()}
         console.error('Failed to create inbound email record:', error);
       }
 
+      // Send email notification to staff if enabled
+      try {
+        const { sendFormSubmissionNotification } = await import('./services/form-notifications');
+        await sendFormSubmissionNotification({
+          formType: 'volunteer',
+          tenantId: req.tenant!.id,
+          applicantName: data.applicantName,
+          applicantEmail: data.applicantEmail,
+          applicantPhone: data.applicantPhone,
+          applicationId: application.id,
+          additionalDetails: data.interests || undefined,
+        });
+      } catch (error) {
+        console.error('Failed to send form notification email:', error);
+      }
+
       res.json({ 
         success: true, 
         application,
@@ -9925,6 +10024,22 @@ Submitted: ${new Date().toLocaleString()}
         });
       } catch (error) {
         console.error('Failed to create inbound email record:', error);
+      }
+
+      // Send email notification to staff if enabled
+      try {
+        const { sendFormSubmissionNotification } = await import('./services/form-notifications');
+        await sendFormSubmissionNotification({
+          formType: 'surrender',
+          tenantId: req.tenant!.id,
+          applicantName: data.submitterName,
+          applicantEmail: data.submitterEmail,
+          applicantPhone: data.submitterPhone,
+          applicationId: surrender.id,
+          additionalDetails: `${data.animalType}${data.breed ? ` - ${data.breed}` : ''}${data.isEmergency ? ' [EMERGENCY]' : ''}`,
+        });
+      } catch (error) {
+        console.error('Failed to send form notification email:', error);
       }
 
       res.json({ success: true, surrender });
