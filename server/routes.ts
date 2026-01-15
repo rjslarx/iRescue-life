@@ -6629,10 +6629,10 @@ Crawl-delay: 1
         status: 'pending',
       });
 
-      // Build the form URL
+      // Build the form URL - use path-based routing for production
       const subdomain = req.tenant!.subdomain;
       const baseUrl = process.env.NODE_ENV === 'production' 
-        ? `https://${subdomain}.irescue.life`
+        ? `https://irescue.life/${subdomain}`
         : `${req.protocol}://${req.get('host')}/${subdomain}`;
       
       const formUrl = `${baseUrl}/forms/sign/${token}`;
