@@ -6635,7 +6635,7 @@ Crawl-delay: 1
         ? `https://irescue.life/${subdomain}`
         : `${req.protocol}://${req.get('host')}/${subdomain}`;
       
-      const formUrl = `${baseUrl}/forms/sign/${token}`;
+      const formUrl = `${baseUrl}/form/${token}`;
 
       // Try to send email to signer
       let emailSent = false;
