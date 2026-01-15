@@ -337,11 +337,20 @@ export function validateTemplateHtml(html: string): { valid: boolean; errors: st
     errors.push('Template should include basic HTML structure (<html> and <body> tags)');
   }
 
-  // Check for balanced tags (basic validation)
-  const openTags = html.match(/<([a-z]+)(?:\s|>)/gi) || [];
+  // HTML5 void elements that don't require closing tags
+  const voidElements = ['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr'];
+  
+  // Count open tags (excluding void elements)
+  const openTagMatches = html.match(/<([a-z]+)(?:\s[^>]*)?>/gi) || [];
+  const openTags = openTagMatches.filter(tag => {
+    const tagName = tag.match(/<([a-z]+)/i)?.[1]?.toLowerCase();
+    return tagName && !voidElements.includes(tagName);
+  });
+  
   const closeTags = html.match(/<\/([a-z]+)>/gi) || [];
   
-  if (openTags.length > closeTags.length + 5) { // Allow some self-closing tags
+  // More lenient check - only flag if significantly unbalanced
+  if (openTags.length > closeTags.length + 10) {
     errors.push('Template may have unclosed HTML tags');
   }
 
