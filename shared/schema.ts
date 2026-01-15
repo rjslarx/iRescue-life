@@ -42,6 +42,9 @@ export const tenants = pgTable("tenants", {
   resendFromName: text("resend_from_name"), // From name (e.g., Happy Paws Rescue)
   resendEnabled: boolean("resend_enabled").notNull().default(false), // Whether Resend is configured
   emailCopyRecipients: text("email_copy_recipients").array(), // Email addresses to CC on inbound emails (e.g., ["director@gmail.com"])
+  // Form submission notification settings
+  formNotificationsEnabled: boolean("form_notifications_enabled").notNull().default(false), // Whether to send email notifications for form submissions
+  formNotificationEmail: text("form_notification_email"), // Email to receive form submission notifications (defaults to contactEmail if null)
   constantContactApiKeyEncrypted: text("constant_contact_api_key_encrypted"), // Constant Contact API key
   constantContactEnabled: boolean("constant_contact_enabled").notNull().default(false), // Whether Constant Contact is configured
   // Email usage tracking (for platform-wide API key quota management)
