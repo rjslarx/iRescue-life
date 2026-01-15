@@ -407,6 +407,83 @@ export async function updateSubmission(
   return submission || null;
 }
 
+// Helper to escape HTML for XSS prevention
+function escapeHtml(text: string): string {
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// Generate HTML for question_builder mode forms
+function generateQuestionBuilderHtml(
+  form: CustomForm,
+  submission: CustomFormSubmission,
+  tenantName: string,
+  animal?: any
+): string {
+  const questions = (form.questions || []).sort((a, b) => a.order - b.order);
+  const formData = (submission.formData || {}) as Record<string, any>;
+  const dateStr = new Date().toLocaleDateString('en-US', { 
+    year: 'numeric', 
+    month: 'long', 
+    day: 'numeric' 
+  });
+  
+  let html = `<div class="question-builder-form">`;
+  
+  // Add intro text if present
+  if (form.introText) {
+    html += `<div class="intro-text" style="margin-bottom: 20px; padding: 15px; background: #f5f5f5; border-radius: 5px;">${escapeHtml(form.introText)}</div>`;
+  }
+  
+  // Signer information section
+  html += `<div class="signer-info" style="margin-bottom: 20px;">
+    <h3 style="margin-bottom: 10px;">Submitted By</h3>
+    <p><strong>Name:</strong> ${escapeHtml(submission.signerName || '')}</p>
+    <p><strong>Email:</strong> ${escapeHtml(submission.signerEmail || '')}</p>
+    ${submission.signerPhone ? `<p><strong>Phone:</strong> ${escapeHtml(submission.signerPhone)}</p>` : ''}
+    <p><strong>Date:</strong> ${dateStr}</p>
+  </div>`;
+  
+  // Animal info for animal-specific forms
+  if (form.formType === 'animal_specific' && animal) {
+    html += `<div class="animal-info" style="margin-bottom: 20px; padding: 15px; background: #f0f8ff; border-radius: 5px;">
+      <h3 style="margin-bottom: 10px;">Animal Information</h3>
+      <p><strong>Name:</strong> ${escapeHtml(animal.name || '')}</p>
+      <p><strong>Species:</strong> ${escapeHtml(animal.species || '')}</p>
+      ${animal.breed ? `<p><strong>Breed:</strong> ${escapeHtml(animal.breed)}</p>` : ''}
+      ${animal.age ? `<p><strong>Age:</strong> ${escapeHtml(animal.age)}</p>` : ''}
+    </div>`;
+  }
+  
+  // Questions and answers
+  html += `<div class="questions" style="margin-bottom: 20px;">`;
+  for (const question of questions) {
+    const answer = formData[question.id];
+    let displayAnswer = '';
+    
+    if (question.type === 'checkbox') {
+      displayAnswer = answer ? 'Yes' : 'No';
+    } else if (answer !== undefined && answer !== null && answer !== '') {
+      displayAnswer = escapeHtml(String(answer));
+    } else {
+      displayAnswer = '<em style="color: #999;">Not provided</em>';
+    }
+    
+    html += `<div class="question-item" style="margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #eee;">
+      <p style="font-weight: bold; margin-bottom: 5px;">${escapeHtml(question.question)}${question.required ? ' <span style="color: red;">*</span>' : ''}</p>
+      <p style="margin-left: 10px;">${displayAnswer}</p>
+    </div>`;
+  }
+  html += `</div>`;
+  
+  html += `</div>`;
+  return html;
+}
+
 // Replace merge fields in template with actual values
 export async function renderFormHtml(
   form: CustomForm,
@@ -414,7 +491,13 @@ export async function renderFormHtml(
   tenantName: string,
   animal?: any
 ): Promise<string> {
-  let html = form.htmlTemplate;
+  // Handle question_builder mode
+  if (form.creationMode === 'question_builder') {
+    return generateQuestionBuilderHtml(form, submission, tenantName, animal);
+  }
+  
+  // Template mode - use HTML template with merge fields
+  let html = form.htmlTemplate || '';
   
   // Common replacements
   const replacements: Record<string, string> = {

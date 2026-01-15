@@ -50,8 +50,9 @@ import {
 import { 
   FileText, Plus, Edit, Trash2, Eye, Copy, ChevronDown, 
   Send, FileSignature, PawPrint, Users, Link as LinkIcon,
-  Clock, CheckCircle, XCircle, Mail
+  Clock, CheckCircle, XCircle, Mail, GripVertical, ArrowUp, ArrowDown
 } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format } from "date-fns";
 
 interface CustomFormField {
@@ -64,14 +65,26 @@ interface CustomFormField {
   defaultValue?: string;
 }
 
+interface FormQuestion {
+  id: string;
+  question: string;
+  type: "text" | "textarea" | "checkbox" | "number" | "date" | "email" | "phone";
+  required: boolean;
+  placeholder?: string;
+  order: number;
+}
+
 interface CustomForm {
   id: string;
   tenantId: string;
   name: string;
   description?: string;
   formType: 'animal_specific' | 'standalone';
-  htmlTemplate: string;
+  creationMode: 'template' | 'question_builder';
+  htmlTemplate?: string;
   customFields?: CustomFormField[];
+  questions?: FormQuestion[];
+  introText?: string;
   requiresSignature: boolean;
   isActive: boolean;
   isPublic: boolean;
@@ -113,7 +126,9 @@ const formSchema = z.object({
   name: z.string().min(1, "Form name is required"),
   description: z.string().optional(),
   formType: z.enum(['animal_specific', 'standalone']),
-  htmlTemplate: z.string().min(1, "Form content is required"),
+  creationMode: z.enum(['template', 'question_builder']).default('question_builder'),
+  htmlTemplate: z.string().optional(),
+  introText: z.string().optional(),
   requiresSignature: z.boolean().default(true),
   isActive: z.boolean().default(true),
   isPublic: z.boolean().default(false),
@@ -141,6 +156,11 @@ interface FormEditorProps {
   currentMergeFields: MergeFields;
   insertPlaceholder: (field: string) => void;
   toast: ReturnType<typeof import("@/hooks/use-toast").useToast>['toast'];
+  questions: FormQuestion[];
+  addQuestion: (question: Omit<FormQuestion, 'id' | 'order'>) => void;
+  removeQuestion: (id: string) => void;
+  moveQuestion: (id: string, direction: 'up' | 'down') => void;
+  updateQuestion: (id: string, updates: Partial<FormQuestion>) => void;
 }
 
 function FormEditor({ 
@@ -153,13 +173,22 @@ function FormEditor({
   currentMergeFields,
   insertPlaceholder,
   toast,
+  questions,
+  addQuestion,
+  removeQuestion,
+  moveQuestion,
+  updateQuestion,
 }: FormEditorProps) {
-  // Local state for new field inputs to prevent parent rerenders
   const [localFieldName, setLocalFieldName] = useState("");
   const [localFieldKey, setLocalFieldKey] = useState("");
   const [localFieldType, setLocalFieldType] = useState<CustomFormField['type']>("text");
   const [localIsAddFieldOpen, setLocalIsAddFieldOpen] = useState(false);
   const [localIsFieldsPanelOpen, setLocalIsFieldsPanelOpen] = useState(false);
+  const [newQuestionText, setNewQuestionText] = useState("");
+  const [newQuestionType, setNewQuestionType] = useState<FormQuestion['type']>("text");
+  const [newQuestionRequired, setNewQuestionRequired] = useState(false);
+  
+  const creationMode = form.watch('creationMode');
   
   return (
     <Form {...form}>
@@ -273,168 +302,356 @@ function FormEditor({
           />
         </div>
 
-        {/* Custom Input Fields Section */}
-        <Collapsible open={localIsAddFieldOpen} onOpenChange={setLocalIsAddFieldOpen}>
-          <div className="flex items-center justify-between">
-            <Label className="text-sm font-medium">Custom Input Fields</Label>
-            <CollapsibleTrigger asChild>
-              <Button type="button" variant="outline" size="sm">
-                <Plus className="h-4 w-4 mr-1" />
-                Add Field
-              </Button>
-            </CollapsibleTrigger>
-          </div>
-          <CollapsibleContent className="mt-2">
-            <div className="rounded-md border p-3 bg-muted/50 space-y-3">
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <Label className="text-xs">Field Label</Label>
-                  <Input 
-                    value={localFieldName}
-                    onChange={(e) => setLocalFieldName(e.target.value)}
-                    placeholder="e.g., Emergency Contact"
-                    className="mt-1"
-                    data-testid="input-new-field-name"
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs">Field Key (for merge)</Label>
-                  <Input 
-                    value={localFieldKey}
-                    onChange={(e) => setLocalFieldKey(e.target.value)}
-                    placeholder="e.g., emergency_contact"
-                    className="mt-1"
-                    data-testid="input-new-field-key"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <Label className="text-xs">Field Type</Label>
-                  <Select value={localFieldType} onValueChange={(v) => setLocalFieldType(v as CustomFormField['type'])}>
-                    <SelectTrigger className="mt-1" data-testid="select-new-field-type">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="text">Text (single line)</SelectItem>
-                      <SelectItem value="textarea">Text Area (multi-line)</SelectItem>
-                      <SelectItem value="email">Email</SelectItem>
-                      <SelectItem value="phone">Phone</SelectItem>
-                      <SelectItem value="number">Number</SelectItem>
-                      <SelectItem value="date">Date</SelectItem>
-                      <SelectItem value="checkbox">Checkbox (Yes/No)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex items-end gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={() => {
-                      if (localFieldName && localFieldKey) {
-                        const sanitizedKey = localFieldKey.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
-                        addCustomField({
-                          name: localFieldName,
-                          fieldKey: sanitizedKey,
-                          type: localFieldType,
-                          required: false,
-                        });
-                        setLocalFieldName('');
-                        setLocalFieldKey('');
-                        setLocalFieldType('text');
-                        toast({
-                          title: "Field added",
-                          description: `You can now use {{${sanitizedKey}}} in your template`,
-                        });
-                      }
-                    }}
-                    data-testid="button-add-custom-field"
-                  >
-                    Add
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </CollapsibleContent>
-        </Collapsible>
+        {/* Creation Mode Selector */}
+        <FormField
+          control={form.control}
+          name="creationMode"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Creation Mode</FormLabel>
+              <Tabs value={field.value} onValueChange={field.onChange} className="w-full">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="question_builder" data-testid="tab-question-builder">
+                    Question Builder
+                  </TabsTrigger>
+                  <TabsTrigger value="template" data-testid="tab-template">
+                    HTML Template
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+              <FormDescription>
+                {field.value === 'question_builder' 
+                  ? "Build your form by adding questions - simpler and faster."
+                  : "Design your form with HTML and merge fields - more control."}
+              </FormDescription>
+            </FormItem>
+          )}
+        />
 
-        {/* Show existing custom fields */}
-        {customFields.length > 0 && (
-          <div className="space-y-2">
-            <Label className="text-xs text-muted-foreground">Defined Custom Fields:</Label>
-            <div className="flex flex-wrap gap-2">
-              {customFields.map((field) => (
-                <Badge 
-                  key={field.id} 
-                  variant="secondary"
-                  className="flex items-center gap-1 pr-1"
+        {/* Question Builder Mode */}
+        {creationMode === 'question_builder' && (
+          <div className="space-y-4">
+            <FormField
+              control={form.control}
+              name="introText"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Introduction Text (optional)</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      placeholder="Add any intro text or instructions that will appear before the questions..."
+                      className="min-h-[80px]"
+                      {...field}
+                      data-testid="textarea-intro-text"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Questions List */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Questions</Label>
+              {questions.length === 0 ? (
+                <div className="p-4 border rounded-md text-center text-muted-foreground">
+                  No questions added yet. Add your first question below.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {questions.sort((a, b) => a.order - b.order).map((q, idx) => (
+                    <div key={q.id} className="flex items-center gap-2 p-3 border rounded-md bg-card">
+                      <div className="flex flex-col gap-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={() => moveQuestion(q.id, 'up')}
+                          disabled={idx === 0}
+                          data-testid={`button-move-up-${q.id}`}
+                        >
+                          <ArrowUp className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={() => moveQuestion(q.id, 'down')}
+                          disabled={idx === questions.length - 1}
+                          data-testid={`button-move-down-${q.id}`}
+                        >
+                          <ArrowDown className="h-3 w-3" />
+                        </Button>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <Input
+                          value={q.question}
+                          onChange={(e) => updateQuestion(q.id, { question: e.target.value })}
+                          className="font-medium"
+                          data-testid={`input-question-${q.id}`}
+                        />
+                        <div className="flex items-center gap-2 mt-1">
+                          <Badge variant="outline" className="text-xs">
+                            {q.type}
+                          </Badge>
+                          <label className="flex items-center gap-1 text-xs">
+                            <input
+                              type="checkbox"
+                              checked={q.required}
+                              onChange={(e) => updateQuestion(q.id, { required: e.target.checked })}
+                              className="h-3 w-3"
+                              data-testid={`checkbox-required-${q.id}`}
+                            />
+                            Required
+                          </label>
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 hover:bg-destructive/20"
+                        onClick={() => removeQuestion(q.id)}
+                        data-testid={`button-remove-question-${q.id}`}
+                      >
+                        <XCircle className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Add New Question */}
+            <div className="p-3 border rounded-md bg-muted/50 space-y-3">
+              <Label className="text-sm font-medium">Add Question</Label>
+              <div className="flex gap-2">
+                <Input
+                  value={newQuestionText}
+                  onChange={(e) => setNewQuestionText(e.target.value)}
+                  placeholder="Enter your question..."
+                  className="flex-1"
+                  data-testid="input-new-question"
+                />
+              </div>
+              <div className="flex items-center gap-4">
+                <Select value={newQuestionType} onValueChange={(v) => setNewQuestionType(v as FormQuestion['type'])}>
+                  <SelectTrigger className="w-[160px]" data-testid="select-question-type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="text">Short Text</SelectItem>
+                    <SelectItem value="textarea">Long Text</SelectItem>
+                    <SelectItem value="email">Email</SelectItem>
+                    <SelectItem value="phone">Phone</SelectItem>
+                    <SelectItem value="number">Number</SelectItem>
+                    <SelectItem value="date">Date</SelectItem>
+                    <SelectItem value="checkbox">Yes/No</SelectItem>
+                  </SelectContent>
+                </Select>
+                <label className="flex items-center gap-1 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={newQuestionRequired}
+                    onChange={(e) => setNewQuestionRequired(e.target.checked)}
+                    className="h-4 w-4"
+                    data-testid="checkbox-new-question-required"
+                  />
+                  Required
+                </label>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => {
+                    if (newQuestionText.trim()) {
+                      addQuestion({
+                        question: newQuestionText.trim(),
+                        type: newQuestionType,
+                        required: newQuestionRequired,
+                      });
+                      setNewQuestionText("");
+                      setNewQuestionRequired(false);
+                    }
+                  }}
+                  data-testid="button-add-question"
                 >
-                  <span>{field.name}</span>
-                  <span className="text-muted-foreground text-xs">{`{{${field.fieldKey}}}`}</span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-4 w-4 ml-1 hover:bg-destructive/20"
-                    onClick={() => removeCustomField(field.id)}
-                    data-testid={`button-remove-field-${field.fieldKey}`}
-                  >
-                    <XCircle className="h-3 w-3" />
-                  </Button>
-                </Badge>
-              ))}
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add
+                </Button>
+              </div>
             </div>
           </div>
         )}
 
-        <Collapsible open={localIsFieldsPanelOpen} onOpenChange={setLocalIsFieldsPanelOpen}>
-          <CollapsibleTrigger asChild>
-            <Button type="button" variant="outline" size="sm" className="w-full">
-              <ChevronDown className={`h-4 w-4 mr-2 transition-transform ${localIsFieldsPanelOpen ? 'rotate-180' : ''}`} />
-              Available Merge Fields ({Object.keys(currentMergeFields).length})
-            </Button>
-          </CollapsibleTrigger>
-          <CollapsibleContent className="mt-2">
-            <div className="grid grid-cols-2 gap-2 p-3 bg-muted rounded-md">
-              {Object.entries(currentMergeFields).map(([field, description]) => (
-                <Button
-                  key={field}
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="justify-start font-mono text-xs h-auto py-2"
-                  onClick={() => insertPlaceholder(field)}
-                  data-testid={`button-insert-${field.replace(/[{}]/g, '')}`}
-                >
-                  <Copy className="h-3 w-3 mr-2 flex-shrink-0" />
-                  <span className="truncate">{field}</span>
-                </Button>
-              ))}
-            </div>
-          </CollapsibleContent>
-        </Collapsible>
+        {/* Template Mode */}
+        {creationMode === 'template' && (
+          <>
+            {/* Custom Input Fields Section */}
+            <Collapsible open={localIsAddFieldOpen} onOpenChange={setLocalIsAddFieldOpen}>
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium">Custom Input Fields</Label>
+                <CollapsibleTrigger asChild>
+                  <Button type="button" variant="outline" size="sm">
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add Field
+                  </Button>
+                </CollapsibleTrigger>
+              </div>
+              <CollapsibleContent className="mt-2">
+                <div className="rounded-md border p-3 bg-muted/50 space-y-3">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <Label className="text-xs">Field Label</Label>
+                      <Input 
+                        value={localFieldName}
+                        onChange={(e) => setLocalFieldName(e.target.value)}
+                        placeholder="e.g., Emergency Contact"
+                        className="mt-1"
+                        data-testid="input-new-field-name"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Field Key (for merge)</Label>
+                      <Input 
+                        value={localFieldKey}
+                        onChange={(e) => setLocalFieldKey(e.target.value)}
+                        placeholder="e.g., emergency_contact"
+                        className="mt-1"
+                        data-testid="input-new-field-key"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <Label className="text-xs">Field Type</Label>
+                      <Select value={localFieldType} onValueChange={(v) => setLocalFieldType(v as CustomFormField['type'])}>
+                        <SelectTrigger className="mt-1" data-testid="select-new-field-type">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="text">Text (single line)</SelectItem>
+                          <SelectItem value="textarea">Text Area (multi-line)</SelectItem>
+                          <SelectItem value="email">Email</SelectItem>
+                          <SelectItem value="phone">Phone</SelectItem>
+                          <SelectItem value="number">Number</SelectItem>
+                          <SelectItem value="date">Date</SelectItem>
+                          <SelectItem value="checkbox">Checkbox (Yes/No)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex items-end gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => {
+                          if (localFieldName && localFieldKey) {
+                            const sanitizedKey = localFieldKey.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+                            addCustomField({
+                              name: localFieldName,
+                              fieldKey: sanitizedKey,
+                              type: localFieldType,
+                              required: false,
+                            });
+                            setLocalFieldName('');
+                            setLocalFieldKey('');
+                            setLocalFieldType('text');
+                            toast({
+                              title: "Field added",
+                              description: `You can now use {{${sanitizedKey}}} in your template`,
+                            });
+                          }
+                        }}
+                        data-testid="button-add-custom-field"
+                      >
+                        Add
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
 
-        <FormField
-          control={form.control}
-          name="htmlTemplate"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Form Content (HTML)</FormLabel>
-              <FormControl>
-                <Textarea
-                  placeholder="Paste your HTML form content here. Use merge fields like {{signer_name}} for dynamic content."
-                  className="min-h-[300px] font-mono text-sm"
-                  {...field}
-                  data-testid="textarea-html-template"
-                />
-              </FormControl>
-              <FormDescription>
-                Use HTML to design your form. Include merge fields that will be replaced with actual data.
-              </FormDescription>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+            {/* Show existing custom fields */}
+            {customFields.length > 0 && (
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Defined Custom Fields:</Label>
+                <div className="flex flex-wrap gap-2">
+                  {customFields.map((field) => (
+                    <Badge 
+                      key={field.id} 
+                      variant="secondary"
+                      className="flex items-center gap-1 pr-1"
+                    >
+                      <span>{field.name}</span>
+                      <span className="text-muted-foreground text-xs">{`{{${field.fieldKey}}}`}</span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-4 w-4 ml-1 hover:bg-destructive/20"
+                        onClick={() => removeCustomField(field.id)}
+                        data-testid={`button-remove-field-${field.fieldKey}`}
+                      >
+                        <XCircle className="h-3 w-3" />
+                      </Button>
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <Collapsible open={localIsFieldsPanelOpen} onOpenChange={setLocalIsFieldsPanelOpen}>
+              <CollapsibleTrigger asChild>
+                <Button type="button" variant="outline" size="sm" className="w-full">
+                  <ChevronDown className={`h-4 w-4 mr-2 transition-transform ${localIsFieldsPanelOpen ? 'rotate-180' : ''}`} />
+                  Available Merge Fields ({Object.keys(currentMergeFields).length})
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="mt-2">
+                <div className="grid grid-cols-2 gap-2 p-3 bg-muted rounded-md">
+                  {Object.entries(currentMergeFields).map(([field, description]) => (
+                    <Button
+                      key={field}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="justify-start font-mono text-xs h-auto py-2"
+                      onClick={() => insertPlaceholder(field)}
+                      data-testid={`button-insert-${field.replace(/[{}]/g, '')}`}
+                    >
+                      <Copy className="h-3 w-3 mr-2 flex-shrink-0" />
+                      <span className="truncate">{field}</span>
+                    </Button>
+                  ))}
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+
+            <FormField
+              control={form.control}
+              name="htmlTemplate"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Form Content (HTML)</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      placeholder="Paste your HTML form content here. Use merge fields like {{signer_name}} for dynamic content."
+                      className="min-h-[300px] font-mono text-sm"
+                      {...field}
+                      data-testid="textarea-html-template"
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    Use HTML to design your form. Include merge fields that will be replaced with actual data.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </>
+        )}
 
         <DialogFooter>
           <Button type="submit" disabled={isPending} data-testid="button-submit-form">
@@ -465,6 +682,7 @@ export default function CustomFormsPage() {
   const [formLink, setFormLink] = useState<string>("");
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [customFields, setCustomFields] = useState<CustomFormField[]>([]);
+  const [questions, setQuestions] = useState<FormQuestion[]>([]);
   const [isAddFieldOpen, setIsAddFieldOpen] = useState(false);
   const [newFieldName, setNewFieldName] = useState("");
   const [newFieldKey, setNewFieldKey] = useState("");
@@ -476,7 +694,9 @@ export default function CustomFormsPage() {
       name: "",
       description: "",
       formType: "standalone",
+      creationMode: "question_builder",
       htmlTemplate: "",
+      introText: "",
       requiresSignature: true,
       isActive: true,
       isPublic: false,
@@ -489,7 +709,9 @@ export default function CustomFormsPage() {
       name: "",
       description: "",
       formType: "standalone",
+      creationMode: "question_builder",
       htmlTemplate: "",
+      introText: "",
       requiresSignature: true,
       isActive: true,
       isPublic: false,
@@ -672,6 +894,7 @@ export default function CustomFormsPage() {
   const handleEdit = (form: CustomForm) => {
     setSelectedForm(form);
     setCustomFields(form.customFields || []);
+    setQuestions(form.questions || []);
     setNewFieldName("");
     setNewFieldKey("");
     setNewFieldType("text");
@@ -680,7 +903,9 @@ export default function CustomFormsPage() {
       name: form.name,
       description: form.description || "",
       formType: form.formType,
-      htmlTemplate: form.htmlTemplate,
+      creationMode: form.creationMode || "template",
+      htmlTemplate: form.htmlTemplate || "",
+      introText: form.introText || "",
       requiresSignature: form.requiresSignature,
       isActive: form.isActive,
       isPublic: form.isPublic,
@@ -690,6 +915,7 @@ export default function CustomFormsPage() {
 
   const handleCreate = () => {
     setCustomFields([]);
+    setQuestions([]);
     setNewFieldName("");
     setNewFieldKey("");
     setNewFieldType("text");
@@ -769,6 +995,45 @@ export default function CustomFormsPage() {
     ));
   };
 
+  // Question handlers for question_builder mode
+  const addQuestion = (question: Omit<FormQuestion, 'id' | 'order'>) => {
+    const maxOrder = questions.length > 0 ? Math.max(...questions.map(q => q.order)) : -1;
+    const newQuestion: FormQuestion = {
+      ...question,
+      id: crypto.randomUUID(),
+      order: maxOrder + 1,
+    };
+    setQuestions([...questions, newQuestion]);
+  };
+
+  const removeQuestion = (questionId: string) => {
+    setQuestions(questions.filter(q => q.id !== questionId));
+  };
+
+  const moveQuestion = (questionId: string, direction: 'up' | 'down') => {
+    const sortedQuestions = [...questions].sort((a, b) => a.order - b.order);
+    const currentIndex = sortedQuestions.findIndex(q => q.id === questionId);
+    if (currentIndex === -1) return;
+    
+    const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    if (targetIndex < 0 || targetIndex >= sortedQuestions.length) return;
+    
+    const currentOrder = sortedQuestions[currentIndex].order;
+    const targetOrder = sortedQuestions[targetIndex].order;
+    
+    setQuestions(questions.map(q => {
+      if (q.id === questionId) return { ...q, order: targetOrder };
+      if (q.id === sortedQuestions[targetIndex].id) return { ...q, order: currentOrder };
+      return q;
+    }));
+  };
+
+  const updateQuestion = (questionId: string, updates: Partial<FormQuestion>) => {
+    setQuestions(questions.map(q => 
+      q.id === questionId ? { ...q, ...updates } : q
+    ));
+  };
+
   // Generate merge fields for custom fields
   const customFieldsMergeFields: MergeFields = customFields.reduce((acc, field) => {
     acc[`{{${field.fieldKey}}}`] = field.name;
@@ -776,12 +1041,22 @@ export default function CustomFormsPage() {
   }, {} as MergeFields);
 
   const onSubmitCreate = (data: FormData) => {
-    createMutation.mutate({ ...data, customFields } as any);
+    const payload = {
+      ...data,
+      customFields: data.creationMode === 'template' ? customFields : [],
+      questions: data.creationMode === 'question_builder' ? questions : [],
+    };
+    createMutation.mutate(payload as any);
   };
 
   const onSubmitEdit = (data: FormData) => {
     if (selectedForm) {
-      updateMutation.mutate({ id: selectedForm.id, data: { ...data, customFields } as any });
+      const payload = {
+        ...data,
+        customFields: data.creationMode === 'template' ? customFields : [],
+        questions: data.creationMode === 'question_builder' ? questions : [],
+      };
+      updateMutation.mutate({ id: selectedForm.id, data: payload as any });
     }
   };
 
@@ -883,8 +1158,11 @@ export default function CustomFormsPage() {
                           <><Users className="h-3 w-3 mr-1" /> Standalone</>
                         )}
                       </Badge>
+                      <Badge variant="outline" className="text-xs">
+                        {form.creationMode === 'question_builder' ? 'Q&A Mode' : 'Template Mode'}
+                      </Badge>
                       {!form.isActive && (
-                        <Badge variant="outline">Inactive</Badge>
+                        <Badge variant="outline" className="border-amber-500 text-amber-500">Inactive</Badge>
                       )}
                     </div>
                   </div>
@@ -967,6 +1245,11 @@ export default function CustomFormsPage() {
               currentMergeFields={currentMergeFields}
               insertPlaceholder={insertPlaceholder}
               toast={toast}
+              questions={questions}
+              addQuestion={addQuestion}
+              removeQuestion={removeQuestion}
+              moveQuestion={moveQuestion}
+              updateQuestion={updateQuestion}
             />
           </DialogContent>
         </Dialog>
@@ -989,6 +1272,11 @@ export default function CustomFormsPage() {
               currentMergeFields={currentMergeFields}
               insertPlaceholder={insertPlaceholder}
               toast={toast}
+              questions={questions}
+              addQuestion={addQuestion}
+              removeQuestion={removeQuestion}
+              moveQuestion={moveQuestion}
+              updateQuestion={updateQuestion}
             />
           </DialogContent>
         </Dialog>

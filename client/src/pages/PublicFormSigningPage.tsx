@@ -22,15 +22,27 @@ interface CustomFormField {
   defaultValue?: string;
 }
 
+interface FormQuestion {
+  id: string;
+  question: string;
+  type: "text" | "textarea" | "checkbox" | "number" | "date" | "email" | "phone";
+  required: boolean;
+  placeholder?: string;
+  order: number;
+}
+
 interface FormData {
   form: {
     id: number;
     name: string;
     description: string | null;
     formType: string;
+    creationMode: 'template' | 'question_builder';
     requiresSignature: boolean;
-    htmlTemplate: string;
+    htmlTemplate?: string;
     customFields?: CustomFormField[];
+    questions?: FormQuestion[];
+    introText?: string;
   };
   submission: {
     id: number;
@@ -184,12 +196,42 @@ export default function PublicFormSigningPage() {
   };
 
   const handleSubmit = () => {
-    // Validate required custom fields
-    const customFields = data?.form.customFields || [];
-    for (const field of customFields) {
-      if (field.required && !customFieldValues[field.fieldKey]) {
-        alert(`Please fill in the required field: ${field.name}`);
-        return;
+    // Validate required fields based on form creation mode
+    if (data?.form.creationMode === 'question_builder') {
+      // Validate required questions in question_builder mode
+      const questions = data?.form.questions || [];
+      for (const question of questions) {
+        if (question.required) {
+          const value = customFieldValues[question.id];
+          // For checkboxes, must be explicitly 'true' to pass validation
+          if (question.type === 'checkbox') {
+            if (value !== 'true') {
+              alert(`Please check the required checkbox: ${question.question}`);
+              return;
+            }
+          } else if (!value || value.trim() === '') {
+            alert(`Please answer the required question: ${question.question}`);
+            return;
+          }
+        }
+      }
+    } else {
+      // Validate required custom fields in template mode
+      const customFields = data?.form.customFields || [];
+      for (const field of customFields) {
+        if (field.required) {
+          const value = customFieldValues[field.fieldKey];
+          // For checkboxes, must be explicitly 'true' to pass validation
+          if (field.type === 'checkbox') {
+            if (value !== 'true') {
+              alert(`Please check the required checkbox: ${field.name}`);
+              return;
+            }
+          } else if (!value || value.trim() === '') {
+            alert(`Please fill in the required field: ${field.name}`);
+            return;
+          }
+        }
       }
     }
 
@@ -256,7 +298,9 @@ export default function PublicFormSigningPage() {
     );
   }
 
-  const renderedHtml = renderMergeFields(data.form.htmlTemplate, data, customFieldValues);
+  const isQuestionBuilder = data.form.creationMode === 'question_builder';
+  const sortedQuestions = (data.form.questions || []).sort((a, b) => a.order - b.order);
+  const renderedHtml = isQuestionBuilder ? '' : renderMergeFields(data.form.htmlTemplate || '', data, customFieldValues);
 
   return (
     <div className="min-h-screen bg-muted/30 py-8 px-4">
@@ -275,74 +319,139 @@ export default function PublicFormSigningPage() {
           </CardHeader>
         </Card>
 
-        <Card data-testid="form-content-card">
-          <CardHeader>
-            <CardTitle className="text-lg">Form Details</CardTitle>
-            <CardDescription>
-              For: {data.submission.signerName} ({data.submission.signerEmail})
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div 
-              className="prose prose-sm max-w-none dark:prose-invert"
-              dangerouslySetInnerHTML={{ __html: renderedHtml }}
-              data-testid="form-rendered-content"
-            />
-          </CardContent>
-        </Card>
-
-        {/* Custom Input Fields */}
-        {data.form.customFields && data.form.customFields.length > 0 && (
-          <Card data-testid="custom-fields-card">
+        {/* Question Builder Mode - Shows questions with inline inputs */}
+        {isQuestionBuilder ? (
+          <Card data-testid="question-builder-card">
             <CardHeader>
-              <CardTitle className="text-lg">Additional Information</CardTitle>
+              <CardTitle className="text-lg">Please Answer the Following Questions</CardTitle>
               <CardDescription>
-                Please fill in the following fields
+                For: {data.submission.signerName} ({data.submission.signerEmail})
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              {data.form.customFields.map((field) => (
-                <div key={field.id} className="space-y-2">
-                  <Label htmlFor={`field-${field.fieldKey}`}>
-                    {field.name}
-                    {field.required && <span className="text-destructive ml-1">*</span>}
+            <CardContent className="space-y-6">
+              {/* Intro text */}
+              {data.form.introText && (
+                <div className="p-4 bg-muted rounded-md text-sm" data-testid="intro-text">
+                  {data.form.introText}
+                </div>
+              )}
+              
+              {/* Questions */}
+              {sortedQuestions.map((question) => (
+                <div key={question.id} className="space-y-2">
+                  <Label htmlFor={`question-${question.id}`}>
+                    {question.question}
+                    {question.required && <span className="text-destructive ml-1">*</span>}
                   </Label>
-                  {field.type === 'textarea' ? (
+                  {question.type === 'textarea' ? (
                     <Textarea
-                      id={`field-${field.fieldKey}`}
-                      placeholder={field.placeholder || ''}
-                      value={customFieldValues[field.fieldKey] || ''}
-                      onChange={(e) => handleCustomFieldChange(field.fieldKey, e.target.value)}
-                      data-testid={`input-${field.fieldKey}`}
+                      id={`question-${question.id}`}
+                      placeholder={question.placeholder || ''}
+                      value={customFieldValues[question.id] || ''}
+                      onChange={(e) => handleCustomFieldChange(question.id, e.target.value)}
+                      data-testid={`input-question-${question.id}`}
                     />
-                  ) : field.type === 'checkbox' ? (
+                  ) : question.type === 'checkbox' ? (
                     <div className="flex items-center space-x-2">
                       <Checkbox
-                        id={`field-${field.fieldKey}`}
-                        checked={customFieldValues[field.fieldKey] === 'true'}
+                        id={`question-${question.id}`}
+                        checked={customFieldValues[question.id] === 'true'}
                         onCheckedChange={(checked) => 
-                          handleCustomFieldChange(field.fieldKey, checked ? 'true' : 'false')
+                          handleCustomFieldChange(question.id, checked ? 'true' : 'false')
                         }
-                        data-testid={`input-${field.fieldKey}`}
+                        data-testid={`input-question-${question.id}`}
                       />
-                      <Label htmlFor={`field-${field.fieldKey}`} className="text-sm font-normal">
-                        {field.placeholder || 'Yes'}
+                      <Label htmlFor={`question-${question.id}`} className="text-sm font-normal">
+                        Yes
                       </Label>
                     </div>
                   ) : (
                     <Input
-                      id={`field-${field.fieldKey}`}
-                      type={field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : field.type === 'email' ? 'email' : field.type === 'phone' ? 'tel' : 'text'}
-                      placeholder={field.placeholder || ''}
-                      value={customFieldValues[field.fieldKey] || ''}
-                      onChange={(e) => handleCustomFieldChange(field.fieldKey, e.target.value)}
-                      data-testid={`input-${field.fieldKey}`}
+                      id={`question-${question.id}`}
+                      type={question.type === 'number' ? 'number' : question.type === 'date' ? 'date' : question.type === 'email' ? 'email' : question.type === 'phone' ? 'tel' : 'text'}
+                      placeholder={question.placeholder || ''}
+                      value={customFieldValues[question.id] || ''}
+                      onChange={(e) => handleCustomFieldChange(question.id, e.target.value)}
+                      data-testid={`input-question-${question.id}`}
                     />
                   )}
                 </div>
               ))}
             </CardContent>
           </Card>
+        ) : (
+          <>
+            {/* Template Mode - Shows HTML template */}
+            <Card data-testid="form-content-card">
+              <CardHeader>
+                <CardTitle className="text-lg">Form Details</CardTitle>
+                <CardDescription>
+                  For: {data.submission.signerName} ({data.submission.signerEmail})
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div 
+                  className="prose prose-sm max-w-none dark:prose-invert"
+                  dangerouslySetInnerHTML={{ __html: renderedHtml }}
+                  data-testid="form-rendered-content"
+                />
+              </CardContent>
+            </Card>
+
+            {/* Custom Input Fields for Template Mode */}
+            {data.form.customFields && data.form.customFields.length > 0 && (
+              <Card data-testid="custom-fields-card">
+                <CardHeader>
+                  <CardTitle className="text-lg">Additional Information</CardTitle>
+                  <CardDescription>
+                    Please fill in the following fields
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {data.form.customFields.map((field) => (
+                    <div key={field.id} className="space-y-2">
+                      <Label htmlFor={`field-${field.fieldKey}`}>
+                        {field.name}
+                        {field.required && <span className="text-destructive ml-1">*</span>}
+                      </Label>
+                      {field.type === 'textarea' ? (
+                        <Textarea
+                          id={`field-${field.fieldKey}`}
+                          placeholder={field.placeholder || ''}
+                          value={customFieldValues[field.fieldKey] || ''}
+                          onChange={(e) => handleCustomFieldChange(field.fieldKey, e.target.value)}
+                          data-testid={`input-${field.fieldKey}`}
+                        />
+                      ) : field.type === 'checkbox' ? (
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`field-${field.fieldKey}`}
+                            checked={customFieldValues[field.fieldKey] === 'true'}
+                            onCheckedChange={(checked) => 
+                              handleCustomFieldChange(field.fieldKey, checked ? 'true' : 'false')
+                            }
+                            data-testid={`input-${field.fieldKey}`}
+                          />
+                          <Label htmlFor={`field-${field.fieldKey}`} className="text-sm font-normal">
+                            {field.placeholder || 'Yes'}
+                          </Label>
+                        </div>
+                      ) : (
+                        <Input
+                          id={`field-${field.fieldKey}`}
+                          type={field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : field.type === 'email' ? 'email' : field.type === 'phone' ? 'tel' : 'text'}
+                          placeholder={field.placeholder || ''}
+                          value={customFieldValues[field.fieldKey] || ''}
+                          onChange={(e) => handleCustomFieldChange(field.fieldKey, e.target.value)}
+                          data-testid={`input-${field.fieldKey}`}
+                        />
+                      )}
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
+          </>
         )}
 
         {data.form.requiresSignature && (

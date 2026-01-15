@@ -6452,12 +6452,23 @@ Crawl-delay: 1
       const { createForm, validateTemplateHtml } = await import('./services/custom-form');
       const { insertCustomFormSchema } = await import('@shared/schema');
       
-      const validation = validateTemplateHtml(req.body.htmlTemplate || '');
-      if (!validation.valid) {
-        return res.status(400).json({ 
-          error: 'Invalid template HTML', 
-          validationErrors: validation.errors 
-        });
+      // Only validate HTML template for template mode
+      const creationMode = req.body.creationMode || 'template';
+      if (creationMode === 'template') {
+        const validation = validateTemplateHtml(req.body.htmlTemplate || '');
+        if (!validation.valid) {
+          return res.status(400).json({ 
+            error: 'Invalid template HTML', 
+            validationErrors: validation.errors 
+          });
+        }
+      } else if (creationMode === 'question_builder') {
+        // For question_builder mode, validate that questions array is provided
+        if (!req.body.questions || !Array.isArray(req.body.questions) || req.body.questions.length === 0) {
+          return res.status(400).json({ 
+            error: 'At least one question is required for question builder mode'
+          });
+        }
       }
 
       const data = insertCustomFormSchema.parse({
@@ -6481,12 +6492,22 @@ Crawl-delay: 1
     try {
       const { updateForm, validateTemplateHtml } = await import('./services/custom-form');
       
-      if (req.body.htmlTemplate) {
+      const creationMode = req.body.creationMode || 'template';
+      
+      // Only validate HTML template for template mode
+      if (creationMode === 'template' && req.body.htmlTemplate) {
         const validation = validateTemplateHtml(req.body.htmlTemplate);
         if (!validation.valid) {
           return res.status(400).json({ 
             error: 'Invalid template HTML', 
             validationErrors: validation.errors 
+          });
+        }
+      } else if (creationMode === 'question_builder') {
+        // For question_builder mode, validate that questions array is provided
+        if (!req.body.questions || !Array.isArray(req.body.questions) || req.body.questions.length === 0) {
+          return res.status(400).json({ 
+            error: 'At least one question is required for question builder mode'
           });
         }
       }
@@ -6752,8 +6773,11 @@ Crawl-delay: 1
           name: form.name,
           description: form.description,
           formType: form.formType,
+          creationMode: form.creationMode || 'template',
           requiresSignature: form.requiresSignature,
           htmlTemplate: form.htmlTemplate,
+          questions: form.questions,
+          introText: form.introText,
         },
         submission: {
           id: submission.id,
@@ -6804,6 +6828,35 @@ Crawl-delay: 1
 
       if (form.requiresSignature && !signatureData) {
         return res.status(400).json({ error: 'Signature is required' });
+      }
+
+      // Server-side validation for required fields based on form creation mode
+      if (form.creationMode === 'question_builder' && form.questions && Array.isArray(form.questions)) {
+        for (const question of form.questions as any[]) {
+          if (question.required) {
+            const value = formData?.[question.id];
+            if (question.type === 'checkbox') {
+              if (value !== 'true') {
+                return res.status(400).json({ error: `Required checkbox not checked: ${question.question}` });
+              }
+            } else if (!value || (typeof value === 'string' && value.trim() === '')) {
+              return res.status(400).json({ error: `Required question not answered: ${question.question}` });
+            }
+          }
+        }
+      } else if (form.customFields && Array.isArray(form.customFields)) {
+        for (const field of form.customFields as any[]) {
+          if (field.required) {
+            const value = formData?.[field.fieldKey];
+            if (field.type === 'checkbox') {
+              if (value !== 'true') {
+                return res.status(400).json({ error: `Required checkbox not checked: ${field.name}` });
+              }
+            } else if (!value || (typeof value === 'string' && value.trim() === '')) {
+              return res.status(400).json({ error: `Required field not filled: ${field.name}` });
+            }
+          }
+        }
       }
 
       // Get IP address
