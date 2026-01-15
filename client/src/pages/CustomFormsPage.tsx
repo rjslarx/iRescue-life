@@ -78,6 +78,9 @@ interface CustomFormSubmission {
   signerEmail: string;
   signerPhone?: string;
   signedAt?: string;
+  signerIpAddress?: string;
+  signatureData?: string;
+  renderedHtml?: string;
   pdfUrl?: string;
   emailedAt?: string;
   status: 'pending' | 'completed' | 'expired' | 'cancelled';
@@ -127,10 +130,13 @@ export default function CustomFormsPage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isSendDialogOpen, setIsSendDialogOpen] = useState(false);
   const [isSubmissionsDialogOpen, setIsSubmissionsDialogOpen] = useState(false);
+  const [isViewSubmissionDialogOpen, setIsViewSubmissionDialogOpen] = useState(false);
   const [selectedForm, setSelectedForm] = useState<CustomForm | null>(null);
+  const [selectedSubmission, setSelectedSubmission] = useState<CustomFormSubmission | null>(null);
   const [previewHtml, setPreviewHtml] = useState<string>("");
   const [isFieldsPanelOpen, setIsFieldsPanelOpen] = useState(false);
   const [formLink, setFormLink] = useState<string>("");
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
 
   const createForm = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -254,6 +260,39 @@ export default function CustomFormsPage() {
       });
     },
   });
+
+  const handleViewSubmission = (submission: CustomFormSubmission) => {
+    if (submission.status === 'completed') {
+      setSelectedSubmission(submission);
+      setIsViewSubmissionDialogOpen(true);
+    }
+  };
+
+  const handleDownloadPdf = async (submissionId: string) => {
+    setIsDownloadingPdf(true);
+    try {
+      const response = await apiRequest('GET', `/api/custom-forms/submissions/${submissionId}/pdf`);
+      const data = await response.json();
+      
+      if (data.pdfUrl) {
+        window.open(data.pdfUrl, '_blank');
+      } else {
+        toast({
+          title: "PDF not available",
+          description: "The PDF is still being generated. Please try again in a moment.",
+          variant: "destructive",
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: "Download failed",
+        description: error.message || "Could not download the PDF",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  };
 
   const previewMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -947,7 +986,12 @@ export default function CustomFormsPage() {
               ) : (
                 <div className="space-y-2">
                   {submissionsData.submissions.map((submission) => (
-                    <Card key={submission.id} className="p-3">
+                    <Card 
+                      key={submission.id} 
+                      className={`p-3 ${submission.status === 'completed' ? 'cursor-pointer hover-elevate' : ''}`}
+                      onClick={() => handleViewSubmission(submission)}
+                      data-testid={`card-submission-${submission.id}`}
+                    >
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="font-medium">{submission.signerName}</p>
@@ -955,12 +999,25 @@ export default function CustomFormsPage() {
                           <p className="text-xs text-muted-foreground">
                             Created: {format(new Date(submission.createdAt), 'MMM d, yyyy h:mm a')}
                           </p>
+                          {submission.status === 'completed' && submission.signedAt && (
+                            <p className="text-xs text-green-600">
+                              Signed: {format(new Date(submission.signedAt), 'MMM d, yyyy h:mm a')}
+                            </p>
+                          )}
                         </div>
                         <div className="flex items-center gap-2">
                           {getStatusBadge(submission.status)}
-                          {submission.pdfUrl && (
-                            <Button variant="outline" size="sm" data-testid={`button-download-${submission.id}`}>
-                              <FileText className="h-4 w-4" />
+                          {submission.status === 'completed' && (
+                            <Button 
+                              variant="outline" 
+                              size="icon"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleViewSubmission(submission);
+                              }}
+                              data-testid={`button-view-${submission.id}`}
+                            >
+                              <Eye className="h-4 w-4" />
                             </Button>
                           )}
                         </div>
@@ -970,6 +1027,76 @@ export default function CustomFormsPage() {
                 </div>
               )}
             </ScrollArea>
+          </DialogContent>
+        </Dialog>
+
+        {/* View Submission Dialog */}
+        <Dialog open={isViewSubmissionDialogOpen} onOpenChange={setIsViewSubmissionDialogOpen}>
+          <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+            <DialogHeader>
+              <DialogTitle>Completed Form Submission</DialogTitle>
+              <DialogDescription>
+                Signed by {selectedSubmission?.signerName} ({selectedSubmission?.signerEmail})
+              </DialogDescription>
+            </DialogHeader>
+            
+            {selectedSubmission && (
+              <>
+                <div className="grid grid-cols-2 gap-4 text-sm border-b pb-4">
+                  <div>
+                    <span className="text-muted-foreground">Signed:</span>{' '}
+                    {selectedSubmission.signedAt ? format(new Date(selectedSubmission.signedAt), 'MMM d, yyyy h:mm a') : 'N/A'}
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">IP Address:</span>{' '}
+                    {selectedSubmission.signerIpAddress || 'N/A'}
+                  </div>
+                </div>
+                
+                <ScrollArea className="flex-1 min-h-[300px] border rounded-md p-4 bg-white dark:bg-gray-900">
+                  {selectedSubmission.renderedHtml ? (
+                    <div 
+                      className="prose prose-sm max-w-none dark:prose-invert"
+                      dangerouslySetInnerHTML={{ 
+                        __html: DOMPurify.sanitize(selectedSubmission.renderedHtml, { WHOLE_DOCUMENT: true }) 
+                      }}
+                    />
+                  ) : (
+                    <div className="text-center text-muted-foreground py-8">
+                      Form content not available
+                    </div>
+                  )}
+                  
+                  {selectedSubmission.signatureData && (
+                    <div className="mt-4 pt-4 border-t">
+                      <p className="text-sm font-medium mb-2">Signature:</p>
+                      <img 
+                        src={selectedSubmission.signatureData} 
+                        alt="Signature" 
+                        className="max-h-24 border rounded p-2 bg-white"
+                      />
+                    </div>
+                  )}
+                </ScrollArea>
+                
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    onClick={() => setIsViewSubmissionDialogOpen(false)}
+                  >
+                    Close
+                  </Button>
+                  <Button
+                    onClick={() => handleDownloadPdf(selectedSubmission.id)}
+                    disabled={isDownloadingPdf}
+                    data-testid="button-download-submission-pdf"
+                  >
+                    <FileText className="h-4 w-4 mr-2" />
+                    {isDownloadingPdf ? "Generating..." : "Download PDF"}
+                  </Button>
+                </DialogFooter>
+              </>
+            )}
           </DialogContent>
         </Dialog>
       </div>

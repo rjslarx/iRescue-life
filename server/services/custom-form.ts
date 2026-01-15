@@ -477,3 +477,161 @@ export function generateSecureToken(): { token: string; hash: string } {
 export function hashToken(token: string): string {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
+
+// Generate PDF for a completed custom form submission
+export async function generateCustomFormPdf(
+  submissionId: string,
+  tenantId: string
+): Promise<{ pdfUrl: string } | null> {
+  const submission = await getSubmissionById(submissionId, tenantId);
+  
+  if (!submission || submission.status !== 'completed' || !submission.renderedHtml) {
+    console.error(`[CustomFormPdf] Cannot generate PDF: submission not found or not completed`);
+    return null;
+  }
+
+  const form = await getFormById(submission.formId, tenantId);
+  if (!form) {
+    console.error(`[CustomFormPdf] Cannot generate PDF: form not found`);
+    return null;
+  }
+
+  // Create full HTML document for PDF generation
+  const fullHtml = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+          font-family: Arial, sans-serif;
+          line-height: 1.6;
+          color: #333;
+          padding: 40px;
+          max-width: 800px;
+          margin: 0 auto;
+        }
+        h1 { font-size: 24px; margin-bottom: 20px; color: #1a1a1a; }
+        h2 { font-size: 18px; margin: 20px 0 10px; color: #333; }
+        h3 { font-size: 16px; margin: 15px 0 8px; color: #444; }
+        p { margin-bottom: 10px; }
+        table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+        th, td { padding: 8px; text-align: left; border-bottom: 1px solid #ddd; }
+        .signature-block { margin-top: 30px; padding-top: 20px; border-top: 1px solid #ccc; }
+        .signature-img { max-height: 80px; margin: 10px 0; }
+        .meta-info { font-size: 12px; color: #666; margin-top: 20px; }
+      </style>
+    </head>
+    <body>
+      <h1>${form.name}</h1>
+      ${submission.renderedHtml}
+      
+      ${submission.signatureData ? `
+        <div class="signature-block">
+          <p><strong>Signature:</strong></p>
+          <img src="${submission.signatureData}" alt="Signature" class="signature-img" />
+        </div>
+      ` : ''}
+      
+      <div class="meta-info">
+        <p><strong>Signed by:</strong> ${submission.signerName} (${submission.signerEmail})</p>
+        <p><strong>Date:</strong> ${submission.signedAt ? new Date(submission.signedAt).toLocaleString() : 'N/A'}</p>
+        <p><strong>IP Address:</strong> ${submission.signerIpAddress || 'N/A'}</p>
+      </div>
+    </body>
+    </html>
+  `;
+
+  try {
+    const puppeteer = await import('puppeteer');
+    
+    const browser = await puppeteer.default.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    });
+
+    const page = await browser.newPage();
+    await page.setContent(fullHtml, { waitUntil: 'networkidle0' });
+    
+    const pdfBuffer = await page.pdf({
+      format: 'Letter',
+      printBackground: true,
+      margin: { top: '0.5in', right: '0.5in', bottom: '0.5in', left: '0.5in' },
+    });
+
+    await browser.close();
+
+    // Upload to object storage
+    const { objectStorageClient } = await import('../objectStorage');
+    
+    const privateObjectDir = process.env.PRIVATE_OBJECT_DIR;
+    if (!privateObjectDir) {
+      throw new Error('PRIVATE_OBJECT_DIR not configured');
+    }
+
+    const timestamp = Date.now();
+    const randomId = Math.random().toString(36).substring(7);
+    const objectPath = `${privateObjectDir}/forms/form_${timestamp}_${randomId}.pdf`;
+    const pathParts = objectPath.split('/');
+    const bucketName = pathParts[1];
+    const objectName = pathParts.slice(2).join('/');
+
+    const bucket = objectStorageClient.bucket(bucketName);
+    const file = bucket.file(objectName);
+
+    await file.save(Buffer.from(pdfBuffer), {
+      metadata: {
+        contentType: 'application/pdf',
+      },
+    });
+
+    // Return the object path (not a signed URL) for permanent storage
+    const pdfPath = `/objects/forms/${file.name.split('/').pop()}`;
+    
+    console.log(`[CustomFormPdf] PDF generated for submission ${submissionId} at ${pdfPath}`);
+    return { pdfUrl: pdfPath };
+  } catch (error) {
+    console.error(`[CustomFormPdf] Error generating PDF:`, error);
+    return null;
+  }
+}
+
+// Generate a time-limited signed URL for downloading a custom form PDF
+export async function generateSignedFormUrl(pdfPath: string, signerName: string, ttlSec: number = 900): Promise<string> {
+  const privateObjectDir = process.env.PRIVATE_OBJECT_DIR;
+  if (!privateObjectDir) {
+    throw new Error('PRIVATE_OBJECT_DIR not configured');
+  }
+
+  // Parse the path to get filename - pdfPath is like /objects/forms/form_123_abc.pdf
+  const filename = pdfPath.split('/').pop();
+  if (!filename) {
+    throw new Error('Invalid PDF path');
+  }
+
+  const objectPath = `${privateObjectDir}/forms/${filename}`;
+  const pathParts = objectPath.split('/');
+  const bucketName = pathParts[1];
+  const objectName = pathParts.slice(2).join('/');
+
+  const { objectStorageClient } = await import('../objectStorage');
+  const bucket = objectStorageClient.bucket(bucketName);
+  const file = bucket.file(objectName);
+
+  // Check if file exists
+  const [exists] = await file.exists();
+  if (!exists) {
+    throw new Error('Form PDF file not found');
+  }
+
+  // Generate signed URL using Google Cloud Storage
+  const [signedUrl] = await file.getSignedUrl({
+    version: 'v4',
+    action: 'read',
+    expires: Date.now() + ttlSec * 1000,
+    responseDisposition: `attachment; filename="form_${signerName.replace(/\s+/g, '_')}_${Date.now()}.pdf"`,
+  });
+
+  return signedUrl;
+}

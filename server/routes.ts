@@ -6849,14 +6849,159 @@ Crawl-delay: 1
         status: 'completed',
       });
 
-      // TODO: Generate PDF and upload to storage
-      // TODO: Send confirmation email to signer
+      // Generate PDF and upload to storage (async - don't wait)
+      (async () => {
+        try {
+          const { generateCustomFormPdf } = await import('./services/custom-form');
+          const pdfResult = await generateCustomFormPdf(submission.id, submission.tenantId);
+          
+          if (pdfResult?.pdfUrl) {
+            // Update submission with PDF URL
+            await updateSubmission(submission.id, submission.tenantId, {
+              pdfUrl: pdfResult.pdfUrl,
+            });
+            
+            // Create document record if tenant has documents system
+            try {
+              const { documents, insertDocumentSchema } = await import('@shared/schema');
+              await db.insert(documents).values({
+                tenantId: submission.tenantId,
+                title: `${form.name} - ${submission.signerName}`,
+                description: `Signed form submitted on ${new Date().toLocaleDateString()}`,
+                fileUrl: pdfResult.pdfUrl,
+                fileType: 'application/pdf',
+                category: 'forms',
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              });
+              console.log(`[CustomForms] Document record created for submission ${submission.id}`);
+            } catch (docError) {
+              console.warn(`[CustomForms] Could not create document record:`, docError);
+            }
+          }
+        } catch (pdfError) {
+          console.error(`[CustomForms] PDF generation failed for submission ${submission.id}:`, pdfError);
+        }
+      })();
+
+      // Send confirmation email to signer (async - don't wait)
+      (async () => {
+        try {
+          const { EmailService } = await import('./lib/email-service');
+          const emailService = await EmailService.forTenant(submission.tenantId);
+          
+          if (emailService) {
+            await emailService.send({
+              to: submission.signerEmail,
+              subject: `Form Completed: ${form.name}`,
+              html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                  <h2 style="color: #333;">Thank you, ${submission.signerName}!</h2>
+                  <p>Your submission for "${form.name}" has been received and recorded.</p>
+                  <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                    <p style="margin: 0;"><strong>Form:</strong> ${form.name}</p>
+                    <p style="margin: 10px 0 0;"><strong>Submitted:</strong> ${new Date().toLocaleString()}</p>
+                  </div>
+                  <p style="color: #666;">This confirmation serves as your receipt. If you have any questions, please contact ${tenant?.name || 'the organization'}.</p>
+                  <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
+                  <p style="color: #888; font-size: 12px;">This email was sent by ${tenant?.name || 'the organization'} via iRescue.life</p>
+                </div>
+              `,
+            });
+            console.log(`[CustomForms] Confirmation email sent to ${submission.signerEmail}`);
+          }
+        } catch (emailError) {
+          console.error(`[CustomForms] Confirmation email failed:`, emailError);
+        }
+      })();
+
+      // Notify staff (async - don't wait)
+      (async () => {
+        try {
+          const { EmailService } = await import('./lib/email-service');
+          const emailService = await EmailService.forTenant(submission.tenantId);
+          
+          if (emailService && tenant?.contactEmail) {
+            await emailService.send({
+              to: tenant.contactEmail,
+              subject: `New Form Submission: ${form.name}`,
+              html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                  <h2 style="color: #333;">New Form Submission Received</h2>
+                  <p>A new form has been completed and submitted:</p>
+                  <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                    <p style="margin: 0;"><strong>Form:</strong> ${form.name}</p>
+                    <p style="margin: 10px 0 0;"><strong>Submitted by:</strong> ${submission.signerName} (${submission.signerEmail})</p>
+                    <p style="margin: 10px 0 0;"><strong>Date:</strong> ${new Date().toLocaleString()}</p>
+                  </div>
+                  <p>You can view and manage all form submissions in your admin dashboard under Custom Forms.</p>
+                  <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
+                  <p style="color: #888; font-size: 12px;">This notification was sent by iRescue.life</p>
+                </div>
+              `,
+            });
+            console.log(`[CustomForms] Staff notification sent to ${tenant.contactEmail}`);
+          }
+        } catch (emailError) {
+          console.error(`[CustomForms] Staff notification email failed:`, emailError);
+        }
+      })();
 
       res.json({ 
         success: true, 
         message: 'Form submitted successfully',
         submissionId: updated?.id,
       });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/custom-forms/submissions/:id/pdf
+   * Get PDF download URL for a completed submission
+   * Returns a fresh signed URL (15-minute expiry) on each request
+   */
+  app.get('/api/custom-forms/submissions/:id/pdf', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      const { getSubmissionById, generateCustomFormPdf, updateSubmission, generateSignedFormUrl } = await import('./services/custom-form');
+      
+      const submission = await getSubmissionById(req.params.id, req.tenant!.id);
+      
+      if (!submission) {
+        return res.status(404).json({ error: 'Submission not found' });
+      }
+
+      if (submission.status !== 'completed') {
+        return res.status(400).json({ error: 'Form has not been completed yet' });
+      }
+
+      // If PDF path already exists, generate a fresh signed URL
+      if (submission.pdfUrl) {
+        try {
+          const signedUrl = await generateSignedFormUrl(submission.pdfUrl, submission.signerName, 900); // 15 min
+          return res.json({ pdfUrl: signedUrl });
+        } catch (urlError) {
+          console.warn(`[CustomForms] Could not generate signed URL for existing PDF, regenerating:`, urlError);
+          // Fall through to regenerate PDF
+        }
+      }
+
+      // Generate PDF on demand if not already generated
+      const pdfResult = await generateCustomFormPdf(submission.id, req.tenant!.id);
+      
+      if (!pdfResult?.pdfUrl) {
+        return res.status(500).json({ error: 'Failed to generate PDF' });
+      }
+
+      // Update submission with PDF path (not signed URL)
+      await updateSubmission(submission.id, req.tenant!.id, {
+        pdfUrl: pdfResult.pdfUrl,
+      });
+
+      // Generate fresh signed URL for download
+      const signedUrl = await generateSignedFormUrl(pdfResult.pdfUrl, submission.signerName, 900);
+      res.json({ pdfUrl: signedUrl });
     } catch (error) {
       next(error);
     }
