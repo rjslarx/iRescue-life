@@ -412,7 +412,8 @@ export default function ContractTemplatesPage() {
   // Preview mutation
   const previewMutation = useMutation({
     mutationFn: async (id: number) => {
-      return apiRequest('GET', `${getApiEndpoint(activeContractType)}/${id}/preview`);
+      const response = await apiRequest('GET', `${getApiEndpoint(activeContractType)}/${id}/preview`);
+      return response.json();
     },
     onSuccess: (data) => {
       const sanitizedHtml = DOMPurify.sanitize(data.html, {
