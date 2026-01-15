@@ -37,6 +37,7 @@ import NewsletterCampaignsPage from "@/pages/NewsletterCampaignsPage";
 import NewsletterDesignerPage from "@/pages/NewsletterDesignerPage";
 import DocumentsPage from "@/pages/DocumentsPage";
 import ContractTemplatesPage from "@/pages/ContractTemplatesPage";
+import CustomFormsPage from "@/pages/CustomFormsPage";
 import SettingsPage from "@/pages/SettingsPage";
 import ContentPagesPage from "@/pages/ContentPagesPage";
 import ContentModulesPage from "@/pages/ContentModulesPage";
@@ -73,6 +74,7 @@ import VolunteerApplicationManagementPage from "@/pages/VolunteerApplicationMana
 import PublicFosterPage from "@/pages/PublicFosterPage";
 import PublicSurrenderPage from "@/pages/PublicSurrenderPage";
 import PublicAdoptionCheckoutPage from "@/pages/PublicAdoptionCheckoutPage";
+import PublicFormSigningPage from "@/pages/PublicFormSigningPage";
 import PublicContactPage from "@/pages/PublicContactPage";
 import DonatePage from "@/pages/DonatePage";
 import GivePage from "@/pages/GivePage";
@@ -191,6 +193,7 @@ function RouterSwitch() {
       <Route path="/event/:id" component={EventDetailPage} />
       <Route path="/adoption-checkout/:token" component={PublicAdoptionCheckoutPage} />
       <Route path="/run-sheet/:token" component={RunSheetPage} />
+      <Route path="/form/:token" component={PublicFormSigningPage} />
       
       {/* Protected dashboard routes */}
       <ProtectedRoute path="/dashboard" pageId="dashboard" component={Dashboard} />
@@ -222,6 +225,7 @@ function RouterSwitch() {
       </Route>
       <ProtectedRoute path="/dashboard/documents" pageId="documents" component={DocumentsPage} />
       <ProtectedRoute path="/dashboard/contract-templates" pageId="settings" component={ContractTemplatesPage} />
+      <ProtectedRoute path="/dashboard/custom-forms" pageId="settings" component={CustomFormsPage} />
       <ProtectedRoute path="/dashboard/website-builder" pageId="custom-pages" component={WebsiteBuilderPage} />
       <ProtectedRoute path="/dashboard/content-modules" pageId="content-modules" component={ContentModulesPage} />
       <ProtectedRoute path="/dashboard/settings" pageId="branding" component={SettingsPage} />

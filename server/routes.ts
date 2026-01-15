@@ -6379,6 +6379,436 @@ Crawl-delay: 1
   });
 
   // ============================================================================
+  // Custom Forms Routes (Flexible forms with e-signature)
+  // ============================================================================
+
+  /**
+   * GET /api/custom-forms
+   * List all custom forms for tenant (staff only)
+   */
+  app.get('/api/custom-forms', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      const { getAllForms, STANDALONE_MERGE_FIELDS, ANIMAL_MERGE_FIELDS } = await import('./services/custom-form');
+      
+      const forms = await getAllForms(req.tenant!.id);
+      res.json({ 
+        forms, 
+        mergeFields: {
+          standalone: STANDALONE_MERGE_FIELDS,
+          animal_specific: ANIMAL_MERGE_FIELDS,
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/custom-forms/active
+   * Get active forms for dropdown selection
+   */
+  app.get('/api/custom-forms/active', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      const { getActiveForms } = await import('./services/custom-form');
+      const forms = await getActiveForms(req.tenant!.id);
+      res.json({ forms });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/custom-forms/:id
+   * Get a single custom form by ID
+   */
+  app.get('/api/custom-forms/:id', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      const { getFormById, STANDALONE_MERGE_FIELDS, ANIMAL_MERGE_FIELDS } = await import('./services/custom-form');
+      
+      const form = await getFormById(req.params.id, req.tenant!.id);
+      if (!form) {
+        return res.status(404).json({ error: 'Form not found' });
+      }
+      
+      const mergeFields = form.formType === 'animal_specific' ? ANIMAL_MERGE_FIELDS : STANDALONE_MERGE_FIELDS;
+      res.json({ form, mergeFields });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/custom-forms
+   * Create a new custom form (admin only)
+   */
+  app.post('/api/custom-forms', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+    try {
+      const { createForm, validateTemplateHtml } = await import('./services/custom-form');
+      const { insertCustomFormSchema } = await import('@shared/schema');
+      
+      const validation = validateTemplateHtml(req.body.htmlTemplate || '');
+      if (!validation.valid) {
+        return res.status(400).json({ 
+          error: 'Invalid template HTML', 
+          validationErrors: validation.errors 
+        });
+      }
+
+      const data = insertCustomFormSchema.parse({
+        ...req.body,
+        tenantId: req.tenant!.id,
+        createdBy: req.user!.id,
+      });
+
+      const form = await createForm(data);
+      res.json({ form, message: 'Custom form created successfully' });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * PUT /api/custom-forms/:id
+   * Update a custom form (admin only)
+   */
+  app.put('/api/custom-forms/:id', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+    try {
+      const { updateForm, validateTemplateHtml } = await import('./services/custom-form');
+      
+      if (req.body.htmlTemplate) {
+        const validation = validateTemplateHtml(req.body.htmlTemplate);
+        if (!validation.valid) {
+          return res.status(400).json({ 
+            error: 'Invalid template HTML', 
+            validationErrors: validation.errors 
+          });
+        }
+      }
+
+      const form = await updateForm(req.params.id, req.tenant!.id, req.body);
+      
+      if (!form) {
+        return res.status(404).json({ error: 'Form not found' });
+      }
+
+      res.json({ form, message: 'Form updated successfully' });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * DELETE /api/custom-forms/:id
+   * Delete a custom form (admin only)
+   */
+  app.delete('/api/custom-forms/:id', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+    try {
+      const { deleteForm } = await import('./services/custom-form');
+      
+      await deleteForm(req.params.id, req.tenant!.id);
+      res.json({ success: true, message: 'Form deleted successfully' });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/custom-forms/:id/preview
+   * Preview a custom form with sample data
+   */
+  app.get('/api/custom-forms/:id/preview', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      const { getFormById, renderFormHtml } = await import('./services/custom-form');
+      
+      const form = await getFormById(req.params.id, req.tenant!.id);
+      if (!form) {
+        return res.status(404).json({ error: 'Form not found' });
+      }
+
+      // Create sample submission for preview
+      const sampleSubmission = {
+        id: 'preview',
+        tenantId: req.tenant!.id,
+        formId: form.id,
+        signerName: 'Jane Smith',
+        signerEmail: 'jane.smith@example.com',
+        signerPhone: '(555) 987-6543',
+        signedAt: new Date(),
+        signerIpAddress: '192.168.1.100',
+        signatureData: '',
+        status: 'completed' as const,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      // Sample animal for animal-specific forms
+      const sampleAnimal = form.formType === 'animal_specific' ? {
+        name: 'Max',
+        species: 'Dog',
+        breed: 'Labrador Mix',
+        age: '2 years',
+        sex: 'Male',
+        color: 'Yellow',
+        microchipNumber: '985112012345678',
+        weight: '55',
+      } : undefined;
+
+      const html = await renderFormHtml(form, sampleSubmission as any, req.tenant!.name, sampleAnimal);
+      
+      const sanitizedHtml = DOMPurify.sanitize(html, {
+        ALLOWED_TAGS: ['html', 'head', 'body', 'title', 'meta', 'style', 'link', 'div', 'span', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'strong', 'em', 'u', 'br', 'hr', 'ul', 'ol', 'li', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'img', 'a'],
+        ALLOWED_ATTR: ['class', 'id', 'style', 'href', 'src', 'alt', 'title', 'target', 'colspan', 'rowspan'],
+        ALLOW_DATA_ATTR: false,
+      });
+      
+      res.json({ html: sanitizedHtml });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/custom-forms/:id/submissions
+   * Get all submissions for a form
+   */
+  app.get('/api/custom-forms/:id/submissions', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      const { getFormSubmissions } = await import('./services/custom-form');
+      
+      const submissions = await getFormSubmissions(req.params.id, req.tenant!.id);
+      res.json({ submissions });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/custom-forms/:id/send
+   * Send a form to someone to fill out (creates a pending submission)
+   */
+  app.post('/api/custom-forms/:id/send', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      const { getFormById, createSubmission, generateSecureToken } = await import('./services/custom-form');
+      const { insertCustomFormSubmissionSchema } = await import('@shared/schema');
+      
+      const form = await getFormById(req.params.id, req.tenant!.id);
+      if (!form) {
+        return res.status(404).json({ error: 'Form not found' });
+      }
+
+      const { signerName, signerEmail, signerPhone, animalId } = req.body;
+      
+      if (!signerName || !signerEmail) {
+        return res.status(400).json({ error: 'Signer name and email are required' });
+      }
+
+      // Validate animal ID for animal-specific forms
+      if (form.formType === 'animal_specific' && !animalId) {
+        return res.status(400).json({ error: 'Animal selection is required for this form type' });
+      }
+
+      const { token, hash } = generateSecureToken();
+      const expiresAt = new Date();
+      expiresAt.setHours(expiresAt.getHours() + 72); // 72 hours expiry
+
+      const submission = await createSubmission({
+        tenantId: req.tenant!.id,
+        formId: form.id,
+        animalId: animalId || null,
+        signerName,
+        signerEmail,
+        signerPhone: signerPhone || null,
+        secureTokenHash: hash,
+        expiresAt,
+        status: 'pending',
+      });
+
+      // TODO: Send email to signer with link to complete form
+      // For now, return the token so it can be shared
+      const subdomain = req.tenant!.subdomain;
+      const baseUrl = process.env.NODE_ENV === 'production' 
+        ? `https://${subdomain}.irescue.life`
+        : `${req.protocol}://${req.get('host')}/${subdomain}`;
+      
+      const formUrl = `${baseUrl}/forms/sign/${token}`;
+
+      res.json({ 
+        submission, 
+        formUrl,
+        message: 'Form submission created. Share this link with the signer.' 
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // ============================================================================
+  // Public Custom Form Routes (for form signing)
+  // ============================================================================
+
+  /**
+   * GET /api/public/forms/:token
+   * Get form for public signing
+   */
+  app.get('/api/public/forms/:token', requireTenant, async (req, res, next) => {
+    try {
+      const { getSubmissionByToken, getFormById, hashToken } = await import('./services/custom-form');
+      
+      const tokenHash = hashToken(req.params.token);
+      const submission = await getSubmissionByToken(tokenHash);
+      
+      if (!submission) {
+        return res.status(404).json({ error: 'Form not found or link has expired' });
+      }
+
+      if (submission.status !== 'pending') {
+        return res.status(400).json({ error: 'This form has already been completed' });
+      }
+
+      if (submission.expiresAt && new Date() > submission.expiresAt) {
+        return res.status(400).json({ error: 'This form link has expired' });
+      }
+
+      const form = await getFormById(submission.formId, submission.tenantId);
+      if (!form) {
+        return res.status(404).json({ error: 'Form template not found' });
+      }
+
+      // Get animal if animal-specific
+      let animal = null;
+      if (form.formType === 'animal_specific' && submission.animalId) {
+        const [animalRecord] = await db
+          .select()
+          .from(animals)
+          .where(eq(animals.id, submission.animalId))
+          .limit(1);
+        animal = animalRecord || null;
+      }
+
+      // Get tenant info
+      const [tenant] = await db
+        .select()
+        .from(tenants)
+        .where(eq(tenants.id, submission.tenantId))
+        .limit(1);
+
+      res.json({ 
+        form: {
+          id: form.id,
+          name: form.name,
+          description: form.description,
+          formType: form.formType,
+          requiresSignature: form.requiresSignature,
+          htmlTemplate: form.htmlTemplate,
+        },
+        submission: {
+          id: submission.id,
+          signerName: submission.signerName,
+          signerEmail: submission.signerEmail,
+          signerPhone: submission.signerPhone,
+        },
+        animal,
+        tenant: {
+          name: tenant?.name,
+          logo: tenant?.logoUrl,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/public/forms/:token/submit
+   * Submit a completed form with signature
+   */
+  app.post('/api/public/forms/:token/submit', requireTenant, async (req, res, next) => {
+    try {
+      const { getSubmissionByToken, getFormById, updateSubmission, renderFormHtml, hashToken } = await import('./services/custom-form');
+      
+      const tokenHash = hashToken(req.params.token);
+      const submission = await getSubmissionByToken(tokenHash);
+      
+      if (!submission) {
+        return res.status(404).json({ error: 'Form not found' });
+      }
+
+      if (submission.status !== 'pending') {
+        return res.status(400).json({ error: 'This form has already been completed' });
+      }
+
+      if (submission.expiresAt && new Date() > submission.expiresAt) {
+        return res.status(400).json({ error: 'This form link has expired' });
+      }
+
+      const form = await getFormById(submission.formId, submission.tenantId);
+      if (!form) {
+        return res.status(404).json({ error: 'Form template not found' });
+      }
+
+      const { signatureData, formData } = req.body;
+
+      if (form.requiresSignature && !signatureData) {
+        return res.status(400).json({ error: 'Signature is required' });
+      }
+
+      // Get IP address
+      const ipAddress = req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || '';
+
+      // Get animal if animal-specific
+      let animal = null;
+      if (form.formType === 'animal_specific' && submission.animalId) {
+        const [animalRecord] = await db
+          .select()
+          .from(animals)
+          .where(eq(animals.id, submission.animalId))
+          .limit(1);
+        animal = animalRecord || null;
+      }
+
+      // Get tenant info
+      const [tenant] = await db
+        .select()
+        .from(tenants)
+        .where(eq(tenants.id, submission.tenantId))
+        .limit(1);
+
+      // Create updated submission object for rendering
+      const updatedData = {
+        ...submission,
+        signatureData,
+        formData,
+        signedAt: new Date(),
+        signerIpAddress: ipAddress,
+      };
+
+      // Render HTML with merged data
+      const renderedHtml = await renderFormHtml(form, updatedData as any, tenant?.name || 'Organization', animal);
+
+      // Update submission
+      const updated = await updateSubmission(submission.id, submission.tenantId, {
+        signatureData,
+        formData,
+        signedAt: new Date(),
+        signerIpAddress: ipAddress,
+        renderedHtml,
+        status: 'completed',
+      });
+
+      // TODO: Generate PDF and upload to storage
+      // TODO: Send confirmation email to signer
+
+      res.json({ 
+        success: true, 
+        message: 'Form submitted successfully',
+        submissionId: updated?.id,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // ============================================================================
   // Adoption Form Fields Routes (Customizable Form Questions)
   // ============================================================================
 

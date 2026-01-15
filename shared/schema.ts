@@ -4257,3 +4257,70 @@ export const insertTutorialSchema = createInsertSchema(tutorials).omit({
 });
 export type InsertTutorial = z.infer<typeof insertTutorialSchema>;
 export type Tutorial = typeof tutorials.$inferSelect;
+
+// ============================================
+// CUSTOM FORMS WITH E-SIGNATURE
+// ============================================
+
+// Custom Forms - Flexible form templates with optional e-signature
+export const customForms = pgTable("custom_forms", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  name: text("name").notNull(), // e.g., "Spay/Neuter Consent Form"
+  description: text("description"), // Optional description
+  formType: text("form_type").notNull().$type<"animal_specific" | "standalone">(), // Whether linked to an animal or not
+  htmlTemplate: text("html_template").notNull(), // HTML with {{mustache}} placeholders
+  requiresSignature: boolean("requires_signature").notNull().default(true),
+  isActive: boolean("is_active").notNull().default(true),
+  isPublic: boolean("is_public").notNull().default(false), // Can be accessed via public link
+  publicSlug: text("public_slug"), // URL-friendly slug for public access
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  createdBy: uuid("created_by").references(() => users.id),
+});
+
+export const insertCustomFormSchema = createInsertSchema(customForms).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertCustomForm = z.infer<typeof insertCustomFormSchema>;
+export type CustomForm = typeof customForms.$inferSelect;
+
+// Custom Form Submissions - Completed form submissions with optional signature
+export const customFormSubmissions = pgTable("custom_form_submissions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  formId: uuid("form_id").notNull().references(() => customForms.id, { onDelete: 'cascade' }),
+  animalId: uuid("animal_id").references(() => animals.id, { onDelete: 'set null' }), // Optional, for animal-specific forms
+  // Signer information
+  signerName: text("signer_name").notNull(),
+  signerEmail: text("signer_email").notNull(),
+  signerPhone: text("signer_phone"),
+  // Form data
+  formData: jsonb("form_data").$type<Record<string, any>>(), // Custom field values
+  // Signature
+  signatureData: text("signature_data"), // Base64 signature image
+  signedAt: timestamp("signed_at"),
+  signerIpAddress: text("signer_ip_address"),
+  // Generated document
+  pdfUrl: text("pdf_url"), // Path to stored PDF
+  renderedHtml: text("rendered_html"), // HTML with merge fields replaced
+  // Email delivery
+  emailedAt: timestamp("emailed_at"),
+  emailError: text("email_error"),
+  // Secure access
+  secureTokenHash: text("secure_token_hash"), // For secure link access
+  expiresAt: timestamp("expires_at"), // Link expiration
+  status: text("status").notNull().default("pending").$type<"pending" | "completed" | "expired" | "cancelled">(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertCustomFormSubmissionSchema = createInsertSchema(customFormSubmissions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertCustomFormSubmission = z.infer<typeof insertCustomFormSubmissionSchema>;
+export type CustomFormSubmission = typeof customFormSubmissions.$inferSelect;
