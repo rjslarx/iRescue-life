@@ -4263,6 +4263,18 @@ export type Tutorial = typeof tutorials.$inferSelect;
 // ============================================
 
 // Custom Forms - Flexible form templates with optional e-signature
+// Custom field definition type
+export type CustomFormField = {
+  id: string;
+  name: string; // Display label
+  fieldKey: string; // Used for merge field: {{field_key}}
+  type: "text" | "textarea" | "select" | "checkbox" | "number" | "date" | "email" | "phone";
+  required: boolean;
+  placeholder?: string;
+  options?: string[]; // For select fields
+  defaultValue?: string;
+};
+
 export const customForms = pgTable("custom_forms", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
@@ -4270,6 +4282,7 @@ export const customForms = pgTable("custom_forms", {
   description: text("description"), // Optional description
   formType: text("form_type").notNull().$type<"animal_specific" | "standalone">(), // Whether linked to an animal or not
   htmlTemplate: text("html_template").notNull(), // HTML with {{mustache}} placeholders
+  customFields: jsonb("custom_fields").$type<CustomFormField[]>(), // Custom input fields that users fill out
   requiresSignature: boolean("requires_signature").notNull().default(true),
   isActive: boolean("is_active").notNull().default(true),
   isPublic: boolean("is_public").notNull().default(false), // Can be accessed via public link
