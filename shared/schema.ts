@@ -4263,7 +4263,7 @@ export type Tutorial = typeof tutorials.$inferSelect;
 // ============================================
 
 // Custom Forms - Flexible form templates with optional e-signature
-// Custom field definition type
+// Custom field definition type (for template mode)
 export type CustomFormField = {
   id: string;
   name: string; // Display label
@@ -4274,14 +4274,27 @@ export type CustomFormField = {
   defaultValue?: string;
 };
 
+// Question definition type (for question_builder mode - simpler like website builder forms)
+export type FormQuestion = {
+  id: string;
+  question: string; // The question text, e.g., "What are your children's names?"
+  type: "text" | "textarea" | "checkbox" | "number" | "date" | "email" | "phone";
+  required: boolean;
+  placeholder?: string;
+  order: number; // For ordering questions
+};
+
 export const customForms = pgTable("custom_forms", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
   name: text("name").notNull(), // e.g., "Spay/Neuter Consent Form"
   description: text("description"), // Optional description
   formType: text("form_type").notNull().$type<"animal_specific" | "standalone">(), // Whether linked to an animal or not
-  htmlTemplate: text("html_template").notNull(), // HTML with {{mustache}} placeholders
-  customFields: jsonb("custom_fields").$type<CustomFormField[]>(), // Custom input fields that users fill out
+  creationMode: text("creation_mode").notNull().default("template").$type<"template" | "question_builder">(), // How the form was created
+  htmlTemplate: text("html_template"), // HTML with {{mustache}} placeholders (for template mode, optional)
+  customFields: jsonb("custom_fields").$type<CustomFormField[]>(), // Custom input fields (for template mode)
+  questions: jsonb("questions").$type<FormQuestion[]>(), // Questions list (for question_builder mode)
+  introText: text("intro_text"), // Optional intro text shown before questions (for question_builder mode)
   requiresSignature: boolean("requires_signature").notNull().default(true),
   isActive: boolean("is_active").notNull().default(true),
   isPublic: boolean("is_public").notNull().default(false), // Can be accessed via public link
