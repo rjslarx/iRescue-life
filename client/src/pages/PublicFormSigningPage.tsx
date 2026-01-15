@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CheckCircle2, AlertCircle, FileSignature, Loader2 } from "lucide-react";
 import SignaturePad from "signature_pad";
+import DOMPurify from "dompurify";
 
 interface FormData {
   form: {
@@ -71,7 +72,12 @@ function renderMergeFields(html: string, data: FormData): string {
     });
   }
   
-  return rendered;
+  return DOMPurify.sanitize(rendered, {
+    ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 
+                   'ul', 'ol', 'li', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 
+                   'div', 'span', 'blockquote', 'hr', 'a'],
+    ALLOWED_ATTR: ['class', 'style', 'href', 'target', 'rel'],
+  });
 }
 
 export default function PublicFormSigningPage() {
@@ -82,7 +88,7 @@ export default function PublicFormSigningPage() {
   const signaturePadRef = useRef<SignaturePad | null>(null);
 
   const { data, isLoading, error } = useQuery<FormData>({
-    queryKey: ['/api/public/forms', token],
+    queryKey: [`/api/public/forms/${token}`],
     enabled: !!token,
   });
 
