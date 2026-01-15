@@ -110,8 +110,9 @@ export default function ThreeDoors({ basePath = '', config }: ThreeDoorsProps) {
           const title = customConfig?.title || defaultDoor.config.title;
           const description = customConfig?.description || defaultDoor.config.description;
           const linkText = customConfig?.linkText || defaultDoor.config.linkText;
-          const linkUrl = customConfig?.linkUrl 
-            ? `${basePath}${customConfig.linkUrl.startsWith('/') ? customConfig.linkUrl : '/' + customConfig.linkUrl}`
+          const customLinkUrl = typeof customConfig?.linkUrl === 'string' ? customConfig.linkUrl : null;
+          const linkUrl = customLinkUrl 
+            ? `${basePath}${customLinkUrl.startsWith('/') ? customLinkUrl : '/' + customLinkUrl}`
             : `${basePath}${defaultDoor.config.linkUrl}`;
           const iconType = customConfig?.icon || defaultDoor.config.icon;
           const IconComponent = ICONS[iconType];
