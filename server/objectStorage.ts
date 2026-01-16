@@ -99,7 +99,7 @@ export class ObjectStorageService {
         try {
           // Read first 12 bytes to detect image type from magic bytes
           const [headerBuffer] = await file.download({ start: 0, end: 11 });
-          contentType = this.detectImageType(headerBuffer) || "application/octet-stream";
+          contentType = this.detectFileType(headerBuffer) || "application/octet-stream";
           if (contentType !== "application/octet-stream") {
             console.log(`[OBJECT-STORAGE] Detected content type from magic bytes: ${contentType}`);
           }
@@ -133,9 +133,14 @@ export class ObjectStorageService {
     }
   }
 
-  // Detect image type from magic bytes (file signature)
-  private detectImageType(buffer: Buffer): string | null {
+  // Detect file type from magic bytes (file signature)
+  private detectFileType(buffer: Buffer): string | null {
     if (buffer.length < 4) return null;
+    
+    // PDF: %PDF (25 50 44 46)
+    if (buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46) {
+      return "application/pdf";
+    }
     
     // JPEG: FF D8 FF
     if (buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF) {
