@@ -257,6 +257,23 @@ export default function ApplicationsPage() {
     setAdoptionDialogOpen(true);
   };
 
+  const handleFeePendingClick = (application: any) => {
+    // Open the approval dialog to set fee and send checkout link
+    const fullApp = data?.applications.find(a => a.id === application.id);
+    if (fullApp) {
+      const animal = animals.find(a => a.id === fullApp.animalId);
+      setApplicationToApprove({
+        id: fullApp.id,
+        applicantName: fullApp.applicantName,
+        applicantEmail: fullApp.applicantEmail,
+        applicantPhone: fullApp.applicantPhone,
+        animalId: fullApp.animalId,
+        animalName: animal?.name || fullApp.animalName,
+      });
+      setApprovalDialogOpen(true);
+    }
+  };
+
   return (
     <DashboardLayout
       title="Application Workflow"
@@ -274,6 +291,7 @@ export default function ApplicationsPage() {
                   onMoveApplication={handleMoveApplication}
                   onAssignAnimal={handleAssignAnimal}
                   onStartCheckout={handleStartCheckout}
+                  onFeePendingClick={handleFeePendingClick}
                   sendingContractId={sendingContractId}
                   subscriptionTier={tenantData?.tenant?.subscriptionTier}
                 />

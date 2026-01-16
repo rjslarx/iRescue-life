@@ -32,6 +32,7 @@ interface KanbanBoardProps {
   onMoveApplication?: (applicationId: string, newStage: string) => void;
   onAssignAnimal?: (application: Application) => void;
   onStartCheckout?: (applicationId: string, animalId: string, signerEmail: string, signerName: string) => void;
+  onFeePendingClick?: (application: Application) => void;
   sendingContractId?: string | null;
   subscriptionTier?: "free" | "professional"; // Only Professional tier can record offline payments
 }
@@ -86,7 +87,7 @@ function AdoptionFeeStatusBadge({ status, amount }: { status: string; amount?: s
   );
 }
 
-export default function KanbanBoard({ applications, onMoveApplication, onAssignAnimal, onStartCheckout, sendingContractId, subscriptionTier }: KanbanBoardProps) {
+export default function KanbanBoard({ applications, onMoveApplication, onAssignAnimal, onStartCheckout, onFeePendingClick, sendingContractId, subscriptionTier }: KanbanBoardProps) {
   const [offlinePaymentApp, setOfflinePaymentApp] = useState<Application | null>(null);
   
   // Only Professional tier can record offline payments (Free tier must use Stripe for platform fee collection)
@@ -155,7 +156,21 @@ export default function KanbanBoard({ applications, onMoveApplication, onAssignA
                                     <CheckoutStatusBadge status={app.checkoutStatus.status} />
                                   )}
                                   {app.adoptionFeeStatus && (stage.id === "approved" || stage.id === "adopted") && (
-                                    <AdoptionFeeStatusBadge status={app.adoptionFeeStatus} amount={app.adoptionFeeAmount} />
+                                    app.adoptionFeeStatus === "pending" && stage.id === "approved" && onFeePendingClick ? (
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          e.preventDefault();
+                                          onFeePendingClick(app);
+                                        }}
+                                        className="cursor-pointer"
+                                        data-testid={`button-fee-pending-${app.id}`}
+                                      >
+                                        <AdoptionFeeStatusBadge status={app.adoptionFeeStatus} amount={app.adoptionFeeAmount} />
+                                      </button>
+                                    ) : (
+                                      <AdoptionFeeStatusBadge status={app.adoptionFeeStatus} amount={app.adoptionFeeAmount} />
+                                    )
                                   )}
                                 </div>
                               </div>
