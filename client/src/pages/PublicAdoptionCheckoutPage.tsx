@@ -251,13 +251,16 @@ function PaymentForm({
                 id="add-donation"
                 checked={parseFloat(donationBoost || "0") > 0}
                 onCheckedChange={(checked) => {
-                  if (!checked) {
+                  if (checked) {
+                    // Set a default donation amount when checking
+                    setDonationBoost("10");
+                  } else {
                     setDonationBoost("0");
-                    // Reset server totals when donation changes
-                    setServerTotals(null);
-                    setClientSecret(null);
-                    setPaymentIntentId(null);
                   }
+                  // Reset server totals when donation changes
+                  setServerTotals(null);
+                  setClientSecret(null);
+                  setPaymentIntentId(null);
                 }}
                 data-testid="checkbox-add-donation"
               />
