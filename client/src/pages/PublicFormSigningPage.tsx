@@ -11,6 +11,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CheckCircle2, AlertCircle, FileSignature, Loader2 } from "lucide-react";
 import SignaturePad from "signature_pad";
 import DOMPurify from "dompurify";
+import { tenantFetch } from "@/lib/tenantApi";
 
 interface CustomFormField {
   id: string;
@@ -165,7 +166,7 @@ export default function PublicFormSigningPage() {
 
   const submitMutation = useMutation<SubmitResponse, Error, { signatureData: string; formData?: Record<string, string> }>({
     mutationFn: async ({ signatureData, formData }) => {
-      const response = await fetch(`/api/public/forms/${token}/submit`, {
+      const response = await tenantFetch(`/api/public/forms/${token}/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ signatureData, formData }),
