@@ -823,6 +823,7 @@ export async function generateCustomFormPdf(
 }
 
 // Generate a time-limited signed URL for downloading a custom form PDF
+// Uses Replit's sidecar for URL signing
 export async function generateSignedFormUrl(pdfPath: string, signerName: string, ttlSec: number = 900): Promise<string> {
   const privateObjectDir = process.env.PRIVATE_OBJECT_DIR;
   if (!privateObjectDir) {
@@ -850,13 +851,30 @@ export async function generateSignedFormUrl(pdfPath: string, signerName: string,
     throw new Error('Form PDF file not found');
   }
 
-  // Generate signed URL using Google Cloud Storage
-  const [signedUrl] = await file.getSignedUrl({
-    version: 'v4',
-    action: 'read',
-    expires: Date.now() + ttlSec * 1000,
-    responseDisposition: `attachment; filename="form_${signerName.replace(/\s+/g, '_')}_${Date.now()}.pdf"`,
-  });
+  // Use Replit sidecar to generate signed URL (required in Replit environment)
+  const REPLIT_SIDECAR_ENDPOINT = "http://127.0.0.1:1106";
+  const request = {
+    bucket_name: bucketName,
+    object_name: objectName,
+    method: "GET",
+    expires_at: new Date(Date.now() + ttlSec * 1000).toISOString(),
+  };
+  
+  const response = await fetch(
+    `${REPLIT_SIDECAR_ENDPOINT}/object-storage/signed-object-url`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(request),
+    }
+  );
+  
+  if (!response.ok) {
+    throw new Error(`Failed to sign object URL: ${response.status}`);
+  }
 
+  const { signed_url: signedUrl } = await response.json();
   return signedUrl;
 }
