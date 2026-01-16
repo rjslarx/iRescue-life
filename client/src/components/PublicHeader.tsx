@@ -32,8 +32,8 @@ export default function PublicHeader({ rescueName, logoUrl }: PublicHeaderProps)
   
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container flex h-16 items-center justify-between gap-4 px-4 md:px-6">
-        <Link href="/" className="flex items-center gap-2 md:gap-3 hover-elevate rounded-md px-2 md:px-3 py-2 -ml-2 md:-ml-3">
+      <div className="container flex h-16 items-center gap-4 px-4 md:px-6">
+        <Link href="/" className="flex items-center gap-2 md:gap-3 hover-elevate rounded-md px-2 md:px-3 py-2 -ml-2 md:-ml-3 flex-1 min-w-0 overflow-hidden">
           <img 
             src={logoUrl || DEFAULT_LOGO} 
             alt={rescueName} 
@@ -99,7 +99,7 @@ export default function PublicHeader({ rescueName, logoUrl }: PublicHeaderProps)
 
         {/* Mobile Navigation */}
         <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-          <SheetTrigger asChild className="md:hidden">
+          <SheetTrigger asChild className="md:hidden flex-shrink-0">
             <Button variant="ghost" size="icon" data-testid="button-mobile-menu">
               <Menu className="h-5 w-5" />
             </Button>
