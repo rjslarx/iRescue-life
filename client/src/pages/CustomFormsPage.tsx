@@ -1571,7 +1571,7 @@ export default function CustomFormsPage() {
                       <img 
                         src={selectedSubmission.signatureData} 
                         alt="Signature" 
-                        className="max-h-24 border rounded p-2 bg-white"
+                        className="max-w-full h-auto max-h-48 border rounded p-2 bg-white object-contain"
                       />
                     </div>
                   )}

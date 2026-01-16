@@ -6970,56 +6970,63 @@ Submitted: ${new Date().toLocaleString()}
         status: 'completed',
       });
 
-      // Generate PDF and upload to storage (async - don't wait)
+      // Create document record and optionally generate PDF (async - don't wait)
       (async () => {
         try {
-          const { generateCustomFormPdf } = await import('./services/custom-form');
-          const pdfResult = await generateCustomFormPdf(submission.id, submission.tenantId);
+          const { documents, users } = await import('@shared/schema');
+          const fileName = `${form.name.replace(/\s+/g, '_')}_${submission.signerName.replace(/\s+/g, '_')}_${Date.now()}.pdf`;
           
-          if (pdfResult?.pdfUrl) {
-            // Update submission with PDF URL
-            await updateSubmission(submission.id, submission.tenantId, {
-              pdfUrl: pdfResult.pdfUrl,
-            });
+          // Get first admin user for uploadedBy field
+          const [adminUser] = await db.select({ id: users.id })
+            .from(users)
+            .where(and(
+              eq(users.tenantId, submission.tenantId),
+              eq(users.role, 'admin')
+            ))
+            .limit(1);
+          
+          // Try to generate PDF
+          let pdfUrl = null;
+          try {
+            const { generateCustomFormPdf } = await import('./services/custom-form');
+            const pdfResult = await generateCustomFormPdf(submission.id, submission.tenantId);
             
-            // Create document record in documents system
-            try {
-              const { documents } = await import('@shared/schema');
-              const fileName = `${form.name.replace(/\s+/g, '_')}_${submission.signerName.replace(/\s+/g, '_')}_${Date.now()}.pdf`;
+            if (pdfResult?.pdfUrl) {
+              pdfUrl = pdfResult.pdfUrl;
               
-              // Get first admin user for uploadedBy field
-              const { users } = await import('@shared/schema');
-              const [adminUser] = await db.select({ id: users.id })
-                .from(users)
-                .where(and(
-                  eq(users.tenantId, submission.tenantId),
-                  eq(users.role, 'admin')
-                ))
-                .limit(1);
-              
-              if (adminUser) {
-                await db.insert(documents).values({
-                  tenantId: submission.tenantId,
-                  title: `${form.name} - ${submission.signerName}`,
-                  description: `Signed form submitted on ${new Date().toLocaleDateString()}`,
-                  fileUrl: pdfResult.pdfUrl,
-                  fileName: fileName,
-                  fileSize: 50000, // Approximate PDF size
-                  category: 'forms',
-                  uploadedBy: adminUser.id,
-                  storageType: 'replit_object_storage',
-                  updatedAt: new Date(),
-                });
-                console.log(`[CustomForms] Document record created for submission ${submission.id}`);
-              } else {
-                console.warn(`[CustomForms] No admin user found to set as uploadedBy for document`);
-              }
-            } catch (docError) {
-              console.warn(`[CustomForms] Could not create document record:`, docError);
+              // Update submission with PDF URL
+              await updateSubmission(submission.id, submission.tenantId, {
+                pdfUrl: pdfUrl,
+              });
+              console.log(`[CustomForms] PDF generated for submission ${submission.id}`);
             }
+          } catch (pdfError) {
+            console.error(`[CustomForms] PDF generation failed for submission ${submission.id}:`, pdfError);
+            // Continue anyway - we'll create document record without PDF
           }
-        } catch (pdfError) {
-          console.error(`[CustomForms] PDF generation failed for submission ${submission.id}:`, pdfError);
+          
+          // Create document record regardless of PDF generation success
+          if (adminUser) {
+            await db.insert(documents).values({
+              tenantId: submission.tenantId,
+              title: `${form.name} - ${submission.signerName}`,
+              description: pdfUrl 
+                ? `Signed form submitted on ${new Date().toLocaleDateString()}`
+                : `Form submitted on ${new Date().toLocaleDateString()} (PDF generation pending)`,
+              fileUrl: pdfUrl || `/api/custom-forms/submissions/${submission.id}/pdf`,
+              fileName: fileName,
+              fileSize: pdfUrl ? 50000 : 0,
+              category: 'forms',
+              uploadedBy: adminUser.id,
+              storageType: pdfUrl ? 'replit_object_storage' : 'pending',
+              updatedAt: new Date(),
+            });
+            console.log(`[CustomForms] Document record created for submission ${submission.id}${pdfUrl ? ' with PDF' : ' (PDF pending)'}`);
+          } else {
+            console.warn(`[CustomForms] No admin user found to set as uploadedBy for document`);
+          }
+        } catch (docError) {
+          console.error(`[CustomForms] Could not create document record:`, docError);
         }
       })();
 
@@ -7083,6 +7090,47 @@ Submitted: ${new Date().toLocaleString()}
           }
         } catch (emailError) {
           console.error(`[CustomForms] Staff notification email failed:`, emailError);
+        }
+      })();
+
+      // Create inbox notification (async - don't wait)
+      (async () => {
+        try {
+          const { inboundEmails } = await import('@shared/schema');
+          const animalInfo = animal ? `\nAnimal: ${animal.name}` : '';
+          
+          const emailSubject = `Form Submission: ${form.name} from ${submission.signerName}`;
+          const emailBody = `
+Custom Form Submission Received
+
+Form: ${form.name}${animalInfo}
+
+Signer Information:
+Name: ${submission.signerName}
+Email: ${submission.signerEmail}
+Phone: ${submission.signerPhone || 'Not provided'}
+
+Submission ID: ${submission.id}
+Signed: ${new Date().toLocaleString()}
+IP Address: ${ipAddress}
+
+View this submission in Custom Forms > ${form.name} > Submissions
+          `.trim();
+
+          await db.insert(inboundEmails).values({
+            tenantId: submission.tenantId,
+            messageId: `custom-form-${submission.id}`,
+            from: submission.signerEmail,
+            fromName: submission.signerName,
+            to: `${tenant?.subdomain || 'forms'}@mail.irescue.life`,
+            subject: emailSubject,
+            textBody: emailBody,
+            htmlBody: emailBody.replace(/\n/g, '<br>'),
+            status: 'unprocessed',
+          });
+          console.log(`[CustomForms] Inbox notification created for submission ${submission.id}`);
+        } catch (inboxError) {
+          console.error(`[CustomForms] Failed to create inbox notification:`, inboxError);
         }
       })();
 
