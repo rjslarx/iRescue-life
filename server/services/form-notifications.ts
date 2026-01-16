@@ -141,8 +141,12 @@ This notification was sent because form submission notifications are enabled for
     `.trim();
 
     const { EmailService } = await import('../lib/email-service');
-    const emailService = new EmailService(data.tenantId);
-    await emailService.sendEmail({
+    const emailService = await EmailService.forTenant(data.tenantId);
+    if (!emailService) {
+      console.warn(`Email service not configured for tenant ${data.tenantId}, skipping form notification`);
+      return;
+    }
+    await emailService.send({
       to: recipientEmail,
       subject,
       html: htmlBody,

@@ -9971,7 +9971,7 @@ Submitted: ${new Date().toLocaleString()}
   app.post('/api/public/contact', requireTenant, emailLimiter, async (req, res, next) => {
     try {
       const { inboundEmails } = await import('@shared/schema');
-      const { emailService } = await import('./lib/email');
+      const { EmailService } = await import('./lib/email-service');
       
       const contactSchema = z.object({
         name: z.string().min(1),
@@ -9986,10 +9986,11 @@ Submitted: ${new Date().toLocaleString()}
       // Send email notification to tenant contact email
       try {
         if (req.tenant!.contactEmail) {
-          await emailService.sendEmail({
-            tenantId: req.tenant!.id,
-            to: req.tenant!.contactEmail,
-            subject: `Contact Form: ${data.subject}`,
+          const emailService = await EmailService.forTenant(req.tenant!.id);
+          if (emailService) {
+            await emailService.send({
+              to: req.tenant!.contactEmail,
+              subject: `Contact Form: ${data.subject}`,
             html: `
               <h2>New Contact Form Submission</h2>
               <p><strong>From:</strong> ${data.name} (${data.email})</p>
@@ -10012,7 +10013,8 @@ ${data.message}
 ---
 Submitted via ${req.tenant!.name} website contact form
             `.trim(),
-          });
+            });
+          }
         } else {
           // Log warning if no contact email configured
           console.warn(`Contact form submission received but tenant ${req.tenant!.id} has no contactEmail configured`);
@@ -10764,8 +10766,12 @@ Submitted: ${new Date().toLocaleString()}
         .limit(1);
 
       // Send foster request email
-      const { EmailService } = await import('./lib/email');
-      const emailService = new EmailService(req.tenant!.id);
+      const { EmailService } = await import('./lib/email-service');
+      const emailService = await EmailService.forTenant(req.tenant!.id);
+      
+      if (!emailService) {
+        return res.status(500).json({ error: 'Email service not configured for this organization' });
+      }
       
       // Build animal profile link
       const baseUrl = tenant?.customDomain && tenant?.customDomainVerified
@@ -10775,7 +10781,7 @@ Submitted: ${new Date().toLocaleString()}
       
       const photoUrl = animal.photoUrls && animal.photoUrls.length > 0 ? animal.photoUrls[0] : null;
       
-      await emailService.sendEmail({
+      await emailService.send({
         to: foster.email,
         subject: `Foster Match: We have a match for you! Meet ${animal.name}`,
         html: `
