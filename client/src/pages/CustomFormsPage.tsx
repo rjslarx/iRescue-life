@@ -1572,7 +1572,8 @@ export default function CustomFormsPage() {
                         <img 
                           src={selectedSubmission.signatureData} 
                           alt="Signature" 
-                          className="max-w-full h-auto max-h-48 border rounded p-2 bg-white object-contain"
+                          className="w-full min-h-[100px] max-h-[200px] border rounded p-2 bg-white"
+                          style={{ objectFit: 'contain' }}
                         />
                       </div>
                     )}
