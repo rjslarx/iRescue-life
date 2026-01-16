@@ -330,6 +330,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
       title: "Administration",
       items: [
         { title: "Finance", url: "/dashboard/finance", icon: DollarSign },
+        { title: "Donation Links", url: "/dashboard/donation-links", icon: DollarSign },
         { title: "Grants", url: "/dashboard/grants", icon: Briefcase },
         { title: "Calendar", url: "/dashboard/calendar", icon: Calendar },
         { title: "Calendar Management", url: "/dashboard/calendar-management", icon: CalendarCog },
@@ -387,6 +388,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
       title: "Content & Reports",
       items: [
         { title: "Finance", url: "/dashboard/finance", icon: DollarSign },
+        { title: "Donation Links", url: "/dashboard/donation-links", icon: DollarSign },
         { title: "Grants", url: "/dashboard/grants", icon: Briefcase },
         { title: "Supply Registry", url: "/dashboard/supplies", icon: ShoppingCart },
         { title: "Communications", url: "/dashboard/communications", icon: Mail },

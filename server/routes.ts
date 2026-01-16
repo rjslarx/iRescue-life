@@ -8342,6 +8342,206 @@ View this submission in Custom Forms > ${form.name} > Submissions
   });
 
   /**
+   * GET /api/donation-links
+   * Get all donation links for tenant (staff only)
+   */
+  app.get('/api/donation-links', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      const { donationLinks } = await import('@shared/schema');
+      
+      const links = await db.select()
+        .from(donationLinks)
+        .where(eq(donationLinks.tenantId, req.tenant!.id))
+        .orderBy(desc(donationLinks.createdAt));
+      
+      res.json({ donationLinks: links });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/donation-links
+   * Create a new donation link via Stripe Connect (admin only)
+   */
+  app.post('/api/donation-links', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+    try {
+      const { donationLinks } = await import('@shared/schema');
+      const { getPlatformStripeSecretKey, getPlatformFeePercent } = await import('./config/platform');
+      const Stripe = (await import('stripe')).default;
+      
+      const createDonationLinkSchema = z.object({
+        title: z.string().min(1).max(200),
+        description: z.string().optional(),
+        amount: z.number().min(100), // Minimum $1.00
+        isRecurring: z.boolean().default(true),
+        interval: z.enum(['month', 'year']).default('month'),
+        imageUrl: z.string().url().optional(),
+      });
+      
+      const data = createDonationLinkSchema.parse(req.body);
+      const tenant = req.tenant!;
+      
+      // Check if tenant has Stripe Connect configured
+      if (!tenant.stripeConnectedAccountId) {
+        return res.status(400).json({ 
+          error: 'Stripe Connect is not configured. Please connect your Stripe account first.' 
+        });
+      }
+      
+      const platformStripeKey = getPlatformStripeSecretKey();
+      if (!platformStripeKey) {
+        return res.status(500).json({ 
+          error: 'Platform Stripe key not configured.' 
+        });
+      }
+      
+      const stripe = new Stripe(platformStripeKey, {
+        apiVersion: '2025-09-30.clover',
+        typescript: true,
+      });
+      
+      // Get platform fee percent based on tenant tier
+      const platformFeePercent = getPlatformFeePercent(tenant.subscriptionTier as 'free' | 'professional');
+      
+      // 1. Create the Product on the connected account
+      const productParams: Stripe.ProductCreateParams = {
+        name: data.title,
+        description: data.description || `Donation to support ${tenant.name}`,
+      };
+      if (data.imageUrl) {
+        productParams.images = [data.imageUrl];
+      }
+      
+      const product = await stripe.products.create(
+        productParams,
+        { stripeAccount: tenant.stripeConnectedAccountId }
+      );
+      
+      // 2. Create the Price (recurring or one-time)
+      const priceParams: Stripe.PriceCreateParams = {
+        product: product.id,
+        unit_amount: data.amount,
+        currency: 'usd',
+      };
+      
+      if (data.isRecurring) {
+        priceParams.recurring = { interval: data.interval };
+      }
+      
+      const price = await stripe.prices.create(
+        priceParams,
+        { stripeAccount: tenant.stripeConnectedAccountId }
+      );
+      
+      // 3. Create the Payment Link with platform fee
+      const paymentLinkParams: Stripe.PaymentLinkCreateParams = {
+        line_items: [{ price: price.id, quantity: 1 }],
+        allow_promotion_codes: false,
+        billing_address_collection: 'auto',
+      };
+      
+      // Apply platform fee only if > 0
+      if (platformFeePercent > 0) {
+        paymentLinkParams.application_fee_percent = platformFeePercent;
+      }
+      
+      const paymentLink = await stripe.paymentLinks.create(
+        paymentLinkParams,
+        { stripeAccount: tenant.stripeConnectedAccountId }
+      );
+      
+      // 4. Save to database
+      const [newLink] = await db.insert(donationLinks).values({
+        tenantId: tenant.id,
+        title: data.title,
+        description: data.description,
+        amount: data.amount,
+        isRecurring: data.isRecurring,
+        interval: data.interval,
+        imageUrl: data.imageUrl,
+        stripeProductId: product.id,
+        stripePriceId: price.id,
+        stripePaymentLinkId: paymentLink.id,
+        stripePaymentLinkUrl: paymentLink.url,
+        createdById: req.user!.id,
+      }).returning();
+      
+      res.json({ 
+        success: true, 
+        donationLink: newLink,
+        paymentLinkUrl: paymentLink.url,
+      });
+    } catch (error: any) {
+      console.error('[DONATION_LINK] Error creating donation link:', error);
+      if (error.type === 'StripeInvalidRequestError') {
+        return res.status(400).json({ error: error.message });
+      }
+      next(error);
+    }
+  });
+
+  /**
+   * DELETE /api/donation-links/:id
+   * Deactivate a donation link (admin only)
+   */
+  app.delete('/api/donation-links/:id', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+    try {
+      const { donationLinks } = await import('@shared/schema');
+      const { getPlatformStripeSecretKey } = await import('./config/platform');
+      const Stripe = (await import('stripe')).default;
+      
+      const linkId = req.params.id;
+      if (!isValidUUID(linkId)) {
+        return res.status(400).json({ error: 'Invalid link ID' });
+      }
+      
+      // Find the link
+      const [link] = await db.select()
+        .from(donationLinks)
+        .where(and(
+          eq(donationLinks.id, linkId),
+          eq(donationLinks.tenantId, req.tenant!.id)
+        ));
+      
+      if (!link) {
+        return res.status(404).json({ error: 'Donation link not found' });
+      }
+      
+      const tenant = req.tenant!;
+      const platformStripeKey = getPlatformStripeSecretKey();
+      
+      // Deactivate the payment link on Stripe if possible
+      if (platformStripeKey && tenant.stripeConnectedAccountId) {
+        try {
+          const stripe = new Stripe(platformStripeKey, {
+            apiVersion: '2025-09-30.clover',
+            typescript: true,
+          });
+          
+          await stripe.paymentLinks.update(
+            link.stripePaymentLinkId,
+            { active: false },
+            { stripeAccount: tenant.stripeConnectedAccountId }
+          );
+        } catch (stripeError) {
+          console.error('[DONATION_LINK] Error deactivating on Stripe:', stripeError);
+          // Continue to mark as inactive in our DB even if Stripe fails
+        }
+      }
+      
+      // Mark as inactive in database
+      await db.update(donationLinks)
+        .set({ isActive: false, updatedAt: new Date() })
+        .where(eq(donationLinks.id, linkId));
+      
+      res.json({ success: true });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * GET /api/finance
    * Get financial data (staff only)
    */

@@ -1,0 +1,75 @@
+Since iRescue.life is a SaaS platform serving multiple rescues ("tenants"), you are likely using Stripe Connect.
+The critical part of this code is the { stripeAccount: connectedAccountId } header. This tells Stripe: "I am the platform (iRescue), but I am creating this product and link inside the Rescue's account, not mine."
+Here is a Node.js function that automates this. This function creates the product, sets the monthly price, and returns the URL the rescue needs for Facebook.
+The Backend Code (Node.js)
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+
+/**
+ * Creates a monthly donation link for a specific tenant (rescue).
+ * * @param {string} connectedAccountId - The Stripe ID of the rescue (e.g., 'acct_12345')
+ * @param {number} amountInCents - Donation amount (e.g., 2500 for $25.00)
+ * @param {string} title - E.g., "Monthly Kennel Sponsor"
+ * @param {string} imageUrl - URL of a dog photo (Crucial for the Facebook preview)
+ */
+async function createMonthlyDonationLink(connectedAccountId, amountInCents, title, imageUrl) {
+  try {
+    // 1. Create the Product (The "Tier")
+    // We pass { stripeAccount } so this lives on the Rescue's dashboard, not yours.
+    const product = await stripe.products.create(
+      {
+        name: title,
+        description: 'Monthly donation to support our rescue animals.',
+        images: [imageUrl], 
+      },
+      { stripeAccount: connectedAccountId }
+    );
+
+    // 2. Create the Recurring Price
+    const price = await stripe.prices.create(
+      {
+        product: product.id,
+        unit_amount: amountInCents,
+        currency: 'usd',
+        recurring: { interval: 'month' }, // This makes it a subscription
+      },
+      { stripeAccount: connectedAccountId }
+    );
+
+    // 3. Generate the Payment Link
+    const paymentLink = await stripe.paymentLinks.create(
+      {
+        line_items: [{ price: price.id, quantity: 1 }],
+        
+        // OPTIONAL: This is how iRescue.life makes money.
+        // If you charge a platform fee (e.g., 50 cents per donation):
+        // application_fee_amount: 50, 
+        // application_fee_percent: 2.5, // OR use percentage
+        
+        // Useful settings for rescues:
+        allow_promotion_codes: false,
+        billing_address_collection: 'auto', // Collect address for tax letters
+      },
+      { stripeAccount: connectedAccountId }
+    );
+
+    return paymentLink.url;
+
+  } catch (error) {
+    console.error("Error creating donation link:", error);
+    throw error;
+  }
+}
+
+// Example Usage:
+// createMonthlyDonationLink('acct_1RnH2x...', 2500, 'Puppy Protector', 'https://irescue.life/imgs/dog1.jpg')
+//   .then(url => console.log("Give this URL to the rescue:", url));
+
+Why this is powerful for your SaaS
+ * Platform Fees: Notice the commented-out application_fee_amount. This allows iRescue.life to automatically take a small cut (e.g., 1% or $0.30) of every donation for hosting the platform, while the rest goes directly to the rescue.
+ * No Coding for Tenants: You can build a simple form in your iRescue dashboard:
+   * Input: "Name of Fundraiser" (e.g., Spring Puppy Drive)
+   * Input: "Monthly Goal" (e.g., $20)
+   * Upload: Photo
+   * Button: "Generate Facebook Link"
+ * Direct Payouts: Because you used the stripeAccount header, the money lands in the Rescue's bank account, not yours. This saves you from the massive legal/tax headache of holding funds for nonprofits.
+Would you like to discuss how to verify if a specific rescue tenant has their Stripe account properly connected before running this function?

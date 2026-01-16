@@ -15,6 +15,7 @@ import Dashboard from "@/pages/Dashboard";
 import AnimalsPage from "@/pages/AnimalsPage";
 import ApplicationsPage from "@/pages/ApplicationsPage";
 import FinancePage from "@/pages/FinancePage";
+import DonationLinksPage from "@/pages/DonationLinksPage";
 import GrantsPage from "@/pages/GrantsPage";
 import DonorsPage from "@/pages/DonorsPage";
 import ContactsPage from "@/pages/ContactsPage";
@@ -202,6 +203,7 @@ function RouterSwitch() {
       <ProtectedRoute path="/dashboard/team" pageId="team" component={TeamManagementPage} />
       <ProtectedRoute path="/dashboard/analytics" pageId="analytics" component={Analytics} />
       <ProtectedRoute path="/dashboard/finance" pageId="finance" component={FinancePage} />
+      <ProtectedRoute path="/dashboard/donation-links" pageId="finance" component={DonationLinksPage} />
       <ProtectedRoute path="/dashboard/grants" pageId="grants" component={GrantsPage} />
       <ProtectedRoute path="/dashboard/donors" pageId="donors" component={DonorsPage} />
       <ProtectedRoute path="/dashboard/contacts" pageId="contacts" component={ContactsPage} />

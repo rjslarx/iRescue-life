@@ -838,6 +838,38 @@ export const insertSubscriptionSchema = createInsertSchema(subscriptions).omit({
 export type InsertSubscription = z.infer<typeof insertSubscriptionSchema>;
 export type Subscription = typeof subscriptions.$inferSelect;
 
+// Donation links table - shareable Stripe payment links for social media fundraising
+export const donationLinks = pgTable("donation_links", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  title: text("title").notNull(), // e.g., "Monthly Kennel Sponsor"
+  description: text("description"), // Optional description
+  amount: integer("amount").notNull(), // Amount in cents
+  isRecurring: boolean("is_recurring").notNull().default(true), // Monthly vs one-time
+  interval: text("interval").default("month").$type<"month" | "year">(), // Recurring interval
+  imageUrl: text("image_url"), // Image URL for the payment link preview
+  stripeProductId: text("stripe_product_id").notNull(), // Stripe Product ID on connected account
+  stripePriceId: text("stripe_price_id").notNull(), // Stripe Price ID on connected account
+  stripePaymentLinkId: text("stripe_payment_link_id").notNull(), // Stripe Payment Link ID
+  stripePaymentLinkUrl: text("stripe_payment_link_url").notNull(), // The actual URL to share
+  isActive: boolean("is_active").notNull().default(true), // Whether the link is active
+  createdById: uuid("created_by_id").references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertDonationLinkSchema = createInsertSchema(donationLinks).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  stripeProductId: true,
+  stripePriceId: true,
+  stripePaymentLinkId: true,
+  stripePaymentLinkUrl: true,
+});
+export type InsertDonationLink = z.infer<typeof insertDonationLinkSchema>;
+export type DonationLink = typeof donationLinks.$inferSelect;
+
 // Expenditures table - expenses per tenant
 export const expenditures = pgTable("expenditures", {
   id: uuid("id").primaryKey().defaultRandom(),
