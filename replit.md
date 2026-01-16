@@ -31,6 +31,12 @@ The platform includes a complete native e-signature system for adoption contract
   - Guided Builder mode: Section-based template construction
 - **Merge Fields:** Templates support placeholders ({{adopter_name}}, {{animal_name}}, {{organization_name}}, {{contract_date}}, {{adoption_fee}}, etc.) that auto-fill during checkout
 - **Native E-Signature:** Uses signature_pad library for browser-based signature capture
+- **Driver's License Verification:** Optional driver's license collection during adoption checkout:
+  - Number input field (max 50 characters)
+  - Photo upload (JPG/PNG/HEIC, max 10MB)
+  - Server-side validation for format and size
+  - Stored securely in private object storage with signed URL access
+- **Pre-built Templates:** Includes HASEYAS_NEW_BEGINNING_CONTRACT_HTML template with comprehensive terms for animal rescue organizations
 - **PDF Generation:** Puppeteer generates PDF contracts with embedded signature, IP address, and timestamp for legal verification
 - **Secure Storage:** Signed contracts stored in object storage with access controlled by session completion status
 - **Contract Download:** Adopters can download signed PDF contracts after completing the adoption process using time-limited signed URLs (15-minute expiry)
