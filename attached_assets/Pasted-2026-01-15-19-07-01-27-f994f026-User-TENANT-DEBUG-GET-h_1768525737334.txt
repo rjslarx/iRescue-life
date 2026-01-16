@@ -1,0 +1,52 @@
+2026-01-15 19:07:01.27
+f994f026
+User
+[TENANT DEBUG] GET /haseyas/api/notifications/counts - hostname: irescue.life, x-tenant-id: haseyas, session.tenantId: 3a4c2321-6a54-41a4-acf3-a7f2ffe0c051
+2026-01-15 19:07:01.46
+f994f026
+User
+[TENANT DEBUG] Path-based tenant detected: haseyas
+2026-01-15 19:07:01.46
+f994f026
+User
+[TENANT DEBUG] BEFORE stripping - req.url: /haseyas/api/notifications/counts, req.originalUrl: /haseyas/api/notifications/counts, req.path: /haseyas/api/notifications/counts
+2026-01-15 19:07:01.46
+f994f026
+User
+[TENANT DEBUG] AFTER stripping - req.url: /api/notifications/counts, req.originalUrl: /api/notifications/counts, req.path: /api/notifications/counts
+2026-01-15 19:07:03.78
+f994f026
+User
+1:07:03 AM [express] GET /api/notifications/counts 304 in 2257ms :: {"counts":{"applications":0,"med…
+2026-01-15 19:07:07.50
+f994f026
+User
+[TENANT DEBUG] GET /haseyas/api/animals - hostname: irescue.life, x-tenant-id: haseyas, session.tenantId: 3a4c2321-6a54-41a4-acf3-a7f2ffe0c051
+2026-01-15 19:07:07.52
+f994f026
+User
+[TENANT DEBUG] BEFORE stripping - req.url: /haseyas/api/animals, req.originalUrl: /haseyas/api/animals, req.path: /haseyas/api/animals
+2026-01-15 19:07:07.52
+f994f026
+User
+[TENANT DEBUG] Path-based tenant detected: haseyas
+2026-01-15 19:07:07.66
+f994f026
+User
+[TENANT DEBUG] GET /haseyas/api/custom-forms - hostname: irescue.life, x-tenant-id: haseyas, session.tenantId: 3a4c2321-6a54-41a4-acf3-a7f2ffe0c051
+2026-01-15 19:07:07.68
+f994f026
+User
+[TENANT DEBUG] Path-based tenant detected: haseyas
+2026-01-15 19:07:07.77
+f994f026
+User
+1:07:07 AM [express] GET /api/custom-forms 304 in 50ms :: {"forms":[{"id":"4f31b6fa-49d4-42da-a760-4…
+2026-01-15 19:07:08.80
+f994f026
+User
+[TENANT DEBUG] AFTER stripping - req.url: /api/custom-forms/4f31b6fa-49d4-42da-a760-41400ef4c591/submissions, req.originalUrl: /api/custom-forms/4f31b6fa-49d4-42da-a760-41400ef4c591/submissions, req.path: /api/custom-forms/4f31b6fa-49d4-42da-a760-41400ef4c591/submissions
+2026-01-15 19:07:08.80
+f994f026
+User
+[TENANT DEBUG] BEFORE stripping - req.url: /haseyas/api/custom-forms/4f31b6fa-49d4-42da-a760-41400ef4c591/submissions, req.originalUrl: /haseyas/api/custom-forms/4f31b6fa-49d4-42da-a760-41400ef4c591/submissions, req.path: /haseyas/api/custom-forms/4f31b6fa-49d4-42da-a760-41400ef4c591/submissions
