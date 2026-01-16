@@ -518,12 +518,43 @@ export async function generateAdoptionContractPDF(
 
   // Build merge data object
   const signedAt = signatureMetadata?.signedAt || new Date();
+  
+  // Extract address components and commitment dates from session metadata
+  const metadata = session.metadata as {
+    adopterStreetAddress?: string;
+    adopterStreetAddress2?: string;
+    adopterCity?: string;
+    adopterState?: string;
+    adopterZip?: string;
+    vetAppointmentDate?: string;
+    spayNeuterDate?: string;
+    waiveFee?: boolean;
+  } | null;
+  
+  // Use individual address fields if available, otherwise fall back to single address
+  const streetAddress = metadata?.adopterStreetAddress || '';
+  const streetAddress2 = metadata?.adopterStreetAddress2 || '';
+  const city = metadata?.adopterCity || '';
+  const state = metadata?.adopterState || '';
+  const zip = metadata?.adopterZip || '';
+  
+  // Build legacy full address for backwards compatibility
+  const fullAddress = adopterAddress || 
+    [streetAddress, streetAddress2, `${city}, ${state} ${zip}`]
+      .filter(line => line.trim())
+      .join('\n');
+  
   const mergeData: MergeData = {
     organization_name: tenant.name,
     adopter_name: adopterName,
     adopter_email: adopterEmail,
     adopter_phone: adopterPhone,
-    adopter_address: adopterAddress,
+    adopter_address: fullAddress,
+    adopter_street_address: streetAddress,
+    adopter_street_address_2: streetAddress2,
+    adopter_city: city,
+    adopter_state: state,
+    adopter_zip: zip,
     animal_name: animal.name,
     animal_species: animal.species,
     animal_breed: animal.breed,
@@ -536,6 +567,8 @@ export async function generateAdoptionContractPDF(
     signature_image_url: signatureImageUrl,
     signed_timestamp: signedAt.toISOString(),
     signed_ip: signatureMetadata?.ipAddress || 'Not recorded',
+    vet_appointment_date: metadata?.vetAppointmentDate || '_________________',
+    spay_neuter_date: metadata?.spayNeuterDate || '_________________',
   };
 
   // Merge placeholders with actual data

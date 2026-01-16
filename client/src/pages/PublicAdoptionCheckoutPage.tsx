@@ -554,6 +554,17 @@ function PublicAdoptionCheckoutPageContent() {
   const [driversLicenseNumber, setDriversLicenseNumber] = useState("");
   const [driversLicenseImage, setDriversLicenseImage] = useState<string | null>(null);
   const [driversLicenseFileName, setDriversLicenseFileName] = useState<string | null>(null);
+  
+  // Address fields
+  const [streetAddress, setStreetAddress] = useState("");
+  const [streetAddress2, setStreetAddress2] = useState("");
+  const [city, setCity] = useState("");
+  const [state, setState] = useState("");
+  const [zipCode, setZipCode] = useState("");
+  
+  // Commitment date fields
+  const [vetAppointmentDate, setVetAppointmentDate] = useState("");
+  const [spayNeuterDate, setSpayNeuterDate] = useState("");
 
   const { data: sessionData, isLoading, error } = useQuery<SessionData>({
     queryKey: ['/api/public/adoption-checkouts', token],
@@ -573,6 +584,15 @@ function PublicAdoptionCheckoutPageContent() {
         signatureImageData: signatureData,
         driversLicenseNumber: driversLicenseNumber || undefined,
         driversLicenseImageData: driversLicenseImage || undefined,
+        // Address fields
+        adopterStreetAddress: streetAddress || undefined,
+        adopterStreetAddress2: streetAddress2 || undefined,
+        adopterCity: city || undefined,
+        adopterState: state || undefined,
+        adopterZip: zipCode || undefined,
+        // Commitment date fields
+        vetAppointmentDate: vetAppointmentDate || undefined,
+        spayNeuterDate: spayNeuterDate || undefined,
       });
       return response.json();
     },
@@ -838,6 +858,116 @@ function PublicAdoptionCheckoutPageContent() {
                       </div>
                     </>
                   )}
+                </div>
+
+                <Separator />
+
+                {/* Your Address */}
+                <div className="space-y-4">
+                  <h4 className="font-semibold">Your Address</h4>
+                  <p className="text-sm text-muted-foreground">Please provide your complete mailing address.</p>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="streetAddress">Street Address <span className="text-destructive">*</span></Label>
+                    <Input
+                      id="streetAddress"
+                      placeholder="123 Main Street"
+                      value={streetAddress}
+                      onChange={(e) => setStreetAddress(e.target.value)}
+                      disabled={signMutation.isPending}
+                      data-testid="input-street-address"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="streetAddress2">Street Address Line 2</Label>
+                    <Input
+                      id="streetAddress2"
+                      placeholder="Apartment, suite, unit, etc. (optional)"
+                      value={streetAddress2}
+                      onChange={(e) => setStreetAddress2(e.target.value)}
+                      disabled={signMutation.isPending}
+                      data-testid="input-street-address-2"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="city">City <span className="text-destructive">*</span></Label>
+                      <Input
+                        id="city"
+                        placeholder="City"
+                        value={city}
+                        onChange={(e) => setCity(e.target.value)}
+                        disabled={signMutation.isPending}
+                        data-testid="input-city"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="state">State / Province <span className="text-destructive">*</span></Label>
+                      <Input
+                        id="state"
+                        placeholder="State"
+                        value={state}
+                        onChange={(e) => setState(e.target.value)}
+                        disabled={signMutation.isPending}
+                        data-testid="input-state"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="w-1/2">
+                    <div className="space-y-2">
+                      <Label htmlFor="zipCode">Postal / Zip Code <span className="text-destructive">*</span></Label>
+                      <Input
+                        id="zipCode"
+                        placeholder="12345"
+                        value={zipCode}
+                        onChange={(e) => setZipCode(e.target.value)}
+                        disabled={signMutation.isPending}
+                        data-testid="input-zip-code"
+                        required
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Commitment Dates */}
+                <div className="space-y-4">
+                  <h4 className="font-semibold">Commitment Dates</h4>
+                  <p className="text-sm text-muted-foreground">Please provide the dates by which you commit to the following.</p>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="vetAppointmentDate">Vet Visit Date (for shots)</Label>
+                      <Input
+                        id="vetAppointmentDate"
+                        type="date"
+                        value={vetAppointmentDate}
+                        onChange={(e) => setVetAppointmentDate(e.target.value)}
+                        disabled={signMutation.isPending}
+                        data-testid="input-vet-appointment-date"
+                      />
+                      <p className="text-xs text-muted-foreground">Date you will take the dog to a licensed vet for shots</p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="spayNeuterDate">Spay/Neuter Date</Label>
+                      <Input
+                        id="spayNeuterDate"
+                        type="date"
+                        value={spayNeuterDate}
+                        onChange={(e) => setSpayNeuterDate(e.target.value)}
+                        disabled={signMutation.isPending}
+                        data-testid="input-spay-neuter-date"
+                      />
+                      <p className="text-xs text-muted-foreground">Date you will have the dog spayed/neutered (if not already done)</p>
+                    </div>
+                  </div>
                 </div>
 
                 <Separator />

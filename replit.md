@@ -29,7 +29,14 @@ The platform includes a complete native e-signature system for adoption contract
 - **Contract Template Editor:** Staff can create custom contract templates using two modes:
   - Rich Text mode: Paste existing contracts with merge field placeholders
   - Guided Builder mode: Section-based template construction
-- **Merge Fields:** Templates support placeholders ({{adopter_name}}, {{animal_name}}, {{organization_name}}, {{contract_date}}, {{adoption_fee}}, etc.) that auto-fill during checkout
+- **Merge Fields:** Templates support placeholders that auto-fill during checkout:
+  - Adopter info: {{adopter_name}}, {{adopter_email}}, {{adopter_phone}}, {{adopter_address}}
+  - Address components: {{adopter_street_address}}, {{adopter_street_address_2}}, {{adopter_city}}, {{adopter_state}}, {{adopter_zip}}
+  - Animal info: {{animal_name}}, {{animal_species}}, {{animal_breed}}, {{animal_age}}, {{animal_sex}}
+  - Financial: {{adoption_fee}}, {{donation_amount}}, {{total_amount}}
+  - Contract: {{organization_name}}, {{contract_date}}, {{signature_image_url}}, {{signed_timestamp}}, {{signed_ip}}
+  - Commitment dates: {{vet_appointment_date}}, {{spay_neuter_date}} (adopter fills these during checkout)
+- **Adopter Input Fields:** During checkout, adopters enter their complete address (street, city, state, zip) and commitment dates for vet appointments and spay/neuter procedures
 - **Native E-Signature:** Uses signature_pad library for browser-based signature capture
 - **Driver's License Verification:** Optional driver's license collection during adoption checkout:
   - Number input field (max 50 characters)

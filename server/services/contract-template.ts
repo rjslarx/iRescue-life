@@ -8,7 +8,12 @@ export const MERGE_FIELDS = {
   '{{adopter_name}}': 'Adopter full name',
   '{{adopter_email}}': 'Adopter email',
   '{{adopter_phone}}': 'Adopter phone',
-  '{{adopter_address}}': 'Adopter address',
+  '{{adopter_address}}': 'Adopter full address (legacy single field)',
+  '{{adopter_street_address}}': 'Adopter street address line 1',
+  '{{adopter_street_address_2}}': 'Adopter street address line 2',
+  '{{adopter_city}}': 'Adopter city',
+  '{{adopter_state}}': 'Adopter state/province',
+  '{{adopter_zip}}': 'Adopter postal/zip code',
   '{{animal_name}}': 'Animal name',
   '{{animal_species}}': 'Animal species',
   '{{animal_breed}}': 'Animal breed',
@@ -21,6 +26,8 @@ export const MERGE_FIELDS = {
   '{{signature_image_url}}': 'Signature image URL',
   '{{signed_timestamp}}': 'Signature timestamp (ISO format)',
   '{{signed_ip}}': 'Signer IP address (for legal verification)',
+  '{{vet_appointment_date}}': 'Date adopter will take dog to vet for shots',
+  '{{spay_neuter_date}}': 'Date adopter will have dog spayed/neutered',
 };
 
 // Default adoption contract template HTML
@@ -142,12 +149,15 @@ export const HASEYAS_NEW_BEGINNING_CONTRACT_HTML = `<!DOCTYPE html>
   .info-grid { display: grid; grid-template-columns: 150px 1fr; gap: 10px; }
   .info-label { font-weight: bold; color: #555; }
   .info-value { color: #333; }
+  .address-block { margin-top: 5px; }
+  .address-line { display: block; }
   .notice { background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; font-style: italic; }
   .terms-section { margin: 25px 0; }
   .terms-section p { margin-bottom: 15px; text-align: justify; }
   .terms-section .term-item { margin-bottom: 18px; padding-left: 10px; }
   .highlight { color: #8B4513; font-weight: bold; }
   .important { font-weight: bold; }
+  .date-field { border-bottom: 1px solid #333; min-width: 120px; display: inline-block; padding: 0 5px; font-weight: bold; }
   .signature-block { margin-top: 40px; background-color: #f9f9f9; padding: 25px; border: 1px solid #ddd; border-radius: 5px; }
   .signature-line { margin: 20px 0; border-bottom: 2px solid #333; display: inline-block; min-width: 350px; }
   .digital-stamp { font-size: 0.85em; color: #666; margin-top: 15px; font-family: 'Courier New', monospace; background: #f0f0f0; padding: 10px; border-radius: 3px; }
@@ -175,7 +185,13 @@ export const HASEYAS_NEW_BEGINNING_CONTRACT_HTML = `<!DOCTYPE html>
       <span class="info-value">{{adopter_phone}}</span>
       
       <span class="info-label">Address:</span>
-      <span class="info-value">{{adopter_address}}</span>
+      <span class="info-value">
+        <div class="address-block">
+          <span class="address-line">{{adopter_street_address}}</span>
+          <span class="address-line">{{adopter_street_address_2}}</span>
+          <span class="address-line">{{adopter_city}}, {{adopter_state}} {{adopter_zip}}</span>
+        </div>
+      </span>
       
       <span class="info-label">Animal Name:</span>
       <span class="info-value highlight">{{animal_name}}</span>
@@ -211,11 +227,11 @@ export const HASEYAS_NEW_BEGINNING_CONTRACT_HTML = `<!DOCTYPE html>
 
     <p class="term-item">I will not have the dog's ears cropped nor will I have its tail docked. I will never allow any physical, mental, or emotional abuse of the dog.</p>
 
-    <p class="term-item">I will take the dog to a licensed veterinarian when shots are due but in no event later than one year from the last vet visit. I will provide all required and/or needed veterinary care, including: rabies shots as required every one or three years; yearly booster shots for DHLPPC; yearly fecal checks for internal parasites (worms); and prompt treatment by a licensed veterinarian for any illness or injury.</p>
+    <p class="term-item">I will take the dog to a licensed veterinarian when shots are due <span class="date-field">{{vet_appointment_date}}</span> but in no event later than one year from the last vet visit. I will provide all required and/or needed veterinary care, including: rabies shots as required every one or three years; yearly booster shots for DHLPPC; yearly fecal checks for internal parasites (worms); and prompt treatment by a licensed veterinarian for any illness or injury.</p>
 
     <p class="term-item">The dog will be given heartworm preventative tablets every month, all year long. I will have a heartworm test given every year. If there is any break in dispensing heartworm tablets, I must retest for heartworm and restart tablets immediately.</p>
 
-    <p class="term-item">If not already done, I will have the dog spayed/neutered and will immediately forward proof to the HNB office. (E-mail to haseyasnewbeginninghr@yahoo.com or mail to 1321 Section Ave Rayne, LA 70578). <span class="important">Failure to comply with this requirement will result in the immediate return of the dog to HNB with no refund.</span></p>
+    <p class="term-item">If not already done, I will have the dog spayed/neutered by <span class="date-field">{{spay_neuter_date}}</span> and will immediately forward proof to the HNB office. (E-mail to haseyasnewbeginninghr@yahoo.com or mail to 1321 Section Ave Rayne, LA 70578). <span class="important">Failure to comply with this requirement will result in the immediate return of the dog to HNB with no refund.</span></p>
 
     <p class="term-item">I/we affirm that no member of my household has been convicted of an animal welfare law violation such as neglect, cruelty, abandonment, etc.</p>
 
@@ -280,6 +296,11 @@ export interface MergeData {
   adopter_email?: string;
   adopter_phone?: string;
   adopter_address?: string;
+  adopter_street_address?: string;
+  adopter_street_address_2?: string;
+  adopter_city?: string;
+  adopter_state?: string;
+  adopter_zip?: string;
   animal_name?: string;
   animal_species?: string;
   animal_breed?: string;
@@ -292,6 +313,8 @@ export interface MergeData {
   signature_image_url?: string;
   signed_timestamp?: string;
   signed_ip?: string;
+  vet_appointment_date?: string;
+  spay_neuter_date?: string;
 }
 
 /**

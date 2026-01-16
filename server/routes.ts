@@ -5881,9 +5881,39 @@ Submitted: ${new Date().toLocaleString()}
           (val) => !val || val.length < 15 * 1024 * 1024, // ~10MB base64 limit
           { message: 'Driver\'s license image must be under 10MB' }
         ),
+        // Address fields
+        adopterStreetAddress: z.string().optional(),
+        adopterStreetAddress2: z.string().optional(),
+        adopterCity: z.string().optional(),
+        adopterState: z.string().optional(),
+        adopterZip: z.string().optional(),
+        // Commitment date fields
+        vetAppointmentDate: z.string().optional(),
+        spayNeuterDate: z.string().optional(),
       });
 
       const signatureData = signatureSchema.parse(req.body);
+
+      // Update session metadata with address and date fields before generating contract
+      if (signatureData.adopterStreetAddress || signatureData.vetAppointmentDate || signatureData.spayNeuterDate) {
+        const existingMetadata = (session.metadata as Record<string, any>) || {};
+        await db
+          .update(adoptionCheckoutSessions)
+          .set({
+            metadata: {
+              ...existingMetadata,
+              adopterStreetAddress: signatureData.adopterStreetAddress,
+              adopterStreetAddress2: signatureData.adopterStreetAddress2,
+              adopterCity: signatureData.adopterCity,
+              adopterState: signatureData.adopterState,
+              adopterZip: signatureData.adopterZip,
+              vetAppointmentDate: signatureData.vetAppointmentDate,
+              spayNeuterDate: signatureData.spayNeuterDate,
+            },
+            updatedAt: new Date(),
+          })
+          .where(eq(adoptionCheckoutSessions.id, session.id));
+      }
 
       // captureSignature now handles waived fees automatically
       // Returns { contract, skipPayment } where skipPayment=true means fee was waived
