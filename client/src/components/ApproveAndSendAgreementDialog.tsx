@@ -13,7 +13,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Check, Send, FileSignature, Star, AlertCircle } from "lucide-react";
+import { Loader2, Check, Send, FileSignature, Star, AlertCircle, Gift } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import type { Animal, Grant } from "@shared/schema";
 
 interface ContractTemplate {
@@ -36,6 +37,7 @@ interface ApplicationData {
 const formSchema = z.object({
   approvalAction: z.enum(["approve_only", "approve_and_send"]),
   baseFee: z.string().min(1, "Adoption fee is required"),
+  waiveFee: z.boolean().default(false),
   grantId: z.string().optional(),
   contractTemplateId: z.string().optional(),
 }).superRefine((data, ctx) => {
@@ -95,6 +97,7 @@ export function ApproveAndSendAgreementDialog({
     defaultValues: {
       approvalAction: "approve_and_send",
       baseFee: "",
+      waiveFee: false,
       grantId: "",
       contractTemplateId: "",
     },
@@ -115,6 +118,18 @@ export function ApproveAndSendAgreementDialog({
   const selectedGrantId = form.watch("grantId");
   const baseFee = form.watch("baseFee");
   const approvalAction = form.watch("approvalAction");
+  const waiveFee = form.watch("waiveFee");
+
+  // When waive fee is checked, set fee to 0
+  useEffect(() => {
+    if (waiveFee) {
+      form.setValue("baseFee", "0");
+      form.setValue("grantId", ""); // Clear any selected grant
+    } else if (open && animal && !waiveFee) {
+      // Restore original fee when unchecking waive
+      form.setValue("baseFee", animal.adoptionFee || "200");
+    }
+  }, [waiveFee, open, animal, form]);
 
   const selectedGrant = activeGrants.find(g => g.id === selectedGrantId);
 
@@ -132,7 +147,8 @@ export function ApproveAndSendAgreementDialog({
       const response = await apiRequest('POST', '/api/applications/approve-and-send', {
         applicationId: data.applicationId,
         sendContract: data.approvalAction === "approve_and_send",
-        baseFee: data.baseFee,
+        baseFee: data.waiveFee ? "0" : data.baseFee,
+        waiveFee: data.waiveFee,
         grantId: data.grantId || null,
         contractTemplateId: data.contractTemplateId || null,
       });
@@ -242,34 +258,75 @@ export function ApproveAndSendAgreementDialog({
               <>
                 <FormField
                   control={form.control}
-                  name="baseFee"
+                  name="waiveFee"
                   render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Adoption Fee *</FormLabel>
+                    <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4 bg-muted/50">
                       <FormControl>
-                        <div className="flex items-center gap-2">
-                          <span className="text-lg">$</span>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            placeholder="200.00"
-                            {...field}
-                            data-testid="input-adoption-fee"
-                          />
-                        </div>
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                          data-testid="checkbox-waive-fee"
+                        />
                       </FormControl>
-                      <FormDescription>
-                        {animal?.adoptionFee 
-                          ? `Pre-filled from ${animal.name}'s configured adoption fee`
-                          : "Enter the adoption fee amount"}
-                      </FormDescription>
-                      <FormMessage />
+                      <div className="space-y-1 leading-none">
+                        <FormLabel className="flex items-center gap-2 cursor-pointer">
+                          <Gift className="h-4 w-4 text-green-600" />
+                          Waive Adoption Fee
+                        </FormLabel>
+                        <FormDescription>
+                          Check this to waive the entire adoption fee (no payment required)
+                        </FormDescription>
+                      </div>
                     </FormItem>
                   )}
                 />
 
-                {activeGrants.length > 0 && (
+                {!waiveFee && (
+                  <FormField
+                    control={form.control}
+                    name="baseFee"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Adoption Fee *</FormLabel>
+                        <FormControl>
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg">$</span>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              placeholder="200.00"
+                              {...field}
+                              data-testid="input-adoption-fee"
+                            />
+                          </div>
+                        </FormControl>
+                        <FormDescription>
+                          {animal?.adoptionFee 
+                            ? `Pre-filled from ${animal.name}'s configured adoption fee`
+                            : "Enter the adoption fee amount"}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+
+                {waiveFee && (
+                  <Card className="bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800">
+                    <CardContent className="pt-4">
+                      <div className="flex items-center gap-2 text-green-700 dark:text-green-400">
+                        <Gift className="h-5 w-5" />
+                        <span className="font-medium">Adoption fee will be waived</span>
+                      </div>
+                      <p className="text-sm text-green-600 dark:text-green-500 mt-1">
+                        The adopter will not be charged any fee. They only need to sign the contract.
+                      </p>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {activeGrants.length > 0 && !waiveFee && (
                   <FormField
                     control={form.control}
                     name="grantId"
@@ -297,7 +354,7 @@ export function ApproveAndSendAgreementDialog({
                   />
                 )}
 
-                {selectedGrant && (
+                {selectedGrant && !waiveFee && (
                   <Card className="bg-muted">
                     <CardContent className="pt-4">
                       <div className="space-y-2 text-sm">

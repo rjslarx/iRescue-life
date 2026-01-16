@@ -175,6 +175,7 @@ export async function createCheckoutSession(
     contractTemplateId?: number;
     staffInitiatedBy: string;
     baseFee: string;
+    waiveFee?: boolean;
     donationBoost?: string;
     coverFees?: boolean;
     processor?: 'stripe';
@@ -277,9 +278,21 @@ export async function createCheckoutSession(
         sendAttempts: 0,
         createdBy: data.staffInitiatedBy,
         createdAt: new Date().toISOString(),
+        waiveFee: data.waiveFee || false,
       },
     })
     .returning();
+
+  // If fee is waived, update the application's fee status
+  if (data.waiveFee) {
+    await db
+      .update(applications)
+      .set({
+        adoptionFeeStatus: 'waived',
+        adoptionFeeAmount: '0',
+      })
+      .where(eq(applications.id, data.applicationId));
+  }
 
   return { session, token };
 }

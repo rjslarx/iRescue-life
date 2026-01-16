@@ -5398,11 +5398,12 @@ Submitted: ${new Date().toLocaleString()}
         applicationId: z.string().uuid(),
         sendContract: z.boolean().default(false),
         baseFee: z.string().optional(),
+        waiveFee: z.boolean().default(false),
         grantId: z.string().uuid().optional().nullable(),
         contractTemplateId: z.string().optional().nullable(),
       });
       
-      const { applicationId, sendContract, baseFee, grantId, contractTemplateId } = approveSchema.parse(req.body);
+      const { applicationId, sendContract, baseFee, waiveFee, grantId, contractTemplateId } = approveSchema.parse(req.body);
       
       // Get the application details
       const application = await getApplicationById(req.tenant!.id, applicationId);
@@ -5446,7 +5447,8 @@ Submitted: ${new Date().toLocaleString()}
           applicationId,
           animalId: application.animalId,
           staffInitiatedBy: req.user!.id,
-          baseFee: baseFee || '200',
+          baseFee: waiveFee ? '0' : (baseFee || '200'),
+          waiveFee,
           grantId: grantId || undefined,
           contractTemplateId: parsedTemplateId,
         });
@@ -5878,16 +5880,50 @@ Submitted: ${new Date().toLocaleString()}
         driversLicenseImageData: signatureData.driversLicenseImageData,
       });
 
-      // Automatically send payment link email after signature
-      // This continues the automated workflow: approval -> contract signing -> payment
-      try {
-        await sendPaymentLinkEmail(session.id, req.params.token);
-      } catch (emailError) {
-        console.error('Failed to send payment link email:', emailError);
-        // Don't fail the signature capture if email fails
-      }
+      // Check if fee is waived
+      const isWaived = session.baseFee === '0' || 
+        parseFloat(session.baseFee) === 0 ||
+        (session.metadata as any)?.waiveFee === true;
 
-      res.json({ success: true, contract: { id: contract.id } });
+      if (isWaived) {
+        // Fee is waived - complete the session directly without payment
+        const { completeAdoptionAfterPayment } = await import('./services/adoption-checkout');
+        const { adoptionCheckoutSessions, applications } = await import('@shared/schema');
+        
+        // Update session status to completed
+        await db
+          .update(adoptionCheckoutSessions)
+          .set({
+            status: 'completed',
+            completedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(adoptionCheckoutSessions.id, session.id));
+
+        // Update application to adopted with fee waived
+        await db
+          .update(applications)
+          .set({
+            stage: 'adopted',
+            adoptionFeeStatus: 'waived',
+            adoptionFeeAmount: '0',
+          })
+          .where(eq(applications.id, session.applicationId));
+
+        res.json({ success: true, contract: { id: contract.id }, skipPayment: true });
+      } else {
+        // Fee not waived - continue with normal payment flow
+        // Automatically send payment link email after signature
+        // This continues the automated workflow: approval -> contract signing -> payment
+        try {
+          await sendPaymentLinkEmail(session.id, req.params.token);
+        } catch (emailError) {
+          console.error('Failed to send payment link email:', emailError);
+          // Don't fail the signature capture if email fails
+        }
+
+        res.json({ success: true, contract: { id: contract.id }, skipPayment: false });
+      }
     } catch (error: any) {
       next(error);
     }

@@ -557,6 +557,11 @@ function PublicAdoptionCheckoutPageContent() {
     retry: false,
   });
 
+  // Check if fee is waived (baseFee is 0 or metadata indicates waived)
+  const isFeeWaived = sessionData?.session?.baseFee === "0" || 
+    parseFloat(sessionData?.session?.baseFee || "0") === 0 ||
+    (sessionData?.session?.metadata as any)?.waiveFee === true;
+
   const signMutation = useMutation({
     mutationFn: async (signatureData: string) => {
       const response = await apiRequest('POST', `/api/public/adoption-checkouts/${token}/sign`, {
@@ -568,12 +573,21 @@ function PublicAdoptionCheckoutPageContent() {
       });
       return response.json();
     },
-    onSuccess: () => {
-      setCurrentStep("payment");
-      toast({
-        title: "Contract signed!",
-        description: "Please proceed to payment",
-      });
+    onSuccess: (data) => {
+      // If fee is waived, skip payment and go directly to success
+      if (isFeeWaived || data?.skipPayment) {
+        setCurrentStep("success");
+        toast({
+          title: "Adoption complete!",
+          description: "Your adoption has been finalized",
+        });
+      } else {
+        setCurrentStep("payment");
+        toast({
+          title: "Contract signed!",
+          description: "Please proceed to payment",
+        });
+      }
     },
     onError: (error: any) => {
       toast({
@@ -627,7 +641,13 @@ function PublicAdoptionCheckoutPageContent() {
 
   const { session, animal, applicant, feeConfig, contract, organization } = sessionData;
 
-  const stepProgress = {
+  // Determine step progress based on whether fee is waived
+  const stepProgress = isFeeWaived ? {
+    review: 50,
+    sign: 100,
+    payment: 100, // Not used when waived
+    success: 100,
+  } : {
     review: 33,
     sign: 66,
     payment: 90,
@@ -656,9 +676,11 @@ function PublicAdoptionCheckoutPageContent() {
               <span className={currentStep === "sign" ? "font-medium text-foreground" : ""}>
                 Sign
               </span>
-              <span className={currentStep === "payment" ? "font-medium text-foreground" : ""}>
-                Payment
-              </span>
+              {!isFeeWaived && (
+                <span className={currentStep === "payment" ? "font-medium text-foreground" : ""}>
+                  Payment
+                </span>
+              )}
             </div>
           </div>
         )}
@@ -716,10 +738,17 @@ function PublicAdoptionCheckoutPageContent() {
                 {/* Fee Info */}
                 <div>
                   <h3 className="font-semibold mb-3">Adoption Fee</h3>
-                  <div className="flex justify-between text-lg">
-                    <span>Total:</span>
-                    <span className="font-bold">${session.baseFee}</span>
-                  </div>
+                  {isFeeWaived ? (
+                    <div className="flex justify-between text-lg">
+                      <span>Total:</span>
+                      <span className="font-bold text-green-600 dark:text-green-400">Fee Waived</span>
+                    </div>
+                  ) : (
+                    <div className="flex justify-between text-lg">
+                      <span>Total:</span>
+                      <span className="font-bold">${session.baseFee}</span>
+                    </div>
+                  )}
                 </div>
 
                 <Alert>
