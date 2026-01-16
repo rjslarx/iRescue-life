@@ -7005,11 +7005,12 @@ Submitted: ${new Date().toLocaleString()}
           const fileName = `${form.name.replace(/\s+/g, '_')}_${submission.signerName.replace(/\s+/g, '_')}_${Date.now()}.pdf`;
           
           // Get first admin user for uploadedBy field
+          // Note: roles is an array, so we use sql to check array containment
           const [adminUser] = await db.select({ id: users.id })
             .from(users)
             .where(and(
               eq(users.tenantId, submission.tenantId),
-              eq(users.role, 'admin')
+              sql`'admin' = ANY(${users.roles})`
             ))
             .limit(1);
           
