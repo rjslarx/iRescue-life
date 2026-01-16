@@ -12,7 +12,8 @@ import { Badge } from "@/components/ui/badge";
 import { SignatureCanvas } from "@/components/SignatureCanvas";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, CheckCircle2, ChevronLeft, ChevronRight, Heart, AlertCircle, FileText, CreditCard, Download } from "lucide-react";
+import { Loader2, CheckCircle2, ChevronLeft, ChevronRight, Heart, AlertCircle, FileText, CreditCard, Download, Upload, X } from "lucide-react";
+import { Label } from "@/components/ui/label";
 import { Elements, CardElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { loadStripe } from "@stripe/stripe-js";
 
@@ -547,6 +548,9 @@ function PublicAdoptionCheckoutPageContent() {
   const [currentStep, setCurrentStep] = useState<Step>("review");
   const [signature, setSignature] = useState<string | null>(null);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [driversLicenseNumber, setDriversLicenseNumber] = useState("");
+  const [driversLicenseImage, setDriversLicenseImage] = useState<string | null>(null);
+  const [driversLicenseFileName, setDriversLicenseFileName] = useState<string | null>(null);
 
   const { data: sessionData, isLoading, error } = useQuery<SessionData>({
     queryKey: ['/api/public/adoption-checkouts', token],
@@ -559,6 +563,8 @@ function PublicAdoptionCheckoutPageContent() {
         signerName: sessionData?.applicant.name || "",
         signerEmail: sessionData?.applicant.email || "",
         signatureImageData: signatureData,
+        driversLicenseNumber: driversLicenseNumber || undefined,
+        driversLicenseImageData: driversLicenseImage || undefined,
       });
       return response.json();
     },
@@ -800,6 +806,89 @@ function PublicAdoptionCheckoutPageContent() {
                       </div>
                     </>
                   )}
+                </div>
+
+                <Separator />
+
+                {/* Driver's License */}
+                <div className="space-y-4">
+                  <h4 className="font-semibold">Driver's License Information</h4>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="driversLicenseNumber">Driver's License Number</Label>
+                    <Input
+                      id="driversLicenseNumber"
+                      placeholder="Enter your driver's license number"
+                      value={driversLicenseNumber}
+                      onChange={(e) => setDriversLicenseNumber(e.target.value)}
+                      disabled={signMutation.isPending}
+                      data-testid="input-drivers-license-number"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Photo of Driver's License</Label>
+                    {driversLicenseImage ? (
+                      <div className="relative border rounded-lg p-4 bg-muted/30">
+                        <div className="flex items-center gap-3">
+                          <CheckCircle2 className="h-5 w-5 text-green-600" />
+                          <span className="text-sm font-medium">{driversLicenseFileName}</span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="ml-auto"
+                            onClick={() => {
+                              setDriversLicenseImage(null);
+                              setDriversLicenseFileName(null);
+                            }}
+                            disabled={signMutation.isPending}
+                            data-testid="button-remove-license-photo"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="border-2 border-dashed rounded-lg p-6 text-center hover:border-primary/50 transition-colors">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          id="driversLicenseUpload"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              if (file.size > 10 * 1024 * 1024) {
+                                toast({
+                                  title: "File too large",
+                                  description: "Please upload an image smaller than 10MB",
+                                  variant: "destructive",
+                                });
+                                return;
+                              }
+                              const reader = new FileReader();
+                              reader.onload = (event) => {
+                                setDriversLicenseImage(event.target?.result as string);
+                                setDriversLicenseFileName(file.name);
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                          }}
+                          disabled={signMutation.isPending}
+                        />
+                        <label htmlFor="driversLicenseUpload" className="cursor-pointer">
+                          <Upload className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                          <p className="text-sm text-muted-foreground">
+                            Click to upload a photo of your driver's license
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            JPG, PNG, or HEIC (max 10MB)
+                          </p>
+                        </label>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <Separator />
