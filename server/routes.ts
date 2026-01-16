@@ -5758,6 +5758,13 @@ Submitted: ${new Date().toLocaleString()}
           .limit(1);
         
         if (template) {
+          // Calculate totals for display
+          const donationAmount = parseFloat(session.donationBoost?.toString() || '0');
+          const baseFee = parseFloat(session.baseFee?.toString() || '0');
+          const totalAmount = session.totals?.total 
+            ? parseFloat(session.totals.total.toString()) 
+            : baseFee + donationAmount;
+          
           // Replace merge fields with actual data
           const mergeFieldValues: Record<string, string> = {
             '{{adopter_name}}': application?.applicantName || '',
@@ -5771,7 +5778,13 @@ Submitted: ${new Date().toLocaleString()}
             '{{animal_sex}}': animal?.sex || '',
             '{{organization_name}}': tenant?.name || '',
             '{{contract_date}}': new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
-            '{{adoption_fee}}': `$${session.baseFee}`,
+            '{{adoption_fee}}': `$${baseFee.toFixed(2)}`,
+            '{{donation_amount}}': donationAmount > 0 ? `$${donationAmount.toFixed(2)}` : '$0.00',
+            '{{total_amount}}': `$${totalAmount.toFixed(2)}`,
+            // Pre-signing placeholders - will be filled with actual values after signing
+            '{{signed_timestamp}}': '(Will be recorded upon signing)',
+            '{{signed_ip}}': '(Will be recorded upon signing)',
+            '{{signature_image_url}}': '',
           };
           
           let processedHtml = template.htmlTemplate;
