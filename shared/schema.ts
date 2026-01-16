@@ -2705,6 +2705,8 @@ export const adoptionContracts = pgTable("adoption_contracts", {
   templateSnapshot: jsonb("template_snapshot").notNull(), // Snapshot of template used
   contractPdfUrl: text("contract_pdf_url"), // Object storage URL
   signatureImageUrl: text("signature_image_url"), // Object storage URL
+  driversLicenseImageUrl: text("drivers_license_image_url"), // Driver's license photo URL
+  driversLicenseNumber: text("drivers_license_number"), // Driver's license number
   signerName: text("signer_name").notNull(),
   signerEmail: text("signer_email").notNull(),
   signedIp: text("signed_ip"),
