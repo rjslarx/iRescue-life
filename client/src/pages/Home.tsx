@@ -351,16 +351,20 @@ export default function Home() {
     );
   };
 
-  // Randomly select and limit animals for homepage display
-  const displayedAnimals = useMemo(() => {
-    const availableAnimals = animals.filter(animal => 
+  // Get all available animals for carousel
+  const allAvailableAnimals = useMemo(() => {
+    return animals.filter(animal => 
       animal.status === "available" || animal.status === "foster"
     );
+  }, [animals]);
+
+  // Randomly select and limit animals for desktop grid display (8 max)
+  const displayedAnimals = useMemo(() => {
     // Shuffle array using Fisher-Yates algorithm
-    const shuffled = [...availableAnimals].sort(() => Math.random() - 0.5);
+    const shuffled = [...allAvailableAnimals].sort(() => Math.random() - 0.5);
     // Return first 8 animals
     return shuffled.slice(0, 8);
-  }, [animals]);
+  }, [allAvailableAnimals]);
 
   const handleAdopt = (animal: Animal) => {
     setSelectedAnimal(animal);
@@ -496,11 +500,11 @@ export default function Home() {
                 </div>
               ))}
             </div>
-          ) : displayedAnimals.length > 0 ? (
+          ) : allAvailableAnimals.length > 0 ? (
             <>
               {isMobile ? (
                 <MobileAnimalCarousel
-                  animals={displayedAnimals}
+                  animals={allAvailableAnimals}
                   basePath={basePath}
                   onAdopt={handleAdopt}
                   onSponsor={handleSponsor}
