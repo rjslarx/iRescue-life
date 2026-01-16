@@ -5853,10 +5853,19 @@ Submitted: ${new Date().toLocaleString()}
       const signatureSchema = z.object({
         signerName: z.string().min(1),
         signerEmail: z.string().email(),
-        signatureImageData: z.string(), // Base64 image
+        signatureImageData: z.string().refine(
+          (val) => val.startsWith('data:image/'),
+          { message: 'Signature must be a valid image' }
+        ),
         templateId: z.number().optional(),
-        driversLicenseNumber: z.string().optional(),
-        driversLicenseImageData: z.string().optional(), // Base64 image
+        driversLicenseNumber: z.string().max(50).optional(),
+        driversLicenseImageData: z.string().optional().refine(
+          (val) => !val || val.startsWith('data:image/'),
+          { message: 'Driver\'s license must be a valid image' }
+        ).refine(
+          (val) => !val || val.length < 15 * 1024 * 1024, // ~10MB base64 limit
+          { message: 'Driver\'s license image must be under 10MB' }
+        ),
       });
 
       const signatureData = signatureSchema.parse(req.body);

@@ -129,6 +129,150 @@ export const DEFAULT_ADOPTION_CONTRACT_HTML = `<!DOCTYPE html>
 </body>
 </html>`;
 
+// Haseya's New Beginning Adoption Contract Template
+export const HASEYAS_NEW_BEGINNING_CONTRACT_HTML = `<!DOCTYPE html>
+<html>
+<head>
+<style>
+  body { font-family: 'Georgia', 'Times New Roman', serif; line-height: 1.8; color: #333; max-width: 800px; margin: 0 auto; padding: 20px; }
+  h1 { text-align: center; font-size: 2em; margin-bottom: 5px; }
+  h2 { text-align: center; font-size: 1.4em; color: #666; margin-top: 0; padding-bottom: 20px; border-bottom: 2px solid #8B4513; }
+  .header-section { text-align: center; margin-bottom: 30px; }
+  .info-section { background: #faf8f5; border: 1px solid #ddd; padding: 20px; margin-bottom: 25px; border-radius: 5px; }
+  .info-grid { display: grid; grid-template-columns: 150px 1fr; gap: 10px; }
+  .info-label { font-weight: bold; color: #555; }
+  .info-value { color: #333; }
+  .notice { background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; font-style: italic; }
+  .terms-section { margin: 25px 0; }
+  .terms-section p { margin-bottom: 15px; text-align: justify; }
+  .terms-section .term-item { margin-bottom: 18px; padding-left: 10px; }
+  .highlight { color: #8B4513; font-weight: bold; }
+  .important { font-weight: bold; }
+  .signature-block { margin-top: 40px; background-color: #f9f9f9; padding: 25px; border: 1px solid #ddd; border-radius: 5px; }
+  .signature-line { margin: 20px 0; border-bottom: 2px solid #333; display: inline-block; min-width: 350px; }
+  .digital-stamp { font-size: 0.85em; color: #666; margin-top: 15px; font-family: 'Courier New', monospace; background: #f0f0f0; padding: 10px; border-radius: 3px; }
+  .fee-box { text-align: right; background: #f5f5f5; padding: 15px; border: 1px solid #ddd; margin: 20px 0; }
+  .fee-total { font-size: 1.2em; border-top: 1px solid #ccc; padding-top: 10px; margin-top: 10px; }
+  .contact-info { font-size: 0.9em; color: #666; text-align: center; margin-top: 30px; }
+</style>
+</head>
+<body>
+
+  <div class="header-section">
+    <h1>Haseya's New Beginning</h1>
+    <h2>Adoption Agreement</h2>
+  </div>
+
+  <div class="info-section">
+    <div class="info-grid">
+      <span class="info-label">Adopter Name:</span>
+      <span class="info-value">{{adopter_name}}</span>
+      
+      <span class="info-label">Email:</span>
+      <span class="info-value">{{adopter_email}}</span>
+      
+      <span class="info-label">Phone:</span>
+      <span class="info-value">{{adopter_phone}}</span>
+      
+      <span class="info-label">Address:</span>
+      <span class="info-value">{{adopter_address}}</span>
+      
+      <span class="info-label">Animal Name:</span>
+      <span class="info-value highlight">{{animal_name}}</span>
+      
+      <span class="info-label">Species/Breed:</span>
+      <span class="info-value">{{animal_species}} / {{animal_breed}}</span>
+      
+      <span class="info-label">Date:</span>
+      <span class="info-value">{{contract_date}}</span>
+    </div>
+  </div>
+
+  <div class="notice">
+    Please read this carefully because you are signing a legally binding document. If you are adopting a puppy under the age of six months who has not yet been altered, you will also be required to sign the Spay/Neuter Agreement.
+  </div>
+
+  <div class="terms-section">
+    <p><strong>The parties hereto agree that the owners shall abide by the following conditions:</strong></p>
+
+    <p class="term-item"><span class="highlight">{{animal_name}}</span>, hereinafter referred to as "the dog," is being transferred to the adopting owner with the understanding that the adopter is taking possession of the dog to treat and to be responsible for it as their own dog.</p>
+
+    <p class="term-item">The dog will be treated as a family member with loving care and affection. I will do my best to ensure the dog's safety and well-being.</p>
+
+    <p class="term-item">I/we will feed the dog at least twice a day and will provide a fresh supply of water at all times.</p>
+
+    <p class="term-item">The dog will live inside my home and will not be isolated from the family.</p>
+
+    <p class="term-item">I will walk my dog on a leash or exercise my dog in a fenced yard, which must be provided unless waived by HNB.</p>
+
+    <p class="term-item">I will <span class="important">never</span> let my dog run loose or roam, keep my dog chained or tied up, keep it continuously in a yard, garage, patio, balcony, or pen, or leave my dog outdoors, even in a fenced yard when no one is at home.</p>
+
+    <p class="term-item">I will not have the dog attack-trained nor will I use it for any purpose other than companionship.</p>
+
+    <p class="term-item">I will not have the dog's ears cropped nor will I have its tail docked. I will never allow any physical, mental, or emotional abuse of the dog.</p>
+
+    <p class="term-item">I will take the dog to a licensed veterinarian when shots are due but in no event later than one year from the last vet visit. I will provide all required and/or needed veterinary care, including: rabies shots as required every one or three years; yearly booster shots for DHLPPC; yearly fecal checks for internal parasites (worms); and prompt treatment by a licensed veterinarian for any illness or injury.</p>
+
+    <p class="term-item">The dog will be given heartworm preventative tablets every month, all year long. I will have a heartworm test given every year. If there is any break in dispensing heartworm tablets, I must retest for heartworm and restart tablets immediately.</p>
+
+    <p class="term-item">If not already done, I will have the dog spayed/neutered and will immediately forward proof to the HNB office. (E-mail to haseyasnewbeginninghr@yahoo.com or mail to 1321 Section Ave Rayne, LA 70578). <span class="important">Failure to comply with this requirement will result in the immediate return of the dog to HNB with no refund.</span></p>
+
+    <p class="term-item">I/we affirm that no member of my household has been convicted of an animal welfare law violation such as neglect, cruelty, abandonment, etc.</p>
+
+    <p class="term-item">I will ensure proper licensing of the dog and will attach the appropriate license tags, rabies tag, HNB tag, and personal identification tag to a non-choke collar to be worn at all times. I will ensure compliance with all applicable local and state statutes.</p>
+
+    <p class="term-item">I will not use a choke-type collar at any time, except for training under the guidance of a qualified dog trainer.</p>
+
+    <p class="term-item">I am adopting the dog for myself and I agree to not give away, sell, or trade my dog, even as a gift to a friend or family member.</p>
+
+    <p class="term-item">I will neither take the dog to a shelter nor abandon the dog. I understand that I must notify HNB without delay if I can no longer care for or keep my dog and agree to give HNB reasonable time to rehome my dog or place my dog in an approved foster home, if available. I must notify HNB of any behavioral problems that have occurred at any time before I return my dog and I agree to pay for a professional trainer's evaluation in case of biting or aggression.</p>
+
+    <p class="term-item">I agree to accept responsibility and ownership of the dog at my own risk and I release HNB and its agents from any and all liability arising out of possession and ownership of my dog.</p>
+
+    <p class="term-item">I agree that I am assuming total financial responsibility for my pet as of the date of this contract. HNB and its agents will not be held responsible for any damages or expenses (veterinary or other) incurred during my ownership of the dog.</p>
+
+    <p class="term-item">I agree to take the dog to obedience training classes as a puppy, and/or as an adult.</p>
+
+    <p class="term-item"><span class="important">**In the event the dog becomes lost or dies, I will immediately notify HNB. I will also immediately notify HNB of any change of contact information (address, phone number, or email address).</span></p>
+
+    <p class="term-item"><span class="important">**This dog's known background and medical history have been discussed with me. I understand that HNB has made no representation concerning the health, condition, training, behavior, or temperament of the dog.</span></p>
+
+    <p class="term-item"><span class="important">**I agree to permit HNB to make inquiry about and enforce any of the above conditions and requirements at any time after adoption. This can include visits to my home and contact with my veterinarian. I UNDERSTAND THAT FAILURE TO COMPLY WITH ANY OF THE ABOVE PROVISIONS WILL RESULT IN FORFEITURE OF THE DOG TO HNB WITH NO REFUND.</span></p>
+
+    <p class="term-item"><span class="important">**I understand that by voluntarily signing this agreement, I am entering into a legal and binding contract with Haseya's New Beginning. Breach of any term(s) of this agreement is deemed actionable by HNB. In the event there is a violation of the agreement, I agree to pay a minimum of $500.00 in damages.</span></p>
+  </div>
+
+  <div class="fee-box">
+    <p>Adoption Fee: <strong>{{adoption_fee}}</strong></p>
+    <p>Additional Donation: <strong>{{donation_amount}}</strong></p>
+    <div class="fee-total">Total Paid: <strong>{{total_amount}}</strong></div>
+  </div>
+
+  <div class="signature-block">
+    <p>I, <strong>{{adopter_name}}</strong>, certify that the information provided is true and I understand and agree to all terms of this Adoption Agreement.</p>
+    
+    <div class="signature-line">
+      <img src="{{signature_image_url}}" alt="Adopter Signature" style="max-height: 80px;" />
+    </div>
+    <br>
+    <strong>Signature of Adopter</strong>
+    
+    <div class="digital-stamp">
+      <p>Digitally Signed via iRescue.life</p>
+      <p>Timestamp: {{signed_timestamp}}</p>
+      <p>IP Address: {{signed_ip}}</p>
+    </div>
+  </div>
+
+  <div class="contact-info">
+    <p>Haseya's New Beginning<br>
+    1321 Section Ave, Rayne, LA 70578<br>
+    haseyasnewbeginninghr@yahoo.com</p>
+  </div>
+
+</body>
+</html>`;
+
 // Type for merge data (all fields optional to handle missing data gracefully)
 export interface MergeData {
   organization_name?: string;
