@@ -315,7 +315,7 @@ export async function getCheckoutSession(tenantId: string, sessionId: string): P
 
 /**
  * Get checkout session by token (public access)
- * Only returns sessions with status 'initiated' that haven't expired
+ * Returns sessions that are in the adoption workflow and haven't expired
  */
 export async function getCheckoutSessionByToken(token: string): Promise<AdoptionCheckoutSession | null> {
   // This is a bit inefficient but secure - we need to check all sessions
@@ -323,7 +323,9 @@ export async function getCheckoutSessionByToken(token: string): Promise<Adoption
   const allSessions = await db
     .select()
     .from(adoptionCheckoutSessions)
-    .where(eq(adoptionCheckoutSessions.status, 'initiated'));
+    .where(
+      sql`${adoptionCheckoutSessions.status} IN ('initiated', 'awaiting_signature', 'awaiting_payment')`
+    );
 
   for (const session of allSessions) {
     const isValid = await bcrypt.compare(token, session.secureTokenHash);
