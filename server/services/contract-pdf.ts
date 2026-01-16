@@ -8,23 +8,31 @@ import { eq } from 'drizzle-orm';
 import { getDefaultTemplate, ensureDefaultTemplate, mergePlaceholders, type MergeData } from './contract-template';
 
 /**
- * Convert base64 signature data to PNG and upload to object storage
- * @param signatureBase64 - Base64 encoded signature image (data:image/png;base64,...)
- * @returns Object storage URL for the signature image
+ * Convert base64 signature/image data to PNG and upload to object storage
+ * @param imageBase64 - Base64 encoded image (data:image/png;base64,...)
+ * @param type - Type of image: 'signature' or 'drivers-license'
+ * @returns Object storage URL for the image
  */
-export async function processSignatureImage(signatureBase64: string): Promise<string> {
+export async function processSignatureImage(imageBase64: string, type: 'signature' | 'drivers-license' = 'signature'): Promise<string> {
   // Remove data URL prefix if present
-  const base64Data = signatureBase64.replace(/^data:image\/\w+;base64,/, '');
+  const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
   const buffer = Buffer.from(base64Data, 'base64');
 
-  // Process image with sharp - optimize and convert to PNG
-  const processedImage = await sharp(buffer)
-    .resize(800, 200, { // Reasonable signature size
-      fit: 'contain',
-      background: { r: 255, g: 255, b: 255, alpha: 0 } // Transparent background
-    })
-    .png({ quality: 90 })
-    .toBuffer();
+  // Configure resize options based on type
+  const resizeOptions = type === 'signature' 
+    ? { width: 800, height: 200, fit: 'contain' as const, background: { r: 255, g: 255, b: 255, alpha: 0 } }
+    : { width: 1200, height: 800, fit: 'inside' as const }; // Larger for license photos
+
+  // Process image with sharp - optimize and convert to PNG/JPEG
+  const processedImage = type === 'signature'
+    ? await sharp(buffer)
+        .resize(resizeOptions.width, resizeOptions.height, { fit: resizeOptions.fit, background: resizeOptions.background })
+        .png({ quality: 90 })
+        .toBuffer()
+    : await sharp(buffer)
+        .resize(resizeOptions.width, resizeOptions.height, { fit: resizeOptions.fit })
+        .jpeg({ quality: 85 }) // JPEG for photos to save space
+        .toBuffer();
 
   // Upload to object storage
   const privateObjectDir = process.env.PRIVATE_OBJECT_DIR;
@@ -34,7 +42,10 @@ export async function processSignatureImage(signatureBase64: string): Promise<st
 
   const timestamp = Date.now();
   const randomId = Math.random().toString(36).substring(7);
-  const objectPath = `${privateObjectDir}/signatures/sig_${timestamp}_${randomId}.png`;
+  const folder = type === 'signature' ? 'signatures' : 'drivers-licenses';
+  const prefix = type === 'signature' ? 'sig' : 'dl';
+  const ext = type === 'signature' ? 'png' : 'jpg';
+  const objectPath = `${privateObjectDir}/${folder}/${prefix}_${timestamp}_${randomId}.${ext}`;
   const pathParts = objectPath.split('/');
   const bucketName = pathParts[1];
   const objectName = pathParts.slice(2).join('/');
@@ -44,12 +55,12 @@ export async function processSignatureImage(signatureBase64: string): Promise<st
 
   await file.save(processedImage, {
     metadata: {
-      contentType: 'image/png',
+      contentType: type === 'signature' ? 'image/png' : 'image/jpeg',
     },
   });
 
-  // Return public URL
-  return `/objects/signatures/${file.name.split('/').pop()}`;
+  // Return storage URL
+  return `/objects/${folder}/${file.name.split('/').pop()}`;
 }
 
 /**

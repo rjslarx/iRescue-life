@@ -5855,6 +5855,8 @@ Submitted: ${new Date().toLocaleString()}
         signerEmail: z.string().email(),
         signatureImageData: z.string(), // Base64 image
         templateId: z.number().optional(),
+        driversLicenseNumber: z.string().optional(),
+        driversLicenseImageData: z.string().optional(), // Base64 image
       });
 
       const signatureData = signatureSchema.parse(req.body);
@@ -5863,6 +5865,8 @@ Submitted: ${new Date().toLocaleString()}
         ...signatureData,
         ipAddress: req.ip,
         userAgent: req.get('user-agent'),
+        driversLicenseNumber: signatureData.driversLicenseNumber,
+        driversLicenseImageData: signatureData.driversLicenseImageData,
       });
 
       // Automatically send payment link email after signature

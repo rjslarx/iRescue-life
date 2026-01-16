@@ -704,6 +704,8 @@ export async function captureSignature(
     ipAddress?: string;
     userAgent?: string;
     templateId?: number;
+    driversLicenseNumber?: string;
+    driversLicenseImageData?: string; // Base64 image data
   }
 ): Promise<AdoptionContract> {
   const [session] = await db
@@ -725,6 +727,12 @@ export async function captureSignature(
   const signatureImageUrl = await processSignatureImage(signatureData.signatureImageData);
   const signedAt = new Date();
 
+  // Process driver's license image if provided
+  let driversLicenseImageUrl: string | undefined;
+  if (signatureData.driversLicenseImageData) {
+    driversLicenseImageUrl = await processSignatureImage(signatureData.driversLicenseImageData, 'drivers-license');
+  }
+
   // Generate PDF contract with signature, including IP and timestamp for legal verification
   const contractPdfUrl = await generateAdoptionContractPDF(session, signatureImageUrl, {
     ipAddress: signatureData.ipAddress,
@@ -744,6 +752,8 @@ export async function captureSignature(
       signedIp: signatureData.ipAddress,
       signedUserAgent: signatureData.userAgent,
       signedAt,
+      driversLicenseNumber: signatureData.driversLicenseNumber || null,
+      driversLicenseImageUrl: driversLicenseImageUrl || null,
     })
     .returning();
 
