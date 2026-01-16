@@ -130,7 +130,7 @@ export function PublicAdoptionDialog({ animal, open, onOpenChange }: PublicAdopt
     mutationFn: async (data: PublicAdoptionFormData) => {
       if (!animal) throw new Error("No animal selected");
       
-      const response = await apiRequest('/api/applications', 'POST', {
+      const response = await apiRequest('POST', '/api/applications', {
         animalId: animal.id,
         applicantName: data.applicantName,
         applicantEmail: data.applicantEmail,
