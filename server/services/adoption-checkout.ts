@@ -559,14 +559,11 @@ export async function sendCheckoutLink(
       let baseUrl: string;
       if (process.env.REPLIT_DEV_DOMAIN) {
         baseUrl = `https://${process.env.REPLIT_DEV_DOMAIN}`;
-        console.log('[CHECKOUT EMAIL] Using Replit dev domain:', baseUrl);
       } else {
         baseUrl = process.env.BASE_URL || 'https://irescue.life';
-        console.log('[CHECKOUT EMAIL] Using BASE_URL/default:', baseUrl);
       }
       checkoutUrl = `${baseUrl}/${tenant?.subdomain || 'demo'}/adoption-checkout/${token}`;
     }
-    console.log('[CHECKOUT EMAIL] Generated checkout URL:', checkoutUrl);
 
     const html = `
       <h2>Complete Your Adoption of ${animal.name}!</h2>
