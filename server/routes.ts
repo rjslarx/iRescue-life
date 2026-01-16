@@ -13,8 +13,21 @@ import { authLimiter, signupLimiter, passwordResetLimiter, emailLimiter } from "
 import QRCode from "qrcode";
 
 // Build version identifier for debugging production deployments
-const BUILD_VERSION = "2025-12-27-v6-gmail-admin-notification";
+const BUILD_VERSION = "2025-01-16-v1-uuid-validation";
 console.log(`[SERVER] Starting with build version: ${BUILD_VERSION}`);
+
+/**
+ * UUID validation regex - prevents database errors from invalid UUID parameters
+ */
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Validate if a string is a valid UUID
+ */
+function isValidUUID(value: string | undefined): boolean {
+  if (!value) return false;
+  return UUID_REGEX.test(value);
+}
 
 /**
  * Helper function to get email quota limit based on subscription tier
@@ -3256,6 +3269,11 @@ Crawl-delay: 1
    */
   app.patch('/api/users/:id', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
     try {
+      // Validate UUID to prevent database errors
+      if (!isValidUUID(req.params.id)) {
+        return res.status(400).json({ error: 'Invalid user ID format' });
+      }
+      
       const { users } = await import('@shared/schema');
       
       const updateSchema = z.object({
@@ -3573,6 +3591,11 @@ Crawl-delay: 1
    */
   app.get('/api/animals/:id', requireTenant, async (req, res, next) => {
     try {
+      // Validate UUID to prevent database errors from bots/crawlers
+      if (!isValidUUID(req.params.id)) {
+        return res.status(400).json({ error: 'Invalid animal ID format' });
+      }
+      
       const { getAnimalById } = await import('./services/animals');
       const animal = await getAnimalById(req.tenant!.id, req.params.id);
       
@@ -3926,6 +3949,11 @@ Crawl-delay: 1
    */
   app.patch('/api/animals/:id', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
     try {
+      // Validate UUID to prevent database errors
+      if (!isValidUUID(req.params.id)) {
+        return res.status(400).json({ error: 'Invalid animal ID format' });
+      }
+      
       const { updateAnimal } = await import('./services/animals');
       const { ObjectStorageService } = await import('./objectStorage');
       
