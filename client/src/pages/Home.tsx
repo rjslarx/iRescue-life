@@ -9,6 +9,8 @@ import AnnouncementBar from "@/components/AnnouncementBar";
 import { useTenant } from "@/contexts/TenantContext";
 import MascotWidget from "@/components/MascotWidget";
 import AnimalCard from "@/components/AnimalCard";
+import MobileAnimalCarousel from "@/components/MobileAnimalCarousel";
+import { useIsMobile } from "@/hooks/use-mobile";
 import EventCard from "@/components/EventCard";
 import HappyTailsCard from "@/components/HappyTailsCard";
 import DonationForm from "@/components/DonationForm";
@@ -213,6 +215,7 @@ function sanitizeBgImage(url: string | undefined): string | undefined {
 
 export default function Home() {
   const { basePath, tenantId } = useTenant();
+  const isMobile = useIsMobile();
   const [donationDialogOpen, setDonationDialogOpen] = useState(false);
   const [adoptionDialogOpen, setAdoptionDialogOpen] = useState(false);
   const [selectedAnimal, setSelectedAnimal] = useState<Animal | null>(null);
@@ -483,40 +486,54 @@ export default function Home() {
             </p>
           </div>
           
-          <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 w-full">
-            {isLoadingAnimals ? (
-              Array.from({ length: 4 }).map((_, i) => (
+          {isLoadingAnimals ? (
+            <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 w-full">
+              {Array.from({ length: 4 }).map((_, i) => (
                 <div key={i} className="space-y-3 w-full">
                   <Skeleton className="h-48 w-full" data-testid="skeleton-animal" />
                   <Skeleton className="h-4 w-3/4" />
                   <Skeleton className="h-4 w-1/2" />
                 </div>
-              ))
-            ) : displayedAnimals.length > 0 ? (
-              displayedAnimals.map((animal) => (
-                <AnimalCard
-                  key={animal.id}
-                  id={animal.id.toString()}
-                  name={animal.name}
-                  species={animal.species}
-                  breed={animal.breed}
-                  age={`${animal.age} years`}
-                  photo={animal.photoUrls?.[0] ?? dogPhoto}
-                  photos={animal.photoUrls && animal.photoUrls.length > 0 ? animal.photoUrls : undefined}
-                  bio={animal.bio ?? undefined}
+              ))}
+            </div>
+          ) : displayedAnimals.length > 0 ? (
+            <>
+              {isMobile ? (
+                <MobileAnimalCarousel
+                  animals={displayedAnimals}
                   basePath={basePath}
-                  onAdopt={() => handleAdopt(animal)}
-                  onSponsor={() => handleSponsor(animal.name)}
+                  onAdopt={handleAdopt}
+                  onSponsor={handleSponsor}
+                  defaultPhoto={dogPhoto}
                 />
-              ))
-            ) : (
-              <div className="col-span-full text-center py-12" data-testid="no-animals">
-                <p className="text-lg text-muted-foreground">
-                  No animals available for adoption at this time. Check back soon!
-                </p>
-              </div>
-            )}
-          </div>
+              ) : (
+                <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 w-full">
+                  {displayedAnimals.map((animal) => (
+                    <AnimalCard
+                      key={animal.id}
+                      id={animal.id.toString()}
+                      name={animal.name}
+                      species={animal.species}
+                      breed={animal.breed}
+                      age={`${animal.age} years`}
+                      photo={animal.photoUrls?.[0] ?? dogPhoto}
+                      photos={animal.photoUrls && animal.photoUrls.length > 0 ? animal.photoUrls : undefined}
+                      bio={animal.bio ?? undefined}
+                      basePath={basePath}
+                      onAdopt={() => handleAdopt(animal)}
+                      onSponsor={() => handleSponsor(animal.name)}
+                    />
+                  ))}
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="text-center py-12" data-testid="no-animals">
+              <p className="text-lg text-muted-foreground">
+                No animals available for adoption at this time. Check back soon!
+              </p>
+            </div>
+          )}
           
           {animals.filter(animal => animal.status === "available").length > 8 && (
             <div className="flex justify-center mt-8 sm:mt-12">
