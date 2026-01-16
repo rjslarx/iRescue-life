@@ -555,8 +555,13 @@ export async function sendCheckoutLink(
     if (tenant?.customDomain && tenant?.customDomainVerified) {
       checkoutUrl = `https://${tenant.customDomain}/adoption-checkout/${token}`;
     } else {
-      // Use path-based routing: irescue.life/{subdomain}/adoption-checkout/{token}
-      const baseUrl = process.env.BASE_URL || 'https://irescue.life';
+      // Use Replit dev domain in development, otherwise use BASE_URL or default to irescue.life
+      let baseUrl: string;
+      if (process.env.REPLIT_DEV_DOMAIN) {
+        baseUrl = `https://${process.env.REPLIT_DEV_DOMAIN}`;
+      } else {
+        baseUrl = process.env.BASE_URL || 'https://irescue.life';
+      }
       checkoutUrl = `${baseUrl}/${tenant?.subdomain || 'demo'}/adoption-checkout/${token}`;
     }
 
@@ -686,7 +691,13 @@ export async function sendPaymentLinkEmail(
   if (tenant?.customDomain && tenant?.customDomainVerified) {
     checkoutUrl = `https://${tenant.customDomain}/adoption-checkout/${token}`;
   } else {
-    const baseUrl = process.env.BASE_URL || 'https://irescue.life';
+    // Use Replit dev domain in development, otherwise use BASE_URL or default to irescue.life
+    let baseUrl: string;
+    if (process.env.REPLIT_DEV_DOMAIN) {
+      baseUrl = `https://${process.env.REPLIT_DEV_DOMAIN}`;
+    } else {
+      baseUrl = process.env.BASE_URL || 'https://irescue.life';
+    }
     checkoutUrl = `${baseUrl}/${tenant?.subdomain || 'demo'}/adoption-checkout/${token}`;
   }
 
