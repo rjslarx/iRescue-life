@@ -19775,6 +19775,41 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
     }
   });
 
+  /**
+   * GET /api/documents/:id/view
+   * View a document file inline (for PDF viewing in browser)
+   */
+  app.get('/api/documents/:id/view', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { documents } = await import('@shared/schema');
+      const { ObjectStorageService } = await import('./objectStorage');
+      const { id } = req.params;
+
+      const [document] = await db
+        .select()
+        .from(documents)
+        .where(and(
+          eq(documents.id, id),
+          eq(documents.tenantId, req.tenant!.id)
+        ))
+        .limit(1);
+
+      if (!document) {
+        return res.status(404).json({ error: 'Document not found' });
+      }
+
+      const objectStorageService = new ObjectStorageService();
+      const objectFile = await objectStorageService.getObjectEntityFile(document.fileUrl);
+      
+      // Set inline disposition so PDF displays in browser
+      res.setHeader('Content-Disposition', `inline; filename="${document.fileName}"`);
+      
+      await objectStorageService.downloadObject(objectFile, res);
+    } catch (error) {
+      next(error);
+    }
+  });
+
   // ============================================================================
   // CUSTOM PAGES (CMS) - Public informational pages
   // ============================================================================

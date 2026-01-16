@@ -229,7 +229,7 @@ export default function DocumentsPage() {
     setViewDialogOpen(true);
     
     try {
-      const response = await fetch(`/api/documents/${doc.id}/download`, {
+      const response = await fetch(`/api/documents/${doc.id}/view`, {
         credentials: 'include',
       });
 
