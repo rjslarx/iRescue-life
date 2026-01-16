@@ -751,6 +751,7 @@ export async function cancelCheckoutSession(tenantId: string, sessionId: string)
 
 /**
  * Capture signature for adoption contract
+ * Returns contract and skipPayment flag (true when fee is waived)
  */
 export async function captureSignature(
   sessionId: string,
@@ -764,7 +765,7 @@ export async function captureSignature(
     driversLicenseNumber?: string;
     driversLicenseImageData?: string; // Base64 image data
   }
-): Promise<AdoptionContract> {
+): Promise<{ contract: AdoptionContract; skipPayment: boolean }> {
   const [session] = await db
     .select()
     .from(adoptionCheckoutSessions)
@@ -814,7 +815,30 @@ export async function captureSignature(
     })
     .returning();
 
-  // Update session status
+  // Check if fee is waived (baseFee is 0 or metadata indicates waived)
+  const baseFee = parseFloat(session.baseFee?.toString() || '0');
+  const metadata = session.metadata as { waiveFee?: boolean } | null;
+  const isFeeWaived = baseFee === 0 || metadata?.waiveFee === true;
+
+  if (isFeeWaived) {
+    // Fee is waived - finalize adoption immediately without payment
+    await db
+      .update(adoptionCheckoutSessions)
+      .set({
+        status: 'completed',
+        signedAt,
+        paidAt: signedAt, // Mark as paid at same time since no payment needed
+        updatedAt: new Date(),
+      })
+      .where(eq(adoptionCheckoutSessions.id, sessionId));
+
+    // Finalize the adoption (update animal status, application, etc.)
+    await finalizeAdoption(sessionId);
+
+    return { contract, skipPayment: true };
+  }
+
+  // Fee is not waived - proceed to payment step
   await db
     .update(adoptionCheckoutSessions)
     .set({
@@ -824,7 +848,7 @@ export async function captureSignature(
     })
     .where(eq(adoptionCheckoutSessions.id, sessionId));
 
-  return contract;
+  return { contract, skipPayment: false };
 }
 
 /**
