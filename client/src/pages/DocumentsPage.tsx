@@ -237,8 +237,10 @@ export default function DocumentsPage() {
         throw new Error('Failed to load document');
       }
 
+      // Get the blob and ensure it has the correct PDF type
       const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
+      const pdfBlob = new Blob([blob], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(pdfBlob);
       setViewUrl(url);
     } catch (error) {
       toast({
@@ -558,18 +560,25 @@ export default function DocumentsPage() {
               {selectedDocument?.fileName}
             </DialogDescription>
           </DialogHeader>
-          <div className="flex-1 min-h-0 h-full">
+          <div className="flex-1 min-h-0 h-full" style={{ minHeight: '500px' }}>
             {viewLoading ? (
               <div className="flex items-center justify-center h-full">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                 <span className="ml-2 text-muted-foreground">Loading document...</span>
               </div>
             ) : viewUrl ? (
-              <iframe
-                src={viewUrl}
+              <object
+                data={viewUrl}
+                type="application/pdf"
                 className="w-full h-full border rounded"
-                title={selectedDocument?.title || "Document Viewer"}
-              />
+                style={{ minHeight: '500px' }}
+              >
+                <embed 
+                  src={viewUrl} 
+                  type="application/pdf" 
+                  className="w-full h-full"
+                />
+              </object>
             ) : (
               <div className="flex items-center justify-center h-full text-muted-foreground">
                 Unable to load document
