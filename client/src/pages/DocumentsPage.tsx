@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { FileText, Upload, Download, Edit2, Trash2, Filter, Plus } from "lucide-react";
+import { FileText, Upload, Download, Edit2, Trash2, Filter, Plus, Eye, Loader2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import type { Document, Tenant } from "@shared/schema";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -49,6 +49,9 @@ export default function DocumentsPage() {
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [viewDialogOpen, setViewDialogOpen] = useState(false);
+  const [viewUrl, setViewUrl] = useState<string | null>(null);
+  const [viewLoading, setViewLoading] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState<DocumentWithUploader | null>(null);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   
@@ -220,6 +223,44 @@ export default function DocumentsPage() {
     }
   };
 
+  const handleView = async (doc: DocumentWithUploader) => {
+    setSelectedDocument(doc);
+    setViewLoading(true);
+    setViewDialogOpen(true);
+    
+    try {
+      const response = await fetch(`/api/documents/${doc.id}/download`, {
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to load document');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      setViewUrl(url);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to load document for viewing",
+        variant: "destructive",
+      });
+      setViewDialogOpen(false);
+    } finally {
+      setViewLoading(false);
+    }
+  };
+
+  const handleCloseView = () => {
+    if (viewUrl) {
+      window.URL.revokeObjectURL(viewUrl);
+    }
+    setViewUrl(null);
+    setViewDialogOpen(false);
+    setSelectedDocument(null);
+  };
+
   return (
     <DashboardLayout
       title="Documents"
@@ -289,6 +330,17 @@ export default function DocumentsPage() {
                           </div>
                         </div>
                         <div className="flex gap-2">
+                          {doc.fileName.toLowerCase().endsWith('.pdf') && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleView(doc)}
+                              data-testid={`button-view-${doc.id}`}
+                            >
+                              <Eye className="h-4 w-4 mr-2" />
+                              View
+                            </Button>
+                          )}
                           <Button
                             variant="outline"
                             size="sm"
@@ -493,6 +545,47 @@ export default function DocumentsPage() {
             >
               {deleteMutation.isPending ? "Deleting..." : "Delete"}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Document Dialog */}
+      <Dialog open={viewDialogOpen} onOpenChange={handleCloseView}>
+        <DialogContent className="max-w-4xl h-[80vh]" data-testid="dialog-view-document">
+          <DialogHeader>
+            <DialogTitle>{selectedDocument?.title}</DialogTitle>
+            <DialogDescription>
+              {selectedDocument?.fileName}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 min-h-0 h-full">
+            {viewLoading ? (
+              <div className="flex items-center justify-center h-full">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                <span className="ml-2 text-muted-foreground">Loading document...</span>
+              </div>
+            ) : viewUrl ? (
+              <iframe
+                src={viewUrl}
+                className="w-full h-full border rounded"
+                title={selectedDocument?.title || "Document Viewer"}
+              />
+            ) : (
+              <div className="flex items-center justify-center h-full text-muted-foreground">
+                Unable to load document
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={handleCloseView}>
+              Close
+            </Button>
+            {selectedDocument && (
+              <Button onClick={() => handleDownload(selectedDocument)} data-testid="button-download-from-view">
+                <Download className="h-4 w-4 mr-2" />
+                Download
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
