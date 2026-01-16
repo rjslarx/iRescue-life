@@ -20,6 +20,7 @@ import { Link } from "wouter";
 import type { Tenant } from "@shared/schema";
 import DashboardLayout from "@/components/DashboardLayout";
 import { formatDistanceToNow } from "date-fns";
+import DOMPurify from "isomorphic-dompurify";
 
 type RecipientType = 'team' | 'donors' | 'newsletter' | 'custom';
 type EmailStatus = "unprocessed" | "processed" | "archived";
@@ -607,9 +608,9 @@ export default function CommunicationsPage() {
                                     <h3 className="font-semibold truncate">{email.subject || '(No Subject)'}</h3>
                                   </div>
                                   <p className="text-sm text-muted-foreground mb-2">
-                                    From: {email.sender}
+                                    From: {email.fromName || email.from || 'Unknown'}
                                   </p>
-                                  <p className="text-sm line-clamp-2">{email.body}</p>
+                                  <p className="text-sm line-clamp-2">{email.textBody || '(No preview available)'}</p>
                                 </div>
                                 <div className="flex flex-col items-end gap-2">
                                   <Badge variant={getStatusBadgeVariant(email.status)}>
@@ -644,7 +645,7 @@ export default function CommunicationsPage() {
               <div className="space-y-4">
                 <div>
                   <Label className="text-sm font-semibold">From</Label>
-                  <p className="text-sm">{selectedEmail.sender}</p>
+                  <p className="text-sm">{selectedEmail.fromName || selectedEmail.from || 'Unknown'}</p>
                 </div>
                 <div>
                   <Label className="text-sm font-semibold">Received</Label>
@@ -662,7 +663,11 @@ export default function CommunicationsPage() {
                 <div>
                   <Label className="text-sm font-semibold mb-2 block">Email Body</Label>
                   <div className="bg-muted p-4 rounded-md text-sm whitespace-pre-wrap">
-                    {selectedEmail.body}
+                    {selectedEmail.htmlBody ? (
+                      <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(selectedEmail.htmlBody) }} />
+                    ) : (
+                      selectedEmail.textBody || '(No content)'
+                    )}
                   </div>
                 </div>
                 {selectedEmail.attachments && selectedEmail.attachments.length > 0 && (

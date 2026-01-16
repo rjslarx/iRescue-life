@@ -14848,6 +14848,7 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
           fromName: inboundEmails.fromName,
           to: inboundEmails.to,
           subject: inboundEmails.subject,
+          textBody: inboundEmails.textBody,
           status: inboundEmails.status,
           linkedAnimalId: inboundEmails.linkedAnimalId,
           linkedDocumentId: inboundEmails.linkedDocumentId,
