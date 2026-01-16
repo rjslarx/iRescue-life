@@ -569,7 +569,26 @@ export function hashToken(token: string): string {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
 
-// Generate PDF for a completed custom form submission
+// Helper to strip HTML tags and extract text content
+function stripHtml(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n\n')
+    .replace(/<\/div>/gi, '\n')
+    .replace(/<\/h[1-6]>/gi, '\n\n')
+    .replace(/<\/li>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+// Generate PDF for a completed custom form submission using pdf-lib
 export async function generateCustomFormPdf(
   submissionId: string,
   tenantId: string
@@ -587,71 +606,186 @@ export async function generateCustomFormPdf(
     return null;
   }
 
-  // Create full HTML document for PDF generation
-  const fullHtml = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="UTF-8">
-      <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-          font-family: Arial, sans-serif;
-          line-height: 1.6;
-          color: #333;
-          padding: 40px;
-          max-width: 800px;
-          margin: 0 auto;
-        }
-        h1 { font-size: 24px; margin-bottom: 20px; color: #1a1a1a; }
-        h2 { font-size: 18px; margin: 20px 0 10px; color: #333; }
-        h3 { font-size: 16px; margin: 15px 0 8px; color: #444; }
-        p { margin-bottom: 10px; }
-        table { width: 100%; border-collapse: collapse; margin: 15px 0; }
-        th, td { padding: 8px; text-align: left; border-bottom: 1px solid #ddd; }
-        .signature-block { margin-top: 30px; padding-top: 20px; border-top: 1px solid #ccc; }
-        .signature-img { max-height: 80px; margin: 10px 0; }
-        .meta-info { font-size: 12px; color: #666; margin-top: 20px; }
-      </style>
-    </head>
-    <body>
-      <h1>${form.name}</h1>
-      ${submission.renderedHtml}
-      
-      ${submission.signatureData ? `
-        <div class="signature-block">
-          <p><strong>Signature:</strong></p>
-          <img src="${submission.signatureData}" alt="Signature" class="signature-img" />
-        </div>
-      ` : ''}
-      
-      <div class="meta-info">
-        <p><strong>Signed by:</strong> ${submission.signerName} (${submission.signerEmail})</p>
-        <p><strong>Date:</strong> ${submission.signedAt ? new Date(submission.signedAt).toLocaleString() : 'N/A'}</p>
-        <p><strong>IP Address:</strong> ${submission.signerIpAddress || 'N/A'}</p>
-      </div>
-    </body>
-    </html>
-  `;
-
   try {
-    const puppeteer = await import('puppeteer');
+    const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib');
     
-    const browser = await puppeteer.default.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    });
-
-    const page = await browser.newPage();
-    await page.setContent(fullHtml, { waitUntil: 'networkidle0' });
+    // Create a new PDF document
+    const pdfDoc = await PDFDocument.create();
+    const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
     
-    const pdfBuffer = await page.pdf({
-      format: 'Letter',
-      printBackground: true,
-      margin: { top: '0.5in', right: '0.5in', bottom: '0.5in', left: '0.5in' },
+    // Page dimensions (Letter size)
+    const pageWidth = 612;
+    const pageHeight = 792;
+    const margin = 50;
+    const contentWidth = pageWidth - (margin * 2);
+    
+    let page = pdfDoc.addPage([pageWidth, pageHeight]);
+    let yPosition = pageHeight - margin;
+    const lineHeight = 14;
+    const paragraphSpacing = 20;
+    
+    // Helper to add new page if needed
+    const ensureSpace = (needed: number) => {
+      if (yPosition - needed < margin) {
+        page = pdfDoc.addPage([pageWidth, pageHeight]);
+        yPosition = pageHeight - margin;
+      }
+    };
+    
+    // Helper to wrap text
+    const wrapText = (text: string, maxWidth: number, font: typeof helvetica, fontSize: number): string[] => {
+      const words = text.split(' ');
+      const lines: string[] = [];
+      let currentLine = '';
+      
+      for (const word of words) {
+        const testLine = currentLine ? `${currentLine} ${word}` : word;
+        const testWidth = font.widthOfTextAtSize(testLine, fontSize);
+        
+        if (testWidth > maxWidth && currentLine) {
+          lines.push(currentLine);
+          currentLine = word;
+        } else {
+          currentLine = testLine;
+        }
+      }
+      if (currentLine) {
+        lines.push(currentLine);
+      }
+      return lines;
+    };
+    
+    // Draw form title
+    ensureSpace(30);
+    page.drawText(form.name, {
+      x: margin,
+      y: yPosition,
+      size: 18,
+      font: helveticaBold,
+      color: rgb(0.1, 0.1, 0.1),
     });
-
-    await browser.close();
+    yPosition -= 30;
+    
+    // Extract and draw form content
+    const textContent = stripHtml(submission.renderedHtml);
+    const paragraphs = textContent.split('\n\n').filter(p => p.trim());
+    
+    for (const paragraph of paragraphs) {
+      const lines = paragraph.split('\n').filter(l => l.trim());
+      
+      for (const line of lines) {
+        const wrappedLines = wrapText(line.trim(), contentWidth, helvetica, 11);
+        
+        for (const wrappedLine of wrappedLines) {
+          ensureSpace(lineHeight);
+          page.drawText(wrappedLine, {
+            x: margin,
+            y: yPosition,
+            size: 11,
+            font: helvetica,
+            color: rgb(0.2, 0.2, 0.2),
+          });
+          yPosition -= lineHeight;
+        }
+      }
+      yPosition -= paragraphSpacing / 2;
+    }
+    
+    // Add signature if present
+    if (submission.signatureData) {
+      ensureSpace(120);
+      yPosition -= 20;
+      
+      // Draw separator line
+      page.drawLine({
+        start: { x: margin, y: yPosition + 10 },
+        end: { x: pageWidth - margin, y: yPosition + 10 },
+        thickness: 1,
+        color: rgb(0.8, 0.8, 0.8),
+      });
+      
+      page.drawText('Signature:', {
+        x: margin,
+        y: yPosition - 5,
+        size: 12,
+        font: helveticaBold,
+        color: rgb(0.2, 0.2, 0.2),
+      });
+      yPosition -= 25;
+      
+      // Embed signature image
+      try {
+        const signatureBase64 = submission.signatureData.replace(/^data:image\/\w+;base64,/, '');
+        const signatureBytes = Buffer.from(signatureBase64, 'base64');
+        const signatureImage = await pdfDoc.embedPng(signatureBytes);
+        
+        const sigDims = signatureImage.scale(0.5);
+        const maxSigWidth = 200;
+        const maxSigHeight = 60;
+        const scale = Math.min(maxSigWidth / sigDims.width, maxSigHeight / sigDims.height, 1);
+        
+        ensureSpace(sigDims.height * scale + 20);
+        page.drawImage(signatureImage, {
+          x: margin,
+          y: yPosition - (sigDims.height * scale),
+          width: sigDims.width * scale,
+          height: sigDims.height * scale,
+        });
+        yPosition -= (sigDims.height * scale) + 20;
+      } catch (sigError) {
+        console.warn('[CustomFormPdf] Could not embed signature image:', sigError);
+        page.drawText('[Signature on file]', {
+          x: margin,
+          y: yPosition,
+          size: 10,
+          font: helvetica,
+          color: rgb(0.5, 0.5, 0.5),
+        });
+        yPosition -= 20;
+      }
+    }
+    
+    // Add metadata footer
+    ensureSpace(80);
+    yPosition -= 20;
+    
+    page.drawLine({
+      start: { x: margin, y: yPosition + 10 },
+      end: { x: pageWidth - margin, y: yPosition + 10 },
+      thickness: 1,
+      color: rgb(0.8, 0.8, 0.8),
+    });
+    
+    const metaFontSize = 9;
+    page.drawText(`Signed by: ${submission.signerName} (${submission.signerEmail})`, {
+      x: margin,
+      y: yPosition - 5,
+      size: metaFontSize,
+      font: helvetica,
+      color: rgb(0.4, 0.4, 0.4),
+    });
+    yPosition -= 14;
+    
+    page.drawText(`Date: ${submission.signedAt ? new Date(submission.signedAt).toLocaleString() : 'N/A'}`, {
+      x: margin,
+      y: yPosition,
+      size: metaFontSize,
+      font: helvetica,
+      color: rgb(0.4, 0.4, 0.4),
+    });
+    yPosition -= 14;
+    
+    page.drawText(`IP Address: ${submission.signerIpAddress || 'N/A'}`, {
+      x: margin,
+      y: yPosition,
+      size: metaFontSize,
+      font: helvetica,
+      color: rgb(0.4, 0.4, 0.4),
+    });
+    
+    // Save PDF to buffer
+    const pdfBytes = await pdfDoc.save();
 
     // Upload to object storage
     const { objectStorageClient } = await import('../objectStorage');
@@ -671,7 +805,7 @@ export async function generateCustomFormPdf(
     const bucket = objectStorageClient.bucket(bucketName);
     const file = bucket.file(objectName);
 
-    await file.save(Buffer.from(pdfBuffer), {
+    await file.save(Buffer.from(pdfBytes), {
       metadata: {
         contentType: 'application/pdf',
       },
