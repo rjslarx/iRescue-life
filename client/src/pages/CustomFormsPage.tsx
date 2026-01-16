@@ -1530,8 +1530,8 @@ export default function CustomFormsPage() {
 
         {/* View Submission Dialog */}
         <Dialog open={isViewSubmissionDialogOpen} onOpenChange={setIsViewSubmissionDialogOpen}>
-          <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
-            <DialogHeader>
+          <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+            <DialogHeader className="flex-shrink-0">
               <DialogTitle>Completed Form Submission</DialogTitle>
               <DialogDescription>
                 Signed by {selectedSubmission?.signerName} ({selectedSubmission?.signerEmail})
@@ -1540,7 +1540,7 @@ export default function CustomFormsPage() {
             
             {selectedSubmission && (
               <>
-                <div className="grid grid-cols-2 gap-4 text-sm border-b pb-4">
+                <div className="grid grid-cols-2 gap-4 text-sm border-b pb-4 flex-shrink-0">
                   <div>
                     <span className="text-muted-foreground">Signed:</span>{' '}
                     {selectedSubmission.signedAt ? format(new Date(selectedSubmission.signedAt), 'MMM d, yyyy h:mm a') : 'N/A'}
@@ -1551,33 +1551,35 @@ export default function CustomFormsPage() {
                   </div>
                 </div>
                 
-                <ScrollArea className="flex-1 min-h-[300px] border rounded-md p-4 bg-white dark:bg-gray-900">
-                  {selectedSubmission.renderedHtml ? (
-                    <div 
-                      className="prose prose-sm max-w-none dark:prose-invert"
-                      dangerouslySetInnerHTML={{ 
-                        __html: DOMPurify.sanitize(selectedSubmission.renderedHtml, { WHOLE_DOCUMENT: true }) 
-                      }}
-                    />
-                  ) : (
-                    <div className="text-center text-muted-foreground py-8">
-                      Form content not available
-                    </div>
-                  )}
-                  
-                  {selectedSubmission.signatureData && (
-                    <div className="mt-4 pt-4 border-t">
-                      <p className="text-sm font-medium mb-2">Signature:</p>
-                      <img 
-                        src={selectedSubmission.signatureData} 
-                        alt="Signature" 
-                        className="max-w-full h-auto max-h-48 border rounded p-2 bg-white object-contain"
+                <ScrollArea className="flex-1 min-h-0 max-h-[60vh] border rounded-md bg-white dark:bg-gray-900">
+                  <div className="p-4">
+                    {selectedSubmission.renderedHtml ? (
+                      <div 
+                        className="prose prose-sm max-w-none dark:prose-invert"
+                        dangerouslySetInnerHTML={{ 
+                          __html: DOMPurify.sanitize(selectedSubmission.renderedHtml, { WHOLE_DOCUMENT: true }) 
+                        }}
                       />
-                    </div>
-                  )}
+                    ) : (
+                      <div className="text-center text-muted-foreground py-8">
+                        Form content not available
+                      </div>
+                    )}
+                    
+                    {selectedSubmission.signatureData && (
+                      <div className="mt-4 pt-4 border-t">
+                        <p className="text-sm font-medium mb-2">Signature:</p>
+                        <img 
+                          src={selectedSubmission.signatureData} 
+                          alt="Signature" 
+                          className="max-w-full h-auto max-h-48 border rounded p-2 bg-white object-contain"
+                        />
+                      </div>
+                    )}
+                  </div>
                 </ScrollArea>
                 
-                <DialogFooter>
+                <DialogFooter className="flex-shrink-0">
                   <Button
                     variant="outline"
                     onClick={() => setIsViewSubmissionDialogOpen(false)}
