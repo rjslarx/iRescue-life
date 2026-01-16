@@ -540,7 +540,23 @@ export async function sendCheckoutLink(
       throw new Error('Email service not configured for this organization');
     }
 
-    const checkoutUrl = `${process.env.BASE_URL || 'https://app.irescue.life'}/adoption-checkout/${token}`;
+    // Get tenant subdomain to build correct URL
+    const [tenant] = await db
+      .select({ subdomain: tenants.subdomain, customDomain: tenants.customDomain, customDomainVerified: tenants.customDomainVerified })
+      .from(tenants)
+      .where(eq(tenants.id, session.tenantId))
+      .limit(1);
+
+    // Build checkout URL with proper tenant routing
+    // Use custom domain if available and verified, otherwise use path-based routing
+    let checkoutUrl: string;
+    if (tenant?.customDomain && tenant?.customDomainVerified) {
+      checkoutUrl = `https://${tenant.customDomain}/adoption-checkout/${token}`;
+    } else {
+      // Use path-based routing: irescue.life/{subdomain}/adoption-checkout/{token}
+      const baseUrl = process.env.BASE_URL || 'https://irescue.life';
+      checkoutUrl = `${baseUrl}/${tenant?.subdomain || 'demo'}/adoption-checkout/${token}`;
+    }
 
     const html = `
       <h2>Complete Your Adoption of ${animal.name}!</h2>
@@ -656,7 +672,22 @@ export async function sendPaymentLinkEmail(
     return;
   }
 
-  const checkoutUrl = `${process.env.BASE_URL || 'https://app.irescue.life'}/adoption-checkout/${token}`;
+  // Get tenant subdomain to build correct URL
+  const [tenant] = await db
+    .select({ subdomain: tenants.subdomain, customDomain: tenants.customDomain, customDomainVerified: tenants.customDomainVerified })
+    .from(tenants)
+    .where(eq(tenants.id, session.tenantId))
+    .limit(1);
+
+  // Build checkout URL with proper tenant routing
+  let checkoutUrl: string;
+  if (tenant?.customDomain && tenant?.customDomainVerified) {
+    checkoutUrl = `https://${tenant.customDomain}/adoption-checkout/${token}`;
+  } else {
+    const baseUrl = process.env.BASE_URL || 'https://irescue.life';
+    checkoutUrl = `${baseUrl}/${tenant?.subdomain || 'demo'}/adoption-checkout/${token}`;
+  }
+
   const totals = session.totals as { subtotal: string; fees: string; total: string } | null;
 
   const html = `
