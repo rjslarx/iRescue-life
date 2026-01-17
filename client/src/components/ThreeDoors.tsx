@@ -115,20 +115,36 @@ function isExternalOrSpecialUrl(url: string): boolean {
 
 // Helper to build tenant-aware URLs without duplication
 function buildTenantUrl(basePath: string, linkUrl: string): string {
+  // Handle empty/undefined inputs
+  if (!linkUrl || linkUrl.trim() === '') {
+    linkUrl = '/';
+  }
+  
   // Normalize basePath: ensure it starts with / if not empty, or is empty string
-  const normalizedBasePath = basePath 
+  const normalizedBasePath = basePath?.trim()
     ? (basePath.startsWith('/') ? basePath : '/' + basePath) 
     : '';
   
   // Normalize link URL: ensure it starts with /
-  const normalizedUrl = linkUrl.startsWith('/') ? linkUrl : '/' + linkUrl;
+  let normalizedUrl = linkUrl.trim();
+  if (!normalizedUrl.startsWith('/')) {
+    normalizedUrl = '/' + normalizedUrl;
+  }
+  
+  // Remove any existing duplicate basePath from the start of the URL
+  // This handles cases where linkUrl is already "/haseyas/volunteer" and basePath is "/haseyas"
+  const basePathWithoutSlash = normalizedBasePath.slice(1); // "haseyas"
+  if (basePathWithoutSlash && normalizedUrl.startsWith('/' + basePathWithoutSlash + '/')) {
+    // URL already contains basePath, return as-is
+    return normalizedUrl;
+  }
   
   // If basePath is empty, just return the normalized URL
   if (!normalizedBasePath) {
     return normalizedUrl;
   }
   
-  // Check if URL already includes the basePath - don't duplicate
+  // Check if URL already includes the basePath exactly - don't duplicate
   if (normalizedUrl.startsWith(normalizedBasePath + '/') || normalizedUrl === normalizedBasePath) {
     return normalizedUrl;
   }
