@@ -8439,6 +8439,11 @@ View this submission in Custom Forms > ${form.name} > Submissions
         isRecurring: z.boolean().default(true),
         interval: z.enum(['month', 'year']).default('month'),
         imageUrl: z.string().url().optional(),
+        // Campaign type fields
+        campaignType: z.enum(['general', 'sponsor_pet', 'virtual_kennel', 'emergency_fund', 'event']).default('general'),
+        animalId: z.string().uuid().optional(), // For sponsor_pet campaigns
+        tierName: z.string().optional(), // For virtual_kennel: "bronze", "silver", "gold"
+        goalAmount: z.number().optional(), // For emergency_fund: target amount in cents
       });
       
       const data = createDonationLinkSchema.parse(req.body);
@@ -8466,10 +8471,21 @@ View this submission in Custom Forms > ${form.name} > Submissions
       // Get platform fee percent based on tenant tier
       const platformFeePercent = getPlatformFeePercent(tenant.subscriptionTier as 'free' | 'professional');
       
+      // Build Stripe metadata for campaign tracking
+      const stripeMetadata: Record<string, string> = {
+        campaign_type: data.campaignType,
+        tenant_id: tenant.id,
+        created_by: req.user!.id,
+      };
+      if (data.animalId) stripeMetadata.pet_id = data.animalId;
+      if (data.tierName) stripeMetadata.tier_name = data.tierName;
+      if (data.goalAmount) stripeMetadata.goal_amount = String(data.goalAmount);
+      
       // 1. Create the Product on the connected account
       const productParams: Stripe.ProductCreateParams = {
         name: data.title,
         description: data.description || `Donation to support ${tenant.name}`,
+        metadata: stripeMetadata,
       };
       if (data.imageUrl) {
         productParams.images = [data.imageUrl];
@@ -8522,6 +8538,10 @@ View this submission in Custom Forms > ${form.name} > Submissions
         isRecurring: data.isRecurring,
         interval: data.interval,
         imageUrl: data.imageUrl,
+        campaignType: data.campaignType,
+        animalId: data.animalId,
+        tierName: data.tierName,
+        goalAmount: data.goalAmount,
         stripeProductId: product.id,
         stripePriceId: price.id,
         stripePaymentLinkId: paymentLink.id,
@@ -8599,6 +8619,510 @@ View this submission in Custom Forms > ${form.name} > Submissions
       
       res.json({ success: true });
     } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/animals/:animalId/sponsor-link
+   * Create a "Sponsor This Pet" donation link for a specific animal
+   */
+  app.post('/api/animals/:animalId/sponsor-link', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      const { donationLinks, animals } = await import('@shared/schema');
+      const { getPlatformStripeSecretKey, getPlatformFeePercent } = await import('./config/platform');
+      const Stripe = (await import('stripe')).default;
+      
+      const { animalId } = req.params;
+      if (!isValidUUID(animalId)) {
+        return res.status(400).json({ error: 'Invalid animal ID' });
+      }
+      
+      const sponsorSchema = z.object({
+        amount: z.number().min(500).default(2500), // Default $25/month
+        interval: z.enum(['month', 'year']).default('month'),
+      });
+      
+      const data = sponsorSchema.parse(req.body);
+      const tenant = req.tenant!;
+      
+      // Fetch the animal
+      const [animal] = await db.select()
+        .from(animals)
+        .where(and(
+          eq(animals.id, animalId),
+          eq(animals.tenantId, tenant.id)
+        ));
+      
+      if (!animal) {
+        return res.status(404).json({ error: 'Animal not found' });
+      }
+      
+      // Check if a sponsor link already exists for this animal
+      const [existingLink] = await db.select()
+        .from(donationLinks)
+        .where(and(
+          eq(donationLinks.animalId, animalId),
+          eq(donationLinks.campaignType, 'sponsor_pet'),
+          eq(donationLinks.isActive, true)
+        ));
+      
+      if (existingLink) {
+        return res.json({ 
+          success: true, 
+          donationLink: existingLink,
+          paymentLinkUrl: existingLink.stripePaymentLinkUrl,
+          existing: true,
+        });
+      }
+      
+      if (!tenant.stripeConnectedAccountId) {
+        return res.status(400).json({ error: 'Stripe Connect is not configured.' });
+      }
+      
+      const platformStripeKey = getPlatformStripeSecretKey();
+      if (!platformStripeKey) {
+        return res.status(500).json({ error: 'Platform Stripe key not configured.' });
+      }
+      
+      const stripe = new Stripe(platformStripeKey, {
+        apiVersion: '2025-09-30.clover',
+        typescript: true,
+      });
+      
+      const platformFeePercent = getPlatformFeePercent(tenant.subscriptionTier as 'free' | 'professional');
+      
+      // Build the product with pet metadata
+      const title = `Sponsor ${animal.name}`;
+      const description = `Become ${animal.name}'s monthly godparent and help cover their care costs.`;
+      const imageUrl = animal.photoUrls?.[0];
+      
+      const stripeMetadata: Record<string, string> = {
+        campaign_type: 'sponsor_pet',
+        pet_id: animal.id,
+        pet_name: animal.name,
+        tenant_id: tenant.id,
+      };
+      
+      const productParams: Stripe.ProductCreateParams = {
+        name: title,
+        description,
+        metadata: stripeMetadata,
+      };
+      if (imageUrl) {
+        productParams.images = [imageUrl];
+      }
+      
+      const product = await stripe.products.create(
+        productParams,
+        { stripeAccount: tenant.stripeConnectedAccountId }
+      );
+      
+      const price = await stripe.prices.create({
+        product: product.id,
+        unit_amount: data.amount,
+        currency: 'usd',
+        recurring: { interval: data.interval },
+      }, { stripeAccount: tenant.stripeConnectedAccountId });
+      
+      const paymentLinkParams: Stripe.PaymentLinkCreateParams = {
+        line_items: [{ price: price.id, quantity: 1 }],
+        allow_promotion_codes: false,
+        billing_address_collection: 'auto',
+      };
+      
+      if (platformFeePercent > 0) {
+        paymentLinkParams.application_fee_percent = platformFeePercent;
+      }
+      
+      const paymentLink = await stripe.paymentLinks.create(
+        paymentLinkParams,
+        { stripeAccount: tenant.stripeConnectedAccountId }
+      );
+      
+      const [newLink] = await db.insert(donationLinks).values({
+        tenantId: tenant.id,
+        title,
+        description,
+        amount: data.amount,
+        isRecurring: true,
+        interval: data.interval,
+        imageUrl,
+        campaignType: 'sponsor_pet',
+        animalId: animal.id,
+        stripeProductId: product.id,
+        stripePriceId: price.id,
+        stripePaymentLinkId: paymentLink.id,
+        stripePaymentLinkUrl: paymentLink.url,
+        createdById: req.user!.id,
+      }).returning();
+      
+      res.json({ 
+        success: true, 
+        donationLink: newLink,
+        paymentLinkUrl: paymentLink.url,
+      });
+    } catch (error: any) {
+      console.error('[SPONSOR_PET] Error creating sponsor link:', error);
+      if (error.type === 'StripeInvalidRequestError') {
+        return res.status(400).json({ error: error.message });
+      }
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/donation-links/virtual-kennel
+   * Create "Virtual Kennel" subscription tiers (Bronze, Silver, Gold)
+   */
+  app.post('/api/donation-links/virtual-kennel', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+    try {
+      const { donationLinks } = await import('@shared/schema');
+      const { getPlatformStripeSecretKey, getPlatformFeePercent } = await import('./config/platform');
+      const Stripe = (await import('stripe')).default;
+      
+      const tenant = req.tenant!;
+      
+      if (!tenant.stripeConnectedAccountId) {
+        return res.status(400).json({ error: 'Stripe Connect is not configured.' });
+      }
+      
+      const platformStripeKey = getPlatformStripeSecretKey();
+      if (!platformStripeKey) {
+        return res.status(500).json({ error: 'Platform Stripe key not configured.' });
+      }
+      
+      // Check if virtual kennel tiers already exist
+      const existingTiers = await db.select()
+        .from(donationLinks)
+        .where(and(
+          eq(donationLinks.tenantId, tenant.id),
+          eq(donationLinks.campaignType, 'virtual_kennel'),
+          eq(donationLinks.isActive, true)
+        ));
+      
+      if (existingTiers.length > 0) {
+        return res.json({ 
+          success: true, 
+          tiers: existingTiers,
+          existing: true,
+        });
+      }
+      
+      const stripe = new Stripe(platformStripeKey, {
+        apiVersion: '2025-09-30.clover',
+        typescript: true,
+      });
+      
+      const platformFeePercent = getPlatformFeePercent(tenant.subscriptionTier as 'free' | 'professional');
+      
+      // Define the 3 tiers
+      const tiers = [
+        { name: 'bronze', title: 'Bowl Filler', amount: 1000, description: 'Help keep our food bowls full! Your monthly contribution feeds our animals.' },
+        { name: 'silver', title: 'Bed Warmer', amount: 2500, description: 'Provide cozy bedding and comfort for animals waiting for their forever homes.' },
+        { name: 'gold', title: 'Kennel Keeper', amount: 5000, description: 'Sponsor an entire kennel! Cover all care costs for shelter animals each month.' },
+      ];
+      
+      const createdLinks = [];
+      
+      for (const tier of tiers) {
+        const stripeMetadata: Record<string, string> = {
+          campaign_type: 'virtual_kennel',
+          tier_name: tier.name,
+          tenant_id: tenant.id,
+        };
+        
+        const product = await stripe.products.create({
+          name: `${tier.title} - Virtual Kennel Sponsor`,
+          description: tier.description,
+          metadata: stripeMetadata,
+        }, { stripeAccount: tenant.stripeConnectedAccountId });
+        
+        const price = await stripe.prices.create({
+          product: product.id,
+          unit_amount: tier.amount,
+          currency: 'usd',
+          recurring: { interval: 'month' },
+        }, { stripeAccount: tenant.stripeConnectedAccountId });
+        
+        const paymentLinkParams: Stripe.PaymentLinkCreateParams = {
+          line_items: [{ price: price.id, quantity: 1 }],
+          allow_promotion_codes: false,
+          billing_address_collection: 'auto',
+        };
+        
+        if (platformFeePercent > 0) {
+          paymentLinkParams.application_fee_percent = platformFeePercent;
+        }
+        
+        const paymentLink = await stripe.paymentLinks.create(
+          paymentLinkParams,
+          { stripeAccount: tenant.stripeConnectedAccountId }
+        );
+        
+        const [newLink] = await db.insert(donationLinks).values({
+          tenantId: tenant.id,
+          title: `${tier.title} - Virtual Kennel Sponsor`,
+          description: tier.description,
+          amount: tier.amount,
+          isRecurring: true,
+          interval: 'month',
+          campaignType: 'virtual_kennel',
+          tierName: tier.name,
+          stripeProductId: product.id,
+          stripePriceId: price.id,
+          stripePaymentLinkId: paymentLink.id,
+          stripePaymentLinkUrl: paymentLink.url,
+          createdById: req.user!.id,
+        }).returning();
+        
+        createdLinks.push(newLink);
+      }
+      
+      res.json({ 
+        success: true, 
+        tiers: createdLinks,
+      });
+    } catch (error: any) {
+      console.error('[VIRTUAL_KENNEL] Error creating tiers:', error);
+      if (error.type === 'StripeInvalidRequestError') {
+        return res.status(400).json({ error: error.message });
+      }
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/donation-links/emergency-fund
+   * Create an "Emergency Vet Fund" campaign (one-time donations)
+   */
+  app.post('/api/donation-links/emergency-fund', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      const { donationLinks } = await import('@shared/schema');
+      const { getPlatformStripeSecretKey, getPlatformFeePercent } = await import('./config/platform');
+      const Stripe = (await import('stripe')).default;
+      
+      const emergencySchema = z.object({
+        title: z.string().min(1).max(200),
+        description: z.string().optional(),
+        goalAmount: z.number().min(10000), // Minimum $100 goal
+        suggestedAmount: z.number().min(500).default(2500), // Default $25 suggestion
+        imageUrl: z.string().url().optional(),
+        animalId: z.string().uuid().optional(), // Optional link to specific animal
+      });
+      
+      const data = emergencySchema.parse(req.body);
+      const tenant = req.tenant!;
+      
+      if (!tenant.stripeConnectedAccountId) {
+        return res.status(400).json({ error: 'Stripe Connect is not configured.' });
+      }
+      
+      const platformStripeKey = getPlatformStripeSecretKey();
+      if (!platformStripeKey) {
+        return res.status(500).json({ error: 'Platform Stripe key not configured.' });
+      }
+      
+      const stripe = new Stripe(platformStripeKey, {
+        apiVersion: '2025-09-30.clover',
+        typescript: true,
+      });
+      
+      const platformFeePercent = getPlatformFeePercent(tenant.subscriptionTier as 'free' | 'professional');
+      
+      const stripeMetadata: Record<string, string> = {
+        campaign_type: 'emergency_fund',
+        goal_amount: String(data.goalAmount),
+        tenant_id: tenant.id,
+      };
+      if (data.animalId) stripeMetadata.pet_id = data.animalId;
+      
+      const productParams: Stripe.ProductCreateParams = {
+        name: data.title,
+        description: data.description || `Emergency fundraising campaign - Goal: $${(data.goalAmount / 100).toFixed(0)}`,
+        metadata: stripeMetadata,
+      };
+      if (data.imageUrl) {
+        productParams.images = [data.imageUrl];
+      }
+      
+      const product = await stripe.products.create(
+        productParams,
+        { stripeAccount: tenant.stripeConnectedAccountId }
+      );
+      
+      // Create a one-time price (not recurring)
+      const price = await stripe.prices.create({
+        product: product.id,
+        unit_amount: data.suggestedAmount,
+        currency: 'usd',
+        // No recurring - this is a one-time donation
+      }, { stripeAccount: tenant.stripeConnectedAccountId });
+      
+      const paymentLinkParams: Stripe.PaymentLinkCreateParams = {
+        line_items: [{ 
+          price: price.id, 
+          quantity: 1,
+          adjustable_quantity: { enabled: true, minimum: 1, maximum: 100 }, // Allow donors to adjust amount
+        }],
+        allow_promotion_codes: false,
+        billing_address_collection: 'auto',
+      };
+      
+      if (platformFeePercent > 0) {
+        paymentLinkParams.application_fee_percent = platformFeePercent;
+      }
+      
+      const paymentLink = await stripe.paymentLinks.create(
+        paymentLinkParams,
+        { stripeAccount: tenant.stripeConnectedAccountId }
+      );
+      
+      const [newLink] = await db.insert(donationLinks).values({
+        tenantId: tenant.id,
+        title: data.title,
+        description: data.description,
+        amount: data.suggestedAmount,
+        isRecurring: false, // Emergency fund is one-time
+        campaignType: 'emergency_fund',
+        animalId: data.animalId,
+        goalAmount: data.goalAmount,
+        imageUrl: data.imageUrl,
+        stripeProductId: product.id,
+        stripePriceId: price.id,
+        stripePaymentLinkId: paymentLink.id,
+        stripePaymentLinkUrl: paymentLink.url,
+        createdById: req.user!.id,
+      }).returning();
+      
+      res.json({ 
+        success: true, 
+        donationLink: newLink,
+        paymentLinkUrl: paymentLink.url,
+      });
+    } catch (error: any) {
+      console.error('[EMERGENCY_FUND] Error creating campaign:', error);
+      if (error.type === 'StripeInvalidRequestError') {
+        return res.status(400).json({ error: error.message });
+      }
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/donation-links/event-flyer
+   * Generate a QR code flyer for adoption events
+   */
+  app.post('/api/donation-links/event-flyer', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      const { donationLinks } = await import('@shared/schema');
+      const { getPlatformStripeSecretKey, getPlatformFeePercent } = await import('./config/platform');
+      const Stripe = (await import('stripe')).default;
+      const QRCode = (await import('qrcode')).default;
+      
+      const flyerSchema = z.object({
+        eventName: z.string().min(1).max(200).default('Adoption Event'),
+        amount: z.number().min(500).default(2000), // Default $20
+        isRecurring: z.boolean().default(true), // Monthly by default
+      });
+      
+      const data = flyerSchema.parse(req.body);
+      const tenant = req.tenant!;
+      
+      if (!tenant.stripeConnectedAccountId) {
+        return res.status(400).json({ error: 'Stripe Connect is not configured.' });
+      }
+      
+      const platformStripeKey = getPlatformStripeSecretKey();
+      if (!platformStripeKey) {
+        return res.status(500).json({ error: 'Platform Stripe key not configured.' });
+      }
+      
+      const stripe = new Stripe(platformStripeKey, {
+        apiVersion: '2025-09-30.clover',
+        typescript: true,
+      });
+      
+      const platformFeePercent = getPlatformFeePercent(tenant.subscriptionTier as 'free' | 'professional');
+      
+      const title = `${data.eventName} - Donate Now`;
+      const stripeMetadata: Record<string, string> = {
+        campaign_type: 'event',
+        event_name: data.eventName,
+        tenant_id: tenant.id,
+      };
+      
+      const product = await stripe.products.create({
+        name: title,
+        description: `Support ${tenant.name} at ${data.eventName}`,
+        metadata: stripeMetadata,
+      }, { stripeAccount: tenant.stripeConnectedAccountId });
+      
+      const priceParams: Stripe.PriceCreateParams = {
+        product: product.id,
+        unit_amount: data.amount,
+        currency: 'usd',
+      };
+      
+      if (data.isRecurring) {
+        priceParams.recurring = { interval: 'month' };
+      }
+      
+      const price = await stripe.prices.create(
+        priceParams,
+        { stripeAccount: tenant.stripeConnectedAccountId }
+      );
+      
+      const paymentLinkParams: Stripe.PaymentLinkCreateParams = {
+        line_items: [{ price: price.id, quantity: 1 }],
+        allow_promotion_codes: false,
+        billing_address_collection: 'auto',
+      };
+      
+      if (platformFeePercent > 0) {
+        paymentLinkParams.application_fee_percent = platformFeePercent;
+      }
+      
+      const paymentLink = await stripe.paymentLinks.create(
+        paymentLinkParams,
+        { stripeAccount: tenant.stripeConnectedAccountId }
+      );
+      
+      // Generate QR code as data URL
+      const qrCodeDataUrl = await QRCode.toDataURL(paymentLink.url, {
+        width: 300,
+        margin: 2,
+        color: { dark: '#000000', light: '#ffffff' },
+      });
+      
+      const [newLink] = await db.insert(donationLinks).values({
+        tenantId: tenant.id,
+        title,
+        description: `Event donation link for ${data.eventName}`,
+        amount: data.amount,
+        isRecurring: data.isRecurring,
+        interval: data.isRecurring ? 'month' : null,
+        campaignType: 'event',
+        stripeProductId: product.id,
+        stripePriceId: price.id,
+        stripePaymentLinkId: paymentLink.id,
+        stripePaymentLinkUrl: paymentLink.url,
+        createdById: req.user!.id,
+      }).returning();
+      
+      res.json({ 
+        success: true, 
+        donationLink: newLink,
+        paymentLinkUrl: paymentLink.url,
+        qrCodeDataUrl,
+        tenantName: tenant.name,
+        tenantLogo: tenant.logoUrl,
+      });
+    } catch (error: any) {
+      console.error('[EVENT_FLYER] Error creating flyer:', error);
+      if (error.type === 'StripeInvalidRequestError') {
+        return res.status(400).json({ error: error.message });
+      }
       next(error);
     }
   });

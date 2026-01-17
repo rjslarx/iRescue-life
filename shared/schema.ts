@@ -846,6 +846,9 @@ export const insertSubscriptionSchema = createInsertSchema(subscriptions).omit({
 export type InsertSubscription = z.infer<typeof insertSubscriptionSchema>;
 export type Subscription = typeof subscriptions.$inferSelect;
 
+// Campaign types for donation links
+export type DonationCampaignType = "general" | "sponsor_pet" | "virtual_kennel" | "emergency_fund" | "event";
+
 // Donation links table - shareable Stripe payment links for social media fundraising
 export const donationLinks = pgTable("donation_links", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -856,6 +859,13 @@ export const donationLinks = pgTable("donation_links", {
   isRecurring: boolean("is_recurring").notNull().default(true), // Monthly vs one-time
   interval: text("interval").default("month").$type<"month" | "year">(), // Recurring interval
   imageUrl: text("image_url"), // Image URL for the payment link preview
+  
+  // Campaign categorization for reporting
+  campaignType: text("campaign_type").default("general").$type<DonationCampaignType>(),
+  animalId: uuid("animal_id").references(() => animals.id, { onDelete: 'set null' }), // For sponsor_pet campaigns
+  tierName: text("tier_name"), // For virtual_kennel: "bronze", "silver", "gold"
+  goalAmount: integer("goal_amount"), // For emergency_fund: target amount in cents
+  
   stripeProductId: text("stripe_product_id").notNull(), // Stripe Product ID on connected account
   stripePriceId: text("stripe_price_id").notNull(), // Stripe Price ID on connected account
   stripePaymentLinkId: text("stripe_payment_link_id").notNull(), // Stripe Payment Link ID

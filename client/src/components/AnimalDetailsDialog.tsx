@@ -6,9 +6,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Loader2, Calendar, User, Package, FileText, Search, Send, Check, Home, Baby, Cat, Mail, Phone } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Loader2, Calendar, User, Package, FileText, Search, Send, Check, Home, Baby, Cat, Mail, Phone, Heart, Copy, ExternalLink, DollarSign, PawPrint } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { format, differenceInDays } from "date-fns";
-import type { Animal } from "@shared/schema";
+import type { Animal, DonationLink } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -135,35 +138,35 @@ export function AnimalDetailsDialog({ animal, open, onOpenChange }: AnimalDetail
     return differenceInDays(end, start);
   };
 
-  const getStatusColor = (status: string) => {
+  const getStatusVariant = (status: string): "default" | "secondary" | "destructive" | "outline" => {
     switch (status) {
       case "active":
-        return "bg-green-500";
+        return "default";
       case "completed":
       case "fulfilled":
       case "resolved":
-        return "bg-blue-500";
+        return "secondary";
       case "pending":
-        return "bg-yellow-500";
+        return "outline";
       case "denied":
-        return "bg-red-500";
+        return "destructive";
       default:
-        return "bg-gray-500";
+        return "secondary";
     }
   };
 
-  const getPriorityColor = (priority: string) => {
+  const getPriorityVariant = (priority: string): "default" | "secondary" | "destructive" | "outline" => {
     switch (priority) {
       case "urgent":
-        return "bg-red-500";
+        return "destructive";
       case "high":
-        return "bg-orange-500";
+        return "default";
       case "normal":
-        return "bg-blue-500";
+        return "secondary";
       case "low":
-        return "bg-gray-500";
+        return "outline";
       default:
-        return "bg-gray-500";
+        return "secondary";
     }
   };
 
@@ -180,7 +183,7 @@ export function AnimalDetailsDialog({ animal, open, onOpenChange }: AnimalDetail
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="find-fosters" data-testid="tab-find-fosters">
               <Search className="h-4 w-4 mr-2" />
               Find Fosters
@@ -196,6 +199,10 @@ export function AnimalDetailsDialog({ animal, open, onOpenChange }: AnimalDetail
             <TabsTrigger value="foster-updates" data-testid="tab-foster-updates">
               <FileText className="h-4 w-4 mr-2" />
               Updates
+            </TabsTrigger>
+            <TabsTrigger value="sponsor" data-testid="tab-sponsor">
+              <Heart className="h-4 w-4 mr-2" />
+              Sponsor
             </TabsTrigger>
           </TabsList>
 
@@ -273,7 +280,7 @@ export function AnimalDetailsDialog({ animal, open, onOpenChange }: AnimalDetail
                                 className="flex items-center gap-1"
                                 data-testid={`badge-match-${foster.id}-${idx}`}
                               >
-                                <Check className="h-3 w-3 text-green-500" />
+                                <Check className="h-3 w-3" />
                                 {badge}
                               </Badge>
                             ))}
@@ -329,7 +336,7 @@ export function AnimalDetailsDialog({ animal, open, onOpenChange }: AnimalDetail
                             {placement.fosterEmail}
                           </CardDescription>
                         </div>
-                        <Badge className={`${getStatusColor(placement.status)} shrink-0`}>
+                        <Badge variant={getStatusVariant(placement.status)} className="shrink-0">
                           {placement.status}
                         </Badge>
                       </div>
@@ -394,7 +401,7 @@ export function AnimalDetailsDialog({ animal, open, onOpenChange }: AnimalDetail
                             Requested by {request.fosterName || 'Unknown Foster'} • {format(new Date(request.createdAt), 'MMM d, yyyy')}
                           </CardDescription>
                         </div>
-                        <Badge className={`${getStatusColor(request.status)} shrink-0`}>
+                        <Badge variant={getStatusVariant(request.status)} className="shrink-0">
                           {request.status}
                         </Badge>
                       </div>
@@ -448,7 +455,7 @@ export function AnimalDetailsDialog({ animal, open, onOpenChange }: AnimalDetail
                             <CardTitle className="text-base capitalize">
                               {update.updateType.replace('_', ' ')}
                             </CardTitle>
-                            <Badge className={`${getPriorityColor(update.priority)} shrink-0 text-xs`}>
+                            <Badge variant={getPriorityVariant(update.priority)} className="shrink-0 text-xs">
                               {update.priority}
                             </Badge>
                           </div>
@@ -456,7 +463,7 @@ export function AnimalDetailsDialog({ animal, open, onOpenChange }: AnimalDetail
                             By {update.fosterName || 'Unknown Foster'} • {format(new Date(update.createdAt), 'MMM d, yyyy h:mm a')}
                           </CardDescription>
                         </div>
-                        <Badge className={`${getStatusColor(update.status)} shrink-0`}>
+                        <Badge variant={getStatusVariant(update.status)} className="shrink-0">
                           {update.status}
                         </Badge>
                       </div>
@@ -485,8 +492,159 @@ export function AnimalDetailsDialog({ animal, open, onOpenChange }: AnimalDetail
             )}
           </TabsContent>
 
+          {/* Sponsor Tab */}
+          <TabsContent value="sponsor" className="space-y-4">
+            <SponsorPetPanel animal={animal} />
+          </TabsContent>
+
         </Tabs>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// Sponsor Pet Panel Component
+function SponsorPetPanel({ animal }: { animal: Animal }) {
+  const { toast } = useToast();
+  const [sponsorAmount, setSponsorAmount] = useState(2500);
+  const [sponsorLink, setSponsorLink] = useState<DonationLink | null>(null);
+  
+  const createSponsorLinkMutation = useMutation({
+    mutationFn: async (amount: number) => {
+      const response = await apiRequest('POST', `/api/animals/${animal.id}/sponsor-link`, { 
+        amount,
+        interval: 'month' 
+      });
+      return response.json();
+    },
+    onSuccess: (data) => {
+      setSponsorLink(data.donationLink);
+      if (data.existing) {
+        toast({ 
+          title: "Existing sponsor link found", 
+          description: "Using the existing sponsor link for this animal." 
+        });
+      } else {
+        toast({ title: "Sponsor link created!", description: "You can now share this link." });
+      }
+      queryClient.invalidateQueries({ queryKey: ['/api/donation-links'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to create sponsor link",
+        description: error.message || "Please check Stripe Connect configuration.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast({ title: "Copied to clipboard!" });
+  };
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Heart className="h-5 w-5 text-destructive" />
+            Sponsor {animal.name}
+          </CardTitle>
+          <CardDescription>
+            Create a shareable link for donors to become {animal.name}'s monthly godparent
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex justify-center" data-testid="container-sponsor-pet-image">
+            <Avatar className="w-32 h-32 rounded-lg">
+              <AvatarImage 
+                src={animal.photoUrls?.[0]} 
+                alt={animal.name}
+                className="object-cover"
+              />
+              <AvatarFallback className="rounded-lg">
+                <PawPrint className="h-12 w-12 text-muted-foreground" />
+              </AvatarFallback>
+            </Avatar>
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="sponsor-amount">Monthly Sponsorship Amount</Label>
+            <div className="flex items-center gap-2">
+              <DollarSign className="h-4 w-4 text-muted-foreground" />
+              <Input
+                id="sponsor-amount"
+                type="number"
+                min="5"
+                step="5"
+                value={sponsorAmount / 100}
+                onChange={(e) => setSponsorAmount(Math.round(parseFloat(e.target.value || "0") * 100))}
+                className="w-32"
+                data-testid="input-sponsor-amount"
+              />
+              <span className="text-sm text-muted-foreground">per month</span>
+            </div>
+          </div>
+
+          {!sponsorLink ? (
+            <Button 
+              onClick={() => createSponsorLinkMutation.mutate(sponsorAmount)}
+              disabled={createSponsorLinkMutation.isPending || sponsorAmount < 500}
+              className="w-full"
+              data-testid="button-generate-sponsor-link"
+            >
+              {createSponsorLinkMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Creating Link...
+                </>
+              ) : (
+                <>
+                  <Heart className="h-4 w-4 mr-2" />
+                  Generate Sponsor Link
+                </>
+              )}
+            </Button>
+          ) : (
+            <div className="space-y-3 p-4 bg-muted rounded-lg" data-testid="container-sponsor-link-result">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-medium" data-testid="text-sponsor-link-status">Sponsor Link Ready!</span>
+                <Badge variant="secondary" data-testid="badge-sponsor-amount">${(sponsorLink.amount / 100).toFixed(2)}/month</Badge>
+              </div>
+              <div className="flex items-center gap-2">
+                <Input 
+                  value={sponsorLink.stripePaymentLinkUrl} 
+                  readOnly 
+                  className="flex-1 text-xs"
+                  data-testid="input-sponsor-link-url"
+                />
+                <Button 
+                  size="icon" 
+                  variant="outline"
+                  onClick={() => copyToClipboard(sponsorLink.stripePaymentLinkUrl)}
+                  data-testid="button-copy-sponsor-link"
+                >
+                  <Copy className="h-4 w-4" />
+                </Button>
+                <Button 
+                  size="icon" 
+                  variant="outline"
+                  asChild
+                  data-testid="button-open-sponsor-link"
+                >
+                  <a href={sponsorLink.stripePaymentLinkUrl} target="_blank" rel="noopener noreferrer">
+                    <ExternalLink className="h-4 w-4" />
+                  </a>
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Share this link on Facebook: "Become {animal.name}'s Monthly Godparent for just ${(sponsorLink.amount / 100).toFixed(0)}!"
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
