@@ -6,6 +6,7 @@ import { z } from "zod";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useTenant } from "@/contexts/TenantContext";
 import { useToast } from "@/hooks/use-toast";
+import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -110,14 +111,15 @@ export default function DonationLinksPage() {
   const inactiveLinks = data?.donationLinks?.filter(link => !link.isActive) || [];
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold">Donation Links</h1>
-          <p className="text-muted-foreground">
-            Create shareable payment links for Facebook and social media fundraising
-          </p>
-        </div>
+    <DashboardLayout>
+      <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold">Donation Links</h1>
+            <p className="text-muted-foreground">
+              Create shareable payment links for Facebook and social media fundraising
+            </p>
+          </div>
         
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
@@ -431,6 +433,7 @@ export default function DonationLinksPage() {
           )}
         </>
       )}
-    </div>
+      </div>
+    </DashboardLayout>
   );
 }
