@@ -85,7 +85,7 @@ export default function DashboardLayout({ children, title, description, actions,
 
   return (
     <SidebarProvider style={style as React.CSSProperties}>
-      <div className="flex h-screen w-full">
+      <div className="flex h-screen w-full overflow-hidden">
         <AppSidebar 
           rescueName={rescueName}
           userName={user?.fullName || "User"}
