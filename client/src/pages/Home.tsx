@@ -10,6 +10,7 @@ import { useTenant } from "@/contexts/TenantContext";
 import MascotWidget from "@/components/MascotWidget";
 import AnimalCard from "@/components/AnimalCard";
 import MobileAnimalCarousel from "@/components/MobileAnimalCarousel";
+import MobileSponsorCarousel from "@/components/MobileSponsorCarousel";
 import { useIsMobile } from "@/hooks/use-mobile";
 import EventCard from "@/components/EventCard";
 import HappyTailsCard from "@/components/HappyTailsCard";
@@ -805,38 +806,44 @@ export default function Home() {
           {((tenant?.sponsorLogos as any[]) || []).length > 0 && (
             <div className="mt-8 pt-8 border-t">
               <h4 className="text-sm font-medium text-center mb-4 text-muted-foreground">Our Sponsors & Partners</h4>
-              <div className="flex flex-wrap justify-center items-center gap-6">
-                {((tenant?.sponsorLogos as { id: string; imageUrl: string; altText: string; linkUrl?: string }[]) || []).map((sponsor) => (
-                  sponsor.linkUrl ? (
-                    <a 
-                      key={sponsor.id}
-                      href={sponsor.linkUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="grayscale hover:grayscale-0 transition-all opacity-70 hover:opacity-100"
-                      data-testid={`link-sponsor-${sponsor.id}`}
-                    >
-                      <img 
-                        src={sponsor.imageUrl} 
-                        alt={sponsor.altText}
-                        className="h-14 w-auto object-contain"
-                      />
-                    </a>
-                  ) : (
-                    <div 
-                      key={sponsor.id}
-                      className="grayscale opacity-70"
-                      data-testid={`img-sponsor-${sponsor.id}`}
-                    >
-                      <img 
-                        src={sponsor.imageUrl} 
-                        alt={sponsor.altText}
-                        className="h-14 w-auto object-contain"
-                      />
-                    </div>
-                  )
-                ))}
-              </div>
+              {isMobile ? (
+                <MobileSponsorCarousel
+                  sponsors={(tenant?.sponsorLogos as { id: string; imageUrl: string; altText: string; linkUrl?: string }[]) || []}
+                />
+              ) : (
+                <div className="flex flex-wrap justify-center items-center gap-6">
+                  {((tenant?.sponsorLogos as { id: string; imageUrl: string; altText: string; linkUrl?: string }[]) || []).map((sponsor) => (
+                    sponsor.linkUrl ? (
+                      <a 
+                        key={sponsor.id}
+                        href={sponsor.linkUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="grayscale hover:grayscale-0 transition-all opacity-70 hover:opacity-100"
+                        data-testid={`link-sponsor-${sponsor.id}`}
+                      >
+                        <img 
+                          src={sponsor.imageUrl} 
+                          alt={sponsor.altText}
+                          className="h-14 w-auto object-contain"
+                        />
+                      </a>
+                    ) : (
+                      <div 
+                        key={sponsor.id}
+                        className="grayscale opacity-70"
+                        data-testid={`img-sponsor-${sponsor.id}`}
+                      >
+                        <img 
+                          src={sponsor.imageUrl} 
+                          alt={sponsor.altText}
+                          className="h-14 w-auto object-contain"
+                        />
+                      </div>
+                    )
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
