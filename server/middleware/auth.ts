@@ -190,8 +190,21 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
 }
 
 /**
+ * Role hierarchy - higher roles can do everything lower roles can do
+ * platform_admin > admin > staff > volunteer > foster
+ */
+const ROLE_HIERARCHY: Record<string, number> = {
+  'platform_admin': 100,
+  'admin': 50,
+  'staff': 30,
+  'volunteer': 20,
+  'foster': 10,
+};
+
+/**
  * Middleware to require specific roles
- * Checks if the user's active role is one of the specified roles
+ * Checks if the user's active role meets the required role level
+ * Uses role hierarchy: admin can do anything staff can do, etc.
  */
 export function requireRole(...roles: string[]) {
   return (req: Request, res: Response, next: NextFunction) => {
@@ -199,13 +212,17 @@ export function requireRole(...roles: string[]) {
       return res.status(401).json({ error: 'Authentication required' });
     }
     
-    if (!roles.includes(req.user.activeRole)) {
-      return res.status(403).json({ 
-        error: 'Forbidden',
-        message: `This action requires one of the following roles: ${roles.join(', ')}. Your active role is: ${req.user.activeRole}`
-      });
+    const userRoleLevel = ROLE_HIERARCHY[req.user.activeRole] || 0;
+    const requiredRoleLevel = Math.min(...roles.map(r => ROLE_HIERARCHY[r] || 0));
+    
+    // User's role level must be >= the minimum required role level
+    if (userRoleLevel >= requiredRoleLevel) {
+      return next();
     }
     
-    next();
+    return res.status(403).json({ 
+      error: 'Forbidden',
+      message: `This action requires one of the following roles: ${roles.join(', ')}. Your active role is: ${req.user.activeRole}`
+    });
   };
 }
