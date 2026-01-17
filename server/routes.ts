@@ -13913,7 +13913,7 @@ Submitted: ${new Date().toLocaleString()}
   app.patch('/api/tenant/settings/hero-layout', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
     try {
       const heroLayoutSchema = z.object({
-        heroLayoutType: z.enum(['none', 'action_circle', 'three_doors']),
+        heroLayoutType: z.enum(['none', 'action_circle', 'three_doors', 'both']),
       });
 
       const settings = heroLayoutSchema.parse(req.body);

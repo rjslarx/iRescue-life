@@ -4,12 +4,12 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Circle, LayoutGrid, Ban } from 'lucide-react';
+import { Loader2, Circle, LayoutGrid, Ban, Layers } from 'lucide-react';
 import { ActionCircleSettings } from './ActionCircleSettings';
 import { ThreeDoorsSettings } from './ThreeDoorsSettings';
 import type { Tenant } from '@shared/schema';
 
-type HeroLayoutType = 'none' | 'action_circle' | 'three_doors';
+type HeroLayoutType = 'none' | 'action_circle' | 'three_doors' | 'both';
 
 interface HeroLayoutSettingsProps {
   tenant?: Tenant;
@@ -103,6 +103,19 @@ export function HeroLayoutSettings({ tenant }: HeroLayoutSettingsProps) {
               </p>
             </label>
           </div>
+
+          <div className={`flex items-start space-x-3 p-4 border rounded-lg cursor-pointer transition-colors ${layoutType === 'both' ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'}`}>
+            <RadioGroupItem value="both" id="layout-both" data-testid="radio-layout-both" />
+            <label htmlFor="layout-both" className="flex-1 cursor-pointer">
+              <div className="flex items-center gap-2 font-medium">
+                <Layers className="h-4 w-4 text-muted-foreground" />
+                Action Circle + Three Doors
+              </div>
+              <p className="text-sm text-muted-foreground mt-1">
+                Display both the rotating action circle and the three action cards together for maximum engagement.
+              </p>
+            </label>
+          </div>
         </RadioGroup>
       </div>
 
@@ -113,7 +126,7 @@ export function HeroLayoutSettings({ tenant }: HeroLayoutSettingsProps) {
         </div>
       )}
 
-      {currentLayoutType === 'action_circle' && (
+      {(currentLayoutType === 'action_circle' || currentLayoutType === 'both') && (
         <div className="pt-6 border-t space-y-4">
           <div>
             <h4 className="font-medium">Action Circle Configuration</h4>
@@ -125,7 +138,7 @@ export function HeroLayoutSettings({ tenant }: HeroLayoutSettingsProps) {
         </div>
       )}
 
-      {currentLayoutType === 'three_doors' && (
+      {(currentLayoutType === 'three_doors' || currentLayoutType === 'both') && (
         <div className="pt-6 border-t space-y-4">
           <div>
             <h4 className="font-medium">Three Doors Configuration</h4>

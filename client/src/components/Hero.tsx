@@ -11,7 +11,7 @@ interface ActionConfig {
 
 type CirclePosition = 'top-right' | 'bottom-right' | 'center';
 type CircleSize = 'sm' | 'md' | 'lg';
-type HeroLayoutType = 'none' | 'action_circle' | 'three_doors';
+type HeroLayoutType = 'none' | 'action_circle' | 'three_doors' | 'both';
 
 interface ActionCircleConfig {
   enabled?: boolean;
@@ -86,12 +86,12 @@ export default function Hero({
   heroButton2Text
 }: HeroProps) {
   // Check if action circle has any configured images
-  const hasActionCircle = heroLayoutType === 'action_circle' && 
+  const hasActionCircle = (heroLayoutType === 'action_circle' || heroLayoutType === 'both') && 
     actionCircle?.enabled && actionCircle?.actions && 
     Object.values(actionCircle.actions).some(action => action?.imageUrl);
   
   // Check if three doors layout is enabled
-  const hasThreeDoors = heroLayoutType === 'three_doors';
+  const hasThreeDoors = heroLayoutType === 'three_doors' || heroLayoutType === 'both';
 
   return (
     <section className="relative min-h-[400px] sm:min-h-[450px] md:min-h-[500px] w-full overflow-visible">
