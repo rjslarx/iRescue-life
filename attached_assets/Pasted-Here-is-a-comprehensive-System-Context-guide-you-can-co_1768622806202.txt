@@ -1,0 +1,130 @@
+Here is a comprehensive "System Context" guide you can copy and paste directly to the Replit Agent. This gives it the architectural context and specific coding instructions it needs to build the **"No-Login" Automated Donation System** for iRescue.life.
+
+---
+
+### 📋 System Context for Replit Agent: iRescue.life Stripe Automation
+
+**Project Goal:**
+Build a backend feature for "iRescue.life" (a SaaS platform) that allows animal rescue tenants to generate monthly donation links for Facebook **without** ever logging into the Stripe dashboard.
+
+**Architecture:**
+
+* **Platform:** iRescue.life (The Connect Platform).
+* **Tenants:** Animal Rescues (The Connected Accounts).
+* **Method:** Stripe Connect. We perform actions on behalf of the tenant using the `Stripe-Account` header.
+
+**Workflow Overview:**
+
+1. **Onboarding (One-time):** The rescue connects their Stripe account to iRescue.life via OAuth. We save their `stripe_account_id` in our database.
+2. **Creation (Recurring):** Rescue Admin fills out a simple form on iRescue.life (Title, Image, Amount).
+3. **Execution:** iRescue backend calls Stripe API using the saved `stripe_account_id` to create a Product, Price, and Payment Link.
+4. **Output:** We return a URL (`buy.stripe.com/...`) to the Rescue Admin to paste on Facebook.
+
+---
+
+### 🛠️ Implementation Guide for Replit Agent
+
+#### 1. Database Requirements
+
+Ensure the `Tenants` or `Rescues` table has a column to store the connected account ID.
+
+* **Field:** `stripeAccountId` (String)
+* **Example Value:** `acct_1PsXy2...`
+* *Note: This ID is required for every API call made on their behalf.*
+
+#### 2. Environment Variables
+
+Set these up in the Replit Secrets manager:
+
+* `STRIPE_SECRET_KEY`: (The platform's live/test secret key `sk_...`)
+* `STRIPE_CLIENT_ID`: (For the initial OAuth onboarding flow)
+
+#### 3. The Core Logic (Node.js/Express)
+
+Create a module `stripeService.js` to handle the link generation.
+
+**Key Pattern:**
+Every Stripe call must include `{ stripeAccount: tenantAccountId }` as the second argument (or in the options object). This ensures the money goes to the *Rescue*, not the Platform.
+
+**Code Snippet to Implement:**
+
+```javascript
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+
+// Main function to be called from the iRescue Dashboard route
+async function generateRescueLink(tenantStripeId, campaignDetails) {
+  const { title, amountInCents, imageUrl } = campaignDetails;
+
+  console.log(`Creating link for Account: ${tenantStripeId}`);
+
+  try {
+    // 1. Create Product (Scoped to Tenant)
+    const product = await stripe.products.create({
+      name: title,
+      description: "Monthly donation via iRescue.life",
+      images: [imageUrl], // Crucial for Facebook preview
+    }, { stripeAccount: tenantStripeId });
+
+    // 2. Create Recurring Price (Scoped to Tenant)
+    const price = await stripe.prices.create({
+      product: product.id,
+      unit_amount: amountInCents,
+      currency: 'usd',
+      recurring: { interval: 'month' }, 
+    }, { stripeAccount: tenantStripeId });
+
+    // 3. Create Payment Link (Scoped to Tenant)
+    // Optional: Add application_fee here if iRescue takes a %
+    const session = await stripe.paymentLinks.create({
+      line_items: [{ price: price.id, quantity: 1 }],
+      billing_address_collection: 'auto',
+      allow_promotion_codes: false,
+      metadata: {
+        campaign_source: 'iRescue_Facebook_Post'
+      }
+    }, { stripeAccount: tenantStripeId });
+
+    return session.url;
+
+  } catch (err) {
+    console.error("Stripe Connect Error:", err.message);
+    throw new Error("Failed to generate link for tenant.");
+  }
+}
+
+module.exports = { generateRescueLink };
+
+```
+
+#### 4. The API Route (The "Trigger")
+
+Create an endpoint (e.g., `POST /api/campaigns/create`) that the iRescue frontend calls when the user hits "Generate Link."
+
+1. **Authenticate** the iRescue user (verify they are a logged-in tenant).
+2. **Fetch** their `stripeAccountId` from the database.
+3. **Call** `generateRescueLink()` with the data from the request body.
+4. **Return** the URL to the frontend.
+
+#### 5. Frontend UX Instructions
+
+* Create a form with:
+* **Campaign Name** (e.g., "Save the Kittens")
+* **Monthly Amount** (e.g., $15)
+* **Image Upload** (Upload to S3/Cloudinary first, then pass the URL to the backend).
+
+
+* **Result:** Display the generated link in a copy-paste box with a "Copy for Facebook" button.
+
+#### 6. Handling Webhooks (Optional but Recommended)
+
+To track who actually donated:
+
+* Set up a single Webhook endpoint on the Platform (`iRescue.life/api/webhooks`).
+* Listen for `checkout.session.completed`.
+* Check the `stripe_account` field in the event object to know *which* rescue got paid.
+
+---
+
+### 🚀 Next Step for Replit Agent
+
+* *Prompt to Agent:* "Using the guide above, please scaffold the `stripeService.js` file and the API route. Assume we are using Express.js and a mock database function `getTenantById`."
