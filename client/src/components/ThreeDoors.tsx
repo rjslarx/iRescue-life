@@ -99,6 +99,44 @@ const DEFAULT_DOORS: { config: Required<DoorConfig>; colorClass: string; textCol
   },
 ];
 
+// Helper to check if a URL is external or a special protocol
+function isExternalOrSpecialUrl(url: string): boolean {
+  return (
+    url.startsWith('http://') || 
+    url.startsWith('https://') ||
+    url.startsWith('//') ||
+    url.startsWith('mailto:') ||
+    url.startsWith('tel:') ||
+    url.startsWith('sms:') ||
+    url.startsWith('ftp:') ||
+    url.startsWith('#')
+  );
+}
+
+// Helper to build tenant-aware URLs without duplication
+function buildTenantUrl(basePath: string, linkUrl: string): string {
+  // Normalize basePath: ensure it starts with / if not empty, or is empty string
+  const normalizedBasePath = basePath 
+    ? (basePath.startsWith('/') ? basePath : '/' + basePath) 
+    : '';
+  
+  // Normalize link URL: ensure it starts with /
+  const normalizedUrl = linkUrl.startsWith('/') ? linkUrl : '/' + linkUrl;
+  
+  // If basePath is empty, just return the normalized URL
+  if (!normalizedBasePath) {
+    return normalizedUrl;
+  }
+  
+  // Check if URL already includes the basePath - don't duplicate
+  if (normalizedUrl.startsWith(normalizedBasePath + '/') || normalizedUrl === normalizedBasePath) {
+    return normalizedUrl;
+  }
+  
+  // Prepend basePath
+  return `${normalizedBasePath}${normalizedUrl}`;
+}
+
 export default function ThreeDoors({ basePath = '', config }: ThreeDoorsProps) {
   const doorConfigs = [config?.door1, config?.door2, config?.door3];
 
@@ -110,10 +148,21 @@ export default function ThreeDoors({ basePath = '', config }: ThreeDoorsProps) {
           const title = customConfig?.title || defaultDoor.config.title;
           const description = customConfig?.description || defaultDoor.config.description;
           const linkText = customConfig?.linkText || defaultDoor.config.linkText;
-          const customLinkUrl = typeof customConfig?.linkUrl === 'string' ? customConfig.linkUrl : null;
-          const linkUrl = customLinkUrl 
-            ? `${basePath}${customLinkUrl.startsWith('/') ? customLinkUrl : '/' + customLinkUrl}`
-            : `${basePath}${defaultDoor.config.linkUrl}`;
+          const customLinkUrl = typeof customConfig?.linkUrl === 'string' ? customConfig.linkUrl.trim() : null;
+          
+          // Build the link URL, avoiding double tenant paths
+          let linkUrl: string;
+          if (customLinkUrl) {
+            // External or special URLs are passed through unchanged
+            if (isExternalOrSpecialUrl(customLinkUrl)) {
+              linkUrl = customLinkUrl;
+            } else {
+              linkUrl = buildTenantUrl(basePath, customLinkUrl);
+            }
+          } else {
+            // Use default URL with basePath
+            linkUrl = buildTenantUrl(basePath, defaultDoor.config.linkUrl);
+          }
           const iconType = customConfig?.icon || defaultDoor.config.icon;
           const IconComponent = ICONS[iconType];
 
