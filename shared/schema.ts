@@ -2018,6 +2018,7 @@ export interface ColumnsBlock extends PageBlockBase {
   type: "columns";
   columns: ColumnData[];
   gap?: "small" | "medium" | "large";
+  backgroundColor?: string;
 }
 
 export interface ListBlock extends PageBlockBase {

@@ -1083,18 +1083,51 @@ function BlockEditor({ block, onSave, onCancel }: { block: PageBlock; onSave: (b
                 <span>Right: {columns[1]?.width || 50}%</span>
               </div>
             </div>
-            <div>
-              <Label>Gap Between Columns</Label>
-              <Select value={columnsBlock.gap || "medium"} onValueChange={(v) => updateField("gap", v)}>
-                <SelectTrigger data-testid="select-column-gap">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="small">Small</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="large">Large</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Gap Between Columns</Label>
+                <Select value={columnsBlock.gap || "medium"} onValueChange={(v) => updateField("gap", v)}>
+                  <SelectTrigger data-testid="select-column-gap">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="small">Small</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="large">Large</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Background Color</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="color"
+                    value={columnsBlock.backgroundColor || "#fafafa"}
+                    onChange={(e) => updateField("backgroundColor", e.target.value)}
+                    className="h-10 w-14 p-1 cursor-pointer"
+                    data-testid="input-columns-bgcolor"
+                  />
+                  <Input
+                    type="text"
+                    value={columnsBlock.backgroundColor || "#fafafa"}
+                    onChange={(e) => updateField("backgroundColor", e.target.value)}
+                    placeholder="#fafafa"
+                    className="flex-1"
+                    data-testid="input-columns-bgcolor-text"
+                  />
+                  {columnsBlock.backgroundColor && columnsBlock.backgroundColor !== "#fafafa" && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => updateField("backgroundColor", "")}
+                      data-testid="button-clear-bgcolor"
+                    >
+                      Clear
+                    </Button>
+                  )}
+                </div>
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -1551,7 +1584,8 @@ function RenderBlock({ block }: { block: PageBlock }) {
       
       return (
         <div 
-          className={`flex flex-col md:flex-row ${gapClasses[block.gap as keyof typeof gapClasses] || gapClasses.medium}`}
+          className={`flex flex-col md:flex-row ${gapClasses[block.gap as keyof typeof gapClasses] || gapClasses.medium} rounded-lg p-4`}
+          style={{ backgroundColor: block.backgroundColor || "#fafafa" }}
           data-testid={`rendered-columns-${block.id}`}
         >
           {columns.map((column, index) => (
