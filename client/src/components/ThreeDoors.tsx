@@ -166,19 +166,33 @@ export default function ThreeDoors({ basePath = '', config }: ThreeDoorsProps) {
           const linkText = customConfig?.linkText || defaultDoor.config.linkText;
           const customLinkUrl = typeof customConfig?.linkUrl === 'string' ? customConfig.linkUrl.trim() : null;
           
-          // Build the link URL, avoiding double tenant paths
+          // Determine the link URL - DO NOT prepend basePath because wouter's Router 
+          // is configured with base={basePath} and will handle the prefix automatically
           let linkUrl: string;
           if (customLinkUrl) {
             // External or special URLs are passed through unchanged
             if (isExternalOrSpecialUrl(customLinkUrl)) {
               linkUrl = customLinkUrl;
             } else {
-              linkUrl = buildTenantUrl(basePath, customLinkUrl);
+              // Strip any existing basePath prefix from custom URL to avoid duplication
+              let cleanUrl = customLinkUrl;
+              if (basePath && cleanUrl.startsWith(basePath + '/')) {
+                cleanUrl = cleanUrl.slice(basePath.length);
+              } else if (basePath && cleanUrl.startsWith(basePath.slice(1) + '/')) {
+                // Handle case where basePath is "/haseyas" but URL is "haseyas/volunteer"
+                cleanUrl = '/' + cleanUrl.slice(basePath.slice(1).length + 1);
+              }
+              // Ensure it starts with /
+              linkUrl = cleanUrl.startsWith('/') ? cleanUrl : '/' + cleanUrl;
             }
           } else {
-            // Use default URL with basePath
-            linkUrl = buildTenantUrl(basePath, defaultDoor.config.linkUrl);
+            // Use the default URL as-is (like /animals, /foster, /volunteer)
+            linkUrl = defaultDoor.config.linkUrl;
           }
+          
+          // Ensure URL starts with / for wouter to treat as absolute path within the base
+          const finalLinkUrl = linkUrl.startsWith('/') ? linkUrl : '/' + linkUrl;
+          
           const iconType = customConfig?.icon || defaultDoor.config.icon;
           const IconComponent = ICONS[iconType];
 
@@ -189,7 +203,7 @@ export default function ThreeDoors({ basePath = '', config }: ThreeDoorsProps) {
               title={title}
               description={description}
               linkText={linkText}
-              linkUrl={linkUrl}
+              linkUrl={finalLinkUrl}
               colorClass={defaultDoor.colorClass}
               textColorClass={defaultDoor.textColorClass}
             />
