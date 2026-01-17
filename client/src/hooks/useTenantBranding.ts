@@ -1,5 +1,7 @@
 import { useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useTenant } from '@/contexts/TenantContext';
+import type { Tenant } from '@shared/schema';
 
 interface BrandingColors {
   primaryColor?: string;
@@ -64,7 +66,15 @@ function generateForegroundColor(hsl: { h: number; s: number; l: number }): { h:
 }
 
 export function useTenantBranding() {
-  const { tenant } = useTenant();
+  const { tenantId } = useTenant();
+
+  // Fetch tenant data including branding
+  const { data: tenantData } = useQuery<{ tenant: Tenant }>({
+    queryKey: ['/api/public/tenant', tenantId],
+    enabled: !!tenantId,
+  });
+
+  const tenant = tenantData?.tenant;
 
   useEffect(() => {
     if (!tenant) return;
