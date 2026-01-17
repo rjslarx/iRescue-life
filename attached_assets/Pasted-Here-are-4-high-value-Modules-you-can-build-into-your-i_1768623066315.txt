@@ -1,0 +1,85 @@
+Here are 4 high-value "Modules" you can build into your iRescue.life dashboard. These leverage the automated Stripe connection to give your tenants powerful fundraising tools without technical headaches.
+
+You can hand these specific feature descriptions to your Replit Agent to build out the logic.
+
+1. The "Sponsor This Pet" Module
+Rescues constantly have "long-term residents" (older dogs or those with medical needs) who are hard to adopt but expensive to keep. This feature turns those liabilities into assets.
+
+The Feature: A "Sponsor Me" button generator for individual animal profiles.
+
+How it Works in iRescue:
+
+Rescue Admin selects a dog (e.g., "Buster").
+
+They choose a monthly amount (e.g., "$25/month").
+
+iRescue Automation: Creates a Stripe Product named "Sponsor Buster" with Buster’s photo and generates a recurring link.
+
+Output: A URL to paste on Facebook: "Become Buster's Monthly Godparent for just $25!"
+
+Why Rescues Need It: Donors prefer giving to a specific face rather than a general fund. This automates that emotional connection.
+
+2. The "Virtual Kennel" Subscription
+This is for steady, reliable operating income (rent, electricity, food) rather than specific medical bills.
+
+The Feature: A program where donors "rent" a kennel or a room in the shelter virtually.
+
+How it Works in iRescue:
+
+You provide 3 pre-set tiers in the dashboard:
+
+Bronze: "Bowl Filler" ($10/mo)
+
+Silver: "Bed Warmer" ($25/mo)
+
+Gold: "Kennel Keeper" ($50/mo)
+
+iRescue Automation: You loop through these 3 tiers, creating 3 distinct Stripe Payment Links.
+
+Output: A simple "Pricing Table" snippet the rescue can share in their email newsletter or pin to the top of their Facebook page.
+
+3. The "Emergency Vet Fund" Blaster
+Sometimes a rescue gets a dog that was hit by a car and needs $3,000 tonight. They don't need a monthly sub; they need fast cash.
+
+The Feature: A "Panic Button" for creating high-urgency campaigns.
+
+How it Works in iRescue:
+
+Rescue Admin hits "Create Emergency Campaign."
+
+Inputs: "Title" (e.g., Save Lucky's Leg), "Goal" ($3,000), and uploads the X-ray or injury photo (blurring gore if needed).
+
+iRescue Automation: Creates a One-Time Stripe Price (not recurring) and enables the "Allow users to adjust quantity" or "Pay what you want" feature in the Stripe API (optional, but powerful).
+
+Output: A link that renders a large, urgent checkout page.
+
+4. The "Adoption Event" QR Code Kit
+Rescues do adoption events at PetSmart or local breweries. People walk by and say "I can't adopt, but here's $20." Cash is hard to handle; this solves that.
+
+The Feature: Auto-generated printable flyers.
+
+How it Works in iRescue:
+
+Rescue Admin clicks "Generate Event Flyer."
+
+iRescue Automation: Generates a "General Donation" payment link.
+
+The Twist: Your app takes that URL, turns it into a QR Code, and places it onto a PDF flyer template with the Rescue's logo.
+
+Output: A downloadable PDF. The rescue prints it, tapes it to the table, and people scan it with their phones to set up a monthly donation right there at the brewery.
+
+💡 Tech Tip for Replit: "Metadata is King"
+When you tell Replit to build these, explicitly ask it to use Stripe Metadata.
+
+Why? When a payment comes in, Stripe tells the rescue "Someone paid $25." It doesn't inherently say which dog it was for.
+
+The Fix: In your code, when creating the link, attach metadata:
+
+JavaScript
+
+metadata: {
+  campaign_type: 'sponsor_pet',
+  pet_name: 'Buster',
+  pet_id: '101'
+}
+This way, you can eventually build a "Reporting Dashboard" that tells the rescue: "Buster has earned $400 this month!"
