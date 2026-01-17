@@ -492,11 +492,11 @@ export default function Home() {
           </div>
           
           {isLoadingAnimals ? (
-            <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 w-full">
-              {Array.from({ length: 4 }).map((_, i) => (
+            <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 w-full">
+              {Array.from({ length: 3 }).map((_, i) => (
                 <div key={i} className="space-y-3 w-full">
-                  <Skeleton className="h-48 w-full" data-testid="skeleton-animal" />
-                  <Skeleton className="h-4 w-3/4" />
+                  <Skeleton className="h-56 w-full rounded-xl" data-testid="skeleton-animal" />
+                  <Skeleton className="h-5 w-3/4" />
                   <Skeleton className="h-4 w-1/2" />
                 </div>
               ))}
@@ -512,7 +512,7 @@ export default function Home() {
                   defaultPhoto={dogPhoto}
                 />
               ) : (
-                <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 w-full">
+                <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 w-full">
                   {displayedAnimals.map((animal) => (
                     <AnimalCard
                       key={animal.id}

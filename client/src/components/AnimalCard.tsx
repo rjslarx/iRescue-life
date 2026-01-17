@@ -157,9 +157,9 @@ export default function AnimalCard({
   };
 
   return (
-    <Card className="overflow-hidden hover-elevate w-full h-full flex flex-col" data-testid={`card-animal-${name.toLowerCase().replace(/\s/g, '-')}`}>
+    <Card className="overflow-hidden hover-elevate w-full h-full flex flex-col rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-card shadow-sm" data-testid={`card-animal-${name.toLowerCase().replace(/\s/g, '-')}`}>
       <div 
-        className="overflow-hidden bg-muted relative aspect-[4/3]"
+        className="overflow-hidden bg-muted relative aspect-[4/3] m-3 mb-0 rounded-xl"
         onMouseEnter={() => setIsActive(true)}
         onMouseLeave={() => setIsActive(false)}
         onTouchStart={handleImageInteraction}
@@ -168,7 +168,7 @@ export default function AnimalCard({
         <img 
           src={photoArray[currentPhotoIndex]} 
           alt={name}
-          className="w-full h-full object-cover object-center transition-transform hover:scale-105"
+          className="w-full h-full object-cover object-center transition-transform hover:scale-105 rounded-xl"
           data-testid={`img-animal-${name.toLowerCase().replace(/\s/g, '-')}`}
         />
         {hasMultiplePhotos && (
@@ -187,10 +187,10 @@ export default function AnimalCard({
           </div>
         )}
       </div>
-      <CardContent className="p-6 space-y-3 flex-1">
+      <CardContent className="p-5 space-y-3 flex-1">
         <div className="space-y-2">
           <div className="flex items-start justify-between gap-2">
-            <h3 className="font-display text-2xl font-semibold" data-testid={`text-animal-name-${name.toLowerCase().replace(/\s/g, '-')}`}>
+            <h3 className="font-display text-xl font-bold text-foreground" data-testid={`text-animal-name-${name.toLowerCase().replace(/\s/g, '-')}`}>
               {name}
             </h3>
             <Badge variant="secondary" className="shrink-0">
@@ -223,10 +223,11 @@ export default function AnimalCard({
           </div>
         )}
       </CardContent>
-      <CardFooter className="flex flex-col gap-2 p-6 pt-0 mt-auto">
+      <CardFooter className="flex flex-col gap-2 p-5 pt-0 mt-auto">
         <div className="flex gap-2 w-full">
           <Button 
-            className="flex-1" 
+            variant="outline"
+            className="flex-1 border-2 border-primary text-primary font-semibold" 
             onClick={onAdopt}
             data-testid="button-adopt"
           >
