@@ -352,19 +352,29 @@ export default function Home() {
     );
   };
 
-  // Get all available animals for carousel
+  // Fisher-Yates shuffle algorithm for proper randomization
+  const shuffleArray = <T,>(array: T[]): T[] => {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+  };
+
+  // Get all available animals and randomize their order for display
   const allAvailableAnimals = useMemo(() => {
-    return animals.filter(animal => 
+    const available = animals.filter(animal => 
       animal.status === "available" || animal.status === "foster"
     );
+    // Shuffle for random display order in both carousel and grid
+    return shuffleArray(available);
   }, [animals]);
 
-  // Randomly select and limit animals for desktop grid display (6 max = 2 rows × 3 columns)
+  // Limit animals for desktop grid display (6 max = 2 rows × 3 columns)
+  // Animals are already shuffled from allAvailableAnimals
   const displayedAnimals = useMemo(() => {
-    // Shuffle array using Fisher-Yates algorithm
-    const shuffled = [...allAvailableAnimals].sort(() => Math.random() - 0.5);
-    // Return first 6 animals for 2 complete rows
-    return shuffled.slice(0, 6);
+    return allAvailableAnimals.slice(0, 6);
   }, [allAvailableAnimals]);
 
   const handleAdopt = (animal: Animal) => {
