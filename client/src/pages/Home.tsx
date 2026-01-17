@@ -594,46 +594,50 @@ export default function Home() {
       )}
 
       <section className="py-12 sm:py-20 bg-primary/5">
-        <div className="max-w-6xl mx-auto px-6">
-          {contentModules.length > 0 ? (
-            <div className="flex flex-col gap-8">
-              {/* Donation section - always first/top */}
-              <div className="w-full max-w-2xl mx-auto">
-                <div className="text-center mb-8">
-                  <h2 className="font-display text-2xl sm:text-3xl md:text-4xl font-bold mb-3 sm:mb-4" data-testid="text-donation-heading">
-                    {(tenant as any)?.donationSection?.sectionHeading || "Support Our Mission"}
-                  </h2>
-                  <p className="text-base sm:text-lg text-muted-foreground" data-testid="text-donation-description">
-                    {(tenant as any)?.donationSection?.sectionDescription || "Your donation helps us rescue, care for, and find homes for animals in need."}
+        <div className="w-full max-w-7xl mx-auto px-6 sm:px-8">
+          {/* Two-column donation section: text left, form right on tablets and larger */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 items-start">
+            {/* Left column: Text content */}
+            <div className="space-y-4">
+              <p className="text-sm font-semibold uppercase tracking-wide text-primary" data-testid="text-donation-label">
+                {(tenant as any)?.donationSection?.sectionLabel || "Support Our Mission"}
+              </p>
+              <h2 className="font-display text-2xl sm:text-3xl md:text-4xl font-bold leading-tight" data-testid="text-donation-heading">
+                {(tenant as any)?.donationSection?.sectionHeading || "We could not do what we do without your help!"}
+              </h2>
+              <div className="text-base sm:text-lg text-muted-foreground space-y-4" data-testid="text-donation-description">
+                <p>
+                  {(tenant as any)?.donationSection?.sectionDescription || "Our shelter is funded by donations, fundraisers and adoption fees."}
+                </p>
+                <p>
+                  {(tenant as any)?.donationSection?.sectionDescriptionExtended || "Your financial contribution enables us to be there for our community, taking care of unwanted, homeless and often sick or injured cats and dogs. Please consider supporting our efforts to provide shelter, food and medical attention to the animals in our care \"until they all have a home.\""}
+                </p>
+                {(tenant as any)?.donationSection?.impactStatement && (
+                  <p className="font-medium">
+                    {(tenant as any)?.donationSection?.impactStatement}
                   </p>
-                </div>
-                <DonationForm 
-                  tenant={tenant}
-                />
+                )}
               </div>
+            </div>
+            
+            {/* Right column: Donation form */}
+            <div className="md:pl-4">
+              <DonationForm 
+                tenant={tenant}
+              />
+            </div>
+          </div>
 
-              {/* Content modules - flexbox layout that centers items and adapts to count */}
-              <div className="flex flex-wrap justify-center gap-6">
+          {/* Content modules section - two-column layout on tablets and larger */}
+          {contentModules.length > 0 && (
+            <div className="mt-12 md:mt-16">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
                 {contentModules.map((module, idx) => (
-                  <div key={module.id} className="w-full sm:w-[calc(50%-0.75rem)] xl:w-[calc(33.333%-1rem)] max-w-md">
+                  <div key={module.id} className="w-full">
                     <ContentModuleCard module={module} testId={`content-module-${idx}`} />
                   </div>
                 ))}
               </div>
-            </div>
-          ) : (
-            <div className="max-w-2xl mx-auto">
-              <div className="text-center mb-8 sm:mb-12">
-                <h2 className="font-display text-2xl sm:text-3xl md:text-4xl font-bold mb-3 sm:mb-4" data-testid="text-donation-heading">
-                  {(tenant as any)?.donationSection?.sectionHeading || "Support Our Mission"}
-                </h2>
-                <p className="text-base sm:text-lg text-muted-foreground" data-testid="text-donation-description">
-                  {(tenant as any)?.donationSection?.sectionDescription || "Your donation helps us rescue, care for, and find homes for animals in need."}
-                </p>
-              </div>
-              <DonationForm 
-                tenant={tenant}
-              />
             </div>
           )}
         </div>
