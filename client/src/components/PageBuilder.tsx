@@ -911,10 +911,15 @@ function BlockEditor({ block, onSave, onCancel }: { block: PageBlock; onSave: (b
                 </div>
               ) : (
                 <ObjectUploader
-                  onUploadComplete={(url) => updateField("src", url)}
+                  onChange={(urls) => {
+                    if (urls && urls.length > 0) {
+                      updateField("src", urls[0]);
+                    }
+                  }}
                   accept="image/*"
-                  folder="page-builder"
-                  maxSizeMB={5}
+                  maxFiles={1}
+                  maxFileSize={5 * 1024 * 1024}
+                  data-testid="uploader-page-image"
                 />
               )}
             </div>
