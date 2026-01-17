@@ -308,7 +308,7 @@ export default function Home() {
           <img 
             src={bgImageUrl} 
             alt={module.title}
-            className="w-full h-48 object-cover rounded-md"
+            className="w-full h-72 object-cover rounded-md"
           />
         </div>
       );
