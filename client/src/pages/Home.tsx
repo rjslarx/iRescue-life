@@ -359,12 +359,12 @@ export default function Home() {
     );
   }, [animals]);
 
-  // Randomly select and limit animals for desktop grid display (8 max)
+  // Randomly select and limit animals for desktop grid display (6 max = 2 rows × 3 columns)
   const displayedAnimals = useMemo(() => {
     // Shuffle array using Fisher-Yates algorithm
     const shuffled = [...allAvailableAnimals].sort(() => Math.random() - 0.5);
-    // Return first 8 animals
-    return shuffled.slice(0, 8);
+    // Return first 6 animals for 2 complete rows
+    return shuffled.slice(0, 6);
   }, [allAvailableAnimals]);
 
   const handleAdopt = (animal: Animal) => {
