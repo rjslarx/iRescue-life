@@ -1494,7 +1494,7 @@ function RenderBlock({ block }: { block: PageBlock }) {
           <img
             src={block.src}
             alt={block.alt || ""}
-            className={`${widthClasses[block.width as keyof typeof widthClasses] || widthClasses.large} h-auto rounded-md`}
+            className={`${widthClasses[block.width as keyof typeof widthClasses] || widthClasses.large} max-w-full h-auto rounded-md`}
           />
           {block.caption && (
             <figcaption className="text-sm text-muted-foreground mt-2 text-center">
@@ -1548,8 +1548,6 @@ function RenderBlock({ block }: { block: PageBlock }) {
         large: "gap-8",
       };
       const columns = block.columns || [];
-      const leftWidth = columns[0]?.width || 50;
-      const rightWidth = columns[1]?.width || 50;
       
       return (
         <div 
@@ -1559,10 +1557,9 @@ function RenderBlock({ block }: { block: PageBlock }) {
           {columns.map((column, index) => (
             <div 
               key={column.id || index}
-              className="flex-shrink-0"
+              className="min-w-0 overflow-hidden"
               style={{ 
-                width: '100%',
-                flex: `0 0 ${column.width || 50}%`
+                flex: `1 1 ${column.width || 50}%`
               }}
             >
               {column.blocks && column.blocks.length > 0 ? (
