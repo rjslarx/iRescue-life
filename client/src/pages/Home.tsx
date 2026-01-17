@@ -15,6 +15,7 @@ import EventCard from "@/components/EventCard";
 import HappyTailsCard from "@/components/HappyTailsCard";
 import DonationForm from "@/components/DonationForm";
 import NewsletterSubscribe from "@/components/NewsletterSubscribe";
+import { RecentDonationsWidget } from "@/components/RecentDonationsWidget";
 import { PublicAdoptionDialog } from "@/components/PublicAdoptionDialog";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -593,7 +594,7 @@ export default function Home() {
         </section>
       )}
 
-      <section className="py-12 sm:py-20 bg-primary/5">
+      <section id="donation-section" className="py-12 sm:py-20 bg-primary/5">
         <div className="w-full max-w-7xl mx-auto px-6 sm:px-8">
           {/* Two-column donation section: text left, form right on tablets and larger */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 items-start">
@@ -845,6 +846,11 @@ export default function Home() {
         enabled={(tenant?.mascot as { enabled?: boolean } | undefined)?.enabled}
         tenantId={tenant?.id}
       />
+
+      {/* Recent Donations Widget - Fixed in bottom-left corner */}
+      {tenant?.subdomain && (
+        <RecentDonationsWidget tenantSubdomain={tenant.subdomain} />
+      )}
     </div>
   );
 }

@@ -740,6 +740,10 @@ export const donations = pgTable("donations", {
   donorName: text("donor_name").notNull(),
   donorEmail: text("donor_email").notNull(),
   donorAddress: text("donor_address"), // For receipt mailing
+  donorCity: text("donor_city"), // City for public display in donation widget
+  donorState: text("donor_state"), // State/region for public display in donation widget
+  donorCountry: text("donor_country"), // Country for public display in donation widget
+  isPublic: boolean("is_public").notNull().default(true), // Whether donation can be shown publicly in widget
   donationType: text("donation_type").notNull().default("cash").$type<"cash" | "in_kind">(),
   amount: integer("amount"), // Amount in cents (e.g., $10.00 = 1000). Required for cash, ignored for in-kind
   description: text("description"), // Required for in-kind (e.g., "5 bags of dog food")
@@ -802,6 +806,10 @@ export const payments = pgTable("payments", {
   paymentMethod: text("payment_method").$type<"stripe" | "manual">(),
   isRecurring: boolean("is_recurring").notNull().default(false),
   message: text("message"), // Optional donor message
+  donorCity: text("donor_city"), // City for public display in donation widget
+  donorState: text("donor_state"), // State/region for public display in donation widget
+  donorCountry: text("donor_country"), // Country for public display in donation widget
+  isPublic: boolean("is_public").notNull().default(true), // Whether payment can be shown publicly in widget
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

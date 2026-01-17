@@ -7,12 +7,14 @@ import {
   complianceDocuments,
   impactStats,
   reviewRequests,
+  payments,
+  donors,
   SAC_INTAKE_CATEGORIES,
   SAC_OUTCOME_CATEGORIES,
   insertSacMonthlyReportSchema,
   insertComplianceDocumentSchema,
 } from '@shared/schema';
-import { eq, and, gte, lt, sql, desc } from 'drizzle-orm';
+import { eq, and, gte, lt, sql, desc, isNotNull } from 'drizzle-orm';
 import { requireTenant } from '../middleware/tenant';
 import { requireAuth } from '../middleware/auth';
 import { z } from 'zod';
@@ -1267,6 +1269,78 @@ router.get('/annual-summary/export-csv', requireTenant, requireAuth, async (req,
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', `attachment; filename="Eligible_Donors_${year}.csv"`);
     res.send(csv);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/compliance/public/recent-donations
+ * Get recent public donations for the donation widget (no auth required)
+ * Returns donor first name + last initial, amount, and location
+ */
+router.get('/public/recent-donations', requireTenant, async (req, res, next) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit as string) || 10, 20);
+    
+    // Fetch recent successful public payments with donor info
+    const recentPayments = await db
+      .select({
+        id: payments.id,
+        amount: payments.amount,
+        donorCity: payments.donorCity,
+        donorState: payments.donorState,
+        donorCountry: payments.donorCountry,
+        createdAt: payments.createdAt,
+        donorName: donors.name,
+      })
+      .from(payments)
+      .leftJoin(donors, eq(payments.donorId, donors.id))
+      .where(
+        and(
+          eq(payments.tenantId, req.tenant!.id),
+          eq(payments.status, 'succeeded'),
+          eq(payments.isPublic, true)
+        )
+      )
+      .orderBy(desc(payments.createdAt))
+      .limit(limit);
+
+    // Format for public display with privacy protection
+    const formattedDonations = recentPayments.map(payment => {
+      // Parse donor name to first name + last initial
+      const nameParts = (payment.donorName || 'Anonymous').split(' ').filter(Boolean);
+      let displayName = 'Anonymous';
+      if (nameParts.length >= 1 && nameParts[0].toLowerCase() !== 'anonymous') {
+        displayName = nameParts[0];
+        if (nameParts.length >= 2 && nameParts[nameParts.length - 1]) {
+          displayName += ` ${nameParts[nameParts.length - 1][0]}.`;
+        }
+      }
+
+      // Format location
+      let location = '';
+      if (payment.donorCity && payment.donorState) {
+        location = `${payment.donorCity}, ${payment.donorState}`;
+      } else if (payment.donorCity) {
+        location = payment.donorCity;
+      } else if (payment.donorState) {
+        location = payment.donorState;
+      }
+      if (payment.donorCountry && payment.donorCountry !== 'US') {
+        location = location ? `${location}, ${payment.donorCountry}` : payment.donorCountry;
+      }
+
+      return {
+        id: payment.id,
+        displayName,
+        amount: payment.amount, // in cents
+        location: location || null,
+        createdAt: payment.createdAt,
+      };
+    });
+
+    res.json(formattedDonations);
   } catch (error) {
     next(error);
   }

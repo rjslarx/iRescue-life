@@ -14445,6 +14445,10 @@ Submitted: ${new Date().toLocaleString()}
           const session = event.data.object as any;
           const customerEmail = session.customer_email || session.customer_details?.email;
           const customerName = session.customer_details?.name || 'Anonymous Donor';
+          const customerAddress = session.customer_details?.address || {};
+          const donorCity = customerAddress.city || null;
+          const donorState = customerAddress.state || null;
+          const donorCountry = customerAddress.country || null;
 
           if (!customerEmail) {
             console.error('Checkout session completed without customer email');
@@ -14515,6 +14519,10 @@ Submitted: ${new Date().toLocaleString()}
             paymentMethod: 'stripe',
             isRecurring: session.mode === 'subscription',
             message: session.metadata?.message,
+            donorCity,
+            donorState,
+            donorCountry,
+            isPublic: true,
           });
 
           // Send appropriate email based on payment status
