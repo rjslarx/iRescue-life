@@ -1019,6 +1019,9 @@ export default function PlatformIntegrationsPage() {
                                     onChange={(e) => setFtpPath(e.target.value)}
                                     data-testid="input-petfinder-ftp-path"
                                   />
+                                  <p className="text-xs text-muted-foreground">
+                                    Most accounts use the root directory. Only set this if Petfinder provided a specific folder path in your FTP setup email or Pro Dashboard.
+                                  </p>
                                 </div>
                                 <div className="flex items-center justify-between">
                                   <div>
