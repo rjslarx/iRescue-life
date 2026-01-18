@@ -68,9 +68,9 @@ function generateForegroundColor(hsl: { h: number; s: number; l: number }): { h:
 export function useTenantBranding() {
   const { tenantId } = useTenant();
 
-  // Fetch tenant data including branding
+  // Fetch tenant data including branding from the existing tenant endpoint
   const { data: tenantData } = useQuery<{ tenant: Tenant }>({
-    queryKey: ['/api/public/tenant', tenantId],
+    queryKey: ['/api/tenant'],
     enabled: !!tenantId,
   });
 
