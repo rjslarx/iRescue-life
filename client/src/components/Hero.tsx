@@ -126,13 +126,13 @@ export default function Hero({
         {hasMobileImage && (
           <div 
             className="absolute inset-0 sm:hidden"
-            style={{ backgroundImage: `url(${mobileBackgroundImage})`, backgroundSize: 'cover', backgroundPosition: 'center center' }}
+            style={{ backgroundImage: `url(${mobileBackgroundImage})`, backgroundSize: 'cover', backgroundPosition: 'center center', filter: 'brightness(1.1)' }}
           />
         )}
         {/* Desktop background image - always shown on sm+ screens, or on mobile if no mobile image */}
         <div 
           className={hasMobileImage ? "absolute inset-0 hidden sm:block" : "absolute inset-0"}
-          style={{ backgroundImage: `url(${backgroundImage})`, backgroundSize: 'cover', backgroundPosition }}
+          style={{ backgroundImage: `url(${backgroundImage})`, backgroundSize: 'cover', backgroundPosition, filter: 'brightness(1.1)' }}
         />
         <div className="absolute inset-0 bg-gradient-to-br from-black/70 via-black/50 to-black/30" />
       </div>
