@@ -11,6 +11,7 @@ export const tenants = pgTable("tenants", {
   tagline: text("tagline"),
   logoUrl: text("logo_url"),
   heroImageUrl: text("hero_image_url"),
+  heroMobileImageUrl: text("hero_mobile_image_url"),
   branding: jsonb("branding").$type<{
     primaryColor?: string;
     secondaryColor?: string;
