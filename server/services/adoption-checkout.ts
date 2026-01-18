@@ -569,19 +569,57 @@ export async function sendCheckoutLink(
       checkoutUrl = `${baseUrl}/${tenant?.subdomain || 'demo'}/adoption-checkout/${token}`;
     }
 
+    // Check if fee is waived
+    const baseFee = parseFloat(session.baseFee?.toString() || '0');
+    const metadata = session.metadata as { waiveFee?: boolean } | null;
+    const isFeeWaived = baseFee === 0 || metadata?.waiveFee === true;
+    const hasDonation = session.donationBoost && parseFloat(session.donationBoost) > 0;
+
+    // Build fee information section
+    let feeSection = '';
+    if (isFeeWaived && !hasDonation) {
+      feeSection = `<p><strong>Adoption Fee:</strong> Waived</p>`;
+    } else if (isFeeWaived && hasDonation) {
+      feeSection = `
+        <p><strong>Adoption Fee:</strong> Waived</p>
+        <p><strong>Additional Donation:</strong> $${session.donationBoost}</p>
+      `;
+    } else {
+      feeSection = `<p><strong>Adoption Fee:</strong> $${session.baseFee}</p>`;
+      if (hasDonation) {
+        feeSection += `<p><strong>Additional Donation:</strong> $${session.donationBoost}</p>`;
+      }
+      if (session.totals) {
+        feeSection += `<p><strong>Total:</strong> $${(session.totals as any).total}</p>`;
+      }
+    }
+
+    // Build steps list based on whether payment is needed
+    const paymentNeeded = !isFeeWaived || hasDonation;
+    const stepsList = paymentNeeded
+      ? `<ol>
+          <li>Review and sign the adoption contract</li>
+          <li>Complete the adoption fee payment</li>
+        </ol>`
+      : `<ol>
+          <li>Review and sign the adoption contract</li>
+        </ol>`;
+
     const html = `
       <h2>Complete Your Adoption of ${animal.name}!</h2>
       <p>Dear ${name},</p>
       <p>Congratulations! Your adoption application for <strong>${animal.name}</strong> has been approved.</p>
       <p>To finalize the adoption, please complete the following steps:</p>
-      <ol>
-        <li>Review and sign the adoption contract</li>
-        <li>Complete the adoption fee payment</li>
-      </ol>
-      <p><strong>Adoption Fee:</strong> $${session.baseFee}</p>
-      ${session.donationBoost && parseFloat(session.donationBoost) > 0 ? `<p><strong>Additional Donation:</strong> $${session.donationBoost}</p>` : ''}
-      ${session.totals ? `<p><strong>Total:</strong> $${(session.totals as any).total}</p>` : ''}
-      <p><a href="${checkoutUrl}" style="display: inline-block; padding: 12px 24px; background-color: #4F46E5; color: white; text-decoration: none; border-radius: 6px; margin: 20px 0;">Complete Adoption</a></p>
+      ${stepsList}
+      ${feeSection}
+      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 20px 0;">
+        <tr>
+          <td>
+            <a href="${checkoutUrl}" style="display: inline-block; padding: 12px 24px; background-color: #4F46E5; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold;">Complete Adoption</a>
+          </td>
+        </tr>
+      </table>
+      <p style="margin-top: 10px; font-size: 12px; color: #666;">Or copy and paste this link into your browser:<br/><a href="${checkoutUrl}">${checkoutUrl}</a></p>
       <p>This link will expire in 72 hours.</p>
       <p>If you have any questions, please don't hesitate to contact us.</p>
     `;
