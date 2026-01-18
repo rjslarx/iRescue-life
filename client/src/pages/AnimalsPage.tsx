@@ -92,6 +92,7 @@ const animalFormSchema = insertAnimalSchema.omit({ tenantId: true }).extend({
   specialNeeds: z.boolean().optional().nullable(),
   shotsCurrent: z.boolean().optional().nullable(),
   heartwormPositive: z.boolean().optional().nullable(),
+  nextVaccinationDue: z.date().optional().nullable(),
 }).refine((data) => {
   // Require restriction reason for yellow or red behavior ratings
   if ((data.behaviorColor === "yellow" || data.behaviorColor === "red") && !data.behaviorRestrictionReason?.trim()) {
@@ -275,6 +276,7 @@ function AnimalForm({
       specialNeeds: initialData.specialNeeds ?? null,
       shotsCurrent: initialData.shotsCurrent ?? null,
       heartwormPositive: initialData.heartwormPositive ?? null,
+      nextVaccinationDue: initialData.nextVaccinationDue ? new Date(initialData.nextVaccinationDue) : null,
     } : {
       name: "",
       // Petfinder-compliant primary fields (user must fill these)
@@ -309,6 +311,7 @@ function AnimalForm({
       specialNeeds: null,
       shotsCurrent: null,
       heartwormPositive: null,
+      nextVaccinationDue: null,
     },
   });
   
@@ -373,6 +376,7 @@ function AnimalForm({
       specialNeeds: data.specialNeeds ?? null,
       shotsCurrent: data.shotsCurrent ?? null,
       heartwormPositive: data.heartwormPositive ?? null,
+      nextVaccinationDue: data.nextVaccinationDue ? data.nextVaccinationDue.toISOString() : null,
       // Kennel assignment - structured fields only
       kennelBuildingId: selectedBuildingId || null,
       kennelRowId: selectedRowId || null,
@@ -1313,6 +1317,28 @@ function AnimalForm({
                 )}
               />
             )}
+          </div>
+          
+          {/* Next Vaccination Due Date */}
+          <div className="mt-4">
+            <FormField
+              control={form.control}
+              name="nextVaccinationDue"
+              render={({ field }) => (
+                <FormItem className="max-w-xs">
+                  <FormLabel>Next Vaccination Due</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="date"
+                      data-testid="input-next-vaccination-due"
+                      value={field.value ? new Date(field.value).toISOString().split('T')[0] : ''}
+                      onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : null)}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
           </div>
         </div>
 

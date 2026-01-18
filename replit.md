@@ -35,8 +35,9 @@ The platform includes a complete native e-signature system for adoption contract
   - Animal info: {{animal_name}}, {{animal_species}}, {{animal_breed}}, {{animal_age}}, {{animal_sex}}
   - Financial: {{adoption_fee}}, {{donation_amount}}, {{total_amount}}
   - Contract: {{organization_name}}, {{contract_date}}, {{signature_image_url}}, {{signed_timestamp}}, {{signed_ip}}
-  - Commitment dates: {{vet_appointment_date}}, {{spay_neuter_date}} (adopter fills these during checkout)
-- **Adopter Input Fields:** During checkout, adopters enter their complete address (street, city, state, zip) and commitment dates for vet appointments and spay/neuter procedures
+  - Commitment dates: {{vet_appointment_date}}, {{spay_neuter_date}} (staff confirms/sets these during checkout)
+- **Adopter Input Fields:** During checkout, adopters enter their complete address (street, city, state, zip)
+- **Staff-Confirmed Dates:** Staff confirms vaccination due date (pre-filled from animal's `nextVaccinationDue` field) and spay/neuter deadline during checkout. If animal is already spayed/neutered, the spay_neuter_date field shows "N/A (Already spayed/neutered)" in the contract
 - **Native E-Signature:** Uses signature_pad library for browser-based signature capture
 - **Driver's License Verification:** Optional driver's license collection during adoption checkout:
   - Number input field (max 50 characters)

@@ -576,7 +576,10 @@ export async function generateAdoptionContractPDF(
     signed_timestamp: signedAt.toISOString(),
     signed_ip: signatureMetadata?.ipAddress || 'Not recorded',
     vet_appointment_date: metadata?.vetAppointmentDate || '_________________',
-    spay_neuter_date: metadata?.spayNeuterDate || '_________________',
+    // Show "N/A" for spay/neuter date if animal is already spayed/neutered
+    spay_neuter_date: (animal.neuterStatus === 'spayed' || animal.neuterStatus === 'neutered') 
+      ? 'N/A (Already ' + animal.neuterStatus + ')' 
+      : (metadata?.spayNeuterDate || '_________________'),
   };
 
   // Merge placeholders with actual data

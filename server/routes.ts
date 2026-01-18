@@ -5505,6 +5505,8 @@ Submitted: ${new Date().toLocaleString()}
         donationBoost: z.string().optional(),
         coverFees: z.boolean().optional(),
         processor: z.enum(['stripe']).optional(),
+        vetAppointmentDate: z.string().optional(),
+        spayNeuterDate: z.string().optional(),
       });
 
       const data = sessionSchema.parse(req.body);

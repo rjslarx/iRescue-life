@@ -179,6 +179,8 @@ export async function createCheckoutSession(
     donationBoost?: string;
     coverFees?: boolean;
     processor?: 'stripe';
+    vetAppointmentDate?: string;
+    spayNeuterDate?: string;
   }
 ): Promise<{ session: AdoptionCheckoutSession; token: string }> {
   // Validate application belongs to tenant
@@ -279,6 +281,8 @@ export async function createCheckoutSession(
         createdBy: data.staffInitiatedBy,
         createdAt: new Date().toISOString(),
         waiveFee: data.waiveFee || false,
+        vetAppointmentDate: data.vetAppointmentDate || null,
+        spayNeuterDate: data.spayNeuterDate || null,
       },
     })
     .returning();

@@ -32,6 +32,8 @@ const formSchema = z.object({
   grantId: z.string().optional(),
   contractTemplateId: z.string().optional(),
   coverFees: z.boolean().default(false),
+  vetAppointmentDate: z.string().optional(),
+  spayNeuterDate: z.string().optional(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -79,6 +81,9 @@ export function FinalizeAdoptionDialog({ open, onOpenChange, animal }: FinalizeA
     grant => grant.status === 'active'
   ) || [];
 
+  // Check if animal is already spayed/neutered
+  const isAlreadyAltered = animal.neuterStatus === 'spayed' || animal.neuterStatus === 'neutered';
+  
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -87,6 +92,10 @@ export function FinalizeAdoptionDialog({ open, onOpenChange, animal }: FinalizeA
       donationBoost: "0",
       contractTemplateId: "",
       coverFees: false,
+      vetAppointmentDate: animal.nextVaccinationDue 
+        ? new Date(animal.nextVaccinationDue).toISOString().split('T')[0] 
+        : "",
+      spayNeuterDate: "",
     },
   });
 
@@ -101,6 +110,20 @@ export function FinalizeAdoptionDialog({ open, onOpenChange, animal }: FinalizeA
       form.setValue("baseFee", animal.adoptionFee);
     }
   }, [open, animal.adoptionFee, form]);
+
+  // Reset date fields when dialog opens or animal changes
+  useEffect(() => {
+    if (open) {
+      // Reset vetAppointmentDate from animal's nextVaccinationDue
+      const vetDate = animal.nextVaccinationDue 
+        ? new Date(animal.nextVaccinationDue).toISOString().split('T')[0] 
+        : "";
+      form.setValue("vetAppointmentDate", vetDate);
+      
+      // Reset spayNeuterDate
+      form.setValue("spayNeuterDate", "");
+    }
+  }, [open, animal.id, animal.nextVaccinationDue, form]);
 
   const selectedGrantId = form.watch("grantId");
   const baseFee = form.watch("baseFee");
@@ -184,6 +207,15 @@ export function FinalizeAdoptionDialog({ open, onOpenChange, animal }: FinalizeA
   });
 
   const handleSubmit = (data: FormData) => {
+    // Validate spayNeuterDate is required when animal is not already altered
+    if (!isAlreadyAltered && !data.spayNeuterDate) {
+      form.setError("spayNeuterDate", {
+        type: "manual",
+        message: "Spay/neuter deadline is required for animals that are not already spayed/neutered"
+      });
+      return;
+    }
+    
     createSessionMutation.mutate({
       ...data,
       animalId: animal.id,
@@ -408,6 +440,67 @@ export function FinalizeAdoptionDialog({ open, onOpenChange, animal }: FinalizeA
                   )}
                 />
               )}
+
+              {/* Contract Commitment Dates */}
+              <div className="space-y-4 border-t pt-4">
+                <h4 className="font-medium text-sm">Contract Commitment Dates</h4>
+                <p className="text-sm text-muted-foreground">
+                  These dates will appear in the adoption contract. Confirm or adjust as needed.
+                </p>
+                
+                <FormField
+                  control={form.control}
+                  name="vetAppointmentDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Next Vaccination Due Date</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="date"
+                          {...field}
+                          data-testid="input-vet-appointment-date"
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        {animal.nextVaccinationDue 
+                          ? "Pre-filled from the animal's profile" 
+                          : "Enter the date when vaccinations are due"}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {!isAlreadyAltered && (
+                  <FormField
+                    control={form.control}
+                    name="spayNeuterDate"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Spay/Neuter Deadline</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="date"
+                            {...field}
+                            data-testid="input-spay-neuter-date"
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Enter the deadline for the adopter to complete spay/neuter
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+
+                {isAlreadyAltered && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 p-3 rounded-md">
+                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    <span>{animal.name} is already {animal.neuterStatus} - spay/neuter date will show as "N/A" in the contract</span>
+                  </div>
+                )}
+              </div>
 
               <DialogFooter>
                 <Button
