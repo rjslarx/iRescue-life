@@ -394,6 +394,7 @@ export default function Home() {
   const rescueName = tenant?.name || "";
   const rescueTagline = tenant?.tagline || "";
   const rescueHeroImage = tenant?.heroImageUrl || heroImage;
+  const rescueMobileHeroImage = (tenant as any)?.heroMobileImageUrl || null;
 
   // SEO configuration
   useSEO({
@@ -438,6 +439,7 @@ export default function Home() {
         rescueName={rescueName}
         tagline={rescueTagline}
         backgroundImage={rescueHeroImage}
+        mobileBackgroundImage={rescueMobileHeroImage}
         onViewAnimals={() => document.getElementById('animals')?.scrollIntoView({ behavior: 'smooth' })}
         onDonate={() => setDonationDialogOpen(true)}
         actionCircle={tenant?.actionCircle as any}

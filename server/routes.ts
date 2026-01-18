@@ -13809,6 +13809,7 @@ Submitted: ${new Date().toLocaleString()}
         // Accept either full URLs or relative paths from object storage
         logoUrl: z.string().optional().or(z.literal("")),
         heroImageUrl: z.string().optional().or(z.literal("")),
+        heroMobileImageUrl: z.string().optional().or(z.literal("")),
         heroHeadline: z.string().optional(),
         heroButtonText: z.string().optional(),
         heroButton2Text: z.string().optional(),
@@ -13848,6 +13849,7 @@ Submitted: ${new Date().toLocaleString()}
       if (settings.missionStatement !== undefined) updateData.missionStatement = settings.missionStatement || null;
       if (settings.logoUrl !== undefined) updateData.logoUrl = settings.logoUrl || null;
       if (settings.heroImageUrl !== undefined) updateData.heroImageUrl = settings.heroImageUrl || null;
+      if (settings.heroMobileImageUrl !== undefined) updateData.heroMobileImageUrl = settings.heroMobileImageUrl || null;
       if (settings.heroHeadline !== undefined) updateData.heroHeadline = settings.heroHeadline || null;
       if (settings.heroButtonText !== undefined) updateData.heroButtonText = settings.heroButtonText || null;
       if (settings.heroButton2Text !== undefined) updateData.heroButton2Text = settings.heroButton2Text || null;

@@ -57,6 +57,7 @@ const brandingSettingsSchema = z.object({
   missionStatement: z.string().optional(),
   logoUrl: urlOrPathSchema,
   heroImageUrl: urlOrPathSchema,
+  heroMobileImageUrl: urlOrPathSchema,
   heroHeadline: z.string().optional(),
   heroButtonText: z.string().optional(),
   heroButton2Text: z.string().optional(),
@@ -345,6 +346,7 @@ export default function SettingsPage() {
       missionStatement: data?.tenant?.missionStatement || "",
       logoUrl: data?.tenant?.logoUrl || "",
       heroImageUrl: data?.tenant?.heroImageUrl || "",
+      heroMobileImageUrl: (data?.tenant as any)?.heroMobileImageUrl || "",
       heroHeadline: data?.tenant?.heroHeadline || "",
       heroButtonText: data?.tenant?.heroButtonText || "",
       heroButton2Text: data?.tenant?.heroButton2Text || "",
@@ -379,6 +381,7 @@ export default function SettingsPage() {
       missionStatement: data.tenant.missionStatement || "",
       logoUrl: data.tenant.logoUrl || "",
       heroImageUrl: data.tenant.heroImageUrl || "",
+      heroMobileImageUrl: (data.tenant as any)?.heroMobileImageUrl || "",
       heroHeadline: data.tenant.heroHeadline || "",
       heroButtonText: data.tenant.heroButtonText || "",
       heroButton2Text: data.tenant.heroButton2Text || "",
@@ -767,6 +770,29 @@ export default function SettingsPage() {
                               </FormControl>
                               <FormDescription>
                                 Upload a background image for your homepage hero section (recommended: 1920x1080px or larger)
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={brandingForm.control}
+                          name="heroMobileImageUrl"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Mobile Hero Image (Optional)</FormLabel>
+                              <FormControl>
+                                <ObjectUploader
+                                  value={field.value ? [field.value] : []}
+                                  onChange={(urls) => field.onChange(urls[0] || "")}
+                                  maxFiles={1}
+                                  accept="image/*"
+                                  data-testid="uploader-hero-mobile"
+                                />
+                              </FormControl>
+                              <FormDescription>
+                                Upload a separate hero image optimized for mobile devices (portrait orientation, 1080x1920px recommended). If not provided, the main hero image will be used with the focus point setting above.
                               </FormDescription>
                               <FormMessage />
                             </FormItem>

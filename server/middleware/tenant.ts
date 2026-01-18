@@ -11,6 +11,7 @@ export interface TenantContext {
   missionStatement?: string | null;
   logoUrl?: string | null;
   heroImageUrl?: string | null;
+  heroMobileImageUrl?: string | null;
   contactEmail?: string | null;
   contactPhone?: string | null;
   customDomain?: string | null;
@@ -339,6 +340,7 @@ export async function resolveTenant(req: Request, res: Response, next: NextFunct
           missionStatement: tenants.missionStatement,
           logoUrl: tenants.logoUrl,
           heroImageUrl: tenants.heroImageUrl,
+          heroMobileImageUrl: tenants.heroMobileImageUrl,
           heroHeadline: tenants.heroHeadline,
           heroButtonText: tenants.heroButtonText,
           heroButton2Text: tenants.heroButton2Text,
@@ -406,6 +408,7 @@ export async function resolveTenant(req: Request, res: Response, next: NextFunct
         missionStatement: tenant.missionStatement,
         logoUrl: tenant.logoUrl,
         heroImageUrl: tenant.heroImageUrl,
+        heroMobileImageUrl: tenant.heroMobileImageUrl,
         heroHeadline: tenant.heroHeadline,
         heroButtonText: tenant.heroButtonText,
         heroButton2Text: tenant.heroButton2Text,

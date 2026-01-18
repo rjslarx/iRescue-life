@@ -62,6 +62,7 @@ interface HeroProps {
   rescueName: string;
   tagline: string;
   backgroundImage: string;
+  mobileBackgroundImage?: string | null;
   onViewAnimals?: () => void;
   onDonate?: () => void;
   actionCircle?: ActionCircleConfig;
@@ -91,6 +92,7 @@ export default function Hero({
   rescueName, 
   tagline, 
   backgroundImage, 
+  mobileBackgroundImage,
   onViewAnimals, 
   onDonate,
   actionCircle,
@@ -104,6 +106,8 @@ export default function Hero({
 }: HeroProps) {
   // Get the CSS background-position value for the focal point
   const backgroundPosition = FOCAL_POINT_MAP[heroFocalPoint || 'center'] || 'center center';
+  // Use mobile image if provided, otherwise fall back to main image with focal point
+  const hasMobileImage = !!mobileBackgroundImage;
   // Check if action circle has any configured images
   const hasActionCircle = (heroLayoutType === 'action_circle' || heroLayoutType === 'both') && 
     actionCircle?.enabled && actionCircle?.actions && 
@@ -118,8 +122,16 @@ export default function Hero({
       <div 
         className="absolute inset-0 overflow-hidden"
       >
+        {/* Mobile background image - shown on small screens if mobile image is provided */}
+        {hasMobileImage && (
+          <div 
+            className="absolute inset-0 sm:hidden"
+            style={{ backgroundImage: `url(${mobileBackgroundImage})`, backgroundSize: 'cover', backgroundPosition: 'center center' }}
+          />
+        )}
+        {/* Desktop background image - always shown on sm+ screens, or on mobile if no mobile image */}
         <div 
-          className="absolute inset-0"
+          className={hasMobileImage ? "absolute inset-0 hidden sm:block" : "absolute inset-0"}
           style={{ backgroundImage: `url(${backgroundImage})`, backgroundSize: 'cover', backgroundPosition }}
         />
         <div className="absolute inset-0 bg-gradient-to-br from-black/70 via-black/50 to-black/30" />
