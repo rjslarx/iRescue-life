@@ -138,11 +138,16 @@ export function ActionCircleSettings({ tenant }: ActionCircleSettingsProps) {
   };
 
   const handleImageUpload = (key: keyof NonNullable<ActionCircleConfig['actions']>, url: string) => {
+    updateAction(key, 'imageUrl', url);
     if (url) {
-      updateAction(key, 'imageUrl', url);
       toast({
         title: "Image uploaded",
         description: `${key.charAt(0).toUpperCase() + key.slice(1)} image ready. Click "Save Action Circle" to apply changes.`,
+      });
+    } else {
+      toast({
+        title: "Image removed",
+        description: `${key.charAt(0).toUpperCase() + key.slice(1)} image removed. Click "Save Action Circle" to apply changes.`,
       });
     }
   };
