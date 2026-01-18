@@ -175,7 +175,7 @@ export default function Hero({
     {hasThreeDoors && (
       <div 
         className="hidden sm:block relative z-10" 
-        style={{ marginTop: '-49px' }}
+        style={{ marginTop: '-50px' }}
         data-testid="three-doors-container"
       >
         <ThreeDoors basePath={basePath} config={threeDoorsConfig} />
