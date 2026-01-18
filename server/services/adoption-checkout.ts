@@ -619,7 +619,7 @@ export async function sendCheckoutLink(
       <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 20px 0;">
         <tr>
           <td align="center" bgcolor="#22c55e" style="border-radius: 6px;">
-            <a href="${checkoutUrl}" target="_blank" style="font-size: 16px; font-family: Arial, sans-serif; color: #ffffff; text-decoration: none; padding: 14px 28px; border: 1px solid #22c55e; display: inline-block; border-radius: 6px; font-weight: bold; background-color: #22c55e;">Complete Adoption</a>
+            <a href="${checkoutUrl}" target="_blank" style="font-size: 16px; font-family: Arial, sans-serif; color: #ffffff; text-decoration: none; padding: 12px 24px; border: 1px solid #22c55e; display: inline-block; border-radius: 6px; font-weight: bold; background-color: #22c55e;">Complete Adoption</a>
           </td>
         </tr>
       </table>
