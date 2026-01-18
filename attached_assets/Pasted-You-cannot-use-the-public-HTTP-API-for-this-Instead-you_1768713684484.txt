@@ -1,0 +1,45 @@
+You cannot use the public HTTP API for this. Instead, you must generate a CSV file adhering to Petfinder's specific legacy import schema and upload it via FTP.
+The standard specification relies on a "Full Upload" logic: The CSV you upload represents the entirety of the shelter's available inventory. If an animal is in the file, it is listed as "Available." If an animal is removed from the file, Petfinder marks it as "Adopted/Deleted".
+1. The File Specifications
+ * Format: CSV (Comma Separated Values)
+ * Encoding: UTF-8 or ISO-8859-1
+ * Transport: FTP (You will need the tenant's specific FTP credentials, obtained from help@petfinder.com)
+2. The CSV Schema (Column Headers)
+Your CSV must contain the following columns in this specific order. The exact header names may vary slightly by software implementation, but the order and content are strict:
+| Field | Description / Logic |
+|---|---|
+| Code | Critical. This is your Internal ID. This MUST match the ID in your database to prevent duplicates. |
+| Name | The animal's public name. |
+| Breed | Must match Petfinder's standard breed list exactly. |
+| Mix | yes or no. |
+| Sex | m or f. |
+| Size | S, M, L, XL. |
+| Color 1 | Primary color (Must match Petfinder's color list). |
+| Color 2 | Secondary color (optional). |
+| Color 3 | Tertiary color (optional). |
+| Age | Baby, Young, Adult, Senior. |
+| Description | The bio. HTML is often stripped or limited; plain text is safer. |
+| Type | Dog, Cat, Barnyard, Bird, Horse, Pig, Rabbit, Small&Furry. |
+| Shots | yes or no (Has shots?). |
+| Altered | yes or no (Spayed/Neutered?). |
+| NoDogs | yes or no (Is the animal bad with dogs?). |
+| NoCats | yes or no (Is the animal bad with cats?). |
+| NoKids | yes or no (Is the animal bad with kids?). |
+| Housetrained | yes or no. |
+| Declawed | yes or no (Mostly for cats). |
+| SpecialNeeds | yes or no. |
+| Photo 1 | Filename of the first image (e.g., 1234_1.jpg). |
+| Photo 2 | Filename of the second image. |
+| Photo 3 | ...up to Photo 6. |
+| Arrival Date | Date format: YYYY-MM-DD. |
+| Birth Date | Date format: YYYY-MM-DD. |
+3. Handling Images
+You cannot usually pass a public URL (like https://irescue.life/img/dog.jpg) in the CSV.
+ * Protocol: You must upload the actual image files to the FTP server alongside the CSV.
+ * Naming Convention: It is best practice to name the files using the animal's ID to avoid collisions (e.g., [ID]_1.jpg, [ID]_2.jpg).
+ * Reference: In the CSV Photo columns, place the exact filename (e.g., 1001_1.jpg).
+4. Implementation Steps for You
+ * Generate the CSV: Create a script in iRescue.life that dumps all "Available" animals into this format.
+ * Generate the Images: Download the images for those animals and rename them locally to match your naming convention.
+ * FTP Upload: Use a library to connect to the tenant's Petfinder FTP, upload the images first, and then upload the CSV file (often named import.csv or similar—check the welcome email the tenant receives).
+Next Step: Would you like me to write a Python (or Node.js) script to generate this CSV and handle the FTP upload?
