@@ -10104,23 +10104,80 @@ View this submission in Custom Forms > ${form.name} > Submissions
           const mode = (req.body.mode || 'skip') as 'skip' | 'update';
           const csvContent = req.file.buffer.toString('utf-8');
         
-          const results = Papa.default.parse(csvContent, {
-            header: true,
+          // First pass: parse without headers to find the real header row
+          const rawResults = Papa.default.parse(csvContent, {
+            header: false,
             skipEmptyLines: true,
-            transformHeader: (header: string) => header.trim().toLowerCase(),
           });
-
-          if (results.errors.length > 0) {
+          
+          if (rawResults.errors.length > 0) {
             return res.status(400).json({ 
               error: 'CSV parsing error', 
-              details: results.errors.slice(0, 5) 
+              details: rawResults.errors.slice(0, 5) 
             });
           }
-
-          const rows = results.data as Record<string, string>[];
+          
+          const rawRows = rawResults.data as string[][];
+          
+          if (rawRows.length === 0) {
+            return res.status(400).json({ error: 'CSV file is empty' });
+          }
+          
+          // Helper to trim trailing empty cells from an array
+          const trimTrailingEmpty = (arr: string[]): string[] => {
+            const result = [...arr];
+            while (result.length > 0 && (result[result.length - 1] || '').trim() === '') {
+              result.pop();
+            }
+            return result;
+          };
+          
+          // Find the header row - look for a row containing "email" (case-insensitive)
+          // Scan up to 50 rows or entire file for small files
+          let headerRowIndex = -1;
+          let rawHeaders: string[] = [];
+          
+          const scanLimit = Math.min(rawRows.length, 50);
+          for (let i = 0; i < scanLimit; i++) {
+            const row = rawRows[i];
+            const normalizedRow = row.map(cell => (cell || '').trim().toLowerCase());
+            if (normalizedRow.includes('email')) {
+              headerRowIndex = i;
+              rawHeaders = trimTrailingEmpty(normalizedRow); // Trim trailing empties but keep leading for alignment
+              break;
+            }
+          }
+          
+          if (headerRowIndex === -1) {
+            return res.status(400).json({ 
+              error: 'Could not find header row. Make sure your CSV has an "email" column header.' 
+            });
+          }
+          
+          // Map header names to handle common variations (e.g., "tag" -> "tags")
+          const headerMapping: Record<string, string> = {
+            'tag': 'tags',
+            'note': 'notes',
+          };
+          
+          // Convert remaining rows to objects using the detected headers
+          // Preserve column position alignment - empty headers are skipped but positions match
+          const dataRows = rawRows.slice(headerRowIndex + 1);
+          const rows: Record<string, string>[] = dataRows.map(rawRow => {
+            // Trim trailing empty cells from data row to match header trimming
+            const row = trimTrailingEmpty(rawRow.map(cell => (cell || '').trim()));
+            const obj: Record<string, string> = {};
+            rawHeaders.forEach((header, idx) => {
+              if (header.length > 0 && idx < row.length) {
+                const normalizedHeader = headerMapping[header] || header;
+                obj[normalizedHeader] = row[idx];
+              }
+            });
+            return obj;
+          }).filter(row => Object.values(row).some(v => v.length > 0)); // Skip completely empty rows
           
           if (rows.length === 0) {
-            return res.status(400).json({ error: 'CSV file is empty' });
+            return res.status(400).json({ error: 'No data rows found after header' });
           }
 
           if (rows.length > 5000) {
