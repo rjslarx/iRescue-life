@@ -443,17 +443,6 @@ export default function AdoptionFormSettingsPage() {
                 <p className="text-sm text-muted-foreground">Phone contact for follow-up</p>
               </div>
             </div>
-            <div className="flex items-center gap-3 p-4 border rounded-lg bg-muted/30" data-testid="system-field-about">
-              <div className="w-4 h-4" />
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="font-medium">Tell Us About Yourself</span>
-                  <Badge variant="secondary" className="text-xs">Required</Badge>
-                  <Badge variant="outline" className="text-xs">Long Text</Badge>
-                </div>
-                <p className="text-sm text-muted-foreground">Living situation, pet experience, and interest in the animal (minimum 100 characters)</p>
-              </div>
-            </div>
           </div>
         </CardContent>
       </Card>
