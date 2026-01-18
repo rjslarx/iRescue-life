@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -73,6 +73,20 @@ export function PublicAdoptionDialog({ animal, open, onOpenChange }: PublicAdopt
 
   const [photoUploads, setPhotoUploads] = useState<Record<string, { url: string; name: string; uploading: boolean }>>({});
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+
+  // Prepopulate animal name in any text field that contains "animal" in the label
+  useEffect(() => {
+    if (animal && customFieldsData?.fields && open) {
+      customFieldsData.fields.forEach((field) => {
+        if (field.fieldType === 'text' && field.label.toLowerCase().includes('animal')) {
+          const currentValue = form.getValues(`customResponses.${field.id}` as any);
+          if (!currentValue) {
+            form.setValue(`customResponses.${field.id}` as any, animal.name);
+          }
+        }
+      });
+    }
+  }, [animal, customFieldsData?.fields, open, form]);
 
   const handlePhotoUpload = async (fieldId: string, file: File) => {
     setPhotoUploads(prev => ({ ...prev, [fieldId]: { url: '', name: file.name, uploading: true } }));

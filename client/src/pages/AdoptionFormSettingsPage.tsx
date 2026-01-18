@@ -398,6 +398,66 @@ export default function AdoptionFormSettingsPage() {
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Badge variant="secondary">System Fields</Badge>
+            Required Contact Information
+          </CardTitle>
+          <CardDescription>
+            These fields are automatically included on every adoption form and cannot be removed. They collect essential contact information from applicants.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            <div className="flex items-center gap-3 p-4 border rounded-lg bg-muted/30" data-testid="system-field-name">
+              <div className="w-4 h-4" />
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="font-medium">Your Full Name</span>
+                  <Badge variant="secondary" className="text-xs">Required</Badge>
+                  <Badge variant="outline" className="text-xs">Text</Badge>
+                </div>
+                <p className="text-sm text-muted-foreground">Applicant's full name for identification</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-4 border rounded-lg bg-muted/30" data-testid="system-field-email">
+              <div className="w-4 h-4" />
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="font-medium">Email Address</span>
+                  <Badge variant="secondary" className="text-xs">Required</Badge>
+                  <Badge variant="outline" className="text-xs">Email</Badge>
+                </div>
+                <p className="text-sm text-muted-foreground">We'll use this to contact you about your application</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-4 border rounded-lg bg-muted/30" data-testid="system-field-phone">
+              <div className="w-4 h-4" />
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="font-medium">Phone Number</span>
+                  <Badge variant="secondary" className="text-xs">Required</Badge>
+                  <Badge variant="outline" className="text-xs">Phone</Badge>
+                </div>
+                <p className="text-sm text-muted-foreground">Phone contact for follow-up</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-4 border rounded-lg bg-muted/30" data-testid="system-field-about">
+              <div className="w-4 h-4" />
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="font-medium">Tell Us About Yourself</span>
+                  <Badge variant="secondary" className="text-xs">Required</Badge>
+                  <Badge variant="outline" className="text-xs">Long Text</Badge>
+                </div>
+                <p className="text-sm text-muted-foreground">Living situation, pet experience, and interest in the animal (minimum 100 characters)</p>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="flex items-center justify-end">
         <Button onClick={() => handleOpenDialog()} data-testid="button-add-field">
           <Plus className="w-4 h-4 mr-2" />
@@ -407,9 +467,9 @@ export default function AdoptionFormSettingsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Form Questions</CardTitle>
+          <CardTitle>Custom Questions</CardTitle>
           <CardDescription>
-            These questions will appear on the public adoption application form in addition to the standard fields (name, email, phone).
+            Add additional questions that appear below the system fields. Drag to reorder.
           </CardDescription>
         </CardHeader>
         <CardContent>
