@@ -14028,6 +14028,9 @@ Submitted: ${new Date().toLocaleString()}
         showCustomAmount: z.boolean().optional().nullable(),
         mailingAddressLabel: z.string().max(100).optional().nullable(),
         donateMailingAddress: z.string().max(500).optional().nullable(),
+        // External wish list links
+        amazonWishListUrl: z.string().url().optional().nullable().or(z.literal("")),
+        chewyWishListUrl: z.string().url().optional().nullable().or(z.literal("")),
       });
 
       // Accept either direct fields or nested donationSection object

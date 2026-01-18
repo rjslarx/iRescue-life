@@ -165,6 +165,9 @@ export const tenants = pgTable("tenants", {
     showCustomAmount?: boolean; // Show custom amount field (default: true)
     mailingAddressLabel?: string; // Label for mailing section (default: "Prefer to mail a check? Send to:")
     donateMailingAddress?: string; // Separate mailing address for donations (falls back to footerAddress if empty)
+    // External wish list links
+    amazonWishListUrl?: string; // Amazon Wish List URL
+    chewyWishListUrl?: string; // Chewy Wish List URL
   }>(),
   
   // Mission statement / About Us (supports markdown for rich text)

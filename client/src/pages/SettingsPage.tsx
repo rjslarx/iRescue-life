@@ -116,6 +116,8 @@ const donationSectionSchema = z.object({
   monthlyGivingIcon: z.enum(["shield", "heart", "paw", "star", "hand-heart", "users", "home"]).optional(),
   oneTimeButtonText: z.string().max(50).optional(),
   monthlyButtonText: z.string().max(50).optional(),
+  amazonWishListUrl: z.string().url().optional().or(z.literal("")),
+  chewyWishListUrl: z.string().url().optional().or(z.literal("")),
 });
 
 type BrandingSettingsData = z.infer<typeof brandingSettingsSchema>;
@@ -432,6 +434,8 @@ export default function SettingsPage() {
       monthlyGivingIcon: (data?.tenant as any)?.donationSection?.monthlyGivingIcon || "shield",
       oneTimeButtonText: (data?.tenant as any)?.donationSection?.oneTimeButtonText || "",
       monthlyButtonText: (data?.tenant as any)?.donationSection?.monthlyButtonText || "",
+      amazonWishListUrl: (data?.tenant as any)?.donationSection?.amazonWishListUrl || "",
+      chewyWishListUrl: (data?.tenant as any)?.donationSection?.chewyWishListUrl || "",
     },
     values: data?.tenant ? {
       sectionHeading: (data.tenant as any)?.donationSection?.sectionHeading || "",
@@ -441,6 +445,8 @@ export default function SettingsPage() {
       monthlyGivingIcon: (data.tenant as any)?.donationSection?.monthlyGivingIcon || "shield",
       oneTimeButtonText: (data.tenant as any)?.donationSection?.oneTimeButtonText || "",
       monthlyButtonText: (data.tenant as any)?.donationSection?.monthlyButtonText || "",
+      amazonWishListUrl: (data.tenant as any)?.donationSection?.amazonWishListUrl || "",
+      chewyWishListUrl: (data.tenant as any)?.donationSection?.chewyWishListUrl || "",
     } : undefined,
   });
 
@@ -1722,6 +1728,59 @@ export default function SettingsPage() {
                                     {...field} 
                                   />
                                 </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+
+                        <Separator />
+
+                        <div className="space-y-2">
+                          <h4 className="font-medium">External Wish Lists</h4>
+                          <p className="text-sm text-muted-foreground">
+                            Add links to your Amazon and Chewy wish lists. These will appear as buttons below your donation description.
+                          </p>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <FormField
+                            control={donationSectionForm.control}
+                            name="amazonWishListUrl"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Amazon Wish List URL</FormLabel>
+                                <FormControl>
+                                  <Input 
+                                    placeholder="https://www.amazon.com/hz/wishlist/ls/..." 
+                                    data-testid="input-amazon-wishlist"
+                                    {...field} 
+                                  />
+                                </FormControl>
+                                <FormDescription>
+                                  Paste your full Amazon Wish List share link
+                                </FormDescription>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          <FormField
+                            control={donationSectionForm.control}
+                            name="chewyWishListUrl"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Chewy Wish List URL</FormLabel>
+                                <FormControl>
+                                  <Input 
+                                    placeholder="https://www.chewy.com/g/..." 
+                                    data-testid="input-chewy-wishlist"
+                                    {...field} 
+                                  />
+                                </FormControl>
+                                <FormDescription>
+                                  Paste your full Chewy Wish List share link
+                                </FormDescription>
                                 <FormMessage />
                               </FormItem>
                             )}

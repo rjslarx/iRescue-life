@@ -22,7 +22,8 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
-import { SiFacebook, SiInstagram, SiYoutube, SiTiktok } from "react-icons/si";
+import { SiFacebook, SiInstagram, SiYoutube, SiTiktok, SiAmazon } from "react-icons/si";
+import { ExternalLink, ShoppingCart } from "lucide-react";
 import { useSEO } from "@/hooks/useSEO";
 import type { Animal, Tenant, CustomPage, HappyTail, ContentModule } from "@shared/schema";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -630,6 +631,46 @@ export default function Home() {
                   </p>
                 )}
               </div>
+              
+              {/* Wish List Buttons */}
+              {((tenant as any)?.donationSection?.amazonWishListUrl || (tenant as any)?.donationSection?.chewyWishListUrl) && (
+                <div className="flex flex-wrap gap-3 pt-2">
+                  {(tenant as any)?.donationSection?.amazonWishListUrl && (
+                    <Button
+                      variant="outline"
+                      asChild
+                      data-testid="button-amazon-wishlist"
+                    >
+                      <a 
+                        href={(tenant as any).donationSection.amazonWishListUrl} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                      >
+                        <SiAmazon className="mr-2 h-4 w-4" />
+                        View Amazon Wish List
+                        <ExternalLink className="ml-2 h-3 w-3" />
+                      </a>
+                    </Button>
+                  )}
+                  {(tenant as any)?.donationSection?.chewyWishListUrl && (
+                    <Button
+                      variant="outline"
+                      asChild
+                      data-testid="button-chewy-wishlist"
+                    >
+                      <a 
+                        href={(tenant as any).donationSection.chewyWishListUrl} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                      >
+                        <ShoppingCart className="mr-2 h-4 w-4" />
+                        View Chewy Wish List
+                        <ExternalLink className="ml-2 h-3 w-3" />
+                      </a>
+                    </Button>
+                  )}
+                </div>
+              )}
             </div>
             
             {/* Right column: Donation form */}
