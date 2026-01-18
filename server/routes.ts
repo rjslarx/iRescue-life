@@ -14000,6 +14000,8 @@ Submitted: ${new Date().toLocaleString()}
         linkText: z.string().max(50).optional(),
         linkUrl: z.string().max(200).optional(),
         icon: z.enum(['paw', 'home', 'heart', 'dollar']).optional(),
+        headerColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional().or(z.literal('')),
+        buttonColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional().or(z.literal('')),
       }).optional();
 
       const threeDoorsSchema = z.object({
@@ -14010,12 +14012,27 @@ Submitted: ${new Date().toLocaleString()}
 
       const settings = threeDoorsSchema.parse(req.body);
 
+      // Helper to clean door config - remove empty strings and undefined values
+      const cleanDoorConfig = (doorSettings: any, existingDoor: any) => {
+        if (!doorSettings) return existingDoor;
+        const merged = { ...existingDoor };
+        for (const [key, value] of Object.entries(doorSettings)) {
+          if (value === '' || value === undefined) {
+            // Remove the field (reset to default)
+            delete merged[key];
+          } else {
+            merged[key] = value;
+          }
+        }
+        return Object.keys(merged).length > 0 ? merged : undefined;
+      };
+
       // Get existing config and merge
       const existingConfig = (req.tenant as any)?.threeDoorsConfig || {};
       const updatedConfig = {
-        door1: settings.door1 ? { ...existingConfig.door1, ...settings.door1 } : existingConfig.door1,
-        door2: settings.door2 ? { ...existingConfig.door2, ...settings.door2 } : existingConfig.door2,
-        door3: settings.door3 ? { ...existingConfig.door3, ...settings.door3 } : existingConfig.door3,
+        door1: cleanDoorConfig(settings.door1, existingConfig.door1),
+        door2: cleanDoorConfig(settings.door2, existingConfig.door2),
+        door3: cleanDoorConfig(settings.door3, existingConfig.door3),
       };
 
       // Update tenant settings

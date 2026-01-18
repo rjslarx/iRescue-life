@@ -9,6 +9,8 @@ interface DoorConfig {
   linkText?: string;
   linkUrl?: string;
   icon?: IconType;
+  headerColor?: string;
+  buttonColor?: string;
 }
 
 interface ThreeDoorsConfig {
@@ -30,6 +32,8 @@ interface DoorProps {
   linkUrl: string;
   colorClass: string;
   textColorClass: string;
+  customHeaderColor?: string;
+  customButtonColor?: string;
 }
 
 const ICONS: Record<IconType, React.FC<{ className?: string }>> = {
@@ -39,7 +43,20 @@ const ICONS: Record<IconType, React.FC<{ className?: string }>> = {
   dollar: DollarSign,
 };
 
-function Door({ icon, title, description, linkText, linkUrl, colorClass, textColorClass }: DoorProps) {
+function getContrastTextColor(hexColor: string): string {
+  if (!hexColor || !hexColor.startsWith('#')) return 'white';
+  const r = parseInt(hexColor.slice(1, 3), 16);
+  const g = parseInt(hexColor.slice(3, 5), 16);
+  const b = parseInt(hexColor.slice(5, 7), 16);
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.5 ? '#1f2937' : '#ffffff';
+}
+
+function Door({ icon, title, description, linkText, linkUrl, colorClass, textColorClass, customHeaderColor, customButtonColor }: DoorProps) {
+  const headerStyle = customHeaderColor ? { backgroundColor: customHeaderColor } : undefined;
+  const headerTextColor = customHeaderColor ? getContrastTextColor(customHeaderColor) : undefined;
+  const buttonStyle = customButtonColor ? { backgroundColor: customButtonColor, color: getContrastTextColor(customButtonColor) } : undefined;
+  
   return (
     <Link href={linkUrl}>
       <div 
@@ -47,14 +64,23 @@ function Door({ icon, title, description, linkText, linkUrl, colorClass, textCol
         data-testid={`door-${title.toLowerCase().replace(/\s+/g, '-')}`}
       >
         <div 
-          className={`w-full rounded-t-lg ${colorClass} py-3 px-4 flex items-center justify-center gap-2`}
+          className={`w-full rounded-t-lg ${customHeaderColor ? '' : colorClass} py-3 px-4 flex items-center justify-center gap-2`}
+          style={headerStyle}
         >
-          <span className={textColorClass}>{icon}</span>
-          <span className={`${textColorClass} font-bold text-lg uppercase tracking-wide`}>{title}</span>
+          <span className={customHeaderColor ? '' : textColorClass} style={customHeaderColor ? { color: headerTextColor } : undefined}>{icon}</span>
+          <span 
+            className={`${customHeaderColor ? '' : textColorClass} font-bold text-lg uppercase tracking-wide`}
+            style={customHeaderColor ? { color: headerTextColor } : undefined}
+          >
+            {title}
+          </span>
         </div>
         <div className="bg-card rounded-b-lg shadow-lg py-4 px-6 w-full border border-t-0">
           <p className="text-muted-foreground text-sm mb-3">{description}</p>
-          <span className="inline-block bg-primary text-primary-foreground font-semibold text-sm px-4 py-1.5 rounded-full shadow-sm group-hover:shadow-md transition-shadow">
+          <span 
+            className={`inline-block ${customButtonColor ? '' : 'bg-primary text-primary-foreground'} font-semibold text-sm px-4 py-1.5 rounded-full shadow-sm group-hover:shadow-md transition-shadow`}
+            style={buttonStyle}
+          >
             {linkText}
           </span>
         </div>
@@ -206,6 +232,8 @@ export default function ThreeDoors({ basePath = '', config }: ThreeDoorsProps) {
               linkUrl={finalLinkUrl}
               colorClass={defaultDoor.colorClass}
               textColorClass={defaultDoor.textColorClass}
+              customHeaderColor={customConfig?.headerColor}
+              customButtonColor={customConfig?.buttonColor}
             />
           );
         })}

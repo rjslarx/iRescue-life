@@ -5,9 +5,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
-import { Save, Loader2, PawPrint, Home, Heart, DollarSign } from 'lucide-react';
+import { Save, Loader2, PawPrint, Home, Heart, DollarSign, Info, RotateCcw } from 'lucide-react';
 import type { Tenant } from '@shared/schema';
 
 type IconType = 'paw' | 'home' | 'heart' | 'dollar';
@@ -18,6 +19,8 @@ interface DoorConfig {
   linkText?: string;
   linkUrl?: string;
   icon?: IconType;
+  headerColor?: string;
+  buttonColor?: string;
 }
 
 interface ThreeDoorsConfig {
@@ -37,21 +40,27 @@ const ICON_OPTIONS: { value: IconType; label: string; icon: React.FC<{ className
   { value: 'dollar', label: 'Dollar', icon: DollarSign },
 ];
 
-const DEFAULT_DOORS: { doorKey: 'door1' | 'door2' | 'door3'; defaults: Required<DoorConfig>; colorLabel: string }[] = [
+const DEFAULT_DOORS: { doorKey: 'door1' | 'door2' | 'door3'; defaults: Required<Omit<DoorConfig, 'headerColor' | 'buttonColor'>>; defaultHeaderColor: string; defaultButtonColor: string; brandColorName: string }[] = [
   {
     doorKey: 'door1',
     defaults: { title: 'Adopt', description: 'Find a friend.', linkText: 'See Pets >', linkUrl: '/animals', icon: 'paw' },
-    colorLabel: 'Primary Color',
+    defaultHeaderColor: '#2563eb',
+    defaultButtonColor: '#2563eb',
+    brandColorName: 'Primary Color',
   },
   {
     doorKey: 'door2',
     defaults: { title: 'Foster', description: 'Save a life.', linkText: 'Apply Now >', linkUrl: '/foster', icon: 'home' },
-    colorLabel: 'Accent Color',
+    defaultHeaderColor: '#6b7280',
+    defaultButtonColor: '#2563eb',
+    brandColorName: 'Accent Color',
   },
   {
     doorKey: 'door3',
     defaults: { title: 'Volunteer', description: 'Help us out.', linkText: 'Get Involved >', linkUrl: '/volunteer', icon: 'heart' },
-    colorLabel: 'Muted Color',
+    defaultHeaderColor: '#9ca3af',
+    defaultButtonColor: '#2563eb',
+    brandColorName: 'Muted (gray)',
   },
 ];
 
@@ -123,22 +132,52 @@ export function ThreeDoorsSettings({ tenant }: ThreeDoorsSettingsProps) {
 
   return (
     <div className="space-y-6">
+      <Alert>
+        <Info className="h-4 w-4" />
+        <AlertDescription>
+          <strong>Color options:</strong> Each door can have custom header and button colors. If not set, doors use your brand colors from Settings → Branding (Door 1 uses Primary, Door 2 uses Accent, Door 3 uses a neutral gray).
+        </AlertDescription>
+      </Alert>
+      
       <div className="space-y-4">
-        {DEFAULT_DOORS.map(({ doorKey, defaults, colorLabel }) => {
+        {DEFAULT_DOORS.map(({ doorKey, defaults, defaultHeaderColor, defaultButtonColor, brandColorName }) => {
           const doorConfig = config[doorKey] || {};
           const IconComponent = ICON_OPTIONS.find(i => i.value === (doorConfig.icon || defaults.icon))?.icon || PawPrint;
+          const hasCustomColors = doorConfig.headerColor || doorConfig.buttonColor;
 
           return (
             <Card key={doorKey}>
               <CardHeader className="pb-3">
-                <div className="flex items-center gap-2">
-                  <IconComponent className="h-5 w-5 text-muted-foreground" />
-                  <CardTitle className="text-base">
-                    Door {doorKey.slice(-1)} - {doorConfig.title || defaults.title}
-                  </CardTitle>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <IconComponent className="h-5 w-5 text-muted-foreground" />
+                    <CardTitle className="text-base">
+                      Door {doorKey.slice(-1)} - {doorConfig.title || defaults.title}
+                    </CardTitle>
+                  </div>
+                  {hasCustomColors && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setConfig(prev => ({
+                          ...prev,
+                          [doorKey]: {
+                            ...prev[doorKey],
+                            headerColor: undefined,
+                            buttonColor: undefined,
+                          },
+                        }));
+                      }}
+                      data-testid={`button-reset-${doorKey}-colors`}
+                    >
+                      <RotateCcw className="h-3 w-3 mr-1" />
+                      Reset colors
+                    </Button>
+                  )}
                 </div>
                 <CardDescription className="text-xs">
-                  Uses your {colorLabel}
+                  {hasCustomColors ? 'Using custom colors' : `Default: uses your ${brandColorName}`}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -207,6 +246,56 @@ export function ThreeDoorsSettings({ tenant }: ThreeDoorsSettingsProps) {
                     />
                     <p className="text-xs text-muted-foreground">
                       Enter a path like /donate or /about
+                    </p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor={`${doorKey}-headerColor`}>Header Color</Label>
+                    <div className="flex gap-2 items-center">
+                      <Input
+                        type="color"
+                        id={`${doorKey}-headerColor`}
+                        className="w-14 h-10 cursor-pointer p-1"
+                        value={doorConfig.headerColor || defaultHeaderColor}
+                        onChange={(e) => updateDoor(doorKey, 'headerColor', e.target.value)}
+                        data-testid={`input-${doorKey}-headerColor`}
+                      />
+                      <Input
+                        type="text"
+                        placeholder={defaultHeaderColor}
+                        value={doorConfig.headerColor || ''}
+                        onChange={(e) => updateDoor(doorKey, 'headerColor', e.target.value)}
+                        className="flex-1"
+                        data-testid={`input-${doorKey}-headerColor-text`}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Title background color
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor={`${doorKey}-buttonColor`}>Button Color</Label>
+                    <div className="flex gap-2 items-center">
+                      <Input
+                        type="color"
+                        id={`${doorKey}-buttonColor`}
+                        className="w-14 h-10 cursor-pointer p-1"
+                        value={doorConfig.buttonColor || defaultButtonColor}
+                        onChange={(e) => updateDoor(doorKey, 'buttonColor', e.target.value)}
+                        data-testid={`input-${doorKey}-buttonColor`}
+                      />
+                      <Input
+                        type="text"
+                        placeholder={defaultButtonColor}
+                        value={doorConfig.buttonColor || ''}
+                        onChange={(e) => updateDoor(doorKey, 'buttonColor', e.target.value)}
+                        className="flex-1"
+                        data-testid={`input-${doorKey}-buttonColor-text`}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Call-to-action button color
                     </p>
                   </div>
                 </div>
