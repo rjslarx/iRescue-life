@@ -115,7 +115,7 @@ export async function sendFormSubmissionNotification(data: FormSubmissionData): 
     <div class="footer">
       <p style="margin: 0; font-size: 14px; color: #64748b;">
         This notification was sent because form submission notifications are enabled for your organization.
-        You can manage this setting in your dashboard under Adoption Applications.
+        You can manage this setting in your dashboard under Settings.
       </p>
     </div>
   </div>
