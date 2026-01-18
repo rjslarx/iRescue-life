@@ -431,6 +431,7 @@ export async function resolveTenant(req: Request, res: Response, next: NextFunct
         donationSection: tenant.donationSection as TenantContext['donationSection'],
         heroLayoutType: tenant.heroLayoutType as TenantContext['heroLayoutType'],
         threeDoorsConfig: tenant.threeDoorsConfig as TenantContext['threeDoorsConfig'],
+        heroFocalPoint: tenant.heroFocalPoint,
       };
       
       // Set cookie for PWA manifest resolution on path-based tenants
