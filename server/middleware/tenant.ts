@@ -226,7 +226,7 @@ export async function resolveTenant(req: Request, res: Response, next: NextFunct
       const firstPathSegment = pathMatch ? pathMatch[1] : null;
       
       // Reserved paths that are NOT tenants (platform routes)
-      const reservedPaths = ['platform', 'api'];  // 'demo' is a real tenant, not reserved!
+      const reservedPaths = ['platform', 'api', 'admin', 'assets', 'static', 'favicon.ico', 'robots.txt', 'manifest.json'];  // 'demo' is a real tenant, not reserved!
       
       // If we have a first path segment that's not reserved, treat it as a potential tenant subdomain
       if (firstPathSegment && !reservedPaths.includes(firstPathSegment)) {
