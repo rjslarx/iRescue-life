@@ -56,6 +56,8 @@ interface ThreeDoorsConfig {
   };
 }
 
+type FocalPoint = 'center' | 'top' | 'bottom' | 'left' | 'right' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+
 interface HeroProps {
   rescueName: string;
   tagline: string;
@@ -69,7 +71,21 @@ interface HeroProps {
   heroHeadline?: string | null;
   heroButtonText?: string | null;
   heroButton2Text?: string | null;
+  heroFocalPoint?: FocalPoint | null;
 }
+
+// Map focal point values to CSS background-position
+const FOCAL_POINT_MAP: Record<FocalPoint, string> = {
+  'center': 'center center',
+  'top': 'center top',
+  'bottom': 'center bottom',
+  'left': 'left center',
+  'right': 'right center',
+  'top-left': 'left top',
+  'top-right': 'right top',
+  'bottom-left': 'left bottom',
+  'bottom-right': 'right bottom',
+};
 
 export default function Hero({ 
   rescueName, 
@@ -83,8 +99,11 @@ export default function Hero({
   basePath = '',
   heroHeadline,
   heroButtonText,
-  heroButton2Text
+  heroButton2Text,
+  heroFocalPoint = 'center'
 }: HeroProps) {
+  // Get the CSS background-position value for the focal point
+  const backgroundPosition = FOCAL_POINT_MAP[heroFocalPoint || 'center'] || 'center center';
   // Check if action circle has any configured images
   const hasActionCircle = (heroLayoutType === 'action_circle' || heroLayoutType === 'both') && 
     actionCircle?.enabled && actionCircle?.actions && 
@@ -101,7 +120,7 @@ export default function Hero({
       >
         <div 
           className="absolute inset-0"
-          style={{ backgroundImage: `url(${backgroundImage})`, backgroundSize: 'cover', backgroundPosition: 'center' }}
+          style={{ backgroundImage: `url(${backgroundImage})`, backgroundSize: 'cover', backgroundPosition }}
         />
         <div className="absolute inset-0 bg-gradient-to-br from-black/70 via-black/50 to-black/30" />
       </div>

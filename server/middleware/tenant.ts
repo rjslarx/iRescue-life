@@ -73,6 +73,7 @@ export interface TenantContext {
     monthlyButtonText?: string;
   };
   heroLayoutType?: 'none' | 'action_circle' | 'three_doors';
+  heroFocalPoint?: string | null;
   threeDoorsConfig?: {
     door1?: {
       title?: string;
@@ -364,6 +365,7 @@ export async function resolveTenant(req: Request, res: Response, next: NextFunct
           donationSection: tenants.donationSection,
           heroLayoutType: tenants.heroLayoutType,
           threeDoorsConfig: tenants.threeDoorsConfig,
+          heroFocalPoint: tenants.heroFocalPoint,
         })
         .from(tenants)
         .where(whereClause!)

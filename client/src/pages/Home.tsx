@@ -447,6 +447,7 @@ export default function Home() {
         heroHeadline={tenant?.heroHeadline}
         heroButtonText={tenant?.heroButtonText}
         heroButton2Text={tenant?.heroButton2Text}
+        heroFocalPoint={(tenant as any)?.heroFocalPoint as any}
       />
       
       {/* Spacer for Three Doors that extend below hero - only needed on larger screens */}

@@ -60,6 +60,7 @@ const brandingSettingsSchema = z.object({
   heroHeadline: z.string().optional(),
   heroButtonText: z.string().optional(),
   heroButton2Text: z.string().optional(),
+  heroFocalPoint: z.enum(["center", "top", "bottom", "left", "right", "top-left", "top-right", "bottom-left", "bottom-right"]).optional(),
   announcementBarEnabled: z.boolean().optional(),
   announcementBarText: z.string().optional(),
   announcementBarLinkText: z.string().optional(),
@@ -347,6 +348,7 @@ export default function SettingsPage() {
       heroHeadline: data?.tenant?.heroHeadline || "",
       heroButtonText: data?.tenant?.heroButtonText || "",
       heroButton2Text: data?.tenant?.heroButton2Text || "",
+      heroFocalPoint: (data?.tenant as any)?.heroFocalPoint || "center",
       announcementBarEnabled: (data?.tenant?.announcementBar as any)?.enabled || false,
       announcementBarText: (data?.tenant?.announcementBar as any)?.text || "",
       announcementBarLinkText: (data?.tenant?.announcementBar as any)?.linkText || "",
@@ -380,6 +382,7 @@ export default function SettingsPage() {
       heroHeadline: data.tenant.heroHeadline || "",
       heroButtonText: data.tenant.heroButtonText || "",
       heroButton2Text: data.tenant.heroButton2Text || "",
+      heroFocalPoint: (data.tenant as any)?.heroFocalPoint || "center",
       announcementBarEnabled: (data.tenant.announcementBar as any)?.enabled || false,
       announcementBarText: (data.tenant.announcementBar as any)?.text || "",
       announcementBarLinkText: (data.tenant.announcementBar as any)?.linkText || "",
@@ -827,6 +830,41 @@ export default function SettingsPage() {
                             )}
                           />
                         </div>
+
+                        <FormField
+                          control={brandingForm.control}
+                          name="heroFocalPoint"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Hero Image Focus Point</FormLabel>
+                              <Select 
+                                value={field.value || "center"} 
+                                onValueChange={field.onChange}
+                              >
+                                <FormControl>
+                                  <SelectTrigger data-testid="select-hero-focal-point">
+                                    <SelectValue placeholder="Select focus area" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="center">Center</SelectItem>
+                                  <SelectItem value="top">Top</SelectItem>
+                                  <SelectItem value="bottom">Bottom</SelectItem>
+                                  <SelectItem value="left">Left</SelectItem>
+                                  <SelectItem value="right">Right</SelectItem>
+                                  <SelectItem value="top-left">Top Left</SelectItem>
+                                  <SelectItem value="top-right">Top Right</SelectItem>
+                                  <SelectItem value="bottom-left">Bottom Left</SelectItem>
+                                  <SelectItem value="bottom-right">Bottom Right</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <FormDescription>
+                                Choose which part of the hero image to focus on when displayed on mobile devices. If your subject (like a dog) is in the lower right of the image, select "Bottom Right".
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
 
                         <Separator />
 
