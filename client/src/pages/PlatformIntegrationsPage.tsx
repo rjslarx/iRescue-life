@@ -15,7 +15,7 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import { Save, Loader2, CheckCircle2, AlertCircle, ExternalLink, RefreshCw, Mail, Calendar, HardDrive, Plus, Trash2, Star, StarOff } from "lucide-react";
+import { Save, Loader2, CheckCircle2, CheckCircle, AlertCircle, ExternalLink, RefreshCw, Mail, Calendar, HardDrive, Plus, Trash2, Star, StarOff } from "lucide-react";
 import { z } from "zod";
 import type { Tenant } from "@shared/schema";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -122,7 +122,8 @@ export default function PlatformIntegrationsPage() {
   const [ftpPassword, setFtpPassword] = useState("");
   const [ftpPath, setFtpPath] = useState("");
   const [ftpAutoSync, setFtpAutoSync] = useState(true);
-  const [ftpSyncFrequency, setFtpSyncFrequency] = useState<"manual" | "hourly" | "daily">("daily");
+  const [ftpSyncFrequency, setFtpSyncFrequency] = useState<"manual" | "frequent" | "daily">("daily");
+  const [ftpCredentialsSaved, setFtpCredentialsSaved] = useState(false);
 
   const { data: tenantData } = useQuery<{ tenant: Tenant }>({
     queryKey: ['/api/tenant'],
@@ -156,7 +157,14 @@ export default function PlatformIntegrationsPage() {
       setFtpHost(petfinderIntegration.ftpHost || '');
       setFtpPath(petfinderIntegration.ftpPath || '');
       setFtpAutoSync(petfinderIntegration.autoSync ?? true);
-      setFtpSyncFrequency((petfinderIntegration.syncFrequency as "manual" | "hourly" | "daily") || 'daily');
+      const freq = petfinderIntegration.syncFrequency;
+      // Map old "hourly" to "frequent" for backward compatibility
+      const mappedFreq = freq === 'hourly' ? 'frequent' : freq;
+      setFtpSyncFrequency((mappedFreq as "manual" | "frequent" | "daily") || 'daily');
+      // Credentials are considered saved if ftpHost exists (username/password are masked)
+      setFtpCredentialsSaved(!!petfinderIntegration.ftpHost);
+    } else {
+      setFtpCredentialsSaved(false);
     }
   }, [selectedPlatform, petfinderIntegration]);
 
@@ -965,6 +973,12 @@ export default function PlatformIntegrationsPage() {
                           <>
                             {'useFtp' in info && info.useFtp ? (
                               <div className="space-y-4">
+                                {ftpCredentialsSaved && (
+                                  <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-950/20 text-green-700 dark:text-green-400 rounded-md text-sm">
+                                    <CheckCircle className="h-4 w-4" />
+                                    <span>FTP credentials are saved. Leave username/password empty to keep existing credentials.</span>
+                                  </div>
+                                )}
                                 <div className="space-y-2">
                                   <Label htmlFor="ftp-host">FTP Host</Label>
                                   <Input
@@ -976,21 +990,21 @@ export default function PlatformIntegrationsPage() {
                                   />
                                 </div>
                                 <div className="space-y-2">
-                                  <Label htmlFor="ftp-username">FTP Username</Label>
+                                  <Label htmlFor="ftp-username">FTP Username{ftpCredentialsSaved && ' (leave empty to keep existing)'}</Label>
                                   <Input
                                     id="ftp-username"
-                                    placeholder="Your Petfinder FTP username"
+                                    placeholder={ftpCredentialsSaved ? "(unchanged)" : "Your Petfinder FTP username"}
                                     value={ftpUsername}
                                     onChange={(e) => setFtpUsername(e.target.value)}
                                     data-testid="input-petfinder-ftp-username"
                                   />
                                 </div>
                                 <div className="space-y-2">
-                                  <Label htmlFor="ftp-password">FTP Password</Label>
+                                  <Label htmlFor="ftp-password">FTP Password{ftpCredentialsSaved && ' (leave empty to keep existing)'}</Label>
                                   <Input
                                     id="ftp-password"
                                     type="password"
-                                    placeholder="Your Petfinder FTP password"
+                                    placeholder={ftpCredentialsSaved ? "(unchanged)" : "Your Petfinder FTP password"}
                                     value={ftpPassword}
                                     onChange={(e) => setFtpPassword(e.target.value)}
                                     data-testid="input-petfinder-ftp-password"
@@ -1025,14 +1039,14 @@ export default function PlatformIntegrationsPage() {
                                     <Label htmlFor="sync-frequency">Sync Frequency</Label>
                                     <Select
                                       value={ftpSyncFrequency}
-                                      onValueChange={(v: "manual" | "hourly" | "daily") => setFtpSyncFrequency(v)}
+                                      onValueChange={(v: "manual" | "frequent" | "daily") => setFtpSyncFrequency(v)}
                                     >
                                       <SelectTrigger data-testid="select-petfinder-sync-frequency">
                                         <SelectValue placeholder="Select frequency" />
                                       </SelectTrigger>
                                       <SelectContent>
-                                        <SelectItem value="hourly">Every hour</SelectItem>
-                                        <SelectItem value="daily">Once daily</SelectItem>
+                                        <SelectItem value="frequent">Every 6 hours</SelectItem>
+                                        <SelectItem value="daily">Once daily (midnight UTC)</SelectItem>
                                       </SelectContent>
                                     </Select>
                                   </div>
@@ -1040,18 +1054,27 @@ export default function PlatformIntegrationsPage() {
                                 <div className="flex gap-2">
                                   <Button
                                     onClick={() => {
-                                      if (!ftpHost || !ftpUsername || !ftpPassword) {
+                                      // Require host always. Only require username/password for new integrations
+                                      if (!ftpHost) {
+                                        toast({
+                                          title: "Missing FTP host",
+                                          description: "Please enter the FTP host address.",
+                                          variant: "destructive",
+                                        });
+                                        return;
+                                      }
+                                      if (!ftpCredentialsSaved && (!ftpUsername || !ftpPassword)) {
                                         toast({
                                           title: "Missing credentials",
-                                          description: "Please enter FTP host, username, and password.",
+                                          description: "Please enter FTP username and password.",
                                           variant: "destructive",
                                         });
                                         return;
                                       }
                                       saveFtpMutation.mutate({
                                         ftpHost,
-                                        ftpUsername,
-                                        ftpPassword,
+                                        ftpUsername: ftpUsername || undefined,
+                                        ftpPassword: ftpPassword || undefined,
                                         ftpPath: ftpPath || undefined,
                                         autoSync: ftpAutoSync,
                                         syncFrequency: ftpSyncFrequency,

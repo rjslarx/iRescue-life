@@ -417,8 +417,24 @@ export async function runScheduledPetfinderSync(): Promise<void> {
       eq(platformIntegrations.autoSync, true)
     ));
 
+  const currentHour = new Date().getUTCHours();
+  
   for (const integration of enabledIntegrations) {
-    console.log(`[Petfinder Sync] Syncing tenant ${integration.tenantId}...`);
+    const syncFrequency = integration.syncFrequency || 'daily';
+    
+    // Skip manual sync tenants (shouldn't have autoSync=true, but double-check)
+    if (syncFrequency === 'manual') {
+      continue;
+    }
+    
+    // Daily sync only runs at midnight UTC
+    if (syncFrequency === 'daily' && currentHour !== 0) {
+      console.log(`[Petfinder Sync] Skipping tenant ${integration.tenantId} (daily sync, not midnight)`);
+      continue;
+    }
+    
+    // "frequent" and legacy "hourly" sync runs on every scheduled execution (every 6 hours)
+    console.log(`[Petfinder Sync] Syncing tenant ${integration.tenantId} (${syncFrequency})...`);
     try {
       const result = await syncToPetfinder(integration.tenantId);
       console.log(`[Petfinder Sync] Tenant ${integration.tenantId}: ${result.message}`);

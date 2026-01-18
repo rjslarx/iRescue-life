@@ -311,17 +311,14 @@ export function registerPlatformIntegrationRoutes(app: Express) {
     try {
       const ftpSchema = z.object({
         ftpHost: z.string().min(1, 'FTP host is required'),
-        ftpUsername: z.string().min(1, 'FTP username is required'),
-        ftpPassword: z.string().min(1, 'FTP password is required'),
+        ftpUsername: z.string().optional(),
+        ftpPassword: z.string().optional(),
         ftpPath: z.string().optional(),
         autoSync: z.boolean().default(false),
-        syncFrequency: z.enum(['manual', 'hourly', 'daily']).default('daily'),
+        syncFrequency: z.enum(['manual', 'frequent', 'hourly', 'daily']).default('daily'),
       });
 
       const data = ftpSchema.parse(req.body);
-
-      const ftpUsernameEncrypted = encrypt(data.ftpUsername);
-      const ftpPasswordEncrypted = encrypt(data.ftpPassword);
 
       const existing = await db
         .select()
@@ -335,21 +332,41 @@ export function registerPlatformIntegrationRoutes(app: Express) {
       let integration;
 
       if (existing.length > 0) {
+        // Build update object, only updating credentials if provided
+        const updateData: Record<string, any> = {
+          ftpHost: data.ftpHost,
+          ftpPath: data.ftpPath || null,
+          autoSync: data.autoSync,
+          syncFrequency: data.syncFrequency,
+          isEnabled: true,
+          updatedAt: new Date(),
+        };
+        
+        // Only update credentials if provided (allows editing other settings without re-entering)
+        if (data.ftpUsername) {
+          updateData.ftpUsernameEncrypted = encrypt(data.ftpUsername);
+        }
+        if (data.ftpPassword) {
+          updateData.ftpPasswordEncrypted = encrypt(data.ftpPassword);
+        }
+        
         [integration] = await db
           .update(platformIntegrations)
-          .set({
-            ftpHost: data.ftpHost,
-            ftpUsernameEncrypted,
-            ftpPasswordEncrypted,
-            ftpPath: data.ftpPath || null,
-            autoSync: data.autoSync,
-            syncFrequency: data.syncFrequency,
-            isEnabled: true,
-            updatedAt: new Date(),
-          })
+          .set(updateData)
           .where(eq(platformIntegrations.id, existing[0].id))
           .returning();
       } else {
+        // For new integrations, require username and password
+        if (!data.ftpUsername || !data.ftpPassword) {
+          return res.status(400).json({
+            success: false,
+            message: 'FTP username and password are required for new integrations',
+          });
+        }
+        
+        const ftpUsernameEncrypted = encrypt(data.ftpUsername);
+        const ftpPasswordEncrypted = encrypt(data.ftpPassword);
+        
         [integration] = await db
           .insert(platformIntegrations)
           .values({
