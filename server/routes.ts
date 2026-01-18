@@ -3331,6 +3331,11 @@ Crawl-delay: 1
    */
   app.delete('/api/users/:id', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
     try {
+      // Validate UUID to prevent database errors
+      if (!isValidUUID(req.params.id)) {
+        return res.status(400).json({ error: 'Invalid user ID format' });
+      }
+      
       const { users } = await import('@shared/schema');
       
       // Prevent admins from deleting themselves
@@ -15851,6 +15856,11 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
    */
   app.get('/api/inbound-emails/:id', requireTenant, requireAuth, async (req, res, next) => {
     try {
+      // Validate UUID to prevent database errors
+      if (!isValidUUID(req.params.id)) {
+        return res.status(400).json({ error: 'Invalid email ID format' });
+      }
+      
       const { inboundEmails, animals, documents, users } = await import('@shared/schema');
 
       const [email] = await db
@@ -15900,6 +15910,11 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
    */
   app.patch('/api/inbound-emails/:id', requireTenant, requireAuth, async (req, res, next) => {
     try {
+      // Validate UUID to prevent database errors
+      if (!isValidUUID(req.params.id)) {
+        return res.status(400).json({ error: 'Invalid email ID format' });
+      }
+      
       const { inboundEmails } = await import('@shared/schema');
 
       const updateSchema = z.object({

@@ -1125,6 +1125,14 @@ router.get('/health', async (req, res, next) => {
  */
 router.post('/impersonate/:tenantId', async (req, res, next) => {
   try {
+    const { tenantId } = req.params;
+    
+    // Validate UUID to prevent database errors
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!tenantId || !UUID_REGEX.test(tenantId)) {
+      return res.status(400).json({ error: 'Invalid tenant ID format' });
+    }
+    
     // Prevent nested impersonation
     if (req.session.impersonating) {
       return res.status(400).json({ 
@@ -1132,8 +1140,6 @@ router.post('/impersonate/:tenantId', async (req, res, next) => {
         message: 'Please exit current impersonation before starting a new one' 
       });
     }
-
-    const { tenantId } = req.params;
 
     // Verify tenant exists and is active
     const [tenant] = await db
