@@ -437,7 +437,7 @@ export default function VolunteerFormSettingsPage() {
                 <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30" data-testid="volunteer-system-field-address">
                   <div className="flex-1">
                     <span className="font-medium">Address</span>
-                    <Badge variant="outline" className="ml-2 text-xs">Optional</Badge>
+                    <Badge variant="secondary" className="ml-2 text-xs">Required</Badge>
                   </div>
                   <Badge variant="outline" className="text-xs">Text</Badge>
                 </div>
@@ -482,14 +482,14 @@ export default function VolunteerFormSettingsPage() {
                 <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30" data-testid="volunteer-system-field-emergency-name">
                   <div className="flex-1">
                     <span className="font-medium">Emergency Contact Name</span>
-                    <Badge variant="outline" className="ml-2 text-xs">Optional</Badge>
+                    <Badge variant="secondary" className="ml-2 text-xs">Required</Badge>
                   </div>
                   <Badge variant="outline" className="text-xs">Text</Badge>
                 </div>
                 <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30" data-testid="volunteer-system-field-emergency-phone">
                   <div className="flex-1">
                     <span className="font-medium">Emergency Contact Phone</span>
-                    <Badge variant="outline" className="ml-2 text-xs">Optional</Badge>
+                    <Badge variant="secondary" className="ml-2 text-xs">Required</Badge>
                   </div>
                   <Badge variant="outline" className="text-xs">Phone</Badge>
                 </div>
