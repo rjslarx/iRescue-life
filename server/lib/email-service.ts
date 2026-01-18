@@ -483,7 +483,7 @@ export class EmailService {
     try {
       // Get admin users for this tenant
       const adminUsers = await db
-        .select({ email: users.email, firstName: users.firstName })
+        .select({ email: users.email, fullName: users.fullName })
         .from(users)
         .where(and(
           eq(users.tenantId, this.tenantId),

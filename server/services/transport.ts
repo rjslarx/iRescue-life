@@ -1330,7 +1330,7 @@ export class TransportService {
   static async getTimelineEvents(
     tenantId: string,
     transportId: string
-  ): Promise<(TransportTimelineEvent & { user?: { firstName: string | null; lastName: string | null; profilePictureUrl?: string | null } | null })[]> {
+  ): Promise<(TransportTimelineEvent & { userFullName?: string | null })[]> {
     const events = await db.select({
       id: transportTimelineEvents.id,
       transportId: transportTimelineEvents.transportId,
@@ -1341,11 +1341,7 @@ export class TransportService {
       message: transportTimelineEvents.message,
       metadata: transportTimelineEvents.metadata,
       createdAt: transportTimelineEvents.createdAt,
-      user: {
-        firstName: users.firstName,
-        lastName: users.lastName,
-        profilePictureUrl: users.profilePictureUrl,
-      },
+      userFullName: users.fullName,
     })
       .from(transportTimelineEvents)
       .leftJoin(users, eq(transportTimelineEvents.userId, users.id))
@@ -1370,14 +1366,13 @@ export class TransportService {
   ): Promise<TransportTimelineEvent> {
     // Get user name for caching
     const [user] = await db.select({
-      firstName: users.firstName,
-      lastName: users.lastName,
+      fullName: users.fullName,
     })
       .from(users)
       .where(eq(users.id, userId))
       .limit(1);
 
-    const userName = user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : null;
+    const userName = user?.fullName || null;
 
     return this.logTransportEvent(tenantId, transportId, 'comment', message, {
       userId,

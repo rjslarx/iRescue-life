@@ -47,7 +47,6 @@ export interface ActivityLogWithUser {
     id: string;
     name: string;
     email: string;
-    avatarUrl: string | null;
   } | null;
 }
 
@@ -64,9 +63,8 @@ export async function getRecentActivity(tenantId: string, limit: number = 20): P
       category: activityLogs.category,
       metadata: activityLogs.metadata,
       createdAt: activityLogs.createdAt,
-      userName: users.name,
+      userName: users.fullName,
       userEmail: users.email,
-      userAvatarUrl: users.avatarUrl,
     })
     .from(activityLogs)
     .leftJoin(users, eq(activityLogs.userId, users.id))
@@ -89,7 +87,6 @@ export async function getRecentActivity(tenantId: string, limit: number = 20): P
       id: log.userId,
       name: log.userName || 'Unknown',
       email: log.userEmail || '',
-      avatarUrl: log.userAvatarUrl || null,
     } : null,
   }));
 }
