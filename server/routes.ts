@@ -3965,6 +3965,9 @@ Crawl-delay: 1
       if (data.petfinderSyncedAt && typeof data.petfinderSyncedAt === 'string') {
         data.petfinderSyncedAt = new Date(data.petfinderSyncedAt);
       }
+      if (data.nextVaccinationDue && typeof data.nextVaccinationDue === 'string') {
+        data.nextVaccinationDue = new Date(data.nextVaccinationDue);
+      }
       
       // Normalize photo URLs if provided
       if (data.photoUrls && data.photoUrls.length > 0) {

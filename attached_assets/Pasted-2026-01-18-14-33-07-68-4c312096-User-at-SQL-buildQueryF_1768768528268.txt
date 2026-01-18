@@ -1,0 +1,110 @@
+2026-01-18 14:33:07.68
+4c312096
+User
+at SQL.buildQueryFromSourceParams (file:///home/runner/workspace/node_modules/drizzle-orm/sql/sql.js:73:32)
+2026-01-18 14:33:07.68
+4c312096
+User
+at Array.map ()
+2026-01-18 14:33:07.68
+4c312096
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/sql/sql.js:95:21
+2026-01-18 14:33:07.68
+4c312096
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/sql/sql.js:95:21
+2026-01-18 14:33:07.68
+4c312096
+User
+TypeError: value.toISOString is not a function
+2026-01-18 14:33:23.92
+4c312096
+User
+at SQL.buildQueryFromSourceParams (file:///home/runner/workspace/node_modules/drizzle-orm/sql/sql.js:73:32)
+2026-01-18 14:33:23.92
+4c312096
+User
+at Array.map ()
+2026-01-18 14:33:23.92
+4c312096
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/sql/sql.js:131:73
+2026-01-18 14:33:23.92
+4c312096
+User
+TypeError: value.toISOString is not a function
+2026-01-18 14:33:23.92
+4c312096
+User
+at Array.map ()
+2026-01-18 14:33:23.92
+4c312096
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/sql/sql.js:95:21
+2026-01-18 14:33:23.92
+4c312096
+User
+at SQL.buildQueryFromSourceParams (file:///home/runner/workspace/node_modules/drizzle-orm/sql/sql.js:73:32)
+2026-01-18 14:33:23.92
+4c312096
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/sql/sql.js:95:21
+2026-01-18 14:33:23.92
+4c312096
+User
+at SQL.buildQueryFromSourceParams (file:///home/runner/workspace/node_modules/drizzle-orm/sql/sql.js:73:32)
+2026-01-18 14:33:23.92
+4c312096
+User
+at Array.map ()
+2026-01-18 14:33:23.92
+4c312096
+User
+at PgTimestamp.mapToDriverValue (file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/columns/timestamp.js:34:18)
+2026-01-18 14:34:02.22
+4c312096
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/sql/sql.js:95:21
+2026-01-18 14:34:02.22
+4c312096
+User
+at SQL.buildQueryFromSourceParams (file:///home/runner/workspace/node_modules/drizzle-orm/sql/sql.js:73:32)
+2026-01-18 14:34:02.22
+4c312096
+User
+at Array.map ()
+2026-01-18 14:34:02.22
+4c312096
+User
+at Array.map ()
+2026-01-18 14:34:02.22
+4c312096
+User
+at SQL.buildQueryFromSourceParams (file:///home/runner/workspace/node_modules/drizzle-orm/sql/sql.js:73:32)
+2026-01-18 14:34:02.22
+4c312096
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/sql/sql.js:131:73
+2026-01-18 14:34:02.22
+4c312096
+User
+at PgTimestamp.mapToDriverValue (file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/columns/timestamp.js:34:18)
+2026-01-18 14:34:02.22
+4c312096
+User
+TypeError: value.toISOString is not a function
+2026-01-18 14:34:02.22
+4c312096
+User
+at Array.map ()
+2026-01-18 14:34:02.22
+4c312096
+User
+at SQL.buildQueryFromSourceParams (file:///home/runner/workspace/node_modules/drizzle-orm/sql/sql.js:73:32)
+2026-01-18 14:34:02.22
+4c312096
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/sql/sql.js:95:21
+Wrap
+Colors
