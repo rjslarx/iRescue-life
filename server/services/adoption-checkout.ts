@@ -618,8 +618,8 @@ export async function sendCheckoutLink(
       ${feeSection}
       <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 20px 0;">
         <tr>
-          <td>
-            <a href="${checkoutUrl}" style="display: inline-block; padding: 12px 24px; background-color: #4F46E5; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold;">Complete Adoption</a>
+          <td align="center" bgcolor="#22c55e" style="border-radius: 6px;">
+            <a href="${checkoutUrl}" target="_blank" style="font-size: 16px; font-family: Arial, sans-serif; color: #ffffff; text-decoration: none; padding: 14px 28px; border: 1px solid #22c55e; display: inline-block; border-radius: 6px; font-weight: bold; background-color: #22c55e;">Complete Adoption</a>
           </td>
         </tr>
       </table>
@@ -761,7 +761,14 @@ export async function sendPaymentLinkEmail(
     <p><strong>Adoption Fee:</strong> $${session.baseFee}</p>
     ${session.donationBoost && parseFloat(session.donationBoost) > 0 ? `<p><strong>Additional Donation:</strong> $${session.donationBoost}</p>` : ''}
     ${totals ? `<p><strong>Total:</strong> $${totals.total}</p>` : ''}
-    <p><a href="${checkoutUrl}" style="display: inline-block; padding: 12px 24px; background-color: #4F46E5; color: white; text-decoration: none; border-radius: 6px; margin: 20px 0;">Complete Payment</a></p>
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 20px 0;">
+      <tr>
+        <td align="center" bgcolor="#22c55e" style="border-radius: 6px;">
+          <a href="${checkoutUrl}" target="_blank" style="font-size: 16px; font-family: Arial, sans-serif; color: #ffffff; text-decoration: none; padding: 14px 28px; border: 1px solid #22c55e; display: inline-block; border-radius: 6px; font-weight: bold; background-color: #22c55e;">Complete Payment</a>
+        </td>
+      </tr>
+    </table>
+    <p style="margin-top: 10px; font-size: 12px; color: #666;">Or copy and paste this link into your browser:<br/><a href="${checkoutUrl}">${checkoutUrl}</a></p>
     <p>Once payment is received, the adoption will be finalized and ${animal.name} will officially be yours!</p>
     <p>This link will expire in 72 hours.</p>
     <p>If you have any questions, please don't hesitate to contact us.</p>
