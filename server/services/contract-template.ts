@@ -844,12 +844,12 @@ export async function ensureDefaultTemplate(tenantId: string, tenantName?: strin
   });
 
   // Also create Enhanced Adoption Contract using the comprehensive template
-  const enhancedHtml = ENHANCED_ADOPTION_CONTRACT_HTML.replace(/\{\{organization_name\}\}/g, organizationName);
+  // Keep {{organization_name}} merge field intact - it will be substituted at render time
   await createTemplate({
     tenantId,
     name: 'Enhanced Adoption Contract',
     version: '1.0',
-    htmlTemplate: enhancedHtml,
+    htmlTemplate: ENHANCED_ADOPTION_CONTRACT_HTML,
     isDefault: false,
     description: 'A comprehensive adoption agreement with detailed care requirements, vaccination tracking, and spay/neuter commitments.',
   });
