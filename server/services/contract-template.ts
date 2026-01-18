@@ -196,6 +196,9 @@ export const HASEYAS_NEW_BEGINNING_CONTRACT_HTML = `<!DOCTYPE html>
         </div>
       </span>
       
+      <span class="info-label">Driver's License:</span>
+      <span class="info-value">{{adopter_drivers_license}}</span>
+      
       <span class="info-label">Animal Name:</span>
       <span class="info-value highlight">{{animal_name}}</span>
       
