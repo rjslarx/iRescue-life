@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -38,6 +38,11 @@ interface PlatformIntegration {
   lastSyncError: string | null;
   totalSynced: number;
   totalErrors: number;
+  ftpHost?: string | null;
+  ftpPath?: string | null;
+  hasFtpCredentials?: boolean;
+  autoSync?: boolean;
+  syncFrequency?: string | null;
 }
 
 interface SenderAddress {
@@ -64,13 +69,20 @@ interface GoogleWorkspaceStatus {
 const platformInfo = {
   petfinder: {
     name: "PetFinder",
-    description: "Sync your animals to PetFinder.com to reach millions of potential adopters",
+    description: "Sync your animals to PetFinder.com via FTP to reach millions of potential adopters",
     docsUrl: "https://www.petfinder.com/developers/",
-    note: "PetFinder API v2 is read-only. You can test your connection but cannot automatically post animals. Animals must be managed through the PetFinder dashboard.",
+    note: "Petfinder uses FTP import to sync animals. Enter your FTP credentials from your Petfinder Pro Dashboard. Animals and photos will be automatically exported in CSV format.",
+    useFtp: true,
     fields: {
-      clientId: "Client ID",
-      clientSecret: "Client Secret",
-      organizationId: "Organization ID (optional)",
+      clientId: null,
+      clientSecret: null,
+      organizationId: null,
+    },
+    ftpFields: {
+      ftpHost: "FTP Host",
+      ftpUsername: "FTP Username",
+      ftpPassword: "FTP Password",
+      ftpPath: "FTP Path (optional)",
     },
   },
   rescuegroups: {
@@ -104,6 +116,13 @@ export default function PlatformIntegrationsPage() {
   const [newSenderName, setNewSenderName] = useState("");
   const [newSenderEmail, setNewSenderEmail] = useState("");
   const [showAddSender, setShowAddSender] = useState(false);
+  
+  const [ftpHost, setFtpHost] = useState("");
+  const [ftpUsername, setFtpUsername] = useState("");
+  const [ftpPassword, setFtpPassword] = useState("");
+  const [ftpPath, setFtpPath] = useState("");
+  const [ftpAutoSync, setFtpAutoSync] = useState(true);
+  const [ftpSyncFrequency, setFtpSyncFrequency] = useState<"manual" | "hourly" | "daily">("daily");
 
   const { data: tenantData } = useQuery<{ tenant: Tenant }>({
     queryKey: ['/api/tenant'],
@@ -129,6 +148,17 @@ export default function PlatformIntegrationsPage() {
 
   const integrations = integrationsData?.integrations || [];
   const googleWorkspace = googleWorkspaceData || { connected: false, features: null };
+
+  const petfinderIntegration = integrations.find(i => i.platform === 'petfinder');
+  
+  useEffect(() => {
+    if (selectedPlatform === 'petfinder' && petfinderIntegration) {
+      setFtpHost(petfinderIntegration.ftpHost || '');
+      setFtpPath(petfinderIntegration.ftpPath || '');
+      setFtpAutoSync(petfinderIntegration.autoSync ?? true);
+      setFtpSyncFrequency((petfinderIntegration.syncFrequency as "manual" | "hourly" | "daily") || 'daily');
+    }
+  }, [selectedPlatform, petfinderIntegration]);
 
   const saveMutation = useMutation({
     mutationFn: async (data: { platform: string; config: PlatformConfigData }) => {
@@ -173,6 +203,73 @@ export default function PlatformIntegrationsPage() {
       toast({
         title: "Connection failed",
         description: error.message || "Could not connect to the platform.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const saveFtpMutation = useMutation({
+    mutationFn: async (data: { ftpHost: string; ftpUsername: string; ftpPassword: string; ftpPath?: string; autoSync: boolean; syncFrequency: string }) => {
+      const response = await apiRequest('POST', '/api/platform-integrations/petfinder/ftp', data);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/platform-integrations'] });
+      toast({
+        title: "FTP credentials saved",
+        description: "Petfinder FTP credentials have been saved successfully.",
+      });
+      setSelectedPlatform(null);
+      setFtpHost("");
+      setFtpUsername("");
+      setFtpPassword("");
+      setFtpPath("");
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to save",
+        description: error.message || "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const testFtpMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest('POST', '/api/platform-integrations/petfinder/test-ftp', {});
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "FTP connection successful",
+        description: data.message || `Found ${data.filesFound} files in directory.`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "FTP connection failed",
+        description: error.message || "Could not connect to FTP server.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const syncPetfinderMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest('POST', '/api/platform-integrations/petfinder/sync', {});
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/platform-integrations'] });
+      toast({
+        title: "Sync completed",
+        description: `Exported ${data.animalsExported} animals, uploaded ${data.imagesUploaded} images.`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Sync failed",
+        description: error.message || "Could not sync animals to Petfinder.",
         variant: "destructive",
       });
     },
@@ -794,25 +891,65 @@ export default function PlatformIntegrationsPage() {
                               </Alert>
                             )}
 
-                            <div className="flex gap-2">
-                              <Button
-                                variant="outline"
-                                onClick={() => testMutation.mutate(platform)}
-                                disabled={testMutation.isPending}
-                                data-testid={`button-test-${platform}`}
-                              >
-                                {testMutation.isPending ? (
-                                  <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Testing...
-                                  </>
-                                ) : (
-                                  <>
-                                    <RefreshCw className="mr-2 h-4 w-4" />
-                                    Test Connection
-                                  </>
-                                )}
-                              </Button>
+                            <div className="flex gap-2 flex-wrap">
+                              {platform === 'petfinder' && integration.hasFtpCredentials ? (
+                                <>
+                                  <Button
+                                    variant="outline"
+                                    onClick={() => testFtpMutation.mutate()}
+                                    disabled={testFtpMutation.isPending}
+                                    data-testid="button-test-petfinder-ftp"
+                                  >
+                                    {testFtpMutation.isPending ? (
+                                      <>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        Testing...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <RefreshCw className="mr-2 h-4 w-4" />
+                                        Test FTP Connection
+                                      </>
+                                    )}
+                                  </Button>
+                                  <Button
+                                    onClick={() => syncPetfinderMutation.mutate()}
+                                    disabled={syncPetfinderMutation.isPending}
+                                    data-testid="button-sync-petfinder"
+                                  >
+                                    {syncPetfinderMutation.isPending ? (
+                                      <>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        Syncing...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <RefreshCw className="mr-2 h-4 w-4" />
+                                        Sync Now
+                                      </>
+                                    )}
+                                  </Button>
+                                </>
+                              ) : (
+                                <Button
+                                  variant="outline"
+                                  onClick={() => testMutation.mutate(platform)}
+                                  disabled={testMutation.isPending}
+                                  data-testid={`button-test-${platform}`}
+                                >
+                                  {testMutation.isPending ? (
+                                    <>
+                                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                      Testing...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <RefreshCw className="mr-2 h-4 w-4" />
+                                      Test Connection
+                                    </>
+                                  )}
+                                </Button>
+                              )}
                               <Button
                                 variant="outline"
                                 onClick={() => setSelectedPlatform(platform)}
@@ -825,117 +962,233 @@ export default function PlatformIntegrationsPage() {
                         )}
 
                         {(!integration?.isEnabled || isConfiguring) && (
-                          <Form {...form}>
-                            <form onSubmit={form.handleSubmit((data) => {
-                              // Platform-specific validation
-                              if (platform === 'petfinder' && !data.clientSecret) {
-                                form.setError('clientSecret', {
-                                  type: 'manual',
-                                  message: 'Client Secret is required for PetFinder'
-                                });
-                                return;
-                              }
-                              if (platform === 'rescuegroups' && !data.organizationId) {
-                                form.setError('organizationId', {
-                                  type: 'manual',
-                                  message: 'Organization ID is required for RescueGroups'
-                                });
-                                return;
-                              }
-                              saveMutation.mutate({ platform, config: data });
-                            })} className="space-y-4">
-                              <FormField
-                                control={form.control}
-                                name="clientId"
-                                render={({ field }) => (
-                                  <FormItem>
-                                    <FormLabel>{info.fields.clientId}</FormLabel>
-                                    <FormControl>
-                                      <Input 
-                                        placeholder="Enter your client ID or API key" 
-                                        data-testid={`input-${platform}-client-id`}
-                                        {...field} 
-                                      />
-                                    </FormControl>
-                                    <FormMessage />
-                                  </FormItem>
+                          <>
+                            {'useFtp' in info && info.useFtp ? (
+                              <div className="space-y-4">
+                                <div className="space-y-2">
+                                  <Label htmlFor="ftp-host">FTP Host</Label>
+                                  <Input
+                                    id="ftp-host"
+                                    placeholder="members.petfinder.com"
+                                    value={ftpHost}
+                                    onChange={(e) => setFtpHost(e.target.value)}
+                                    data-testid="input-petfinder-ftp-host"
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label htmlFor="ftp-username">FTP Username</Label>
+                                  <Input
+                                    id="ftp-username"
+                                    placeholder="Your Petfinder FTP username"
+                                    value={ftpUsername}
+                                    onChange={(e) => setFtpUsername(e.target.value)}
+                                    data-testid="input-petfinder-ftp-username"
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label htmlFor="ftp-password">FTP Password</Label>
+                                  <Input
+                                    id="ftp-password"
+                                    type="password"
+                                    placeholder="Your Petfinder FTP password"
+                                    value={ftpPassword}
+                                    onChange={(e) => setFtpPassword(e.target.value)}
+                                    data-testid="input-petfinder-ftp-password"
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label htmlFor="ftp-path">FTP Path (optional)</Label>
+                                  <Input
+                                    id="ftp-path"
+                                    placeholder="/ (leave empty for root)"
+                                    value={ftpPath}
+                                    onChange={(e) => setFtpPath(e.target.value)}
+                                    data-testid="input-petfinder-ftp-path"
+                                  />
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <Label htmlFor="auto-sync">Auto-sync animals</Label>
+                                    <p className="text-xs text-muted-foreground">
+                                      Automatically sync animals to Petfinder on schedule
+                                    </p>
+                                  </div>
+                                  <Switch
+                                    id="auto-sync"
+                                    checked={ftpAutoSync}
+                                    onCheckedChange={setFtpAutoSync}
+                                    data-testid="switch-petfinder-auto-sync"
+                                  />
+                                </div>
+                                {ftpAutoSync && (
+                                  <div className="space-y-2">
+                                    <Label htmlFor="sync-frequency">Sync Frequency</Label>
+                                    <Select
+                                      value={ftpSyncFrequency}
+                                      onValueChange={(v: "manual" | "hourly" | "daily") => setFtpSyncFrequency(v)}
+                                    >
+                                      <SelectTrigger data-testid="select-petfinder-sync-frequency">
+                                        <SelectValue placeholder="Select frequency" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="hourly">Every hour</SelectItem>
+                                        <SelectItem value="daily">Once daily</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
                                 )}
-                              />
-
-                              {info.fields.clientSecret && (
-                                <FormField
-                                  control={form.control}
-                                  name="clientSecret"
-                                  render={({ field }) => (
-                                    <FormItem>
-                                      <FormLabel>{info.fields.clientSecret}</FormLabel>
-                                      <FormControl>
-                                        <Input 
-                                          type="password"
-                                          placeholder="Enter your client secret" 
-                                          data-testid={`input-${platform}-client-secret`}
-                                          {...field} 
-                                        />
-                                      </FormControl>
-                                      <FormMessage />
-                                    </FormItem>
-                                  )}
-                                />
-                              )}
-
-                              {info.fields.organizationId && (
-                                <FormField
-                                  control={form.control}
-                                  name="organizationId"
-                                  render={({ field }) => (
-                                    <FormItem>
-                                      <FormLabel>{info.fields.organizationId}</FormLabel>
-                                      <FormControl>
-                                        <Input 
-                                          placeholder="Enter your organization/shelter ID" 
-                                          data-testid={`input-${platform}-org-id`}
-                                          {...field} 
-                                        />
-                                      </FormControl>
-                                      <FormDescription>
-                                        Found in your {info.name} account settings
-                                      </FormDescription>
-                                      <FormMessage />
-                                    </FormItem>
-                                  )}
-                                />
-                              )}
-
-                              <div className="flex gap-2">
-                                <Button 
-                                  type="submit" 
-                                  disabled={saveMutation.isPending}
-                                  data-testid={`button-save-${platform}`}
-                                >
-                                  {saveMutation.isPending ? (
-                                    <>
-                                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                      Saving...
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Save className="mr-2 h-4 w-4" />
-                                      Save Credentials
-                                    </>
-                                  )}
-                                </Button>
-                                {isConfiguring && (
-                                  <Button 
-                                    type="button" 
-                                    variant="outline"
-                                    onClick={() => setSelectedPlatform(null)}
+                                <div className="flex gap-2">
+                                  <Button
+                                    onClick={() => {
+                                      if (!ftpHost || !ftpUsername || !ftpPassword) {
+                                        toast({
+                                          title: "Missing credentials",
+                                          description: "Please enter FTP host, username, and password.",
+                                          variant: "destructive",
+                                        });
+                                        return;
+                                      }
+                                      saveFtpMutation.mutate({
+                                        ftpHost,
+                                        ftpUsername,
+                                        ftpPassword,
+                                        ftpPath: ftpPath || undefined,
+                                        autoSync: ftpAutoSync,
+                                        syncFrequency: ftpSyncFrequency,
+                                      });
+                                    }}
+                                    disabled={saveFtpMutation.isPending}
+                                    data-testid="button-save-petfinder-ftp"
                                   >
-                                    Cancel
+                                    {saveFtpMutation.isPending ? (
+                                      <>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        Saving...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Save className="mr-2 h-4 w-4" />
+                                        Save FTP Credentials
+                                      </>
+                                    )}
                                   </Button>
-                                )}
+                                  {isConfiguring && (
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      onClick={() => setSelectedPlatform(null)}
+                                    >
+                                      Cancel
+                                    </Button>
+                                  )}
+                                </div>
                               </div>
-                            </form>
-                          </Form>
+                            ) : (
+                              <Form {...form}>
+                                <form onSubmit={form.handleSubmit((data) => {
+                                  if (platform === 'rescuegroups' && !data.organizationId) {
+                                    form.setError('organizationId', {
+                                      type: 'manual',
+                                      message: 'Organization ID is required for RescueGroups'
+                                    });
+                                    return;
+                                  }
+                                  saveMutation.mutate({ platform, config: data });
+                                })} className="space-y-4">
+                                  <FormField
+                                    control={form.control}
+                                    name="clientId"
+                                    render={({ field }) => (
+                                      <FormItem>
+                                        <FormLabel>{info.fields.clientId}</FormLabel>
+                                        <FormControl>
+                                          <Input 
+                                            placeholder="Enter your client ID or API key" 
+                                            data-testid={`input-${platform}-client-id`}
+                                            {...field} 
+                                          />
+                                        </FormControl>
+                                        <FormMessage />
+                                      </FormItem>
+                                    )}
+                                  />
+
+                                  {info.fields.clientSecret && (
+                                    <FormField
+                                      control={form.control}
+                                      name="clientSecret"
+                                      render={({ field }) => (
+                                        <FormItem>
+                                          <FormLabel>{info.fields.clientSecret}</FormLabel>
+                                          <FormControl>
+                                            <Input 
+                                              type="password"
+                                              placeholder="Enter your client secret" 
+                                              data-testid={`input-${platform}-client-secret`}
+                                              {...field} 
+                                            />
+                                          </FormControl>
+                                          <FormMessage />
+                                        </FormItem>
+                                      )}
+                                    />
+                                  )}
+
+                                  {info.fields.organizationId && (
+                                    <FormField
+                                      control={form.control}
+                                      name="organizationId"
+                                      render={({ field }) => (
+                                        <FormItem>
+                                          <FormLabel>{info.fields.organizationId}</FormLabel>
+                                          <FormControl>
+                                            <Input 
+                                              placeholder="Enter your organization/shelter ID" 
+                                              data-testid={`input-${platform}-org-id`}
+                                              {...field} 
+                                            />
+                                          </FormControl>
+                                          <FormDescription>
+                                            Found in your {info.name} account settings
+                                          </FormDescription>
+                                          <FormMessage />
+                                        </FormItem>
+                                      )}
+                                    />
+                                  )}
+
+                                  <div className="flex gap-2">
+                                    <Button 
+                                      type="submit" 
+                                      disabled={saveMutation.isPending}
+                                      data-testid={`button-save-${platform}`}
+                                    >
+                                      {saveMutation.isPending ? (
+                                        <>
+                                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                          Saving...
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Save className="mr-2 h-4 w-4" />
+                                          Save Credentials
+                                        </>
+                                      )}
+                                    </Button>
+                                    {isConfiguring && (
+                                      <Button 
+                                        type="button" 
+                                        variant="outline"
+                                        onClick={() => setSelectedPlatform(null)}
+                                      >
+                                        Cancel
+                                      </Button>
+                                    )}
+                                  </div>
+                                </form>
+                              </Form>
+                            )}
+                          </>
                         )}
                       </CardContent>
                     </Card>

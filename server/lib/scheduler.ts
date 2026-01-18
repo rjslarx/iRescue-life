@@ -235,6 +235,24 @@ export function initializeScheduler() {
   });
 
   console.log(`✓ Trial expiration check scheduled for: ${trialExpirationSchedule} (UTC)`);
+
+  // Schedule Petfinder FTP sync every 6 hours (daily at 00:00, 06:00, 12:00, 18:00 UTC)
+  // "0 0,6,12,18 * * *" means: at minute 0, hours 0, 6, 12, 18, every day
+  const petfinderSyncSchedule = process.env.PETFINDER_SYNC_SCHEDULE || "0 0,6,12,18 * * *";
+  
+  cron.schedule(petfinderSyncSchedule, async () => {
+    console.log("🐾 Running Petfinder FTP sync...");
+    try {
+      const { runScheduledPetfinderSync } = await import("../services/petfinder-sync");
+      await runScheduledPetfinderSync();
+    } catch (error) {
+      console.error(`❌ Petfinder sync failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }, {
+    timezone: "UTC"
+  });
+
+  console.log(`✓ Petfinder sync scheduled for: ${petfinderSyncSchedule} (UTC)`);
   
   // Log next scheduled run times
   const nextMidnight = new Date();

@@ -2310,6 +2310,11 @@ export const platformIntegrations = pgTable("platform_integrations", {
   // Organization IDs on platforms
   organizationId: text("organization_id"), // Organization ID on the platform
   googleFeatures: jsonb("google_features").$type<{useGmail?: boolean; syncCalendar?: boolean; useDrive?: boolean; connectedEmail?: string; sharedDriveId?: string; sharedDriveName?: string; senderName?: string; senderEmail?: string; senderAddresses?: Array<{name: string; email: string; isDefault?: boolean}>;}>(), // Google Workspace feature flags including Shared Drive config, manual sender settings, and multiple sender addresses
+  // FTP credentials for Petfinder import system
+  ftpHost: text("ftp_host"), // FTP server hostname (e.g., members.petfinder.com)
+  ftpUsernameEncrypted: text("ftp_username_encrypted"), // Encrypted FTP username
+  ftpPasswordEncrypted: text("ftp_password_encrypted"), // Encrypted FTP password
+  ftpPath: text("ftp_path"), // Optional path/folder on FTP server
   // Sync settings
   autoSync: boolean("auto_sync").notNull().default(false), // Automatically sync changes
   syncFrequency: text("sync_frequency").default("manual").$type<"manual" | "hourly" | "daily">(),

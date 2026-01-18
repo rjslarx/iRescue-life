@@ -30,6 +30,9 @@ export function registerPlatformIntegrationRoutes(app: Express) {
         clientIdEncrypted: integration.clientIdEncrypted ? '***' : null,
         clientSecretEncrypted: integration.clientSecretEncrypted ? '***' : null,
         accessTokenEncrypted: integration.accessTokenEncrypted ? '***' : null,
+        ftpUsernameEncrypted: integration.ftpUsernameEncrypted ? '***' : null,
+        ftpPasswordEncrypted: integration.ftpPasswordEncrypted ? '***' : null,
+        hasFtpCredentials: !!(integration.ftpHost && integration.ftpUsernameEncrypted && integration.ftpPasswordEncrypted),
       }));
 
       res.json({ integrations: maskedIntegrations });
@@ -295,6 +298,170 @@ export function registerPlatformIntegrationRoutes(app: Express) {
         ));
 
       res.json({ success: true, message: `${platform} integration removed` });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/platform-integrations/petfinder/ftp
+   * Save Petfinder FTP credentials
+   */
+  app.post('/api/platform-integrations/petfinder/ftp', requireTenant, requireAuth, requireRole('admin'), async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const ftpSchema = z.object({
+        ftpHost: z.string().min(1, 'FTP host is required'),
+        ftpUsername: z.string().min(1, 'FTP username is required'),
+        ftpPassword: z.string().min(1, 'FTP password is required'),
+        ftpPath: z.string().optional(),
+        autoSync: z.boolean().default(false),
+        syncFrequency: z.enum(['manual', 'hourly', 'daily']).default('daily'),
+      });
+
+      const data = ftpSchema.parse(req.body);
+
+      const ftpUsernameEncrypted = encrypt(data.ftpUsername);
+      const ftpPasswordEncrypted = encrypt(data.ftpPassword);
+
+      const existing = await db
+        .select()
+        .from(platformIntegrations)
+        .where(and(
+          eq(platformIntegrations.tenantId, req.tenant!.id),
+          eq(platformIntegrations.platform, 'petfinder')
+        ))
+        .limit(1);
+
+      let integration;
+
+      if (existing.length > 0) {
+        [integration] = await db
+          .update(platformIntegrations)
+          .set({
+            ftpHost: data.ftpHost,
+            ftpUsernameEncrypted,
+            ftpPasswordEncrypted,
+            ftpPath: data.ftpPath || null,
+            autoSync: data.autoSync,
+            syncFrequency: data.syncFrequency,
+            isEnabled: true,
+            updatedAt: new Date(),
+          })
+          .where(eq(platformIntegrations.id, existing[0].id))
+          .returning();
+      } else {
+        [integration] = await db
+          .insert(platformIntegrations)
+          .values({
+            tenantId: req.tenant!.id,
+            platform: 'petfinder',
+            ftpHost: data.ftpHost,
+            ftpUsernameEncrypted,
+            ftpPasswordEncrypted,
+            ftpPath: data.ftpPath || null,
+            autoSync: data.autoSync,
+            syncFrequency: data.syncFrequency,
+            isEnabled: true,
+          })
+          .returning();
+      }
+
+      res.json({
+        success: true,
+        message: 'Petfinder FTP credentials saved successfully',
+        integration: {
+          ...integration,
+          ftpUsernameEncrypted: '***',
+          ftpPasswordEncrypted: '***',
+          hasFtpCredentials: true,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/platform-integrations/petfinder/sync
+   * Trigger manual Petfinder FTP sync
+   */
+  app.post('/api/platform-integrations/petfinder/sync', requireTenant, requireAuth, requireRole('admin'), async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { syncToPetfinder } = await import('../services/petfinder-sync');
+      
+      const result = await syncToPetfinder(req.tenant!.id);
+      
+      if (result.success) {
+        res.json({
+          success: true,
+          message: result.message,
+          animalsExported: result.animalsExported,
+          imagesUploaded: result.imagesUploaded,
+          errors: result.errors,
+        });
+      } else {
+        res.status(400).json({
+          success: false,
+          message: result.message,
+          errors: result.errors,
+        });
+      }
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/platform-integrations/petfinder/test-ftp
+   * Test Petfinder FTP connection
+   */
+  app.post('/api/platform-integrations/petfinder/test-ftp', requireTenant, requireAuth, requireRole('admin'), async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const [integration] = await db
+        .select()
+        .from(platformIntegrations)
+        .where(and(
+          eq(platformIntegrations.tenantId, req.tenant!.id),
+          eq(platformIntegrations.platform, 'petfinder')
+        ))
+        .limit(1);
+
+      if (!integration || !integration.ftpHost || !integration.ftpUsernameEncrypted || !integration.ftpPasswordEncrypted) {
+        return res.status(400).json({
+          success: false,
+          message: 'FTP credentials not configured',
+        });
+      }
+
+      const { decrypt } = await import('../lib/encryption');
+      const ftp = await import('basic-ftp');
+      
+      const client = new ftp.Client();
+      client.ftp.verbose = false;
+      
+      try {
+        await client.access({
+          host: integration.ftpHost,
+          user: decrypt(integration.ftpUsernameEncrypted),
+          password: decrypt(integration.ftpPasswordEncrypted),
+          secure: false,
+        });
+        
+        const files = await client.list(integration.ftpPath || '/');
+        client.close();
+        
+        res.json({
+          success: true,
+          message: 'FTP connection successful',
+          filesFound: files.length,
+        });
+      } catch (ftpError: any) {
+        client.close();
+        res.status(400).json({
+          success: false,
+          message: `FTP connection failed: ${ftpError.message}`,
+        });
+      }
     } catch (error) {
       next(error);
     }

@@ -66,6 +66,18 @@ The "Paw Pay" platform fee system uses Stripe Connect with a "SaaS + 0%" two-tie
 
 It utilizes Stripe Standard Connect OAuth for tenant payment processing, allowing tenants to own their Stripe accounts. A "Donor Covers Fees" feature calculates gross-up amounts to cover both Stripe and platform processing fees. ACH bank transfer support is implemented for one-time donations with asynchronous payment handling (not adoption fees). Sensitive data is protected with AES-256-GCM encryption. Unified file storage prioritizes Google Drive (if connected) and falls back to Replit object storage. Email services use a hybrid Resend integration with optional Google Workspace Gmail API. Platform admin security includes subdomain resolution, RBAC, frontend guards, authenticated sessions, and TOTP MFA. Subscription management tracks tenant tiers and trial periods. Production security features rate limiting, Helmet security headers, CORS fail-closed, environment validation, and session hardening. Google Analytics 4 is integrated for tracking. Optional Google Workspace integration provides Gmail API, Calendar sync, and Drive storage, using CASA-optimized OAuth scopes and requiring `GOOGLE_PICKER_API_KEY` for Google Picker API integration.
 
+**Petfinder FTP Sync Integration:**
+The platform supports automated animal sync to Petfinder via their FTP import system:
+- **FTP Credentials:** Tenants configure FTP host, username, password, and optional path from the Petfinder Pro Dashboard
+- **CSV Export:** Generates Petfinder-compatible CSV with proper column order (Code, Name, Breed, Mix, Sex, Size, Colors, Age, Description, Type, health status flags, photo filenames, dates)
+- **Breed Validation:** Maps animal breeds to official Petfinder breed dictionary (`shared/petfinder-breeds.ts`)
+- **Age Calculation:** Converts birth dates to Petfinder age categories (Baby, Young, Adult, Senior)
+- **Image Download:** Downloads animal photos and renames to `{animalId}_{1-6}.jpg` format
+- **FTP Upload:** Uses `basic-ftp` package to upload CSV and images to Petfinder server
+- **Scheduled Sync:** Cron job runs every 6 hours (configurable via `PETFINDER_SYNC_SCHEDULE`) for tenants with auto-sync enabled
+- **Manual Sync:** Staff can trigger manual sync from Platform Integrations settings
+- **Sync Tracking:** Records last sync time, status, and error messages in `platform_integrations` table
+
 ## External Dependencies
 - **Stripe:** Payment gateway for donations, adoption fees, and subscriptions.
 - **Resend:** Email delivery service.
@@ -86,4 +98,5 @@ It utilizes Stripe Standard Connect OAuth for tenant payment processing, allowin
 - **cors:** CORS middleware.
 - **express-rate-limit:** Rate-limiting middleware.
 - **node-cron:** Scheduled tasks.
+- **basic-ftp:** FTP client for Petfinder sync.
 - **Twilio (optional):** SMS notifications.
