@@ -6,6 +6,8 @@ import { type InsertAdoptionContractTemplate, type AdoptionContractTemplate } fr
 export const MERGE_FIELDS = {
   '{{organization_name}}': 'Organization name',
   '{{adopter_name}}': 'Adopter full name',
+  '{{adopter_first_name}}': 'Adopter first name',
+  '{{adopter_last_name}}': 'Adopter last name',
   '{{adopter_email}}': 'Adopter email',
   '{{adopter_phone}}': 'Adopter phone',
   '{{adopter_address}}': 'Adopter full address (legacy single field)',
@@ -14,6 +16,7 @@ export const MERGE_FIELDS = {
   '{{adopter_city}}': 'Adopter city',
   '{{adopter_state}}': 'Adopter state/province',
   '{{adopter_zip}}': 'Adopter postal/zip code',
+  '{{adopter_drivers_license}}': 'Adopter driver\'s license number',
   '{{animal_name}}': 'Animal name',
   '{{animal_species}}': 'Animal species',
   '{{animal_breed}}': 'Animal breed',
@@ -293,6 +296,8 @@ export const HASEYAS_NEW_BEGINNING_CONTRACT_HTML = `<!DOCTYPE html>
 export interface MergeData {
   organization_name?: string;
   adopter_name?: string;
+  adopter_first_name?: string;
+  adopter_last_name?: string;
   adopter_email?: string;
   adopter_phone?: string;
   adopter_address?: string;
@@ -301,6 +306,7 @@ export interface MergeData {
   adopter_city?: string;
   adopter_state?: string;
   adopter_zip?: string;
+  adopter_drivers_license?: string;
   animal_name?: string;
   animal_species?: string;
   animal_breed?: string;

@@ -544,9 +544,16 @@ export async function generateAdoptionContractPDF(
       .filter(line => line.trim())
       .join('\n');
   
+  // Parse first and last name from full name
+  const nameParts = adopterName.trim().split(/\s+/);
+  const adopterFirstName = nameParts[0] || '';
+  const adopterLastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
+  
   const mergeData: MergeData = {
     organization_name: tenant.name,
     adopter_name: adopterName,
+    adopter_first_name: adopterFirstName,
+    adopter_last_name: adopterLastName,
     adopter_email: adopterEmail,
     adopter_phone: adopterPhone,
     adopter_address: fullAddress,
@@ -555,6 +562,7 @@ export async function generateAdoptionContractPDF(
     adopter_city: city,
     adopter_state: state,
     adopter_zip: zip,
+    adopter_drivers_license: session.driversLicenseNumber || undefined,
     animal_name: animal.name,
     animal_species: animal.species,
     animal_breed: animal.breed,
