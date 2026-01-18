@@ -398,6 +398,134 @@ export default function FosterFormSettingsPage() {
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Badge variant="secondary">System Fields</Badge>
+            Required Foster Information
+          </CardTitle>
+          <CardDescription>
+            These fields are automatically included on every foster application and cannot be removed. They collect essential information from applicants.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div>
+              <h4 className="text-sm font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Contact Information</h4>
+              <div className="grid gap-2">
+                <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30" data-testid="foster-system-field-name">
+                  <div className="flex-1">
+                    <span className="font-medium">Full Name</span>
+                    <Badge variant="secondary" className="ml-2 text-xs">Required</Badge>
+                  </div>
+                  <Badge variant="outline" className="text-xs">Text</Badge>
+                </div>
+                <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30" data-testid="foster-system-field-email">
+                  <div className="flex-1">
+                    <span className="font-medium">Email</span>
+                    <Badge variant="secondary" className="ml-2 text-xs">Required</Badge>
+                  </div>
+                  <Badge variant="outline" className="text-xs">Email</Badge>
+                </div>
+                <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30" data-testid="foster-system-field-phone">
+                  <div className="flex-1">
+                    <span className="font-medium">Phone Number</span>
+                    <Badge variant="secondary" className="ml-2 text-xs">Required</Badge>
+                  </div>
+                  <Badge variant="outline" className="text-xs">Phone</Badge>
+                </div>
+                <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30" data-testid="foster-system-field-address">
+                  <div className="flex-1">
+                    <span className="font-medium">Address</span>
+                    <Badge variant="secondary" className="ml-2 text-xs">Required</Badge>
+                  </div>
+                  <Badge variant="outline" className="text-xs">Text</Badge>
+                </div>
+              </div>
+            </div>
+            <div>
+              <h4 className="text-sm font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Home Details</h4>
+              <div className="grid gap-2">
+                <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30" data-testid="foster-system-field-housing">
+                  <div className="flex-1">
+                    <span className="font-medium">Housing Type</span>
+                    <Badge variant="secondary" className="ml-2 text-xs">Required</Badge>
+                  </div>
+                  <Badge variant="outline" className="text-xs">Dropdown</Badge>
+                </div>
+                <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30" data-testid="foster-system-field-yard">
+                  <div className="flex-1">
+                    <span className="font-medium">I have a yard</span>
+                    <Badge variant="outline" className="ml-2 text-xs">Optional</Badge>
+                  </div>
+                  <Badge variant="outline" className="text-xs">Checkbox</Badge>
+                </div>
+                <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30" data-testid="foster-system-field-pets">
+                  <div className="flex-1">
+                    <span className="font-medium">I have other pets</span>
+                    <Badge variant="outline" className="ml-2 text-xs">Optional</Badge>
+                  </div>
+                  <Badge variant="outline" className="text-xs">Checkbox</Badge>
+                </div>
+                <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30" data-testid="foster-system-field-pets-details">
+                  <div className="flex-1">
+                    <span className="font-medium">Other Pets Details</span>
+                    <Badge variant="outline" className="ml-2 text-xs">Conditional</Badge>
+                    <p className="text-sm text-muted-foreground">Shows when "I have other pets" is checked</p>
+                  </div>
+                  <Badge variant="outline" className="text-xs">Long Text</Badge>
+                </div>
+              </div>
+            </div>
+            <div>
+              <h4 className="text-sm font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Experience & Availability</h4>
+              <div className="grid gap-2">
+                <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30" data-testid="foster-system-field-experience">
+                  <div className="flex-1">
+                    <span className="font-medium">Fostering / Pet Care Experience</span>
+                    <Badge variant="secondary" className="ml-2 text-xs">Required</Badge>
+                  </div>
+                  <Badge variant="outline" className="text-xs">Long Text</Badge>
+                </div>
+                <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30" data-testid="foster-system-field-availability">
+                  <div className="flex-1">
+                    <span className="font-medium">Time Commitment & Availability</span>
+                    <Badge variant="secondary" className="ml-2 text-xs">Required</Badge>
+                  </div>
+                  <Badge variant="outline" className="text-xs">Long Text</Badge>
+                </div>
+                <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30" data-testid="foster-system-field-preferences">
+                  <div className="flex-1">
+                    <span className="font-medium">Animal Preferences</span>
+                    <Badge variant="outline" className="ml-2 text-xs">Optional</Badge>
+                  </div>
+                  <Badge variant="outline" className="text-xs">Long Text</Badge>
+                </div>
+              </div>
+            </div>
+            <div>
+              <h4 className="text-sm font-semibold text-muted-foreground mb-2 uppercase tracking-wide">References</h4>
+              <div className="grid gap-2">
+                <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30" data-testid="foster-system-field-vet-ref">
+                  <div className="flex-1">
+                    <span className="font-medium">Veterinarian Reference</span>
+                    <Badge variant="outline" className="ml-2 text-xs">Optional</Badge>
+                  </div>
+                  <Badge variant="outline" className="text-xs">Text</Badge>
+                </div>
+                <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30" data-testid="foster-system-field-personal-ref">
+                  <div className="flex-1">
+                    <span className="font-medium">Personal Reference</span>
+                    <Badge variant="outline" className="ml-2 text-xs">Optional</Badge>
+                  </div>
+                  <Badge variant="outline" className="text-xs">Text</Badge>
+                </div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="flex items-center justify-end">
         <Button onClick={() => handleOpenDialog()} data-testid="button-add-field">
           <Plus className="w-4 h-4 mr-2" />
@@ -407,9 +535,9 @@ export default function FosterFormSettingsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Foster Application Questions</CardTitle>
+          <CardTitle>Custom Questions</CardTitle>
           <CardDescription>
-            These questions will appear on the public foster application form in addition to the standard fields (name, email, phone, housing details, etc.).
+            Add additional questions that appear below the system fields. Drag to reorder.
           </CardDescription>
         </CardHeader>
         <CardContent>

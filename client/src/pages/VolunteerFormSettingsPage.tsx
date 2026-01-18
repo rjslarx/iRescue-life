@@ -398,6 +398,107 @@ export default function VolunteerFormSettingsPage() {
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Badge variant="secondary">System Fields</Badge>
+            Required Volunteer Information
+          </CardTitle>
+          <CardDescription>
+            These fields are automatically included on every volunteer form and cannot be removed. They collect essential information from applicants.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div>
+              <h4 className="text-sm font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Contact Information</h4>
+              <div className="grid gap-2">
+                <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30" data-testid="volunteer-system-field-name">
+                  <div className="flex-1">
+                    <span className="font-medium">Full Name</span>
+                    <Badge variant="secondary" className="ml-2 text-xs">Required</Badge>
+                  </div>
+                  <Badge variant="outline" className="text-xs">Text</Badge>
+                </div>
+                <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30" data-testid="volunteer-system-field-email">
+                  <div className="flex-1">
+                    <span className="font-medium">Email</span>
+                    <Badge variant="secondary" className="ml-2 text-xs">Required</Badge>
+                  </div>
+                  <Badge variant="outline" className="text-xs">Email</Badge>
+                </div>
+                <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30" data-testid="volunteer-system-field-phone">
+                  <div className="flex-1">
+                    <span className="font-medium">Phone Number</span>
+                    <Badge variant="secondary" className="ml-2 text-xs">Required</Badge>
+                  </div>
+                  <Badge variant="outline" className="text-xs">Phone</Badge>
+                </div>
+                <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30" data-testid="volunteer-system-field-address">
+                  <div className="flex-1">
+                    <span className="font-medium">Address</span>
+                    <Badge variant="outline" className="ml-2 text-xs">Optional</Badge>
+                  </div>
+                  <Badge variant="outline" className="text-xs">Text</Badge>
+                </div>
+              </div>
+            </div>
+            <div>
+              <h4 className="text-sm font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Volunteer Details</h4>
+              <div className="grid gap-2">
+                <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30" data-testid="volunteer-system-field-experience">
+                  <div className="flex-1">
+                    <span className="font-medium">Experience with Animals</span>
+                    <Badge variant="secondary" className="ml-2 text-xs">Required</Badge>
+                  </div>
+                  <Badge variant="outline" className="text-xs">Long Text</Badge>
+                </div>
+                <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30" data-testid="volunteer-system-field-availability">
+                  <div className="flex-1">
+                    <span className="font-medium">Availability</span>
+                    <Badge variant="secondary" className="ml-2 text-xs">Required</Badge>
+                  </div>
+                  <Badge variant="outline" className="text-xs">Long Text</Badge>
+                </div>
+                <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30" data-testid="volunteer-system-field-interests">
+                  <div className="flex-1">
+                    <span className="font-medium">Areas of Interest</span>
+                    <Badge variant="outline" className="ml-2 text-xs">Optional</Badge>
+                  </div>
+                  <Badge variant="outline" className="text-xs">Long Text</Badge>
+                </div>
+                <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30" data-testid="volunteer-system-field-skills">
+                  <div className="flex-1">
+                    <span className="font-medium">Skills</span>
+                    <Badge variant="outline" className="ml-2 text-xs">Optional</Badge>
+                  </div>
+                  <Badge variant="outline" className="text-xs">Long Text</Badge>
+                </div>
+              </div>
+            </div>
+            <div>
+              <h4 className="text-sm font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Emergency Contact</h4>
+              <div className="grid gap-2">
+                <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30" data-testid="volunteer-system-field-emergency-name">
+                  <div className="flex-1">
+                    <span className="font-medium">Emergency Contact Name</span>
+                    <Badge variant="outline" className="ml-2 text-xs">Optional</Badge>
+                  </div>
+                  <Badge variant="outline" className="text-xs">Text</Badge>
+                </div>
+                <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30" data-testid="volunteer-system-field-emergency-phone">
+                  <div className="flex-1">
+                    <span className="font-medium">Emergency Contact Phone</span>
+                    <Badge variant="outline" className="ml-2 text-xs">Optional</Badge>
+                  </div>
+                  <Badge variant="outline" className="text-xs">Phone</Badge>
+                </div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="flex items-center justify-end">
         <Button onClick={() => handleOpenDialog()} data-testid="button-add-field">
           <Plus className="w-4 h-4 mr-2" />
@@ -407,9 +508,9 @@ export default function VolunteerFormSettingsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Volunteer Form Questions</CardTitle>
+          <CardTitle>Custom Questions</CardTitle>
           <CardDescription>
-            These questions will appear on the public volunteer signup form. Customize the form to collect additional information from volunteers.
+            Add additional questions that appear below the system fields. Drag to reorder.
           </CardDescription>
         </CardHeader>
         <CardContent>

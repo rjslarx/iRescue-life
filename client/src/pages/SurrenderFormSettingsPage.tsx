@@ -397,15 +397,14 @@ export default function SurrenderFormSettingsPage() {
         </CardContent>
       </Card>
 
-      {/* Standard Form Fields - Read-only display */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <FileText className="w-5 h-5" />
-            Standard Form Fields
+            <Badge variant="secondary">System Fields</Badge>
+            Required Surrender Information
           </CardTitle>
           <CardDescription>
-            These fields are always included on the surrender form and cannot be removed.
+            These fields are automatically included on every surrender form and cannot be removed. They collect essential information from applicants.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -414,28 +413,28 @@ export default function SurrenderFormSettingsPage() {
             <div className="mb-4">
               <h4 className="text-sm font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Owner Information</h4>
               <div className="grid gap-2">
-                <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30">
+                <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30" data-testid="surrender-system-field-name">
                   <div className="flex-1">
                     <span className="font-medium">Your Full Name</span>
                     <Badge variant="secondary" className="ml-2 text-xs">Required</Badge>
                   </div>
                   <Badge variant="outline" className="text-xs">Text</Badge>
                 </div>
-                <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30">
+                <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30" data-testid="surrender-system-field-email">
                   <div className="flex-1">
                     <span className="font-medium">Email Address</span>
                     <Badge variant="secondary" className="ml-2 text-xs">Required</Badge>
                   </div>
                   <Badge variant="outline" className="text-xs">Email</Badge>
                 </div>
-                <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30">
+                <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30" data-testid="surrender-system-field-phone">
                   <div className="flex-1">
                     <span className="font-medium">Phone Number</span>
                     <Badge variant="secondary" className="ml-2 text-xs">Required</Badge>
                   </div>
                   <Badge variant="outline" className="text-xs">Phone</Badge>
                 </div>
-                <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30">
+                <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30" data-testid="surrender-system-field-address">
                   <div className="flex-1">
                     <span className="font-medium">Address</span>
                     <Badge variant="secondary" className="ml-2 text-xs">Required</Badge>
@@ -449,42 +448,42 @@ export default function SurrenderFormSettingsPage() {
             <div className="mb-4">
               <h4 className="text-sm font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Animal Information</h4>
               <div className="grid gap-2">
-                <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30">
+                <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30" data-testid="surrender-system-field-animal-name">
                   <div className="flex-1">
                     <span className="font-medium">Animal's Name</span>
                     <Badge variant="secondary" className="ml-2 text-xs">Required</Badge>
                   </div>
                   <Badge variant="outline" className="text-xs">Text</Badge>
                 </div>
-                <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30">
+                <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30" data-testid="surrender-system-field-species">
                   <div className="flex-1">
                     <span className="font-medium">Species</span>
                     <Badge variant="secondary" className="ml-2 text-xs">Required</Badge>
                   </div>
                   <Badge variant="outline" className="text-xs">Select</Badge>
                 </div>
-                <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30">
+                <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30" data-testid="surrender-system-field-breed">
                   <div className="flex-1">
                     <span className="font-medium">Breed</span>
                     <Badge variant="secondary" className="ml-2 text-xs">Required</Badge>
                   </div>
                   <Badge variant="outline" className="text-xs">Text</Badge>
                 </div>
-                <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30">
+                <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30" data-testid="surrender-system-field-age">
                   <div className="flex-1">
                     <span className="font-medium">Age</span>
                     <Badge variant="secondary" className="ml-2 text-xs">Required</Badge>
                   </div>
                   <Badge variant="outline" className="text-xs">Text</Badge>
                 </div>
-                <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30">
+                <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30" data-testid="surrender-system-field-sex">
                   <div className="flex-1">
                     <span className="font-medium">Sex</span>
                     <Badge variant="secondary" className="ml-2 text-xs">Required</Badge>
                   </div>
                   <Badge variant="outline" className="text-xs">Select</Badge>
                 </div>
-                <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30">
+                <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30" data-testid="surrender-system-field-spayed">
                   <div className="flex-1">
                     <span className="font-medium">Spayed/Neutered</span>
                     <Badge variant="secondary" className="ml-2 text-xs">Required</Badge>
@@ -498,28 +497,28 @@ export default function SurrenderFormSettingsPage() {
             <div>
               <h4 className="text-sm font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Additional Details</h4>
               <div className="grid gap-2">
-                <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30">
+                <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30" data-testid="surrender-system-field-medical">
                   <div className="flex-1">
                     <span className="font-medium">Medical History</span>
                     <Badge variant="secondary" className="ml-2 text-xs">Required</Badge>
                   </div>
                   <Badge variant="outline" className="text-xs">Long Text</Badge>
                 </div>
-                <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30">
+                <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30" data-testid="surrender-system-field-behavior">
                   <div className="flex-1">
                     <span className="font-medium">Behavior Notes</span>
                     <Badge variant="secondary" className="ml-2 text-xs">Required</Badge>
                   </div>
                   <Badge variant="outline" className="text-xs">Long Text</Badge>
                 </div>
-                <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30">
+                <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30" data-testid="surrender-system-field-reason">
                   <div className="flex-1">
                     <span className="font-medium">Reason for Surrender</span>
                     <Badge variant="secondary" className="ml-2 text-xs">Required</Badge>
                   </div>
                   <Badge variant="outline" className="text-xs">Long Text</Badge>
                 </div>
-                <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30">
+                <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30" data-testid="surrender-system-field-emergency">
                   <div className="flex-1">
                     <span className="font-medium">Emergency Surrender</span>
                     <Badge variant="secondary" className="ml-2 text-xs">Required</Badge>
