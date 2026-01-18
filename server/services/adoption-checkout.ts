@@ -559,9 +559,13 @@ export async function sendCheckoutLink(
     if (tenant?.customDomain && tenant?.customDomainVerified) {
       checkoutUrl = `https://${tenant.customDomain}/adoption-checkout/${token}`;
     } else {
-      // Use Replit dev domain in development, otherwise use BASE_URL or default to irescue.life
+      // In production (REPLIT_DEPLOYMENT=1), always use irescue.life
+      // Only use REPLIT_DEV_DOMAIN for actual development/testing
+      const isProduction = process.env.REPLIT_DEPLOYMENT === '1';
       let baseUrl: string;
-      if (process.env.REPLIT_DEV_DOMAIN) {
+      if (isProduction) {
+        baseUrl = 'https://irescue.life';
+      } else if (process.env.REPLIT_DEV_DOMAIN) {
         baseUrl = `https://${process.env.REPLIT_DEV_DOMAIN}`;
       } else {
         baseUrl = process.env.BASE_URL || 'https://irescue.life';
@@ -733,9 +737,13 @@ export async function sendPaymentLinkEmail(
   if (tenant?.customDomain && tenant?.customDomainVerified) {
     checkoutUrl = `https://${tenant.customDomain}/adoption-checkout/${token}`;
   } else {
-    // Use Replit dev domain in development, otherwise use BASE_URL or default to irescue.life
+    // In production (REPLIT_DEPLOYMENT=1), always use irescue.life
+    // Only use REPLIT_DEV_DOMAIN for actual development/testing
+    const isProduction = process.env.REPLIT_DEPLOYMENT === '1';
     let baseUrl: string;
-    if (process.env.REPLIT_DEV_DOMAIN) {
+    if (isProduction) {
+      baseUrl = 'https://irescue.life';
+    } else if (process.env.REPLIT_DEV_DOMAIN) {
       baseUrl = `https://${process.env.REPLIT_DEV_DOMAIN}`;
     } else {
       baseUrl = process.env.BASE_URL || 'https://irescue.life';
