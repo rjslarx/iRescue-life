@@ -490,6 +490,8 @@ export const animals = pgTable("animals", {
   // Medical fund tracking (via Stripe donations)
   medicalFundGoal: decimal("medical_fund_goal", { precision: 10, scale: 2 }), // Target fundraising amount
   medicalFundRaised: decimal("medical_fund_raised", { precision: 10, scale: 2 }).default("0.00"), // Amount raised via donations
+  // Vaccination tracking for adoption contracts
+  nextVaccinationDue: timestamp("next_vaccination_due"), // Date when next vaccination/shots are due (required for adoption checkout)
   // External platform import tracking (for RescueGroups, Petfinder imports, etc.)
   externalId: text("external_id"), // External platform's animal ID (prevents duplicate imports)
   externalSource: text("external_source").$type<"rescuegroups" | "petfinder" | "adoptapet" | "other">(), // Which platform imported from
