@@ -15810,6 +15810,42 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
   });
 
   /**
+   * GET /api/inbound-emails/counts
+   * Get counts of emails by status for badge notifications
+   * NOTE: Must be defined before the :id route to avoid route conflicts
+   */
+  app.get('/api/inbound-emails/counts', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { inboundEmails } = await import('@shared/schema');
+
+      const result = await db
+        .select({ 
+          status: inboundEmails.status,
+          count: sql<number>`count(*)::int` 
+        })
+        .from(inboundEmails)
+        .where(eq(inboundEmails.tenantId, req.tenant!.id))
+        .groupBy(inboundEmails.status);
+
+      const counts = {
+        unprocessed: 0,
+        processed: 0,
+        archived: 0,
+      };
+      
+      for (const row of result) {
+        if (row.status in counts) {
+          counts[row.status as keyof typeof counts] = row.count;
+        }
+      }
+
+      res.json(counts);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * GET /api/inbound-emails/:id
    * Get specific inbound email with full content
    */

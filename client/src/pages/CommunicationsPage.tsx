@@ -90,6 +90,11 @@ export default function CommunicationsPage() {
       : () => fetch(`/api/inbound-emails?status=${selectedStatus}`).then(r => r.json()),
   });
 
+  // Fetch email counts by status for badges
+  const { data: emailCounts } = useQuery<{ unprocessed: number; processed: number; archived: number }>({
+    queryKey: ['/api/inbound-emails/counts'],
+  });
+
   // Fetch all animals for linking
   const { data: animalsData } = useQuery<{ animals: any[] }>({
     queryKey: ['/api/animals'],
@@ -169,6 +174,7 @@ export default function CommunicationsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/inbound-emails'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/inbound-emails/counts'] });
       setViewDialogOpen(false);
     },
   });
@@ -290,15 +296,15 @@ export default function CommunicationsPage() {
       description="Send email campaigns and manage inbound emails"
     >
       <div className="flex-1 overflow-auto p-6">
-        <Tabs defaultValue="campaigns" className="w-full">
+        <Tabs defaultValue="inbox" className="w-full">
           <TabsList className="grid w-full max-w-md grid-cols-2">
-            <TabsTrigger value="campaigns" data-testid="tab-campaigns">
-              <Send className="w-4 h-4 mr-2" />
-              Email Campaigns
-            </TabsTrigger>
             <TabsTrigger value="inbox" data-testid="tab-inbox">
               <Inbox className="w-4 h-4 mr-2" />
               Inbox
+            </TabsTrigger>
+            <TabsTrigger value="campaigns" data-testid="tab-campaigns">
+              <Send className="w-4 h-4 mr-2" />
+              Email Campaigns
             </TabsTrigger>
           </TabsList>
 
@@ -573,9 +579,24 @@ export default function CommunicationsPage() {
                 <Tabs value={selectedStatus} onValueChange={(v) => setSelectedStatus(v as any)} className="w-full">
                   <TabsList>
                     <TabsTrigger value="all" data-testid="tab-all-emails">All</TabsTrigger>
-                    <TabsTrigger value="unprocessed" data-testid="tab-unprocessed">Unprocessed</TabsTrigger>
-                    <TabsTrigger value="processed" data-testid="tab-processed">Processed</TabsTrigger>
-                    <TabsTrigger value="archived" data-testid="tab-archived">Archived</TabsTrigger>
+                    <TabsTrigger value="unprocessed" data-testid="tab-unprocessed" className="gap-2">
+                      Unprocessed
+                      {emailCounts && (
+                        <Badge variant="secondary" className="ml-1 h-5 min-w-5 px-1.5 text-xs">{emailCounts.unprocessed}</Badge>
+                      )}
+                    </TabsTrigger>
+                    <TabsTrigger value="processed" data-testid="tab-processed" className="gap-2">
+                      Processed
+                      {emailCounts && (
+                        <Badge variant="outline" className="ml-1 h-5 min-w-5 px-1.5 text-xs">{emailCounts.processed}</Badge>
+                      )}
+                    </TabsTrigger>
+                    <TabsTrigger value="archived" data-testid="tab-archived" className="gap-2">
+                      Archived
+                      {emailCounts && (
+                        <Badge variant="outline" className="ml-1 h-5 min-w-5 px-1.5 text-xs">{emailCounts.archived}</Badge>
+                      )}
+                    </TabsTrigger>
                   </TabsList>
 
                   <TabsContent value={selectedStatus} className="space-y-4 mt-4">
