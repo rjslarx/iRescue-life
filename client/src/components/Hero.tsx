@@ -94,6 +94,7 @@ export default function Hero({
   const hasThreeDoors = heroLayoutType === 'three_doors' || heroLayoutType === 'both';
 
   return (
+    <>
     <section className="relative min-h-[400px] sm:min-h-[450px] md:min-h-[500px] w-full overflow-visible">
       <div 
         className="absolute inset-0 overflow-hidden"
@@ -131,7 +132,7 @@ export default function Hero({
                 variant="outline"
                 onClick={onDonate}
                 data-testid="button-hero-donate"
-                className="bg-background/20 backdrop-blur-sm border-white/30 text-white hover:bg-background/30 w-full sm:w-auto"
+                className="bg-background/20 backdrop-blur-sm border-white/30 text-white w-full sm:w-auto"
               >
                 {heroButton2Text || "Donate Now"}
               </Button>
@@ -147,13 +148,6 @@ export default function Hero({
         <>
           {/* Mobile: Normal stacked layout below hero */}
           <div className="sm:hidden relative z-10 pt-6 pb-4 bg-background" data-testid="three-doors-container-mobile">
-            <ThreeDoors basePath={basePath} config={threeDoorsConfig} />
-          </div>
-          {/* Desktop: Positioned at bottom of hero, colored headers overlap image */}
-          <div 
-            className="hidden sm:block absolute bottom-0 left-0 right-0 z-10 translate-y-[calc(60%+7px)]" 
-            data-testid="three-doors-container"
-          >
             <ThreeDoors basePath={basePath} config={threeDoorsConfig} />
           </div>
         </>
@@ -174,5 +168,19 @@ export default function Hero({
         </div>
       )}
     </section>
+    {/* Desktop: Three doors in normal flow with negative margin to overlap hero - space is naturally reserved
+        Original used translate-y-[calc(60%+7px)] pushing down 60% of height + 7px
+        To match: pull up by (40% of height - 7px) so same portion overlaps with hero
+        Three doors ~140px tall, so: -(140 * 0.4 - 7) = -(56 - 7) = -49px */}
+    {hasThreeDoors && (
+      <div 
+        className="hidden sm:block relative z-10" 
+        style={{ marginTop: '-49px' }}
+        data-testid="three-doors-container"
+      >
+        <ThreeDoors basePath={basePath} config={threeDoorsConfig} />
+      </div>
+    )}
+    </>
   );
 }
