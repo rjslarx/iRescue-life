@@ -1,0 +1,123 @@
+Delivered-To: rstelly3@gmail.com
+Received: by 2002:a05:6504:84e:b0:2d5:1192:35dd with SMTP id u14csp2842135ltr;
+        Sun, 18 Jan 2026 15:35:45 -0800 (PST)
+X-Received: by 2002:a53:ac84:0:b0:63e:30e1:4429 with SMTP id 956f58d0204a3-649164992c8mr7847617d50.38.1768779345163;
+        Sun, 18 Jan 2026 15:35:45 -0800 (PST)
+ARC-Seal: i=1; a=rsa-sha256; t=1768779345; cv=none;
+        d=google.com; s=arc-20240605;
+        b=e/2fFT6QyQf9e8++57Krb2rHIhexnihBdVOLveAzV1aVYLkkr/YOKrBEznjLTb9vde
+         x6naCfsDlubGcZ9ZDWRqMsTgV+sV+vmKp1ehzC2qLp5+aOlJHbQ4GmCdX8vdDeh25plG
+         SshOvPz4L/emx2E0b2sKSBT4HI82fbA3jW3X4LM71wtrT/dKvLHZjnWnQpXjrerN/RGA
+         s17TIDRaXzLvexYmUQSYwaLu3EJobjg9Cg7lzT6bksrgshxWctamAKFWuYOTK+Y81LLu
+         kpaAgWoJD+D50IEqdj6NI2oKUmLGz8lBz0BxAJSYM4UEZ6IsJH+tnbl5/PWjb0Kab9q3
+         KXxg==
+ARC-Message-Signature: i=1; a=rsa-sha256; c=relaxed/relaxed; d=google.com; s=arc-20240605;
+        h=to:subject:message-id:date:mime-version:from:dkim-signature;
+        bh=mXcKAl3wrn/Dqb6j8exhwSAEtHGb84zCMj5BJGm3+ec=;
+        fh=4tFGJzMn0gIaS12Wf+vYVRisls23QliPowVam0v8Slo=;
+        b=hYDpgcNSJA5Wvt6Ic1zSCex+KH/xnsmoPdYw586bMyseoI8qTAP+7KqP5cmXYJaUt6
+         UfvQu4YyN3Ipo79sCLMu1d96oBVJsRfdhuoxCCuiLpOTXsZM89M1KbNrw5keNkXTeOik
+         iS0XlKVHXI4uJn8I4bsNVJ2drx6qBynoj/5bFpWj/GcesBxQKXgYZlguj1Ro0BerwP1p
+         1/CUR7iswHF6JmBXiF8QTf56xtYbtT4dsewQqMPLPo4r7BLkvpX8zsplQS9LgtS90JO6
+         NhAYhbNp8U/8DXtQP4BLdxdTg0vupt15U2Hnf5LW/wOBGuN/d/a6RO1zaPCfGO+MIIsL
+         IjBQ==;
+        dara=google.com
+ARC-Authentication-Results: i=1; mx.google.com;
+       dkim=pass header.i=@haseyasnewbeginningar-com.20230601.gappssmtp.com header.s=20230601 header.b=TuRCDfPq;
+       spf=pass (google.com: domain of robby@haseyasnewbeginningar.com designates 209.85.220.41 as permitted sender) smtp.mailfrom=robby@haseyasnewbeginningar.com;
+       dara=pass header.i=@gmail.com
+Return-Path: <robby@haseyasnewbeginningar.com>
+Received: from mail-sor-f41.google.com (mail-sor-f41.google.com. [209.85.220.41])
+        by mx.google.com with SMTPS id 956f58d0204a3-64916f45611sor3095582d50.0.2026.01.18.15.35.44
+        for <rstelly3@gmail.com>
+        (Google Transport Security);
+        Sun, 18 Jan 2026 15:35:45 -0800 (PST)
+Received-SPF: pass (google.com: domain of robby@haseyasnewbeginningar.com designates 209.85.220.41 as permitted sender) client-ip=209.85.220.41;
+Authentication-Results: mx.google.com;
+       dkim=pass header.i=@haseyasnewbeginningar-com.20230601.gappssmtp.com header.s=20230601 header.b=TuRCDfPq;
+       spf=pass (google.com: domain of robby@haseyasnewbeginningar.com designates 209.85.220.41 as permitted sender) smtp.mailfrom=robby@haseyasnewbeginningar.com;
+       dara=pass header.i=@gmail.com
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=haseyasnewbeginningar-com.20230601.gappssmtp.com; s=20230601; t=1768779344; x=1769384144; dara=google.com;
+        h=to:subject:message-id:date:mime-version:from:from:to:cc:subject
+         :date:message-id:reply-to;
+        bh=mXcKAl3wrn/Dqb6j8exhwSAEtHGb84zCMj5BJGm3+ec=;
+        b=TuRCDfPqcZd5Lcht4UFikztZJT2V9EtAGVpARq9JT5fF8OwIUMRS46dqBl8woFwUZ9
+         w3gI1QvwG0SgSyoNeYBDh4Yb+YR+w0VeW3z/j1yimiqChXHbn+Z4bGZ9wwuNQ66LkiH+
+         vRvtMwBjReqj6hQPip+X8UJ5z3slr/2lVbdpMp4F4QN/hpHErAAa/Cpoz+kQlLzEhvMD
+         0dgYfJ1iY+c033+0Nj0zZKgzdFCcNr8XwqZcpk8RRCn2w6l1wmPrhW+K0FKYmwh2wwpL
+         EuKUPNxV38DLH8xlJNkPOkRb4GymlEP8UjyjRBLr40TRLllUNZOFhsKFDNR/VaQeMLXh
+         9mZw==
+X-Google-DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=1e100.net; s=20230601; t=1768779344; x=1769384144;
+        h=to:subject:message-id:date:mime-version:from:x-gm-gg
+         :x-gm-message-state:from:to:cc:subject:date:message-id:reply-to;
+        bh=mXcKAl3wrn/Dqb6j8exhwSAEtHGb84zCMj5BJGm3+ec=;
+        b=IjFfi13lVfxV2TKhNMe/Ujx99/wRP8Hgo0T46+WeHYtXLlUdS0gJ6oLrxH3Ljfwv1q
+         3QylF1MplUy/vXee1vyL7rs1MteSwbIBIBmVv33SH6H4sYr+KGkBXinbx1pmjJYUb00V
+         rlE8VkwsNlGHmiZpF9QVQTlmlVfPCktkbuOT3Lnagva5AjYT6IZdZGBM9Jmu1nJ4RER2
+         cE4kDqW0UqHSoJJbK9f5yMZ9tdr1Gqwb7I3MZRSxOdltIkEX28FUfoQFZx7rIbtZhtRJ
+         QPBw3u0t0sJHKl5t/4FQeYKqGp+dI/n9av1jrxq/bUhV05krkwcmOISeaXvWQlwsKw+j
+         S6PQ==
+X-Gm-Message-State: AOJu0Yx+v+DLSSYiUVSWqDLGvCXNK6sUwEGGi0rRGJJpai3z75TLmR6E 2pDJ/RayimVJ/MdT2PdFECJ8yEiPZrcypYbFg9Aef99CbHr+0R+CMa0SPBVgzUj7C94Xt4aaRfU Jh/Yncl/kV+TJBmVyskqOsyZqJbKRZCJGTQ7vA/9QpAsedsyV4FpI7w==
+X-Gm-Gg: AY/fxX5Bug3ICRlD+cJIm8HyLIwj6MavROVGRR4pa1dnUM+MZ+aYgj8OOlpvWJ5X6AX TcgjHwlX2L+cwdyuwzZ8satd+wuIYNxh/a1z8yEC3LZzp3Dd/bjw1hZt8V2od45h8zlLH/mWlx9 6DNZWlv+QriC/L99uqarfUCvgz3SiZWDK4mu35ebDBk5gP/pcayyiF4m/uyps2KDkvb/4vPfeFP j7cDeh331d5Keyilw4GOlgOdLYehwo05n3RBcKvgni32pJnUKwJWGb6mH+9zvH4OZWsOHS8hNIP m4fHrTFOkh9Pm0Al
+X-Received: by 2002:a05:690e:148b:b0:63f:af33:e413 with SMTP id 956f58d0204a3-6491648342amr8699218d50.24.1768779344369; Sun, 18 Jan 2026 15:35:44 -0800 (PST)
+Received: from 124696500616 named unknown by gmailapi.google.com with HTTPREST; Sun, 18 Jan 2026 18:35:43 -0500
+Received: from 124696500616 named unknown by gmailapi.google.com with HTTPREST; Sun, 18 Jan 2026 18:35:43 -0500
+From: "Haseya's New Beginning Animal Rescue" <news@haseyasnewbeginningar.com>
+MIME-Version: 1.0
+Date: Sun, 18 Jan 2026 18:35:43 -0500
+X-Gm-Features: AZwV_Qjv_x651xbQxKmKj-cuHqWxfMJK21-P1yURkdFExvnOPjzDq53R36FO7ZU
+Message-ID: <CAAFSOOu-PBQyw+SR9OYU87xfJrm4oKjAe=xx0oeFgbjsMnQeiQ@mail.gmail.com>
+Subject: Complete Your Adoption of Luna
+To: rstelly3@gmail.com
+Content-Type: multipart/alternative; boundary="00000000000081efee0648b20817"
+
+--00000000000081efee0648b20817
+Content-Type: text/plain; charset="UTF-8"
+
+ Complete Your Adoption of Luna!
+
+Dear Robby Stelly,
+
+Congratulations! Your adoption application for *Luna* has been approved.
+
+To finalize the adoption, please complete the following steps:
+
+   1. Review and sign the adoption contract
+
+*Adoption Fee:* Waived
+Complete Adoption
+
+Or copy and paste this link into your browser:
+https://irescue.life/haseyas/adoption-checkout/30d8466cc480acda92d106874434f15a9df13dab9c09ba9e58a3e41361c651e7
+
+This link will expire in 72 hours.
+
+If you have any questions, please don't hesitate to contact us.
+
+--00000000000081efee0648b20817
+Content-Type: text/html; charset="UTF-8"
+
+
+      <h2>Complete Your Adoption of Luna!</h2>
+      <p>Dear Robby Stelly,</p>
+      <p>Congratulations! Your adoption application for <strong>Luna</strong> has been approved.</p>
+      <p>To finalize the adoption, please complete the following steps:</p>
+      <ol>
+          <li>Review and sign the adoption contract</li>
+        </ol>
+      <p><strong>Adoption Fee:</strong> Waived</p>
+      <table>
+        <tr>
+          <td>
+            <a>Complete Adoption</a>
+          </td>
+        </tr>
+      </table>
+      <p>Or copy and paste this link into your browser:<br><a>https://irescue.life/haseyas/adoption-checkout/30d8466cc480acda92d106874434f15a9df13dab9c09ba9e58a3e41361c651e7</a></p>
+      <p>This link will expire in 72 hours.</p>
+      <p>If you have any questions, please don&#39;t hesitate to contact us.</p>
+    
+
+--00000000000081efee0648b20817--

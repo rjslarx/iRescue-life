@@ -1,0 +1,78 @@
+Yes, there is a workaround, and it is the industry standard for HTML emails.
+
+The reason your button is not showing up is likely because you are using the standard HTML <button> or <input type="submit"> tags. Gmail (and most other email clients) completely ignores or strips these tags for security reasons, as they are associated with forms and scripts which are blocked in email.
+
+To get a button to appear, you must "fake" it using an anchor <a> link that is styled to look like a button.
+
+Here are the two best workarounds, ranging from simple to "bulletproof."
+
+Option 1: The Border-Based Button (Simple & Reliable)
+This method uses a thick border on the <a> tag to simulate padding. This is safer than standard padding because Microsoft Outlook often ignores padding on links, but it respects borders.
+
+HTML
+
+<table width="100%" border="0" cellspacing="0" cellpadding="0">
+  <tr>
+    <td>
+      <table border="0" cellspacing="0" cellpadding="0">
+        <tr>
+          <td align="center" bgcolor="#0056b3" style="border-radius: 5px;">
+            <a href="https://your-link-here.com" 
+               target="_blank" 
+               style="font-size: 16px; 
+                      font-family: Helvetica, Arial, sans-serif; 
+                      color: #ffffff; 
+                      text-decoration: none; 
+                      border-radius: 5px; 
+                      padding: 10px 20px; 
+                      border: 1px solid #0056b3; 
+                      display: inline-block; 
+                      font-weight: bold;">
+              Click Me
+            </a>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+Option 2: The "Bulletproof" Button (Best for Outlook + Gmail)
+If you need the button to look perfect in every version of Outlook (which renders HTML using Microsoft Word) as well as Gmail, you should use the "Table-Based" approach. This wraps the link in a table cell that handles the background color, ensuring the "button" is clickable even if images or CSS are turned off.
+
+HTML
+
+<table border="0" cellspacing="0" cellpadding="0">
+  <tr>
+    <td align="center" style="border-radius: 5px;" bgcolor="#0056b3">
+      <a href="https://your-link-here.com" 
+         target="_blank" 
+         style="font-size: 16px; 
+                font-family: Helvetica, Arial, sans-serif; 
+                color: #ffffff; 
+                text-decoration: none; 
+                padding: 12px 25px; 
+                display: inline-block; 
+                border: 1px solid #0056b3;">
+         <span style="color: #ffffff;">Confirm Email</span>
+      </a>
+    </td>
+  </tr>
+</table>
+Key Rules for Gmail Buttons
+Inline CSS Only: Do not put your button styles in a <style> block in the <head> or an external sheet. Gmail sometimes strips these. Put the style directly in the style="..." attribute of the element.
+
+Avoid Background Images: Gmail handles background images well now, but Outlook does not. Stick to solid background colors (bgcolor) for buttons.
+
+No JavaScript: Never try to add onclick events. They will be stripped immediately.
+
+Did you mean "Action Buttons"?
+If you were looking for the special buttons that appear in the subject line of an email (like "Track Package" or "RSVP"), those are called Gmail Go-To Actions (Schema markup). Those do not work by simply adding HTML; you must whitelist your sender domain with Google to use them.
+
+Next Step
+If you paste the hex color code you are trying to use, I can generate the exact HTML block for your specific button design so you can copy-paste it directly.
+
+Fix: Gmail formatting options not showing - Gmail buttons not showing While this video focuses on restoring the Gmail UI toolbar buttons, it is useful if you are trying to ensure your local interface settings aren't hiding elements you expect to see.
+
+Fix: Gmail formatting options not showing - Gmail buttons not showing - Gmail toolbar missing - YouTube
+
+Abhay Zambare · 45K views

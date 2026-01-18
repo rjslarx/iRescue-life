@@ -293,19 +293,25 @@ export class GmailService {
   
   /**
    * Encode content as quoted-printable for proper email transmission
+   * RFC 2045: The '=' character must ALWAYS be encoded as '=3D' since it's the escape character
    */
   private encodeQuotedPrintable(str: string): string {
-    return str
-      .replace(/[^\x20-\x7E\r\n\t]/g, (char) => {
-        const code = char.charCodeAt(0);
-        if (code < 256) {
-          return '=' + code.toString(16).toUpperCase().padStart(2, '0');
-        }
-        // For multi-byte UTF-8 characters
-        const bytes = Buffer.from(char, 'utf-8');
-        return Array.from(bytes).map(b => '=' + b.toString(16).toUpperCase().padStart(2, '0')).join('');
-      })
-      .replace(/=$/gm, '=3D'); // Escape trailing equals
+    // First, encode the '=' character since it's the quoted-printable escape character
+    // This MUST be done first before any other encoding
+    let encoded = str.replace(/=/g, '=3D');
+    
+    // Then encode non-printable ASCII characters
+    encoded = encoded.replace(/[^\x20-\x7E\r\n\t]/g, (char) => {
+      const code = char.charCodeAt(0);
+      if (code < 256) {
+        return '=' + code.toString(16).toUpperCase().padStart(2, '0');
+      }
+      // For multi-byte UTF-8 characters
+      const bytes = Buffer.from(char, 'utf-8');
+      return Array.from(bytes).map(b => '=' + b.toString(16).toUpperCase().padStart(2, '0')).join('');
+    });
+    
+    return encoded;
   }
   
   /**

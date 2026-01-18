@@ -1,0 +1,124 @@
+Delivered-To: rstelly3@gmail.com
+Received: by 2002:a05:6504:84e:b0:2d5:1192:35dd with SMTP id u14csp2839584ltr;
+        Sun, 18 Jan 2026 15:27:01 -0800 (PST)
+X-Received: by 2002:a05:6214:226b:b0:87f:fffb:b7af with SMTP id 6a1803df08f44-8942d5f7c7bmr144293326d6.1.1768778820746;
+        Sun, 18 Jan 2026 15:27:00 -0800 (PST)
+ARC-Seal: i=1; a=rsa-sha256; t=1768778820; cv=none;
+        d=google.com; s=arc-20240605;
+        b=g8TICy1qk19fXzO1JpqCuGOl5V33dpHnaW/S2fiqB373sJNhr7VR3oJv1l32Coh0AQ
+         YpAPEYbO+8k3yp9aIm9n/tGuKCxW6SZw5JXD8QmMzVAs+yGBryedYhn9LtUzKApFzGri
+         eHlwP/OzBlU/OTcTKI1muWdgcUgwLREVtGFaMR5cC0YZiocFCr48jJE6Y6acRbemboS4
+         lVLFQUVLudRUZE1SVh94EojEsHNfb9penyIJI/DOrek8BiqVLMRXjSvyiHijNzQ97i7c
+         27r9y7psXyJcMokmP+JwTUZvqFP3jzjCSM0bJsdEsRCRLTK0klHsR8Oxln+IZUsnuJNJ
+         QRHg==
+ARC-Message-Signature: i=1; a=rsa-sha256; c=relaxed/relaxed; d=google.com; s=arc-20240605;
+        h=feedback-id:mime-version:date:message-id:subject:reply-to:to:from
+         :dkim-signature:dkim-signature;
+        bh=1Zydwr5oN0kSikJOgjw1h11ZLaQbHRAlzaO78gvs41w=;
+        fh=4tFGJzMn0gIaS12Wf+vYVRisls23QliPowVam0v8Slo=;
+        b=KSrsaws3cJKFvGBWCPxLRUAbHNzb+4pNcD9iz8h5iApEfZmC+hOwBloMSORPvxpDgQ
+         MseM747t4ET3W00bSsP5tHyPtQBjFMEpZoAOqAncNOpDhNrZYnTSclaNFmewmj/d2qkU
+         19+Kok9tX/uZtLpG70heRL8yw6NTdBuL21OHxMGFufjKGERhsatFSYwCJSe07YdSC52G
+         1AyqvEhELP4fpaLtk6SagdAYga/qbHy5UEOUSIIjGH0FaAyqQOtES1/OIeXjHbhtcCwJ
+         PydpwaipIYUGDvlXL2ZOeyuPZjRfTaVDc6Qhffx/WfxwkAmGEsHRHPEsQJWHmK12fIxm
+         f6GQ==;
+        dara=google.com
+ARC-Authentication-Results: i=1; mx.google.com;
+       dkim=pass header.i=@irescue.life header.s=resend header.b="gu/AE9rW";
+       dkim=pass header.i=@amazonses.com header.s=6gbrjpgwjskckoa6a5zn6fwqkn67xbtw header.b=pkhlJ1bA;
+       spf=pass (google.com: domain of 0100019bd36eea1d-bfb42428-a299-4898-9197-6cfb0a85f5ec-000000@send.irescue.life designates 54.240.9.92 as permitted sender) smtp.mailfrom=0100019bd36eea1d-bfb42428-a299-4898-9197-6cfb0a85f5ec-000000@send.irescue.life
+Return-Path: <0100019bd36eea1d-bfb42428-a299-4898-9197-6cfb0a85f5ec-000000@send.irescue.life>
+Received: from a9-92.smtp-out.amazonses.com (a9-92.smtp-out.amazonses.com. [54.240.9.92])
+        by mx.google.com with ESMTPS id 6a1803df08f44-8942e5c24b3si87614836d6.67.2026.01.18.15.27.00
+        for <rstelly3@gmail.com>
+        (version=TLS1_3 cipher=TLS_AES_128_GCM_SHA256 bits=128/128);
+        Sun, 18 Jan 2026 15:27:00 -0800 (PST)
+Received-SPF: pass (google.com: domain of 0100019bd36eea1d-bfb42428-a299-4898-9197-6cfb0a85f5ec-000000@send.irescue.life designates 54.240.9.92 as permitted sender) client-ip=54.240.9.92;
+Authentication-Results: mx.google.com;
+       dkim=pass header.i=@irescue.life header.s=resend header.b="gu/AE9rW";
+       dkim=pass header.i=@amazonses.com header.s=6gbrjpgwjskckoa6a5zn6fwqkn67xbtw header.b=pkhlJ1bA;
+       spf=pass (google.com: domain of 0100019bd36eea1d-bfb42428-a299-4898-9197-6cfb0a85f5ec-000000@send.irescue.life designates 54.240.9.92 as permitted sender) smtp.mailfrom=0100019bd36eea1d-bfb42428-a299-4898-9197-6cfb0a85f5ec-000000@send.irescue.life
+DKIM-Signature: v=1; a=rsa-sha256; q=dns/txt; c=relaxed/simple; s=resend; d=irescue.life; t=1768778820; h=From:To:Reply-To:Subject:Message-ID:Date:MIME-Version:Content-Type; bh=KxVdiJwvJtepGWmYlOe+EtWurKaHhZ1UK9LWb+tKqhg=; b=gu/AE9rW5A0xvQbIaDRgG/iRham2qOLUXFzJCc6wg77CnW8m9T2+KXRassDu5A+a nnfuPrU4ht6LzfCPgyUCwnltCWRWVbfH76YaFy7W05V8b4P+W6t48MJXJ5sGm7huudM B2dCz5iI6I4ACgN8qqSA+2jMRObdyitvNjzzneYk=
+DKIM-Signature: v=1; a=rsa-sha256; q=dns/txt; c=relaxed/simple; s=6gbrjpgwjskckoa6a5zn6fwqkn67xbtw; d=amazonses.com; t=1768778820; h=From:To:Reply-To:Subject:Message-ID:Date:MIME-Version:Content-Type:Feedback-ID; bh=KxVdiJwvJtepGWmYlOe+EtWurKaHhZ1UK9LWb+tKqhg=; b=pkhlJ1bAiq2jIDvxCOKDkyzVQAv89Cg+iwA8A4Y6l+9T8zpQb3Abz27mgx6VPY81 YzBMMJBuu1tZ36eEbYWFmEAlIK5yiBo38iMBf2WE2gEOSsgWf0vRXYv7Nvkbojbnviz euaKf9LUjpqRu+VMPXSortQWTcLOZ20VEEruLgdU=
+From: Adoption Alerts <notifications@irescue.life>
+To: rstelly3@gmail.com
+Reply-To: demo@example.com
+Subject: Complete Your Adoption of Max
+Message-ID: <0100019bd36eea1d-bfb42428-a299-4898-9197-6cfb0a85f5ec-000000@email.amazonses.com>
+Date: Sun, 18 Jan 2026 23:27:00 +0000
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="--_NmP-2b84e9a2b8124933-Part_1"
+Feedback-ID: ::1.us-east-1.pAEstvQcjyhQNKGKcgSlzI7SVR8ZSG5wSmKwiz/A8Dg=:AmazonSES
+X-SES-Outgoing: 2026.01.18-54.240.9.92
+
+----_NmP-2b84e9a2b8124933-Part_1
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: quoted-printable
+
+Complete Your Adoption of Max!
+
+ Dear Robby,
+
+ Congratulations! Your adoption application for *Max* has been approved.
+
+ To finalize the adoption, please complete the following steps:
+
+ - Review and sign the adoption contract
+
+ *Adoption Fee:* Waived
+
+ Complete Adoption (https://be89be9e-6a6a-443f-9996-8bdfc0b79d2c-00-13cespn=
+89a94g.spock.replit.dev/demo/adoption-checkout/48912bf50a57b4f9ba08098411eb=
+3e5d106d37f7c6fc13dbda569ee3a1209d67)
+
+ Or copy and paste this link into your browser:
+https://be89be9e-6a6a-443f-9996-8bdfc0b79d2c-00-13cespn89a94g.spock.replit.=
+dev/demo/adoption-checkout/48912bf50a57b4f9ba08098411eb3e5d106d37f7c6fc13db=
+da569ee3a1209d67 (https://be89be9e-6a6a-443f-9996-8bdfc0b79d2c-00-13cespn89=
+a94g.spock.replit.dev/demo/adoption-checkout/48912bf50a57b4f9ba08098411eb3e=
+5d106d37f7c6fc13dbda569ee3a1209d67)
+
+ This link will expire in 72 hours.
+
+ If you have any questions, please don't hesitate to contact us.
+----_NmP-2b84e9a2b8124933-Part_1
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: quoted-printable
+
+
+      <h2>Complete Your Adoption of Max!</h2>
+      <p>Dear Robby,</p>
+      <p>Congratulations! Your adoption application for <strong>Max</strong=
+> has been approved.</p>
+      <p>To finalize the adoption, please complete the following steps:</p>
+      <ol>
+          <li>Review and sign the adoption contract</li>
+        </ol>
+      <p><strong>Adoption Fee:</strong> Waived</p>
+      <table width=3D"100%" cellpadding=3D"0" cellspacing=3D"0" border=3D"0=
+" style=3D"margin: 20px 0;">
+        <tr>
+          <td align=3D"center" bgcolor=3D"#22c55e" style=3D"border-radius: =
+6px;">
+            <a href=3D"https://be89be9e-6a6a-443f-9996-8bdfc0b79d2c-00-13ce=
+spn89a94g.spock.replit.dev/demo/adoption-checkout/48912bf50a57b4f9ba0809841=
+1eb3e5d106d37f7c6fc13dbda569ee3a1209d67" target=3D"_blank" style=3D"font-si=
+ze: 16px; font-family: Arial, sans-serif; color: #ffffff; text-decoration: =
+none; padding: 14px 28px; border: 1px solid #22c55e; display: inline-block;=
+ border-radius: 6px; font-weight: bold; background-color: #22c55e;">Complet=
+e Adoption</a>
+          </td>
+        </tr>
+      </table>
+      <p style=3D"margin-top: 10px; font-size: 12px; color: #666;">Or copy =
+and paste this link into your browser:<br/><a href=3D"https://be89be9e-6a6a=
+-443f-9996-8bdfc0b79d2c-00-13cespn89a94g.spock.replit.dev/demo/adoption-che=
+ckout/48912bf50a57b4f9ba08098411eb3e5d106d37f7c6fc13dbda569ee3a1209d67">htt=
+ps://be89be9e-6a6a-443f-9996-8bdfc0b79d2c-00-13cespn89a94g.spock.replit.dev=
+/demo/adoption-checkout/48912bf50a57b4f9ba08098411eb3e5d106d37f7c6fc13dbda5=
+69ee3a1209d67</a></p>
+      <p>This link will expire in 72 hours.</p>
+      <p>If you have any questions, please don't hesitate to contact us.</p=
+>
+   =20
+----_NmP-2b84e9a2b8124933-Part_1--
