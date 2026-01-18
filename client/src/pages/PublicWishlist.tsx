@@ -17,6 +17,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { Package, Heart, ExternalLink, ShoppingCart } from 'lucide-react';
 import type { SupplyItem, SupplyCategory, Tenant } from '@shared/schema';
+import PublicHeader from '@/components/PublicHeader';
 
 type SupplyItemWithRelations = SupplyItem & {
   category: SupplyCategory | null;
@@ -109,7 +110,9 @@ export default function PublicWishlist() {
   }
 
   return (
-    <div className="container mx-auto py-8 space-y-8" data-testid="page-public-wishlist">
+    <>
+      <PublicHeader rescueName={rescueName} logoUrl={tenant?.logoUrl || undefined} />
+      <div className="container mx-auto py-8 space-y-8" data-testid="page-public-wishlist">
       <div className="text-center space-y-4">
         <div className="flex items-center justify-center gap-3 mb-2">
           <Package className="w-12 h-12 text-primary" />
@@ -293,6 +296,7 @@ export default function PublicWishlist() {
         </div>
       )}
     </div>
+    </>
   );
 }
 
