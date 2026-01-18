@@ -456,14 +456,14 @@ export default function FosterFormSettingsPage() {
                 <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30" data-testid="foster-system-field-yard">
                   <div className="flex-1">
                     <span className="font-medium">I have a yard</span>
-                    <Badge variant="outline" className="ml-2 text-xs">Optional</Badge>
+                    <Badge variant="secondary" className="ml-2 text-xs">Required</Badge>
                   </div>
                   <Badge variant="outline" className="text-xs">Checkbox</Badge>
                 </div>
                 <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30" data-testid="foster-system-field-pets">
                   <div className="flex-1">
                     <span className="font-medium">I have other pets</span>
-                    <Badge variant="outline" className="ml-2 text-xs">Optional</Badge>
+                    <Badge variant="secondary" className="ml-2 text-xs">Required</Badge>
                   </div>
                   <Badge variant="outline" className="text-xs">Checkbox</Badge>
                 </div>
@@ -509,14 +509,14 @@ export default function FosterFormSettingsPage() {
                 <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30" data-testid="foster-system-field-vet-ref">
                   <div className="flex-1">
                     <span className="font-medium">Veterinarian Reference</span>
-                    <Badge variant="outline" className="ml-2 text-xs">Optional</Badge>
+                    <Badge variant="secondary" className="ml-2 text-xs">Required</Badge>
                   </div>
                   <Badge variant="outline" className="text-xs">Text</Badge>
                 </div>
                 <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30" data-testid="foster-system-field-personal-ref">
                   <div className="flex-1">
                     <span className="font-medium">Personal Reference</span>
-                    <Badge variant="outline" className="ml-2 text-xs">Optional</Badge>
+                    <Badge variant="secondary" className="ml-2 text-xs">Required</Badge>
                   </div>
                   <Badge variant="outline" className="text-xs">Text</Badge>
                 </div>
