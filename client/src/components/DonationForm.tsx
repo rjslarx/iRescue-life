@@ -6,116 +6,13 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
-import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { DollarSign, ExternalLink, Loader2, Gift, ArrowRight, Lock, Shield, Heart, Star, Users, Home, HandHeart, PawPrint, HeartHandshake } from "lucide-react";
-import { Link } from "wouter";
+import { DollarSign, ExternalLink, Loader2, Lock, Shield, Heart, Star, Users, Home, HandHeart, PawPrint, HeartHandshake } from "lucide-react";
 import type { Tenant } from "@shared/schema";
 
 interface DonationFormProps {
   sponsoredAnimalName?: string;
   tenant?: Tenant;
-}
-
-interface SupplyItemWithRelations {
-  id: string;
-  title: string;
-  description: string | null;
-  imageUrl: string | null;
-  quantityNeeded: number;
-  quantityFulfilled: number;
-  unitPrice: string | null;
-  priority: "low" | "normal" | "high" | "urgent";
-  status: "active" | "fulfilled" | "paused";
-  category: {
-    id: string;
-    name: string;
-  } | null;
-}
-
-function WishlistFeed() {
-  const { data: itemsData } = useQuery<{ items: SupplyItemWithRelations[] }>({
-    queryKey: ['/api/supply-items'],
-  });
-
-  const items = (itemsData?.items || []).slice(0, 3);
-
-  if (items.length === 0) {
-    return null;
-  }
-
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case "urgent": return "destructive";
-      case "high": return "default";
-      default: return "secondary";
-    }
-  };
-
-  const getProgressPercentage = (item: SupplyItemWithRelations) => {
-    return Math.min((item.quantityFulfilled / item.quantityNeeded) * 100, 100);
-  };
-
-  return (
-    <div className="my-6">
-      <div className="relative mb-4">
-        <Separator />
-        <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-card px-2 text-xs text-muted-foreground">
-          or help with supplies
-        </span>
-      </div>
-      
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Gift className="h-4 w-4 text-primary" />
-            <h3 className="text-sm font-semibold">Needed Supplies</h3>
-          </div>
-          <Link href="/wishlist">
-            <Button variant="ghost" size="sm" className="h-8 text-xs" data-testid="link-view-all-supplies">
-              View All
-              <ArrowRight className="h-3 w-3 ml-1" />
-            </Button>
-          </Link>
-        </div>
-
-        <div className="space-y-2">
-          {items.map((item) => (
-            <div
-              key={item.id}
-              className="flex items-start gap-3 p-3 rounded-md border bg-card hover-elevate transition-all"
-              data-testid={`wishlist-item-${item.id}`}
-            >
-              <div className="flex-1 min-w-0">
-                <div className="flex items-start justify-between gap-2 mb-1">
-                  <h4 className="text-sm font-medium leading-tight line-clamp-1">{item.title}</h4>
-                  {item.priority !== "normal" && item.priority !== "low" && (
-                    <Badge variant={getPriorityColor(item.priority)} className="text-xs shrink-0">
-                      {item.priority}
-                    </Badge>
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground line-clamp-1 mb-2">
-                  {item.quantityNeeded - item.quantityFulfilled} needed
-                  {item.unitPrice && ` • $${item.unitPrice} each`}
-                </p>
-                <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-primary transition-all"
-                    style={{ width: `${getProgressPercentage(item)}%` }}
-                  />
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <p className="text-xs text-muted-foreground text-center">
-          Purchase items from our wishlist or donate funds to help us buy supplies
-        </p>
-      </div>
-    </div>
-  );
 }
 
 const iconMap = {
@@ -466,10 +363,6 @@ export default function DonationForm({ sponsoredAnimalName, tenant }: DonationFo
             </div>
           </>
         )}
-
-        <div className="px-6 pb-6">
-          <WishlistFeed />
-        </div>
 
         {/* Mail-in donation address section */}
         {donateMailingAddress && (
