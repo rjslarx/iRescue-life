@@ -1,0 +1,162 @@
+2026-01-18 05:01:23.75
+d753a375
+User
+setTypeParser: [Function: setTypeParser],
+2026-01-18 05:01:23.75
+d753a375
+User
+at TLSSocket.emit (node:events:524:28)
+2026-01-18 05:01:23.75
+d753a375
+User
+at Client.emit (node:events:524:28)
+2026-01-18 05:01:23.75
+d753a375
+User
+binary: false,
+2026-01-18 05:01:23.75
+d753a375
+User
+host: 'ep-cold-truth-aelbjfhc.c-2.us-east-2.aws.neon.tech',
+2026-01-18 05:01:23.75
+d753a375
+User
+data: undefined,
+2026-01-18 05:01:23.75
+d753a375
+User
+table: undefined,
+2026-01-18 05:01:23.75
+d753a375
+User
+database: 'neondb',
+2026-01-18 05:01:23.75
+d753a375
+User
+isDomainSocket: false,
+2026-01-18 05:01:23.75
+d753a375
+User
+client_encoding: '',
+2026-01-18 05:01:23.75
+d753a375
+User
+BYTEA: 17,
+2026-01-18 05:01:23.75
+d753a375
+User
+schema: undefined,
+2026-01-18 05:01:23.75
+d753a375
+User
+code: '57P01',
+2026-01-18 05:01:23.75
+d753a375
+User
+file: 'postgres.c',
+2026-01-18 05:01:23.75
+d753a375
+User
+end: [Function: onReadableStreamEnd],
+2026-01-18 05:01:23.75
+d753a375
+User
+at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)
+2026-01-18 05:01:23.75
+d753a375
+User
+}
+2026-01-18 05:01:23.75
+d753a375
+User
+at Client._handleErrorMessage (/home/runner/workspace/node_modules/pg/lib/client.js:361:12)
+2026-01-18 05:01:23.75
+d753a375
+User
+internalQuery: undefined,
+2026-01-18 05:01:23.75
+d753a375
+User
+at Connection.emit (node:events:524:28)
+2026-01-18 05:01:23.75
+d753a375
+User
+at Readable.push (node:internal/streams/readable:392:5)
+2026-01-18 05:01:23.75
+d753a375
+User
+throw er; // Unhandled 'error' event
+2026-01-18 05:01:23.75
+d753a375
+User
+at TLSSocket. (/home/runner/workspace/node_modules/pg-protocol/dist/index.js:11:42)
+2026-01-18 05:01:23.75
+d753a375
+User
+at TLSWrap.onStreamRead (node:internal/stream_base_commons:191:23)
+2026-01-18 05:01:23.75
+d753a375
+User
+position: undefined,
+2026-01-18 05:01:23.75
+d753a375
+User
+detail: undefined,
+2026-01-18 05:01:23.75
+d753a375
+User
+_poolUseCount: 1,
+2026-01-18 05:01:23.75
+d753a375
+User
+at TLSSocket. (/home/runner/workspace/node_modules/pg-protocol/dist/index.js:11:42)
+2026-01-18 05:01:23.75
+d753a375
+User
+options: undefined,
+2026-01-18 05:01:23.75
+d753a375
+User
+^
+2026-01-18 05:01:23.75
+d753a375
+User
+[Symbol(kCapture)]: false
+2026-01-18 05:01:23.75
+d753a375
+User
+where: undefined,
+2026-01-18 05:01:23.75
+d753a375
+User
+internalPosition: undefined,
+2026-01-18 05:01:23.75
+d753a375
+User
+application_name: undefined,
+2026-01-18 05:01:30.35
+d753a375
+User
+npm notice
+2026-01-18 05:01:30.35
+d753a375
+User
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.7.0
+2026-01-18 05:01:30.35
+d753a375
+User
+npm notice
+2026-01-18 05:01:30.35
+d753a375
+User
+npm notice To update run: npm install -g npm@11.7.0
+2026-01-18 05:01:30.35
+d753a375
+User
+npm notice New major version of npm available! 10.8.2 -> 11.7.0
+2026-01-18 05:01:32.35
+d753a375
+System
+command finished with error [npm run start]: exit status 1
+Wrap
+Colors
