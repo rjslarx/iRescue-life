@@ -295,6 +295,153 @@ export const HASEYAS_NEW_BEGINNING_CONTRACT_HTML = `<!DOCTYPE html>
 </body>
 </html>`;
 
+// Enhanced Adoption Contract - Generic version for all tenants
+// Based on Haseya's New Beginning template but uses {{organization_name}} for customization
+export const ENHANCED_ADOPTION_CONTRACT_HTML = `<!DOCTYPE html>
+<html>
+<head>
+<style>
+  body { font-family: 'Georgia', 'Times New Roman', serif; line-height: 1.8; color: #333; max-width: 800px; margin: 0 auto; padding: 20px; }
+  h1 { text-align: center; font-size: 2em; margin-bottom: 5px; }
+  h2 { text-align: center; font-size: 1.4em; color: #666; margin-top: 0; padding-bottom: 20px; border-bottom: 2px solid #4a7c59; }
+  .header-section { text-align: center; margin-bottom: 30px; }
+  .info-section { background: #faf8f5; border: 1px solid #ddd; padding: 20px; margin-bottom: 25px; border-radius: 5px; }
+  .info-grid { display: grid; grid-template-columns: 150px 1fr; gap: 10px; }
+  .info-label { font-weight: bold; color: #555; }
+  .info-value { color: #333; }
+  .address-block { margin-top: 5px; }
+  .address-line { display: block; }
+  .notice { background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; font-style: italic; }
+  .terms-section { margin: 25px 0; }
+  .terms-section p { margin-bottom: 15px; text-align: justify; }
+  .terms-section .term-item { margin-bottom: 18px; padding-left: 10px; }
+  .highlight { color: #4a7c59; font-weight: bold; }
+  .important { font-weight: bold; }
+  .date-field { border-bottom: 1px solid #333; min-width: 120px; display: inline-block; padding: 0 5px; font-weight: bold; }
+  .signature-block { margin-top: 40px; background-color: #f9f9f9; padding: 25px; border: 1px solid #ddd; border-radius: 5px; }
+  .signature-line { margin: 20px 0; border-bottom: 2px solid #333; display: inline-block; min-width: 350px; }
+  .digital-stamp { font-size: 0.85em; color: #666; margin-top: 15px; font-family: 'Courier New', monospace; background: #f0f0f0; padding: 10px; border-radius: 3px; }
+  .fee-box { text-align: right; background: #f5f5f5; padding: 15px; border: 1px solid #ddd; margin: 20px 0; }
+  .fee-total { font-size: 1.2em; border-top: 1px solid #ccc; padding-top: 10px; margin-top: 10px; }
+  .contact-info { font-size: 0.9em; color: #666; text-align: center; margin-top: 30px; }
+</style>
+</head>
+<body>
+
+  <div class="header-section">
+    <h1>{{organization_name}}</h1>
+    <h2>Adoption Agreement</h2>
+  </div>
+
+  <div class="info-section">
+    <div class="info-grid">
+      <span class="info-label">Adopter Name:</span>
+      <span class="info-value">{{adopter_name}}</span>
+      
+      <span class="info-label">Email:</span>
+      <span class="info-value">{{adopter_email}}</span>
+      
+      <span class="info-label">Phone:</span>
+      <span class="info-value">{{adopter_phone}}</span>
+      
+      <span class="info-label">Address:</span>
+      <span class="info-value">
+        <div class="address-block">
+          <span class="address-line">{{adopter_street_address}}</span>
+          <span class="address-line">{{adopter_street_address_2}}</span>
+          <span class="address-line">{{adopter_city}}, {{adopter_state}} {{adopter_zip}}</span>
+        </div>
+      </span>
+      
+      <span class="info-label">Driver's License:</span>
+      <span class="info-value">{{adopter_drivers_license}}</span>
+      
+      <span class="info-label">Animal Name:</span>
+      <span class="info-value highlight">{{animal_name}}</span>
+      
+      <span class="info-label">Species/Breed:</span>
+      <span class="info-value">{{animal_species}} / {{animal_breed}}</span>
+      
+      <span class="info-label">Date:</span>
+      <span class="info-value">{{contract_date}}</span>
+    </div>
+  </div>
+
+  <div class="notice">
+    Please read this carefully because you are signing a legally binding document. If you are adopting an animal that has not yet been spayed/neutered, you will also be required to comply with the spay/neuter agreement terms below.
+  </div>
+
+  <div class="terms-section">
+    <p><strong>The parties hereto agree that the adopter shall abide by the following conditions:</strong></p>
+
+    <p class="term-item"><span class="highlight">{{animal_name}}</span>, hereinafter referred to as "the animal," is being transferred to the adopting owner with the understanding that the adopter is taking possession of the animal to treat and to be responsible for it as their own pet.</p>
+
+    <p class="term-item">The animal will be treated as a family member with loving care and affection. I will do my best to ensure the animal's safety and well-being.</p>
+
+    <p class="term-item">I/we will feed the animal at least twice a day and will provide a fresh supply of water at all times.</p>
+
+    <p class="term-item">The animal will live inside my home and will not be isolated from the family.</p>
+
+    <p class="term-item">I will walk my pet on a leash or exercise in a fenced yard, which must be provided unless waived by {{organization_name}}.</p>
+
+    <p class="term-item">I will <span class="important">never</span> let my pet run loose or roam, keep it chained or tied up, keep it continuously in a yard, garage, patio, balcony, or pen, or leave it outdoors, even in a fenced yard when no one is at home.</p>
+
+    <p class="term-item">I will not have the animal attack-trained nor will I use it for any purpose other than companionship.</p>
+
+    <p class="term-item">I will never allow any physical, mental, or emotional abuse of the animal.</p>
+
+    <p class="term-item">I will take the animal to a licensed veterinarian when shots are due <span class="date-field">{{vet_appointment_date}}</span> but in no event later than one year from the last vet visit. I will provide all required and/or needed veterinary care, including: rabies shots as required; yearly booster shots; yearly checks for internal parasites; and prompt treatment by a licensed veterinarian for any illness or injury.</p>
+
+    <p class="term-item">The animal will be given heartworm preventative as recommended by the veterinarian. I will have a heartworm test given every year.</p>
+
+    <p class="term-item">If not already done, I will have the animal spayed/neutered by <span class="date-field">{{spay_neuter_date}}</span> and will immediately forward proof to {{organization_name}}. <span class="important">Failure to comply with this requirement may result in the return of the animal with no refund.</span></p>
+
+    <p class="term-item">I/we affirm that no member of my household has been convicted of an animal welfare law violation such as neglect, cruelty, abandonment, etc.</p>
+
+    <p class="term-item">I will ensure proper licensing of the animal and will attach the appropriate license tags, rabies tag, and personal identification tag to a collar to be worn at all times. I will ensure compliance with all applicable local and state statutes.</p>
+
+    <p class="term-item">I am adopting the animal for myself and I agree to not give away, sell, or trade my pet, even as a gift to a friend or family member.</p>
+
+    <p class="term-item">I will neither take the animal to a shelter nor abandon the animal. I understand that I must notify {{organization_name}} without delay if I can no longer care for or keep my pet and agree to give reasonable time to rehome or place the animal in an approved foster home, if available.</p>
+
+    <p class="term-item">I agree to accept responsibility and ownership of the animal at my own risk and I release {{organization_name}} and its agents from any and all liability arising out of possession and ownership of my pet.</p>
+
+    <p class="term-item">I agree that I am assuming total financial responsibility for my pet as of the date of this contract. {{organization_name}} and its agents will not be held responsible for any damages or expenses (veterinary or other) incurred during my ownership of the animal.</p>
+
+    <p class="term-item"><span class="important">**In the event the animal becomes lost or dies, I will immediately notify {{organization_name}}. I will also immediately notify {{organization_name}} of any change of contact information (address, phone number, or email address).</span></p>
+
+    <p class="term-item"><span class="important">**This animal's known background and medical history have been discussed with me. I understand that {{organization_name}} has made no representation concerning the health, condition, training, behavior, or temperament of the animal.</span></p>
+
+    <p class="term-item"><span class="important">**I agree to permit {{organization_name}} to make inquiry about and enforce any of the above conditions and requirements at any time after adoption. This can include visits to my home and contact with my veterinarian. I UNDERSTAND THAT FAILURE TO COMPLY WITH ANY OF THE ABOVE PROVISIONS MAY RESULT IN FORFEITURE OF THE ANIMAL WITH NO REFUND.</span></p>
+
+    <p class="term-item"><span class="important">**I understand that by voluntarily signing this agreement, I am entering into a legal and binding contract with {{organization_name}}.</span></p>
+  </div>
+
+  <div class="fee-box">
+    <p>Adoption Fee: <strong>{{adoption_fee}}</strong></p>
+    <p>Additional Donation: <strong>{{donation_amount}}</strong></p>
+    <div class="fee-total">Total Paid: <strong>{{total_amount}}</strong></div>
+  </div>
+
+  <div class="signature-block">
+    <p>I, <strong>{{adopter_name}}</strong>, certify that the information provided is true and I understand and agree to all terms of this Adoption Agreement.</p>
+    
+    <div class="signature-line">
+      <img src="{{signature_image_url}}" alt="Adopter Signature" style="max-height: 80px;" />
+    </div>
+    <br>
+    <strong>Signature of Adopter</strong>
+    
+    <div class="digital-stamp">
+      <p>Digitally Signed via iRescue.life</p>
+      <p>Timestamp: {{signed_timestamp}}</p>
+      <p>IP Address: {{signed_ip}}</p>
+    </div>
+  </div>
+
+</body>
+</html>`;
+
 // Type for merge data (all fields optional to handle missing data gracefully)
 export interface MergeData {
   organization_name?: string;
@@ -686,13 +833,26 @@ export async function ensureDefaultTemplate(tenantId: string, tenantName?: strin
 </body>
 </html>`;
 
-  const template = await createTemplate({
+  // Create Standard Adoption Contract (set as default)
+  const standardTemplate = await createTemplate({
     tenantId,
     name: 'Standard Adoption Contract',
     version: '1.0',
     htmlTemplate: defaultHtml,
     isDefault: true,
+    description: 'A clean, professional adoption agreement with essential terms and conditions.',
   });
 
-  return template;
+  // Also create Enhanced Adoption Contract using the comprehensive template
+  const enhancedHtml = ENHANCED_ADOPTION_CONTRACT_HTML.replace(/\{\{organization_name\}\}/g, organizationName);
+  await createTemplate({
+    tenantId,
+    name: 'Enhanced Adoption Contract',
+    version: '1.0',
+    htmlTemplate: enhancedHtml,
+    isDefault: false,
+    description: 'A comprehensive adoption agreement with detailed care requirements, vaccination tracking, and spay/neuter commitments.',
+  });
+
+  return standardTemplate;
 }
