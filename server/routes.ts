@@ -7587,6 +7587,44 @@ Submitted: ${new Date().toLocaleString()}
         }
       })();
 
+      // Log to activity feed (async - don't wait)
+      (async () => {
+        try {
+          const { activityLogs } = await import('@shared/schema');
+          
+          // Determine description based on payment status
+          let description = `submitted form "${form.name}"`;
+          if (hasPayment) {
+            const totalDollars = (totalAmount / 100).toFixed(2);
+            description += ` (payment pending: $${totalDollars})`;
+          }
+          
+          await db.insert(activityLogs).values({
+            tenantId: submission.tenantId,
+            userId: null, // Public submission - no user ID
+            entityType: 'CustomFormSubmission',
+            entityId: submission.id,
+            action: 'form_submitted',
+            description: description,
+            category: 'system',
+            metadata: {
+              formId: form.id,
+              formName: form.name,
+              signerName: submission.signerName,
+              signerEmail: submission.signerEmail,
+              hasPayment,
+              feeAmount: submission.feeAmount,
+              donationAmount: donationReceivedCents,
+              animalId: submission.animalId,
+              animalName: animal?.name,
+            },
+          });
+          console.log(`[CustomForms] Activity log created for submission ${submission.id}`);
+        } catch (activityError) {
+          console.error(`[CustomForms] Failed to create activity log:`, activityError);
+        }
+      })();
+
       // Create inbox notification (async - don't wait)
       (async () => {
         try {
@@ -7908,6 +7946,77 @@ View this submission in Custom Forms > ${form.name} > Submissions
           console.error('[CustomForms] Failed to record donation:', donationError);
         }
       }
+
+      // Log to activity feed (async - don't wait)
+      (async () => {
+        try {
+          const { activityLogs } = await import('@shared/schema');
+          const form = await getFormById(submission.formId, submission.tenantId);
+          const totalDollars = (totalPaid / 100).toFixed(2);
+          
+          await db.insert(activityLogs).values({
+            tenantId: submission.tenantId,
+            userId: null, // Public submission
+            entityType: 'CustomFormSubmission',
+            entityId: submission.id,
+            action: 'form_payment_completed',
+            description: `completed payment of $${totalDollars} for form "${form?.name || 'unknown'}"`,
+            category: 'finance',
+            metadata: {
+              formId: submission.formId,
+              formName: form?.name,
+              signerName: submission.signerName,
+              signerEmail: submission.signerEmail,
+              feeAmount: submission.feeAmount,
+              donationAmount: submission.donationReceived,
+              totalPaid,
+              paymentIntentId,
+            },
+          });
+          console.log(`[CustomForms] Payment activity log created for submission ${submission.id}`);
+        } catch (activityError) {
+          console.error(`[CustomForms] Failed to create payment activity log:`, activityError);
+        }
+      })();
+
+      // Notify staff about completed payment (async - don't wait)
+      (async () => {
+        try {
+          const { EmailService } = await import('./lib/email-service');
+          const { tenants } = await import('@shared/schema');
+          const form = await getFormById(submission.formId, submission.tenantId);
+          const totalDollars = (totalPaid / 100).toFixed(2);
+          
+          const [tenant] = await db.select().from(tenants).where(eq(tenants.id, submission.tenantId)).limit(1);
+          
+          if (tenant?.contactEmail) {
+            const emailService = await EmailService.forTenant(submission.tenantId);
+            if (emailService) {
+              await emailService.send({
+                to: tenant.contactEmail,
+                subject: `Payment Received: $${totalDollars} for ${form?.name || 'Form'}`,
+                html: `
+                  <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                    <h2 style="color: #16a34a;">Payment Received</h2>
+                    <p>A form submission payment has been completed:</p>
+                    <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                      <p style="margin: 0;"><strong>Form:</strong> ${form?.name || 'Custom Form'}</p>
+                      <p style="margin: 10px 0 0;"><strong>Submitted by:</strong> ${submission.signerName} (${submission.signerEmail})</p>
+                      <p style="margin: 10px 0 0;"><strong>Amount Paid:</strong> $${totalDollars}</p>
+                      ${submission.feeAmount ? `<p style="margin: 10px 0 0;"><strong>Fee:</strong> $${(submission.feeAmount / 100).toFixed(2)}</p>` : ''}
+                      ${submission.donationReceived ? `<p style="margin: 10px 0 0;"><strong>Donation:</strong> $${(submission.donationReceived / 100).toFixed(2)}</p>` : ''}
+                    </div>
+                    <p>View this submission in your admin dashboard under Custom Forms.</p>
+                  </div>
+                `,
+              });
+              console.log(`[CustomForms] Payment notification sent to ${tenant.contactEmail}`);
+            }
+          }
+        } catch (emailError) {
+          console.error(`[CustomForms] Payment notification email failed:`, emailError);
+        }
+      })();
 
       res.json({
         success: true,
