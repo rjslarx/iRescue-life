@@ -1,7 +1,7 @@
 # Multi-Tenant Animal Rescue SaaS Platform
 
 ## Overview
-This project is a multi-tenant SaaS platform designed for animal rescue organizations. It provides each organization with a custom subdomain, a public-facing site for showcasing animals and accepting donations, and a secure internal portal for staff. The platform aims to centralize and streamline animal rescue operations, including adoptions, financial contributions, and overall efficiency, while enhancing outreach capabilities within the animal welfare sector. It offers a comprehensive solution to manage animals, adoptions, finances, volunteers, medical records, and communications, alongside advanced features like PWA capabilities, AI assistance, and IoT integration for shelter monitoring.
+This project is a multi-tenant SaaS platform for animal rescue organizations, providing each with a custom subdomain, a public-facing site for animal showcasing and donations, and a secure internal staff portal. Its purpose is to centralize and streamline operations like adoptions, financial contributions, and outreach. Key capabilities include managing animals, applications, finances, volunteers, medical records, and communications, alongside advanced features such as PWA, AI assistance, and IoT integration for shelter monitoring. The platform aims to enhance operational efficiency and expand outreach within the animal welfare sector.
 
 ## User Preferences
 - Must use PostgreSQL database (NOT Firebase)
@@ -10,107 +10,41 @@ This project is a multi-tenant SaaS platform designed for animal rescue organiza
 - Single database schema with tenant_id foreign keys (NOT separate schemas per tenant)
 
 ## System Architecture
-The platform features a React, TypeScript, and Vite frontend with Wouter, TanStack Query, Tailwind CSS, and shadcn/ui. The backend is an Express and Node.js application in TypeScript, utilizing PostgreSQL via Drizzle ORM.
+The platform utilizes a React, TypeScript, and Vite frontend with Wouter, TanStack Query, Tailwind CSS, and shadcn/ui. The backend is an Express and Node.js application in TypeScript, leveraging PostgreSQL via Drizzle ORM.
 
 **UI/UX Decisions:**
-The design is mobile-first, responsive, and adheres to WCAG accessibility standards, with SEO enhancements and consolidated navigation. It includes an enhanced dashboard with real-time activity, a "Quick Actions" button, breadcrumbs, a drag-and-drop kennel layout editor, and consolidated volunteer management. Public navigation is streamlined for fostering, volunteering, surrendering, donating, and staff login.
+The design is mobile-first, responsive, WCAG accessible, and SEO-enhanced. It features a consolidated navigation, an enhanced dashboard with real-time activity and "Quick Actions," breadcrumbs, a drag-and-drop kennel layout editor, and streamlined public navigation for fostering, volunteering, surrendering, and donating.
 
 **Multi-Tenancy:**
-A single PostgreSQL database enforces data isolation using `tenant_id` foreign keys. It supports a hybrid URL architecture including path-based URLs (`irescue.life/{subdomain}`), custom domains, and subdomain-based access (`demo.irescue.life`). Path-based routing is managed by backend middleware.
+Data isolation is enforced in a single PostgreSQL database using `tenant_id` foreign keys. It supports a hybrid URL architecture including path-based URLs, custom domains, and subdomain-based access, with routing managed by backend middleware.
 
 **Authentication & Authorization:**
-Email/password authentication leverages bcrypt and Express sessions, featuring secure token-based password reset, a user invitation system, TOTP-based Multi-Factor Authentication (MFA) for platform admins, and JWTs for session management. Tenant-scoped Role-Based Access Control (RBAC) supports dynamic role switching and includes a `platform_admin` role for host administrators.
+Email/password authentication uses bcrypt and Express sessions, incorporating secure token-based password reset, a user invitation system, TOTP-based MFA for platform admins, and JWTs for session management. Tenant-scoped Role-Based Access Control (RBAC) supports dynamic role switching and includes a `platform_admin` role.
 
 **Feature Specifications:**
-The platform offers comprehensive animal, application, and financial management (with Stripe). It includes contact management, Happy Tails, supply registry, expenditure tracking, event management, volunteer coordination, medical records, and document management. **Customizable Hero Layouts:** Tenants can choose from three hero layout types: "Three Doors" (action cards), "Action Circle" (circular CTA), or "None". The Three Doors layout allows full customization of each door's title, description, link text, link URL, and icon (paw, home, heart, dollar) via the admin settings page. Communication features include newsletters, email campaigns (via Resend), and automated notifications. It provides unified site permissions, multi-calendar functionality, page-level permissions, and customizable event forms. Admin interfaces allow tenant branding, CMS, custom pages, and analytics dashboards. PWA capabilities include mobile installation, offline access, and push notifications. Integrations include external adoption platforms and Google Workspace. A platform admin interface manages tenants, users, feature flags, audit logs, and system health. Other features include an AI Help Assistant, a setup wizard, kennel management, a public animal surrender system, auto-archiving, grant budget tracking, a contract template editor with native e-signature system, a fundraising shop module, a collaboration hub, smart foster matching, medical fund campaigns, Govee temperature monitoring integration, IRS-compliant donation receipts, and social media sharing with dynamic Open Graph tags.
+The platform offers comprehensive animal, application, and financial management (Stripe integrated). It includes contact management, supply registry, expenditure tracking, event management, volunteer coordination, medical records, and document management. Customizable hero layouts are available for tenant websites. Communication features encompass newsletters, email campaigns (via Resend), and automated notifications. Core functionalities include unified site permissions, multi-calendar, page-level permissions, customizable event forms, and admin interfaces for tenant branding, CMS, custom pages, and analytics. PWA capabilities offer mobile installation, offline access, and push notifications. Integrations include external adoption platforms and Google Workspace. A platform admin interface manages tenants, users, feature flags, audit logs, and system health. Additional features include an AI Help Assistant, setup wizard, kennel management, public animal surrender, auto-archiving, grant budget tracking, a contract template editor with a native e-signature system, a fundraising shop module, a collaboration hub, smart foster matching, medical fund campaigns, Govee temperature monitoring, IRS-compliant donation receipts, and social media sharing with Open Graph tags.
 
 **Foster Application Pipeline:**
-The platform includes a comprehensive foster application management system with Kanban workflow:
-- **7-Stage Pipeline:** New App → Interview → Home Check → Orientation → Agreement → Active Pool → Rejected
-- **Kanban Board:** Drag-and-drop interface for moving applications through stages
-- **Foster Agreement E-Signing:** Native e-signature system for foster care agreements (similar to adoption contracts)
-- **Active Foster Pool:** Searchable roster of approved fosters with preference filters (fenced yard, large dogs, cats, puppies, seniors, medical needs)
-- **Email Notifications:** Automated agreement signing links sent via email with 7-day expiry
-- **Database Tables:** `foster_agreement_sessions` tracks signing workflow, `foster_contracts` stores signed agreements
-- **API Routes:** `/api/foster-applications/:id/status` for stage transitions, `/api/foster-agreements/sessions` for agreement management
+A 7-stage Kanban workflow manages foster applications, from 'New App' to 'Rejected,' with drag-and-drop functionality. It includes native e-signing for foster agreements and an active foster pool with searchable preferences. Automated email notifications are sent for agreement signing.
+
+**Dashboard Form Submissions Widget:**
+The admin dashboard features a widget displaying recent custom form submissions with status badges (Pending, Signed, Awaiting Payment, Completed), counts for awaiting payment and new submissions, and auto-refresh every 30 seconds. Activity is logged, and staff receive email notifications.
 
 **Custom Forms with Fee Collection:**
-The platform includes a custom forms system that supports integrated fee collection and donation requests:
-- **Fee Configuration:** When sending a form, staff can configure a fee amount, custom label (e.g., "Application Fee", "Processing Fee"), and whether it's required
-- **Donation Requests:** Optional donation request with suggested amount, displayed alongside the fee on the form signing page
-- **Payment Flow:** Sign form → if payment needed, redirect to payment page → complete Stripe payment → form marked as completed
-- **Fee Waiver:** Staff can waive fees for individual submissions via the admin interface
-- **Stripe Connect Integration:** Payments processed through existing Paw Pay infrastructure with platform fees
-- **Payment Status Tracking:** Submissions track payment status (pending, processing, completed, failed, waived)
-- **Database Fields:** `custom_form_submissions` includes `feeAmount`, `feeLabel`, `feeRequired`, `feeWaived`, `enableDonation`, `donationSuggested`, `donationReceived`, `paymentStatus`, `paymentIntentId`, `totalPaid`
-- **API Routes:** `/api/custom-forms/sign/:token/payment` (GET payment info), `/api/custom-forms/sign/:token/payment/create-intent` (POST create Stripe PaymentIntent), `/api/custom-forms/sign/:token/payment/complete` (POST complete payment), `/api/custom-forms/submissions/:id/waive-fee` (POST waive fee - staff only)
+The system supports custom forms with integrated fee collection and optional donation requests. Staff can configure fee amounts and labels. The payment flow integrates with Stripe, and staff can waive fees. Payments are processed through Stripe Connect, tracking various payment statuses.
 
 **Native Contract Management System:**
-The platform includes a complete native e-signature system for adoption contracts (no external DocuSign integration):
-- **Contract Template Editor:** Staff can create custom contract templates using two modes:
-  - Rich Text mode: Paste existing contracts with merge field placeholders
-  - Guided Builder mode: Section-based template construction
-- **Merge Fields:** Templates support placeholders that auto-fill during checkout:
-  - Adopter info: {{adopter_name}}, {{adopter_email}}, {{adopter_phone}}, {{adopter_address}}
-  - Address components: {{adopter_street_address}}, {{adopter_street_address_2}}, {{adopter_city}}, {{adopter_state}}, {{adopter_zip}}
-  - Animal info: {{animal_name}}, {{animal_species}}, {{animal_breed}}, {{animal_age}}, {{animal_sex}}
-  - Financial: {{adoption_fee}}, {{donation_amount}}, {{total_amount}}
-  - Contract: {{organization_name}}, {{contract_date}}, {{signature_image_url}}, {{signed_timestamp}}, {{signed_ip}}
-  - Commitment dates: {{vet_appointment_date}}, {{spay_neuter_date}} (staff confirms/sets these during checkout)
-- **Adopter Input Fields:** During checkout, adopters enter their complete address (street, city, state, zip)
-- **Staff-Confirmed Dates:** Staff confirms vaccination due date (pre-filled from animal's `nextVaccinationDue` field) and spay/neuter deadline during checkout. If animal is already spayed/neutered, the spay_neuter_date field shows "N/A (Already spayed/neutered)" in the contract
-- **Native E-Signature:** Uses signature_pad library for browser-based signature capture
-- **Driver's License Verification:** Optional driver's license collection during adoption checkout:
-  - Number input field (max 50 characters)
-  - Photo upload (JPG/PNG/HEIC, max 10MB)
-  - Server-side validation for format and size
-  - Stored securely in private object storage with signed URL access
-- **Pre-built Templates:** Includes HASEYAS_NEW_BEGINNING_CONTRACT_HTML template with comprehensive terms for animal rescue organizations
-- **PDF Generation:** Puppeteer generates PDF contracts with embedded signature, IP address, and timestamp for legal verification
-- **Secure Storage:** Signed contracts stored in object storage with access controlled by session completion status
-- **Contract Download:** Adopters can download signed PDF contracts after completing the adoption process using time-limited signed URLs (15-minute expiry)
-- **Security:** Server-side HTML sanitization with DOMPurify prevents XSS in contract templates, and GCS v4 signed URLs provide secure, time-limited access to contract PDFs
-- **Access Control:** Contract downloads require session status 'completed' (signed + paid), with a 7-day download window after adoption completion to limit token exposure
-- **Conditional Spay/Neuter Contract:** When adopting unaltered animals:
-  - Tenant setting `requireSpayNeuterContract` enables the feature
-  - Staff sets spay/neuter deadline during checkout creation
-  - Additional SPAY_NEUTER_CONTRACT_HTML template with $500 breach penalty clause
-  - Auto-fills adopter data from main adoption contract (name, address, phone, email, driver's license)
-  - Both contracts (adoption + spay/neuter) generated as PDFs during signature capture
-  - Tracked via `spayNeuterContractPdfUrl` and `spayNeuterSignedAt` in adoption_contracts table
-  - Contract only required when: animal NOT altered AND tenant setting enabled AND spay/neuter date set
+A native e-signature system for adoption contracts includes a template editor (Rich Text or Guided Builder) supporting merge fields for auto-filling adopter, animal, and financial information. It incorporates native e-signature capture, optional driver's license verification, and PDF generation with embedded signatures, IP, and timestamps. Signed contracts are stored securely with time-limited download access. A conditional spay/neuter contract is available for unaltered animals.
 
 **Technical Implementations:**
-The "Paw Pay" platform fee system uses Stripe Connect with a "SaaS + 0%" two-tier model:
-
-**Subscription Tiers:**
-- **Free Tier ($0/mo):** Permanent free tier with 5% platform fee, 500 emails/month. All core features included. No payment required.
-- **Professional Tier ($39/mo):** 0% platform fee, 10,000 emails/month, custom domain support. Optional.
-
-**Pro Trial System:**
-- New organizations start on Free tier with 'active' status (no payment required)
-- Optional 14-day Pro trial available at signup or anytime later via `/api/platform/start-pro-trial`
-- Each organization can only use the Pro trial once (tracked via `pro_trial_used` column)
-- When trial expires, organizations automatically revert to Free tier (handled by daily cron job at 3 AM UTC)
-- Trial expiration sends notification email with upgrade options
-
-It utilizes Stripe Standard Connect OAuth for tenant payment processing, allowing tenants to own their Stripe accounts. A "Donor Covers Fees" feature calculates gross-up amounts to cover both Stripe and platform processing fees. ACH bank transfer support is implemented for one-time donations with asynchronous payment handling (not adoption fees). Sensitive data is protected with AES-256-GCM encryption. Unified file storage prioritizes Google Drive (if connected) and falls back to Replit object storage. Email services use a hybrid Resend integration with optional Google Workspace Gmail API. Platform admin security includes subdomain resolution, RBAC, frontend guards, authenticated sessions, and TOTP MFA. Subscription management tracks tenant tiers and trial periods. Production security features rate limiting, Helmet security headers, CORS fail-closed, environment validation, and session hardening. Google Analytics 4 is integrated for tracking. Optional Google Workspace integration provides Gmail API, Calendar sync, and Drive storage, using CASA-optimized OAuth scopes and requiring `GOOGLE_PICKER_API_KEY` for Google Picker API integration.
+"Paw Pay" utilizes Stripe Connect with a "SaaS + 0%" two-tier subscription model (Free and Professional). A 14-day Pro trial is available once per organization, reverting to the Free tier upon expiration. Stripe Standard Connect OAuth manages tenant payments. A "Donor Covers Fees" feature calculates gross-up amounts. ACH bank transfer is supported for one-time donations. Sensitive data uses AES-256-GCM encryption. Unified file storage prioritizes Google Drive, falling back to Replit object storage. Email services integrate Resend with optional Google Workspace Gmail API. Platform admin security includes subdomain resolution, RBAC, frontend guards, authenticated sessions, and TOTP MFA. Production security features rate limiting, Helmet, CORS fail-closed, environment validation, and session hardening. Google Analytics 4 is integrated. Optional Google Workspace integration provides Gmail API, Calendar sync, and Drive storage.
 
 **Petfinder FTP Sync Integration:**
-The platform supports automated animal sync to Petfinder via their FTP import system:
-- **FTP Credentials:** Tenants configure FTP host, username, password, and optional path from the Petfinder Pro Dashboard
-- **CSV Export:** Generates Petfinder-compatible CSV with proper column order (Code, Name, Breed, Mix, Sex, Size, Colors, Age, Description, Type, health status flags, photo filenames, dates)
-- **Breed Validation:** Maps animal breeds to official Petfinder breed dictionary (`shared/petfinder-breeds.ts`)
-- **Age Calculation:** Converts birth dates to Petfinder age categories (Baby, Young, Adult, Senior)
-- **Image Download:** Downloads animal photos and renames to `{animalId}_{1-6}.jpg` format
-- **FTP Upload:** Uses `basic-ftp` package to upload CSV and images to Petfinder server
-- **Scheduled Sync:** Cron job runs every 6 hours (configurable via `PETFINDER_SYNC_SCHEDULE`) for tenants with auto-sync enabled
-- **Manual Sync:** Staff can trigger manual sync from Platform Integrations settings
-- **Sync Tracking:** Records last sync time, status, and error messages in `platform_integrations` table
+The platform automates animal synchronization to Petfinder via FTP. Tenants configure FTP credentials, and the system generates Petfinder-compatible CSVs, maps breeds, calculates animal ages, and uploads images. Syncs can be scheduled (every 6 hours) or triggered manually, with sync status and errors tracked.
 
 ## External Dependencies
-- **Stripe:** Payment gateway for donations, adoption fees, and subscriptions.
-- **Resend:** Email delivery service.
+- **Stripe:** Payment gateway.
+- **Resend:** Email delivery.
 - **Google APIs:** OAuth 2.0, Gmail API, Calendar API, Drive API.
 - **PostgreSQL:** Primary database.
 - **Vite:** Frontend build tool.
@@ -129,4 +63,3 @@ The platform supports automated animal sync to Petfinder via their FTP import sy
 - **express-rate-limit:** Rate-limiting middleware.
 - **node-cron:** Scheduled tasks.
 - **basic-ftp:** FTP client for Petfinder sync.
-- **Twilio (optional):** SMS notifications.
