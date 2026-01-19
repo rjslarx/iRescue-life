@@ -10,7 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { CheckCircle2, AlertCircle, FileSignature, Loader2, Upload, X, File as FileIcon } from "lucide-react";
+import { CheckCircle2, AlertCircle, FileSignature, Loader2, Upload, X, File as FileIcon, DollarSign, Gift } from "lucide-react";
 import SignaturePad from "signature_pad";
 import DOMPurify from "dompurify";
 import { tenantFetch } from "@/lib/tenantApi";
@@ -67,6 +67,14 @@ interface FormData {
     signerName: string;
     signerEmail: string;
     signerPhone: string | null;
+    // Fee/payment settings
+    feeAmount: number | null;
+    feeLabel: string | null;
+    feeRequired: boolean | null;
+    feeWaived: boolean | null;
+    enableDonation: boolean | null;
+    donationSuggested: number | null;
+    paymentStatus: string | null;
   };
   animal: {
     id: number;
@@ -86,6 +94,15 @@ interface SubmitResponse {
   success: boolean;
   message: string;
   downloadUrl?: string;
+  submissionId?: string;
+  requiresPayment?: boolean;
+  paymentInfo?: {
+    feeAmount: number;
+    feeLabel: string;
+    donationAmount: number;
+    totalAmount: number;
+  };
+  paymentUrl?: string;
 }
 
 function renderMergeFields(html: string, data: FormData, customFieldValues?: Record<string, string>): string {
@@ -151,6 +168,7 @@ export default function PublicFormSigningPage() {
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({});
   const [uploadedFiles, setUploadedFiles] = useState<Record<string, UploadedFile>>({});
   const [uploadingFields, setUploadingFields] = useState<Record<string, boolean>>({});
+  const [donationAmount, setDonationAmount] = useState<string>("");
   const signatureCanvasRef = useRef<HTMLCanvasElement>(null);
   const signaturePadRef = useRef<SignaturePad | null>(null);
 
@@ -183,12 +201,12 @@ export default function PublicFormSigningPage() {
     }
   }, [data]);
 
-  const submitMutation = useMutation<SubmitResponse, Error, { signatureData: string; formData?: Record<string, string> }>({
-    mutationFn: async ({ signatureData, formData }) => {
+  const submitMutation = useMutation<SubmitResponse, Error, { signatureData: string; formData?: Record<string, string>; donationAmount?: number }>({
+    mutationFn: async ({ signatureData, formData, donationAmount: donation }) => {
       const response = await tenantFetch(`/api/public/forms/${token}/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ signatureData, formData }),
+        body: JSON.stringify({ signatureData, formData, donationAmount: donation }),
       });
       if (!response.ok) {
         const result = await response.json();
@@ -197,9 +215,14 @@ export default function PublicFormSigningPage() {
       return response.json();
     },
     onSuccess: (result) => {
-      setIsComplete(true);
-      if (result.downloadUrl) {
-        setDownloadUrl(result.downloadUrl);
+      if (result.requiresPayment && result.paymentUrl) {
+        // Redirect to payment page
+        window.location.href = result.paymentUrl;
+      } else {
+        setIsComplete(true);
+        if (result.downloadUrl) {
+          setDownloadUrl(result.downloadUrl);
+        }
       }
     },
   });
@@ -342,7 +365,12 @@ export default function PublicFormSigningPage() {
     }
     
     const signatureData = signaturePadRef.current?.toDataURL('image/png') || '';
-    submitMutation.mutate({ signatureData, formData: customFieldValues });
+    const donationCents = donationAmount ? Math.round(parseFloat(donationAmount) * 100) : undefined;
+    submitMutation.mutate({ 
+      signatureData, 
+      formData: customFieldValues,
+      donationAmount: donationCents,
+    });
   };
 
   if (isLoading) {
@@ -797,6 +825,87 @@ export default function PublicFormSigningPage() {
           </>
         )}
 
+        {/* Fee & Donation Section */}
+        {(data.submission.feeAmount || data.submission.enableDonation) && !data.submission.feeWaived && (
+          <Card data-testid="payment-card" className="border-amber-200 bg-amber-50/50">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <DollarSign className="h-5 w-5 text-amber-600" />
+                Payment Summary
+              </CardTitle>
+              <CardDescription>
+                {data.submission.feeRequired 
+                  ? "Payment is required to complete this form" 
+                  : "Optional fees and donations"}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Fee Display */}
+              {data.submission.feeAmount && data.submission.feeAmount > 0 && (
+                <div className="flex justify-between items-center p-3 bg-white rounded-md border">
+                  <div>
+                    <p className="font-medium">{data.submission.feeLabel || "Fee"}</p>
+                    {data.submission.feeRequired && (
+                      <p className="text-xs text-muted-foreground">Required</p>
+                    )}
+                  </div>
+                  <p className="text-lg font-semibold">${(data.submission.feeAmount / 100).toFixed(2)}</p>
+                </div>
+              )}
+              
+              {/* Donation Input */}
+              {data.submission.enableDonation && (
+                <div className="space-y-2 p-3 bg-white rounded-md border">
+                  <div className="flex items-center gap-2">
+                    <Gift className="h-4 w-4 text-green-600" />
+                    <Label htmlFor="donation" className="font-medium">Add a Donation (Optional)</Label>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Your donation helps us continue our mission
+                    {data.submission.donationSuggested && (
+                      <> - Suggested: ${(data.submission.donationSuggested / 100).toFixed(2)}</>
+                    )}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg font-medium">$</span>
+                    <Input
+                      id="donation"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder={data.submission.donationSuggested 
+                        ? (data.submission.donationSuggested / 100).toFixed(2)
+                        : "0.00"
+                      }
+                      value={donationAmount}
+                      onChange={(e) => setDonationAmount(e.target.value)}
+                      className="max-w-[150px]"
+                      data-testid="input-donation-amount"
+                    />
+                  </div>
+                </div>
+              )}
+              
+              {/* Total Summary */}
+              {(data.submission.feeAmount || parseFloat(donationAmount) > 0) && (
+                <div className="flex justify-between items-center p-3 bg-amber-100 rounded-md border border-amber-200 font-medium">
+                  <p>Total Due</p>
+                  <p className="text-xl font-bold">
+                    ${(
+                      (data.submission.feeAmount || 0) / 100 + 
+                      (parseFloat(donationAmount) || 0)
+                    ).toFixed(2)}
+                  </p>
+                </div>
+              )}
+              
+              <p className="text-xs text-muted-foreground">
+                Payment will be processed after you sign and submit the form.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
         {data.form.requiresSignature && (
           <Card data-testid="signature-card">
             <CardHeader>
@@ -852,7 +961,14 @@ export default function PublicFormSigningPage() {
               ) : (
                 <>
                   <FileSignature className="mr-2 h-4 w-4" />
-                  {data.form.requiresSignature ? 'Sign and Submit Form' : 'Submit Form'}
+                  {(() => {
+                    const hasPayment = (data.submission.feeAmount && data.submission.feeAmount > 0 && !data.submission.feeWaived) || 
+                                       (parseFloat(donationAmount) > 0);
+                    if (hasPayment) {
+                      return data.form.requiresSignature ? 'Sign & Continue to Payment' : 'Continue to Payment';
+                    }
+                    return data.form.requiresSignature ? 'Sign and Submit Form' : 'Submit Form';
+                  })()}
                 </>
               )}
             </Button>
@@ -860,6 +976,9 @@ export default function PublicFormSigningPage() {
               <p className="text-xs text-center text-muted-foreground">
                 By submitting, you agree to sign this form electronically. Your signature, 
                 IP address, and timestamp will be recorded.
+                {((data.submission.feeAmount && !data.submission.feeWaived) || parseFloat(donationAmount) > 0) && (
+                  " You will be redirected to complete payment after signing."
+                )}
               </p>
             )}
           </CardFooter>

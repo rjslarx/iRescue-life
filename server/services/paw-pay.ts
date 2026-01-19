@@ -620,6 +620,182 @@ export async function processShopPayment(
 }
 
 /**
+ * Form Fee Payment Parameters
+ */
+export interface FormFeePaymentParams {
+  tenantId: string;
+  submissionId: string;
+  feeAmount: number; // Amount in cents (required fee portion)
+  donationAmount?: number; // Amount in cents (optional donation portion)
+  feeLabel?: string;
+  formName?: string;
+  currency?: string;
+  payerEmail?: string;
+  payerName?: string;
+  metadata?: Record<string, string>;
+}
+
+/**
+ * Process a form fee + donation payment with platform fee logic
+ * 
+ * This function handles payments for custom form submissions that include fees
+ * and/or optional donations. Similar to adoption fees but for generic form payments.
+ */
+export async function processFormFeePayment(
+  params: FormFeePaymentParams
+): Promise<PaymentProcessingResult> {
+  const totalBaseAmount = (params.feeAmount || 0) + (params.donationAmount || 0);
+  const defaultResult = {
+    donorCoveredFees: false,
+    feesCoveredAmount: 0,
+    chargeAmount: totalBaseAmount,
+    baseAmount: totalBaseAmount,
+  };
+
+  try {
+    const tenant = await getTenantById(params.tenantId);
+    if (!tenant) {
+      return { 
+        success: false, 
+        error: 'Organization not found',
+        platformFeeAmount: 0,
+        platformFeePercent: 0,
+        platformFeeCollected: false,
+        ...defaultResult,
+      };
+    }
+
+    // Calculate base platform fee info
+    const platformFeePercent = getPlatformFeePercent(tenant.subscriptionTier);
+    const chargeAmount = totalBaseAmount;
+    
+    // Calculate platform fee on the total charge amount
+    const platformFeeAmount = calculatePlatformFee(chargeAmount, tenant.subscriptionTier);
+
+    // Check if payments should be blocked due to missing fee configuration
+    if (shouldBlockPaymentWithoutFees(tenant)) {
+      const errorMessage = isHostedPlatform()
+        ? 'Payment processing requires Stripe Connect onboarding. Please complete your organization setup.'
+        : 'Payment processing requires Stripe Connect configuration. Please set PLATFORM_STRIPE_SECRET_KEY and STRIPE_CONNECT_PLATFORM_ID environment variables.';
+      console.error(`[Paw Pay] Form payment blocked: ${errorMessage}`);
+      return {
+        success: false,
+        error: errorMessage,
+        platformFeeAmount,
+        platformFeePercent,
+        platformFeeCollected: false,
+        ...defaultResult,
+      };
+    }
+
+    // Check if Stripe Connect is configured for fee collection
+    const stripeConnectConfigured = isStripeConnectConfigured();
+    const platformStripe = getPlatformStripeClient();
+    
+    // Determine which Stripe client to use
+    let stripe: Stripe | null = null;
+    let useStripeConnect = false;
+    let tenantConnectedAccountId: string | undefined;
+
+    if (stripeConnectConfigured && platformStripe && tenant.stripeConnectedAccountId) {
+      // Full Stripe Connect flow: use platform key, destination to tenant
+      stripe = platformStripe;
+      useStripeConnect = true;
+      tenantConnectedAccountId = tenant.stripeConnectedAccountId;
+    } else {
+      // Fallback: use tenant's own Stripe (fees logged but not collected)
+      stripe = await getTenantStripeClient(tenant);
+    }
+
+    if (!stripe) {
+      return { 
+        success: false, 
+        error: 'Stripe is not configured for this organization',
+        platformFeeAmount,
+        platformFeePercent,
+        platformFeeCollected: false,
+        ...defaultResult,
+      };
+    }
+
+    // Build description with fee breakdown
+    const feeLabel = params.feeLabel || 'Fee';
+    const formName = params.formName || 'Form';
+    let description = `${formName}`;
+    if (params.feeAmount && params.feeAmount > 0) {
+      description += ` - ${feeLabel}: $${(params.feeAmount / 100).toFixed(2)}`;
+    }
+    if (params.donationAmount && params.donationAmount > 0) {
+      description += ` + Donation: $${(params.donationAmount / 100).toFixed(2)}`;
+    }
+
+    // Build PaymentIntent parameters
+    const paymentIntentParams: Stripe.PaymentIntentCreateParams = {
+      amount: chargeAmount,
+      currency: params.currency || 'usd',
+      description,
+      receipt_email: params.payerEmail,
+      automatic_payment_methods: {
+        enabled: true,
+      },
+      metadata: {
+        tenantId: params.tenantId,
+        type: 'form_fee',
+        submissionId: params.submissionId,
+        payerName: params.payerName || '',
+        feeAmount: (params.feeAmount || 0).toString(),
+        donationAmount: (params.donationAmount || 0).toString(),
+        totalAmount: chargeAmount.toString(),
+        platformFeePercent: platformFeePercent.toString(),
+        platformFeeAmount: platformFeeAmount.toString(),
+        platformFeeCollected: useStripeConnect.toString(),
+        ...params.metadata,
+      },
+    };
+
+    // Apply Stripe Connect parameters if configured
+    if (useStripeConnect && tenantConnectedAccountId && platformFeeAmount > 0) {
+      // Destination charge: funds go to tenant's connected account
+      // minus the application fee which stays with platform
+      paymentIntentParams.application_fee_amount = platformFeeAmount;
+      paymentIntentParams.transfer_data = {
+        destination: tenantConnectedAccountId,
+      };
+    } else if (!useStripeConnect && platformFeeAmount > 0) {
+      // Log that fees are calculated but not collected
+      console.log(`[Paw Pay] Form payment to ${tenant.name}: $${(chargeAmount / 100).toFixed(2)}`);
+      console.log(`[Paw Pay] Platform fee: $${(platformFeeAmount / 100).toFixed(2)} (${platformFeePercent}%) - NOT COLLECTED (Stripe Connect not configured)`);
+    }
+
+    const paymentIntent = await stripe.paymentIntents.create(paymentIntentParams);
+
+    return {
+      success: true,
+      paymentIntentId: paymentIntent.id,
+      clientSecret: paymentIntent.client_secret!,
+      platformFeeAmount,
+      platformFeePercent,
+      platformFeeCollected: useStripeConnect,
+      donorCoveredFees: false,
+      feesCoveredAmount: 0,
+      chargeAmount,
+      baseAmount: totalBaseAmount,
+    };
+  } catch (error) {
+    console.error('Error processing form fee payment:', error);
+    const platformFeePercent = getPlatformFeePercent();
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Payment processing failed',
+      platformFeeAmount: 0,
+      platformFeePercent,
+      platformFeeCollected: false,
+      ...defaultResult,
+    };
+  }
+}
+
+/**
  * Get platform fee information for display to users
  * This can be used to show transparency about fees
  */

@@ -78,6 +78,7 @@ import PublicFosterPage from "@/pages/PublicFosterPage";
 import PublicSurrenderPage from "@/pages/PublicSurrenderPage";
 import PublicAdoptionCheckoutPage from "@/pages/PublicAdoptionCheckoutPage";
 import PublicFormSigningPage from "@/pages/PublicFormSigningPage";
+import FormPaymentPage from "@/pages/FormPaymentPage";
 import PublicContactPage from "@/pages/PublicContactPage";
 import DonatePage from "@/pages/DonatePage";
 import GivePage from "@/pages/GivePage";
@@ -197,6 +198,7 @@ function RouterSwitch() {
       <Route path="/adoption-checkout/:token" component={PublicAdoptionCheckoutPage} />
       <Route path="/run-sheet/:token" component={RunSheetPage} />
       <Route path="/form/:token" component={PublicFormSigningPage} />
+      <Route path="/form/:token/payment" component={FormPaymentPage} />
       
       {/* Protected dashboard routes */}
       <ProtectedRoute path="/dashboard" pageId="dashboard" component={Dashboard} />

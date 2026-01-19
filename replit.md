@@ -34,6 +34,17 @@ The platform includes a comprehensive foster application management system with 
 - **Database Tables:** `foster_agreement_sessions` tracks signing workflow, `foster_contracts` stores signed agreements
 - **API Routes:** `/api/foster-applications/:id/status` for stage transitions, `/api/foster-agreements/sessions` for agreement management
 
+**Custom Forms with Fee Collection:**
+The platform includes a custom forms system that supports integrated fee collection and donation requests:
+- **Fee Configuration:** When sending a form, staff can configure a fee amount, custom label (e.g., "Application Fee", "Processing Fee"), and whether it's required
+- **Donation Requests:** Optional donation request with suggested amount, displayed alongside the fee on the form signing page
+- **Payment Flow:** Sign form → if payment needed, redirect to payment page → complete Stripe payment → form marked as completed
+- **Fee Waiver:** Staff can waive fees for individual submissions via the admin interface
+- **Stripe Connect Integration:** Payments processed through existing Paw Pay infrastructure with platform fees
+- **Payment Status Tracking:** Submissions track payment status (pending, processing, completed, failed, waived)
+- **Database Fields:** `custom_form_submissions` includes `feeAmount`, `feeLabel`, `feeRequired`, `feeWaived`, `enableDonation`, `donationSuggested`, `donationReceived`, `paymentStatus`, `paymentIntentId`, `totalPaid`
+- **API Routes:** `/api/custom-forms/sign/:token/payment` (GET payment info), `/api/custom-forms/sign/:token/payment/create-intent` (POST create Stripe PaymentIntent), `/api/custom-forms/sign/:token/payment/complete` (POST complete payment), `/api/custom-forms/submissions/:id/waive-fee` (POST waive fee - staff only)
+
 **Native Contract Management System:**
 The platform includes a complete native e-signature system for adoption contracts (no external DocuSign integration):
 - **Contract Template Editor:** Staff can create custom contract templates using two modes:

@@ -6917,7 +6917,10 @@ Submitted: ${new Date().toLocaleString()}
         return res.status(404).json({ error: 'Form not found' });
       }
 
-      const { signerName, signerEmail, signerPhone, animalId } = req.body;
+      const { 
+        signerName, signerEmail, signerPhone, animalId,
+        feeAmount, feeLabel, feeRequired, enableDonation, donationSuggested
+      } = req.body;
       
       if (!signerName || !signerEmail) {
         return res.status(400).json({ error: 'Signer name and email are required' });
@@ -6927,6 +6930,14 @@ Submitted: ${new Date().toLocaleString()}
       if (form.formType === 'animal_specific' && !animalId) {
         return res.status(400).json({ error: 'Animal selection is required for this form type' });
       }
+
+      // Parse fee amounts (convert dollars to cents)
+      const feeAmountCents = feeAmount ? Math.round(parseFloat(feeAmount) * 100) : null;
+      const donationSuggestedCents = donationSuggested ? Math.round(parseFloat(donationSuggested) * 100) : null;
+      
+      // Determine payment status based on fee settings
+      const hasPayment = (feeAmountCents && feeAmountCents > 0) || enableDonation;
+      const paymentStatus = hasPayment ? 'pending' : 'not_required';
 
       const { token, hash } = generateSecureToken();
       const expiresAt = new Date();
@@ -6942,6 +6953,13 @@ Submitted: ${new Date().toLocaleString()}
         secureTokenHash: hash,
         expiresAt,
         status: 'pending',
+        // Fee/payment settings
+        feeAmount: feeAmountCents,
+        feeLabel: feeLabel || null,
+        feeRequired: feeRequired || false,
+        enableDonation: enableDonation || false,
+        donationSuggested: donationSuggestedCents,
+        paymentStatus,
       });
 
       // Build the form URL - use path-based routing for production
@@ -6958,6 +6976,28 @@ Submitted: ${new Date().toLocaleString()}
         const emailService = await EmailService.forTenant(req.tenant!.id);
         if (emailService) {
           const tenantName = req.tenant!.name;
+          // Build fee info section for email
+          let feeInfoHtml = '';
+          if (feeAmountCents && feeAmountCents > 0) {
+            const feeDisplay = (feeAmountCents / 100).toFixed(2);
+            const feeLabelDisplay = feeLabel || 'Fee';
+            feeInfoHtml = `
+              <div style="background: #fef3c7; padding: 15px; border-radius: 6px; margin: 15px 0; border-left: 4px solid #f59e0b;">
+                <p style="margin: 0; color: #92400e; font-weight: 500;">
+                  ${feeLabelDisplay}: $${feeDisplay}${feeRequired ? ' (required)' : ' (optional)'}
+                </p>
+              </div>
+            `;
+          }
+          if (enableDonation && donationSuggestedCents) {
+            const donationDisplay = (donationSuggestedCents / 100).toFixed(2);
+            feeInfoHtml += `
+              <p style="color: #666; font-size: 14px; margin: 10px 0;">
+                Optional donation suggested: $${donationDisplay}
+              </p>
+            `;
+          }
+
           const emailResult = await emailService.send({
             to: signerEmail,
             subject: `${tenantName}: Please complete "${form.name}"`,
@@ -6969,6 +7009,7 @@ Submitted: ${new Date().toLocaleString()}
                   <h3 style="margin-top: 0; color: #333;">${form.name}</h3>
                   ${form.description ? `<p style="color: #666;">${form.description}</p>` : ''}
                 </div>
+                ${feeInfoHtml}
                 <p>Please click the button below to complete the form:</p>
                 <div style="text-align: center; margin: 30px 0;">
                   <a href="${formUrl}" style="background: #4f46e5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">Complete Form</a>
@@ -7079,6 +7120,14 @@ Submitted: ${new Date().toLocaleString()}
           signerName: submission.signerName,
           signerEmail: submission.signerEmail,
           signerPhone: submission.signerPhone,
+          // Fee/payment settings
+          feeAmount: submission.feeAmount,
+          feeLabel: submission.feeLabel,
+          feeRequired: submission.feeRequired,
+          feeWaived: submission.feeWaived,
+          enableDonation: submission.enableDonation,
+          donationSuggested: submission.donationSuggested,
+          paymentStatus: submission.paymentStatus,
         },
         animal,
         tenant: {
@@ -7206,11 +7255,14 @@ Submitted: ${new Date().toLocaleString()}
         return res.status(404).json({ error: 'Form template not found' });
       }
 
-      const { signatureData, formData } = req.body;
+      const { signatureData, formData, donationAmount } = req.body;
 
       if (form.requiresSignature && !signatureData) {
         return res.status(400).json({ error: 'Signature is required' });
       }
+
+      // Store donation amount if provided
+      const donationReceivedCents = donationAmount && donationAmount > 0 ? donationAmount : null;
 
       // Server-side validation for required fields based on form creation mode
       if (form.creationMode === 'question_builder' && form.questions && Array.isArray(form.questions)) {
@@ -7274,14 +7326,31 @@ Submitted: ${new Date().toLocaleString()}
       // Render HTML with merged data
       const renderedHtml = await renderFormHtml(form, updatedData as any, tenant?.name || 'Organization', animal);
 
-      // Update submission
+      // Determine if payment is needed
+      const hasFee = submission.feeAmount && submission.feeAmount > 0 && !submission.feeWaived;
+      const hasDonation = donationReceivedCents && donationReceivedCents > 0;
+      const totalAmount = (hasFee ? submission.feeAmount! : 0) + (hasDonation ? donationReceivedCents : 0);
+      const paymentRequired = hasFee && submission.feeRequired;
+      const hasPayment = totalAmount > 0;
+      
+      // If payment required but no amount, cannot complete
+      if (paymentRequired && !hasPayment) {
+        return res.status(400).json({ error: 'Payment is required to complete this form' });
+      }
+      
+      // Update submission - if payment needed, status stays pending until payment complete
+      const submissionStatus = hasPayment ? 'pending' : 'completed';
+      const paymentStatus = hasPayment ? 'pending' : 'not_required';
+      
       const updated = await updateSubmission(submission.id, submission.tenantId, {
         signatureData,
         formData,
         signedAt: new Date(),
         signerIpAddress: ipAddress,
         renderedHtml,
-        status: 'completed',
+        status: submissionStatus,
+        donationReceived: donationReceivedCents,
+        paymentStatus,
       });
 
       // Auto-advance volunteer application if this is a Hold Harmless waiver
@@ -7508,11 +7577,29 @@ View this submission in Custom Forms > ${form.name} > Submissions
         }
       })();
 
-      res.json({ 
-        success: true, 
-        message: 'Form submitted successfully',
-        submissionId: updated?.id,
-      });
+      // If payment is needed, include payment info in response
+      if (hasPayment) {
+        res.json({ 
+          success: true, 
+          message: 'Form signed successfully. Please complete payment.',
+          submissionId: updated?.id,
+          requiresPayment: true,
+          paymentInfo: {
+            feeAmount: hasFee ? submission.feeAmount : 0,
+            feeLabel: submission.feeLabel || 'Fee',
+            donationAmount: donationReceivedCents || 0,
+            totalAmount,
+          },
+          paymentUrl: `/form/${req.params.token}/payment`,
+        });
+      } else {
+        res.json({ 
+          success: true, 
+          message: 'Form submitted successfully',
+          submissionId: updated?.id,
+          requiresPayment: false,
+        });
+      }
     } catch (error) {
       next(error);
     }
@@ -7563,6 +7650,261 @@ View this submission in Custom Forms > ${form.name} > Submissions
       // Generate fresh signed URL for download
       const signedUrl = await generateSignedFormUrl(pdfResult.pdfUrl, submission.signerName, 900);
       res.json({ pdfUrl: signedUrl });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/custom-forms/sign/:token/payment
+   * Get payment information for a form submission (public)
+   */
+  app.get('/api/custom-forms/sign/:token/payment', requireTenant, async (req, res, next) => {
+    try {
+      const { getSubmissionByToken, getFormById } = await import('./services/custom-form');
+      
+      const submission = await getSubmissionByToken(req.params.token);
+      
+      if (!submission) {
+        return res.status(404).json({ error: 'Form session not found' });
+      }
+
+      if (submission.tenantId !== req.tenant!.id) {
+        return res.status(403).json({ error: 'Invalid tenant' });
+      }
+
+      // Must be signed but not completed (pending payment)
+      if (!submission.signedAt) {
+        return res.status(400).json({ error: 'Form must be signed before payment' });
+      }
+
+      if (submission.paymentStatus === 'completed') {
+        return res.status(400).json({ error: 'Payment already completed' });
+      }
+
+      const form = await getFormById(submission.formId, submission.tenantId);
+      
+      res.json({
+        success: true,
+        submission: {
+          id: submission.id,
+          signerName: submission.signerName,
+          signerEmail: submission.signerEmail,
+          feeAmount: submission.feeAmount,
+          feeLabel: submission.feeLabel,
+          feeRequired: submission.feeRequired,
+          feeWaived: submission.feeWaived,
+          donationReceived: submission.donationReceived,
+          enableDonation: submission.enableDonation,
+          donationSuggested: submission.donationSuggested,
+          paymentStatus: submission.paymentStatus,
+        },
+        form: form ? {
+          id: form.id,
+          name: form.name,
+        } : null,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/custom-forms/sign/:token/payment/create-intent
+   * Create a Stripe PaymentIntent for form fees and donations (public)
+   */
+  app.post('/api/custom-forms/sign/:token/payment/create-intent', requireTenant, async (req, res, next) => {
+    try {
+      const { getSubmissionByToken, getFormById, updateSubmission } = await import('./services/custom-form');
+      const { processFormFeePayment } = await import('./services/paw-pay');
+      
+      const submission = await getSubmissionByToken(req.params.token);
+      
+      if (!submission) {
+        return res.status(404).json({ error: 'Form session not found' });
+      }
+
+      if (submission.tenantId !== req.tenant!.id) {
+        return res.status(403).json({ error: 'Invalid tenant' });
+      }
+
+      // Must be signed but not completed
+      if (!submission.signedAt) {
+        return res.status(400).json({ error: 'Form must be signed before payment' });
+      }
+
+      if (submission.paymentStatus === 'completed') {
+        return res.status(400).json({ error: 'Payment already completed' });
+      }
+
+      // Fee waived means no payment needed
+      if (submission.feeWaived) {
+        return res.status(400).json({ error: 'Fee has been waived - no payment required' });
+      }
+
+      const form = await getFormById(submission.formId, submission.tenantId);
+      
+      // Calculate amounts
+      const feeAmount = submission.feeAmount || 0;
+      const donationAmount = submission.donationReceived || 0;
+      const totalAmount = feeAmount + donationAmount;
+      
+      if (totalAmount <= 0) {
+        return res.status(400).json({ error: 'No payment amount specified' });
+      }
+
+      // Create payment intent using Paw Pay
+      const result = await processFormFeePayment({
+        tenantId: submission.tenantId,
+        submissionId: submission.id,
+        feeAmount: feeAmount,
+        donationAmount: donationAmount,
+        feeLabel: submission.feeLabel || 'Fee',
+        formName: form?.name,
+        payerEmail: submission.signerEmail,
+        payerName: submission.signerName,
+      });
+
+      if (!result.success) {
+        return res.status(400).json({ error: result.error || 'Failed to create payment' });
+      }
+
+      // Update submission with payment intent ID and status
+      await updateSubmission(submission.id, submission.tenantId, {
+        paymentIntentId: result.paymentIntentId,
+        paymentStatus: 'processing',
+      });
+
+      res.json({
+        success: true,
+        clientSecret: result.clientSecret,
+        paymentIntentId: result.paymentIntentId,
+        amount: totalAmount,
+        feeBreakdown: {
+          feeAmount,
+          feeLabel: submission.feeLabel || 'Fee',
+          donationAmount,
+          platformFee: result.platformFeeAmount,
+          total: totalAmount,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/custom-forms/sign/:token/payment/complete
+   * Complete payment and finalize form submission (public)
+   */
+  app.post('/api/custom-forms/sign/:token/payment/complete', requireTenant, async (req, res, next) => {
+    try {
+      const { getSubmissionByToken, getFormById, updateSubmission } = await import('./services/custom-form');
+      const { donations } = await import('@shared/schema');
+      
+      const submission = await getSubmissionByToken(req.params.token);
+      
+      if (!submission) {
+        return res.status(404).json({ error: 'Form session not found' });
+      }
+
+      if (submission.tenantId !== req.tenant!.id) {
+        return res.status(403).json({ error: 'Invalid tenant' });
+      }
+
+      if (submission.paymentStatus === 'completed') {
+        return res.status(400).json({ error: 'Payment already completed' });
+      }
+
+      const { paymentIntentId } = req.body;
+      
+      if (!paymentIntentId) {
+        return res.status(400).json({ error: 'Payment intent ID required' });
+      }
+
+      // Verify payment intent ID matches the one we created for this submission
+      if (submission.paymentIntentId && submission.paymentIntentId !== paymentIntentId) {
+        return res.status(400).json({ error: 'Invalid payment intent ID' });
+      }
+
+      // Update submission status to completed
+      const totalPaid = (submission.feeAmount || 0) + (submission.donationReceived || 0);
+      
+      const updated = await updateSubmission(submission.id, submission.tenantId, {
+        status: 'completed',
+        paymentStatus: 'completed',
+        paymentIntentId: paymentIntentId,
+        totalPaid: totalPaid,
+      });
+
+      // If there's a donation component, record it
+      if (submission.donationReceived && submission.donationReceived > 0) {
+        try {
+          const form = await getFormById(submission.formId, submission.tenantId);
+          await db.insert(donations).values({
+            tenantId: submission.tenantId,
+            donorName: submission.signerName,
+            donorEmail: submission.signerEmail,
+            amount: submission.donationReceived / 100, // Convert cents to dollars
+            date: new Date(),
+            source: 'form',
+            paymentMethod: 'stripe',
+            notes: `Donation via ${form?.name || 'custom form'}`,
+            isAnonymous: false,
+            receiptSent: true,
+          });
+        } catch (donationError) {
+          console.error('[CustomForms] Failed to record donation:', donationError);
+        }
+      }
+
+      res.json({
+        success: true,
+        message: 'Payment completed successfully',
+        submissionId: updated?.id,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/custom-forms/submissions/:id/waive-fee
+   * Waive the fee for a submission (admin/staff only)
+   */
+  app.post('/api/custom-forms/submissions/:id/waive-fee', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      const { getSubmissionById, updateSubmission } = await import('./services/custom-form');
+      
+      const submission = await getSubmissionById(req.params.id, req.tenant!.id);
+      
+      if (!submission) {
+        return res.status(404).json({ error: 'Submission not found' });
+      }
+
+      // Can only waive if not already completed
+      if (submission.paymentStatus === 'completed') {
+        return res.status(400).json({ error: 'Cannot waive fee - payment already completed' });
+      }
+
+      // Mark fee as waived and complete submission if it was signed
+      const updateData: any = {
+        feeWaived: true,
+        paymentStatus: 'waived',
+      };
+
+      // If already signed, mark as completed
+      if (submission.signedAt) {
+        updateData.status = 'completed';
+      }
+
+      const updated = await updateSubmission(submission.id, req.tenant!.id, updateData);
+
+      res.json({
+        success: true,
+        message: 'Fee waived successfully',
+        submission: updated,
+      });
     } catch (error) {
       next(error);
     }

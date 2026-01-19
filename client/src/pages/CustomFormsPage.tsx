@@ -38,6 +38,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Form,
   FormControl,
@@ -50,7 +51,8 @@ import {
 import { 
   FileText, Plus, Edit, Trash2, Eye, Copy, ChevronDown, 
   Send, FileSignature, PawPrint, Users, Link as LinkIcon,
-  Clock, CheckCircle, XCircle, Mail, GripVertical, ArrowUp, ArrowDown, Download, File as FileIcon
+  Clock, CheckCircle, XCircle, Mail, GripVertical, ArrowUp, ArrowDown, Download, File as FileIcon,
+  DollarSign, CreditCard
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format } from "date-fns";
@@ -118,6 +120,16 @@ interface CustomFormSubmission {
   status: 'pending' | 'completed' | 'expired' | 'cancelled';
   createdAt: string;
   formData?: Record<string, any>;
+  feeAmount?: number | null;
+  feeLabel?: string | null;
+  feeRequired?: boolean | null;
+  feeWaived?: boolean | null;
+  enableDonation?: boolean | null;
+  donationSuggested?: number | null;
+  donationReceived?: number | null;
+  paymentStatus?: 'not_required' | 'pending' | 'processing' | 'completed' | 'failed' | 'waived' | null;
+  paymentIntentId?: string | null;
+  totalPaid?: number | null;
 }
 
 interface MergeFields {
@@ -150,6 +162,12 @@ const sendFormSchema = z.object({
   signerEmail: z.string().email("Valid email is required"),
   signerPhone: z.string().optional(),
   animalId: z.string().optional(),
+  // Fee/payment options
+  feeAmount: z.string().optional(),
+  feeLabel: z.string().optional(),
+  feeRequired: z.boolean().optional(),
+  enableDonation: z.boolean().optional(),
+  donationSuggested: z.string().optional(),
 });
 
 type SendFormData = z.infer<typeof sendFormSchema>;
@@ -897,6 +915,11 @@ export default function CustomFormsPage() {
       signerEmail: "",
       signerPhone: "",
       animalId: "",
+      feeAmount: "",
+      feeLabel: "",
+      feeRequired: false,
+      enableDonation: false,
+      donationSuggested: "",
     },
   });
 
@@ -1057,6 +1080,28 @@ export default function CustomFormsPage() {
     onError: (error: any) => {
       toast({
         title: "Failed to send form",
+        description: error.message || "Please try again",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const waiveFeeMutation = useMutation({
+    mutationFn: async (submissionId: string) => {
+      const response = await apiRequest('POST', `/api/custom-forms/submissions/${submissionId}/waive-fee`);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/custom-forms', selectedForm?.id, 'submissions'] });
+      setIsViewSubmissionDialogOpen(false);
+      toast({
+        title: "Fee waived",
+        description: "The fee has been waived for this submission.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to waive fee",
         description: error.message || "Please try again",
         variant: "destructive",
       });
@@ -1620,6 +1665,121 @@ export default function CustomFormsPage() {
                     />
                   )}
 
+                  {/* Fee & Donation Options */}
+                  <Collapsible className="border rounded-md p-3">
+                    <CollapsibleTrigger className="flex items-center justify-between w-full text-sm font-medium">
+                      <div className="flex items-center gap-2">
+                        <DollarSign className="h-4 w-4" />
+                        <span>Fee & Donation Options</span>
+                      </div>
+                      <ChevronDown className="h-4 w-4 transition-transform" />
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="pt-3 space-y-4">
+                      <div className="grid grid-cols-2 gap-3">
+                        <FormField
+                          control={sendForm.control}
+                          name="feeAmount"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Fee Amount ($)</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  placeholder="0.00"
+                                  {...field} 
+                                  data-testid="input-fee-amount"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={sendForm.control}
+                          name="feeLabel"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Fee Label</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  placeholder="e.g., Adoption Fee"
+                                  {...field} 
+                                  data-testid="input-fee-label"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                      
+                      <FormField
+                        control={sendForm.control}
+                        name="feeRequired"
+                        render={({ field }) => (
+                          <FormItem className="flex items-center gap-2">
+                            <FormControl>
+                              <Checkbox
+                                checked={field.value}
+                                onCheckedChange={field.onChange}
+                                data-testid="checkbox-fee-required"
+                              />
+                            </FormControl>
+                            <FormLabel className="!mt-0 text-sm font-normal">
+                              Fee must be paid before form is complete
+                            </FormLabel>
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <div className="border-t pt-3">
+                        <FormField
+                          control={sendForm.control}
+                          name="enableDonation"
+                          render={({ field }) => (
+                            <FormItem className="flex items-center gap-2">
+                              <FormControl>
+                                <Checkbox
+                                  checked={field.value}
+                                  onCheckedChange={field.onChange}
+                                  data-testid="checkbox-enable-donation"
+                                />
+                              </FormControl>
+                              <FormLabel className="!mt-0 text-sm font-normal">
+                                Allow optional donation
+                              </FormLabel>
+                            </FormItem>
+                          )}
+                        />
+                        
+                        {sendForm.watch("enableDonation") && (
+                          <FormField
+                            control={sendForm.control}
+                            name="donationSuggested"
+                            render={({ field }) => (
+                              <FormItem className="mt-2">
+                                <FormLabel>Suggested Donation ($)</FormLabel>
+                                <FormControl>
+                                  <Input 
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    placeholder="25.00"
+                                    {...field} 
+                                    data-testid="input-donation-suggested"
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        )}
+                      </div>
+                    </CollapsibleContent>
+                  </Collapsible>
+
                   <DialogFooter>
                     <Button type="submit" disabled={sendMutation.isPending} data-testid="button-send-form">
                       <Send className="h-4 w-4 mr-2" />
@@ -1722,6 +1882,81 @@ export default function CustomFormsPage() {
                     {selectedSubmission.signerIpAddress || 'N/A'}
                   </div>
                 </div>
+                
+                {/* Payment Status Section */}
+                {(selectedSubmission.feeAmount || selectedSubmission.donationReceived) && (
+                  <div className="border rounded-md p-4 bg-muted/30 flex-shrink-0">
+                    <h4 className="font-medium mb-3 flex items-center gap-2">
+                      <CreditCard className="h-4 w-4" />
+                      Payment Information
+                    </h4>
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      {selectedSubmission.feeAmount && selectedSubmission.feeAmount > 0 && (
+                        <div>
+                          <span className="text-muted-foreground">{selectedSubmission.feeLabel || 'Fee'}:</span>{' '}
+                          ${(selectedSubmission.feeAmount / 100).toFixed(2)}
+                          {selectedSubmission.feeRequired && (
+                            <span className="text-xs text-muted-foreground ml-1">(required)</span>
+                          )}
+                        </div>
+                      )}
+                      {selectedSubmission.donationReceived && selectedSubmission.donationReceived > 0 && (
+                        <div>
+                          <span className="text-muted-foreground">Donation:</span>{' '}
+                          <span className="text-green-600">${(selectedSubmission.donationReceived / 100).toFixed(2)}</span>
+                        </div>
+                      )}
+                      <div>
+                        <span className="text-muted-foreground">Payment Status:</span>{' '}
+                        {selectedSubmission.paymentStatus === 'completed' && (
+                          <Badge variant="outline" className="bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">Paid</Badge>
+                        )}
+                        {selectedSubmission.paymentStatus === 'waived' && (
+                          <Badge variant="outline" className="bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">Waived</Badge>
+                        )}
+                        {selectedSubmission.paymentStatus === 'pending' && (
+                          <Badge variant="outline" className="bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300">Pending</Badge>
+                        )}
+                        {selectedSubmission.paymentStatus === 'processing' && (
+                          <Badge variant="outline" className="bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300">Processing</Badge>
+                        )}
+                        {selectedSubmission.paymentStatus === 'failed' && (
+                          <Badge variant="outline" className="bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300">Failed</Badge>
+                        )}
+                        {(!selectedSubmission.paymentStatus || selectedSubmission.paymentStatus === 'not_required') && (
+                          <span className="text-muted-foreground">N/A</span>
+                        )}
+                      </div>
+                      {selectedSubmission.totalPaid && selectedSubmission.totalPaid > 0 && (
+                        <div>
+                          <span className="text-muted-foreground">Total Paid:</span>{' '}
+                          <span className="font-medium">${(selectedSubmission.totalPaid / 100).toFixed(2)}</span>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Fee Waiver Button - show if payment pending and has fee */}
+                    {selectedSubmission.paymentStatus === 'pending' && 
+                     selectedSubmission.feeAmount && 
+                     selectedSubmission.feeAmount > 0 && 
+                     !selectedSubmission.feeWaived && (
+                      <div className="mt-3 pt-3 border-t">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => waiveFeeMutation.mutate(selectedSubmission.id)}
+                          disabled={waiveFeeMutation.isPending}
+                          data-testid="button-waive-fee"
+                        >
+                          {waiveFeeMutation.isPending ? "Waiving..." : "Waive Fee"}
+                        </Button>
+                        <span className="text-xs text-muted-foreground ml-2">
+                          Waive the fee and mark submission complete
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
                 
                 <ScrollArea className="flex-1 min-h-0 border rounded-md bg-white dark:bg-gray-900" style={{ maxHeight: 'calc(90vh - 200px)' }}>
                   <div className="p-4">
