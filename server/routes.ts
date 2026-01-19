@@ -7099,7 +7099,7 @@ Submitted: ${new Date().toLocaleString()}
     try {
       const multer = (await import('multer')).default;
       const { getSubmissionByToken, hashToken } = await import('./services/custom-form');
-      const { ObjectStorageService } = await import('./objectStorage');
+      const { TenantFileStorage } = await import('./lib/tenantFileStorage');
       
       // Verify token and get submission
       const tokenHash = hashToken(req.params.token);
@@ -7139,31 +7139,34 @@ Submitted: ${new Date().toLocaleString()}
         }
 
         try {
-          const objectStorageService = new ObjectStorageService();
           const tenantId = submission.tenantId;
           
-          // Upload to object storage in the tenant's form-uploads folder
-          const { objectPath, fullPath } = await objectStorageService.uploadTenantFile(
+          // Use TenantFileStorage to upload - prioritizes Google Drive if configured
+          // Use 'public' visibility so staff can access uploaded files without ACL issues
+          const fileStorage = await TenantFileStorage.forTenant(tenantId);
+          const uploadResult = await fileStorage.uploadFile({
             tenantId,
-            'form-uploads',
-            req.file.buffer,
-            req.file.mimetype
-          );
-
-          // Store the original filename with the object path for retrieval
-          const fileInfo = {
-            objectPath,
-            originalName: req.file.originalname,
+            userId: tenantId, // Use tenantId as owner for tenant-wide access
+            category: 'form-uploads',
+            visibility: 'public', // Staff need to view these files
+            fileName: req.file.originalname,
             mimeType: req.file.mimetype,
-            size: req.file.size,
-          };
+            content: req.file.buffer,
+          });
+
+          if (!uploadResult.success) {
+            console.error('[FORM-UPLOAD] Upload failed:', uploadResult.error);
+            return res.status(500).json({ error: 'Failed to upload file. Please try again.' });
+          }
 
           res.json({
             success: true,
-            fileUrl: objectPath,
+            fileUrl: uploadResult.fileUrl,
             fileName: req.file.originalname,
             mimeType: req.file.mimetype,
             size: req.file.size,
+            storageType: uploadResult.storageType,
+            driveFileId: uploadResult.driveFileId,
           });
         } catch (uploadError: any) {
           console.error('[FORM-UPLOAD] Error uploading file:', uploadError);

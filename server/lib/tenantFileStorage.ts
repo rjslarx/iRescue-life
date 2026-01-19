@@ -2,7 +2,7 @@ import { DriveService } from './googleWorkspace';
 import { ObjectStorageService } from '../objectStorage';
 import { ObjectAclPolicy } from '../objectAcl';
 
-export type FileCategory = 'animal-photos' | 'animal-medical' | 'animal-contracts' | 'foster-updates' | 'website-assets' | 'general-docs';
+export type FileCategory = 'animal-photos' | 'animal-medical' | 'animal-contracts' | 'foster-updates' | 'website-assets' | 'general-docs' | 'form-uploads';
 export type LegacyCategory = 'animals' | 'documents' | 'custom-pages';
 export type AnyCategory = FileCategory | LegacyCategory;
 export type FileVisibility = 'public' | 'private';
@@ -204,6 +204,15 @@ export class TenantFileStorage {
 
     if (category === 'general-docs') {
       return this.getOrCreateFolder(driveService, ROOT_FOLDERS.GENERAL_DOCS);
+    }
+
+    if (category === 'form-uploads') {
+      // Form uploads go to a dedicated folder under General Docs
+      const generalDocsFolder = await this.getOrCreateFolder(driveService, ROOT_FOLDERS.GENERAL_DOCS);
+      if (!generalDocsFolder.success || !generalDocsFolder.folderId) {
+        return generalDocsFolder;
+      }
+      return this.getOrCreateFolder(driveService, 'Form_Uploads', generalDocsFolder.folderId);
     }
 
     return { success: false, error: `Unknown category: ${category}` };
