@@ -1723,7 +1723,7 @@ export default function CustomFormsPage() {
                   </div>
                 </div>
                 
-                <ScrollArea className="flex-1 min-h-0 max-h-[60vh] border rounded-md bg-white dark:bg-gray-900">
+                <ScrollArea className="flex-1 min-h-0 border rounded-md bg-white dark:bg-gray-900" style={{ maxHeight: 'calc(90vh - 200px)' }}>
                   <div className="p-4">
                     {selectedSubmission.renderedHtml ? (
                       <div 
