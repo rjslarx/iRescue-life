@@ -7,7 +7,7 @@ import { loginUser, createTenantWithAdmin, createUser } from "./services/auth";
 import { PushNotificationService } from "./services/push-notifications";
 import { db } from "./db";
 import { tenants, users, demoRequests, insertDemoRequestSchema, smsMessageLogs, emailEvents, animals, platformIntegrations, newsletterCampaigns, newsletterSubscribers, happyTails, adoptionCheckoutSessions } from "@shared/schema";
-import { eq, and, desc, sql, inArray, lt } from "drizzle-orm";
+import { eq, and, desc, sql, inArray, lt, ilike } from "drizzle-orm";
 import { z } from "zod";
 import { authLimiter, signupLimiter, passwordResetLimiter, emailLimiter } from "./config/security";
 import QRCode from "qrcode";
@@ -7126,6 +7126,65 @@ Submitted: ${new Date().toLocaleString()}
         status: 'completed',
       });
 
+      // Auto-advance volunteer application if this is a Hold Harmless waiver
+      (async () => {
+        try {
+          const { volunteerApplications } = await import('@shared/schema');
+          
+          // First, check if any volunteer application has this form as their holdHarmlessFormId
+          const [volunteerAppByFormId] = await db
+            .select()
+            .from(volunteerApplications)
+            .where(and(
+              eq(volunteerApplications.tenantId, submission.tenantId),
+              eq(volunteerApplications.holdHarmlessFormId, submission.formId),
+              eq(volunteerApplications.applicantEmail, submission.signerEmail),
+              eq(volunteerApplications.pipelineStatus, 'waiver_needed')
+            ))
+            .limit(1);
+          
+          if (volunteerAppByFormId) {
+            // Update volunteer application to active pool
+            await db.update(volunteerApplications)
+              .set({
+                holdHarmlessSignedAt: new Date(),
+                pipelineStatus: 'active_pool',
+                status: 'approved',
+                updatedAt: new Date()
+              })
+              .where(eq(volunteerApplications.id, volunteerAppByFormId.id));
+            
+            console.log(`[Volunteer Pipeline] Auto-advanced volunteer ${volunteerAppByFormId.applicantEmail} to active_pool after Hold Harmless signing`);
+          } else if (form.name.toLowerCase().includes('hold harmless') || form.name.toLowerCase().includes('waiver')) {
+            // Fallback: match by email if form name contains hold harmless/waiver
+            const [volunteerApp] = await db
+              .select()
+              .from(volunteerApplications)
+              .where(and(
+                eq(volunteerApplications.tenantId, submission.tenantId),
+                eq(volunteerApplications.applicantEmail, submission.signerEmail),
+                eq(volunteerApplications.pipelineStatus, 'waiver_needed')
+              ))
+              .limit(1);
+            
+            if (volunteerApp) {
+              await db.update(volunteerApplications)
+                .set({
+                  holdHarmlessSignedAt: new Date(),
+                  pipelineStatus: 'active_pool',
+                  status: 'approved',
+                  updatedAt: new Date()
+                })
+                .where(eq(volunteerApplications.id, volunteerApp.id));
+              
+              console.log(`[Volunteer Pipeline] Auto-advanced volunteer ${volunteerApp.applicantEmail} to active_pool after Hold Harmless signing (fallback match)`);
+            }
+          }
+        } catch (volunteerError) {
+          console.error('[Volunteer Pipeline] Error auto-advancing volunteer:', volunteerError);
+        }
+      })();
+
       // Create document record and optionally generate PDF (async - don't wait)
       (async () => {
         try {
@@ -11283,18 +11342,27 @@ Submitted: ${new Date().toLocaleString()}
       const { volunteerApplications } = await import('@shared/schema');
       
       const updateSchema = z.object({
-        status: z.enum(['pending', 'approved', 'rejected']),
+        status: z.enum(['pending', 'approved', 'rejected']).optional(),
+        pipelineStatus: z.enum(['new_applicant', 'orientation_scheduled', 'waiver_needed', 'active_pool', 'rejected']).optional(),
         notes: z.string().optional(),
       });
 
       const data = updateSchema.parse(req.body);
 
+      // If moving to active_pool via pipeline, also set status to approved
+      const updateData: any = {
+        ...data,
+        updatedAt: new Date(),
+      };
+      if (data.pipelineStatus === 'active_pool') {
+        updateData.status = 'approved';
+      } else if (data.pipelineStatus === 'rejected') {
+        updateData.status = 'rejected';
+      }
+
       const [updatedApplication] = await db
         .update(volunteerApplications)
-        .set({
-          ...data,
-          updatedAt: new Date(),
-        })
+        .set(updateData)
         .where(
           and(
             eq(volunteerApplications.id, req.params.id),
@@ -11308,6 +11376,160 @@ Submitted: ${new Date().toLocaleString()}
       }
 
       res.json({ success: true, application: updatedApplication });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * PATCH /api/volunteer-applications/:id/pipeline-status
+   * Update volunteer application pipeline status for Kanban drag-and-drop (admin/staff only)
+   */
+  app.patch('/api/volunteer-applications/:id/pipeline-status', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      const { volunteerApplications } = await import('@shared/schema');
+      
+      const updateSchema = z.object({
+        pipelineStatus: z.enum(['new_applicant', 'orientation_scheduled', 'waiver_needed', 'active_pool', 'rejected']),
+      });
+
+      const { pipelineStatus } = updateSchema.parse(req.body);
+
+      // Prepare update data
+      const updateData: any = {
+        pipelineStatus,
+        updatedAt: new Date(),
+      };
+      
+      // Sync legacy status field with pipeline status
+      if (pipelineStatus === 'active_pool') {
+        updateData.status = 'approved';
+      } else if (pipelineStatus === 'rejected') {
+        updateData.status = 'rejected';
+      }
+
+      const [updatedApplication] = await db
+        .update(volunteerApplications)
+        .set(updateData)
+        .where(
+          and(
+            eq(volunteerApplications.id, req.params.id),
+            eq(volunteerApplications.tenantId, req.tenant!.id)
+          )
+        )
+        .returning();
+
+      if (!updatedApplication) {
+        return res.status(404).json({ error: 'Volunteer application not found' });
+      }
+
+      res.json({ success: true, application: updatedApplication });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/volunteer-applications/:id/send-waiver
+   * Send Hold Harmless waiver form to a volunteer applicant (admin/staff only)
+   */
+  app.post('/api/volunteer-applications/:id/send-waiver', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      const { volunteerApplications, customForms } = await import('@shared/schema');
+      const { getFormById, createSubmission, generateSecureToken, updateSubmission } = await import('./services/custom-form');
+      const { EmailService } = await import('./lib/email-service');
+      
+      // Find the volunteer application
+      const [application] = await db
+        .select()
+        .from(volunteerApplications)
+        .where(
+          and(
+            eq(volunteerApplications.id, req.params.id),
+            eq(volunteerApplications.tenantId, req.tenant!.id)
+          )
+        );
+
+      if (!application) {
+        return res.status(404).json({ error: 'Volunteer application not found' });
+      }
+
+      // Find the Hold Harmless form for this tenant
+      const holdHarmlessForms = await db
+        .select()
+        .from(customForms)
+        .where(
+          and(
+            eq(customForms.tenantId, req.tenant!.id),
+            eq(customForms.isActive, true),
+            ilike(customForms.name, '%hold%harmless%')
+          )
+        )
+        .limit(1);
+
+      if (holdHarmlessForms.length === 0) {
+        return res.status(404).json({ 
+          error: 'Hold Harmless form not found. Please create a custom form with "Hold Harmless" in the name.' 
+        });
+      }
+
+      const form = holdHarmlessForms[0];
+
+      // Generate secure token for form signing
+      const { token, hash } = generateSecureToken();
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7); // 7 days expiry
+
+      // Create form submission
+      const submission = await createSubmission({
+        tenantId: req.tenant!.id,
+        formId: form.id,
+        signerName: application.applicantName,
+        signerEmail: application.applicantEmail,
+        status: 'pending',
+        tokenHash: hash,
+        expiresAt,
+      });
+
+      // Update volunteer application with form reference
+      await db
+        .update(volunteerApplications)
+        .set({
+          holdHarmlessFormId: form.id,
+          updatedAt: new Date(),
+        })
+        .where(eq(volunteerApplications.id, application.id));
+
+      // Send email with signing link
+      const emailService = await EmailService.create(req.tenant!.id);
+      const signingUrl = `${req.protocol}://${req.get('host')}/sign-form/${token}`;
+      
+      await emailService.send({
+        to: application.applicantEmail,
+        subject: `Please sign the Hold Harmless Waiver - ${req.tenant!.name}`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2>Hold Harmless Waiver Required</h2>
+            <p>Hello ${application.applicantName},</p>
+            <p>Thank you for your interest in volunteering with ${req.tenant!.name}!</p>
+            <p>Before you can start volunteering, we need you to review and sign our Hold Harmless waiver. This is a standard form that protects both you and our organization.</p>
+            <p style="margin: 24px 0;">
+              <a href="${signingUrl}" style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
+                Review and Sign Waiver
+              </a>
+            </p>
+            <p style="color: #666; font-size: 14px;">This link will expire in 7 days.</p>
+            <p>If you have any questions, please don't hesitate to contact us.</p>
+            <p>Thank you,<br>${req.tenant!.name} Team</p>
+          </div>
+        `,
+      });
+
+      res.json({ 
+        success: true, 
+        message: 'Hold Harmless waiver sent successfully',
+        submissionId: submission.id,
+      });
     } catch (error) {
       next(error);
     }

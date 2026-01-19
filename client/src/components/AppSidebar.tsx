@@ -63,6 +63,7 @@ import {
   Radio,
   Palette,
   Video,
+  Kanban,
 } from "lucide-react";
 
 interface AppSidebarProps {
@@ -101,6 +102,7 @@ const iconMap: Record<string, any> = {
   Users,
   DollarSign,
   Calendar,
+  CalendarCog,
   Package,
   BarChart3,
   Smile,
@@ -121,6 +123,7 @@ const iconMap: Record<string, any> = {
   Smartphone,
   Truck,
   Video,
+  Kanban,
 };
 
 interface RecentPage {
@@ -302,7 +305,9 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
       items: [
         { title: "Team", url: "/dashboard/team", icon: Users, notificationKey: "teamInvitations" },
         { title: "Foster Management", url: "/dashboard/foster-management", icon: PawPrint, notificationKey: "fosterUpdates", usesGoogleDrive: true },
+        { title: "Foster Pipeline", url: "/dashboard/foster-pipeline", icon: Kanban },
         { title: "Volunteer Management", url: "/dashboard/volunteers", icon: UserCircle },
+        { title: "Volunteer Pipeline", url: "/dashboard/volunteer-pipeline", icon: Kanban },
         { title: "Contacts", url: "/dashboard/contacts", icon: UserCircle },
         { title: "Collaboration Hub", url: "/dashboard/collaboration", icon: Truck },
       ],
@@ -378,7 +383,9 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
       items: [
         { title: "Team", url: "/dashboard/team", icon: Users },
         { title: "Foster Management", url: "/dashboard/foster-management", icon: PawPrint, notificationKey: "fosterUpdates", usesGoogleDrive: true },
+        { title: "Foster Pipeline", url: "/dashboard/foster-pipeline", icon: Kanban },
         { title: "Volunteer Management", url: "/dashboard/volunteers", icon: UserCircle },
+        { title: "Volunteer Pipeline", url: "/dashboard/volunteer-pipeline", icon: Kanban },
         { title: "Contacts", url: "/dashboard/contacts", icon: UserCircle },
         { title: "Collaboration Hub", url: "/dashboard/collaboration", icon: Truck },
       ],
@@ -431,6 +438,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
         { title: "Adoption Applications", url: "/dashboard/applications", icon: FileText, notificationKey: "applications" },
         { title: "Supply Registry", url: "/dashboard/supplies", icon: ShoppingCart },
         { title: "Volunteer Management", url: "/dashboard/volunteers", icon: UserCircle },
+        { title: "Volunteer Pipeline", url: "/dashboard/volunteer-pipeline", icon: Kanban },
         { title: "Collaboration Hub", url: "/dashboard/collaboration", icon: Truck },
       ],
       defaultOpen: true,

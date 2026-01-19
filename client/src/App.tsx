@@ -73,6 +73,7 @@ import PlatformBlogPostPage from "@/pages/PlatformBlogPostPage";
 import EventDetailPage from "@/pages/EventDetailPage";
 import PublicVolunteerPage from "@/pages/PublicVolunteerPage";
 import VolunteerApplicationManagementPage from "@/pages/VolunteerApplicationManagementPage";
+import VolunteerApplicationsPipelinePage from "@/pages/VolunteerApplicationsPipelinePage";
 import PublicFosterPage from "@/pages/PublicFosterPage";
 import PublicSurrenderPage from "@/pages/PublicSurrenderPage";
 import PublicAdoptionCheckoutPage from "@/pages/PublicAdoptionCheckoutPage";
@@ -217,6 +218,7 @@ function RouterSwitch() {
       <ProtectedRoute path="/dashboard/foster-management" pageId="foster-management" component={FosterManagementPage} />
       <ProtectedRoute path="/dashboard/foster-pipeline" pageId="foster-management" component={FosterApplicationsPipelinePage} />
       <ProtectedRoute path="/dashboard/volunteer-applications" pageId="volunteers" component={VolunteerApplicationManagementPage} />
+      <ProtectedRoute path="/dashboard/volunteer-pipeline" pageId="volunteers" component={VolunteerApplicationsPipelinePage} />
       <ProtectedRoute path="/dashboard/communications" pageId="communications" component={CommunicationsPage} />
       <ProtectedRoute path="/dashboard/broadcasts" pageId="communications" component={BroadcastsPage} />
       <ProtectedRoute path="/dashboard/newsletter-campaigns" pageId="communications" component={NewsletterCampaignsPage} />

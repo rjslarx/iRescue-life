@@ -975,8 +975,11 @@ export const volunteerApplications = pgTable("volunteer_applications", {
   emergencyContactName: text("emergency_contact_name"),
   emergencyContactPhone: text("emergency_contact_phone"),
   status: text("status").notNull().default("pending").$type<"pending" | "approved" | "rejected">(),
+  pipelineStatus: text("pipeline_status").notNull().default("new_applicant").$type<"new_applicant" | "orientation_scheduled" | "waiver_needed" | "active_pool" | "rejected">(),
   notes: text("notes"),
   customResponses: jsonb("custom_responses").$type<Record<string, any>>(),
+  holdHarmlessFormId: uuid("hold_harmless_form_id"),
+  holdHarmlessSignedAt: timestamp("hold_harmless_signed_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -988,6 +991,7 @@ export const insertVolunteerApplicationSchema = createInsertSchema(volunteerAppl
 });
 export type InsertVolunteerApplication = z.infer<typeof insertVolunteerApplicationSchema>;
 export type VolunteerApplication = typeof volunteerApplications.$inferSelect;
+export type VolunteerPipelineStatus = "new_applicant" | "orientation_scheduled" | "waiver_needed" | "active_pool" | "rejected";
 
 // Foster applications table - public applications to become a foster
 export const fosterApplications = pgTable("foster_applications", {
