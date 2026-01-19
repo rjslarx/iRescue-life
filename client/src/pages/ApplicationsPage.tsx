@@ -101,17 +101,45 @@ export default function ApplicationsPage() {
     },
   });
 
+  // Map checkout sessions by application ID, prioritizing completed sessions
+  // to ensure adopted applications show correct "completed" status
   const checkoutSessionsByAppId = useMemo(() => {
-    const map = new Map<string, { status: string; expiresAt?: string; sessionId?: string; baseFee?: string }>();
-    (checkoutSessionsData?.sessions || []).forEach(session => {
-      if (session.status !== 'completed' && session.status !== 'expired' && session.status !== 'cancelled') {
-        map.set(session.applicationId, {
-          status: session.status,
-          expiresAt: session.expiresAt,
-          sessionId: session.id,
-          baseFee: session.baseFee,
-        });
+    const map = new Map<string, { status: string; expiresAt?: string; sessionId?: string; baseFee?: string; feeStatus?: string; totalAmount?: string }>();
+    const sessions = checkoutSessionsData?.sessions || [];
+    
+    // Sort sessions by updatedAt (oldest first), then by completed status (completed last)
+    // This ensures the most recent session overwrites older ones, with completed taking priority
+    const sortedSessions = [...sessions].sort((a, b) => {
+      // First sort by completion status - completed should come last to overwrite
+      if (a.status === 'completed' && b.status !== 'completed') return 1;
+      if (a.status !== 'completed' && b.status === 'completed') return -1;
+      // Then sort by updatedAt so most recent session is processed last
+      const aTime = new Date(a.updatedAt || a.createdAt).getTime();
+      const bTime = new Date(b.updatedAt || b.createdAt).getTime();
+      return aTime - bTime;
+    });
+    
+    sortedSessions.forEach(session => {
+      // Skip expired and cancelled sessions
+      if (session.status === 'expired' || session.status === 'cancelled') return;
+      
+      // Determine fee status from totals.total (accounts for grants/waivers)
+      // waived = total is 0, paid = completed with non-zero total
+      let feeStatus = 'pending';
+      const totalAmount = session.totals?.total || session.baseFee;
+      if (session.status === 'completed') {
+        const totalNum = parseFloat(totalAmount || '0');
+        feeStatus = totalNum === 0 ? 'waived' : 'paid';
       }
+      
+      map.set(session.applicationId, {
+        status: session.status,
+        expiresAt: session.expiresAt,
+        sessionId: session.id,
+        baseFee: session.baseFee,
+        feeStatus,
+        totalAmount,
+      });
     });
     return map;
   }, [checkoutSessionsData]);
@@ -149,11 +177,13 @@ export default function ApplicationsPage() {
   const historicalApplications: ApplicationWithAnimal[] = [];
 
   (data?.applications || []).forEach(app => {
-    const createdAt = new Date(app.createdAt);
+    // Use updatedAt for archival timing - applications should stay visible for 7 days
+    // after reaching terminal status (adopted/denied), not 7 days after creation
+    const statusChangeDate = new Date(app.updatedAt || app.createdAt);
     const isTerminalStatus = app.stage === 'denied' || app.stage === 'adopted';
-    const isOldEnough = createdAt < sevenDaysAgo;
+    const isOldEnough = statusChangeDate < sevenDaysAgo;
     
-    // Only archive if it's denied/adopted AND older than 7 days
+    // Only archive if it's denied/adopted AND more than 7 days since status change
     if (isTerminalStatus && isOldEnough) {
       historicalApplications.push(app);
     } else {
@@ -169,7 +199,12 @@ export default function ApplicationsPage() {
   // Transform active applications to KanbanBoard format
   const applications = activeApplications.map(app => {
     const animal = animals.find(a => a.id === app.animalId);
-    const checkoutStatus = checkoutSessionsByAppId.get(app.id);
+    const checkoutSession = checkoutSessionsByAppId.get(app.id);
+    
+    // Derive fee status from checkout session - completed sessions have paid/waived status
+    const adoptionFeeStatus = checkoutSession?.feeStatus || 'pending';
+    const adoptionFeeAmount = checkoutSession?.totalAmount || checkoutSession?.baseFee;
+    
     return {
       id: app.id,
       applicantName: app.applicantName,
@@ -179,9 +214,9 @@ export default function ApplicationsPage() {
       stage: app.stage,
       animalId: app.animalId,
       applicationType: "adoption" as const,
-      checkoutStatus: checkoutStatus || null,
-      adoptionFeeStatus: (app as any).adoptionFeeStatus || 'pending',
-      adoptionFeeAmount: (app as any).adoptionFeeAmount,
+      checkoutStatus: checkoutSession || null,
+      adoptionFeeStatus,
+      adoptionFeeAmount,
     };
   });
 
@@ -315,7 +350,11 @@ export default function ApplicationsPage() {
                             const statusDisplay = getStatusDisplay(app.stage);
                             const submittedDate = new Date(app.createdAt).toLocaleDateString();
                             const animalName = app.animalName || "Unknown Animal";
-                            const feeStatus = getFeeStatusDisplay((app as any).adoptionFeeStatus || 'pending', (app as any).adoptionFeeAmount);
+                            // Derive fee status from checkout session (consistent with active applications)
+                            const checkoutSession = checkoutSessionsByAppId.get(app.id);
+                            const adoptionFeeStatus = checkoutSession?.feeStatus || 'pending';
+                            const adoptionFeeAmount = checkoutSession?.totalAmount || checkoutSession?.baseFee;
+                            const feeStatus = getFeeStatusDisplay(adoptionFeeStatus, adoptionFeeAmount);
                             const FeeIcon = feeStatus.icon;
 
                             return (
