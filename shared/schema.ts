@@ -4425,6 +4425,23 @@ export const customFormSubmissions = pgTable("custom_form_submissions", {
   secureTokenHash: text("secure_token_hash"), // For secure link access
   expiresAt: timestamp("expires_at"), // Link expiration
   status: text("status").notNull().default("pending").$type<"pending" | "completed" | "expired" | "cancelled">(),
+  // Fee/Payment settings (set by staff when sending form)
+  feeAmount: integer("fee_amount"), // Fee in cents (e.g., adoption fee)
+  feeLabel: text("fee_label"), // Label for the fee (e.g., "Adoption Fee", "Application Fee")
+  feeRequired: boolean("fee_required").default(false), // Whether fee must be paid before form is complete
+  feeWaived: boolean("fee_waived").default(false), // Staff can waive the fee
+  feeWaivedBy: uuid("fee_waived_by").references(() => users.id, { onDelete: 'set null' }),
+  feeWaivedAt: timestamp("fee_waived_at"),
+  feeWaivedReason: text("fee_waived_reason"),
+  // Optional donation request
+  enableDonation: boolean("enable_donation").default(false), // Allow optional donation
+  donationSuggested: integer("donation_suggested"), // Suggested donation amount in cents
+  donationReceived: integer("donation_received"), // Actual donation amount received in cents
+  // Payment tracking
+  paymentStatus: text("payment_status").default("not_required").$type<"not_required" | "pending" | "processing" | "completed" | "failed" | "waived">(),
+  paymentIntentId: text("payment_intent_id"), // Stripe PaymentIntent ID
+  paymentCompletedAt: timestamp("payment_completed_at"),
+  totalPaid: integer("total_paid"), // Total amount paid in cents (fee + donation)
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
