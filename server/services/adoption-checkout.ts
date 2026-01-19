@@ -276,13 +276,13 @@ export async function createCheckoutSession(
       secureTokenHash: tokenHash,
       expiresAt,
       totals,
+      vetAppointmentDate: data.vetAppointmentDate || null,
+      spayNeuterDate: data.spayNeuterDate || null,
       metadata: {
         sendAttempts: 0,
         createdBy: data.staffInitiatedBy,
         createdAt: new Date().toISOString(),
         waiveFee: data.waiveFee || false,
-        vetAppointmentDate: data.vetAppointmentDate || null,
-        spayNeuterDate: data.spayNeuterDate || null,
       },
     })
     .returning();

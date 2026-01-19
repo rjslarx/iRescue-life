@@ -5409,9 +5409,11 @@ Submitted: ${new Date().toLocaleString()}
         waiveFee: z.boolean().default(false),
         grantId: z.string().uuid().optional().nullable(),
         contractTemplateId: z.string().optional().nullable(),
+        vetAppointmentDate: z.string().optional().nullable(),
+        spayNeuterDate: z.string().optional().nullable(),
       });
       
-      const { applicationId, sendContract, baseFee, waiveFee, grantId, contractTemplateId } = approveSchema.parse(req.body);
+      const { applicationId, sendContract, baseFee, waiveFee, grantId, contractTemplateId, vetAppointmentDate, spayNeuterDate } = approveSchema.parse(req.body);
       
       // Get the application details
       const application = await getApplicationById(req.tenant!.id, applicationId);
@@ -5459,6 +5461,8 @@ Submitted: ${new Date().toLocaleString()}
           waiveFee,
           grantId: grantId || undefined,
           contractTemplateId: parsedTemplateId,
+          vetAppointmentDate: vetAppointmentDate || undefined,
+          spayNeuterDate: spayNeuterDate || undefined,
         });
         
         checkoutSession = sessionResult.session;

@@ -2716,6 +2716,8 @@ export const adoptionCheckoutSessions = pgTable("adoption_checkout_sessions", {
   signedAt: timestamp("signed_at"),
   paidAt: timestamp("paid_at"),
   totals: jsonb("totals").$type<{ subtotal: string; fees: string; total: string }>(), // Fee breakdown
+  vetAppointmentDate: text("vet_appointment_date"), // Staff-confirmed vet follow-up date
+  spayNeuterDate: text("spay_neuter_date"), // Staff-confirmed spay/neuter deadline (null if already altered)
   metadata: jsonb("metadata").$type<Record<string, any>>(), // Audit trail, IP addresses, etc.
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
