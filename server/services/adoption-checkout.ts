@@ -849,10 +849,12 @@ export async function captureSignature(
   }
 
   // Generate PDF contract with signature, including IP, timestamp, and driver's license for legal verification
+  // Pass both the stored URL (for record) and base64 data (for Puppeteer to render)
   const contractPdfUrl = await generateAdoptionContractPDF(session, signatureImageUrl, {
     ipAddress: signatureData.ipAddress,
     signedAt,
     driversLicenseNumber: signatureData.driversLicenseNumber,
+    signatureBase64: signatureData.signatureImageData, // Pass base64 for PDF rendering
   });
 
   // Create contract record

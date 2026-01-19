@@ -5959,7 +5959,7 @@ Submitted: ${new Date().toLocaleString()}
 
       const signatureData = signatureSchema.parse(req.body);
 
-      // Update session metadata with address and date fields before generating contract
+      // Update session with address, date fields, and commitment dates (both metadata and actual columns)
       if (signatureData.adopterStreetAddress || signatureData.vetAppointmentDate || signatureData.spayNeuterDate) {
         const existingMetadata = (session.metadata as Record<string, any>) || {};
         await db
@@ -5972,9 +5972,10 @@ Submitted: ${new Date().toLocaleString()}
               adopterCity: signatureData.adopterCity,
               adopterState: signatureData.adopterState,
               adopterZip: signatureData.adopterZip,
-              vetAppointmentDate: signatureData.vetAppointmentDate,
-              spayNeuterDate: signatureData.spayNeuterDate,
             },
+            // Also update actual database columns for dates so PDF generation can access them
+            vetAppointmentDate: signatureData.vetAppointmentDate || session.vetAppointmentDate,
+            spayNeuterDate: signatureData.spayNeuterDate || session.spayNeuterDate,
             updatedAt: new Date(),
           })
           .where(eq(adoptionCheckoutSessions.id, session.id));

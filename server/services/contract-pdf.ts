@@ -423,7 +423,7 @@ function generateContractHTML(data: {
 export async function generateAdoptionContractPDF(
   session: AdoptionCheckoutSession,
   signatureImageUrl?: string,
-  signatureMetadata?: { ipAddress?: string; signedAt?: Date; driversLicenseNumber?: string }
+  signatureMetadata?: { ipAddress?: string; signedAt?: Date; driversLicenseNumber?: string; signatureBase64?: string }
 ): Promise<string> {
   // Fetch all required data
   const [tenant] = await db
@@ -547,6 +547,18 @@ export async function generateAdoptionContractPDF(
   const adopterFirstName = nameParts[0] || '';
   const adopterLastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
   
+  // Calculate total amount - adoption fee is $0.00 if waived, but preserve any donation
+  const isFeeWaived = metadata?.waiveFee === true || parseFloat(session.baseFee?.toString() || '0') === 0;
+  const donationAmount = parseFloat(session.donationBoost?.toString() || '0');
+  // If fee is waived but there's a donation, total = donation only; otherwise use session totals
+  const totalAmount = isFeeWaived 
+    ? (donationAmount > 0 ? donationAmount.toFixed(2) : '0.00')
+    : (session.totals?.total || session.baseFee);
+  
+  // Use base64 signature data for Puppeteer rendering (it can't access internal URLs)
+  // Fall back to signatureImageUrl if no base64 provided (for backward compatibility)
+  const signatureForPdf = signatureMetadata?.signatureBase64 || signatureImageUrl;
+  
   const mergeData: MergeData = {
     organization_name: tenant.name,
     adopter_name: adopterName,
@@ -566,11 +578,11 @@ export async function generateAdoptionContractPDF(
     animal_breed: animal.breed,
     animal_age: animal.age,
     animal_sex: animal.sex || undefined,
-    adoption_fee: session.baseFee,
+    adoption_fee: isFeeWaived ? '0.00' : session.baseFee,
     donation_amount: session.donationBoost || '0',
-    total_amount: session.totals?.total || session.baseFee,
+    total_amount: totalAmount,
     contract_date: signedAt.toLocaleDateString(),
-    signature_image_url: signatureImageUrl,
+    signature_image_url: signatureForPdf,
     signed_timestamp: signedAt.toISOString(),
     signed_ip: signatureMetadata?.ipAddress || 'Not recorded',
     vet_appointment_date: session.vetAppointmentDate || '_________________',

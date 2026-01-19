@@ -584,7 +584,8 @@ function escapeHtml(unsafe: string): string {
 }
 
 /**
- * Validate that a URL is safe (not javascript: or data: protocol)
+ * Validate that a URL is safe (not javascript: or other dangerous protocols)
+ * Allows data:image URLs for base64 signatures rendered in Puppeteer PDFs
  */
 function isSafeUrl(url: string): boolean {
   if (!url) return false;
@@ -598,7 +599,13 @@ function isSafeUrl(url: string): boolean {
     return true;
   }
   
-  // Block javascript:, data:, and other potentially dangerous protocols
+  // Allow data:image URLs for base64-encoded images (needed for PDF rendering)
+  // This is safe because img src with data:image just renders an image
+  if (trimmedUrl.startsWith('data:image/')) {
+    return true;
+  }
+  
+  // Block javascript:, data: (non-image), and other potentially dangerous protocols
   return false;
 }
 
