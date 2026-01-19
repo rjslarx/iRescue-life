@@ -22,6 +22,7 @@ import NotificationSettings from "@/components/NotificationSettings";
 import MedicalReminderSettings from "@/components/MedicalReminderSettings";
 import VolunteerAlertSettings from "@/components/VolunteerAlertSettings";
 import VolunteerDigestSettings from "@/components/VolunteerDigestSettings";
+import QuickActionsSettings from "@/components/QuickActionsSettings";
 import { GoveeSettings } from "@/components/GoveeSettings";
 import { StripeConnectBanner } from "@/components/StripeConnectBanner";
 import { Save, Loader2, DollarSign, CreditCard, AlertCircle, CheckCircle2, Mail, Palette, Globe, ExternalLink, Copy, Inbox, HelpCircle, Check, Info, MessageSquare, Phone, FileSignature, Heart, Shield, Star, Users, Home, HandHeart, PawPrint, Upload, FileUp } from "lucide-react";
@@ -1598,6 +1599,9 @@ export default function SettingsPage() {
                     <HeroLayoutSettings tenant={data?.tenant} />
                   </CardContent>
                 </Card>
+
+                {/* Quick Actions Customization */}
+                <QuickActionsSettings />
 
                 {/* Mascot Widget Settings */}
                 <MascotSettings 
