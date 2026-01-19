@@ -23,6 +23,7 @@ import { TemperatureWidget } from "@/components/TemperatureWidget";
 import { formatDistanceToNow } from "date-fns";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { useQuickActions } from "@/hooks/useQuickActions";
 
 interface Activity {
   type: 'application' | 'donation' | 'status_change' | 'volunteer_app' | 'foster_app' | 'event' | 'happy_tail' | 'animal_new';
@@ -82,6 +83,10 @@ export default function Dashboard() {
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
   const [selectedAnimal, setSelectedAnimal] = useState<{id: string, name: string} | null>(null);
   const [offlineDonationDialogOpen, setOfflineDonationDialogOpen] = useState(false);
+  
+  const { actions: quickActions, handleAction } = useQuickActions({
+    onRecordDonation: () => setOfflineDonationDialogOpen(true),
+  });
 
   const { data: statsData, isLoading: isLoadingStats } = useQuery<{
     stats: {
@@ -501,39 +506,31 @@ export default function Dashboard() {
           <div className="space-y-4">
             <h2 className="text-xl font-semibold">Quick Actions</h2>
             <div className="grid gap-3">
-              <Link href="/dashboard/animals">
-                <Button variant="outline" className="w-full justify-start" data-testid="button-add-animal">
-                  <Heart className="mr-2 h-4 w-4" />
-                  Add New Animal
-                </Button>
-              </Link>
-              <Link href="/dashboard/applications">
-                <Button variant="outline" className="w-full justify-start" data-testid="button-review-applications">
-                  <FileText className="mr-2 h-4 w-4" />
-                  Review Applications
-                </Button>
-              </Link>
-              <Link href="/dashboard/volunteers">
-                <Button variant="outline" className="w-full justify-start" data-testid="button-post-opportunity">
-                  <Users className="mr-2 h-4 w-4" />
-                  Post Volunteer Opportunity
-                </Button>
-              </Link>
-              <Link href="/dashboard/inbox?status=unprocessed">
-                <Button variant="outline" className="w-full justify-start relative" data-testid="button-check-inbox">
-                  <Mail className="mr-2 h-4 w-4" />
-                  Check Inbox
-                  {(inboxCountData?.count ?? 0) > 0 && (
-                    <Badge 
-                      variant="destructive" 
-                      className="ml-auto h-5 min-w-5 px-1.5 text-xs"
-                      data-testid="badge-inbox-count"
+              {quickActions.map((action) => (
+                action.href ? (
+                  <Link key={action.id} href={action.href}>
+                    <Button 
+                      variant="outline" 
+                      className="w-full justify-start" 
+                      data-testid={`button-quick-action-${action.id}`}
                     >
-                      {inboxCountData!.count}
-                    </Badge>
-                  )}
-                </Button>
-              </Link>
+                      <action.icon className="mr-2 h-4 w-4" />
+                      {action.label}
+                    </Button>
+                  </Link>
+                ) : (
+                  <Button
+                    key={action.id}
+                    variant="outline"
+                    className="w-full justify-start"
+                    onClick={() => handleAction(action.id)}
+                    data-testid={`button-quick-action-${action.id}`}
+                  >
+                    <action.icon className="mr-2 h-4 w-4" />
+                    {action.label}
+                  </Button>
+                )
+              ))}
             </div>
           </div>
 
