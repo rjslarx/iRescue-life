@@ -59,17 +59,21 @@ interface CustomFormField {
   id: string;
   name: string;
   fieldKey: string;
-  type: "text" | "textarea" | "checkbox" | "number" | "date" | "email" | "phone" | "select" | "radio" | "multiselect";
+  type: "text" | "textarea" | "checkbox" | "number" | "date" | "email" | "phone" | "select" | "radio" | "multiselect" | "file";
   required: boolean;
   placeholder?: string;
   defaultValue?: string;
   options?: string[];
+  acceptedFileTypes?: string; // e.g., "image/*", ".pdf,.doc,.docx", "image/*,.pdf"
+  maxFileSize?: number; // in bytes, default 10MB
 }
 
 interface FormQuestion {
   id: string;
   question: string;
-  type: "text" | "textarea" | "checkbox" | "number" | "date" | "email" | "phone" | "select" | "radio" | "multiselect";
+  type: "text" | "textarea" | "checkbox" | "number" | "date" | "email" | "phone" | "select" | "radio" | "multiselect" | "file";
+  acceptedFileTypes?: string;
+  maxFileSize?: number;
   required: boolean;
   placeholder?: string;
   order: number;
@@ -408,6 +412,7 @@ function FormEditor({
                              q.type === 'select' ? 'Dropdown' :
                              q.type === 'radio' ? 'Multiple Choice' :
                              q.type === 'multiselect' ? 'Checkboxes' :
+                             q.type === 'file' ? 'File Upload' :
                              q.type.charAt(0).toUpperCase() + q.type.slice(1)}
                           </Badge>
                           <label className="flex items-center gap-1 text-xs">
@@ -480,6 +485,7 @@ function FormEditor({
                     <SelectItem value="select">Dropdown</SelectItem>
                     <SelectItem value="radio">Multiple Choice</SelectItem>
                     <SelectItem value="multiselect">Checkboxes</SelectItem>
+                    <SelectItem value="file">File Upload</SelectItem>
                   </SelectContent>
                 </Select>
                 <label className="flex items-center gap-1 text-sm">

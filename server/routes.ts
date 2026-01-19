@@ -7092,6 +7092,90 @@ Submitted: ${new Date().toLocaleString()}
   });
 
   /**
+   * POST /api/public/forms/:token/upload
+   * Upload a file for a public form (no auth required since forms are public)
+   */
+  app.post('/api/public/forms/:token/upload', requireTenant, async (req, res, next) => {
+    try {
+      const multer = (await import('multer')).default;
+      const { getSubmissionByToken, hashToken } = await import('./services/custom-form');
+      const { ObjectStorageService } = await import('./objectStorage');
+      
+      // Verify token and get submission
+      const tokenHash = hashToken(req.params.token);
+      const submission = await getSubmissionByToken(tokenHash);
+      
+      if (!submission) {
+        return res.status(404).json({ error: 'Form not found' });
+      }
+
+      if (submission.status !== 'pending') {
+        return res.status(400).json({ error: 'This form has already been completed' });
+      }
+
+      if (submission.expiresAt && new Date() > submission.expiresAt) {
+        return res.status(400).json({ error: 'This form link has expired' });
+      }
+
+      // Configure multer for memory storage
+      const upload = multer({
+        storage: multer.memoryStorage(),
+        limits: {
+          fileSize: 10 * 1024 * 1024, // 10MB per file
+        },
+      }).single('file');
+
+      // Process upload
+      upload(req, res, async (err) => {
+        if (err) {
+          if (err.code === 'LIMIT_FILE_SIZE') {
+            return res.status(400).json({ error: 'File too large. Maximum size is 10MB.' });
+          }
+          return res.status(400).json({ error: err.message || 'Upload error' });
+        }
+
+        if (!req.file) {
+          return res.status(400).json({ error: 'No file provided' });
+        }
+
+        try {
+          const objectStorageService = new ObjectStorageService();
+          const tenantId = submission.tenantId;
+          
+          // Upload to object storage in the tenant's form-uploads folder
+          const { objectPath, fullPath } = await objectStorageService.uploadTenantFile(
+            tenantId,
+            'form-uploads',
+            req.file.buffer,
+            req.file.mimetype
+          );
+
+          // Store the original filename with the object path for retrieval
+          const fileInfo = {
+            objectPath,
+            originalName: req.file.originalname,
+            mimeType: req.file.mimetype,
+            size: req.file.size,
+          };
+
+          res.json({
+            success: true,
+            fileUrl: objectPath,
+            fileName: req.file.originalname,
+            mimeType: req.file.mimetype,
+            size: req.file.size,
+          });
+        } catch (uploadError: any) {
+          console.error('[FORM-UPLOAD] Error uploading file:', uploadError);
+          res.status(500).json({ error: 'Failed to upload file. Please try again.' });
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * POST /api/public/forms/:token/submit
    * Submit a completed form with signature
    */
