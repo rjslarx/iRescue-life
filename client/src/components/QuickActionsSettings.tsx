@@ -142,8 +142,7 @@ export default function QuickActionsSettings() {
                   <div className="flex gap-1">
                     <Button
                       variant="ghost"
-                      size="icon"
-                      className="h-6 w-6"
+                      size="sm"
                       onClick={() => handleMoveUp(action.id)}
                       disabled={index === 0}
                       data-testid={`button-move-up-${action.id}`}
@@ -152,8 +151,7 @@ export default function QuickActionsSettings() {
                     </Button>
                     <Button
                       variant="ghost"
-                      size="icon"
-                      className="h-6 w-6"
+                      size="sm"
                       onClick={() => handleMoveDown(action.id)}
                       disabled={index === selectedActionObjects.length - 1}
                       data-testid={`button-move-down-${action.id}`}
