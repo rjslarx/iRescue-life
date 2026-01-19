@@ -848,10 +848,11 @@ export async function captureSignature(
     driversLicenseImageUrl = await processSignatureImage(signatureData.driversLicenseImageData, 'drivers-license');
   }
 
-  // Generate PDF contract with signature, including IP and timestamp for legal verification
+  // Generate PDF contract with signature, including IP, timestamp, and driver's license for legal verification
   const contractPdfUrl = await generateAdoptionContractPDF(session, signatureImageUrl, {
     ipAddress: signatureData.ipAddress,
     signedAt,
+    driversLicenseNumber: signatureData.driversLicenseNumber,
   });
 
   // Create contract record

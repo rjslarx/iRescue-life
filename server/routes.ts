@@ -5779,26 +5779,70 @@ Submitted: ${new Date().toLocaleString()}
             ? parseFloat(session.totals.total.toString()) 
             : baseFee + donationAmount;
           
+          // Parse adopter name into first/last components
+          const fullName = application?.applicantName || '';
+          const nameParts = fullName.trim().split(/\s+/);
+          const firstName = nameParts[0] || '';
+          const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
+          
+          // Format commitment dates for display
+          const formatDate = (dateStr: string | null | undefined): string => {
+            if (!dateStr) return '';
+            try {
+              return new Date(dateStr).toLocaleDateString('en-US', { 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+              });
+            } catch {
+              return dateStr;
+            }
+          };
+          
+          // Check if animal is already spayed/neutered
+          const isAlreadyAltered = animal?.neuterStatus === 'spayed' || animal?.neuterStatus === 'neutered';
+          const spayNeuterDisplay = isAlreadyAltered 
+            ? 'N/A (Already spayed/neutered)' 
+            : formatDate(session.spayNeuterDate);
+          
           // Replace merge fields with actual data
           const mergeFieldValues: Record<string, string> = {
-            '{{adopter_name}}': application?.applicantName || '',
+            // Adopter info - legacy fields
+            '{{adopter_name}}': fullName,
             '{{adopter_email}}': application?.applicantEmail || '',
             '{{adopter_phone}}': application?.applicantPhone || '',
             '{{adopter_address}}': application?.applicantAddress || '',
+            // Adopter info - component fields
+            '{{adopter_first_name}}': firstName,
+            '{{adopter_last_name}}': lastName,
+            // Note: Full address components will be collected during checkout signing
+            // For now, use the legacy address field for preview
+            '{{adopter_street_address}}': '(To be provided during signing)',
+            '{{adopter_street_address_2}}': '',
+            '{{adopter_city}}': '(To be provided during signing)',
+            '{{adopter_state}}': '(To be provided during signing)',
+            '{{adopter_zip}}': '(To be provided during signing)',
+            // Animal info
             '{{animal_name}}': animal?.name || '',
             '{{animal_species}}': animal?.species || '',
             '{{animal_breed}}': animal?.breed || '',
             '{{animal_age}}': animal?.age?.toString() || '',
             '{{animal_sex}}': animal?.sex || '',
+            // Organization info
             '{{organization_name}}': tenant?.name || '',
+            // Financial info
             '{{contract_date}}': new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
             '{{adoption_fee}}': `$${baseFee.toFixed(2)}`,
             '{{donation_amount}}': donationAmount > 0 ? `$${donationAmount.toFixed(2)}` : '$0.00',
             '{{total_amount}}': `$${totalAmount.toFixed(2)}`,
+            // Commitment dates (staff-confirmed)
+            '{{vet_appointment_date}}': formatDate(session.vetAppointmentDate),
+            '{{spay_neuter_date}}': spayNeuterDisplay,
             // Pre-signing placeholders - will be filled with actual values after signing
             '{{signed_timestamp}}': '(Will be recorded upon signing)',
             '{{signed_ip}}': '(Will be recorded upon signing)',
             '{{signature_image_url}}': '',
+            '{{adopter_drivers_license}}': '(Will be collected during signing)',
           };
           
           let processedHtml = template.htmlTemplate;

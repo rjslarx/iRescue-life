@@ -417,13 +417,13 @@ function generateContractHTML(data: {
  * Generate adoption contract PDF with session data
  * @param session - Adoption checkout session
  * @param signatureImageUrl - Optional signature image URL (if already uploaded)
- * @param signatureMetadata - Optional metadata for signature verification (IP, timestamp)
+ * @param signatureMetadata - Optional metadata for signature verification (IP, timestamp, driver's license)
  * @returns Object storage URL for the generated PDF
  */
 export async function generateAdoptionContractPDF(
   session: AdoptionCheckoutSession,
   signatureImageUrl?: string,
-  signatureMetadata?: { ipAddress?: string; signedAt?: Date }
+  signatureMetadata?: { ipAddress?: string; signedAt?: Date; driversLicenseNumber?: string }
 ): Promise<string> {
   // Fetch all required data
   const [tenant] = await db
@@ -519,15 +519,13 @@ export async function generateAdoptionContractPDF(
   // Build merge data object
   const signedAt = signatureMetadata?.signedAt || new Date();
   
-  // Extract address components and commitment dates from session metadata
+  // Extract address components from session metadata
   const metadata = session.metadata as {
     adopterStreetAddress?: string;
     adopterStreetAddress2?: string;
     adopterCity?: string;
     adopterState?: string;
     adopterZip?: string;
-    vetAppointmentDate?: string;
-    spayNeuterDate?: string;
     waiveFee?: boolean;
   } | null;
   
@@ -562,7 +560,7 @@ export async function generateAdoptionContractPDF(
     adopter_city: city,
     adopter_state: state,
     adopter_zip: zip,
-    adopter_drivers_license: session.driversLicenseNumber || undefined,
+    adopter_drivers_license: signatureMetadata?.driversLicenseNumber || undefined,
     animal_name: animal.name,
     animal_species: animal.species,
     animal_breed: animal.breed,
@@ -575,11 +573,11 @@ export async function generateAdoptionContractPDF(
     signature_image_url: signatureImageUrl,
     signed_timestamp: signedAt.toISOString(),
     signed_ip: signatureMetadata?.ipAddress || 'Not recorded',
-    vet_appointment_date: metadata?.vetAppointmentDate || '_________________',
+    vet_appointment_date: session.vetAppointmentDate || '_________________',
     // Show "N/A" for spay/neuter date if animal is already spayed/neutered
     spay_neuter_date: (animal.neuterStatus === 'spayed' || animal.neuterStatus === 'neutered') 
       ? 'N/A (Already ' + animal.neuterStatus + ')' 
-      : (metadata?.spayNeuterDate || '_________________'),
+      : (session.spayNeuterDate || '_________________'),
   };
 
   // Merge placeholders with actual data
