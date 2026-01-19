@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CheckCircle2, AlertCircle, FileSignature, Loader2 } from "lucide-react";
 import SignaturePad from "signature_pad";
@@ -17,19 +19,21 @@ interface CustomFormField {
   id: string;
   name: string;
   fieldKey: string;
-  type: "text" | "textarea" | "checkbox" | "number" | "date" | "email" | "phone";
+  type: "text" | "textarea" | "checkbox" | "number" | "date" | "email" | "phone" | "select" | "radio" | "multiselect";
   required: boolean;
   placeholder?: string;
   defaultValue?: string;
+  options?: string[];
 }
 
 interface FormQuestion {
   id: string;
   question: string;
-  type: "text" | "textarea" | "checkbox" | "number" | "date" | "email" | "phone";
+  type: "text" | "textarea" | "checkbox" | "number" | "date" | "email" | "phone" | "select" | "radio" | "multiselect";
   required: boolean;
   placeholder?: string;
   order: number;
+  options?: string[];
 }
 
 interface FormData {
@@ -366,6 +370,63 @@ export default function PublicFormSigningPage() {
                         Yes
                       </Label>
                     </div>
+                  ) : question.type === 'select' ? (
+                    <Select
+                      value={customFieldValues[question.id] || ''}
+                      onValueChange={(value) => handleCustomFieldChange(question.id, value)}
+                    >
+                      <SelectTrigger data-testid={`input-question-${question.id}`}>
+                        <SelectValue placeholder="Select an option..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {question.options?.map((opt, idx) => (
+                          <SelectItem key={idx} value={opt} data-testid={`input-question-${question.id}-option-${idx}`}>{opt}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : question.type === 'radio' ? (
+                    <RadioGroup
+                      value={customFieldValues[question.id] || ''}
+                      onValueChange={(value) => handleCustomFieldChange(question.id, value)}
+                      data-testid={`input-question-${question.id}`}
+                    >
+                      {question.options?.map((opt, idx) => (
+                        <div key={idx} className="flex items-center space-x-2">
+                          <RadioGroupItem value={opt} id={`question-${question.id}-option-${idx}`} data-testid={`input-question-${question.id}-option-${idx}`} />
+                          <Label htmlFor={`question-${question.id}-option-${idx}`} className="font-normal">
+                            {opt}
+                          </Label>
+                        </div>
+                      ))}
+                    </RadioGroup>
+                  ) : question.type === 'multiselect' ? (
+                    <div className="space-y-2" data-testid={`input-question-${question.id}`}>
+                      {question.options?.map((opt, idx) => {
+                        const selectedValues = customFieldValues[question.id] ? customFieldValues[question.id].split(', ').filter(v => v) : [];
+                        const isChecked = selectedValues.includes(opt);
+                        return (
+                          <div key={idx} className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`question-${question.id}-option-${idx}`}
+                              checked={isChecked}
+                              onCheckedChange={(checked) => {
+                                let newValues: string[];
+                                if (checked) {
+                                  newValues = [...selectedValues, opt];
+                                } else {
+                                  newValues = selectedValues.filter(v => v !== opt);
+                                }
+                                handleCustomFieldChange(question.id, newValues.join(', '));
+                              }}
+                              data-testid={`input-question-${question.id}-option-${idx}`}
+                            />
+                            <Label htmlFor={`question-${question.id}-option-${idx}`} className="font-normal">
+                              {opt}
+                            </Label>
+                          </div>
+                        );
+                      })}
+                    </div>
                   ) : (
                     <Input
                       id={`question-${question.id}`}
@@ -436,6 +497,63 @@ export default function PublicFormSigningPage() {
                           <Label htmlFor={`field-${field.fieldKey}`} className="text-sm font-normal">
                             {field.placeholder || 'Yes'}
                           </Label>
+                        </div>
+                      ) : field.type === 'select' ? (
+                        <Select
+                          value={customFieldValues[field.fieldKey] || ''}
+                          onValueChange={(value) => handleCustomFieldChange(field.fieldKey, value)}
+                        >
+                          <SelectTrigger data-testid={`input-${field.fieldKey}`}>
+                            <SelectValue placeholder="Select an option..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {field.options?.map((opt, idx) => (
+                              <SelectItem key={idx} value={opt} data-testid={`input-${field.fieldKey}-option-${idx}`}>{opt}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : field.type === 'radio' ? (
+                        <RadioGroup
+                          value={customFieldValues[field.fieldKey] || ''}
+                          onValueChange={(value) => handleCustomFieldChange(field.fieldKey, value)}
+                          data-testid={`input-${field.fieldKey}`}
+                        >
+                          {field.options?.map((opt, idx) => (
+                            <div key={idx} className="flex items-center space-x-2">
+                              <RadioGroupItem value={opt} id={`field-${field.fieldKey}-option-${idx}`} data-testid={`input-${field.fieldKey}-option-${idx}`} />
+                              <Label htmlFor={`field-${field.fieldKey}-option-${idx}`} className="font-normal">
+                                {opt}
+                              </Label>
+                            </div>
+                          ))}
+                        </RadioGroup>
+                      ) : field.type === 'multiselect' ? (
+                        <div className="space-y-2" data-testid={`input-${field.fieldKey}`}>
+                          {field.options?.map((opt, idx) => {
+                            const selectedValues = customFieldValues[field.fieldKey] ? customFieldValues[field.fieldKey].split(', ').filter(v => v) : [];
+                            const isChecked = selectedValues.includes(opt);
+                            return (
+                              <div key={idx} className="flex items-center space-x-2">
+                                <Checkbox
+                                  id={`field-${field.fieldKey}-option-${idx}`}
+                                  checked={isChecked}
+                                  onCheckedChange={(checked) => {
+                                    let newValues: string[];
+                                    if (checked) {
+                                      newValues = [...selectedValues, opt];
+                                    } else {
+                                      newValues = selectedValues.filter(v => v !== opt);
+                                    }
+                                    handleCustomFieldChange(field.fieldKey, newValues.join(', '));
+                                  }}
+                                  data-testid={`input-${field.fieldKey}-option-${idx}`}
+                                />
+                                <Label htmlFor={`field-${field.fieldKey}-option-${idx}`} className="font-normal">
+                                  {opt}
+                                </Label>
+                              </div>
+                            );
+                          })}
                         </div>
                       ) : (
                         <Input
