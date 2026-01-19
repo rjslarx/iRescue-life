@@ -1367,18 +1367,24 @@ export async function finalizeAdoption(sessionId: string): Promise<void> {
 
       console.log(`[Adoption Email] Generating PDF attachments for session ${session.id}...`);
 
-      // 1. Payment Receipt PDF
-      try {
-        const receiptPdf = await generatePaymentReceiptPDF(session.id);
-        attachments.push({
-          filename: `adoption-receipt-${animal.name.replace(/\s+/g, '-').toLowerCase()}.pdf`,
-          content: receiptPdf,
-          contentType: 'application/pdf',
-        });
-        includedDocs.receipt = true;
-        console.log(`[Adoption Email] ✅ Payment receipt PDF generated successfully`);
-      } catch (error) {
-        console.error('[Adoption Email] ❌ Failed to generate payment receipt PDF:', error);
+      // 1. Payment Receipt PDF - only generate if fee was not waived
+      const sessionTotals = session.totals as { total?: string } | null;
+      const totalAmount = parseFloat(sessionTotals?.total || session.baseFee?.toString() || '0');
+      if (totalAmount > 0) {
+        try {
+          const receiptPdf = await generatePaymentReceiptPDF(session.id);
+          attachments.push({
+            filename: `adoption-receipt-${animal.name.replace(/\s+/g, '-').toLowerCase()}.pdf`,
+            content: receiptPdf,
+            contentType: 'application/pdf',
+          });
+          includedDocs.receipt = true;
+          console.log(`[Adoption Email] ✅ Payment receipt PDF generated successfully`);
+        } catch (error) {
+          console.error('[Adoption Email] ❌ Failed to generate payment receipt PDF:', error);
+        }
+      } else {
+        console.log(`[Adoption Email] ℹ️ Skipping payment receipt - adoption fee was waived (total: $${totalAmount})`);
       }
 
       // 2. Signed Contract PDF

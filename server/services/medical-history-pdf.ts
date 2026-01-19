@@ -35,83 +35,83 @@ export async function generateMedicalHistoryPDF(animalId: string, tenantId: stri
     .where(eq(tenants.id, tenantId))
     .limit(1);
 
-  // Fetch medical exams
+  // Fetch medical exams - using correct schema column names
   const exams = await db
     .select({
       id: medicalExams.id,
       examDate: medicalExams.examDate,
       examType: medicalExams.examType,
-      veterinarian: medicalExams.veterinarian,
-      findings: medicalExams.findings,
-      notes: medicalExams.notes,
+      veterinarian: medicalExams.performedBy,
+      findings: medicalExams.assessment,
+      notes: medicalExams.plan,
     })
     .from(medicalExams)
     .where(eq(medicalExams.animalId, animalId));
 
-  // Fetch vaccines
+  // Fetch vaccines - using correct schema column names
   const vaccines = await db
     .select({
       id: vaccineRecords.id,
-      vaccineDate: vaccineRecords.vaccineDate,
-      vaccineName: vaccineRecords.vaccineName,
+      vaccineDate: vaccineRecords.dateGiven,
+      vaccineName: vaccineRecords.itemName,
       administeredBy: vaccineRecords.administeredBy,
       lotNumber: vaccineRecords.lotNumber,
-      nextDueDate: vaccineRecords.nextDueDate,
+      nextDueDate: vaccineRecords.dateDue,
     })
     .from(vaccineRecords)
     .where(eq(vaccineRecords.animalId, animalId));
 
-  // Fetch diagnostic tests
+  // Fetch diagnostic tests - using correct schema column names
   const diagnostics = await db
     .select({
       id: diagnosticTests.id,
       testDate: diagnosticTests.testDate,
-      testType: diagnosticTests.testType,
-      results: diagnosticTests.results,
-      performedBy: diagnosticTests.performedBy,
+      testType: diagnosticTests.testName,
+      results: diagnosticTests.result,
+      performedBy: diagnosticTests.notes,
     })
     .from(diagnosticTests)
     .where(eq(diagnosticTests.animalId, animalId));
 
-  // Fetch procedures
+  // Fetch procedures - using correct schema column names
   const procedures = await db
     .select({
       id: procedureLogs.id,
       procedureDate: procedureLogs.procedureDate,
       procedureName: procedureLogs.procedureName,
-      performedBy: procedureLogs.performedBy,
+      performedBy: procedureLogs.veterinarian,
       notes: procedureLogs.notes,
     })
     .from(procedureLogs)
     .where(eq(procedureLogs.animalId, animalId));
 
-  // Fetch medical bills
+  // Fetch medical bills - using correct schema column names
   const bills = await db
     .select({
       id: medicalBills.id,
       billDate: medicalBills.billDate,
       vendor: medicalBills.vendor,
-      totalAmount: medicalBills.totalAmount,
-      category: medicalBills.category,
+      totalAmount: medicalBills.amount,
+      category: medicalBills.description,
     })
     .from(medicalBills)
     .where(eq(medicalBills.animalId, animalId))
     .orderBy(medicalBills.billDate);
 
-  // Fetch prescriptions
+  // Fetch prescriptions - using correct schema column names
   const prescriptions = await db
     .select({
       id: medicalPrescriptions.id,
-      datePrescribed: medicalPrescriptions.datePrescribed,
-      medication: medicalPrescriptions.medication,
+      datePrescribed: medicalPrescriptions.startDate,
+      medication: medicalPrescriptions.medicationName,
       dosage: medicalPrescriptions.dosage,
       frequency: medicalPrescriptions.frequency,
-      duration: medicalPrescriptions.duration,
-      prescribedBy: medicalPrescriptions.prescribedBy,
+      duration: medicalPrescriptions.endDate,
+      prescribedBy: medicalPrescriptions.notes,
     })
     .from(medicalPrescriptions)
     .where(eq(medicalPrescriptions.animalId, animalId))
-    .orderBy(medicalPrescriptions.datePrescribed);
+    .orderBy(medicalPrescriptions.startDate);
 
   const html = generateMedicalHistoryHTML({
     organizationName: tenant?.name || 'Animal Rescue Organization',
@@ -122,7 +122,14 @@ export async function generateMedicalHistoryPDF(animalId: string, tenantId: stri
     animalBreed: animal.breed || '',
     animalAge: animal.age || '',
     animalSex: animal.sex || '',
-    animalMicrochip: animal.microchipId || '',
+    animalMicrochip: animal.microchipNumber || '',
+    animalWeight: animal.weight || '',
+    neuterStatus: animal.neuterStatus || 'unknown',
+    shotsCurrent: animal.shotsCurrent,
+    heartwormPositive: animal.heartwormPositive,
+    specialNeeds: animal.specialNeeds,
+    medicalAlertMemo: animal.medicalAlertMemo || '',
+    dietaryRestrictions: animal.dietaryRestrictions || '',
     exams: exams,
     vaccines: vaccines,
     diagnostics: diagnostics,
@@ -173,8 +180,15 @@ function generateMedicalHistoryHTML(data: {
   animalAge: string;
   animalSex: string;
   animalMicrochip: string;
+  animalWeight: string;
+  neuterStatus: string;
+  shotsCurrent: boolean | null;
+  heartwormPositive: boolean | null;
+  specialNeeds: boolean | null;
+  medicalAlertMemo: string;
+  dietaryRestrictions: string;
   exams: Array<{
-    id: number;
+    id: string;
     examDate: Date;
     examType: string;
     veterinarian: string | null;
@@ -182,7 +196,7 @@ function generateMedicalHistoryHTML(data: {
     notes: string | null;
   }>;
   vaccines: Array<{
-    id: number;
+    id: string;
     vaccineDate: Date;
     vaccineName: string;
     administeredBy: string | null;
@@ -190,33 +204,33 @@ function generateMedicalHistoryHTML(data: {
     nextDueDate: Date | null;
   }>;
   diagnostics: Array<{
-    id: number;
+    id: string;
     testDate: Date;
     testType: string;
     results: string | null;
     performedBy: string | null;
   }>;
   procedures: Array<{
-    id: number;
+    id: string;
     procedureDate: Date;
     procedureName: string;
     performedBy: string | null;
     notes: string | null;
   }>;
   medicalBills: Array<{
-    id: number;
+    id: string;
     billDate: Date;
     vendor: string;
     totalAmount: string;
     category: string;
   }>;
   prescriptions: Array<{
-    id: number;
+    id: string;
     datePrescribed: Date;
     medication: string;
     dosage: string;
     frequency: string;
-    duration: string | null;
+    duration: Date | null;
     prescribedBy: string | null;
   }>;
   generatedDate: string;
@@ -362,8 +376,31 @@ function generateMedicalHistoryHTML(data: {
       <div class="info-item"><strong>Breed:</strong> ${data.animalBreed || 'Unknown'}</div>
       <div class="info-item"><strong>Age:</strong> ${data.animalAge || 'Unknown'}</div>
       <div class="info-item"><strong>Sex:</strong> ${data.animalSex || 'Unknown'}</div>
+      ${data.animalWeight ? `<div class="info-item"><strong>Weight:</strong> ${data.animalWeight}</div>` : ''}
       ${data.animalMicrochip ? `<div class="info-item"><strong>Microchip:</strong> ${data.animalMicrochip}</div>` : ''}
     </div>
+  </div>
+
+  <div class="section">
+    <h3>Health Overview</h3>
+    <div class="info-grid" style="background-color: #f8fafc; padding: 15px; border-radius: 6px; margin-bottom: 15px;">
+      <div class="info-item"><strong>Spay/Neuter Status:</strong> ${data.neuterStatus === 'spayed' ? 'Spayed' : data.neuterStatus === 'neutered' ? 'Neutered' : data.neuterStatus === 'intact' ? 'Intact' : 'Unknown'}</div>
+      <div class="info-item"><strong>Vaccinations Current:</strong> ${data.shotsCurrent === true ? 'Yes' : data.shotsCurrent === false ? 'No' : 'Unknown'}</div>
+      <div class="info-item"><strong>Heartworm Status:</strong> ${data.heartwormPositive === true ? 'Positive' : data.heartwormPositive === false ? 'Negative' : 'Unknown'}</div>
+      <div class="info-item"><strong>Special Needs:</strong> ${data.specialNeeds === true ? 'Yes' : 'No'}</div>
+    </div>
+    ${data.medicalAlertMemo ? `
+    <div style="background-color: #fef2f2; border: 1px solid #fee2e2; border-radius: 6px; padding: 12px; margin-bottom: 15px;">
+      <strong style="color: #dc2626;">Medical Alerts:</strong>
+      <p style="margin-top: 5px; color: #7f1d1d;">${data.medicalAlertMemo}</p>
+    </div>
+    ` : ''}
+    ${data.dietaryRestrictions ? `
+    <div style="background-color: #fffbeb; border: 1px solid #fef3c7; border-radius: 6px; padding: 12px;">
+      <strong style="color: #92400e;">Dietary Restrictions:</strong>
+      <p style="margin-top: 5px; color: #78350f;">${data.dietaryRestrictions}</p>
+    </div>
+    ` : ''}
   </div>
 
   <div class="section">
@@ -473,7 +510,7 @@ function generateMedicalHistoryHTML(data: {
               <td>${rx.medication}</td>
               <td>${rx.dosage}</td>
               <td>${rx.frequency}</td>
-              <td>${rx.duration || 'As needed'}</td>
+              <td>${rx.duration ? 'Until ' + new Date(rx.duration).toLocaleDateString() : 'Ongoing'}</td>
             </tr>
           `).join('')}
         </tbody>
