@@ -44,6 +44,9 @@ interface SessionData {
     totals: { subtotal: string; fees: string; total: string };
     expiresAt: string;
     contractTemplateId?: number;
+    // Staff-set commitment dates (read-only for adopter)
+    vetAppointmentDate?: string;
+    spayNeuterDate?: string;
   };
   animal: {
     id: string;
@@ -562,7 +565,7 @@ function PublicAdoptionCheckoutPageContent() {
   const [state, setState] = useState("");
   const [zipCode, setZipCode] = useState("");
   
-  // Commitment date fields
+  // Commitment date fields - will be pre-filled from session if staff set them
   const [vetAppointmentDate, setVetAppointmentDate] = useState("");
   const [spayNeuterDate, setSpayNeuterDate] = useState("");
 
@@ -570,6 +573,20 @@ function PublicAdoptionCheckoutPageContent() {
     queryKey: ['/api/public/adoption-checkouts', token],
     retry: false,
   });
+
+  // Pre-fill commitment dates from session when data loads
+  const staffSetVetDate = sessionData?.session?.vetAppointmentDate;
+  const staffSetSpayDate = sessionData?.session?.spayNeuterDate;
+  
+  // Use useEffect to initialize dates from session
+  React.useEffect(() => {
+    if (staffSetVetDate && !vetAppointmentDate) {
+      setVetAppointmentDate(staffSetVetDate);
+    }
+    if (staffSetSpayDate && !spayNeuterDate) {
+      setSpayNeuterDate(staffSetSpayDate);
+    }
+  }, [staffSetVetDate, staffSetSpayDate]);
 
   // Check if fee is waived (baseFee is 0 or metadata indicates waived)
   const isFeeWaived = sessionData?.session?.baseFee === "0" || 
@@ -940,32 +957,48 @@ function PublicAdoptionCheckoutPageContent() {
                 {/* Commitment Dates */}
                 <div className="space-y-4">
                   <h4 className="font-semibold">Commitment Dates</h4>
-                  <p className="text-sm text-muted-foreground">Please provide the dates by which you commit to the following.</p>
+                  <p className="text-sm text-muted-foreground">
+                    {staffSetVetDate || staffSetSpayDate 
+                      ? "The rescue has set the following commitment dates for this adoption."
+                      : "Please provide the dates by which you commit to the following."}
+                  </p>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="vetAppointmentDate">Vet Visit Date (for shots)</Label>
-                      <Input
-                        id="vetAppointmentDate"
-                        type="date"
-                        value={vetAppointmentDate}
-                        onChange={(e) => setVetAppointmentDate(e.target.value)}
-                        disabled={signMutation.isPending}
-                        data-testid="input-vet-appointment-date"
-                      />
-                      <p className="text-xs text-muted-foreground">Date you will take the dog to a licensed vet for shots</p>
+                      {staffSetVetDate ? (
+                        <div className="p-2 border rounded-md bg-muted/50 text-sm" data-testid="text-vet-appointment-date">
+                          {new Date(staffSetVetDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+                        </div>
+                      ) : (
+                        <Input
+                          id="vetAppointmentDate"
+                          type="date"
+                          value={vetAppointmentDate}
+                          onChange={(e) => setVetAppointmentDate(e.target.value)}
+                          disabled={signMutation.isPending}
+                          data-testid="input-vet-appointment-date"
+                        />
+                      )}
+                      <p className="text-xs text-muted-foreground">Date to take the animal to a licensed vet for shots</p>
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="spayNeuterDate">Spay/Neuter Date</Label>
-                      <Input
-                        id="spayNeuterDate"
-                        type="date"
-                        value={spayNeuterDate}
-                        onChange={(e) => setSpayNeuterDate(e.target.value)}
-                        disabled={signMutation.isPending}
-                        data-testid="input-spay-neuter-date"
-                      />
-                      <p className="text-xs text-muted-foreground">Date you will have the dog spayed/neutered (if not already done)</p>
+                      {staffSetSpayDate ? (
+                        <div className="p-2 border rounded-md bg-muted/50 text-sm" data-testid="text-spay-neuter-date">
+                          {new Date(staffSetSpayDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+                        </div>
+                      ) : (
+                        <Input
+                          id="spayNeuterDate"
+                          type="date"
+                          value={spayNeuterDate}
+                          onChange={(e) => setSpayNeuterDate(e.target.value)}
+                          disabled={signMutation.isPending}
+                          data-testid="input-spay-neuter-date"
+                        />
+                      )}
+                      <p className="text-xs text-muted-foreground">Date to have the animal spayed/neutered (if not already done)</p>
                     </div>
                   </div>
                 </div>

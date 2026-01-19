@@ -5772,12 +5772,12 @@ Submitted: ${new Date().toLocaleString()}
           .limit(1);
         
         if (template) {
-          // Calculate totals for display
+          // Calculate totals for display in contract
+          // Note: Contract shows baseFee + donation (what the adopter pays to the rescue)
+          // NOT the payment total with processing fees (which goes to Stripe)
           const donationAmount = parseFloat(session.donationBoost?.toString() || '0');
           const baseFee = parseFloat(session.baseFee?.toString() || '0');
-          const totalAmount = session.totals?.total 
-            ? parseFloat(session.totals.total.toString()) 
-            : baseFee + donationAmount;
+          const totalAmount = baseFee + donationAmount;
           
           // Parse adopter name into first/last components
           const fullName = application?.applicantName || '';
@@ -5878,6 +5878,9 @@ Submitted: ${new Date().toLocaleString()}
           signedAt: session.signedAt,
           paidAt: session.paidAt,
           contractTemplateId: session.contractTemplateId,
+          // Staff-set commitment dates (read-only for adopter)
+          vetAppointmentDate: session.vetAppointmentDate,
+          spayNeuterDate: session.spayNeuterDate,
         },
         animal: animal ? {
           id: animal.id,
