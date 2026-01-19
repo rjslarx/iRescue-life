@@ -89,7 +89,16 @@ export const sessionMiddleware = session({
  * Loads user data if session exists
  */
 export async function authenticateUser(req: Request, res: Response, next: NextFunction) {
-  if (req.session.userId && req.session.tenantId) {
+  // Validate session IDs are proper UUID strings (defensive against corrupted session data)
+  const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const userId = typeof req.session.userId === 'string' && UUID_PATTERN.test(req.session.userId) 
+    ? req.session.userId 
+    : null;
+  const tenantId = typeof req.session.tenantId === 'string' && UUID_PATTERN.test(req.session.tenantId) 
+    ? req.session.tenantId 
+    : null;
+  
+  if (userId && tenantId) {
     try {
       // Handle impersonation: load platform admin user without tenant filter
       let user;
@@ -105,7 +114,7 @@ export async function authenticateUser(req: Request, res: Response, next: NextFu
           })
           .from(users)
           .where(and(
-            eq(users.id, req.session.userId),
+            eq(users.id, userId),
             eq(users.isActive, true)
           ))
           .limit(1);
@@ -116,7 +125,7 @@ export async function authenticateUser(req: Request, res: Response, next: NextFu
           // Add admin role so they can access tenant routes as admin
           user = {
             ...platformAdmin,
-            tenantId: req.session.tenantId, // Use impersonated tenant
+            tenantId: tenantId, // Use impersonated tenant
             roles: [...platformAdmin.roles, 'admin'], // Keep platform_admin, add admin
           };
           // Mark request as platform admin to bypass tenant checks
@@ -136,8 +145,8 @@ export async function authenticateUser(req: Request, res: Response, next: NextFu
           })
           .from(users)
           .where(and(
-            eq(users.id, req.session.userId),
-            eq(users.tenantId, req.session.tenantId),
+            eq(users.id, userId),
+            eq(users.tenantId, tenantId),
             eq(users.isActive, true)
           ))
           .limit(1);
