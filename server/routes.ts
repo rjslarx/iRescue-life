@@ -5805,6 +5805,10 @@ Submitted: ${new Date().toLocaleString()}
             ? 'N/A (Already spayed/neutered)' 
             : formatDate(session.spayNeuterDate);
           
+          // Helper to create highlighted editable field span
+          const editableField = (fieldName: string, placeholder: string) => 
+            `<span class="merge-field-editable" data-field="${fieldName}" style="background-color: #fff3cd; padding: 1px 4px; border-radius: 2px;">${placeholder}</span>`;
+          
           // Replace merge fields with actual data
           const mergeFieldValues: Record<string, string> = {
             // Adopter info - legacy fields
@@ -5815,13 +5819,12 @@ Submitted: ${new Date().toLocaleString()}
             // Adopter info - component fields
             '{{adopter_first_name}}': firstName,
             '{{adopter_last_name}}': lastName,
-            // Note: Full address components will be collected during checkout signing
-            // For now, use the legacy address field for preview
-            '{{adopter_street_address}}': '(To be provided during signing)',
-            '{{adopter_street_address_2}}': '',
-            '{{adopter_city}}': '(To be provided during signing)',
-            '{{adopter_state}}': '(To be provided during signing)',
-            '{{adopter_zip}}': '(To be provided during signing)',
+            // Address components - editable fields with yellow highlight
+            '{{adopter_street_address}}': editableField('street_address', 'Street Address'),
+            '{{adopter_street_address_2}}': `<span class="merge-field-editable" data-field="street_address_2"></span>`,
+            '{{adopter_city}}': editableField('city', 'City'),
+            '{{adopter_state}}': editableField('state', 'State'),
+            '{{adopter_zip}}': editableField('zip', 'Zip Code'),
             // Animal info
             '{{animal_name}}': animal?.name || '',
             '{{animal_species}}': animal?.species || '',
@@ -5838,11 +5841,11 @@ Submitted: ${new Date().toLocaleString()}
             // Commitment dates (staff-confirmed)
             '{{vet_appointment_date}}': formatDate(session.vetAppointmentDate),
             '{{spay_neuter_date}}': spayNeuterDisplay,
-            // Pre-signing placeholders - will be filled with actual values after signing
+            // Pre-signing placeholders - editable fields
             '{{signed_timestamp}}': '(Will be recorded upon signing)',
             '{{signed_ip}}': '(Will be recorded upon signing)',
             '{{signature_image_url}}': '',
-            '{{adopter_drivers_license}}': '(Will be collected during signing)',
+            '{{adopter_drivers_license}}': editableField('drivers_license', "Driver's License #"),
           };
           
           let processedHtml = template.htmlTemplate;
@@ -5851,10 +5854,11 @@ Submitted: ${new Date().toLocaleString()}
           }
           
           // Sanitize HTML server-side to prevent XSS
+          // Allow data-field attribute for merge field live updates
           const sanitizedHtml = DOMPurify.sanitize(processedHtml, {
             ALLOWED_TAGS: ['div', 'span', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'strong', 'em', 'u', 'br', 'hr', 'ul', 'ol', 'li', 'table', 'thead', 'tbody', 'tr', 'th', 'td'],
-            ALLOWED_ATTR: ['class', 'style'],
-            ALLOW_DATA_ATTR: false,
+            ALLOWED_ATTR: ['class', 'style', 'data-field'],
+            ALLOW_DATA_ATTR: false, // Only allow specific data attrs via ALLOWED_ATTR
           });
           
           contractData = {

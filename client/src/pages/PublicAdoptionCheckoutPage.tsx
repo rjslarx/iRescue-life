@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -558,6 +558,9 @@ function PublicAdoptionCheckoutPageContent() {
   const [driversLicenseImage, setDriversLicenseImage] = useState<string | null>(null);
   const [driversLicenseFileName, setDriversLicenseFileName] = useState<string | null>(null);
   
+  // Ref for contract container to update merge fields live
+  const contractRef = useRef<HTMLDivElement>(null);
+  
   // Address fields
   const [streetAddress, setStreetAddress] = useState("");
   const [streetAddress2, setStreetAddress2] = useState("");
@@ -579,7 +582,7 @@ function PublicAdoptionCheckoutPageContent() {
   const staffSetSpayDate = sessionData?.session?.spayNeuterDate;
   
   // Use useEffect to initialize dates from session
-  React.useEffect(() => {
+  useEffect(() => {
     if (staffSetVetDate && !vetAppointmentDate) {
       setVetAppointmentDate(staffSetVetDate);
     }
@@ -587,6 +590,40 @@ function PublicAdoptionCheckoutPageContent() {
       setSpayNeuterDate(staffSetSpayDate);
     }
   }, [staffSetVetDate, staffSetSpayDate]);
+
+  // Live update merge fields in contract as user types
+  useEffect(() => {
+    if (!contractRef.current) return;
+    
+    // Map of data-field values to current form values and their placeholder text
+    const fieldMappings: Record<string, { value: string; placeholder: string }> = {
+      'street_address': { value: streetAddress, placeholder: 'Street Address' },
+      'street_address_2': { value: streetAddress2, placeholder: '' },
+      'city': { value: city, placeholder: 'City' },
+      'state': { value: state, placeholder: 'State' },
+      'zip': { value: zipCode, placeholder: 'Zip Code' },
+      'drivers_license': { value: driversLicenseNumber, placeholder: "Driver's License #" },
+    };
+    
+    // Update each editable merge field
+    Object.entries(fieldMappings).forEach(([fieldName, { value, placeholder }]) => {
+      const elements = contractRef.current?.querySelectorAll(`[data-field="${fieldName}"]`);
+      elements?.forEach((el) => {
+        const span = el as HTMLSpanElement;
+        if (value) {
+          // User has entered a value - show it without yellow background
+          span.textContent = value;
+          span.style.backgroundColor = 'transparent';
+          span.style.fontWeight = '500';
+        } else {
+          // No value - show placeholder with yellow highlight
+          span.textContent = placeholder;
+          span.style.backgroundColor = '#fff3cd';
+          span.style.fontWeight = 'normal';
+        }
+      });
+    });
+  }, [streetAddress, streetAddress2, city, state, zipCode, driversLicenseNumber]);
 
   // Check if fee is waived (baseFee is 0 or metadata indicates waived)
   const isFeeWaived = sessionData?.session?.baseFee === "0" || 
@@ -837,6 +874,7 @@ function PublicAdoptionCheckoutPageContent() {
                 <div className="max-h-96 overflow-y-auto border rounded-lg p-4 bg-muted/30">
                   {contract?.html ? (
                     <div 
+                      ref={contractRef}
                       className="prose prose-sm dark:prose-invert max-w-none"
                       dangerouslySetInnerHTML={{ __html: contract.html }}
                     />
