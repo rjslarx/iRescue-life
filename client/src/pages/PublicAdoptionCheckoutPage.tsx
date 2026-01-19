@@ -65,6 +65,11 @@ interface SessionData {
     html: string;
     name: string;
   };
+  spayNeuterContract?: {
+    html: string;
+    name: string;
+  };
+  requiresSpayNeuterContract?: boolean;
   organization?: {
     name: string;
   };
@@ -915,6 +920,39 @@ function PublicAdoptionCheckoutPageContent() {
                   )}
                 </div>
 
+                {/* Spay/Neuter Contract (conditional) */}
+                {sessionData?.requiresSpayNeuterContract && sessionData?.spayNeuterContract && (
+                  <>
+                    <Separator />
+                    <div className="space-y-4">
+                      <Alert className="bg-amber-50 dark:bg-amber-950 border-amber-200 dark:border-amber-800">
+                        <AlertCircle className="h-4 w-4 text-amber-600" />
+                        <AlertDescription className="text-amber-800 dark:text-amber-200">
+                          <strong>Additional Agreement Required:</strong> Because {animal.name} is not yet spayed/neutered, 
+                          you are also agreeing to the Spay/Neuter Agreement below as part of this adoption.
+                        </AlertDescription>
+                      </Alert>
+                      
+                      <div className="space-y-2">
+                        <h4 className="font-semibold flex items-center gap-2">
+                          <FileText className="h-4 w-4" />
+                          {sessionData.spayNeuterContract.name}
+                        </h4>
+                        <p className="text-sm text-muted-foreground">
+                          This agreement commits you to having {animal.name} spayed/neutered by the date specified below. 
+                          Failure to comply may result in penalties.
+                        </p>
+                      </div>
+                      
+                      <div 
+                        className="border rounded-lg p-4 bg-white dark:bg-slate-950 max-h-[400px] overflow-y-auto text-sm"
+                        dangerouslySetInnerHTML={{ __html: sessionData.spayNeuterContract.html }}
+                        data-testid="spay-neuter-contract-content"
+                      />
+                    </div>
+                  </>
+                )}
+
                 <Separator />
 
                 {/* Your Address */}
@@ -1135,7 +1173,8 @@ function PublicAdoptionCheckoutPageContent() {
                 <Alert>
                   <Heart className="h-4 w-4" />
                   <AlertDescription>
-                    By signing, I agree to all terms and conditions of this adoption contract.
+                    By signing, I agree to all terms and conditions of this adoption contract
+                    {sessionData?.requiresSpayNeuterContract && " and the Spay/Neuter Agreement"}.
                   </AlertDescription>
                 </Alert>
               </CardContent>

@@ -5754,6 +5754,7 @@ Submitted: ${new Date().toLocaleString()}
         .select({
           subscriptionTier: tenants.subscriptionTier,
           passFeesToAdopter: tenants.passFeesToAdopter,
+          requireSpayNeuterContract: tenants.requireSpayNeuterContract,
           name: tenants.name,
         })
         .from(tenants)
@@ -5868,6 +5869,74 @@ Submitted: ${new Date().toLocaleString()}
         }
       }
 
+      // Determine if spay/neuter contract is needed
+      // Required when: animal is NOT already spayed/neutered AND tenant has enabled the setting AND spay/neuter date is set
+      const isAnimalAltered = animal?.neuterStatus === 'spayed' || animal?.neuterStatus === 'neutered';
+      const requiresSpayNeuterContract = !isAnimalAltered && tenant?.requireSpayNeuterContract === true && !!session.spayNeuterDate;
+      
+      // Generate spay/neuter contract HTML if needed
+      let spayNeuterContractData: { html: string; name: string } | null = null;
+      if (requiresSpayNeuterContract) {
+        const DOMPurify = (await import('isomorphic-dompurify')).default;
+        const { SPAY_NEUTER_CONTRACT_HTML } = await import('./services/contract-template');
+        
+        // Helper to create highlighted editable field span
+        const editableField = (fieldName: string, placeholder: string) => 
+          `<span class="merge-field-editable" data-field="${fieldName}" style="background-color: #fff3cd; padding: 1px 4px; border-radius: 2px;">${placeholder}</span>`;
+        
+        // Format commitment date for display
+        const formatDate = (dateStr: string | null | undefined): string => {
+          if (!dateStr) return '';
+          try {
+            return new Date(dateStr).toLocaleDateString('en-US', { 
+              year: 'numeric', 
+              month: 'long', 
+              day: 'numeric' 
+            });
+          } catch {
+            return dateStr;
+          }
+        };
+        
+        // Replace merge fields with actual data
+        const spayNeuterMergeFields: Record<string, string> = {
+          '{{adopter_name}}': application?.applicantName || '',
+          '{{adopter_email}}': application?.applicantEmail || '',
+          '{{adopter_phone}}': application?.applicantPhone || '',
+          // Address components - editable fields with yellow highlight
+          '{{adopter_street_address}}': editableField('street_address', 'Street Address'),
+          '{{adopter_street_address_2}}': `<span class="merge-field-editable" data-field="street_address_2"></span>`,
+          '{{adopter_city}}': editableField('city', 'City'),
+          '{{adopter_state}}': editableField('state', 'State'),
+          '{{adopter_zip}}': editableField('zip', 'Zip Code'),
+          '{{adopter_drivers_license}}': editableField('drivers_license', "Driver's License #"),
+          '{{animal_name}}': animal?.name || '',
+          '{{organization_name}}': tenant?.name || '',
+          '{{contract_date}}': new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
+          '{{spay_neuter_date}}': formatDate(session.spayNeuterDate),
+          '{{signed_timestamp}}': '(Will be recorded upon signing)',
+          '{{signed_ip}}': '(Will be recorded upon signing)',
+          '{{signature_image_url}}': '',
+        };
+        
+        let processedSpayNeuterHtml = SPAY_NEUTER_CONTRACT_HTML;
+        for (const [placeholder, value] of Object.entries(spayNeuterMergeFields)) {
+          processedSpayNeuterHtml = processedSpayNeuterHtml.replace(new RegExp(placeholder.replace(/[{}]/g, '\\$&'), 'g'), value);
+        }
+        
+        // Sanitize HTML
+        const sanitizedSpayNeuterHtml = DOMPurify.sanitize(processedSpayNeuterHtml, {
+          ALLOWED_TAGS: ['div', 'span', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'strong', 'em', 'u', 'br', 'hr', 'ul', 'ol', 'li', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'img'],
+          ALLOWED_ATTR: ['class', 'style', 'data-field', 'src', 'alt'],
+          ALLOW_DATA_ATTR: false,
+        });
+        
+        spayNeuterContractData = {
+          html: sanitizedSpayNeuterHtml,
+          name: 'Spay/Neuter Agreement',
+        };
+      }
+
       // Calculate fee info for display
       const platformFeePercent = getPlatformFeePercent(tenant?.subscriptionTier || 'free');
       
@@ -5900,6 +5969,8 @@ Submitted: ${new Date().toLocaleString()}
           address: application.applicantAddress,
         } : null,
         contract: contractData,
+        spayNeuterContract: spayNeuterContractData,
+        requiresSpayNeuterContract: requiresSpayNeuterContract,
         organization: tenant ? { name: tenant.name } : null,
         // Fee configuration for adopter display
         feeConfig: {
@@ -13454,6 +13525,7 @@ Submitted: ${new Date().toLocaleString()}
       const settingsSchema = z.object({
         stripeLink: z.string().url().optional().or(z.literal("")),
         passFeesToAdopter: z.boolean().optional(),
+        requireSpayNeuterContract: z.boolean().optional(),
       });
 
       const parsedSettings = settingsSchema.parse(req.body);
@@ -13463,6 +13535,7 @@ Submitted: ${new Date().toLocaleString()}
       const settingsToUpdate: Record<string, any> = {};
       if (parsedSettings.stripeLink !== undefined) settingsToUpdate.stripeLink = parsedSettings.stripeLink;
       if (parsedSettings.passFeesToAdopter !== undefined) settingsToUpdate.passFeesToAdopter = parsedSettings.passFeesToAdopter;
+      if (parsedSettings.requireSpayNeuterContract !== undefined) settingsToUpdate.requireSpayNeuterContract = parsedSettings.requireSpayNeuterContract;
 
       const [updatedTenant] = await db
         .update(tenants)

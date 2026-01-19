@@ -638,3 +638,175 @@ export async function generateAdoptionContractPDF(
     await browser.close();
   }
 }
+
+/**
+ * Generate a PDF for the spay/neuter contract
+ * Required when animal is NOT spayed/neutered and tenant has enabled the setting
+ * @param session - The adoption checkout session
+ * @param signatureImageUrl - URL of the uploaded signature image
+ * @param signatureMetadata - Optional metadata for signature verification (IP, timestamp)
+ * @returns Object storage URL for the generated PDF
+ */
+export async function generateSpayNeuterContractPDF(
+  session: AdoptionCheckoutSession,
+  signatureImageUrl?: string,
+  signatureMetadata?: { ipAddress?: string; signedAt?: Date; signatureBase64?: string }
+): Promise<string> {
+  const { SPAY_NEUTER_CONTRACT_HTML } = await import('./contract-template');
+
+  // Fetch required data
+  const [tenant] = await db
+    .select()
+    .from(tenants)
+    .where(eq(tenants.id, session.tenantId))
+    .limit(1);
+
+  if (!tenant) {
+    throw new Error('Tenant not found');
+  }
+
+  const [animal] = await db
+    .select()
+    .from(animals)
+    .where(eq(animals.id, session.animalId))
+    .limit(1);
+
+  if (!animal) {
+    throw new Error('Animal not found');
+  }
+
+  // Get adopter information
+  let adopterName: string;
+  let adopterEmail: string;
+  let adopterPhone: string;
+
+  if (session.adopterContactId) {
+    const [contact] = await db
+      .select()
+      .from(contacts)
+      .where(eq(contacts.id, session.adopterContactId))
+      .limit(1);
+
+    if (contact) {
+      adopterName = contact.name;
+      adopterEmail = contact.email;
+      adopterPhone = contact.phone || '';
+    } else {
+      const [application] = await db
+        .select()
+        .from(applications)
+        .where(eq(applications.id, session.applicationId))
+        .limit(1);
+
+      adopterName = application?.applicantName || 'Unknown';
+      adopterEmail = application?.applicantEmail || '';
+      adopterPhone = application?.applicantPhone || '';
+    }
+  } else {
+    const [application] = await db
+      .select()
+      .from(applications)
+      .where(eq(applications.id, session.applicationId))
+      .limit(1);
+
+    adopterName = application?.applicantName || 'Unknown';
+    adopterEmail = application?.applicantEmail || '';
+    adopterPhone = application?.applicantPhone || '';
+  }
+
+  const signedAt = signatureMetadata?.signedAt || new Date();
+
+  // Extract address components from session metadata
+  const metadata = session.metadata as {
+    adopterStreetAddress?: string;
+    adopterStreetAddress2?: string;
+    adopterCity?: string;
+    adopterState?: string;
+    adopterZip?: string;
+    driversLicenseNumber?: string;
+  } | null;
+
+  // Use base64 signature data for Puppeteer rendering
+  const signatureForPdf = signatureMetadata?.signatureBase64 || signatureImageUrl;
+
+  // Format spay/neuter date
+  const formatDate = (dateStr: string | null | undefined): string => {
+    if (!dateStr) return '_________________';
+    try {
+      return new Date(dateStr).toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      });
+    } catch {
+      return dateStr;
+    }
+  };
+
+  // Build merge data
+  const mergeData: Record<string, string> = {
+    '{{organization_name}}': tenant.name,
+    '{{adopter_name}}': adopterName,
+    '{{adopter_email}}': adopterEmail,
+    '{{adopter_phone}}': adopterPhone,
+    '{{adopter_street_address}}': metadata?.adopterStreetAddress || '',
+    '{{adopter_street_address_2}}': metadata?.adopterStreetAddress2 || '',
+    '{{adopter_city}}': metadata?.adopterCity || '',
+    '{{adopter_state}}': metadata?.adopterState || '',
+    '{{adopter_zip}}': metadata?.adopterZip || '',
+    '{{adopter_drivers_license}}': metadata?.driversLicenseNumber || '',
+    '{{animal_name}}': animal.name,
+    '{{contract_date}}': signedAt.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
+    '{{spay_neuter_date}}': formatDate(session.spayNeuterDate),
+    '{{signature_image_url}}': signatureForPdf || '',
+    '{{signed_timestamp}}': signedAt.toISOString(),
+    '{{signed_ip}}': signatureMetadata?.ipAddress || 'Not recorded',
+  };
+
+  // Replace placeholders in template
+  let mergedHtml = SPAY_NEUTER_CONTRACT_HTML;
+  for (const [placeholder, value] of Object.entries(mergeData)) {
+    mergedHtml = mergedHtml.replace(new RegExp(placeholder.replace(/[{}]/g, '\\$&'), 'g'), value);
+  }
+
+  // Final sanitization
+  const safeHtml = DOMPurify.sanitize(mergedHtml, {
+    ALLOWED_TAGS: ['html', 'head', 'body', 'title', 'meta', 'style', 'link', 'div', 'span', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'strong', 'em', 'u', 'br', 'hr', 'ul', 'ol', 'li', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'img', 'a'],
+    ALLOWED_ATTR: ['class', 'id', 'style', 'href', 'src', 'alt', 'title', 'target', 'colspan', 'rowspan'],
+    ALLOW_DATA_ATTR: false,
+  });
+
+  // Launch Puppeteer and generate PDF
+  const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || '/nix/store/zi4f80l169xlmivz8vja8wlphq74qqk0-chromium-125.0.6422.141/bin/chromium';
+  const browser = await puppeteer.launch({
+    headless: true,
+    executablePath,
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+  });
+
+  try {
+    const page = await browser.newPage();
+    await page.setContent(safeHtml, {
+      waitUntil: 'networkidle0',
+    });
+
+    // Generate PDF buffer
+    const pdfBuffer = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      margin: {
+        top: '20px',
+        right: '20px',
+        bottom: '20px',
+        left: '20px',
+      },
+    });
+
+    // Upload to object storage
+    const pdfUrl = await uploadPdfToStorage(pdfBuffer);
+
+    return pdfUrl;
+  } finally {
+    await browser.close();
+  }
+}

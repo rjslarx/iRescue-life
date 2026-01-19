@@ -857,6 +857,35 @@ export async function captureSignature(
     signatureBase64: signatureData.signatureImageData, // Pass base64 for PDF rendering
   });
 
+  // Check if spay/neuter contract is needed
+  // Required when: animal is NOT already spayed/neutered AND tenant has enabled the setting
+  let spayNeuterContractPdfUrl: string | null = null;
+  
+  // Fetch animal and tenant to check if spay/neuter contract is needed
+  const [animal] = await db
+    .select()
+    .from(animals)
+    .where(eq(animals.id, session.animalId))
+    .limit(1);
+  
+  const [tenant] = await db
+    .select()
+    .from(tenants)
+    .where(eq(tenants.id, session.tenantId))
+    .limit(1);
+  
+  const isAnimalAltered = animal?.neuterStatus === 'spayed' || animal?.neuterStatus === 'neutered';
+  const requiresSpayNeuterContract = !isAnimalAltered && tenant?.requireSpayNeuterContract === true && !!session.spayNeuterDate;
+  
+  if (requiresSpayNeuterContract) {
+    const { generateSpayNeuterContractPDF } = await import('./contract-pdf');
+    spayNeuterContractPdfUrl = await generateSpayNeuterContractPDF(session, signatureImageUrl, {
+      ipAddress: signatureData.ipAddress,
+      signedAt,
+      signatureBase64: signatureData.signatureImageData,
+    });
+  }
+
   // Create contract record
   const [contract] = await db
     .insert(adoptionContracts)
@@ -872,6 +901,8 @@ export async function captureSignature(
       signedAt,
       driversLicenseNumber: signatureData.driversLicenseNumber || null,
       driversLicenseImageUrl: driversLicenseImageUrl || null,
+      spayNeuterContractPdfUrl: spayNeuterContractPdfUrl,
+      spayNeuterSignedAt: requiresSpayNeuterContract ? signedAt : null,
     })
     .returning();
 

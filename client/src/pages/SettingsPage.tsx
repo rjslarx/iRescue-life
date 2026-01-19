@@ -251,6 +251,30 @@ export default function SettingsPage() {
     },
   });
 
+  // Require spay/neuter contract toggle mutation
+  const updateRequireSpayNeuterContractMutation = useMutation({
+    mutationFn: async (requireSpayNeuterContract: boolean) => {
+      const response = await apiRequest('PATCH', '/api/tenant/settings', { requireSpayNeuterContract });
+      return response.json();
+    },
+    onSuccess: (_, requireSpayNeuterContract) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/tenant/settings'] });
+      toast({
+        title: requireSpayNeuterContract ? "Spay/neuter contract enabled" : "Spay/neuter contract disabled",
+        description: requireSpayNeuterContract 
+          ? "Adopters will sign an additional agreement for unaltered animals." 
+          : "No separate spay/neuter agreement will be required.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to update spay/neuter contract settings",
+        description: error.message || "Please try again later.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const updateTwilioMutation = useMutation({
     mutationFn: async (settings: TwilioSettingsData) => {
       const response = await apiRequest('PATCH', '/api/tenant/settings/twilio', settings);
@@ -1904,6 +1928,37 @@ export default function SettingsPage() {
                         <Info className="h-4 w-4" />
                         <AlertDescription>
                           Adopters will see a service fee breakdown on the checkout page explaining that the fee covers payment processing and helps ensure the full adoption amount goes to your rescue.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+
+                    <Separator />
+
+                    {/* Spay/Neuter Contract Toggle */}
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="require-spay-neuter-toggle" className="text-base font-medium">
+                          Require Spay/Neuter Agreement
+                        </Label>
+                        <p className="text-sm text-muted-foreground">
+                          When enabled, adopters of unaltered animals will be required to sign an additional Spay/Neuter Agreement 
+                          during checkout. This includes a $500 breach penalty clause.
+                        </p>
+                      </div>
+                      <Switch
+                        id="require-spay-neuter-toggle"
+                        checked={data?.tenant?.requireSpayNeuterContract || false}
+                        disabled={updateRequireSpayNeuterContractMutation.isPending}
+                        onCheckedChange={(checked) => updateRequireSpayNeuterContractMutation.mutate(checked)}
+                        data-testid="switch-require-spay-neuter"
+                      />
+                    </div>
+                    {data?.tenant?.requireSpayNeuterContract && (
+                      <Alert>
+                        <Info className="h-4 w-4" />
+                        <AlertDescription>
+                          The spay/neuter agreement will only appear for animals that are not already spayed or neutered, 
+                          and only when staff sets a spay/neuter deadline during checkout.
                         </AlertDescription>
                       </Alert>
                     )}
