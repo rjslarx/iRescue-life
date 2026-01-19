@@ -153,7 +153,7 @@ export default function Hero({
                 variant="default"
                 onClick={onViewAnimals}
                 data-testid="button-view-animals"
-                className="gap-2 w-full sm:w-auto"
+                className="hidden sm:inline-flex gap-2 w-full sm:w-auto"
               >
                 {heroButtonText || "Meet Our Pets"}
                 <ArrowRight className="h-4 w-4" />
