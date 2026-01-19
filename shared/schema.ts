@@ -253,6 +253,9 @@ export const tenants = pgTable("tenants", {
   donationLandingMailingAddress: text("donation_landing_mailing_address"), // e.g., "PO Box 123, City, ST 12345"
   donationLandingMailingText: text("donation_landing_mailing_text"), // e.g., "Prefer to mail a check? Send to:"
   
+  // Quick actions customization (admin can configure which actions appear in dashboard quick actions)
+  quickActionsConfig: text("quick_actions_config").array(), // Array of quick action IDs (e.g., ["add-animal", "record-donation", "send-email"])
+  
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
