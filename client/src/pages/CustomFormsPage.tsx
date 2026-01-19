@@ -59,19 +59,21 @@ interface CustomFormField {
   id: string;
   name: string;
   fieldKey: string;
-  type: "text" | "textarea" | "checkbox" | "number" | "date" | "email" | "phone";
+  type: "text" | "textarea" | "checkbox" | "number" | "date" | "email" | "phone" | "select" | "radio" | "multiselect";
   required: boolean;
   placeholder?: string;
   defaultValue?: string;
+  options?: string[];
 }
 
 interface FormQuestion {
   id: string;
   question: string;
-  type: "text" | "textarea" | "checkbox" | "number" | "date" | "email" | "phone";
+  type: "text" | "textarea" | "checkbox" | "number" | "date" | "email" | "phone" | "select" | "radio" | "multiselect";
   required: boolean;
   placeholder?: string;
   order: number;
+  options?: string[];
 }
 
 interface CustomForm {
@@ -157,7 +159,7 @@ interface FormEditorProps {
   insertPlaceholder: (field: string) => void;
   toast: ReturnType<typeof import("@/hooks/use-toast").useToast>['toast'];
   questions: FormQuestion[];
-  addQuestion: (question: Omit<FormQuestion, 'id' | 'order'>) => void;
+  addQuestion: (question: Omit<FormQuestion, 'id' | 'order'> & { options?: string[] }) => void;
   removeQuestion: (id: string) => void;
   moveQuestion: (id: string, direction: 'up' | 'down') => void;
   updateQuestion: (id: string, updates: Partial<FormQuestion>) => void;
@@ -182,11 +184,17 @@ function FormEditor({
   const [localFieldName, setLocalFieldName] = useState("");
   const [localFieldKey, setLocalFieldKey] = useState("");
   const [localFieldType, setLocalFieldType] = useState<CustomFormField['type']>("text");
+  const [localFieldOptions, setLocalFieldOptions] = useState<string[]>([]);
+  const [localNewOption, setLocalNewOption] = useState("");
   const [localIsAddFieldOpen, setLocalIsAddFieldOpen] = useState(false);
   const [localIsFieldsPanelOpen, setLocalIsFieldsPanelOpen] = useState(false);
   const [newQuestionText, setNewQuestionText] = useState("");
   const [newQuestionType, setNewQuestionType] = useState<FormQuestion['type']>("text");
   const [newQuestionRequired, setNewQuestionRequired] = useState(false);
+  const [newQuestionOptions, setNewQuestionOptions] = useState<string[]>([]);
+  const [newOptionInput, setNewOptionInput] = useState("");
+  
+  const needsOptions = (type: string) => ['select', 'radio', 'multiselect'].includes(type);
   
   const creationMode = form.watch('creationMode');
   
@@ -394,7 +402,13 @@ function FormEditor({
                         />
                         <div className="flex items-center gap-2 mt-1">
                           <Badge variant="outline" className="text-xs">
-                            {q.type}
+                            {q.type === 'text' ? 'Short Text' : 
+                             q.type === 'textarea' ? 'Long Text' : 
+                             q.type === 'checkbox' ? 'Yes/No' : 
+                             q.type === 'select' ? 'Dropdown' :
+                             q.type === 'radio' ? 'Multiple Choice' :
+                             q.type === 'multiselect' ? 'Checkboxes' :
+                             q.type.charAt(0).toUpperCase() + q.type.slice(1)}
                           </Badge>
                           <label className="flex items-center gap-1 text-xs">
                             <input
@@ -407,6 +421,15 @@ function FormEditor({
                             Required
                           </label>
                         </div>
+                        {q.options && q.options.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {q.options.map((opt, optIdx) => (
+                              <Badge key={optIdx} variant="secondary" className="text-xs">
+                                {opt}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
                       </div>
                       <Button
                         type="button"
@@ -437,7 +460,12 @@ function FormEditor({
                 />
               </div>
               <div className="flex items-center gap-4">
-                <Select value={newQuestionType} onValueChange={(v) => setNewQuestionType(v as FormQuestion['type'])}>
+                <Select value={newQuestionType} onValueChange={(v) => {
+                    setNewQuestionType(v as FormQuestion['type']);
+                    if (!needsOptions(v)) {
+                      setNewQuestionOptions([]);
+                    }
+                  }}>
                   <SelectTrigger className="w-[160px]" data-testid="select-question-type">
                     <SelectValue />
                   </SelectTrigger>
@@ -449,6 +477,9 @@ function FormEditor({
                     <SelectItem value="number">Number</SelectItem>
                     <SelectItem value="date">Date</SelectItem>
                     <SelectItem value="checkbox">Yes/No</SelectItem>
+                    <SelectItem value="select">Dropdown</SelectItem>
+                    <SelectItem value="radio">Multiple Choice</SelectItem>
+                    <SelectItem value="multiselect">Checkboxes</SelectItem>
                   </SelectContent>
                 </Select>
                 <label className="flex items-center gap-1 text-sm">
@@ -466,13 +497,24 @@ function FormEditor({
                   size="sm"
                   onClick={() => {
                     if (newQuestionText.trim()) {
+                      if (needsOptions(newQuestionType) && newQuestionOptions.length < 2) {
+                        toast({
+                          title: "Options Required",
+                          description: "Please add at least 2 options for this question type.",
+                          variant: "destructive",
+                        });
+                        return;
+                      }
                       addQuestion({
                         question: newQuestionText.trim(),
                         type: newQuestionType,
                         required: newQuestionRequired,
+                        options: needsOptions(newQuestionType) ? newQuestionOptions : undefined,
                       });
                       setNewQuestionText("");
                       setNewQuestionRequired(false);
+                      setNewQuestionOptions([]);
+                      setNewOptionInput("");
                     }
                   }}
                   data-testid="button-add-question"
@@ -481,6 +523,62 @@ function FormEditor({
                   Add
                 </Button>
               </div>
+              
+              {needsOptions(newQuestionType) && (
+                <div className="mt-3 p-3 rounded-md border bg-muted/50">
+                  <Label className="text-sm font-medium">Answer Options</Label>
+                  <p className="text-xs text-muted-foreground mb-2">Add at least 2 options for respondents to choose from</p>
+                  <div className="flex gap-2 mb-2">
+                    <Input
+                      value={newOptionInput}
+                      onChange={(e) => setNewOptionInput(e.target.value)}
+                      placeholder="Enter an option..."
+                      className="flex-1"
+                      data-testid="input-new-option"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && newOptionInput.trim()) {
+                          e.preventDefault();
+                          if (!newQuestionOptions.includes(newOptionInput.trim())) {
+                            setNewQuestionOptions([...newQuestionOptions, newOptionInput.trim()]);
+                          }
+                          setNewOptionInput("");
+                        }
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        if (newOptionInput.trim() && !newQuestionOptions.includes(newOptionInput.trim())) {
+                          setNewQuestionOptions([...newQuestionOptions, newOptionInput.trim()]);
+                          setNewOptionInput("");
+                        }
+                      }}
+                      data-testid="button-add-option"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  {newQuestionOptions.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {newQuestionOptions.map((opt, idx) => (
+                        <Badge key={idx} variant="secondary" className="gap-1">
+                          {opt}
+                          <button
+                            type="button"
+                            onClick={() => setNewQuestionOptions(newQuestionOptions.filter((_, i) => i !== idx))}
+                            className="ml-1 hover:text-destructive"
+                            data-testid={`button-remove-option-${idx}`}
+                          >
+                            <XCircle className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}
