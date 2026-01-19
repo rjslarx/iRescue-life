@@ -37,6 +37,7 @@ export const tenants = pgTable("tenants", {
   stripeConnectedAt: timestamp("stripe_connected_at"), // When Stripe was connected via OAuth
   // Adoption fee settings
   passFeesToAdopter: boolean("pass_fees_to_adopter").notNull().default(false), // Whether to add processing + platform fees to adoption fee (paid by adopter)
+  requireSpayNeuterContract: boolean("require_spay_neuter_contract").notNull().default(false), // Whether to require spay/neuter contract for unaltered animals
   // Email service settings (encrypted API keys per tenant)
   resendApiKeyEncrypted: text("resend_api_key_encrypted"), // Resend API key for transactional emails
   resendFromEmail: text("resend_from_email"), // From email address (e.g., noreply@rescue.org)
@@ -2759,6 +2760,9 @@ export const adoptionContracts = pgTable("adoption_contracts", {
   signedUserAgent: text("signed_user_agent"),
   signedAt: timestamp("signed_at").notNull(),
   revokedAt: timestamp("revoked_at"),
+  // Spay/Neuter Contract fields (for unaltered animals)
+  spayNeuterContractPdfUrl: text("spay_neuter_contract_pdf_url"), // Object storage URL for spay/neuter contract
+  spayNeuterSignedAt: timestamp("spay_neuter_signed_at"), // When spay/neuter contract was signed
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

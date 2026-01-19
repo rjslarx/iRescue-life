@@ -295,6 +295,115 @@ export const HASEYAS_NEW_BEGINNING_CONTRACT_HTML = `<!DOCTYPE html>
 </body>
 </html>`;
 
+// Spay/Neuter Contract Template - Required for unaltered animals
+// Based on Haseya's New Beginning Spay/Neuter Contract
+export const SPAY_NEUTER_CONTRACT_HTML = `<!DOCTYPE html>
+<html>
+<head>
+<style>
+  body { font-family: 'Georgia', 'Times New Roman', serif; line-height: 1.8; color: #333; max-width: 800px; margin: 0 auto; padding: 20px; }
+  h1 { text-align: center; font-size: 2em; margin-bottom: 5px; }
+  h2 { text-align: center; font-size: 1.4em; color: #666; margin-top: 0; padding-bottom: 20px; border-bottom: 2px solid #8B4513; }
+  .header-section { text-align: center; margin-bottom: 30px; }
+  .info-section { background: #faf8f5; border: 1px solid #ddd; padding: 20px; margin-bottom: 25px; border-radius: 5px; }
+  .info-grid { display: grid; grid-template-columns: 150px 1fr; gap: 10px; }
+  .info-label { font-weight: bold; color: #555; }
+  .info-value { color: #333; }
+  .address-block { margin-top: 5px; }
+  .address-line { display: block; }
+  .notice { background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; font-style: italic; }
+  .warning { background-color: #f8d7da; border-left: 4px solid #dc3545; padding: 15px; margin: 20px 0; }
+  .terms-section { margin: 25px 0; }
+  .terms-section p { margin-bottom: 15px; text-align: justify; }
+  .terms-section .term-item { margin-bottom: 18px; padding-left: 10px; }
+  .highlight { color: #8B4513; font-weight: bold; }
+  .important { font-weight: bold; }
+  .date-field { border-bottom: 1px solid #333; min-width: 150px; display: inline-block; padding: 0 5px; font-weight: bold; }
+  .signature-block { margin-top: 40px; background-color: #f9f9f9; padding: 25px; border: 1px solid #ddd; border-radius: 5px; }
+  .signature-line { margin: 20px 0; border-bottom: 2px solid #333; display: inline-block; min-width: 350px; }
+  .digital-stamp { font-size: 0.85em; color: #666; margin-top: 15px; font-family: 'Courier New', monospace; background: #f0f0f0; padding: 10px; border-radius: 3px; }
+  .contact-info { font-size: 0.9em; color: #666; text-align: center; margin-top: 30px; }
+  .penalty-notice { background-color: #ffe4e1; border: 2px solid #dc3545; padding: 15px; margin: 20px 0; }
+  .penalty-notice p { margin: 0; color: #dc3545; font-weight: bold; }
+</style>
+</head>
+<body>
+
+  <div class="header-section">
+    <h1>{{organization_name}}</h1>
+    <h2>Spay/Neuter Agreement</h2>
+  </div>
+
+  <div class="info-section">
+    <div class="info-grid">
+      <span class="info-label">Adopter Name:</span>
+      <span class="info-value">{{adopter_name}}</span>
+      
+      <span class="info-label">Email:</span>
+      <span class="info-value">{{adopter_email}}</span>
+      
+      <span class="info-label">Phone:</span>
+      <span class="info-value">{{adopter_phone}}</span>
+      
+      <span class="info-label">Address:</span>
+      <span class="info-value">
+        <div class="address-block">
+          <span class="address-line">{{adopter_street_address}}</span>
+          <span class="address-line">{{adopter_street_address_2}}</span>
+          <span class="address-line">{{adopter_city}}, {{adopter_state}} {{adopter_zip}}</span>
+        </div>
+      </span>
+      
+      <span class="info-label">Driver's License:</span>
+      <span class="info-value">{{adopter_drivers_license}}</span>
+      
+      <span class="info-label">Animal Name:</span>
+      <span class="info-value highlight">{{animal_name}}</span>
+      
+      <span class="info-label">Date:</span>
+      <span class="info-value">{{contract_date}}</span>
+    </div>
+  </div>
+
+  <div class="notice">
+    <p><strong>IMPORTANT:</strong> If you are adopting an unaltered animal, you are required to complete and agree to the terms of this Spay/Neuter Agreement. Please read it carefully - you are agreeing to these terms as a condition of your adoption.</p>
+  </div>
+
+  <div class="terms-section">
+    <p class="term-item">I agree to have the above described pet, <span class="highlight">{{animal_name}}</span>, altered (spayed or neutered) no later than <span class="date-field">{{spay_neuter_date}}</span> by a licensed veterinarian.</p>
+
+    <p class="term-item">{{organization_name}} has scheduled your animal's appointment and has provided me with the appointment date. {{organization_name}} will send a reminder text/email 1 week prior to the surgery date.</p>
+
+    <p class="term-item"><span class="important">I understand that if I cannot make this appointment, I must give {{organization_name}} at least one week's notice to allow time to reschedule.</span></p>
+
+    <p class="term-item">{{organization_name}} will reschedule one more time if necessary. <span class="important">If this second appointment is also not kept, this is considered a breach of contract and {{organization_name}} has the right to reclaim the animal.</span></p>
+
+    <div class="penalty-notice">
+      <p>I understand that by voluntarily signing this agreement, I am entering into a legal and binding contract with {{organization_name}}. Breach of any term(s) of this agreement is deemed actionable. In the event there is a violation of the agreement, I agree to pay a minimum of $500.00 in damages.</p>
+    </div>
+
+    <p class="term-item"><span class="important">I certify that I have read and understand the terms of this Spay/Neuter Agreement. I acknowledge that failure to comply with these terms shall be considered a breach of contract and may result in the immediate return of the adopted pet to {{organization_name}}.</span></p>
+  </div>
+
+  <div class="signature-block">
+    <p>I, <strong>{{adopter_name}}</strong>, certify that the information provided is true and I understand and agree to all terms of this Spay/Neuter Agreement.</p>
+    
+    <div class="signature-line">
+      <img src="{{signature_image_url}}" alt="Adopter Signature" style="max-height: 80px;" />
+    </div>
+    <br>
+    <strong>Signature of Adopter</strong>
+    
+    <div class="digital-stamp">
+      <p>Digitally Signed via iRescue.life</p>
+      <p>Timestamp: {{signed_timestamp}}</p>
+      <p>IP Address: {{signed_ip}}</p>
+    </div>
+  </div>
+
+</body>
+</html>`;
+
 // Enhanced Adoption Contract - Generic version for all tenants
 // Based on Haseya's New Beginning template but uses {{organization_name}} for customization
 export const ENHANCED_ADOPTION_CONTRACT_HTML = `<!DOCTYPE html>
