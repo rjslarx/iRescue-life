@@ -24206,6 +24206,55 @@ The user asking is a tenant administrator or staff member.`;
   });
 
   /**
+   * QUICK ACTIONS SETTINGS API
+   * Manage dashboard quick actions configuration
+   */
+
+  // GET /api/tenant/settings/quick-actions - Get quick actions configuration
+  app.get('/api/tenant/settings/quick-actions', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const tenantId = req.session.tenantId!;
+      const [tenant] = await db
+        .select({ quickActionsConfig: tenants.quickActionsConfig })
+        .from(tenants)
+        .where(eq(tenants.id, tenantId));
+
+      const defaultActions = ["add-animal", "record-donation", "new-application", "add-event", "send-email"];
+      
+      res.json({ 
+        quickActions: tenant?.quickActionsConfig || defaultActions 
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // PATCH /api/tenant/settings/quick-actions - Update quick actions configuration (admin only)
+  app.patch('/api/tenant/settings/quick-actions', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+    try {
+      const tenantId = req.session.tenantId!;
+      
+      const quickActionsSchema = z.object({
+        quickActions: z.array(z.string()).min(1).max(10),
+      });
+
+      const { quickActions } = quickActionsSchema.parse(req.body);
+
+      await db
+        .update(tenants)
+        .set({ quickActionsConfig: quickActions })
+        .where(eq(tenants.id, tenantId));
+
+      res.json({ 
+        success: true, 
+        quickActions 
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * TUTORIALS API
    * CRUD operations for help/tutorial videos
    */
