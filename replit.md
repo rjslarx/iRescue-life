@@ -60,6 +60,14 @@ The platform includes a complete native e-signature system for adoption contract
 - **Contract Download:** Adopters can download signed PDF contracts after completing the adoption process using time-limited signed URLs (15-minute expiry)
 - **Security:** Server-side HTML sanitization with DOMPurify prevents XSS in contract templates, and GCS v4 signed URLs provide secure, time-limited access to contract PDFs
 - **Access Control:** Contract downloads require session status 'completed' (signed + paid), with a 7-day download window after adoption completion to limit token exposure
+- **Conditional Spay/Neuter Contract:** When adopting unaltered animals:
+  - Tenant setting `requireSpayNeuterContract` enables the feature
+  - Staff sets spay/neuter deadline during checkout creation
+  - Additional SPAY_NEUTER_CONTRACT_HTML template with $500 breach penalty clause
+  - Auto-fills adopter data from main adoption contract (name, address, phone, email, driver's license)
+  - Both contracts (adoption + spay/neuter) generated as PDFs during signature capture
+  - Tracked via `spayNeuterContractPdfUrl` and `spayNeuterSignedAt` in adoption_contracts table
+  - Contract only required when: animal NOT altered AND tenant setting enabled AND spay/neuter date set
 
 **Technical Implementations:**
 The "Paw Pay" platform fee system uses Stripe Connect with a "SaaS + 0%" two-tier model:
