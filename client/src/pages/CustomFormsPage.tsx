@@ -50,7 +50,7 @@ import {
 import { 
   FileText, Plus, Edit, Trash2, Eye, Copy, ChevronDown, 
   Send, FileSignature, PawPrint, Users, Link as LinkIcon,
-  Clock, CheckCircle, XCircle, Mail, GripVertical, ArrowUp, ArrowDown
+  Clock, CheckCircle, XCircle, Mail, GripVertical, ArrowUp, ArrowDown, Download, File as FileIcon
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format } from "date-fns";
@@ -115,6 +115,7 @@ interface CustomFormSubmission {
   emailedAt?: string;
   status: 'pending' | 'completed' | 'expired' | 'cancelled';
   createdAt: string;
+  formData?: Record<string, any>;
 }
 
 interface MergeFields {
@@ -1681,6 +1682,57 @@ export default function CustomFormsPage() {
                         />
                       </div>
                     )}
+                    
+                    {/* Display any uploaded files from formData */}
+                    {selectedSubmission.formData && (() => {
+                      const fileUploads = Object.entries(selectedSubmission.formData)
+                        .filter(([_, value]) => {
+                          if (typeof value === 'string') {
+                            try {
+                              const parsed = JSON.parse(value);
+                              return parsed?.fileUrl && parsed?.fileName;
+                            } catch {
+                              return false;
+                            }
+                          }
+                          return value?.fileUrl && value?.fileName;
+                        })
+                        .map(([key, value]) => {
+                          const fileData = typeof value === 'string' ? JSON.parse(value) : value;
+                          return { key, ...fileData };
+                        });
+                      
+                      if (fileUploads.length === 0) return null;
+                      
+                      return (
+                        <div className="mt-4 pt-4 border-t">
+                          <p className="text-sm font-medium mb-2">Uploaded Files:</p>
+                          <div className="space-y-2">
+                            {fileUploads.map((file, idx) => (
+                              <div key={idx} className="flex items-center gap-3 p-3 rounded-lg border bg-muted/50">
+                                <FileIcon className="h-6 w-6 text-muted-foreground flex-shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium truncate">{file.fileName}</p>
+                                  {file.mimeType && (
+                                    <p className="text-xs text-muted-foreground">{file.mimeType}</p>
+                                  )}
+                                </div>
+                                <a 
+                                  href={file.fileUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-1 text-xs text-primary hover:underline"
+                                  data-testid={`link-download-file-${idx}`}
+                                >
+                                  <Download className="h-4 w-4" />
+                                  View
+                                </a>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </ScrollArea>
                 

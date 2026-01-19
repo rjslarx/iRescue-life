@@ -10,7 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { CheckCircle2, AlertCircle, FileSignature, Loader2 } from "lucide-react";
+import { CheckCircle2, AlertCircle, FileSignature, Loader2, Upload, X, File as FileIcon } from "lucide-react";
 import SignaturePad from "signature_pad";
 import DOMPurify from "dompurify";
 import { tenantFetch } from "@/lib/tenantApi";
@@ -19,21 +19,32 @@ interface CustomFormField {
   id: string;
   name: string;
   fieldKey: string;
-  type: "text" | "textarea" | "checkbox" | "number" | "date" | "email" | "phone" | "select" | "radio" | "multiselect";
+  type: "text" | "textarea" | "checkbox" | "number" | "date" | "email" | "phone" | "select" | "radio" | "multiselect" | "file";
   required: boolean;
   placeholder?: string;
   defaultValue?: string;
   options?: string[];
+  acceptedFileTypes?: string;
+  maxFileSize?: number;
 }
 
 interface FormQuestion {
   id: string;
   question: string;
-  type: "text" | "textarea" | "checkbox" | "number" | "date" | "email" | "phone" | "select" | "radio" | "multiselect";
+  type: "text" | "textarea" | "checkbox" | "number" | "date" | "email" | "phone" | "select" | "radio" | "multiselect" | "file";
   required: boolean;
   placeholder?: string;
   order: number;
   options?: string[];
+  acceptedFileTypes?: string;
+  maxFileSize?: number;
+}
+
+interface UploadedFile {
+  fileUrl: string;
+  fileName: string;
+  mimeType: string;
+  size: number;
 }
 
 interface FormData {
@@ -136,6 +147,8 @@ export default function PublicFormSigningPage() {
   const [isComplete, setIsComplete] = useState(false);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({});
+  const [uploadedFiles, setUploadedFiles] = useState<Record<string, UploadedFile>>({});
+  const [uploadingFields, setUploadingFields] = useState<Record<string, boolean>>({});
   const signatureCanvasRef = useRef<HTMLCanvasElement>(null);
   const signaturePadRef = useRef<SignaturePad | null>(null);
 
@@ -194,6 +207,87 @@ export default function PublicFormSigningPage() {
       ...prev,
       [fieldKey]: value,
     }));
+  };
+
+  const handleFileUpload = async (fieldKey: string, file: File, acceptedTypes?: string, maxSize?: number) => {
+    // Validate file size (default 10MB)
+    const maxFileSize = maxSize || 10 * 1024 * 1024;
+    if (file.size > maxFileSize) {
+      alert(`File too large. Maximum size is ${(maxFileSize / 1024 / 1024).toFixed(0)}MB.`);
+      return;
+    }
+
+    // Validate file type if specified
+    if (acceptedTypes) {
+      const types = acceptedTypes.split(',').map(t => t.trim());
+      const fileName = file.name.toLowerCase();
+      const fileExt = '.' + fileName.split('.').pop();
+      
+      const isValidType = types.some(type => {
+        if (type.endsWith('/*')) {
+          const baseType = type.replace('/*', '');
+          return file.type.startsWith(baseType);
+        }
+        if (type.startsWith('.')) {
+          return fileName.endsWith(type.toLowerCase());
+        }
+        return file.type === type;
+      });
+
+      if (!isValidType) {
+        alert(`Invalid file type. Accepted types: ${acceptedTypes}`);
+        return;
+      }
+    }
+
+    setUploadingFields(prev => ({ ...prev, [fieldKey]: true }));
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await tenantFetch(`/api/public/forms/${token}/upload`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Upload failed' }));
+        throw new Error(errorData.error || 'Upload failed');
+      }
+
+      const result = await response.json();
+      
+      setUploadedFiles(prev => ({
+        ...prev,
+        [fieldKey]: {
+          fileUrl: result.fileUrl,
+          fileName: result.fileName,
+          mimeType: result.mimeType,
+          size: result.size,
+        },
+      }));
+
+      // Store file URL in customFieldValues for form submission
+      handleCustomFieldChange(fieldKey, JSON.stringify({
+        fileUrl: result.fileUrl,
+        fileName: result.fileName,
+        mimeType: result.mimeType,
+      }));
+    } catch (error: any) {
+      alert(error.message || 'Failed to upload file. Please try again.');
+    } finally {
+      setUploadingFields(prev => ({ ...prev, [fieldKey]: false }));
+    }
+  };
+
+  const handleRemoveFile = (fieldKey: string) => {
+    setUploadedFiles(prev => {
+      const newFiles = { ...prev };
+      delete newFiles[fieldKey];
+      return newFiles;
+    });
+    handleCustomFieldChange(fieldKey, '');
   };
 
   const handleClearSignature = () => {
@@ -427,6 +521,62 @@ export default function PublicFormSigningPage() {
                         );
                       })}
                     </div>
+                  ) : question.type === 'file' ? (
+                    <div className="space-y-2" data-testid={`input-question-${question.id}`}>
+                      {uploadedFiles[question.id] ? (
+                        <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/50">
+                          <FileIcon className="h-8 w-8 text-muted-foreground" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{uploadedFiles[question.id].fileName}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {(uploadedFiles[question.id].size / 1024).toFixed(1)} KB
+                            </p>
+                          </div>
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => handleRemoveFile(question.id)}
+                            data-testid={`button-remove-file-${question.id}`}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="relative">
+                          <input
+                            type="file"
+                            id={`file-${question.id}`}
+                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                            accept={question.acceptedFileTypes || '*'}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                handleFileUpload(question.id, file, question.acceptedFileTypes, question.maxFileSize);
+                              }
+                            }}
+                            disabled={uploadingFields[question.id]}
+                            data-testid={`file-input-${question.id}`}
+                          />
+                          <div className={`flex items-center justify-center gap-2 p-4 rounded-lg border-2 border-dashed transition-colors ${uploadingFields[question.id] ? 'border-primary bg-primary/5' : 'border-muted-foreground/25 hover:border-primary/50 hover:bg-accent/50'}`}>
+                            {uploadingFields[question.id] ? (
+                              <>
+                                <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                                <span className="text-sm text-muted-foreground">Uploading...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Upload className="h-5 w-5 text-muted-foreground" />
+                                <span className="text-sm text-muted-foreground">Click to upload a file</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      {question.acceptedFileTypes && (
+                        <p className="text-xs text-muted-foreground">Accepted: {question.acceptedFileTypes}</p>
+                      )}
+                    </div>
                   ) : (
                     <Input
                       id={`question-${question.id}`}
@@ -554,6 +704,62 @@ export default function PublicFormSigningPage() {
                               </div>
                             );
                           })}
+                        </div>
+                      ) : field.type === 'file' ? (
+                        <div className="space-y-2" data-testid={`input-${field.fieldKey}`}>
+                          {uploadedFiles[field.fieldKey] ? (
+                            <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/50">
+                              <FileIcon className="h-8 w-8 text-muted-foreground" />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium truncate">{uploadedFiles[field.fieldKey].fileName}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {(uploadedFiles[field.fieldKey].size / 1024).toFixed(1)} KB
+                                </p>
+                              </div>
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => handleRemoveFile(field.fieldKey)}
+                                data-testid={`button-remove-file-${field.fieldKey}`}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="relative">
+                              <input
+                                type="file"
+                                id={`file-${field.fieldKey}`}
+                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                accept={field.acceptedFileTypes || '*'}
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) {
+                                    handleFileUpload(field.fieldKey, file, field.acceptedFileTypes, field.maxFileSize);
+                                  }
+                                }}
+                                disabled={uploadingFields[field.fieldKey]}
+                                data-testid={`file-input-${field.fieldKey}`}
+                              />
+                              <div className={`flex items-center justify-center gap-2 p-4 rounded-lg border-2 border-dashed transition-colors ${uploadingFields[field.fieldKey] ? 'border-primary bg-primary/5' : 'border-muted-foreground/25 hover:border-primary/50 hover:bg-accent/50'}`}>
+                                {uploadingFields[field.fieldKey] ? (
+                                  <>
+                                    <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                                    <span className="text-sm text-muted-foreground">Uploading...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Upload className="h-5 w-5 text-muted-foreground" />
+                                    <span className="text-sm text-muted-foreground">Click to upload a file</span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                          {field.acceptedFileTypes && (
+                            <p className="text-xs text-muted-foreground">Accepted: {field.acceptedFileTypes}</p>
+                          )}
                         </div>
                       ) : (
                         <Input
