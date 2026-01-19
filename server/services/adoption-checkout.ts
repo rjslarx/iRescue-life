@@ -1357,8 +1357,15 @@ export async function finalizeAdoption(sessionId: string): Promise<void> {
   const emailService = await EmailService.forTenant(session.tenantId);
   if (emailService && animal && recipientEmail) {
     try {
-      // Generate all three PDF attachments
+      // Generate all three PDF attachments - track which ones succeed
       const attachments: Array<{ filename: string; content: Buffer; contentType: string }> = [];
+      const includedDocs: { receipt: boolean; contract: boolean; medical: boolean } = {
+        receipt: false,
+        contract: false,
+        medical: false,
+      };
+
+      console.log(`[Adoption Email] Generating PDF attachments for session ${session.id}...`);
 
       // 1. Payment Receipt PDF
       try {
@@ -1368,8 +1375,10 @@ export async function finalizeAdoption(sessionId: string): Promise<void> {
           content: receiptPdf,
           contentType: 'application/pdf',
         });
+        includedDocs.receipt = true;
+        console.log(`[Adoption Email] ✅ Payment receipt PDF generated successfully`);
       } catch (error) {
-        console.error('Failed to generate payment receipt PDF:', error);
+        console.error('[Adoption Email] ❌ Failed to generate payment receipt PDF:', error);
       }
 
       // 2. Signed Contract PDF
@@ -1406,9 +1415,13 @@ export async function finalizeAdoption(sessionId: string): Promise<void> {
             content: contractBuffer,
             contentType: 'application/pdf',
           });
+          includedDocs.contract = true;
+          console.log(`[Adoption Email] ✅ Signed contract PDF retrieved successfully`);
+        } else {
+          console.log(`[Adoption Email] ⚠️ No signed contract found for session ${session.id}`);
         }
       } catch (error) {
-        console.error('Failed to download signed contract PDF:', error);
+        console.error('[Adoption Email] ❌ Failed to download signed contract PDF:', error);
       }
 
       // 3. Medical History PDF
@@ -1419,9 +1432,38 @@ export async function finalizeAdoption(sessionId: string): Promise<void> {
           content: medicalHistoryPdf,
           contentType: 'application/pdf',
         });
+        includedDocs.medical = true;
+        console.log(`[Adoption Email] ✅ Medical history PDF generated successfully`);
       } catch (error) {
-        console.error('Failed to generate medical history PDF:', error);
+        console.error('[Adoption Email] ❌ Failed to generate medical history PDF:', error);
       }
+
+      console.log(`[Adoption Email] Generated ${attachments.length}/3 attachments: receipt=${includedDocs.receipt}, contract=${includedDocs.contract}, medical=${includedDocs.medical}`);
+
+      // Build dynamic attachment list for email based on what was actually generated
+      const attachmentListItems: string[] = [];
+      if (includedDocs.receipt) {
+        attachmentListItems.push('<li><strong>Payment Receipt</strong> - Your official adoption payment receipt</li>');
+      }
+      if (includedDocs.contract) {
+        attachmentListItems.push('<li><strong>Signed Adoption Contract</strong> - Your legally binding adoption agreement</li>');
+      }
+      if (includedDocs.medical) {
+        attachmentListItems.push(`<li><strong>Medical History</strong> - ${animal.name}'s complete medical records</li>`);
+      }
+
+      // Only show the attachments section if we have any attachments
+      const attachmentsSection = attachments.length > 0 ? `
+            <div style="background-color: #f0fdf4; border-left: 4px solid #10b981; padding: 15px; margin: 20px 0;">
+              <h3 style="color: #10b981; margin-top: 0;">What's Included</h3>
+              <p style="margin: 5px 0;">We've attached ${attachments.length === 1 ? 'an important document' : `${attachments.length} important documents`} to this email:</p>
+              <ul style="margin: 10px 0;">
+                ${attachmentListItems.join('\n                ')}
+              </ul>
+              <p style="margin: 5px 0; font-size: 14px; color: #166534;">
+                Please save ${attachments.length === 1 ? 'this document' : 'these documents'} for your records.
+              </p>
+            </div>` : '';
 
       // Send confirmation email with 3-3-3 Rule info
       await emailService.send({
@@ -1432,20 +1474,7 @@ export async function finalizeAdoption(sessionId: string): Promise<void> {
             <h2 style="color: #2563eb;">Welcome to the Family!</h2>
             <p>Dear ${recipientName},</p>
             <p>Congratulations on completing the adoption of <strong>${animal.name}</strong>!</p>
-            
-            <div style="background-color: #f0fdf4; border-left: 4px solid #10b981; padding: 15px; margin: 20px 0;">
-              <h3 style="color: #10b981; margin-top: 0;">What's Included</h3>
-              <p style="margin: 5px 0;">We've attached three important documents to this email:</p>
-              <ul style="margin: 10px 0;">
-                <li><strong>Payment Receipt</strong> - Your official adoption payment receipt</li>
-                <li><strong>Signed Adoption Contract</strong> - Your legally binding adoption agreement</li>
-                <li><strong>Medical History</strong> - ${animal.name}'s complete medical records</li>
-              </ul>
-              <p style="margin: 5px 0; font-size: 14px; color: #166534;">
-                Please save these documents for your records.
-              </p>
-            </div>
-
+            ${attachmentsSection}
             <div style="background-color: #f8fafc; padding: 15px; margin: 20px 0; border-radius: 8px;">
               <h3 style="color: #2563eb; margin-top: 0;">The 3-3-3 Rule</h3>
               <p>It takes time for ${animal.name} to adjust to their new home!</p>
@@ -1469,10 +1498,12 @@ export async function finalizeAdoption(sessionId: string): Promise<void> {
             </p>
           </div>
         `,
-        attachments,
+        attachments: attachments.length > 0 ? attachments : undefined,
       });
+      
+      console.log(`[Adoption Email] ✅ Confirmation email sent to ${recipientEmail} with ${attachments.length} attachments`);
     } catch (error) {
-      console.error('Failed to send confirmation email with attachments:', error);
+      console.error('[Adoption Email] ❌ Failed to send confirmation email with attachments:', error);
       // Send basic email if attachment generation fails
       await emailService.send({
         to: recipientEmail,

@@ -235,6 +235,7 @@ export class GmailService {
   /**
    * Build raw MIME message for Gmail API
    * Uses native string construction instead of Nodemailer for better compatibility with gmail.send scope
+   * Supports attachments via multipart/mixed structure
    */
   private makeRawMessage(options: {
     to: string;
@@ -243,8 +244,11 @@ export class GmailService {
     html: string;
     text?: string;
     replyTo?: string;
+    attachments?: EmailAttachment[];
   }): string {
-    const boundary = `boundary_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    const hasAttachments = options.attachments && options.attachments.length > 0;
+    const mixedBoundary = `mixed_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    const altBoundary = `alt_${Date.now()}_${Math.random().toString(36).substring(7)}`;
     const plainText = options.text || this.htmlToPlainText(options.html);
     
     // Build RFC 2822 compliant MIME message with proper CRLF line endings
@@ -256,25 +260,78 @@ export class GmailService {
     }
     message += `Subject: ${this.encodeSubject(options.subject)}\r\n`;
     message += `MIME-Version: 1.0\r\n`;
-    message += `Content-Type: multipart/alternative; boundary="${boundary}"\r\n`;
-    message += `\r\n`;
     
-    // Plain text part
-    message += `--${boundary}\r\n`;
-    message += `Content-Type: text/plain; charset=utf-8\r\n`;
-    message += `Content-Transfer-Encoding: quoted-printable\r\n`;
-    message += `\r\n`;
-    message += `${this.encodeQuotedPrintable(plainText)}\r\n`;
-    
-    // HTML part
-    message += `--${boundary}\r\n`;
-    message += `Content-Type: text/html; charset=utf-8\r\n`;
-    message += `Content-Transfer-Encoding: quoted-printable\r\n`;
-    message += `\r\n`;
-    message += `${this.encodeQuotedPrintable(options.html)}\r\n`;
-    
-    // Close boundary
-    message += `--${boundary}--\r\n`;
+    if (hasAttachments) {
+      // Use multipart/mixed for messages with attachments
+      message += `Content-Type: multipart/mixed; boundary="${mixedBoundary}"\r\n`;
+      message += `\r\n`;
+      
+      // First part: multipart/alternative containing text and HTML
+      message += `--${mixedBoundary}\r\n`;
+      message += `Content-Type: multipart/alternative; boundary="${altBoundary}"\r\n`;
+      message += `\r\n`;
+      
+      // Plain text part
+      message += `--${altBoundary}\r\n`;
+      message += `Content-Type: text/plain; charset=utf-8\r\n`;
+      message += `Content-Transfer-Encoding: quoted-printable\r\n`;
+      message += `\r\n`;
+      message += `${this.encodeQuotedPrintable(plainText)}\r\n`;
+      
+      // HTML part
+      message += `--${altBoundary}\r\n`;
+      message += `Content-Type: text/html; charset=utf-8\r\n`;
+      message += `Content-Transfer-Encoding: quoted-printable\r\n`;
+      message += `\r\n`;
+      message += `${this.encodeQuotedPrintable(options.html)}\r\n`;
+      
+      // Close alternative boundary
+      message += `--${altBoundary}--\r\n`;
+      
+      // Add attachment parts
+      for (const attachment of options.attachments!) {
+        const contentType = attachment.contentType || 'application/octet-stream';
+        const filename = attachment.filename;
+        
+        // Convert content to base64 if it's a Buffer
+        const base64Content = Buffer.isBuffer(attachment.content)
+          ? attachment.content.toString('base64')
+          : attachment.content;
+        
+        message += `--${mixedBoundary}\r\n`;
+        message += `Content-Type: ${contentType}; name="${filename}"\r\n`;
+        message += `Content-Disposition: attachment; filename="${filename}"\r\n`;
+        message += `Content-Transfer-Encoding: base64\r\n`;
+        message += `\r\n`;
+        // Split base64 into 76-character lines per RFC 2045
+        const lines = base64Content.match(/.{1,76}/g) || [];
+        message += lines.join('\r\n') + '\r\n';
+      }
+      
+      // Close mixed boundary
+      message += `--${mixedBoundary}--\r\n`;
+    } else {
+      // No attachments - use simple multipart/alternative
+      message += `Content-Type: multipart/alternative; boundary="${altBoundary}"\r\n`;
+      message += `\r\n`;
+      
+      // Plain text part
+      message += `--${altBoundary}\r\n`;
+      message += `Content-Type: text/plain; charset=utf-8\r\n`;
+      message += `Content-Transfer-Encoding: quoted-printable\r\n`;
+      message += `\r\n`;
+      message += `${this.encodeQuotedPrintable(plainText)}\r\n`;
+      
+      // HTML part
+      message += `--${altBoundary}\r\n`;
+      message += `Content-Type: text/html; charset=utf-8\r\n`;
+      message += `Content-Transfer-Encoding: quoted-printable\r\n`;
+      message += `\r\n`;
+      message += `${this.encodeQuotedPrintable(options.html)}\r\n`;
+      
+      // Close boundary
+      message += `--${altBoundary}--\r\n`;
+    }
     
     return message;
   }
@@ -345,7 +402,8 @@ export class GmailService {
       const recipients = Array.isArray(options.to) ? options.to.join(', ') : options.to;
       const fromAddress = options.from || 'me';
       
-      console.log(`[GmailService] Building raw MIME message for recipients: ${recipients}, from: ${fromAddress}`);
+      const attachmentCount = options.attachments?.length || 0;
+      console.log(`[GmailService] Building raw MIME message for recipients: ${recipients}, from: ${fromAddress}, attachments: ${attachmentCount}`);
       
       // Build raw MIME message using native string construction
       // This is more compatible with gmail.send scope than Nodemailer
@@ -356,6 +414,7 @@ export class GmailService {
         html: options.html,
         text: options.text,
         replyTo: options.replyTo,
+        attachments: options.attachments,
       });
       
       // Base64URL encode the message (Gmail API requirement)
