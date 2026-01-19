@@ -1006,9 +1006,18 @@ export const fosterApplications = pgTable("foster_applications", {
   preferences: text("preferences"),
   vetReference: text("vet_reference"),
   personalReference: text("personal_reference"),
-  status: text("status").notNull().default("pending").$type<"pending" | "approved" | "rejected">(),
+  status: text("status").notNull().default("new_app").$type<"new_app" | "interview" | "home_check" | "orientation" | "agreement" | "active_pool" | "rejected">(),
   notes: text("notes"), // Admin notes
   customResponses: jsonb("custom_responses").$type<Record<string, any>>(), // Stores answers to custom form fields
+  // Foster preferences (for Active Pool roster filtering)
+  hasFencedYard: boolean("has_fenced_yard").default(false),
+  acceptsLargeDogs: boolean("accepts_large_dogs").default(false),
+  acceptsCats: boolean("accepts_cats").default(false),
+  acceptsPuppies: boolean("accepts_puppies").default(false),
+  acceptsSeniors: boolean("accepts_seniors").default(false),
+  acceptsMedicalNeeds: boolean("accepts_medical_needs").default(false),
+  maxAnimals: integer("max_animals").default(1),
+  agreementSessionId: uuid("agreement_session_id").references(() => fosterAgreementSessions.id, { onDelete: 'set null' }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

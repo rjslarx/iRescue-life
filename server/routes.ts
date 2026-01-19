@@ -10618,15 +10618,22 @@ Submitted: ${new Date().toLocaleString()}
 
   /**
    * PATCH /api/foster-applications/:id
-   * Update foster application status (admin/staff only)
+   * Update foster application (admin/staff only)
    */
   app.patch('/api/foster-applications/:id', requireTenant, requireAuth, requireRole('staff'), async (req, res, next) => {
     try {
       const { fosterApplications } = await import('@shared/schema');
       
       const updateSchema = z.object({
-        status: z.enum(['pending', 'approved', 'rejected']),
+        status: z.enum(['new_app', 'interview', 'home_check', 'orientation', 'agreement', 'active_pool', 'rejected', 'pending', 'approved']).optional(),
         notes: z.string().optional(),
+        hasFencedYard: z.boolean().optional(),
+        acceptsLargeDogs: z.boolean().optional(),
+        acceptsCats: z.boolean().optional(),
+        acceptsPuppies: z.boolean().optional(),
+        acceptsSeniors: z.boolean().optional(),
+        acceptsMedicalNeeds: z.boolean().optional(),
+        maxAnimals: z.number().optional(),
       });
 
       const data = updateSchema.parse(req.body);
@@ -10650,6 +10657,385 @@ Submitted: ${new Date().toLocaleString()}
       }
 
       res.json({ success: true, application: updatedApplication });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * PATCH /api/foster-applications/:id/status
+   * Update foster application status (Kanban stage transition)
+   */
+  app.patch('/api/foster-applications/:id/status', requireTenant, requireAuth, requireRole('staff'), async (req, res, next) => {
+    try {
+      const { fosterApplications } = await import('@shared/schema');
+      
+      const updateSchema = z.object({
+        status: z.enum(['new_app', 'interview', 'home_check', 'orientation', 'agreement', 'active_pool', 'rejected']),
+      });
+
+      const data = updateSchema.parse(req.body);
+
+      const [updatedApplication] = await db
+        .update(fosterApplications)
+        .set({
+          status: data.status,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(fosterApplications.id, req.params.id),
+            eq(fosterApplications.tenantId, req.tenant!.id)
+          )
+        )
+        .returning();
+
+      if (!updatedApplication) {
+        return res.status(404).json({ error: 'Foster application not found' });
+      }
+
+      res.json({ success: true, application: updatedApplication });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // ============================================================================
+  // Foster Agreement Sessions
+  // ============================================================================
+
+  /**
+   * GET /api/foster-agreements/sessions
+   * List foster agreement sessions (admin/staff only)
+   */
+  app.get('/api/foster-agreements/sessions', requireTenant, requireAuth, requireRole('staff'), async (req, res, next) => {
+    try {
+      const { fosterAgreementSessions } = await import('@shared/schema');
+      
+      const sessions = await db
+        .select()
+        .from(fosterAgreementSessions)
+        .where(eq(fosterAgreementSessions.tenantId, req.tenant!.id))
+        .orderBy(desc(fosterAgreementSessions.createdAt));
+      
+      res.json({ sessions });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/foster-agreements/sessions
+   * Create a new foster agreement session
+   */
+  app.post('/api/foster-agreements/sessions', requireTenant, requireAuth, requireRole('staff'), async (req, res, next) => {
+    try {
+      const { fosterAgreementSessions, contractTemplates } = await import('@shared/schema');
+      
+      const createSchema = z.object({
+        fosterApplicationId: z.string().uuid(),
+        fosterName: z.string(),
+        fosterEmail: z.string().email(),
+        contractTemplateId: z.string().uuid().optional(),
+      });
+
+      const data = createSchema.parse(req.body);
+
+      // Generate secure token
+      const token = randomUUID();
+      
+      // Set expiration to 7 days from now
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7);
+
+      // Find default foster contract template if not specified
+      let templateId = data.contractTemplateId;
+      if (!templateId) {
+        const defaultTemplate = await db
+          .select()
+          .from(contractTemplates)
+          .where(
+            and(
+              eq(contractTemplates.tenantId, req.tenant!.id),
+              eq(contractTemplates.type, 'foster_agreement'),
+              eq(contractTemplates.isDefault, true)
+            )
+          )
+          .limit(1);
+        
+        if (defaultTemplate.length > 0) {
+          templateId = defaultTemplate[0].id;
+        }
+      }
+
+      const [session] = await db
+        .insert(fosterAgreementSessions)
+        .values({
+          id: randomUUID(),
+          tenantId: req.tenant!.id,
+          fosterApplicationId: data.fosterApplicationId,
+          fosterName: data.fosterName,
+          fosterEmail: data.fosterEmail,
+          contractTemplateId: templateId || null,
+          token,
+          status: 'initiated',
+          expiresAt,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .returning();
+
+      res.json({ success: true, session });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/foster-agreements/sessions/:id/send-link
+   * Send foster agreement signing link via email
+   */
+  app.post('/api/foster-agreements/sessions/:id/send-link', requireTenant, requireAuth, requireRole('staff'), async (req, res, next) => {
+    try {
+      const { fosterAgreementSessions } = await import('@shared/schema');
+      const { EmailService } = await import('./lib/email-service');
+      
+      const sendSchema = z.object({
+        fosterEmail: z.string().email(),
+        fosterName: z.string(),
+      });
+
+      const data = sendSchema.parse(req.body);
+
+      // Get the session
+      const [session] = await db
+        .select()
+        .from(fosterAgreementSessions)
+        .where(
+          and(
+            eq(fosterAgreementSessions.id, req.params.id),
+            eq(fosterAgreementSessions.tenantId, req.tenant!.id)
+          )
+        );
+
+      if (!session) {
+        return res.status(404).json({ error: 'Foster agreement session not found' });
+      }
+
+      // Generate signing link
+      const baseUrl = req.tenant!.customDomain 
+        ? `https://${req.tenant!.customDomain}` 
+        : `https://${req.tenant!.subdomain}.irescue.life`;
+      const signingLink = `${baseUrl}/foster-agreement/${session.token}`;
+
+      // Send email
+      const emailService = await EmailService.forTenant(req.tenant!.id);
+      if (emailService) {
+        await emailService.send({
+          to: data.fosterEmail,
+          subject: `Foster Care Agreement - ${req.tenant!.name}`,
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h2 style="color: #333;">Foster Care Agreement</h2>
+              <p>Dear ${data.fosterName},</p>
+              <p>Congratulations on being approved to foster with ${req.tenant!.name}! Please review and sign our Foster Care Agreement to complete your onboarding.</p>
+              <p style="margin: 30px 0;">
+                <a href="${signingLink}" style="background-color: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
+                  Review & Sign Agreement
+                </a>
+              </p>
+              <p style="color: #666; font-size: 14px;">This link will expire in 7 days. If you have any questions, please contact us.</p>
+              <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
+              <p style="color: #999; font-size: 12px;">Sent by ${req.tenant!.name}</p>
+            </div>
+          `,
+          text: `
+Foster Care Agreement - ${req.tenant!.name}
+
+Dear ${data.fosterName},
+
+Congratulations on being approved to foster with ${req.tenant!.name}! Please review and sign our Foster Care Agreement to complete your onboarding.
+
+Sign your agreement here: ${signingLink}
+
+This link will expire in 7 days. If you have any questions, please contact us.
+
+Sent by ${req.tenant!.name}
+          `.trim(),
+        });
+      }
+
+      // Update session status
+      await db
+        .update(fosterAgreementSessions)
+        .set({
+          status: 'awaiting_signature',
+          updatedAt: new Date(),
+        })
+        .where(eq(fosterAgreementSessions.id, session.id));
+
+      res.json({ success: true, message: 'Foster agreement link sent successfully' });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/foster-agreement/:token
+   * Get foster agreement session by token (public route for signing)
+   */
+  app.get('/api/foster-agreement/:token', requireTenant, async (req, res, next) => {
+    try {
+      const { fosterAgreementSessions, contractTemplates, tenants } = await import('@shared/schema');
+      
+      const [session] = await db
+        .select()
+        .from(fosterAgreementSessions)
+        .where(
+          and(
+            eq(fosterAgreementSessions.token, req.params.token),
+            eq(fosterAgreementSessions.tenantId, req.tenant!.id)
+          )
+        );
+
+      if (!session) {
+        return res.status(404).json({ error: 'Foster agreement session not found' });
+      }
+
+      // Check if expired
+      if (session.expiresAt && new Date() > new Date(session.expiresAt)) {
+        return res.status(410).json({ error: 'This foster agreement link has expired' });
+      }
+
+      // Check if already completed
+      if (session.status === 'completed') {
+        return res.status(400).json({ error: 'This foster agreement has already been signed' });
+      }
+
+      // Get contract template content if available
+      let contractContent = null;
+      if (session.contractTemplateId) {
+        const [template] = await db
+          .select()
+          .from(contractTemplates)
+          .where(eq(contractTemplates.id, session.contractTemplateId));
+        
+        if (template) {
+          contractContent = template.content;
+        }
+      }
+
+      // Get tenant info
+      const [tenant] = await db
+        .select({
+          name: tenants.name,
+          logoUrl: tenants.logoUrl,
+        })
+        .from(tenants)
+        .where(eq(tenants.id, req.tenant!.id));
+
+      res.json({
+        session: {
+          id: session.id,
+          fosterName: session.fosterName,
+          fosterEmail: session.fosterEmail,
+          status: session.status,
+        },
+        contractContent,
+        tenant,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/foster-agreement/:token/sign
+   * Sign foster agreement (public route)
+   */
+  app.post('/api/foster-agreement/:token/sign', requireTenant, async (req, res, next) => {
+    try {
+      const { fosterAgreementSessions, fosterContracts, fosterApplications } = await import('@shared/schema');
+      
+      const signSchema = z.object({
+        signatureImage: z.string(),
+        fosterAddress: z.string().optional(),
+        fosterPhone: z.string().optional(),
+      });
+
+      const data = signSchema.parse(req.body);
+
+      // Get the session
+      const [session] = await db
+        .select()
+        .from(fosterAgreementSessions)
+        .where(
+          and(
+            eq(fosterAgreementSessions.token, req.params.token),
+            eq(fosterAgreementSessions.tenantId, req.tenant!.id)
+          )
+        );
+
+      if (!session) {
+        return res.status(404).json({ error: 'Foster agreement session not found' });
+      }
+
+      // Check if expired
+      if (session.expiresAt && new Date() > new Date(session.expiresAt)) {
+        return res.status(410).json({ error: 'This foster agreement link has expired' });
+      }
+
+      // Check if already completed
+      if (session.status === 'completed') {
+        return res.status(400).json({ error: 'This foster agreement has already been signed' });
+      }
+
+      // Get client IP
+      const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
+      const signedAt = new Date();
+
+      // Create foster contract record
+      const [contract] = await db
+        .insert(fosterContracts)
+        .values({
+          id: randomUUID(),
+          tenantId: req.tenant!.id,
+          fosterAgreementSessionId: session.id,
+          fosterApplicationId: session.fosterApplicationId,
+          fosterName: session.fosterName,
+          fosterEmail: session.fosterEmail,
+          fosterAddress: data.fosterAddress || null,
+          fosterPhone: data.fosterPhone || null,
+          contractTemplateId: session.contractTemplateId,
+          signatureImage: data.signatureImage,
+          signedAt,
+          signedIp: String(clientIp),
+          createdAt: new Date(),
+        })
+        .returning();
+
+      // Update session status to completed
+      await db
+        .update(fosterAgreementSessions)
+        .set({
+          status: 'completed',
+          completedAt: signedAt,
+          updatedAt: new Date(),
+        })
+        .where(eq(fosterAgreementSessions.id, session.id));
+
+      // Optionally update foster application status to active_pool
+      if (session.fosterApplicationId) {
+        await db
+          .update(fosterApplications)
+          .set({
+            status: 'active_pool',
+            updatedAt: new Date(),
+          })
+          .where(eq(fosterApplications.id, session.fosterApplicationId));
+      }
+
+      res.json({ success: true, contract });
     } catch (error) {
       next(error);
     }

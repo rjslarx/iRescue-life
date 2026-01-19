@@ -29,6 +29,7 @@ import MyFostersPage from "@/pages/MyFostersPage";
 import FosterAnimalProfilePage from "@/pages/FosterAnimalProfilePage";
 import FosterAnimalMedicalPage from "@/pages/FosterAnimalMedicalPage";
 import FosterManagementPage from "@/pages/FosterManagementPage";
+import FosterApplicationsPipelinePage from "@/pages/FosterApplicationsPipelinePage";
 import FosterMobilePortal from "@/pages/FosterMobilePortal";
 import TeamManagementPage from "@/pages/TeamManagementPage";
 import EmailCampaignPage from "@/pages/EmailCampaignPage";
@@ -214,6 +215,7 @@ function RouterSwitch() {
       <ProtectedRoute path="/dashboard/my-fosters/:animalId" pageId="foster-management" component={FosterAnimalProfilePage} />
       <ProtectedRoute path="/dashboard/foster-mobile" pageId="foster-management" component={FosterMobilePortal} />
       <ProtectedRoute path="/dashboard/foster-management" pageId="foster-management" component={FosterManagementPage} />
+      <ProtectedRoute path="/dashboard/foster-pipeline" pageId="foster-management" component={FosterApplicationsPipelinePage} />
       <ProtectedRoute path="/dashboard/volunteer-applications" pageId="volunteers" component={VolunteerApplicationManagementPage} />
       <ProtectedRoute path="/dashboard/communications" pageId="communications" component={CommunicationsPage} />
       <ProtectedRoute path="/dashboard/broadcasts" pageId="communications" component={BroadcastsPage} />

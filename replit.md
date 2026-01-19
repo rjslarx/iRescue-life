@@ -24,6 +24,16 @@ Email/password authentication leverages bcrypt and Express sessions, featuring s
 **Feature Specifications:**
 The platform offers comprehensive animal, application, and financial management (with Stripe). It includes contact management, Happy Tails, supply registry, expenditure tracking, event management, volunteer coordination, medical records, and document management. **Customizable Hero Layouts:** Tenants can choose from three hero layout types: "Three Doors" (action cards), "Action Circle" (circular CTA), or "None". The Three Doors layout allows full customization of each door's title, description, link text, link URL, and icon (paw, home, heart, dollar) via the admin settings page. Communication features include newsletters, email campaigns (via Resend), and automated notifications. It provides unified site permissions, multi-calendar functionality, page-level permissions, and customizable event forms. Admin interfaces allow tenant branding, CMS, custom pages, and analytics dashboards. PWA capabilities include mobile installation, offline access, and push notifications. Integrations include external adoption platforms and Google Workspace. A platform admin interface manages tenants, users, feature flags, audit logs, and system health. Other features include an AI Help Assistant, a setup wizard, kennel management, a public animal surrender system, auto-archiving, grant budget tracking, a contract template editor with native e-signature system, a fundraising shop module, a collaboration hub, smart foster matching, medical fund campaigns, Govee temperature monitoring integration, IRS-compliant donation receipts, and social media sharing with dynamic Open Graph tags.
 
+**Foster Application Pipeline:**
+The platform includes a comprehensive foster application management system with Kanban workflow:
+- **7-Stage Pipeline:** New App → Interview → Home Check → Orientation → Agreement → Active Pool → Rejected
+- **Kanban Board:** Drag-and-drop interface for moving applications through stages
+- **Foster Agreement E-Signing:** Native e-signature system for foster care agreements (similar to adoption contracts)
+- **Active Foster Pool:** Searchable roster of approved fosters with preference filters (fenced yard, large dogs, cats, puppies, seniors, medical needs)
+- **Email Notifications:** Automated agreement signing links sent via email with 7-day expiry
+- **Database Tables:** `foster_agreement_sessions` tracks signing workflow, `foster_contracts` stores signed agreements
+- **API Routes:** `/api/foster-applications/:id/status` for stage transitions, `/api/foster-agreements/sessions` for agreement management
+
 **Native Contract Management System:**
 The platform includes a complete native e-signature system for adoption contracts (no external DocuSign integration):
 - **Contract Template Editor:** Staff can create custom contract templates using two modes:
