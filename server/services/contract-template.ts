@@ -442,6 +442,314 @@ export const ENHANCED_ADOPTION_CONTRACT_HTML = `<!DOCTYPE html>
 </body>
 </html>`;
 
+// Haseya's New Beginning Foster Care Agreement Template
+export const HASEYAS_FOSTER_CARE_AGREEMENT_HTML = `<!DOCTYPE html>
+<html>
+<head>
+<style>
+  body { font-family: 'Georgia', 'Times New Roman', serif; line-height: 1.8; color: #333; max-width: 800px; margin: 0 auto; padding: 20px; }
+  h1 { text-align: center; font-size: 2em; margin-bottom: 5px; }
+  h2 { text-align: center; font-size: 1.4em; color: #666; margin-top: 0; padding-bottom: 20px; border-bottom: 2px solid #8B4513; }
+  .header-section { text-align: center; margin-bottom: 30px; }
+  .info-section { background: #faf8f5; border: 1px solid #ddd; padding: 20px; margin-bottom: 25px; border-radius: 5px; }
+  .info-grid { display: grid; grid-template-columns: 150px 1fr; gap: 10px; }
+  .info-label { font-weight: bold; color: #555; }
+  .info-value { color: #333; }
+  .address-block { margin-top: 5px; }
+  .address-line { display: block; }
+  .notice { background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; font-style: italic; }
+  .warning { background-color: #f8d7da; border-left: 4px solid #dc3545; padding: 15px; margin: 20px 0; }
+  .terms-section { margin: 25px 0; }
+  .terms-section p { margin-bottom: 15px; text-align: justify; }
+  .terms-section .term-item { margin-bottom: 18px; padding-left: 10px; }
+  .highlight { color: #8B4513; font-weight: bold; }
+  .important { font-weight: bold; }
+  .phone-number { font-weight: bold; color: #2563eb; }
+  .signature-block { margin-top: 40px; background-color: #f9f9f9; padding: 25px; border: 1px solid #ddd; border-radius: 5px; }
+  .signature-line { margin: 20px 0; border-bottom: 2px solid #333; display: inline-block; min-width: 350px; }
+  .digital-stamp { font-size: 0.85em; color: #666; margin-top: 15px; font-family: 'Courier New', monospace; background: #f0f0f0; padding: 10px; border-radius: 3px; }
+  .contact-info { font-size: 0.9em; color: #666; text-align: center; margin-top: 30px; }
+  .transport-notice { background-color: #ffe4e1; border: 2px solid #dc3545; padding: 20px; margin: 25px 0; text-align: center; }
+  .transport-notice p { margin: 0; font-weight: bold; color: #dc3545; font-size: 1.1em; }
+</style>
+</head>
+<body>
+
+  <div class="header-section">
+    <h1>Haseya's New Beginning</h1>
+    <h2>Foster Agreement Form</h2>
+  </div>
+
+  <div class="info-section">
+    <div class="info-grid">
+      <span class="info-label">Foster Name:</span>
+      <span class="info-value">{{adopter_name}}</span>
+      
+      <span class="info-label">Email:</span>
+      <span class="info-value">{{adopter_email}}</span>
+      
+      <span class="info-label">Phone:</span>
+      <span class="info-value">{{adopter_phone}}</span>
+      
+      <span class="info-label">Address:</span>
+      <span class="info-value">
+        <div class="address-block">
+          <span class="address-line">{{adopter_street_address}}</span>
+          <span class="address-line">{{adopter_street_address_2}}</span>
+          <span class="address-line">{{adopter_city}}, {{adopter_state}} {{adopter_zip}}</span>
+        </div>
+      </span>
+      
+      <span class="info-label">Driver's License:</span>
+      <span class="info-value">{{adopter_drivers_license}}</span>
+      
+      <span class="info-label">Foster Dog:</span>
+      <span class="info-value highlight">{{animal_name}}</span>
+      
+      <span class="info-label">Species/Breed:</span>
+      <span class="info-value">{{animal_species}} / {{animal_breed}}</span>
+      
+      <span class="info-label">Date:</span>
+      <span class="info-value">{{contract_date}}</span>
+    </div>
+  </div>
+
+  <div class="terms-section">
+    <p class="term-item"><span class="important">I agree that the dog <span class="highlight">{{animal_name}}</span>, is in a foster and will not be sold, adopted, or given to another party.</span></p>
+
+    <div class="notice">
+      <p><strong>The following applies to "foster to adopt" periods:</strong></p>
+      <p>I understand that I am required to bring the dog/puppy to all required vaccine appointments at the given days/times and spay/neuter appointment at the veterinarian designated by Haseya's New Beginning Animal Rescue. If I am unable to attend the appointment(s) for any reason, I agree to notify HNBAR immediately and arrange alternate plans to have vaccines completed within the required vaccine time frame.</p>
+      <p>I understand that this is a requirement when adopting a dog/puppy from HNBAR and if violated HNBAR reserves the right to take the dog/puppy back into the rescue <span class="important">WITHOUT refunding the $150 adoption fee.</span></p>
+    </div>
+
+    <p class="term-item">I agree to care for the dog in a humane manner and be a responsible guardian for as set forth in the fostering guidelines document.</p>
+
+    <p class="term-item">I agree to foster this dog until the dog has been neutered/spayed and completed the foster to adopt period, is placed in a permanent adoptive home, or until an agreed-upon date. <span class="important">In the event I decide not to foster, I will allow HNBAR at least 14 days to find an alternative foster for the dog that I am fostering unless otherwise agreed upon by HNBAR.</span></p>
+
+    <p class="term-item">I agree to bring the dog to all local adoption events (if applicable). If I cannot attend, I will contact HNBAR for assistance in transporting the dog to the event.</p>
+
+    <p class="term-item">I agree that the dog will not be allowed outdoors without proper supervision with a secure collar, leash, and proper ID.</p>
+
+    <p class="term-item"><span class="important">I agree NOT TO CHANGE THE DOG'S NAME for any reason while fostering.</span></p>
+
+    <p class="term-item">I agree to give my foster dog medicines and vaccines covered by HNBAR. If in a "foster to adopt" trial, I agree to provide the heartworm protection.</p>
+
+    <p class="term-item">I agree to feed the dog two or three times per day depending on the age and other medical needs and will always provide fresh water.</p>
+
+    <p class="term-item">I agree to supervise the dog around adults, children, and pets.</p>
+
+    <p class="term-item">I agree not to take the dog to dog parks while fostering.</p>
+
+    <p class="term-item">I agree to contact HNBAR at <span class="phone-number">337-580-9552</span> or <span class="phone-number">337-581-4480</span> immediately if the dog escapes my supervision.</p>
+
+    <p class="term-item">I agree to contact HNBAR about any medical attention the dog may need. In case of an emergency, I agree to get the dog immediate vet care and notify HNBAR immediately before charges are incurred for approval. <span class="important">If in a "foster to adopt" period, I understand that I am responsible for all veterinarian costs.</span></p>
+
+    <p class="term-item">I agree to not let the dog go with anyone other than myself, a family member, or HNBAR.</p>
+
+    <p class="term-item">I agree that this dog is to be a companion animal, not a guard dog. The dog will live inside my home, not outdoors.</p>
+
+    <p class="term-item">I agree that all animals in my home are current on their vaccinations.</p>
+
+    <p class="term-item">If applicable, my spouse and/or all family/household members have agreed to this foster agreement with HNBAR.</p>
+
+    <p class="term-item">I agree to keep HNBAR informed of my current home address, mailing address, phone number, and email address.</p>
+
+    <p class="term-item">I understand that it is the foster's responsibility to notify HNBAR should I no longer be able or willing to foster the dog until it is adopted, and I must provide HNBAR up to 14 days to find an alternative placement for the dog unless otherwise agreed upon HNBAR.</p>
+
+    <p class="term-item">I agree to abide by all local and state laws set forth by your animal control government.</p>
+
+    <div class="warning">
+      <p><strong>Disclaimer:</strong> Due to the limited time we have spent with the rescue animals, HNBAR has little knowledge of their temperament or past history beyond that which you have been provided. HNBAR requires that foster homes assume all responsibility for any behavior by the rescue dog. By your agreement to foster and care for HNBAR's dog, you are agreeing to this provision.</p>
+    </div>
+
+    <p class="term-item"><span class="important">HASEYA'S NEW BEGINNING IS NOT RESPONSIBLE FOR ANY DAMAGES TO ANY PROPERTY CAUSED BY THE FOSTER ANIMAL.</span></p>
+
+    <p class="term-item"><span class="important">HASEYA'S NEW BEGINNING IS NOT RESPONSIBLE FOR ANY DEATH OR INJURIES TO ANY OTHER ANIMAL CAUSED BY THE FOSTER ANIMAL.</span></p>
+
+    <p class="term-item">The dog is and shall remain the property of HNBAR until it is spayed or neutered and the adoption is finalized. If for any reason the adoption deposit will NOT BE REFUNDED. I further agree that if HNBAR is forced to take legal action against me to recover physical custody of the dog that I will reimburse HNBAR for filing fees, court costs, service fees, and any other expenses incurred by HNBAR to recover physical custody of the pet.</p>
+  </div>
+
+  <div class="signature-block">
+    <p>I, <strong>{{adopter_name}}</strong>, certify that the information provided is true and I understand and agree to all terms of this Foster Agreement.</p>
+    
+    <div class="signature-line">
+      <img src="{{signature_image_url}}" alt="Foster Signature" style="max-height: 80px;" />
+    </div>
+    <br>
+    <strong>Signature of Foster</strong>
+    
+    <div class="digital-stamp">
+      <p>Digitally Signed via iRescue.life</p>
+      <p>Timestamp: {{signed_timestamp}}</p>
+      <p>IP Address: {{signed_ip}}</p>
+    </div>
+  </div>
+
+  <div class="transport-notice">
+    <p>IMPORTANT: I AGREE THAT ONCE MY FOSTER DOG IS TAGGED BY ANY RESCUE, MY FOSTER DOG CAN NOT BE ADOPTED OUT, IT MUST GO ON TRANSPORT. NO EXCEPTIONS.</p>
+  </div>
+
+  <div class="signature-block">
+    <p>I acknowledge and agree to the above transport policy:</p>
+    
+    <div class="signature-line">
+      <img src="{{signature_image_url}}" alt="Foster Transport Agreement Signature" style="max-height: 80px;" />
+    </div>
+    <br>
+    <strong>Signature of Foster (Transport Agreement)</strong>
+  </div>
+
+  <div class="contact-info">
+    <p>Haseya's New Beginning<br>
+    1321 Section Ave, Rayne, LA 70578<br>
+    haseyasnewbeginninghr@yahoo.com<br>
+    <span class="phone-number">337-580-9552</span> | <span class="phone-number">337-581-4480</span></p>
+  </div>
+
+</body>
+</html>`;
+
+// Enhanced Foster Care Agreement - Generic version for all tenants
+export const ENHANCED_FOSTER_CARE_AGREEMENT_HTML = `<!DOCTYPE html>
+<html>
+<head>
+<style>
+  body { font-family: 'Georgia', 'Times New Roman', serif; line-height: 1.8; color: #333; max-width: 800px; margin: 0 auto; padding: 20px; }
+  h1 { text-align: center; font-size: 2em; margin-bottom: 5px; }
+  h2 { text-align: center; font-size: 1.4em; color: #666; margin-top: 0; padding-bottom: 20px; border-bottom: 2px solid #4a7c59; }
+  .header-section { text-align: center; margin-bottom: 30px; }
+  .info-section { background: #faf8f5; border: 1px solid #ddd; padding: 20px; margin-bottom: 25px; border-radius: 5px; }
+  .info-grid { display: grid; grid-template-columns: 150px 1fr; gap: 10px; }
+  .info-label { font-weight: bold; color: #555; }
+  .info-value { color: #333; }
+  .address-block { margin-top: 5px; }
+  .address-line { display: block; }
+  .notice { background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; font-style: italic; }
+  .warning { background-color: #f8d7da; border-left: 4px solid #dc3545; padding: 15px; margin: 20px 0; }
+  .terms-section { margin: 25px 0; }
+  .terms-section p { margin-bottom: 15px; text-align: justify; }
+  .terms-section .term-item { margin-bottom: 18px; padding-left: 10px; }
+  .highlight { color: #4a7c59; font-weight: bold; }
+  .important { font-weight: bold; }
+  .signature-block { margin-top: 40px; background-color: #f9f9f9; padding: 25px; border: 1px solid #ddd; border-radius: 5px; }
+  .signature-line { margin: 20px 0; border-bottom: 2px solid #333; display: inline-block; min-width: 350px; }
+  .digital-stamp { font-size: 0.85em; color: #666; margin-top: 15px; font-family: 'Courier New', monospace; background: #f0f0f0; padding: 10px; border-radius: 3px; }
+  .contact-info { font-size: 0.9em; color: #666; text-align: center; margin-top: 30px; }
+</style>
+</head>
+<body>
+
+  <div class="header-section">
+    <h1>{{organization_name}}</h1>
+    <h2>Foster Care Agreement</h2>
+  </div>
+
+  <div class="info-section">
+    <div class="info-grid">
+      <span class="info-label">Foster Name:</span>
+      <span class="info-value">{{adopter_name}}</span>
+      
+      <span class="info-label">Email:</span>
+      <span class="info-value">{{adopter_email}}</span>
+      
+      <span class="info-label">Phone:</span>
+      <span class="info-value">{{adopter_phone}}</span>
+      
+      <span class="info-label">Address:</span>
+      <span class="info-value">
+        <div class="address-block">
+          <span class="address-line">{{adopter_street_address}}</span>
+          <span class="address-line">{{adopter_street_address_2}}</span>
+          <span class="address-line">{{adopter_city}}, {{adopter_state}} {{adopter_zip}}</span>
+        </div>
+      </span>
+      
+      <span class="info-label">Driver's License:</span>
+      <span class="info-value">{{adopter_drivers_license}}</span>
+      
+      <span class="info-label">Foster Animal:</span>
+      <span class="info-value highlight">{{animal_name}}</span>
+      
+      <span class="info-label">Species/Breed:</span>
+      <span class="info-value">{{animal_species}} / {{animal_breed}}</span>
+      
+      <span class="info-label">Date:</span>
+      <span class="info-value">{{contract_date}}</span>
+    </div>
+  </div>
+
+  <div class="notice">
+    Please read this carefully because you are signing a legally binding document. As a foster, you are providing temporary care for an animal that remains the property of {{organization_name}}.
+  </div>
+
+  <div class="terms-section">
+    <p><strong>The parties hereto agree that the foster shall abide by the following conditions:</strong></p>
+
+    <p class="term-item"><span class="important">I agree that the animal <span class="highlight">{{animal_name}}</span>, is in foster care and will not be sold, adopted, or given to another party.</span></p>
+
+    <p class="term-item">I agree to care for the animal in a humane manner and be a responsible guardian as set forth in the fostering guidelines.</p>
+
+    <p class="term-item">I agree to foster this animal until it has been spayed/neutered and placed in a permanent adoptive home, or until an agreed-upon date. In the event I decide not to foster, I will allow {{organization_name}} at least 14 days to find an alternative foster unless otherwise agreed upon.</p>
+
+    <p class="term-item">I agree to bring the animal to adoption events when requested. If I cannot attend, I will contact {{organization_name}} for assistance in transporting the animal to the event.</p>
+
+    <p class="term-item">I agree that the animal will not be allowed outdoors without proper supervision with a secure collar, leash, and proper ID.</p>
+
+    <p class="term-item"><span class="important">I agree NOT TO CHANGE THE ANIMAL'S NAME for any reason while fostering.</span></p>
+
+    <p class="term-item">I agree to administer medicines and vaccines as directed by {{organization_name}}.</p>
+
+    <p class="term-item">I agree to feed the animal appropriately depending on age and medical needs and will always provide fresh water.</p>
+
+    <p class="term-item">I agree to supervise the animal around adults, children, and other pets.</p>
+
+    <p class="term-item">I agree to contact {{organization_name}} immediately if the animal escapes my supervision.</p>
+
+    <p class="term-item">I agree to contact {{organization_name}} about any medical attention the animal may need. In case of an emergency, I agree to seek immediate veterinary care and notify {{organization_name}} immediately.</p>
+
+    <p class="term-item">I agree to not let the animal go with anyone other than myself, a family member, or {{organization_name}}.</p>
+
+    <p class="term-item">I agree that this animal is to be a companion, not a guard or working animal. The animal will live inside my home and will not be isolated from the family.</p>
+
+    <p class="term-item">I agree that all animals in my home are current on their vaccinations.</p>
+
+    <p class="term-item">If applicable, my spouse and/or all family/household members have agreed to this foster agreement.</p>
+
+    <p class="term-item">I agree to keep {{organization_name}} informed of my current contact information.</p>
+
+    <p class="term-item">I agree to abide by all local and state laws regarding animal care and welfare.</p>
+
+    <div class="warning">
+      <p><strong>Disclaimer:</strong> Due to the limited time spent with rescue animals, {{organization_name}} may have limited knowledge of their temperament or past history. Foster homes assume all responsibility for any behavior by the rescue animal. By agreeing to foster and care for the animal, you are accepting this provision.</p>
+    </div>
+
+    <p class="term-item"><span class="important">{{organization_name}} IS NOT RESPONSIBLE FOR ANY DAMAGES TO ANY PROPERTY CAUSED BY THE FOSTER ANIMAL.</span></p>
+
+    <p class="term-item"><span class="important">{{organization_name}} IS NOT RESPONSIBLE FOR ANY DEATH OR INJURIES TO ANY OTHER ANIMAL CAUSED BY THE FOSTER ANIMAL.</span></p>
+
+    <p class="term-item">The animal is and shall remain the property of {{organization_name}} until adoption is finalized. I further agree that if {{organization_name}} is forced to take legal action to recover physical custody of the animal, I will reimburse filing fees, court costs, service fees, and any other expenses incurred.</p>
+  </div>
+
+  <div class="signature-block">
+    <p>I, <strong>{{adopter_name}}</strong>, certify that the information provided is true and I understand and agree to all terms of this Foster Care Agreement.</p>
+    
+    <div class="signature-line">
+      <img src="{{signature_image_url}}" alt="Foster Signature" style="max-height: 80px;" />
+    </div>
+    <br>
+    <strong>Signature of Foster</strong>
+    
+    <div class="digital-stamp">
+      <p>Digitally Signed via iRescue.life</p>
+      <p>Timestamp: {{signed_timestamp}}</p>
+      <p>IP Address: {{signed_ip}}</p>
+    </div>
+  </div>
+
+</body>
+</html>`;
+
 // Type for merge data (all fields optional to handle missing data gracefully)
 export interface MergeData {
   organization_name?: string;
