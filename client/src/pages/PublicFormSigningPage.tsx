@@ -19,25 +19,27 @@ interface CustomFormField {
   id: string;
   name: string;
   fieldKey: string;
-  type: "text" | "textarea" | "checkbox" | "number" | "date" | "email" | "phone" | "select" | "radio" | "multiselect" | "file";
+  type: "text" | "textarea" | "checkbox" | "number" | "date" | "email" | "phone" | "select" | "radio" | "multiselect" | "file" | "info";
   required: boolean;
   placeholder?: string;
   defaultValue?: string;
   options?: string[];
   acceptedFileTypes?: string;
   maxFileSize?: number;
+  infoText?: string;
 }
 
 interface FormQuestion {
   id: string;
   question: string;
-  type: "text" | "textarea" | "checkbox" | "number" | "date" | "email" | "phone" | "select" | "radio" | "multiselect" | "file";
+  type: "text" | "textarea" | "checkbox" | "number" | "date" | "email" | "phone" | "select" | "radio" | "multiselect" | "file" | "info";
   required: boolean;
   placeholder?: string;
   order: number;
   options?: string[];
   acceptedFileTypes?: string;
   maxFileSize?: number;
+  infoText?: string;
 }
 
 interface UploadedFile {
@@ -438,10 +440,14 @@ export default function PublicFormSigningPage() {
               {/* Questions */}
               {sortedQuestions.map((question) => (
                 <div key={question.id} className="space-y-2">
-                  <Label htmlFor={`question-${question.id}`}>
-                    {question.question}
-                    {question.required && <span className="text-destructive ml-1">*</span>}
-                  </Label>
+                  {question.type !== 'info' ? (
+                    <Label htmlFor={`question-${question.id}`}>
+                      {question.question}
+                      {question.required && <span className="text-destructive ml-1">*</span>}
+                    </Label>
+                  ) : (
+                    <p className="text-sm font-medium">{question.question}</p>
+                  )}
                   {question.type === 'textarea' ? (
                     <Textarea
                       id={`question-${question.id}`}
@@ -520,6 +526,10 @@ export default function PublicFormSigningPage() {
                           </div>
                         );
                       })}
+                    </div>
+                  ) : question.type === 'info' ? (
+                    <div className="p-4 rounded-lg bg-muted/50 border border-muted" data-testid={`info-text-${question.id}`}>
+                      <p className="text-sm text-muted-foreground whitespace-pre-wrap">{question.infoText}</p>
                     </div>
                   ) : question.type === 'file' ? (
                     <div className="space-y-2" data-testid={`input-question-${question.id}`}>
@@ -622,10 +632,14 @@ export default function PublicFormSigningPage() {
                 <CardContent className="space-y-4">
                   {data.form.customFields.map((field) => (
                     <div key={field.id} className="space-y-2">
-                      <Label htmlFor={`field-${field.fieldKey}`}>
-                        {field.name}
-                        {field.required && <span className="text-destructive ml-1">*</span>}
-                      </Label>
+                      {field.type !== 'info' ? (
+                        <Label htmlFor={`field-${field.fieldKey}`}>
+                          {field.name}
+                          {field.required && <span className="text-destructive ml-1">*</span>}
+                        </Label>
+                      ) : (
+                        <p className="text-sm font-medium">{field.name}</p>
+                      )}
                       {field.type === 'textarea' ? (
                         <Textarea
                           id={`field-${field.fieldKey}`}
@@ -704,6 +718,10 @@ export default function PublicFormSigningPage() {
                               </div>
                             );
                           })}
+                        </div>
+                      ) : field.type === 'info' ? (
+                        <div className="p-4 rounded-lg bg-muted/50 border border-muted" data-testid={`info-text-${field.fieldKey}`}>
+                          <p className="text-sm text-muted-foreground whitespace-pre-wrap">{field.infoText}</p>
                         </div>
                       ) : field.type === 'file' ? (
                         <div className="space-y-2" data-testid={`input-${field.fieldKey}`}>

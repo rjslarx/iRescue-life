@@ -59,22 +59,24 @@ interface CustomFormField {
   id: string;
   name: string;
   fieldKey: string;
-  type: "text" | "textarea" | "checkbox" | "number" | "date" | "email" | "phone" | "select" | "radio" | "multiselect" | "file";
+  type: "text" | "textarea" | "checkbox" | "number" | "date" | "email" | "phone" | "select" | "radio" | "multiselect" | "file" | "info";
   required: boolean;
   placeholder?: string;
   defaultValue?: string;
   options?: string[];
   acceptedFileTypes?: string; // e.g., "image/*", ".pdf,.doc,.docx", "image/*,.pdf"
   maxFileSize?: number; // in bytes, default 10MB
+  infoText?: string; // Text content for 'info' type fields (displayed as static text, no input)
 }
 
 interface FormQuestion {
   id: string;
   question: string;
-  type: "text" | "textarea" | "checkbox" | "number" | "date" | "email" | "phone" | "select" | "radio" | "multiselect" | "file";
+  type: "text" | "textarea" | "checkbox" | "number" | "date" | "email" | "phone" | "select" | "radio" | "multiselect" | "file" | "info";
   acceptedFileTypes?: string;
   maxFileSize?: number;
   required: boolean;
+  infoText?: string; // For 'info' type - the static text to display
   placeholder?: string;
   order: number;
   options?: string[];
@@ -191,6 +193,7 @@ function FormEditor({
   const [localFieldType, setLocalFieldType] = useState<CustomFormField['type']>("text");
   const [localFieldOptions, setLocalFieldOptions] = useState<string[]>([]);
   const [localNewOption, setLocalNewOption] = useState("");
+  const [localInfoText, setLocalInfoText] = useState("");
   const [localIsAddFieldOpen, setLocalIsAddFieldOpen] = useState(false);
   const [localIsFieldsPanelOpen, setLocalIsFieldsPanelOpen] = useState(false);
   const [newQuestionText, setNewQuestionText] = useState("");
@@ -198,8 +201,10 @@ function FormEditor({
   const [newQuestionRequired, setNewQuestionRequired] = useState(false);
   const [newQuestionOptions, setNewQuestionOptions] = useState<string[]>([]);
   const [newOptionInput, setNewOptionInput] = useState("");
+  const [newInfoText, setNewInfoText] = useState("");
   
   const needsOptions = (type: string) => ['select', 'radio', 'multiselect'].includes(type);
+  const isInfoType = (type: string) => type === 'info';
   
   const creationMode = form.watch('creationMode');
   
@@ -414,19 +419,27 @@ function FormEditor({
                              q.type === 'radio' ? 'Multiple Choice' :
                              q.type === 'multiselect' ? 'Checkboxes' :
                              q.type === 'file' ? 'File Upload' :
+                             q.type === 'info' ? 'Info Text' :
                              q.type.charAt(0).toUpperCase() + q.type.slice(1)}
                           </Badge>
-                          <label className="flex items-center gap-1 text-xs">
-                            <input
-                              type="checkbox"
-                              checked={q.required}
-                              onChange={(e) => updateQuestion(q.id, { required: e.target.checked })}
-                              className="h-3 w-3"
-                              data-testid={`checkbox-required-${q.id}`}
-                            />
-                            Required
-                          </label>
+                          {q.type !== 'info' && (
+                            <label className="flex items-center gap-1 text-xs">
+                              <input
+                                type="checkbox"
+                                checked={q.required}
+                                onChange={(e) => updateQuestion(q.id, { required: e.target.checked })}
+                                className="h-3 w-3"
+                                data-testid={`checkbox-required-${q.id}`}
+                              />
+                              Required
+                            </label>
+                          )}
                         </div>
+                        {q.infoText && q.type === 'info' && (
+                          <div className="mt-2 p-2 bg-muted/50 rounded text-sm text-muted-foreground italic">
+                            {q.infoText}
+                          </div>
+                        )}
                         {q.options && q.options.length > 0 && (
                           <div className="flex flex-wrap gap-1 mt-2">
                             {q.options.map((opt, optIdx) => (
@@ -487,18 +500,21 @@ function FormEditor({
                     <SelectItem value="radio">Multiple Choice</SelectItem>
                     <SelectItem value="multiselect">Checkboxes</SelectItem>
                     <SelectItem value="file">File Upload</SelectItem>
+                    <SelectItem value="info">Info Text</SelectItem>
                   </SelectContent>
                 </Select>
-                <label className="flex items-center gap-1 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={newQuestionRequired}
-                    onChange={(e) => setNewQuestionRequired(e.target.checked)}
-                    className="h-4 w-4"
-                    data-testid="checkbox-new-question-required"
-                  />
-                  Required
-                </label>
+                {!isInfoType(newQuestionType) && (
+                  <label className="flex items-center gap-1 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={newQuestionRequired}
+                      onChange={(e) => setNewQuestionRequired(e.target.checked)}
+                      className="h-4 w-4"
+                      data-testid="checkbox-new-question-required"
+                    />
+                    Required
+                  </label>
+                )}
                 <Button
                   type="button"
                   size="sm"
@@ -512,16 +528,26 @@ function FormEditor({
                         });
                         return;
                       }
+                      if (isInfoType(newQuestionType) && !newInfoText.trim()) {
+                        toast({
+                          title: "Info Text Required",
+                          description: "Please enter the text to display for this info block.",
+                          variant: "destructive",
+                        });
+                        return;
+                      }
                       addQuestion({
                         question: newQuestionText.trim(),
                         type: newQuestionType,
-                        required: newQuestionRequired,
+                        required: isInfoType(newQuestionType) ? false : newQuestionRequired,
                         options: needsOptions(newQuestionType) ? newQuestionOptions : undefined,
+                        infoText: isInfoType(newQuestionType) ? newInfoText.trim() : undefined,
                       });
                       setNewQuestionText("");
                       setNewQuestionRequired(false);
                       setNewQuestionOptions([]);
                       setNewOptionInput("");
+                      setNewInfoText("");
                     }
                   }}
                   data-testid="button-add-question"
@@ -586,6 +612,20 @@ function FormEditor({
                   )}
                 </div>
               )}
+              
+              {isInfoType(newQuestionType) && (
+                <div className="mt-3 p-3 rounded-md border bg-muted/50">
+                  <Label className="text-sm font-medium">Info Text</Label>
+                  <p className="text-xs text-muted-foreground mb-2">This text will be displayed to form respondents (no input required from them)</p>
+                  <Textarea
+                    value={newInfoText}
+                    onChange={(e) => setNewInfoText(e.target.value)}
+                    placeholder="Enter the information, instruction, or note you want to display..."
+                    className="min-h-[80px]"
+                    data-testid="textarea-new-info-text"
+                  />
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -643,6 +683,7 @@ function FormEditor({
                           <SelectItem value="number">Number</SelectItem>
                           <SelectItem value="date">Date</SelectItem>
                           <SelectItem value="checkbox">Checkbox (Yes/No)</SelectItem>
+                          <SelectItem value="info">Info Text (no input)</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -652,19 +693,31 @@ function FormEditor({
                         size="sm"
                         onClick={() => {
                           if (localFieldName && localFieldKey) {
+                            if (localFieldType === 'info' && !localInfoText.trim()) {
+                              toast({
+                                title: "Info Text Required",
+                                description: "Please enter the text to display for this info block.",
+                                variant: "destructive",
+                              });
+                              return;
+                            }
                             const sanitizedKey = localFieldKey.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
                             addCustomField({
                               name: localFieldName,
                               fieldKey: sanitizedKey,
                               type: localFieldType,
-                              required: false,
+                              required: localFieldType === 'info' ? false : false,
+                              infoText: localFieldType === 'info' ? localInfoText.trim() : undefined,
                             });
                             setLocalFieldName('');
                             setLocalFieldKey('');
                             setLocalFieldType('text');
+                            setLocalInfoText('');
                             toast({
                               title: "Field added",
-                              description: `You can now use {{${sanitizedKey}}} in your template`,
+                              description: localFieldType === 'info' 
+                                ? "Info text block added to your form"
+                                : `You can now use {{${sanitizedKey}}} in your template`,
                             });
                           }
                         }}
@@ -674,6 +727,20 @@ function FormEditor({
                       </Button>
                     </div>
                   </div>
+                  
+                  {localFieldType === 'info' && (
+                    <div className="mt-2">
+                      <Label className="text-xs">Info Text</Label>
+                      <Textarea
+                        value={localInfoText}
+                        onChange={(e) => setLocalInfoText(e.target.value)}
+                        placeholder="Enter the information, instruction, or note you want to display..."
+                        className="mt-1 min-h-[60px]"
+                        data-testid="textarea-local-info-text"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">This text will be displayed to form respondents (no input required)</p>
+                    </div>
+                  )}
                 </div>
               </CollapsibleContent>
             </Collapsible>
