@@ -4419,3 +4419,68 @@ export const insertCustomFormSubmissionSchema = createInsertSchema(customFormSub
 });
 export type InsertCustomFormSubmission = z.infer<typeof insertCustomFormSubmissionSchema>;
 export type CustomFormSubmission = typeof customFormSubmissions.$inferSelect;
+
+// Foster Agreement Sessions - manages the foster agreement signing process (no payment)
+export const fosterAgreementSessions = pgTable("foster_agreement_sessions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  fosterApplicationId: uuid("foster_application_id").references(() => fosterApplications.id, { onDelete: 'set null' }), // Optional link to foster application
+  animalId: uuid("animal_id").notNull().references(() => animals.id, { onDelete: 'cascade' }),
+  fosterContactId: uuid("foster_contact_id").references(() => contacts.id, { onDelete: 'set null' }),
+  contractTemplateId: integer("contract_template_id").references(() => fosterContractTemplates.id, { onDelete: 'set null' }),
+  staffInitiatedBy: uuid("staff_initiated_by").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  // Foster information (pre-filled from application or entered by staff)
+  fosterName: text("foster_name").notNull(),
+  fosterEmail: text("foster_email").notNull(),
+  fosterPhone: text("foster_phone"),
+  fosterAddress: text("foster_address"),
+  // Session status
+  status: text("status").notNull().default("initiated").$type<"initiated" | "awaiting_signature" | "completed" | "cancelled" | "expired">(),
+  secureTokenHash: text("secure_token_hash").notNull(), // Hashed token for public link
+  expiresAt: timestamp("expires_at").notNull(), // 72 hours default
+  signedAt: timestamp("signed_at"),
+  // Additional metadata
+  metadata: jsonb("metadata").$type<Record<string, any>>(), // Audit trail, IP addresses, etc.
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertFosterAgreementSessionSchema = createInsertSchema(fosterAgreementSessions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertFosterAgreementSession = z.infer<typeof insertFosterAgreementSessionSchema>;
+export type FosterAgreementSession = typeof fosterAgreementSessions.$inferSelect;
+
+// Foster Contracts - signed foster care agreements with full audit trail
+export const fosterContracts = pgTable("foster_contracts", {
+  id: serial("id").primaryKey(),
+  sessionId: uuid("session_id").notNull().references(() => fosterAgreementSessions.id, { onDelete: 'cascade' }),
+  templateSnapshot: jsonb("template_snapshot").notNull(), // Snapshot of template used
+  contractPdfUrl: text("contract_pdf_url"), // Object storage URL
+  signatureImageUrl: text("signature_image_url"), // Object storage URL
+  driversLicenseImageUrl: text("drivers_license_image_url"), // Driver's license photo URL
+  driversLicenseNumber: text("drivers_license_number"), // Driver's license number
+  signerName: text("signer_name").notNull(),
+  signerEmail: text("signer_email").notNull(),
+  signerPhone: text("signer_phone"),
+  signerAddress: text("signer_address"), // Full address
+  signerStreetAddress: text("signer_street_address"),
+  signerStreetAddress2: text("signer_street_address_2"),
+  signerCity: text("signer_city"),
+  signerState: text("signer_state"),
+  signerZip: text("signer_zip"),
+  signedIp: text("signed_ip"),
+  signedUserAgent: text("signed_user_agent"),
+  signedAt: timestamp("signed_at").notNull(),
+  revokedAt: timestamp("revoked_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertFosterContractSchema = createInsertSchema(fosterContracts).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertFosterContract = z.infer<typeof insertFosterContractSchema>;
+export type FosterContract = typeof fosterContracts.$inferSelect;
