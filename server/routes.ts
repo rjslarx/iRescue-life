@@ -2844,6 +2844,57 @@ Crawl-delay: 1
   });
 
   /**
+   * GET /api/dashboard/form-submissions
+   * Get recent custom form submissions for the dashboard widget
+   */
+  app.get('/api/dashboard/form-submissions', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      const { customFormSubmissions, customForms } = await import('@shared/schema');
+      const { desc, isNull, isNotNull } = await import('drizzle-orm');
+
+      // Get recent submissions with form names
+      const submissions = await db
+        .select({
+          id: customFormSubmissions.id,
+          formName: customForms.name,
+          signerName: customFormSubmissions.signerName,
+          signerEmail: customFormSubmissions.signerEmail,
+          status: customFormSubmissions.status,
+          createdAt: customFormSubmissions.createdAt,
+          signedAt: customFormSubmissions.signedAt,
+          feeAmount: customFormSubmissions.feeAmount,
+          paymentStatus: customFormSubmissions.paymentStatus,
+        })
+        .from(customFormSubmissions)
+        .leftJoin(customForms, eq(customFormSubmissions.formId, customForms.id))
+        .where(eq(customFormSubmissions.tenantId, req.tenant!.id))
+        .orderBy(desc(customFormSubmissions.createdAt))
+        .limit(10);
+
+      // Get counts for different statuses
+      const allSubmissions = await db
+        .select({
+          status: customFormSubmissions.status,
+          signedAt: customFormSubmissions.signedAt,
+          paymentStatus: customFormSubmissions.paymentStatus,
+        })
+        .from(customFormSubmissions)
+        .where(eq(customFormSubmissions.tenantId, req.tenant!.id));
+
+      const counts = {
+        pending: allSubmissions.filter(s => s.status === 'pending' && !s.signedAt).length,
+        signed: allSubmissions.filter(s => s.signedAt && s.status !== 'completed').length,
+        completed: allSubmissions.filter(s => s.status === 'completed').length,
+        awaitingPayment: allSubmissions.filter(s => s.paymentStatus === 'pending' && s.signedAt).length,
+      };
+
+      res.json({ submissions, counts });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * GET /api/dashboard/urgent-items
    * Get urgent items requiring attention (overdue medical doses, old pending applications, animals needing adoption)
    */

@@ -18,6 +18,7 @@ import SupplyRequestDialog from "@/components/SupplyRequestDialog";
 import FosterUpdateDialog from "@/components/FosterUpdateDialog";
 import MedicalRemindersWidget from "@/components/MedicalRemindersWidget";
 import RecentActivityWidget from "@/components/RecentActivityWidget";
+import FormSubmissionsWidget from "@/components/FormSubmissionsWidget";
 import { TemperatureWidget } from "@/components/TemperatureWidget";
 import { formatDistanceToNow } from "date-fns";
 import { useState, useEffect } from "react";
@@ -603,9 +604,12 @@ export default function Dashboard() {
           </Card>
         )}
 
-        {/* Medical Reminders Widget - Only for admin/staff */}
+        {/* Medical Reminders & Form Submissions - Only for admin/staff */}
         {(user?.activeRole === 'admin' || user?.activeRole === 'staff') && (
-          <MedicalRemindersWidget />
+          <div className="grid gap-6 lg:grid-cols-2">
+            <MedicalRemindersWidget />
+            <FormSubmissionsWidget />
+          </div>
         )}
 
         {/* Temperature Monitoring Widget - Only for admin/staff */}
