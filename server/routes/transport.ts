@@ -853,6 +853,16 @@ router.get('/events/:transportId/validate-manifest', requireTenant, requireAuth,
   }
 });
 
+// CVI (Certificate of Veterinary Inspection) Compliance Validation
+router.get('/events/:transportId/cvi-compliance', requireTenant, requireAuth, async (req, res, next) => {
+  try {
+    const result = await TransportService.validateCviCompliance(req.tenant!.id, req.params.transportId);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.post('/events/:transportId/finalize-manifest', requireTenant, requireAuth, async (req, res, next) => {
   try {
     const result = await TransportService.finalizeManifest(req.tenant!.id, req.params.transportId);

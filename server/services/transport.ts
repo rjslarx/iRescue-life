@@ -10,6 +10,7 @@ import {
   transportTimelineEvents,
   pendingTransfers,
   animals,
+  vaccineRecords,
   medicalExams,
   medicalFiles,
   tenants,
@@ -1534,6 +1535,345 @@ export class TransportService {
     });
 
     return { success: true, animalsUpdated: animalIds.length, transport: updatedTransport };
+  }
+
+  // ============================================================================
+  // CVI (Certificate of Veterinary Inspection) Compliance Validation
+  // ============================================================================
+
+  /**
+   * Validates CVI compliance for all animals on a transport manifest.
+   * Checks against transport departure date, not current date.
+   */
+  static async validateCviCompliance(
+    tenantId: string,
+    transportId: string
+  ): Promise<{
+    isCompliant: boolean;
+    canDepart: boolean;
+    transport: {
+      id: string;
+      departureDate: Date | null;
+      cviInspectionDate: Date | null;
+      accreditedVetName: string | null;
+      accreditedVetLicenseNumber: string | null;
+      importPermitNumber: string | null;
+      importPermitState: string | null;
+      originPhysicalAddress: string | null;
+      destinationPhysicalAddress: string | null;
+    };
+    summary: {
+      total: number;
+      compliant: number;
+      nonCompliant: number;
+      criticalIssues: number;
+      warnings: number;
+    };
+    animals: Array<{
+      animalId: string;
+      animalName: string;
+      species: string;
+      breed: string;
+      microchipNumber: string | null;
+      colorMarkings: string | null;
+      dateOfBirth: Date | null;
+      rabiesVaccine: {
+        found: boolean;
+        productName: string | null;
+        dateGiven: Date | null;
+        expirationDate: Date | null;
+        rabiesTagNumber: string | null;
+        isExpired: boolean;
+        daysUntilExpiry: number | null;
+        administeredBy: string | null;
+      } | null;
+      issues: Array<{
+        field: string;
+        severity: 'critical' | 'warning';
+        message: string;
+      }>;
+      isCompliant: boolean;
+    }>;
+  }> {
+    // Get transport details
+    const transport = await this.getTransport(tenantId, transportId);
+    if (!transport) {
+      throw new Error('Transport not found');
+    }
+
+    const departureDate = transport.departureDate || new Date();
+    const manifestItems = await this.listManifestItems(tenantId, transportId);
+    
+    const animalResults: Array<{
+      animalId: string;
+      animalName: string;
+      species: string;
+      breed: string;
+      microchipNumber: string | null;
+      colorMarkings: string | null;
+      dateOfBirth: Date | null;
+      rabiesVaccine: {
+        found: boolean;
+        productName: string | null;
+        dateGiven: Date | null;
+        expirationDate: Date | null;
+        rabiesTagNumber: string | null;
+        isExpired: boolean;
+        daysUntilExpiry: number | null;
+        administeredBy: string | null;
+      } | null;
+      issues: Array<{
+        field: string;
+        severity: 'critical' | 'warning';
+        message: string;
+      }>;
+      isCompliant: boolean;
+    }> = [];
+
+    let criticalIssues = 0;
+    let warnings = 0;
+    let compliantCount = 0;
+
+    for (const item of manifestItems) {
+      const animal = item.animal;
+      if (!animal) continue;
+
+      const issues: Array<{ field: string; severity: 'critical' | 'warning'; message: string }> = [];
+
+      // 1. Check for microchip
+      if (!animal.microchipNumber) {
+        issues.push({
+          field: 'microchipNumber',
+          severity: 'critical',
+          message: 'Missing microchip number - required for CVI',
+        });
+        criticalIssues++;
+      }
+
+      // 2. Check for color/markings description
+      if (!animal.colorMarkings) {
+        issues.push({
+          field: 'colorMarkings',
+          severity: 'critical',
+          message: 'Missing color/markings description - required for CVI',
+        });
+        criticalIssues++;
+      }
+
+      // 3. Check for date of birth (needed for age verification)
+      if (!animal.dateOfBirth) {
+        issues.push({
+          field: 'dateOfBirth',
+          severity: 'warning',
+          message: 'Missing date of birth - recommended for age verification',
+        });
+        warnings++;
+      } else {
+        // Check if animal is under 3 months (12 weeks) - cannot have rabies vaccine
+        const ageInWeeks = Math.floor((departureDate.getTime() - animal.dateOfBirth.getTime()) / (7 * 24 * 60 * 60 * 1000));
+        if (ageInWeeks < 12) {
+          issues.push({
+            field: 'dateOfBirth',
+            severity: 'warning',
+            message: `Animal is ${ageInWeeks} weeks old - under 12 weeks, rabies vaccine may not be required`,
+          });
+          warnings++;
+        }
+      }
+
+      // 4. Fetch rabies vaccine records for this animal
+      const rabiesRecords = await db.select()
+        .from(vaccineRecords)
+        .where(and(
+          eq(vaccineRecords.animalId, animal.id),
+          eq(vaccineRecords.tenantId, tenantId),
+          sql`LOWER(${vaccineRecords.itemName}) LIKE '%rabies%'`
+        ))
+        .orderBy(desc(vaccineRecords.dateGiven))
+        .limit(1);
+
+      let rabiesVaccine: {
+        found: boolean;
+        productName: string | null;
+        dateGiven: Date | null;
+        expirationDate: Date | null;
+        rabiesTagNumber: string | null;
+        isExpired: boolean;
+        daysUntilExpiry: number | null;
+        administeredBy: string | null;
+      } | null = null;
+
+      if (rabiesRecords.length === 0) {
+        // Check if animal is old enough to require rabies
+        const isUnder12Weeks = animal.dateOfBirth && 
+          Math.floor((departureDate.getTime() - animal.dateOfBirth.getTime()) / (7 * 24 * 60 * 60 * 1000)) < 12;
+        
+        if (!isUnder12Weeks) {
+          issues.push({
+            field: 'rabiesVaccine',
+            severity: 'critical',
+            message: 'No rabies vaccination record found - required for CVI',
+          });
+          criticalIssues++;
+        }
+        
+        rabiesVaccine = {
+          found: false,
+          productName: null,
+          dateGiven: null,
+          expirationDate: null,
+          rabiesTagNumber: null,
+          isExpired: false,
+          daysUntilExpiry: null,
+          administeredBy: null,
+        };
+      } else {
+        const vaccine = rabiesRecords[0];
+        
+        // Calculate expiration status based on departure date
+        let isExpired = false;
+        let daysUntilExpiry: number | null = null;
+        
+        if (vaccine.expirationDate) {
+          isExpired = vaccine.expirationDate < departureDate;
+          daysUntilExpiry = Math.floor((vaccine.expirationDate.getTime() - departureDate.getTime()) / (24 * 60 * 60 * 1000));
+          
+          if (isExpired) {
+            issues.push({
+              field: 'rabiesVaccine.expirationDate',
+              severity: 'critical',
+              message: `Rabies vaccine expired ${Math.abs(daysUntilExpiry)} days before departure date`,
+            });
+            criticalIssues++;
+          } else if (daysUntilExpiry <= 30) {
+            issues.push({
+              field: 'rabiesVaccine.expirationDate',
+              severity: 'warning',
+              message: `Rabies vaccine expires in ${daysUntilExpiry} days (destination may require longer validity)`,
+            });
+            warnings++;
+          }
+        } else {
+          // No expiration date recorded - check dateDue as fallback
+          if (vaccine.dateDue) {
+            isExpired = vaccine.dateDue < departureDate;
+            daysUntilExpiry = Math.floor((vaccine.dateDue.getTime() - departureDate.getTime()) / (24 * 60 * 60 * 1000));
+            
+            if (isExpired) {
+              issues.push({
+                field: 'rabiesVaccine.dateDue',
+                severity: 'critical',
+                message: `Rabies vaccine overdue - next dose was due ${Math.abs(daysUntilExpiry)} days before departure`,
+              });
+              criticalIssues++;
+            }
+          } else {
+            issues.push({
+              field: 'rabiesVaccine.expirationDate',
+              severity: 'warning',
+              message: 'Missing vaccine expiration date - CVI may require vial expiration',
+            });
+            warnings++;
+          }
+        }
+
+        // Check for product name
+        if (!vaccine.productName) {
+          issues.push({
+            field: 'rabiesVaccine.productName',
+            severity: 'warning',
+            message: 'Missing rabies vaccine product name - recommended for CVI',
+          });
+          warnings++;
+        }
+
+        // Check for rabies tag number
+        if (!vaccine.rabiesTagNumber) {
+          issues.push({
+            field: 'rabiesVaccine.rabiesTagNumber',
+            severity: 'warning',
+            message: 'Missing rabies tag number - recommended for CVI',
+          });
+          warnings++;
+        }
+
+        rabiesVaccine = {
+          found: true,
+          productName: vaccine.productName,
+          dateGiven: vaccine.dateGiven,
+          expirationDate: vaccine.expirationDate,
+          rabiesTagNumber: vaccine.rabiesTagNumber,
+          isExpired,
+          daysUntilExpiry,
+          administeredBy: vaccine.administeredBy,
+        };
+      }
+
+      // Determine if animal is CVI compliant (no critical issues)
+      const animalCriticalIssues = issues.filter(i => i.severity === 'critical').length;
+      const isCompliant = animalCriticalIssues === 0;
+      
+      if (isCompliant) {
+        compliantCount++;
+      }
+
+      animalResults.push({
+        animalId: animal.id,
+        animalName: animal.name,
+        species: animal.species,
+        breed: animal.breed,
+        microchipNumber: animal.microchipNumber,
+        colorMarkings: animal.colorMarkings,
+        dateOfBirth: animal.dateOfBirth,
+        rabiesVaccine,
+        issues,
+        isCompliant,
+      });
+    }
+
+    // Check transport-level CVI requirements
+    const transportIssues: string[] = [];
+    
+    if (!transport.cviInspectionDate) {
+      transportIssues.push('Missing CVI inspection date');
+    }
+    if (!transport.accreditedVetLicenseNumber) {
+      transportIssues.push('Missing accredited veterinarian license number');
+    }
+    if (!transport.originPhysicalAddress) {
+      transportIssues.push('Missing origin physical address');
+    }
+    if (!transport.destinationPhysicalAddress) {
+      transportIssues.push('Missing destination physical address');
+    }
+
+    const nonCompliantCount = animalResults.length - compliantCount;
+    const isCompliant = nonCompliantCount === 0 && transportIssues.length === 0;
+    const canDepart = nonCompliantCount === 0; // Can depart if all animals are compliant
+
+    return {
+      isCompliant,
+      canDepart,
+      transport: {
+        id: transport.id,
+        departureDate: transport.departureDate,
+        cviInspectionDate: transport.cviInspectionDate,
+        accreditedVetName: transport.accreditedVetName,
+        accreditedVetLicenseNumber: transport.accreditedVetLicenseNumber,
+        importPermitNumber: transport.importPermitNumber,
+        importPermitState: transport.importPermitState,
+        originPhysicalAddress: transport.originPhysicalAddress,
+        destinationPhysicalAddress: transport.destinationPhysicalAddress,
+      },
+      summary: {
+        total: animalResults.length,
+        compliant: compliantCount,
+        nonCompliant: nonCompliantCount,
+        criticalIssues,
+        warnings,
+      },
+      animals: animalResults,
+    };
   }
 }
 
