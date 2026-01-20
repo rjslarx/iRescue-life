@@ -2325,9 +2325,23 @@ Crawl-delay: 1
       return res.status(400).json({ error: 'Role is required' });
     }
     
-    if (!req.user!.roles.includes(role)) {
-      return res.status(403).json({ 
+    // Define all valid roles
+    const allValidRoles = ['owner', 'admin', 'board_member', 'staff', 'foster', 'volunteer'];
+    
+    // Check if the requested role is valid
+    if (!allValidRoles.includes(role)) {
+      return res.status(400).json({ 
         error: 'Invalid role',
+        message: `"${role}" is not a valid role. Valid roles are: ${allValidRoles.join(', ')}`
+      });
+    }
+    
+    // Admins and owners can preview any role
+    const isAdminOrOwner = req.user!.roles.includes('admin') || req.user!.roles.includes('owner');
+    
+    if (!isAdminOrOwner && !req.user!.roles.includes(role)) {
+      return res.status(403).json({ 
+        error: 'Permission denied',
         message: `You don't have the ${role} role. Your available roles are: ${req.user!.roles.join(', ')}`
       });
     }
