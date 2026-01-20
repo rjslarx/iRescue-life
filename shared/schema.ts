@@ -260,6 +260,11 @@ export const tenants = pgTable("tenants", {
   // Transfer workflow settings
   enableTransferAgreement: boolean("enable_transfer_agreement").notNull().default(false), // Whether to generate transfer agreements for transport events
   
+  // Owner - the user who has full control over organization settings
+  // Only the owner can modify sensitive settings (branding, integrations, billing, etc.)
+  // Note: This is a UUID reference to users.id, but defined without FK to avoid circular reference
+  ownerId: uuid("owner_id"), // Nullable initially - will be set during signup or migration
+  
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
