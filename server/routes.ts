@@ -16704,6 +16704,10 @@ Submitted: ${new Date().toLocaleString()}
   /**
    * POST /api/stripe/webhook
    * Handle Stripe webhook events for automatic donation tracking
+   * 
+   * Security: Signature verification happens BEFORE any payload processing
+   * Stripe Connect payments are verified with PLATFORM_STRIPE_WEBHOOK_SECRET
+   * since they're routed through the platform's connected account infrastructure.
    */
   app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
     try {
@@ -16716,13 +16720,38 @@ Submitted: ${new Date().toLocaleString()}
       const { donors, payments, subscriptions } = await import('@shared/schema');
       const { stripeService } = await import('./lib/stripe-service');
 
-      const payload = JSON.parse(req.body.toString('utf8'));
-      let metadata = payload.data?.object?.metadata || {};
+      // SECURITY: Verify signature FIRST before any payload processing
+      // For Stripe Connect, platform webhook secret is required
+      const platformWebhookSecret = process.env.PLATFORM_STRIPE_WEBHOOK_SECRET;
+      
+      if (!platformWebhookSecret) {
+        console.error('[Webhook] PLATFORM_STRIPE_WEBHOOK_SECRET not configured');
+        return res.status(500).send('Webhook secret not configured');
+      }
+
+      // Verify the webhook signature with platform secret
+      let event;
+      try {
+        event = await stripeService.handleWebhook(
+          req.body,
+          signature,
+          platformWebhookSecret
+        );
+      } catch (verifyError: any) {
+        console.error('[Webhook] Signature verification failed:', verifyError.message);
+        return res.status(400).send('Webhook signature verification failed');
+      }
+
+      console.log(`[Webhook] Verified with platform secret, event type: ${event.type}`);
+
+      // NOW safe to extract tenant info from verified event
+      const eventData = event.data.object as any;
+      let metadata = eventData.metadata || {};
       let tenantId = metadata.tenantId;
 
-      if (!tenantId && payload.data?.object?.subscription) {
-        const subscriptionId = payload.data.object.subscription;
-        const { subscriptions } = await import('@shared/schema');
+      // If no tenantId in metadata, try to resolve from subscription
+      if (!tenantId && eventData.subscription) {
+        const subscriptionId = eventData.subscription;
         const subscription = await db
           .select()
           .from(subscriptions)
@@ -16736,7 +16765,7 @@ Submitted: ${new Date().toLocaleString()}
       }
 
       if (!tenantId) {
-        console.error('Webhook missing tenantId in metadata and could not resolve from subscription');
+        console.error('[Webhook] Missing tenantId in verified event metadata');
         return res.status(400).send('Missing tenant information');
       }
 
@@ -16746,18 +16775,12 @@ Submitted: ${new Date().toLocaleString()}
         .where(eq(tenants.id, tenantId))
         .limit(1);
 
-      if (!tenant || !tenant.stripeEnabled || !tenant.stripeWebhookSecretEncrypted) {
-        console.error('Webhook tenant not found or not configured:', tenantId);
-        return res.status(400).send('Webhook not configured for this tenant');
+      if (!tenant || !tenant.stripeEnabled) {
+        console.error('[Webhook] Tenant not found or Stripe not enabled:', tenantId);
+        return res.status(400).send('Stripe not configured for this tenant');
       }
 
-      const webhookSecret = decrypt(tenant.stripeWebhookSecretEncrypted);
-      
-      const event = await stripeService.handleWebhook(
-        req.body,
-        signature,
-        webhookSecret
-      );
+      console.log(`[Webhook] Processing ${event.type} for tenant: ${tenant.name}`);
 
       switch (event.type) {
         case 'checkout.session.completed': {
