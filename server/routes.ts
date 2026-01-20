@@ -16844,6 +16844,20 @@ Submitted: ${new Date().toLocaleString()}
             isPublic: true,
           });
 
+          // Create or update contact record for the donor
+          try {
+            const { createContactFromDonation } = await import('./services/contacts');
+            await createContactFromDonation(
+              tenant.id,
+              customerName,
+              customerEmail,
+              (session.amount_total || 0) / 100
+            );
+          } catch (contactError) {
+            console.error('Failed to create contact from Stripe donation:', contactError);
+            // Don't fail the webhook if contact creation fails
+          }
+
           // Send appropriate email based on payment status
           try {
             const { EmailService } = await import('./lib/email-service');
