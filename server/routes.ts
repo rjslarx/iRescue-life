@@ -2,7 +2,7 @@ import type { Express } from "express";
 import express from "express";
 import { createServer, type Server } from "http";
 import { requireTenant } from "./middleware/tenant";
-import { requireAuth, requireRole } from "./middleware/auth";
+import { requireAuth, requireRole, requireOwner } from "./middleware/auth";
 import { loginUser, createTenantWithAdmin, createUser } from "./services/auth";
 import { PushNotificationService } from "./services/push-notifications";
 import { db } from "./db";
@@ -2367,6 +2367,33 @@ Crawl-delay: 1
    */
   app.get('/api/me', requireAuth, (req, res) => {
     res.json({ user: req.user });
+  });
+
+  /**
+   * GET /api/me/is-owner
+   * Check if the current user is the organization owner
+   * Returns { isOwner: boolean } - true if user is owner or platform admin
+   */
+  app.get('/api/me/is-owner', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      // Platform admins always have owner access
+      if (req.user!.roles.includes('platform_admin')) {
+        return res.json({ isOwner: true });
+      }
+      
+      // Check if user is the tenant owner
+      const [tenant] = await db
+        .select({ ownerId: tenants.ownerId })
+        .from(tenants)
+        .where(eq(tenants.id, req.user!.tenantId))
+        .limit(1);
+      
+      const isOwner = tenant?.ownerId === req.user!.id;
+      
+      res.json({ isOwner });
+    } catch (error) {
+      next(error);
+    }
   });
 
   /**
@@ -14329,7 +14356,7 @@ Submitted: ${new Date().toLocaleString()}
    * Get tenant configuration (admin only)
    * Returns full tenant data for settings page
    */
-  app.get('/api/tenant/settings', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+  app.get('/api/tenant/settings', requireTenant, requireAuth, requireOwner, async (req, res, next) => {
     try {
       // Fetch full tenant data from database (req.tenant is limited subset)
       const [fullTenant] = await db
@@ -14350,9 +14377,9 @@ Submitted: ${new Date().toLocaleString()}
 
   /**
    * PATCH /api/tenant/settings
-   * Update tenant payment settings (admin only)
+   * Update tenant payment settings (owner only)
    */
-  app.patch('/api/tenant/settings', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+  app.patch('/api/tenant/settings', requireTenant, requireAuth, requireOwner, async (req, res, next) => {
     try {
       const settingsSchema = z.object({
         stripeLink: z.string().url().optional().or(z.literal("")),
@@ -14386,9 +14413,9 @@ Submitted: ${new Date().toLocaleString()}
 
   /**
    * PATCH /api/tenant/settings/stripe
-   * Configure Stripe API keys (admin only)
+   * Configure Stripe API keys (owner only)
    */
-  app.patch('/api/tenant/settings/stripe', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+  app.patch('/api/tenant/settings/stripe', requireTenant, requireAuth, requireOwner, async (req, res, next) => {
     try {
       const { encrypt } = await import('./lib/encryption');
       const { stripeService } = await import('./lib/stripe-service');
@@ -14434,9 +14461,9 @@ Submitted: ${new Date().toLocaleString()}
 
   /**
    * GET /api/tenant/settings/google-ads
-   * Get Google Ads configuration status (admin only)
+   * Get Google Ads configuration status (owner only)
    */
-  app.get('/api/tenant/settings/google-ads', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+  app.get('/api/tenant/settings/google-ads', requireTenant, requireAuth, requireOwner, async (req, res, next) => {
     try {
       const { getTenantGoogleAdsStatus } = await import('./googleAds');
       const status = await getTenantGoogleAdsStatus(req.tenant!.id);
@@ -14460,9 +14487,9 @@ Submitted: ${new Date().toLocaleString()}
 
   /**
    * PATCH /api/tenant/settings/google-ads
-   * Configure Google Ads Grant credentials (admin only)
+   * Configure Google Ads Grant credentials (owner only)
    */
-  app.patch('/api/tenant/settings/google-ads', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+  app.patch('/api/tenant/settings/google-ads', requireTenant, requireAuth, requireOwner, async (req, res, next) => {
     try {
       const { encrypt } = await import('./lib/encryption');
 
@@ -14507,9 +14534,9 @@ Submitted: ${new Date().toLocaleString()}
 
   /**
    * DELETE /api/tenant/settings/google-ads
-   * Disable Google Ads integration (admin only)
+   * Disable Google Ads integration (owner only)
    */
-  app.delete('/api/tenant/settings/google-ads', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+  app.delete('/api/tenant/settings/google-ads', requireTenant, requireAuth, requireOwner, async (req, res, next) => {
     try {
       await db
         .update(tenants)
@@ -14581,9 +14608,9 @@ Submitted: ${new Date().toLocaleString()}
 
   /**
    * PATCH /api/tenant/settings/twilio
-   * Configure Twilio credentials for SMS (admin only)
+   * Configure Twilio credentials for SMS (owner only)
    */
-  app.patch('/api/tenant/settings/twilio', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+  app.patch('/api/tenant/settings/twilio', requireTenant, requireAuth, requireOwner, async (req, res, next) => {
     try {
       const { encrypt } = await import('./lib/encryption');
       
@@ -14619,9 +14646,9 @@ Submitted: ${new Date().toLocaleString()}
 
   /**
    * DELETE /api/tenant/settings/twilio
-   * Disable Twilio integration (admin only)
+   * Disable Twilio integration (owner only)
    */
-  app.delete('/api/tenant/settings/twilio', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+  app.delete('/api/tenant/settings/twilio', requireTenant, requireAuth, requireOwner, async (req, res, next) => {
     try {
       const [updatedTenant] = await db
         .update(tenants)
@@ -14642,9 +14669,9 @@ Submitted: ${new Date().toLocaleString()}
 
   /**
    * GET /api/tenant/settings/twilio/status
-   * Check if Twilio is configured (admin only)
+   * Check if Twilio is configured (owner only)
    */
-  app.get('/api/tenant/settings/twilio/status', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+  app.get('/api/tenant/settings/twilio/status', requireTenant, requireAuth, requireOwner, async (req, res, next) => {
     try {
       const { isTwilioEnabled } = await import('./lib/twilio-service');
       const enabled = await isTwilioEnabled(req.tenant!.id);
@@ -14662,7 +14689,7 @@ Submitted: ${new Date().toLocaleString()}
    * POST /api/tenant/settings/twilio/test
    * Send a test SMS (admin only)
    */
-  app.post('/api/tenant/settings/twilio/test', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+  app.post('/api/tenant/settings/twilio/test', requireTenant, requireAuth, requireOwner, async (req, res, next) => {
     try {
       const { sendSms } = await import('./lib/twilio-service');
       
@@ -14918,9 +14945,9 @@ Submitted: ${new Date().toLocaleString()}
 
   /**
    * PATCH /api/tenant/settings/docusign
-   * Configure DocuSign credentials for eSignature (admin only)
+   * Configure DocuSign credentials for eSignature (owner only)
    */
-  app.patch('/api/tenant/settings/docusign', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+  app.patch('/api/tenant/settings/docusign', requireTenant, requireAuth, requireOwner, async (req, res, next) => {
     try {
       const { encrypt } = await import('./lib/encryption');
 
@@ -14969,9 +14996,9 @@ Submitted: ${new Date().toLocaleString()}
 
   /**
    * DELETE /api/tenant/settings/docusign
-   * Disable DocuSign integration (admin only)
+   * Disable DocuSign integration (owner only)
    */
-  app.delete('/api/tenant/settings/docusign', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+  app.delete('/api/tenant/settings/docusign', requireTenant, requireAuth, requireOwner, async (req, res, next) => {
     try {
       const { clearTokenCache } = await import('./lib/docusign-service');
 
@@ -14998,9 +15025,9 @@ Submitted: ${new Date().toLocaleString()}
 
   /**
    * GET /api/tenant/settings/docusign/status
-   * Check if DocuSign is configured (admin only)
+   * Check if DocuSign is configured (owner only)
    */
-  app.get('/api/tenant/settings/docusign/status', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+  app.get('/api/tenant/settings/docusign/status', requireTenant, requireAuth, requireOwner, async (req, res, next) => {
     try {
       const { isDocusignEnabled } = await import('./lib/docusign-service');
       const enabled = await isDocusignEnabled(req.tenant!.id);
@@ -15291,10 +15318,10 @@ Submitted: ${new Date().toLocaleString()}
 
   /**
    * PATCH /api/tenant/settings/email
-   * Configure email service API keys (admin only)
+   * Configure email service API keys (owner only)
    * Supports both BYOK mode (provide all fields) and platform mode (send null to clear)
    */
-  app.patch('/api/tenant/settings/email', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+  app.patch('/api/tenant/settings/email', requireTenant, requireAuth, requireOwner, async (req, res, next) => {
     try {
       const { encrypt } = await import('./lib/encryption');
       
@@ -15348,9 +15375,9 @@ Submitted: ${new Date().toLocaleString()}
 
   /**
    * PATCH /api/tenant/settings/email-copy
-   * Configure email copy recipients (admin only)
+   * Configure email copy recipients (owner only)
    */
-  app.patch('/api/tenant/settings/email-copy', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+  app.patch('/api/tenant/settings/email-copy', requireTenant, requireAuth, requireOwner, async (req, res, next) => {
     try {
       const emailCopySchema = z.object({
         emailCopyRecipients: z.array(z.string().email()).optional().nullable(),
@@ -15373,8 +15400,8 @@ Submitted: ${new Date().toLocaleString()}
     }
   });
 
-  // Branding & Appearance Settings
-  app.patch('/api/tenant/settings/branding', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+  // Branding & Appearance Settings (owner only)
+  app.patch('/api/tenant/settings/branding', requireTenant, requireAuth, requireOwner, async (req, res, next) => {
     try {
       const sponsorLogoSchema = z.object({
         id: z.string(),
@@ -15499,9 +15526,9 @@ Submitted: ${new Date().toLocaleString()}
 
   /**
    * PATCH /api/tenant/settings/action-circle
-   * Update action circle configuration for hero section (admin only)
+   * Update action circle configuration for hero section (owner only)
    */
-  app.patch('/api/tenant/settings/action-circle', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+  app.patch('/api/tenant/settings/action-circle', requireTenant, requireAuth, requireOwner, async (req, res, next) => {
     try {
       const actionConfigSchema = z.object({
         imageUrl: z.string().optional(),
@@ -15550,9 +15577,9 @@ Submitted: ${new Date().toLocaleString()}
 
   /**
    * PATCH /api/tenant/settings/hero-layout
-   * Update hero layout type (admin only)
+   * Update hero layout type (owner only)
    */
-  app.patch('/api/tenant/settings/hero-layout', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+  app.patch('/api/tenant/settings/hero-layout', requireTenant, requireAuth, requireOwner, async (req, res, next) => {
     try {
       const heroLayoutSchema = z.object({
         heroLayoutType: z.enum(['none', 'action_circle', 'three_doors', 'both']),
@@ -15575,9 +15602,9 @@ Submitted: ${new Date().toLocaleString()}
 
   /**
    * PATCH /api/tenant/settings/three-doors
-   * Update Three Doors configuration (admin only)
+   * Update Three Doors configuration (owner only)
    */
-  app.patch('/api/tenant/settings/three-doors', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+  app.patch('/api/tenant/settings/three-doors', requireTenant, requireAuth, requireOwner, async (req, res, next) => {
     try {
       const doorSchema = z.object({
         title: z.string().max(50).optional(),
@@ -15635,9 +15662,9 @@ Submitted: ${new Date().toLocaleString()}
 
   /**
    * PATCH /api/tenant/settings/mascot
-   * Update mascot widget configuration (admin only)
+   * Update mascot widget configuration (owner only)
    */
-  app.patch('/api/tenant/settings/mascot', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+  app.patch('/api/tenant/settings/mascot', requireTenant, requireAuth, requireOwner, async (req, res, next) => {
     try {
       const mascotSchema = z.object({
         enabled: z.boolean().optional(),
@@ -15668,9 +15695,9 @@ Submitted: ${new Date().toLocaleString()}
 
   /**
    * PATCH /api/tenant/settings/donation-section
-   * Update donation section customization (admin only)
+   * Update donation section customization (owner only)
    */
-  app.patch('/api/tenant/settings/donation-section', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+  app.patch('/api/tenant/settings/donation-section', requireTenant, requireAuth, requireOwner, async (req, res, next) => {
     try {
       const donationSectionSchema = z.object({
         sectionHeading: z.string().max(100).optional().nullable(),
@@ -15718,9 +15745,9 @@ Submitted: ${new Date().toLocaleString()}
 
   /**
    * PATCH /api/tenant/settings/donation-landing
-   * Update donation landing page settings for QR code mobile page (admin only)
+   * Update donation landing page settings for QR code mobile page (owner only)
    */
-  app.patch('/api/tenant/settings/donation-landing', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+  app.patch('/api/tenant/settings/donation-landing', requireTenant, requireAuth, requireOwner, async (req, res, next) => {
     try {
       const donationLandingSchema = z.object({
         donationLandingHeader: z.string().nullable().optional(),
@@ -24803,7 +24830,7 @@ The user asking is a tenant administrator or staff member.`;
   app.use('/api/volunteer-alerts', requireTenant, volunteerAlertRoutes.default);
 
   // Volunteer schedule digest settings
-  app.get('/api/tenant/settings/volunteer-digest', requireTenant, requireRole(['admin']), async (req, res, next) => {
+  app.get('/api/tenant/settings/volunteer-digest', requireTenant, requireOwner, async (req, res, next) => {
     try {
       const tenantId = req.session.tenantId!;
       const [tenant] = await db
@@ -24817,7 +24844,7 @@ The user asking is a tenant administrator or staff member.`;
     }
   });
 
-  app.patch('/api/tenant/settings/volunteer-digest', requireTenant, requireRole(['admin']), async (req, res, next) => {
+  app.patch('/api/tenant/settings/volunteer-digest', requireTenant, requireOwner, async (req, res, next) => {
     try {
       const tenantId = req.session.tenantId!;
       const { enabled, dayOfWeek, sendTime, includeUpcomingDays } = req.body;
@@ -24848,7 +24875,7 @@ The user asking is a tenant administrator or staff member.`;
     }
   });
 
-  app.post('/api/tenant/settings/volunteer-digest/test', requireTenant, requireRole(['admin']), async (req, res, next) => {
+  app.post('/api/tenant/settings/volunteer-digest/test', requireTenant, requireOwner, async (req, res, next) => {
     try {
       const tenantId = req.session.tenantId!;
       const { VolunteerScheduleDigestService } = await import('./services/volunteer-schedule-digest');
@@ -24893,8 +24920,8 @@ The user asking is a tenant administrator or staff member.`;
     }
   });
 
-  // PATCH /api/tenant/settings/quick-actions - Update quick actions configuration (admin only)
-  app.patch('/api/tenant/settings/quick-actions', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+  // PATCH /api/tenant/settings/quick-actions - Update quick actions configuration (owner only)
+  app.patch('/api/tenant/settings/quick-actions', requireTenant, requireAuth, requireOwner, async (req, res, next) => {
     try {
       const tenantId = req.session.tenantId!;
       
