@@ -16270,9 +16270,13 @@ Submitted: ${new Date().toLocaleString()}
       const platformFeeAmount = calculatePlatformFee(chargeAmount, tenant.subscriptionTier || 'free');
       const platformFeePercent = getPlatformFeePercent(tenant.subscriptionTier || 'free');
 
-      const baseUrl = `${req.protocol}://${req.get('host')}`;
-      // Include tenant subdomain path for proper redirect back to tenant's page
-      const tenantPath = tenant.subdomain ? `/${tenant.subdomain}` : '';
+      // Check if using custom domain - if so, don't include tenant path
+      const isCustomDomain = tenant.customDomain && tenant.customDomainVerified;
+      const baseUrl = isCustomDomain 
+        ? `https://${tenant.customDomain}`
+        : `${req.protocol}://${req.get('host')}`;
+      // Only include tenant subdomain path when NOT using custom domain
+      const tenantPath = isCustomDomain ? '' : (tenant.subdomain ? `/${tenant.subdomain}` : '');
       
       const session = await stripeService.createCheckoutSession(tenant, {
         amount: chargeAmount,
