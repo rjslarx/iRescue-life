@@ -4595,3 +4595,24 @@ export const insertFosterContractSchema = createInsertSchema(fosterContracts).om
 });
 export type InsertFosterContract = z.infer<typeof insertFosterContractSchema>;
 export type FosterContract = typeof fosterContracts.$inferSelect;
+
+// Page Visits - track visits to public pages for analytics
+export const pageVisits = pgTable("page_visits", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  pagePath: text("page_path").notNull(),
+  pageType: text("page_type").notNull().$type<"home" | "animals" | "animal_profile" | "donate" | "wishlist" | "foster" | "volunteer" | "surrender" | "contact" | "shop" | "campaign" | "custom" | "other">(),
+  visitorId: text("visitor_id"),
+  sessionId: text("session_id"),
+  referrer: text("referrer"),
+  userAgent: text("user_agent"),
+  ipHash: text("ip_hash"),
+  visitedAt: timestamp("visited_at").notNull().defaultNow(),
+});
+
+export const insertPageVisitSchema = createInsertSchema(pageVisits).omit({
+  id: true,
+  visitedAt: true,
+});
+export type InsertPageVisit = z.infer<typeof insertPageVisitSchema>;
+export type PageVisit = typeof pageVisits.$inferSelect;

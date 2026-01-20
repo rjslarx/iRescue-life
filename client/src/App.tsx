@@ -116,6 +116,7 @@ import { DemoAccessDialog } from "@/components/DemoAccessDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { usePageTracking } from "@/hooks/usePageTracking";
+import { useVisitTracking } from "@/hooks/useVisitTracking";
 
 // Component to handle root path routing
 function RootHandler() {
@@ -415,6 +416,7 @@ function DemoPage() {
 
 function AppContent() {
   usePageTracking();
+  useVisitTracking();
   usePWAManifest();
   useTenantBranding();
   const { basePath } = useTenant();

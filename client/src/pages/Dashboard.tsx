@@ -20,6 +20,7 @@ import MedicalRemindersWidget from "@/components/MedicalRemindersWidget";
 import RecentActivityWidget from "@/components/RecentActivityWidget";
 import FormSubmissionsWidget from "@/components/FormSubmissionsWidget";
 import { TemperatureWidget } from "@/components/TemperatureWidget";
+import WebsiteVisitsWidget from "@/components/WebsiteVisitsWidget";
 import { formatDistanceToNow } from "date-fns";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -612,6 +613,11 @@ export default function Dashboard() {
         {/* Temperature Monitoring Widget - Only for admin/staff */}
         {(user?.activeRole === 'admin' || user?.activeRole === 'staff') && (
           <TemperatureWidget />
+        )}
+
+        {/* Website Visits Widget - Only for admin */}
+        {user?.activeRole === 'admin' && (
+          <WebsiteVisitsWidget />
         )}
 
         {/* Urgent Items Alert - Only for admin/staff and only if there are urgent items */}

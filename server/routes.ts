@@ -6,8 +6,8 @@ import { requireAuth, requireRole } from "./middleware/auth";
 import { loginUser, createTenantWithAdmin, createUser } from "./services/auth";
 import { PushNotificationService } from "./services/push-notifications";
 import { db } from "./db";
-import { tenants, users, demoRequests, insertDemoRequestSchema, smsMessageLogs, emailEvents, animals, platformIntegrations, newsletterCampaigns, newsletterSubscribers, happyTails, adoptionCheckoutSessions } from "@shared/schema";
-import { eq, and, desc, sql, inArray, lt, ilike } from "drizzle-orm";
+import { tenants, users, demoRequests, insertDemoRequestSchema, smsMessageLogs, emailEvents, animals, platformIntegrations, newsletterCampaigns, newsletterSubscribers, happyTails, adoptionCheckoutSessions, pageVisits } from "@shared/schema";
+import { eq, and, desc, sql, inArray, lt, ilike, gte, count } from "drizzle-orm";
 import { z } from "zod";
 import { authLimiter, signupLimiter, passwordResetLimiter, emailLimiter } from "./config/security";
 import QRCode from "qrcode";
@@ -22948,6 +22948,164 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
       const breakdown = await getSpeciesBreakdown(req.tenant!.id);
       
       res.json(breakdown);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * Page Visit Tracking Routes
+   */
+
+  /**
+   * POST /api/page-visits
+   * Record a page visit (public endpoint - no auth required)
+   */
+  const pageVisitSchema = z.object({
+    pagePath: z.string().min(1).max(500),
+    pageType: z.enum(['home', 'animals', 'animal_profile', 'donate', 'wishlist', 'foster', 'volunteer', 'surrender', 'contact', 'shop', 'campaign', 'custom', 'other']),
+    visitorId: z.string().max(100).optional().nullable(),
+    sessionId: z.string().max(100).optional().nullable(),
+    referrer: z.string().max(2000).optional().nullable(),
+  });
+
+  app.post('/api/page-visits', requireTenant, async (req, res, next) => {
+    try {
+      const parsed = pageVisitSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: 'Invalid request body', details: parsed.error.flatten() });
+      }
+
+      const { pagePath, pageType, visitorId, sessionId, referrer } = parsed.data;
+
+      // Hash IP for privacy
+      const ip = req.ip || req.socket.remoteAddress || '';
+      const crypto = await import('crypto');
+      const ipHash = crypto.createHash('sha256').update(ip + req.tenant!.id).digest('hex').substring(0, 16);
+
+      await db.insert(pageVisits).values({
+        tenantId: req.tenant!.id,
+        pagePath,
+        pageType,
+        visitorId: visitorId || null,
+        sessionId: sessionId || null,
+        referrer: referrer || req.get('Referer') || null,
+        userAgent: req.get('User-Agent') || null,
+        ipHash,
+      });
+
+      res.json({ success: true });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/analytics/page-visits
+   * Get page visit stats for dashboard widget (admin only)
+   */
+  app.get('/api/analytics/page-visits', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+    try {
+      const tenantId = req.tenant!.id;
+      
+      // Get dates for today, this week, and last week
+      const now = new Date();
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const weekStart = new Date(todayStart);
+      weekStart.setDate(weekStart.getDate() - weekStart.getDay()); // Start of this week (Sunday)
+      const lastWeekStart = new Date(weekStart);
+      lastWeekStart.setDate(lastWeekStart.getDate() - 7);
+      const lastWeekEnd = new Date(weekStart);
+      
+      // Today's visits
+      const [todayResult] = await db
+        .select({ count: count() })
+        .from(pageVisits)
+        .where(and(
+          eq(pageVisits.tenantId, tenantId),
+          gte(pageVisits.visitedAt, todayStart)
+        ));
+      
+      // This week's visits
+      const [thisWeekResult] = await db
+        .select({ count: count() })
+        .from(pageVisits)
+        .where(and(
+          eq(pageVisits.tenantId, tenantId),
+          gte(pageVisits.visitedAt, weekStart)
+        ));
+      
+      // Last week's visits (for comparison)
+      const [lastWeekResult] = await db
+        .select({ count: count() })
+        .from(pageVisits)
+        .where(and(
+          eq(pageVisits.tenantId, tenantId),
+          gte(pageVisits.visitedAt, lastWeekStart),
+          lt(pageVisits.visitedAt, lastWeekEnd)
+        ));
+      
+      // Unique visitors today (by ipHash)
+      const [uniqueTodayResult] = await db
+        .select({ count: sql<number>`count(distinct ${pageVisits.ipHash})` })
+        .from(pageVisits)
+        .where(and(
+          eq(pageVisits.tenantId, tenantId),
+          gte(pageVisits.visitedAt, todayStart)
+        ));
+      
+      // Unique visitors this week
+      const [uniqueWeekResult] = await db
+        .select({ count: sql<number>`count(distinct ${pageVisits.ipHash})` })
+        .from(pageVisits)
+        .where(and(
+          eq(pageVisits.tenantId, tenantId),
+          gte(pageVisits.visitedAt, weekStart)
+        ));
+      
+      // Top pages this week
+      const topPages = await db
+        .select({
+          pageType: pageVisits.pageType,
+          count: count(),
+        })
+        .from(pageVisits)
+        .where(and(
+          eq(pageVisits.tenantId, tenantId),
+          gte(pageVisits.visitedAt, weekStart)
+        ))
+        .groupBy(pageVisits.pageType)
+        .orderBy(desc(count()))
+        .limit(5);
+      
+      // Calculate trend
+      const thisWeekCount = thisWeekResult?.count || 0;
+      const lastWeekCount = lastWeekResult?.count || 0;
+      let trendPercentage = 0;
+      if (lastWeekCount > 0) {
+        trendPercentage = Math.round(((thisWeekCount - lastWeekCount) / lastWeekCount) * 100);
+      } else if (thisWeekCount > 0) {
+        trendPercentage = 100; // All new visits
+      }
+
+      res.json({
+        today: {
+          views: todayResult?.count || 0,
+          uniqueVisitors: uniqueTodayResult?.count || 0,
+        },
+        thisWeek: {
+          views: thisWeekCount,
+          uniqueVisitors: uniqueWeekResult?.count || 0,
+        },
+        lastWeek: {
+          views: lastWeekCount,
+        },
+        trendPercentage,
+        topPages: topPages.map(p => ({
+          pageType: p.pageType,
+          views: p.count,
+        })),
+      });
     } catch (error) {
       next(error);
     }
