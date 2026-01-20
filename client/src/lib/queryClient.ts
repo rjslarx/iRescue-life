@@ -43,32 +43,51 @@ export const getQueryFn: <T>(options: {
     const tenantHeaders = getTenantHeaders();
     
     // Build URL from query key elements
-    // - If first element is a complete URL (starts with /api), use only that as the URL
-    //   Additional elements like tenantId are for cache separation, not URL building
-    // - For hierarchical paths like ['/api/animals', animalId, 'files'], join them
-    // - Detect cache-only elements: if an element looks like a tenant ID (stored in headers),
-    //   don't include it in the URL path
+    // - First element is always the base URL path
+    // - String elements (except tenant IDs) are path segments
+    // - Object elements are converted to query parameters
     const firstKey = String(queryKey[0]);
     let url: string;
+    let queryParams: URLSearchParams = new URLSearchParams();
     
     if (queryKey.length === 1) {
       // Simple case: single URL string
       url = firstKey;
     } else {
-      // Multiple elements: determine if second element is a URL path segment or cache key
-      // If the first element is a complete API path like '/api/animals' and the second
-      // element is used in x-tenant-id header, it's for caching only
+      // Multiple elements: handle path segments and query params separately
       const tenantId = typeof window !== 'undefined' ? localStorage.getItem('rescue_portal_tenant') : null;
-      const filteredKeys = queryKey.filter((key, index) => {
-        if (index === 0) return true; // Always include first element
+      const pathSegments: string[] = [firstKey];
+      
+      for (let i = 1; i < queryKey.length; i++) {
+        const key = queryKey[i];
+        
+        // Handle objects as query parameters
+        if (key && typeof key === 'object' && !Array.isArray(key)) {
+          const obj = key as Record<string, unknown>;
+          for (const [paramKey, paramValue] of Object.entries(obj)) {
+            if (paramValue !== undefined && paramValue !== null && paramValue !== '') {
+              queryParams.append(paramKey, String(paramValue));
+            }
+          }
+          continue;
+        }
+        
         const keyStr = String(key);
         // Exclude keys that match tenantId (these are cache-busting only)
-        if (keyStr === tenantId) return false;
+        if (keyStr === tenantId) continue;
         // Exclude undefined/null strings
-        if (keyStr === 'undefined' || keyStr === 'null') return false;
-        return true;
-      });
-      url = filteredKeys.join("/");
+        if (keyStr === 'undefined' || keyStr === 'null') continue;
+        
+        pathSegments.push(keyStr);
+      }
+      
+      url = pathSegments.join("/");
+    }
+    
+    // Append query parameters if any
+    const queryString = queryParams.toString();
+    if (queryString) {
+      url = url + (url.includes('?') ? '&' : '?') + queryString;
     }
     
     const tenantUrl = buildTenantUrl(url);
