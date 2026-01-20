@@ -2,15 +2,24 @@ import { db } from "../db";
 import { 
   volunteerThresholdAlerts, 
   volunteerThresholdAlertHistory,
-  volunteerOpportunities,
-  volunteerSignups,
+  calendars,
+  calendarEvents,
   users,
   type VolunteerThresholdAlert 
 } from "@shared/schema";
-import { eq, and, gte, lte, sql } from "drizzle-orm";
+import { eq, and, gte, lte, sql, inArray } from "drizzle-orm";
 import { PushNotificationService } from "./push-notifications";
 import { sendSms, isTwilioEnabled } from "../lib/twilio-service";
-import { format, addDays, startOfDay, endOfDay } from "date-fns";
+import { format, addDays, startOfDay, endOfDay, eachDayOfInterval } from "date-fns";
+
+interface CalendarDayShortage {
+  calendarId: string;
+  calendarName: string;
+  date: string;
+  currentVolunteers: number;
+  minimumRequired: number;
+  shortage: number;
+}
 
 interface OpportunityShortage {
   opportunity: {
@@ -31,6 +40,7 @@ interface AlertResult {
   alertId: string;
   tenantId: string;
   shortages: OpportunityShortage[];
+  calendarShortages: CalendarDayShortage[];
   pushSent: number;
   smsSent: number;
   emailSent: number;
@@ -123,76 +133,104 @@ export class VolunteerThresholdAlertService {
       .set({ lastCheckedAt: now, updatedAt: now })
       .where(eq(volunteerThresholdAlerts.id, alert.id));
 
-    // Find opportunities in the check window that are below threshold
+    // Find calendar events in the check window that are below threshold
     const startDate = startOfDay(now);
     const endDate = endOfDay(addDays(now, daysAhead));
 
-    // Get opportunities for this tenant within the date range
-    const opportunities = await db.query.volunteerOpportunities.findMany({
-      where: eq(volunteerOpportunities.tenantId, alert.tenantId),
-    });
+    // Get calendars to check - either specific ones or all volunteer calendars
+    let calendarsToCheck: { id: string; name: string }[] = [];
+    
+    if (alert.calendarIds && alert.calendarIds.length > 0) {
+      // Check specific calendars
+      const specificCalendars = await db.query.calendars.findMany({
+        where: and(
+          eq(calendars.tenantId, alert.tenantId),
+          inArray(calendars.id, alert.calendarIds)
+        ),
+      });
+      calendarsToCheck = specificCalendars.map(c => ({ id: c.id, name: c.name }));
+    } else {
+      // Check all volunteer-type calendars for this tenant
+      const volunteerCalendars = await db.query.calendars.findMany({
+        where: and(
+          eq(calendars.tenantId, alert.tenantId),
+          eq(calendars.type, "volunteer")
+        ),
+      });
+      calendarsToCheck = volunteerCalendars.map(c => ({ id: c.id, name: c.name }));
+    }
 
-    // Filter opportunities by date and check if below threshold
-    const shortages: OpportunityShortage[] = [];
+    if (calendarsToCheck.length === 0) {
+      console.log(`No calendars to check for alert ${alert.id}`);
+      return null;
+    }
 
-    for (const opp of opportunities) {
-      // Parse date string (format: YYYY-MM-DD or similar)
-      const oppDate = new Date(opp.date);
-      
-      // Check if opportunity is in the date range
-      if (oppDate < startDate || oppDate > endDate) {
-        continue;
-      }
+    // Get all days in the range to check
+    const daysToCheck = eachDayOfInterval({ start: startDate, end: endDate });
+    
+    // Check calendar events for volunteer shortages
+    const calendarShortages: CalendarDayShortage[] = [];
 
-      // Check if calendar filter applies
-      if (alert.calendarIds && alert.calendarIds.length > 0) {
-        // If the opportunity isn't associated with one of the filtered calendars, skip
-        // Note: volunteerOpportunities doesn't have calendarId - this is for future enhancement
-        // For now, we check all opportunities
-      }
+    for (const calendar of calendarsToCheck) {
+      // Get all events for this calendar in the date range
+      const events = await db.query.calendarEvents.findMany({
+        where: and(
+          eq(calendarEvents.calendarId, calendar.id),
+          gte(calendarEvents.startTime, startDate),
+          lte(calendarEvents.startTime, endDate)
+        ),
+      });
 
-      // Get current volunteer count
-      const signupCount = opp.slotsFilled || 0;
-
-      // Check if below threshold
-      if (signupCount < minimumVolunteers) {
-        shortages.push({
-          opportunity: {
-            id: opp.id,
-            title: opp.title,
-            date: opp.date,
-            time: opp.time,
-            location: opp.location,
-            slotsTotal: opp.slotsTotal,
-            slotsFilled: signupCount,
-          },
-          currentVolunteers: signupCount,
-          minimumRequired: minimumVolunteers,
-          shortage: minimumVolunteers - signupCount,
+      // Count events per day (each event = one volunteer signup)
+      for (const day of daysToCheck) {
+        const dayStart = startOfDay(day);
+        const dayEnd = endOfDay(day);
+        
+        // Count events that start on this day
+        const eventsOnDay = events.filter(event => {
+          const eventStart = new Date(event.startTime);
+          return eventStart >= dayStart && eventStart <= dayEnd;
         });
+
+        const volunteerCount = eventsOnDay.length;
+
+        // Check if below threshold
+        if (volunteerCount < minimumVolunteers) {
+          calendarShortages.push({
+            calendarId: calendar.id,
+            calendarName: calendar.name,
+            date: format(day, 'yyyy-MM-dd'),
+            currentVolunteers: volunteerCount,
+            minimumRequired: minimumVolunteers,
+            shortage: minimumVolunteers - volunteerCount,
+          });
+        }
       }
     }
 
-    if (shortages.length === 0) {
+    // Legacy: Keep empty shortages array for backward compatibility
+    const shortages: OpportunityShortage[] = [];
+
+    if (calendarShortages.length === 0) {
       return null; // No shortages, no need to send alerts
     }
 
     // Send notifications
-    const result = await this.sendAlertNotifications(alert, shortages);
+    const result = await this.sendCalendarAlertNotifications(alert, calendarShortages);
 
     // Update last alert sent timestamp
     await db.update(volunteerThresholdAlerts)
       .set({ lastAlertSentAt: now, updatedAt: now })
       .where(eq(volunteerThresholdAlerts.id, alert.id));
 
-    // Record alert history
-    for (const shortage of shortages) {
+    // Record alert history for calendar shortages
+    for (const shortage of calendarShortages) {
       await db.insert(volunteerThresholdAlertHistory).values({
         alertId: alert.id,
         tenantId: alert.tenantId,
         alertDate: now,
-        opportunityId: shortage.opportunity.id,
-        opportunityTitle: shortage.opportunity.title,
+        opportunityId: shortage.calendarId, // Use calendarId as opportunityId for history
+        opportunityTitle: `${shortage.calendarName} - ${shortage.date}`,
         currentVolunteers: shortage.currentVolunteers,
         minimumRequired: shortage.minimumRequired,
         pushSent: result.pushSent,
@@ -206,6 +244,7 @@ export class VolunteerThresholdAlertService {
       alertId: alert.id,
       tenantId: alert.tenantId,
       shortages,
+      calendarShortages,
       ...result,
     };
   }
@@ -312,6 +351,125 @@ export class VolunteerThresholdAlertService {
     if (alert.emailEnabled) {
       // TODO: Implement email sending for volunteer shortage alerts
       console.log(`Email alerts requested for volunteer shortage - sending to ${eligibleUsers.length} users`);
+    }
+
+    return { pushSent, smsSent, emailSent, totalRecipients };
+  }
+
+  /**
+   * Send notifications for calendar-based volunteer shortages
+   */
+  static async sendCalendarAlertNotifications(
+    alert: VolunteerThresholdAlert,
+    shortages: CalendarDayShortage[]
+  ): Promise<{ pushSent: number; smsSent: number; emailSent: number; totalRecipients: number }> {
+    let pushSent = 0;
+    let smsSent = 0;
+    let emailSent = 0;
+
+    // Group shortages by calendar for better readability
+    const shortagesByCalendar = shortages.reduce((acc, s) => {
+      if (!acc[s.calendarName]) {
+        acc[s.calendarName] = [];
+      }
+      acc[s.calendarName].push(s);
+      return acc;
+    }, {} as Record<string, CalendarDayShortage[]>);
+
+    // Build notification message
+    const shortagesList = Object.entries(shortagesByCalendar).map(([calendarName, calendarShortages]) => {
+      const dates = calendarShortages.map(s => 
+        `  - ${s.date}: ${s.currentVolunteers}/${s.minimumRequired} signed up`
+      ).join('\n');
+      return `${calendarName}:\n${dates}`;
+    }).join('\n\n');
+
+    const title = "Volunteers Needed!";
+    const body = alert.messageTemplate 
+      ? alert.messageTemplate.replace('{shortages}', shortagesList)
+      : `The following shifts need more volunteers:\n\n${shortagesList}`;
+
+    // Determine target roles
+    let targetRoles: string[] = [];
+    if (alert.targetAllVolunteers) {
+      targetRoles = ["admin", "staff", "volunteer", "foster", "board_member"];
+    } else if (alert.targetRoles) {
+      targetRoles = alert.targetRoles;
+    }
+
+    // Get target users
+    const targetUsers = await db.query.users.findMany({
+      where: eq(users.tenantId, alert.tenantId),
+    });
+
+    const eligibleUsers = targetUsers.filter(user => 
+      user.roles && user.roles.some((role: string) => targetRoles.includes(role))
+    );
+
+    const totalRecipients = eligibleUsers.length;
+
+    // Send push notifications
+    if (alert.pushEnabled && PushNotificationService.isConfigured()) {
+      try {
+        const pushResult = await PushNotificationService.sendToTenantRoles(
+          alert.tenantId,
+          targetRoles,
+          {
+            title,
+            body,
+            tag: 'volunteer-shortage',
+            data: {
+              type: 'volunteer_calendar_shortage',
+              alertId: alert.id,
+              shortages: shortages.map(s => ({
+                calendarId: s.calendarId,
+                calendarName: s.calendarName,
+                date: s.date,
+              })),
+            },
+            actions: [
+              { action: 'view', title: 'View Calendar' },
+            ],
+            requireInteraction: true,
+          }
+        );
+        pushSent = pushResult.success;
+      } catch (error) {
+        console.error('Error sending push notifications for volunteer calendar alert:', error);
+      }
+    }
+
+    // Send SMS if enabled and tenant has Twilio configured
+    if (alert.smsEnabled) {
+      const twilioConfigured = await isTwilioEnabled(alert.tenantId);
+      if (twilioConfigured) {
+        const smsMessage = `${title}\n${body}`;
+        for (const user of eligibleUsers) {
+          if (user.phone) {
+            try {
+              const result = await sendSms(
+                alert.tenantId,
+                user.phone,
+                smsMessage,
+                'reminder',
+                { sentBy: { id: 'system', name: 'Volunteer Alert System' } }
+              );
+              if (result.status === 'sent') {
+                smsSent++;
+              }
+            } catch (error) {
+              console.error(`Failed to send SMS to ${user.phone}:`, error);
+            }
+          }
+        }
+      } else {
+        console.log(`SMS alerts requested for volunteer calendar shortage but Twilio not configured for tenant ${alert.tenantId}`);
+      }
+    }
+
+    // Email sending would be handled here
+    if (alert.emailEnabled) {
+      console.log(`Email alerts requested for volunteer calendar shortage - sending to ${eligibleUsers.length} users`);
     }
 
     return { pushSent, smsSent, emailSent, totalRecipients };

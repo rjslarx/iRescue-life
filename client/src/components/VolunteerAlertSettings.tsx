@@ -15,9 +15,16 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Plus, Trash2, Bell, Clock, Users, AlertCircle, CheckCircle2, Edit, Play, History, MessageSquare, Mail, Smartphone } from "lucide-react";
+import { Loader2, Plus, Trash2, Bell, Clock, Users, AlertCircle, CheckCircle2, Edit, Play, History, MessageSquare, Mail, Smartphone, Calendar } from "lucide-react";
 import { z } from "zod";
 import { format } from "date-fns";
+
+interface CalendarInfo {
+  id: string;
+  name: string;
+  type: string;
+  color: string;
+}
 
 const alertSchema = z.object({
   name: z.string().min(1, "Name is required").max(100),
@@ -29,6 +36,7 @@ const alertSchema = z.object({
   emailEnabled: z.boolean().default(true),
   targetAllVolunteers: z.boolean().default(true),
   targetRoles: z.array(z.string()).optional(),
+  calendarIds: z.array(z.string()).optional(),
   checkTime: z.string().regex(/^\d{2}:\d{2}$/).default("09:00"),
   daysOfWeek: z.array(z.string()).min(1, "Select at least one day"),
   messageTemplate: z.string().max(500).optional(),
@@ -47,6 +55,7 @@ interface VolunteerThresholdAlert {
   emailEnabled: boolean;
   targetAllVolunteers: boolean;
   targetRoles: string[] | null;
+  calendarIds: string[] | null;
   checkTime: string;
   daysOfWeek: string[];
   messageTemplate: string | null;
@@ -100,6 +109,12 @@ export function VolunteerAlertSettings() {
     enabled: showHistory,
   });
 
+  const { data: calendarsData } = useQuery<{ calendars: CalendarInfo[] }>({
+    queryKey: ["/api/calendars"],
+  });
+
+  const availableCalendars = calendarsData?.calendars || [];
+
   const createMutation = useMutation({
     mutationFn: async (data: AlertFormData) => {
       return apiRequest("/api/volunteer-alerts", { method: "POST", body: JSON.stringify(data) });
@@ -147,15 +162,19 @@ export function VolunteerAlertSettings() {
     },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/volunteer-alerts/history"] });
-      if (data.result?.shortages?.length > 0) {
+      const calendarShortages = data.result?.calendarShortages?.length || 0;
+      const legacyShortages = data.result?.shortages?.length || 0;
+      const totalShortages = calendarShortages + legacyShortages;
+      
+      if (totalShortages > 0) {
         toast({ 
           title: "Test alert sent", 
-          description: `Found ${data.result.shortages.length} opportunity shortage(s). Notifications sent.` 
+          description: `Found ${totalShortages} day(s) with volunteer shortages. Notifications sent.` 
         });
       } else {
         toast({ 
           title: "No shortages", 
-          description: "All upcoming opportunities have sufficient volunteers." 
+          description: "All upcoming calendar days have sufficient volunteers." 
         });
       }
     },
@@ -208,12 +227,13 @@ export function VolunteerAlertSettings() {
               <DialogHeader>
                 <DialogTitle>Create Volunteer Threshold Alert</DialogTitle>
                 <DialogDescription>
-                  Configure when and how to notify staff about volunteer shortages
+                  Configure when and how to notify staff about volunteer shortages on your calendars
                 </DialogDescription>
               </DialogHeader>
               <AlertForm
                 onSubmit={(data) => createMutation.mutate(data)}
                 isPending={createMutation.isPending}
+                calendars={availableCalendars}
               />
             </DialogContent>
           </Dialog>
@@ -272,6 +292,12 @@ export function VolunteerAlertSettings() {
                   <div className="flex items-center gap-1">
                     <Clock className="h-3.5 w-3.5" />
                     {alert.checkTime}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Calendar className="h-3.5 w-3.5" />
+                    {alert.calendarIds && alert.calendarIds.length > 0 
+                      ? `${alert.calendarIds.length} calendar(s)` 
+                      : "All volunteer calendars"}
                   </div>
                   <div className="flex items-center gap-1">
                     <Users className="h-3.5 w-3.5" />
@@ -406,12 +432,14 @@ export function VolunteerAlertSettings() {
                 emailEnabled: editingAlert.emailEnabled,
                 targetAllVolunteers: editingAlert.targetAllVolunteers,
                 targetRoles: editingAlert.targetRoles || [],
+                calendarIds: editingAlert.calendarIds || [],
                 checkTime: editingAlert.checkTime,
                 daysOfWeek: editingAlert.daysOfWeek,
                 messageTemplate: editingAlert.messageTemplate || "",
               }}
               onSubmit={(data) => updateMutation.mutate({ id: editingAlert.id, data })}
               isPending={updateMutation.isPending}
+              calendars={availableCalendars}
             />
           )}
         </DialogContent>
@@ -424,10 +452,12 @@ function AlertForm({
   defaultValues,
   onSubmit,
   isPending,
+  calendars,
 }: {
   defaultValues?: Partial<AlertFormData>;
   onSubmit: (data: AlertFormData) => void;
   isPending: boolean;
+  calendars: CalendarInfo[];
 }) {
   const form = useForm<AlertFormData>({
     resolver: zodResolver(alertSchema),
@@ -441,6 +471,7 @@ function AlertForm({
       emailEnabled: true,
       targetAllVolunteers: true,
       targetRoles: [],
+      calendarIds: [],
       checkTime: "09:00",
       daysOfWeek: ["mon", "tue", "wed", "thu", "fri"],
       messageTemplate: "",
@@ -449,6 +480,9 @@ function AlertForm({
   });
 
   const targetAllVolunteers = form.watch("targetAllVolunteers");
+  const selectedCalendarIds = form.watch("calendarIds") || [];
+  
+  const volunteerCalendars = calendars.filter(c => c.type === "volunteer");
 
   return (
     <Form {...form}>
@@ -512,6 +546,75 @@ function AlertForm({
             )}
           />
         </div>
+
+        {volunteerCalendars.length > 0 && (
+          <FormField
+            control={form.control}
+            name="calendarIds"
+            render={() => (
+              <FormItem>
+                <FormLabel className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4" />
+                  Calendars to Monitor
+                </FormLabel>
+                <FormDescription className="text-xs mb-2">
+                  Select which volunteer calendars to check for shortages. If none selected, all volunteer calendars will be checked.
+                </FormDescription>
+                <div className="flex flex-wrap gap-2">
+                  {volunteerCalendars.map((cal) => (
+                    <FormField
+                      key={cal.id}
+                      control={form.control}
+                      name="calendarIds"
+                      render={({ field }) => (
+                        <FormItem key={cal.id}>
+                          <FormControl>
+                            <Button
+                              type="button"
+                              variant={field.value?.includes(cal.id) ? "default" : "outline"}
+                              size="sm"
+                              className="gap-2"
+                              onClick={() => {
+                                const current = field.value || [];
+                                if (current.includes(cal.id)) {
+                                  field.onChange(current.filter((id) => id !== cal.id));
+                                } else {
+                                  field.onChange([...current, cal.id]);
+                                }
+                              }}
+                              data-testid={`button-calendar-${cal.id}`}
+                            >
+                              <div
+                                className="w-3 h-3 rounded-full"
+                                style={{ backgroundColor: cal.color }}
+                              />
+                              {cal.name}
+                            </Button>
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                  ))}
+                </div>
+                {selectedCalendarIds.length === 0 && (
+                  <p className="text-xs text-muted-foreground mt-2">
+                    No calendars selected - will check all {volunteerCalendars.length} volunteer calendar(s)
+                  </p>
+                )}
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
+
+        {volunteerCalendars.length === 0 && calendars.length > 0 && (
+          <Alert>
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              No volunteer-type calendars found. Create a calendar with type "volunteer" in Calendar Management to use threshold alerts.
+            </AlertDescription>
+          </Alert>
+        )}
 
         <FormField
           control={form.control}
