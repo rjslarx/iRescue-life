@@ -91,6 +91,15 @@ const transportFormSchema = z.object({
   driverName: z.string().optional(),
   driverPhone: z.string().optional(),
   notes: z.string().optional(),
+  // CVI (Certificate of Veterinary Inspection) compliance fields
+  cviInspectionDate: z.string().optional(),
+  accreditedVetName: z.string().optional(),
+  accreditedVetLicenseNumber: z.string().optional(),
+  accreditedVetPhone: z.string().optional(),
+  importPermitNumber: z.string().optional(),
+  importPermitState: z.string().optional(),
+  originPhysicalAddress: z.string().optional(),
+  destinationPhysicalAddress: z.string().optional(),
 });
 
 type TransportFormData = z.infer<typeof transportFormSchema>;
@@ -275,6 +284,15 @@ function CreateTransportDialog({
       driverName: "",
       driverPhone: "",
       notes: "",
+      // CVI fields
+      cviInspectionDate: "",
+      accreditedVetName: "",
+      accreditedVetLicenseNumber: "",
+      accreditedVetPhone: "",
+      importPermitNumber: "",
+      importPermitState: "",
+      originPhysicalAddress: "",
+      destinationPhysicalAddress: "",
     },
   });
 
@@ -284,6 +302,7 @@ function CreateTransportDialog({
         ...data,
         departureDate: data.departureDate ? new Date(data.departureDate).toISOString() : undefined,
         estimatedArrivalDate: data.estimatedArrivalDate ? new Date(data.estimatedArrivalDate).toISOString() : undefined,
+        cviInspectionDate: data.cviInspectionDate ? new Date(data.cviInspectionDate).toISOString() : undefined,
       };
       return apiRequest('POST', '/api/transport/events', payload);
     },
@@ -584,6 +603,154 @@ function CreateTransportDialog({
                         placeholder="(555) 123-4567" 
                         {...field} 
                         data-testid="input-driver-phone"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <Separator className="my-4" />
+            <h3 className="text-sm font-medium text-muted-foreground mb-3">CVI Compliance (Optional)</h3>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField
+                control={form.control}
+                name="cviInspectionDate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>CVI Inspection Date</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="date" 
+                        {...field} 
+                        data-testid="input-cvi-inspection-date"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="accreditedVetName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Accredited Vet Name</FormLabel>
+                    <FormControl>
+                      <Input 
+                        placeholder="Dr. Jane Smith, DVM" 
+                        {...field} 
+                        data-testid="input-vet-name"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="accreditedVetLicenseNumber"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Vet License Number</FormLabel>
+                    <FormControl>
+                      <Input 
+                        placeholder="VET-12345" 
+                        {...field} 
+                        data-testid="input-vet-license"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="accreditedVetPhone"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Vet Phone</FormLabel>
+                    <FormControl>
+                      <Input 
+                        placeholder="(555) 123-4567" 
+                        {...field} 
+                        data-testid="input-vet-phone"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="importPermitNumber"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Import Permit Number</FormLabel>
+                    <FormControl>
+                      <Input 
+                        placeholder="Optional - required by some states" 
+                        {...field} 
+                        data-testid="input-import-permit"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="importPermitState"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Import Permit State</FormLabel>
+                    <FormControl>
+                      <Input 
+                        placeholder="e.g., CO, MA, CT" 
+                        {...field} 
+                        data-testid="input-import-permit-state"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="originPhysicalAddress"
+                render={({ field }) => (
+                  <FormItem className="sm:col-span-2">
+                    <FormLabel>Origin Physical Address</FormLabel>
+                    <FormControl>
+                      <Input 
+                        placeholder="Street address (no PO Boxes) - required for CVI" 
+                        {...field} 
+                        data-testid="input-origin-address"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="destinationPhysicalAddress"
+                render={({ field }) => (
+                  <FormItem className="sm:col-span-2">
+                    <FormLabel>Destination Physical Address</FormLabel>
+                    <FormControl>
+                      <Input 
+                        placeholder="Street address (no PO Boxes) - required for CVI" 
+                        {...field} 
+                        data-testid="input-destination-address"
                       />
                     </FormControl>
                     <FormMessage />
@@ -990,6 +1157,15 @@ function ManifestTab({ transportId, transportStatus, open }: { transportId: stri
     enabled: !!transportId && open && (manifestData?.items?.length || 0) > 0,
   });
 
+  const { data: cviComplianceData } = useQuery<{
+    isCompliant: boolean;
+    canDepart: boolean;
+    summary: { total: number; compliant: number; nonCompliant: number; criticalIssues: number; warnings: number };
+  }>({
+    queryKey: [`/api/transport/events/${transportId}/cvi-compliance`],
+    enabled: !!transportId && open && (manifestData?.items?.length || 0) > 0 && transportStatus === 'confirmed',
+  });
+
   const addManifestItemMutation = useMutation({
     mutationFn: async (data: { 
       animalId: string; 
@@ -1235,8 +1411,9 @@ function ManifestTab({ transportId, transportStatus, open }: { transportId: stri
               size="sm"
               variant="default"
               onClick={() => departTransportMutation.mutate()}
-              disabled={departTransportMutation.isPending}
+              disabled={departTransportMutation.isPending || (cviComplianceData && !cviComplianceData.canDepart)}
               data-testid="button-depart-transport"
+              title={cviComplianceData && !cviComplianceData.canDepart ? 'Resolve CVI issues before departing' : undefined}
             >
               {departTransportMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               <Truck className="h-4 w-4 mr-2" />
@@ -1265,6 +1442,17 @@ function ManifestTab({ transportId, transportStatus, open }: { transportId: stri
             <strong>CVI Check Failed:</strong> {validationData.summary.missingCvi} animal(s) missing Health Certificate / CVI.
             <br />
             <span className="text-sm">Transport cannot be finalized until all animals have valid health documentation.</span>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {transportStatus === 'confirmed' && cviComplianceData && !cviComplianceData.canDepart && (
+        <Alert variant="destructive">
+          <AlertOctagon className="h-4 w-4" />
+          <AlertDescription>
+            <strong>Departure Blocked:</strong> {cviComplianceData.summary.nonCompliant} animal(s) have critical CVI compliance issues.
+            <br />
+            <span className="text-sm">Resolve all critical issues (missing microchip, rabies vaccine, etc.) before departing.</span>
           </AlertDescription>
         </Alert>
       )}
