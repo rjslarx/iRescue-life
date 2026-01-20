@@ -61,6 +61,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useTenant } from "@/contexts/TenantContext";
 import { MedicalFileUploadDialog } from "@/components/MedicalFileUploadDialog";
+import { CVIHealthCheck } from "@/components/CVIHealthCheck";
 import type { 
   TransportEvent, 
   TransferAlert,
@@ -1284,6 +1285,10 @@ function ManifestTab({ transportId, transportStatus, open }: { transportId: stri
             All {validationData.summary.total} animals have valid health certificates. Ready to finalize!
           </AlertDescription>
         </Alert>
+      )}
+
+      {manifestItems.length > 0 && (
+        <CVIHealthCheck transportId={transportId} enabled={open} />
       )}
 
       <Separator />
