@@ -139,8 +139,15 @@ export default function SettingsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
 
-  const { data, isLoading } = useQuery<{ tenant: Tenant }>({
+  // Check if the current user is the organization owner
+  const { data: ownerData, isLoading: isOwnerLoading } = useQuery<{ isOwner: boolean }>({
+    queryKey: ['/api/me/is-owner'],
+  });
+
+  const { data, isLoading, error } = useQuery<{ tenant: Tenant }>({
     queryKey: ['/api/tenant/settings'],
+    // Only fetch settings if user is owner
+    enabled: ownerData?.isOwner === true,
   });
 
   const { data: emailUsage } = useQuery<{
@@ -568,6 +575,57 @@ export default function SettingsPage() {
   const onSubmitEmail = (data: EmailSettingsData) => {
     updateEmailMutation.mutate(data);
   };
+
+  // Show loading state while checking owner status
+  if (isOwnerLoading) {
+    return (
+      <DashboardLayout
+        breadcrumbs={[
+          { label: "Settings" }
+        ]}
+      >
+        <div className="flex items-center justify-center h-64" data-testid="loading-settings">
+          <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  // Show access denied message if user is not the owner
+  if (!ownerData?.isOwner) {
+    return (
+      <DashboardLayout
+        breadcrumbs={[
+          { label: "Settings" }
+        ]}
+      >
+        <div className="max-w-2xl mx-auto py-12" data-testid="settings-access-denied">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2 text-destructive">
+                <Shield className="h-6 w-6" />
+                <CardTitle>Access Restricted</CardTitle>
+              </div>
+              <CardDescription>
+                Organization settings can only be accessed by the organization owner
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  You don't have permission to view or modify organization settings. Only the organization owner can access this page. If you need to make changes, please contact your organization owner.
+                </AlertDescription>
+              </Alert>
+              <p className="text-sm text-muted-foreground">
+                This includes settings for branding, integrations (Stripe, Twilio, DocuSign), email configuration, and other sensitive organization settings.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout
