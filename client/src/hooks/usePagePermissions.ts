@@ -42,8 +42,9 @@ export function usePagePermissions() {
       return true;
     }
 
-    // Admin role always has access to all pages
-    if (userRole === 'admin') {
+    // Owner and Admin roles always have access to all pages
+    // Owner is the organization founder with highest privileges
+    if (userRole === 'owner' || userRole === 'admin') {
       return true;
     }
 
@@ -68,8 +69,8 @@ export function usePagePermissions() {
       return [];
     }
 
-    // Platform admin and admin have access to all pages
-    if (userRole === 'platform_admin' || userRole === 'admin') {
+    // Platform admin, owner, and admin have access to all pages
+    if (userRole === 'platform_admin' || userRole === 'owner' || userRole === 'admin') {
       return permissions.map(p => p.pageId);
     }
 
