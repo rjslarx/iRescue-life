@@ -7,7 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Globe, AlertCircle, Loader2, ExternalLink, Trash2, CheckCircle2 } from "lucide-react";
+import { Globe, AlertCircle, Loader2, ExternalLink, Trash2, CheckCircle2, Smartphone } from "lucide-react";
+import { SiApplepay } from "react-icons/si";
 import type { Tenant } from "@shared/schema";
 
 interface CustomDomainSettingsProps {
@@ -66,6 +67,27 @@ export function CustomDomainSettings({ tenant }: CustomDomainSettingsProps) {
     },
   });
 
+  const registerApplePayMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest('POST', '/api/tenant/custom-domain/register-apple-pay', {});
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/tenant/settings'] });
+      toast({
+        title: "Apple Pay enabled",
+        description: "Apple Pay is now available on your custom domain.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Apple Pay registration failed",
+        description: error.message || "Please try again later.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleSaveDomain = () => {
     if (!customDomain) {
       toast({
@@ -91,12 +113,49 @@ export function CustomDomainSettings({ tenant }: CustomDomainSettingsProps) {
       </CardHeader>
       <CardContent className="space-y-4">
         {tenant?.customDomainVerified ? (
-          <Alert className="border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950">
-            <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
-            <AlertDescription className="text-green-800 dark:text-green-200">
-              <strong>Custom domain active:</strong> {tenant.customDomain}
-            </AlertDescription>
-          </Alert>
+          <div className="space-y-3">
+            <Alert className="border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950">
+              <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+              <AlertDescription className="text-green-800 dark:text-green-200">
+                <strong>Custom domain active:</strong> {tenant.customDomain}
+              </AlertDescription>
+            </Alert>
+            
+            {/* Apple Pay Status */}
+            {tenant.applePayDomainRegistered ? (
+              <Alert className="border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950" data-testid="alert-apple-pay-enabled">
+                <SiApplepay className="h-4 w-4 text-green-600 dark:text-green-400" />
+                <AlertDescription className="text-green-800 dark:text-green-200">
+                  <span data-testid="text-apple-pay-status"><strong>Apple Pay enabled</strong> - Donors can use Apple Pay on your custom domain</span>
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <Alert className="border-yellow-200 bg-yellow-50 dark:border-yellow-900 dark:bg-yellow-950" data-testid="alert-apple-pay-disabled">
+                <SiApplepay className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+                <AlertDescription className="text-yellow-800 dark:text-yellow-200 flex items-center justify-between gap-4 flex-wrap">
+                  <span data-testid="text-apple-pay-status"><strong>Apple Pay not enabled</strong> - Register your domain to accept Apple Pay</span>
+                  <Button
+                    size="sm"
+                    onClick={() => registerApplePayMutation.mutate()}
+                    disabled={registerApplePayMutation.isPending}
+                    data-testid="button-register-apple-pay"
+                  >
+                    {registerApplePayMutation.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Registering...
+                      </>
+                    ) : (
+                      <>
+                        <Smartphone className="mr-2 h-4 w-4" />
+                        Enable Apple Pay
+                      </>
+                    )}
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            )}
+          </div>
         ) : tenant?.customDomain ? (
           <Alert className="border-yellow-200 bg-yellow-50 dark:border-yellow-900 dark:bg-yellow-950">
             <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />

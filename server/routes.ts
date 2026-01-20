@@ -15641,15 +15641,48 @@ Submitted: ${new Date().toLocaleString()}
         
         if (cnameRecords && cnameRecords.includes(expectedSubdomain)) {
           // CNAME is correctly configured
+          let applePayRegistered = false;
+          let applePayError: string | null = null;
+          
+          // Try to register domain for Apple Pay with Stripe
+          try {
+            const platformStripeKey = process.env.STRIPE_SECRET_KEY;
+            if (platformStripeKey) {
+              const Stripe = (await import('stripe')).default;
+              const stripe = new Stripe(platformStripeKey, { 
+                apiVersion: '2025-09-30.clover',
+                typescript: true,
+              });
+              
+              // Register the custom domain for Apple Pay
+              await stripe.applePayDomains.create({
+                domain_name: customDomain,
+              });
+              applePayRegistered = true;
+              console.log(`[APPLE PAY] Successfully registered domain ${customDomain} for Apple Pay`);
+            }
+          } catch (applePayErr: any) {
+            // Don't fail the whole verification if Apple Pay registration fails
+            applePayError = applePayErr.message || 'Unknown error';
+            console.error(`[APPLE PAY] Failed to register domain ${customDomain}: ${applePayError}`);
+          }
+          
           await db
             .update(tenants)
-            .set({ customDomainVerified: true })
+            .set({ 
+              customDomainVerified: true,
+              applePayDomainRegistered: applePayRegistered,
+            })
             .where(eq(tenants.id, req.tenant!.id));
 
           return res.json({ 
             success: true, 
             verified: true,
-            message: 'Custom domain verified successfully!'
+            applePayRegistered,
+            applePayError,
+            message: applePayRegistered 
+              ? 'Custom domain verified and Apple Pay enabled!'
+              : 'Custom domain verified! Apple Pay registration pending.'
           });
         }
 
@@ -15684,6 +15717,7 @@ Submitted: ${new Date().toLocaleString()}
         .set({
           customDomain: null,
           customDomainVerified: false,
+          applePayDomainRegistered: false,
         })
         .where(eq(tenants.id, req.tenant!.id));
 
@@ -15693,6 +15727,72 @@ Submitted: ${new Date().toLocaleString()}
       });
     } catch (error) {
       next(error);
+    }
+  });
+
+  /**
+   * POST /api/tenant/custom-domain/register-apple-pay
+   * Manually register custom domain for Apple Pay (admin only)
+   */
+  app.post('/api/tenant/custom-domain/register-apple-pay', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+    try {
+      // Get current tenant data
+      const [tenant] = await db
+        .select()
+        .from(tenants)
+        .where(eq(tenants.id, req.tenant!.id))
+        .limit(1);
+
+      if (!tenant || !tenant.customDomain || !tenant.customDomainVerified) {
+        return res.status(400).json({ 
+          error: 'No verified custom domain',
+          message: 'Please verify your custom domain first'
+        });
+      }
+
+      if (tenant.applePayDomainRegistered) {
+        return res.json({ 
+          success: true,
+          message: 'Apple Pay is already registered for this domain'
+        });
+      }
+
+      const platformStripeKey = process.env.STRIPE_SECRET_KEY;
+      if (!platformStripeKey) {
+        return res.status(500).json({ 
+          error: 'Configuration error',
+          message: 'Stripe is not configured on the platform'
+        });
+      }
+
+      const Stripe = (await import('stripe')).default;
+      const stripe = new Stripe(platformStripeKey, { 
+        apiVersion: '2025-09-30.clover',
+        typescript: true,
+      });
+      
+      // Register the custom domain for Apple Pay
+      await stripe.applePayDomains.create({
+        domain_name: tenant.customDomain,
+      });
+
+      await db
+        .update(tenants)
+        .set({ applePayDomainRegistered: true })
+        .where(eq(tenants.id, req.tenant!.id));
+
+      console.log(`[APPLE PAY] Successfully registered domain ${tenant.customDomain} for Apple Pay (manual)`);
+
+      res.json({ 
+        success: true,
+        message: 'Apple Pay enabled for your custom domain!'
+      });
+    } catch (error: any) {
+      console.error(`[APPLE PAY] Manual registration failed:`, error.message);
+      res.status(400).json({ 
+        error: 'Apple Pay registration failed',
+        message: error.message || 'Could not register domain with Stripe'
+      });
     }
   });
 
