@@ -440,6 +440,8 @@ export const animals = pgTable("animals", {
   neuterStatus: text("neuter_status").$type<"intact" | "neutered" | "spayed" | "unknown">(),
   dateOfBirth: timestamp("date_of_birth"),
   microchipNumber: text("microchip_number"),
+  // CVI compliance fields
+  colorMarkings: text("color_markings"), // e.g., "Black with white chest" - required for CVI
   kennelLocation: text("kennel_location"), // Legacy text field - kept for backwards compatibility
   kennelBuildingId: uuid("kennel_building_id").references(() => kennelBuildings.id, { onDelete: 'set null' }),
   kennelRowId: uuid("kennel_row_id").references(() => kennelRows.id, { onDelete: 'set null' }),
@@ -1492,8 +1494,12 @@ export const vaccineRecords = pgTable("vaccine_records", {
   itemName: text("item_name").notNull(),
   dateGiven: timestamp("date_given").notNull(),
   dateDue: timestamp("date_due"),
+  // CVI compliance fields
+  expirationDate: timestamp("expiration_date"), // Vaccine vial expiration date (critical for CVI)
+  productName: text("product_name"), // e.g., "Defensor 3" - required for CVI
   manufacturer: text("manufacturer"),
   lotNumber: text("lot_number"),
+  rabiesTagNumber: text("rabies_tag_number"), // Physical metal rabies tag number
   administeredBy: text("administered_by"),
   createdBy: uuid("created_by").references(() => users.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -1515,6 +1521,10 @@ export const insertVaccineRecordSchema = createInsertSchema(vaccineRecords).omit
 }).extend({
   dateGiven: z.coerce.date(),
   dateDue: z.union([z.coerce.date(), z.literal(""), z.null(), z.undefined()]).optional().transform((val) => (val === "" || val === null || val === undefined) ? null : val),
+  // CVI compliance fields
+  expirationDate: z.union([z.coerce.date(), z.literal(""), z.null(), z.undefined()]).optional().transform((val) => (val === "" || val === null || val === undefined) ? null : val),
+  productName: z.string().optional(),
+  rabiesTagNumber: z.string().optional(),
   billVendor: z.string().optional(),
   billAmount: z.string().optional(),
   billInvoiceNumber: z.string().optional(),
@@ -3188,6 +3198,17 @@ export const transportEvents = pgTable("transport_events", {
   driverPhone: text("driver_phone"),
   // Notes and attachments
   notes: text("notes"),
+  // CVI (Certificate of Veterinary Inspection) compliance fields
+  cviInspectionDate: timestamp("cvi_inspection_date"), // Date vet inspected animals (CVI valid 10-30 days from this)
+  cviExpirationDate: timestamp("cvi_expiration_date"), // Auto-calculated or manually set CVI expiration
+  accreditedVetName: text("accredited_vet_name"), // Name of signing veterinarian
+  accreditedVetLicenseNumber: text("accredited_vet_license_number"), // Vet's license number for CVI
+  accreditedVetPhone: text("accredited_vet_phone"), // Vet contact phone
+  importPermitNumber: text("import_permit_number"), // Required by some states (CT, MA, CO, etc.)
+  importPermitState: text("import_permit_state"), // Which state issued the permit
+  // Physical addresses for CVI (separate from mailing/PO Box)
+  originPhysicalAddress: text("origin_physical_address"), // Street address, no PO Boxes
+  destinationPhysicalAddress: text("destination_physical_address"), // Street address, no PO Boxes
   createdBy: uuid("created_by").references(() => users.id, { onDelete: 'set null' }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
