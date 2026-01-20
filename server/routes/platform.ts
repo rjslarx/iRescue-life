@@ -510,6 +510,8 @@ router.get('/tenants', async (req, res, next) => {
         customDomainVerified: tenants.customDomainVerified,
         isActive: tenants.isActive,
         createdAt: tenants.createdAt,
+        subscriptionTier: tenants.subscriptionTier,
+        platformFeePercent: tenants.platformFeePercent,
       })
       .from(tenants)
       .where(sql`${tenants.subdomain} != 'platform'`)

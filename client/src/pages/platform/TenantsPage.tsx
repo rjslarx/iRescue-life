@@ -15,7 +15,7 @@ import { usePlatformAdmin } from "@/hooks/usePlatformAdmin";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Building2, Users, PawPrint, CheckCircle, XCircle, Plus, Edit, UserCircle, Globe, Send, Loader2, ShieldCheck, ShieldX } from "lucide-react";
+import { Building2, Users, PawPrint, CheckCircle, XCircle, Plus, Edit, UserCircle, Globe, Send, Loader2, ShieldCheck, ShieldX, DollarSign } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
@@ -28,6 +28,8 @@ interface Tenant {
   customDomainVerified: boolean;
   isActive: boolean;
   createdAt: string;
+  subscriptionTier: string | null;
+  platformFeePercent: number | null;
   stats: {
     userCount: number;
     animalCount: number;
@@ -45,6 +47,7 @@ export default function TenantsPage() {
   const [dnsTenant, setDnsTenant] = useState<Tenant | null>(null);
   const [aRecordValue, setARecordValue] = useState("");
   const [txtRecordValue, setTxtRecordValue] = useState("");
+  const [platformFeeOverride, setPlatformFeeOverride] = useState<string>("");
 
   const { data: tenantsData, isLoading } = useQuery<{ tenants: Tenant[] }>({
     queryKey: ['/api/platform/tenants'],
@@ -91,17 +94,30 @@ export default function TenantsPage() {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
 
-    const data = {
+    const data: Record<string, unknown> = {
       subdomain: formData.get('subdomain'),
       name: formData.get('name'),
       contactEmail: formData.get('contactEmail'),
       isActive: formData.get('isActive') === 'on',
     };
 
+    // Add platform fee override (null means use default tier-based fee)
+    if (editingTenant) {
+      if (platformFeeOverride === "" || platformFeeOverride === null) {
+        data.platformFeePercent = null; // Use default based on tier
+      } else {
+        const feeValue = parseFloat(platformFeeOverride);
+        if (!isNaN(feeValue) && feeValue >= 0 && feeValue <= 100) {
+          data.platformFeePercent = feeValue;
+        }
+      }
+    }
+
     if (editingTenant) {
       updateTenantMutation.mutate({ id: editingTenant.id, data });
       setIsDialogOpen(false);
       setEditingTenant(null);
+      setPlatformFeeOverride("");
     } else {
       createTenantMutation.mutate(data);
     }
@@ -109,6 +125,7 @@ export default function TenantsPage() {
 
   const handleEdit = (tenant: Tenant) => {
     setEditingTenant(tenant);
+    setPlatformFeeOverride(tenant.platformFeePercent !== null ? String(tenant.platformFeePercent) : "");
     setIsDialogOpen(true);
   };
 
@@ -327,6 +344,22 @@ export default function TenantsPage() {
                               <span className="text-muted-foreground text-xs">animals</span>
                             </div>
                           </div>
+                          <div className="flex items-center gap-2 pt-2">
+                            <DollarSign className="h-3 w-3 text-muted-foreground" />
+                            <span className="text-xs">
+                              {tenant.platformFeePercent !== null ? (
+                                <span className="font-medium">
+                                  {tenant.platformFeePercent === 0 ? (
+                                    <Badge variant="secondary" className="text-[10px] px-1 py-0">No Platform Fee</Badge>
+                                  ) : (
+                                    <>{tenant.platformFeePercent}% platform fee</>
+                                  )}
+                                </span>
+                              ) : (
+                                <span className="text-muted-foreground">Default fee ({tenant.subscriptionTier === 'professional' ? '0%' : '5%'})</span>
+                              )}
+                            </span>
+                          </div>
                           <div className="text-xs text-muted-foreground pt-2">
                             Created {new Date(tenant.createdAt).toLocaleDateString()}
                           </div>
@@ -479,6 +512,35 @@ export default function TenantsPage() {
                 />
                 <Label htmlFor="isActive">Active</Label>
               </div>
+              {editingTenant && (
+                <div className="space-y-2 pt-4 border-t">
+                  <Label htmlFor="platformFeePercent">
+                    <div className="flex items-center gap-2">
+                      <DollarSign className="h-4 w-4" />
+                      Platform Fee Override
+                    </div>
+                  </Label>
+                  <Input
+                    id="platformFeePercent"
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="100"
+                    placeholder="Leave empty for default"
+                    value={platformFeeOverride}
+                    onChange={(e) => setPlatformFeeOverride(e.target.value)}
+                    data-testid="input-platform-fee"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Leave empty to use default fee based on subscription tier. Set to 0 for no platform fee (e.g., for conflict-of-interest avoidance or partnerships).
+                  </p>
+                  {editingTenant.subscriptionTier && (
+                    <p className="text-xs text-muted-foreground">
+                      Current tier: <span className="font-medium capitalize">{editingTenant.subscriptionTier}</span> (default fee: {editingTenant.subscriptionTier === 'professional' ? '0%' : '5%'})
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => { setIsDialogOpen(false); setEditingTenant(null); }}>
