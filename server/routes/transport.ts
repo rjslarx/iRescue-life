@@ -887,6 +887,15 @@ router.post('/events/:transportId/depart', requireTenant, requireAuth, async (re
     const user = req.user!;
     const userName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || undefined;
     
+    // Server-side CVI compliance enforcement - block departure if critical issues exist
+    const cviCompliance = await TransportService.validateCviCompliance(req.tenant!.id, req.params.transportId);
+    if (!cviCompliance.canDepart) {
+      return res.status(400).json({ 
+        error: `Cannot depart transport: ${cviCompliance.summary.nonCompliant} animal(s) have critical CVI compliance issues. Resolve all critical issues before departing.`,
+        cviCompliance: cviCompliance.summary,
+      });
+    }
+    
     const result = await TransportService.departTransport(
       req.tenant!.id, 
       req.params.transportId,
