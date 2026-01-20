@@ -5528,6 +5528,52 @@ Submitted: ${new Date().toLocaleString()}
       } catch (error) {
         console.error('Failed to send form notification email:', error);
       }
+
+      // Send confirmation email to applicant
+      try {
+        const { EmailService } = await import('./lib/email-service');
+        const emailService = await EmailService.forTenant(req.tenant!.id);
+        
+        if (emailService && data.applicantEmail) {
+          const safeApplicantName = escapeHtml(data.applicantName);
+          const safeTenantName = escapeHtml(req.tenant!.name);
+          const safeAnimalName = escapeHtml(animalName);
+          const dateFormatted = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+
+          await emailService.send({
+            to: data.applicantEmail,
+            subject: `Thank you for your adoption application for ${safeAnimalName} - ${safeTenantName}`,
+            html: `
+<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <h2 style="color: #2563eb;">Thank You, ${safeApplicantName}!</h2>
+  
+  <p>We've received your adoption application for <strong>${safeAnimalName}</strong>. Thank you for considering adoption!</p>
+  
+  <div style="background: #f3f4f6; padding: 15px; border-radius: 8px; margin: 20px 0;">
+    <p style="margin: 5px 0;"><strong>Application Type:</strong> Adoption</p>
+    <p style="margin: 5px 0;"><strong>Animal:</strong> ${safeAnimalName}</p>
+    <p style="margin: 5px 0;"><strong>Date Submitted:</strong> ${dateFormatted}</p>
+    <p style="margin: 5px 0;"><strong>Reference ID:</strong> ${application.id.slice(0, 8).toUpperCase()}</p>
+  </div>
+  
+  <h3 style="color: #374151;">What Happens Next?</h3>
+  <p>Our adoption team will review your application and reach out to you within 3-5 business days. This may include a phone interview, reference checks, or a meet-and-greet with ${safeAnimalName}.</p>
+  
+  <p>In the meantime, if you have any questions about ${safeAnimalName} or the adoption process, please don't hesitate to reach out to us.</p>
+  
+  <p>Thank you for choosing adoption!</p>
+  
+  <p>With gratitude,<br/>
+  <strong>The ${safeTenantName} Team</strong></p>
+</div>
+            `.trim()
+          });
+          console.log(`[Application] Adoption confirmation email sent to ${data.applicantEmail} for ${animalName}`);
+        }
+      } catch (emailError) {
+        console.error('Failed to send adoption application confirmation email:', emailError);
+        // Don't fail the application submission if email fails
+      }
       
       if (gclid && application) {
         try {
@@ -11576,6 +11622,50 @@ Submitted: ${new Date().toLocaleString()}
         console.error('Failed to send form notification email:', error);
       }
 
+      // Send confirmation email to applicant
+      try {
+        const { EmailService } = await import('./lib/email-service');
+        const emailService = await EmailService.forTenant(req.tenant!.id);
+        
+        if (emailService && data.applicantEmail) {
+          const safeApplicantName = escapeHtml(data.applicantName);
+          const safeTenantName = escapeHtml(req.tenant!.name);
+          const dateFormatted = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+
+          await emailService.send({
+            to: data.applicantEmail,
+            subject: `Thank you for your foster application - ${safeTenantName}`,
+            html: `
+<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <h2 style="color: #2563eb;">Thank You, ${safeApplicantName}!</h2>
+  
+  <p>We've received your application to become a foster with ${safeTenantName}. Thank you for your interest in helping animals in need!</p>
+  
+  <div style="background: #f3f4f6; padding: 15px; border-radius: 8px; margin: 20px 0;">
+    <p style="margin: 5px 0;"><strong>Application Type:</strong> Foster</p>
+    <p style="margin: 5px 0;"><strong>Date Submitted:</strong> ${dateFormatted}</p>
+    <p style="margin: 5px 0;"><strong>Reference ID:</strong> ${application.id.slice(0, 8).toUpperCase()}</p>
+  </div>
+  
+  <h3 style="color: #374151;">What Happens Next?</h3>
+  <p>Our team will review your application and reach out to you within 3-5 business days. We may contact you to schedule a brief phone interview or home visit.</p>
+  
+  <p>In the meantime, if you have any questions, please don't hesitate to reach out to us.</p>
+  
+  <p>Thank you for opening your heart and home to animals in need!</p>
+  
+  <p>With gratitude,<br/>
+  <strong>The ${safeTenantName} Team</strong></p>
+</div>
+            `.trim()
+          });
+          console.log(`[Application] Foster confirmation email sent to ${data.applicantEmail}`);
+        }
+      } catch (emailError) {
+        console.error('Failed to send foster application confirmation email:', emailError);
+        // Don't fail the application submission if email fails
+      }
+
       res.json({ 
         success: true, 
         application,
@@ -12232,6 +12322,50 @@ Submitted: ${new Date().toLocaleString()}
         });
       } catch (error) {
         console.error('Failed to send form notification email:', error);
+      }
+
+      // Send confirmation email to applicant
+      try {
+        const { EmailService } = await import('./lib/email-service');
+        const emailService = await EmailService.forTenant(req.tenant!.id);
+        
+        if (emailService && data.applicantEmail) {
+          const safeApplicantName = escapeHtml(data.applicantName);
+          const safeTenantName = escapeHtml(req.tenant!.name);
+          const dateFormatted = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+
+          await emailService.send({
+            to: data.applicantEmail,
+            subject: `Thank you for your volunteer application - ${safeTenantName}`,
+            html: `
+<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <h2 style="color: #2563eb;">Thank You, ${safeApplicantName}!</h2>
+  
+  <p>We've received your application to volunteer with ${safeTenantName}. Thank you for your interest in making a difference for animals in need!</p>
+  
+  <div style="background: #f3f4f6; padding: 15px; border-radius: 8px; margin: 20px 0;">
+    <p style="margin: 5px 0;"><strong>Application Type:</strong> Volunteer</p>
+    <p style="margin: 5px 0;"><strong>Date Submitted:</strong> ${dateFormatted}</p>
+    <p style="margin: 5px 0;"><strong>Reference ID:</strong> ${application.id.slice(0, 8).toUpperCase()}</p>
+  </div>
+  
+  <h3 style="color: #374151;">What Happens Next?</h3>
+  <p>Our volunteer coordinator will review your application and reach out to you within 3-5 business days with next steps, which may include orientation information or training schedules.</p>
+  
+  <p>In the meantime, if you have any questions, please don't hesitate to reach out to us.</p>
+  
+  <p>Thank you for wanting to help animals in need!</p>
+  
+  <p>With gratitude,<br/>
+  <strong>The ${safeTenantName} Team</strong></p>
+</div>
+            `.trim()
+          });
+          console.log(`[Application] Volunteer confirmation email sent to ${data.applicantEmail}`);
+        }
+      } catch (emailError) {
+        console.error('Failed to send volunteer application confirmation email:', emailError);
+        // Don't fail the application submission if email fails
       }
 
       res.json({ 
