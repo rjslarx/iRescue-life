@@ -11,11 +11,10 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
-import { Package, Heart, ExternalLink, ShoppingCart } from 'lucide-react';
+import { Package, Heart, ExternalLink, AlertTriangle, Flame, List } from 'lucide-react';
 import type { SupplyItem, SupplyCategory, Tenant } from '@shared/schema';
 import PublicHeader from '@/components/PublicHeader';
 
@@ -34,7 +33,6 @@ const donationFormSchema = z.object({
 
 export default function PublicWishlist() {
   const { toast } = useToast();
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [donatingItem, setDonatingItem] = useState<SupplyItemWithRelations | null>(null);
 
   const { data: tenantData } = useQuery<{ tenant: Tenant }>({
@@ -43,16 +41,15 @@ export default function PublicWishlist() {
 
   // Fetch supply items (public endpoint)
   const { data: itemsData, isLoading: itemsLoading } = useQuery<{ items: SupplyItemWithRelations[] }>({
-    queryKey: ['/api/supply-items', { categoryId: selectedCategory !== 'all' ? selectedCategory : undefined }],
-  });
-
-  // Fetch categories
-  const { data: categoriesData } = useQuery<{ categories: SupplyCategory[] }>({
-    queryKey: ['/api/supply-categories'],
+    queryKey: ['/api/supply-items'],
   });
 
   const tenant = tenantData?.tenant;
   const rescueName = tenant?.name || "Animal Rescue";
+  const donationSection = (tenant as any)?.donationSection as {
+    chewyWishListUrl?: string;
+    amazonWishListUrl?: string;
+  } | undefined;
 
   useSEO({
     title: `Supply Wishlist - ${rescueName}`,
@@ -78,7 +75,11 @@ export default function PublicWishlist() {
   });
 
   const items = itemsData?.items || [];
-  const categories = categoriesData?.categories || [];
+  
+  // Group items by priority
+  const urgentItems = items.filter(item => item.priority === 'urgent' && item.status === 'active');
+  const highPriorityItems = items.filter(item => item.priority === 'high' && item.status === 'active');
+  const normalItems = items.filter(item => (item.priority === 'normal' || item.priority === 'low') && item.status === 'active');
 
   const getProgressPercentage = (item: SupplyItemWithRelations) => {
     return Math.min((item.quantityFulfilled / item.quantityNeeded) * 100, 100);
@@ -86,17 +87,6 @@ export default function PublicWishlist() {
 
   const getRemainingNeeded = (item: SupplyItemWithRelations) => {
     return Math.max(item.quantityNeeded - item.quantityFulfilled, 0);
-  };
-
-  const getPriorityBadge = (priority: string) => {
-    const variants: Record<string, { variant: 'default' | 'secondary' | 'destructive' | 'outline'; label: string }> = {
-      urgent: { variant: 'destructive', label: 'Urgent' },
-      high: { variant: 'destructive', label: 'High Priority' },
-      normal: { variant: 'secondary', label: 'Needed' },
-      low: { variant: 'outline', label: 'Low Priority' },
-    };
-    const config = variants[priority] || variants.normal;
-    return <Badge variant={config.variant}>{config.label}</Badge>;
   };
 
   if (itemsLoading) {
@@ -109,193 +99,363 @@ export default function PublicWishlist() {
     );
   }
 
+  // Render a single supply item card
+  const renderSupplyCard = (item: SupplyItemWithRelations, compact: boolean = false) => {
+    const progressPercentage = getProgressPercentage(item);
+    const remainingNeeded = getRemainingNeeded(item);
+    const primaryLink = item.chewyUrl || item.amazonUrl || item.petsmartUrl || item.otherRetailerUrl;
+
+    if (compact) {
+      return (
+        <Card key={item.id} className="flex flex-col min-w-[280px] max-w-[320px] flex-shrink-0" data-testid={`card-supply-${item.id}`}>
+          {item.imageUrl && (
+            <div className="relative h-40 w-full overflow-hidden rounded-t-lg bg-muted">
+              <img 
+                src={item.imageUrl} 
+                alt={item.title}
+                className="w-full h-full object-cover"
+              />
+            </div>
+          )}
+          <CardHeader className={`pb-2 ${!item.imageUrl ? 'pt-4' : 'pt-3'}`}>
+            <CardTitle className="text-base line-clamp-2" data-testid={`text-supply-title-${item.id}`}>
+              {item.title}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex-1 flex flex-col gap-2 pt-0">
+            {item.unitPrice && (
+              <p className="text-lg font-semibold">${item.unitPrice}</p>
+            )}
+            <div className="space-y-1">
+              <Progress value={progressPercentage} className="h-1.5" />
+              <p className="text-xs text-muted-foreground">
+                {remainingNeeded > 0 ? `${remainingNeeded} needed` : 'Fulfilled!'}
+              </p>
+            </div>
+            <div className="flex gap-2 mt-auto pt-2">
+              {primaryLink && (
+                <Button size="sm" variant="outline" asChild className="flex-1" data-testid={`button-buy-${item.id}`}>
+                  <a href={primaryLink} target="_blank" rel="noopener noreferrer">
+                    Buy Now <ExternalLink className="w-3 h-3 ml-1" />
+                  </a>
+                </Button>
+              )}
+              <Dialog open={donatingItem?.id === item.id} onOpenChange={() => setDonatingItem(null)}>
+                <DialogTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant={primaryLink ? "ghost" : "default"}
+                    className={primaryLink ? "" : "flex-1"}
+                    onClick={() => setDonatingItem(item)}
+                    data-testid={`button-donate-${item.id}`}
+                  >
+                    <Heart className="w-4 h-4" />
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Donate: {item.title}</DialogTitle>
+                    <DialogDescription>
+                      Let us know about your donation so we can track our supply needs and thank you!
+                    </DialogDescription>
+                  </DialogHeader>
+                  <DonationForm
+                    item={item}
+                    onSubmit={(data) => recordDonationMutation.mutate({ ...data, supplyItemId: item.id })}
+                    isPending={recordDonationMutation.isPending}
+                  />
+                </DialogContent>
+              </Dialog>
+            </div>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    // Full card for other sections
+    return (
+      <Card key={item.id} className="flex flex-col" data-testid={`card-supply-${item.id}`}>
+        {item.imageUrl && (
+          <div className="relative h-48 w-full overflow-hidden rounded-t-lg bg-muted">
+            <img 
+              src={item.imageUrl} 
+              alt={item.title}
+              className="w-full h-full object-cover"
+            />
+          </div>
+        )}
+        <CardHeader className="pb-4">
+          <div className="flex items-start justify-between gap-2 mb-2">
+            <CardTitle className="text-lg line-clamp-2" data-testid={`text-supply-title-${item.id}`}>
+              {item.title}
+            </CardTitle>
+            <Badge variant={item.priority === 'high' ? 'destructive' : 'secondary'}>
+              {item.priority === 'high' ? 'High Priority' : item.priority === 'normal' ? 'Needed' : 'Low Priority'}
+            </Badge>
+          </div>
+          {item.description && (
+            <CardDescription className="line-clamp-3">{item.description}</CardDescription>
+          )}
+          {item.publicNote && (
+            <p className="text-sm text-muted-foreground italic mt-2">"{item.publicNote}"</p>
+          )}
+        </CardHeader>
+
+        <CardContent className="flex-1 flex flex-col gap-4">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Progress:</span>
+              <span className="font-medium" data-testid={`text-progress-${item.id}`}>
+                {item.quantityFulfilled} / {item.quantityNeeded}
+              </span>
+            </div>
+            <Progress value={progressPercentage} className="h-2" />
+            {remainingNeeded > 0 && (
+              <p className="text-sm text-muted-foreground">
+                <strong>{remainingNeeded}</strong> still needed
+              </p>
+            )}
+          </div>
+
+          {item.unitPrice && (
+            <div className="text-sm">
+              <span className="text-muted-foreground">Estimated cost: </span>
+              <span className="font-semibold text-lg">${item.unitPrice}</span>
+              <span className="text-muted-foreground"> per item</span>
+            </div>
+          )}
+
+          {item.category && (
+            <Badge variant="outline" className="w-fit">
+              {item.category.name}
+            </Badge>
+          )}
+
+          <div className="space-y-2 mt-auto pt-4">
+            {(item.amazonUrl || item.chewyUrl || item.petsmartUrl || item.otherRetailerUrl) && (
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-muted-foreground mb-1">Buy from:</p>
+                <div className="flex flex-wrap gap-2">
+                  {item.amazonUrl && (
+                    <Button size="sm" variant="outline" asChild className="text-xs" data-testid={`button-amazon-${item.id}`}>
+                      <a href={item.amazonUrl} target="_blank" rel="noopener noreferrer">
+                        Amazon <ExternalLink className="w-3 h-3 ml-1" />
+                      </a>
+                    </Button>
+                  )}
+                  {item.chewyUrl && (
+                    <Button size="sm" variant="outline" asChild className="text-xs" data-testid={`button-chewy-${item.id}`}>
+                      <a href={item.chewyUrl} target="_blank" rel="noopener noreferrer">
+                        Chewy <ExternalLink className="w-3 h-3 ml-1" />
+                      </a>
+                    </Button>
+                  )}
+                  {item.petsmartUrl && (
+                    <Button size="sm" variant="outline" asChild className="text-xs" data-testid={`button-petsmart-${item.id}`}>
+                      <a href={item.petsmartUrl} target="_blank" rel="noopener noreferrer">
+                        PetSmart <ExternalLink className="w-3 h-3 ml-1" />
+                      </a>
+                    </Button>
+                  )}
+                  {item.otherRetailerUrl && item.otherRetailerName && (
+                    <Button size="sm" variant="outline" asChild className="text-xs" data-testid={`button-other-retailer-${item.id}`}>
+                      <a href={item.otherRetailerUrl} target="_blank" rel="noopener noreferrer">
+                        {item.otherRetailerName} <ExternalLink className="w-3 h-3 ml-1" />
+                      </a>
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <Dialog open={donatingItem?.id === item.id} onOpenChange={() => setDonatingItem(null)}>
+              <DialogTrigger asChild>
+                <Button
+                  className="w-full"
+                  onClick={() => setDonatingItem(item)}
+                  data-testid={`button-donate-${item.id}`}
+                >
+                  <Heart className="w-4 h-4 mr-2" />
+                  I want to donate this
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Donate: {item.title}</DialogTitle>
+                  <DialogDescription>
+                    Let us know about your donation so we can track our supply needs and thank you!
+                  </DialogDescription>
+                </DialogHeader>
+                <DonationForm
+                  item={item}
+                  onSubmit={(data) => recordDonationMutation.mutate({ ...data, supplyItemId: item.id })}
+                  isPending={recordDonationMutation.isPending}
+                />
+              </DialogContent>
+            </Dialog>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
+
+  // Horizontal scrollable row component
+  const PriorityRow = ({ 
+    title, 
+    icon: Icon, 
+    items, 
+    variant = 'default',
+    showChewyButton = false
+  }: { 
+    title: string; 
+    icon: React.ElementType; 
+    items: SupplyItemWithRelations[];
+    variant?: 'urgent' | 'high' | 'default';
+    showChewyButton?: boolean;
+  }) => {
+    if (items.length === 0) return null;
+
+    const bgClass = variant === 'urgent' 
+      ? 'bg-destructive/5 border-destructive/20' 
+      : variant === 'high' 
+        ? 'bg-orange-500/5 border-orange-500/20' 
+        : 'bg-muted/30';
+
+    return (
+      <section className={`rounded-lg border p-6 ${bgClass}`} data-testid={`section-priority-${variant}`}>
+        <div className="flex items-center gap-3 mb-4">
+          <div className={`p-2 rounded-full ${
+            variant === 'urgent' ? 'bg-destructive/10 text-destructive' : 
+            variant === 'high' ? 'bg-orange-500/10 text-orange-600' : 
+            'bg-muted text-muted-foreground'
+          }`}>
+            <Icon className="w-6 h-6" />
+          </div>
+          <div>
+            <h2 className={`text-2xl font-bold ${
+              variant === 'urgent' ? 'text-destructive' : 
+              variant === 'high' ? 'text-orange-600' : ''
+            }`}>
+              {title}
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              {items.length} item{items.length !== 1 ? 's' : ''} needed
+            </p>
+          </div>
+        </div>
+
+        <div className="relative">
+          <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent" 
+               style={{ scrollBehavior: 'smooth' }}>
+            {items.map((item) => renderSupplyCard(item, true))}
+          </div>
+        </div>
+
+        {showChewyButton && donationSection?.chewyWishListUrl && (
+          <div className="mt-4 text-center">
+            <Button size="lg" asChild className="gap-2" data-testid="button-view-chewy-wishlist">
+              <a href={donationSection.chewyWishListUrl} target="_blank" rel="noopener noreferrer">
+                View Full Wish List on Chewy
+                <ExternalLink className="w-4 h-4" />
+              </a>
+            </Button>
+          </div>
+        )}
+      </section>
+    );
+  };
+
   return (
     <>
       <PublicHeader rescueName={rescueName} logoUrl={tenant?.logoUrl || undefined} />
       <div className="container mx-auto py-8 space-y-8" data-testid="page-public-wishlist">
-      <div className="text-center space-y-4">
-        <div className="flex items-center justify-center gap-3 mb-2">
-          <Package className="w-12 h-12 text-primary" />
-          <h1 className="text-4xl font-bold" data-testid="heading-wishlist">Supply Wishlist</h1>
+        <div className="text-center space-y-4">
+          <div className="flex items-center justify-center gap-3 mb-2">
+            <Package className="w-12 h-12 text-muted-foreground" />
+            <h1 className="text-4xl font-bold" data-testid="heading-wishlist">Supply Wishlist</h1>
+          </div>
+          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+            Help us care for our rescue animals by donating supplies or contributing funds to purchase needed items.
+            Every donation makes a difference!
+          </p>
         </div>
-        <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-          Help us care for our rescue animals by donating supplies or contributing funds to purchase needed items.
-          Every donation makes a difference!
-        </p>
+
+        {items.length === 0 ? (
+          <Card className="max-w-2xl mx-auto">
+            <CardContent className="flex flex-col items-center justify-center py-12">
+              <Heart className="w-16 h-16 text-muted-foreground mb-4" />
+              <p className="text-xl font-medium mb-2">Thank you!</p>
+              <p className="text-muted-foreground text-center">
+                We currently have all the supplies we need. Check back soon or consider a monetary donation.
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-8">
+            {/* Urgent Needs Row */}
+            <PriorityRow 
+              title="Our Most Urgent Needs" 
+              icon={AlertTriangle}
+              items={urgentItems}
+              variant="urgent"
+              showChewyButton={true}
+            />
+
+            {/* High Priority Row */}
+            <PriorityRow 
+              title="High Priority Items" 
+              icon={Flame}
+              items={highPriorityItems}
+              variant="high"
+            />
+
+            {/* Other Needed Items */}
+            {normalItems.length > 0 && (
+              <section>
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-2 rounded-full bg-muted">
+                    <List className="w-6 h-6 text-muted-foreground" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold">Other Needed Items</h2>
+                    <p className="text-sm text-muted-foreground">
+                      {normalItems.length} item{normalItems.length !== 1 ? 's' : ''} needed
+                    </p>
+                  </div>
+                </div>
+                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                  {normalItems.map((item) => renderSupplyCard(item, false))}
+                </div>
+              </section>
+            )}
+
+            {/* External Wishlist Links */}
+            {(donationSection?.chewyWishListUrl || donationSection?.amazonWishListUrl) && (
+              <div className="text-center py-8 border-t">
+                <h3 className="text-lg font-semibold mb-4">Shop Our Full Wishlists</h3>
+                <div className="flex justify-center gap-4 flex-wrap">
+                  {donationSection?.chewyWishListUrl && (
+                    <Button size="lg" asChild className="gap-2" data-testid="button-chewy-wishlist">
+                      <a href={donationSection.chewyWishListUrl} target="_blank" rel="noopener noreferrer">
+                        View Chewy Wishlist
+                        <ExternalLink className="w-4 h-4" />
+                      </a>
+                    </Button>
+                  )}
+                  {donationSection?.amazonWishListUrl && (
+                    <Button size="lg" variant="outline" asChild className="gap-2" data-testid="button-amazon-wishlist">
+                      <a href={donationSection.amazonWishListUrl} target="_blank" rel="noopener noreferrer">
+                        View Amazon Wishlist
+                        <ExternalLink className="w-4 h-4" />
+                      </a>
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
-
-      {categories.length > 0 && (
-        <div className="flex justify-center">
-          <Tabs value={selectedCategory} onValueChange={setSelectedCategory} className="w-full max-w-4xl">
-            <TabsList className="w-full grid grid-cols-auto">
-              <TabsTrigger value="all" data-testid="tab-category-all">All Supplies</TabsTrigger>
-              {categories.map((cat) => (
-                <TabsTrigger key={cat.id} value={cat.id} data-testid={`tab-category-${cat.id}`}>
-                  {cat.name}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </Tabs>
-        </div>
-      )}
-
-      {items.length === 0 ? (
-        <Card className="max-w-2xl mx-auto">
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <Heart className="w-16 h-16 text-muted-foreground mb-4" />
-            <p className="text-xl font-medium mb-2">Thank you!</p>
-            <p className="text-muted-foreground text-center">
-              We currently have all the supplies we need. Check back soon or consider a monetary donation.
-            </p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 justify-items-center md:justify-items-stretch">
-          {items.map((item) => {
-            const progressPercentage = getProgressPercentage(item);
-            const remainingNeeded = getRemainingNeeded(item);
-
-            return (
-              <Card key={item.id} className="flex flex-col" data-testid={`card-supply-${item.id}`}>
-                <CardHeader className="pb-4">
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <CardTitle className="text-lg line-clamp-2" data-testid={`text-supply-title-${item.id}`}>
-                      {item.title}
-                    </CardTitle>
-                    {getPriorityBadge(item.priority)}
-                  </div>
-                  {item.description && (
-                    <CardDescription className="line-clamp-3">{item.description}</CardDescription>
-                  )}
-                  {item.publicNote && (
-                    <p className="text-sm text-primary/80 italic mt-2">"{item.publicNote}"</p>
-                  )}
-                </CardHeader>
-
-                <CardContent className="flex-1 flex flex-col gap-4">
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Progress:</span>
-                      <span className="font-medium" data-testid={`text-progress-${item.id}`}>
-                        {item.quantityFulfilled} / {item.quantityNeeded}
-                      </span>
-                    </div>
-                    <Progress value={progressPercentage} className="h-2" />
-                    {remainingNeeded > 0 && (
-                      <p className="text-sm text-muted-foreground">
-                        <strong>{remainingNeeded}</strong> still needed
-                      </p>
-                    )}
-                  </div>
-
-                  {item.unitPrice && (
-                    <div className="text-sm">
-                      <span className="text-muted-foreground">Estimated cost: </span>
-                      <span className="font-semibold text-lg">${item.unitPrice}</span>
-                      <span className="text-muted-foreground"> per item</span>
-                    </div>
-                  )}
-
-                  {item.category && (
-                    <Badge variant="outline" className="w-fit">
-                      {item.category.name}
-                    </Badge>
-                  )}
-
-                  <div className="space-y-2 mt-auto pt-4">
-                    {(item.amazonUrl || item.chewyUrl || item.petsmartUrl || item.otherRetailerUrl) && (
-                      <div className="space-y-1">
-                        <p className="text-xs font-medium text-muted-foreground mb-1">Buy from:</p>
-                        <div className="flex flex-wrap gap-2">
-                          {item.amazonUrl && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              asChild
-                              className="text-xs"
-                              data-testid={`button-amazon-${item.id}`}
-                            >
-                              <a href={item.amazonUrl} target="_blank" rel="noopener noreferrer">
-                                Amazon <ExternalLink className="w-3 h-3 ml-1" />
-                              </a>
-                            </Button>
-                          )}
-                          {item.chewyUrl && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              asChild
-                              className="text-xs"
-                              data-testid={`button-chewy-${item.id}`}
-                            >
-                              <a href={item.chewyUrl} target="_blank" rel="noopener noreferrer">
-                                Chewy <ExternalLink className="w-3 h-3 ml-1" />
-                              </a>
-                            </Button>
-                          )}
-                          {item.petsmartUrl && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              asChild
-                              className="text-xs"
-                              data-testid={`button-petsmart-${item.id}`}
-                            >
-                              <a href={item.petsmartUrl} target="_blank" rel="noopener noreferrer">
-                                PetSmart <ExternalLink className="w-3 h-3 ml-1" />
-                              </a>
-                            </Button>
-                          )}
-                          {item.otherRetailerUrl && item.otherRetailerName && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              asChild
-                              className="text-xs"
-                              data-testid={`button-other-retailer-${item.id}`}
-                            >
-                              <a href={item.otherRetailerUrl} target="_blank" rel="noopener noreferrer">
-                                {item.otherRetailerName} <ExternalLink className="w-3 h-3 ml-1" />
-                              </a>
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    <Dialog open={donatingItem?.id === item.id} onOpenChange={() => setDonatingItem(null)}>
-                      <DialogTrigger asChild>
-                        <Button
-                          className="w-full"
-                          onClick={() => setDonatingItem(item)}
-                          data-testid={`button-donate-${item.id}`}
-                        >
-                          <Heart className="w-4 h-4 mr-2" />
-                          I want to donate this
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>Donate: {item.title}</DialogTitle>
-                          <DialogDescription>
-                            Let us know about your donation so we can track our supply needs and thank you!
-                          </DialogDescription>
-                        </DialogHeader>
-                        <DonationForm
-                          item={item}
-                          onSubmit={(data) => recordDonationMutation.mutate({ ...data, supplyItemId: item.id })}
-                          isPending={recordDonationMutation.isPending}
-                        />
-                      </DialogContent>
-                    </Dialog>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      )}
-    </div>
     </>
   );
 }

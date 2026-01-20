@@ -560,6 +560,35 @@ function SupplyItemForm({
           )}
         />
 
+        <FormField
+          control={form.control}
+          name="imageUrl"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Product Image URL</FormLabel>
+              <FormControl>
+                <Input {...field} placeholder="https://..." data-testid="input-item-image-url" />
+              </FormControl>
+              <FormDescription>
+                Paste a product image URL (from Amazon, Chewy, etc.) to show on the public wishlist
+              </FormDescription>
+              {field.value && (
+                <div className="mt-2 rounded-lg overflow-hidden border bg-muted w-32 h-32">
+                  <img 
+                    src={field.value} 
+                    alt="Product preview"
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
+                </div>
+              )}
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
         <div className="grid grid-cols-2 gap-4">
           <FormField
             control={form.control}

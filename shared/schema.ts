@@ -2268,6 +2268,7 @@ export const insertSupplyItemSchema = createInsertSchema(supplyItems).omit({
 }).extend({
   title: z.string().min(1).max(200),
   description: z.string().max(1000).optional(),
+  imageUrl: z.string().url().optional().or(z.literal("")),
   quantityNeeded: z.number().int().min(1),
   unitPrice: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
   amazonUrl: z.string().url().optional().or(z.literal("")),
