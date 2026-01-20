@@ -5,7 +5,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useSEO } from '@/hooks/useSEO';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -140,18 +140,16 @@ export default function PublicWishlist() {
                   </a>
                 </Button>
               )}
+              <Button
+                size="sm"
+                variant={primaryLink ? "ghost" : "default"}
+                className={primaryLink ? "" : "flex-1"}
+                onClick={() => setDonatingItem(item)}
+                data-testid={`button-donate-${item.id}`}
+              >
+                <Heart className="w-4 h-4" />
+              </Button>
               <Dialog open={donatingItem?.id === item.id} onOpenChange={() => setDonatingItem(null)}>
-                <DialogTrigger asChild>
-                  <Button
-                    size="sm"
-                    variant={primaryLink ? "ghost" : "default"}
-                    className={primaryLink ? "" : "flex-1"}
-                    onClick={() => setDonatingItem(item)}
-                    data-testid={`button-donate-${item.id}`}
-                  >
-                    <Heart className="w-4 h-4" />
-                  </Button>
-                </DialogTrigger>
                 <DialogContent>
                   <DialogHeader>
                     <DialogTitle>Donate: {item.title}</DialogTitle>
@@ -268,17 +266,15 @@ export default function PublicWishlist() {
               </div>
             )}
 
+            <Button
+              className="w-full"
+              onClick={() => setDonatingItem(item)}
+              data-testid={`button-donate-${item.id}`}
+            >
+              <Heart className="w-4 h-4 mr-2" />
+              I want to donate this
+            </Button>
             <Dialog open={donatingItem?.id === item.id} onOpenChange={() => setDonatingItem(null)}>
-              <DialogTrigger asChild>
-                <Button
-                  className="w-full"
-                  onClick={() => setDonatingItem(item)}
-                  data-testid={`button-donate-${item.id}`}
-                >
-                  <Heart className="w-4 h-4 mr-2" />
-                  I want to donate this
-                </Button>
-              </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>Donate: {item.title}</DialogTitle>
