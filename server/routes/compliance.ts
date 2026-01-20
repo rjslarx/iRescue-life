@@ -9,6 +9,7 @@ import {
   reviewRequests,
   payments,
   donors,
+  supplyDonations,
   SAC_INTAKE_CATEGORIES,
   SAC_OUTCOME_CATEGORIES,
   insertSacMonthlyReportSchema,
@@ -1278,10 +1279,24 @@ router.get('/annual-summary/export-csv', requireTenant, requireAuth, async (req,
  * GET /api/compliance/public/recent-donations
  * Get recent public donations for the donation widget (no auth required)
  * Returns donor first name + last initial, amount, and location
+ * Includes both regular donations (payments) and wishlist donations (supply donations)
  */
 router.get('/public/recent-donations', requireTenant, async (req, res, next) => {
   try {
     const limit = Math.min(parseInt(req.query.limit as string) || 10, 20);
+    
+    // Helper function to format donor name for privacy
+    const formatDisplayName = (name: string | null) => {
+      const nameParts = (name || 'Anonymous').split(' ').filter(Boolean);
+      let displayName = 'Anonymous';
+      if (nameParts.length >= 1 && nameParts[0].toLowerCase() !== 'anonymous') {
+        displayName = nameParts[0];
+        if (nameParts.length >= 2 && nameParts[nameParts.length - 1]) {
+          displayName += ` ${nameParts[nameParts.length - 1][0]}.`;
+        }
+      }
+      return displayName;
+    };
     
     // Fetch recent successful public payments with donor info
     const recentPayments = await db
@@ -1306,18 +1321,28 @@ router.get('/public/recent-donations', requireTenant, async (req, res, next) => 
       .orderBy(desc(payments.createdAt))
       .limit(limit);
 
-    // Format for public display with privacy protection
-    const formattedDonations = recentPayments.map(payment => {
-      // Parse donor name to first name + last initial
-      const nameParts = (payment.donorName || 'Anonymous').split(' ').filter(Boolean);
-      let displayName = 'Anonymous';
-      if (nameParts.length >= 1 && nameParts[0].toLowerCase() !== 'anonymous') {
-        displayName = nameParts[0];
-        if (nameParts.length >= 2 && nameParts[nameParts.length - 1]) {
-          displayName += ` ${nameParts[nameParts.length - 1][0]}.`;
-        }
-      }
+    // Fetch recent wishlist donations (supply donations paid via Stripe)
+    // Include both 'monetary' and 'both' donation types
+    const recentWishlistDonations = await db
+      .select({
+        id: supplyDonations.id,
+        amount: supplyDonations.amount,
+        donorName: supplyDonations.donorName,
+        createdAt: supplyDonations.createdAt,
+      })
+      .from(supplyDonations)
+      .where(
+        and(
+          eq(supplyDonations.tenantId, req.tenant!.id),
+          eq(supplyDonations.paymentMethod, 'stripe'),
+          sql`${supplyDonations.donationType} IN ('monetary', 'both')`
+        )
+      )
+      .orderBy(desc(supplyDonations.createdAt))
+      .limit(limit);
 
+    // Format regular payments for public display
+    const formattedPayments = recentPayments.map(payment => {
       // Format location
       let location = '';
       if (payment.donorCity && payment.donorState) {
@@ -1333,14 +1358,29 @@ router.get('/public/recent-donations', requireTenant, async (req, res, next) => 
 
       return {
         id: payment.id,
-        displayName,
+        displayName: formatDisplayName(payment.donorName),
         amount: payment.amount, // in cents
         location: location || null,
         createdAt: payment.createdAt,
       };
     });
 
-    res.json(formattedDonations);
+    // Format wishlist donations for public display
+    const formattedWishlistDonations = recentWishlistDonations.map(donation => ({
+      id: donation.id,
+      displayName: formatDisplayName(donation.donorName),
+      // Supply donations store amount in dollars (numeric), convert to cents
+      amount: donation.amount ? Math.round(parseFloat(donation.amount) * 100) : 0,
+      location: null, // Wishlist donations don't have location info
+      createdAt: donation.createdAt,
+    }));
+
+    // Merge and sort by createdAt descending, then take the limit
+    const allDonations = [...formattedPayments, ...formattedWishlistDonations]
+      .sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime())
+      .slice(0, limit);
+
+    res.json(allDonations);
   } catch (error) {
     next(error);
   }

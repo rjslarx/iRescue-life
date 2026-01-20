@@ -16936,6 +16936,45 @@ Submitted: ${new Date().toLocaleString()}
             });
           }
 
+          // Handle supply item (wishlist) donations
+          if (session.metadata?.supplyItemId && isPaymentComplete) {
+            try {
+              const { supplyDonations, supplyItems } = await import('@shared/schema');
+              
+              const supplyItemId = session.metadata.supplyItemId;
+              const quantity = parseInt(session.metadata.quantity || '1', 10);
+              
+              // Create supply donation record
+              await db.insert(supplyDonations).values({
+                tenantId: tenant.id,
+                supplyItemId,
+                donorName: customerName,
+                donorEmail: customerEmail,
+                quantity,
+                amount: ((session.amount_total || 0) / 100).toFixed(2),
+                currency: session.currency || 'usd',
+                donationType: 'monetary',
+                paymentMethod: 'stripe',
+                stripePaymentIntentId: session.payment_intent,
+                fulfillmentStatus: 'received',
+              });
+
+              // Increment the supply item's fulfilled quantity
+              await db
+                .update(supplyItems)
+                .set({
+                  quantityFulfilled: sql`${supplyItems.quantityFulfilled} + ${quantity}`,
+                  updatedAt: new Date(),
+                })
+                .where(eq(supplyItems.id, supplyItemId));
+
+              console.log(`[Webhook] Supply item donation recorded: ${quantity}x ${session.metadata.supplyItemTitle} from ${customerName}`);
+            } catch (supplyError) {
+              // Don't fail the webhook if supply donation recording fails
+              console.error('[Webhook] Failed to record supply donation:', supplyError);
+            }
+          }
+
           break;
         }
 
@@ -23593,6 +23632,124 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
 
       res.json({ success: true });
     } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/supply-items/:id/checkout
+   * Create a Stripe checkout session for a supply item donation (public endpoint)
+   */
+  app.post('/api/supply-items/:id/checkout', requireTenant, async (req, res, next) => {
+    try {
+      const { supplyItems } = await import('@shared/schema');
+      const { stripeService } = await import('./lib/stripe-service');
+
+      // Get the supply item
+      const [item] = await db
+        .select()
+        .from(supplyItems)
+        .where(and(
+          eq(supplyItems.id, req.params.id),
+          eq(supplyItems.tenantId, req.tenant!.id),
+          eq(supplyItems.status, 'active')
+        ))
+        .limit(1);
+
+      if (!item) {
+        return res.status(404).json({ error: 'Supply item not found or not available' });
+      }
+
+      // Get tenant for Stripe config
+      const [tenant] = await db
+        .select()
+        .from(tenants)
+        .where(eq(tenants.id, req.tenant!.id))
+        .limit(1);
+
+      if (!tenant || !tenant.stripeEnabled) {
+        return res.status(400).json({ 
+          error: "Stripe is not configured for this rescue" 
+        });
+      }
+
+      // Validate item has a price
+      if (!item.unitPrice || parseFloat(item.unitPrice) <= 0) {
+        return res.status(400).json({ 
+          error: "This item does not have a price set for donations" 
+        });
+      }
+
+      const checkoutSchema = z.object({
+        quantity: z.number().int().min(1).max(100).default(1),
+        customerEmail: z.string().email().optional(),
+        donorCoversFees: z.boolean().default(false),
+      });
+
+      const data = checkoutSchema.parse(req.body);
+      
+      // Calculate total amount in cents
+      const itemPriceCents = Math.round(parseFloat(item.unitPrice) * 100);
+      const baseAmount = itemPriceCents * data.quantity;
+
+      const { calculateDonorCoversFees, calculatePlatformFee, getPlatformFeePercent } = await import('./config/platform');
+
+      // If donor covers fees, calculate the grossed-up amount
+      let chargeAmount = baseAmount;
+      let feesCovered = 0;
+      if (data.donorCoversFees) {
+        const feeCalc = calculateDonorCoversFees(baseAmount, tenant.subscriptionTier || 'free');
+        chargeAmount = feeCalc.totalAmount;
+        feesCovered = feeCalc.feesCovered;
+      }
+
+      // Calculate platform fee
+      const platformFeeAmount = calculatePlatformFee(chargeAmount, tenant.subscriptionTier || 'free');
+      const platformFeePercent = getPlatformFeePercent(tenant.subscriptionTier || 'free');
+
+      // Build URLs
+      const isCustomDomain = tenant.customDomain && tenant.customDomainVerified;
+      const baseUrl = isCustomDomain 
+        ? `https://${tenant.customDomain}`
+        : `${req.protocol}://${req.get('host')}`;
+      const tenantPath = isCustomDomain ? '' : (tenant.subdomain ? `/${tenant.subdomain}` : '');
+      
+      const session = await stripeService.createCheckoutSession(tenant, {
+        amount: chargeAmount,
+        currency: item.currency.toLowerCase(),
+        customerEmail: data.customerEmail,
+        isRecurring: false,
+        successUrl: `${baseUrl}${tenantPath}/wishlist?donation=success&session_id={CHECKOUT_SESSION_ID}`,
+        cancelUrl: `${baseUrl}${tenantPath}/wishlist?donation=cancelled`,
+        platformFeeAmount: platformFeeAmount,
+        connectedAccountId: tenant.stripeConnectedAccountId || undefined,
+        metadata: {
+          supplyItemId: item.id,
+          supplyItemTitle: item.title.substring(0, 100), // Stripe metadata has length limits
+          quantity: data.quantity.toString(),
+          baseAmount: baseAmount.toString(),
+          chargeAmount: chargeAmount.toString(),
+          donorCoveredFees: data.donorCoversFees.toString(),
+          feesCovered: feesCovered.toString(),
+          platformFeeAmount: platformFeeAmount.toString(),
+          platformFeePercent: platformFeePercent.toString(),
+          platformFeeCollected: (tenant.stripeConnectedAccountId && platformFeeAmount > 0 ? 'true' : 'false'),
+        },
+      });
+
+      if (!session) {
+        return res.status(500).json({ 
+          error: "Failed to create checkout session" 
+        });
+      }
+
+      res.json({ sessionId: session.id, url: session.url });
+    } catch (error: any) {
+      console.error('[Supply Item Checkout Error]', {
+        message: error?.message,
+        itemId: req.params.id,
+        tenantId: req.tenant?.id,
+      });
       next(error);
     }
   });

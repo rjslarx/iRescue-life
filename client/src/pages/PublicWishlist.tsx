@@ -1,20 +1,17 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
+import { useLocation } from 'wouter';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { useSEO } from '@/hooks/useSEO';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm } from 'react-hook-form';
-import { z } from 'zod';
-import { Package, Heart, ExternalLink, AlertTriangle, Flame, List } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
+import { Package, Heart, ExternalLink, AlertTriangle, Flame, List, Loader2 } from 'lucide-react';
 import type { SupplyItem, SupplyCategory, Tenant } from '@shared/schema';
 import PublicHeader from '@/components/PublicHeader';
 
@@ -22,18 +19,12 @@ type SupplyItemWithRelations = SupplyItem & {
   category: SupplyCategory | null;
 };
 
-const donationFormSchema = z.object({
-  donorName: z.string().min(1, 'Name is required').max(100),
-  donorEmail: z.string().email('Valid email required').optional().or(z.literal('')),
-  quantity: z.coerce.number().int().min(1, 'Quantity must be at least 1'),
-  donorMessage: z.string().max(500).optional(),
-  donationType: z.enum(['physical', 'monetary', 'both']),
-  amount: z.string().regex(/^\d+(\.\d{1,2})?$/).optional().or(z.literal('')),
-});
-
 export default function PublicWishlist() {
   const { toast } = useToast();
+  const [location] = useLocation();
   const [donatingItem, setDonatingItem] = useState<SupplyItemWithRelations | null>(null);
+  const [donorCoversFees, setDonorCoversFees] = useState(false);
+  const [quantity, setQuantity] = useState(1);
 
   const { data: tenantData } = useQuery<{ tenant: Tenant }>({
     queryKey: ['/api/tenant'],
@@ -51,26 +42,54 @@ export default function PublicWishlist() {
     amazonWishListUrl?: string;
   } | undefined;
 
+  // Handle donation success/cancelled from URL params
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const donationStatus = urlParams.get('donation');
+    
+    if (donationStatus === 'success') {
+      toast({
+        title: 'Thank you for your donation!',
+        description: 'Your generous support helps us care for animals in need.',
+      });
+      // Clear the URL params
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (donationStatus === 'cancelled') {
+      toast({
+        title: 'Donation cancelled',
+        description: 'No worries! You can donate anytime.',
+        variant: 'default',
+      });
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [toast]);
+
   useSEO({
     title: `Supply Wishlist - ${rescueName}`,
     description: `Support ${rescueName} by donating needed supplies. Browse our wishlist and help us provide essential items for animals in our care.`,
     siteName: rescueName,
   });
 
-  // Record donation mutation
-  const recordDonationMutation = useMutation({
-    mutationFn: async (data: z.infer<typeof donationFormSchema> & { supplyItemId: string }) => {
-      return apiRequest('POST', '/api/supply-donations', data);
-    },
-    onSuccess: () => {
-      toast({
-        title: 'Thank you for your donation!',
-        description: 'Your support means the world to our animals.',
+  // Create Stripe checkout session for supply item donation
+  const checkoutMutation = useMutation({
+    mutationFn: async ({ itemId, quantity, donorCoversFees }: { itemId: string; quantity: number; donorCoversFees: boolean }) => {
+      const response = await apiRequest('POST', `/api/supply-items/${itemId}/checkout`, {
+        quantity,
+        donorCoversFees,
       });
-      setDonatingItem(null);
+      return response.json();
+    },
+    onSuccess: (data: { url: string }) => {
+      if (data.url) {
+        window.location.href = data.url;
+      }
     },
     onError: (error: Error) => {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      toast({ 
+        title: 'Unable to process donation', 
+        description: error.message || 'Please try again or contact support.', 
+        variant: 'destructive' 
+      });
     },
   });
 
@@ -149,18 +168,32 @@ export default function PublicWishlist() {
               >
                 <Heart className="w-4 h-4" />
               </Button>
-              <Dialog open={donatingItem?.id === item.id} onOpenChange={() => setDonatingItem(null)}>
+              <Dialog open={donatingItem?.id === item.id} onOpenChange={(open) => {
+                if (!open) {
+                  setDonatingItem(null);
+                  setQuantity(1);
+                  setDonorCoversFees(false);
+                }
+              }}>
                 <DialogContent>
                   <DialogHeader>
                     <DialogTitle>Donate: {item.title}</DialogTitle>
                     <DialogDescription>
-                      Let us know about your donation so we can track our supply needs and thank you!
+                      Support our animals by donating the cost of this item. Payment is processed securely through Stripe.
                     </DialogDescription>
                   </DialogHeader>
-                  <DonationForm
+                  <CheckoutForm 
                     item={item}
-                    onSubmit={(data) => recordDonationMutation.mutate({ ...data, supplyItemId: item.id })}
-                    isPending={recordDonationMutation.isPending}
+                    quantity={quantity}
+                    setQuantity={setQuantity}
+                    donorCoversFees={donorCoversFees}
+                    setDonorCoversFees={setDonorCoversFees}
+                    onCheckout={() => checkoutMutation.mutate({ 
+                      itemId: item.id, 
+                      quantity, 
+                      donorCoversFees 
+                    })}
+                    isPending={checkoutMutation.isPending}
                   />
                 </DialogContent>
               </Dialog>
@@ -274,18 +307,32 @@ export default function PublicWishlist() {
               <Heart className="w-4 h-4 mr-2" />
               I want to donate this
             </Button>
-            <Dialog open={donatingItem?.id === item.id} onOpenChange={() => setDonatingItem(null)}>
+            <Dialog open={donatingItem?.id === item.id} onOpenChange={(open) => {
+              if (!open) {
+                setDonatingItem(null);
+                setQuantity(1);
+                setDonorCoversFees(false);
+              }
+            }}>
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>Donate: {item.title}</DialogTitle>
                   <DialogDescription>
-                    Let us know about your donation so we can track our supply needs and thank you!
+                    Support our animals by donating the cost of this item. Payment is processed securely through Stripe.
                   </DialogDescription>
                 </DialogHeader>
-                <DonationForm
+                <CheckoutForm 
                   item={item}
-                  onSubmit={(data) => recordDonationMutation.mutate({ ...data, supplyItemId: item.id })}
-                  isPending={recordDonationMutation.isPending}
+                  quantity={quantity}
+                  setQuantity={setQuantity}
+                  donorCoversFees={donorCoversFees}
+                  setDonorCoversFees={setDonorCoversFees}
+                  onCheckout={() => checkoutMutation.mutate({ 
+                    itemId: item.id, 
+                    quantity, 
+                    donorCoversFees 
+                  })}
+                  isPending={checkoutMutation.isPending}
                 />
               </DialogContent>
             </Dialog>
@@ -456,155 +503,128 @@ export default function PublicWishlist() {
   );
 }
 
-function DonationForm({
+function CheckoutForm({
   item,
-  onSubmit,
+  quantity,
+  setQuantity,
+  donorCoversFees,
+  setDonorCoversFees,
+  onCheckout,
   isPending,
 }: {
   item: SupplyItemWithRelations;
-  onSubmit: (data: z.infer<typeof donationFormSchema>) => void;
+  quantity: number;
+  setQuantity: (q: number) => void;
+  donorCoversFees: boolean;
+  setDonorCoversFees: (v: boolean) => void;
+  onCheckout: () => void;
   isPending: boolean;
 }) {
-  const form = useForm<z.infer<typeof donationFormSchema>>({
-    resolver: zodResolver(donationFormSchema),
-    defaultValues: {
-      donorName: '',
-      donorEmail: '',
-      quantity: 1,
-      donorMessage: '',
-      donationType: 'physical',
-      amount: item.unitPrice || '',
-    },
-  });
-
-  const donationType = form.watch('donationType');
-  const quantity = form.watch('quantity');
-
-  return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-        <FormField
-          control={form.control}
-          name="donorName"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Your Name *</FormLabel>
-              <FormControl>
-                <Input {...field} placeholder="John Doe" data-testid="input-donor-name" />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="donorEmail"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Email (optional)</FormLabel>
-              <FormControl>
-                <Input {...field} type="email" placeholder="john@example.com" data-testid="input-donor-email" />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="donationType"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Donation Type *</FormLabel>
-              <div className="grid grid-cols-3 gap-2">
-                <Button
-                  type="button"
-                  variant={field.value === 'physical' ? 'default' : 'outline'}
-                  onClick={() => field.onChange('physical')}
-                  data-testid="button-donation-type-physical"
-                >
-                  Physical Item
-                </Button>
-                <Button
-                  type="button"
-                  variant={field.value === 'monetary' ? 'default' : 'outline'}
-                  onClick={() => field.onChange('monetary')}
-                  data-testid="button-donation-type-monetary"
-                >
-                  Money
-                </Button>
-                <Button
-                  type="button"
-                  variant={field.value === 'both' ? 'default' : 'outline'}
-                  onClick={() => field.onChange('both')}
-                  data-testid="button-donation-type-both"
-                >
-                  Both
-                </Button>
-              </div>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="quantity"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Quantity *</FormLabel>
-              <FormControl>
-                <Input {...field} type="number" min="1" data-testid="input-donation-quantity" />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        {(donationType === 'monetary' || donationType === 'both') && (
-          <FormField
-            control={form.control}
-            name="amount"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Donation Amount (USD)</FormLabel>
-                <FormControl>
-                  <Input
-                    {...field}
-                    placeholder={item.unitPrice ? `${parseFloat(item.unitPrice) * quantity}` : '25.00'}
-                    data-testid="input-donation-amount"
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        )}
-
-        <FormField
-          control={form.control}
-          name="donorMessage"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Message (optional)</FormLabel>
-              <FormControl>
-                <Textarea {...field} placeholder="Thank you for all you do!" rows={3} data-testid="input-donor-message" />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <div className="pt-4">
-          <Button type="submit" disabled={isPending} className="w-full" data-testid="button-submit-donation">
-            {isPending ? 'Recording...' : 'Record My Donation'}
-          </Button>
-          <p className="text-xs text-muted-foreground mt-2 text-center">
-            This form records your intent to donate. We'll follow up with delivery instructions.
+  const itemPrice = item.unitPrice ? parseFloat(item.unitPrice) : 0;
+  const totalAmount = itemPrice * quantity;
+  const remainingNeeded = Math.max(0, (item.quantityNeeded || 0) - (item.quantityFulfilled || 0));
+  
+  if (itemPrice <= 0) {
+    return (
+      <div className="space-y-4">
+        <div className="p-4 bg-muted rounded-lg">
+          <p className="text-sm text-muted-foreground">
+            This item doesn't have a price set for online donations. 
+            Please use the retailer links above to purchase and ship this item directly.
           </p>
         </div>
-      </form>
-    </Form>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-muted/50 p-4 rounded-lg space-y-2">
+        <div className="flex justify-between text-sm">
+          <span className="text-muted-foreground">Price per item:</span>
+          <span className="font-medium">${itemPrice.toFixed(2)}</span>
+        </div>
+        <div className="flex justify-between text-sm">
+          <span className="text-muted-foreground">Still needed:</span>
+          <span className="font-medium">{remainingNeeded} items</span>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="checkout-quantity">How many would you like to donate?</Label>
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={() => setQuantity(Math.max(1, quantity - 1))}
+            disabled={quantity <= 1}
+            data-testid="button-quantity-decrease"
+          >
+            -
+          </Button>
+          <span className="w-12 text-center font-medium" data-testid="text-checkout-quantity">{quantity}</span>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={() => setQuantity(Math.min(remainingNeeded || 100, quantity + 1))}
+            disabled={quantity >= (remainingNeeded || 100)}
+            data-testid="button-quantity-increase"
+          >
+            +
+          </Button>
+        </div>
+      </div>
+
+      <div className="flex items-center space-x-2">
+        <Checkbox
+          id="cover-fees"
+          checked={donorCoversFees}
+          onCheckedChange={(checked) => setDonorCoversFees(checked === true)}
+          data-testid="checkbox-cover-fees"
+        />
+        <Label htmlFor="cover-fees" className="text-sm cursor-pointer">
+          I'd like to cover the processing fees so 100% goes to the animals
+        </Label>
+      </div>
+
+      <div className="bg-primary/5 p-4 rounded-lg">
+        <div className="flex justify-between items-center">
+          <span className="font-medium">Total Donation:</span>
+          <span className="text-2xl font-bold" data-testid="text-checkout-total">
+            ${totalAmount.toFixed(2)}
+          </span>
+        </div>
+        {donorCoversFees && (
+          <p className="text-xs text-muted-foreground mt-1">
+            + processing fees (calculated at checkout)
+          </p>
+        )}
+      </div>
+
+      <Button 
+        className="w-full" 
+        onClick={onCheckout}
+        disabled={isPending}
+        data-testid="button-checkout"
+      >
+        {isPending ? (
+          <>
+            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            Processing...
+          </>
+        ) : (
+          <>
+            <Heart className="w-4 h-4 mr-2" />
+            Donate ${totalAmount.toFixed(2)} via Stripe
+          </>
+        )}
+      </Button>
+      
+      <p className="text-xs text-muted-foreground text-center">
+        Secure payment powered by Stripe. Your donation is tax-deductible.
+      </p>
+    </div>
   );
 }
