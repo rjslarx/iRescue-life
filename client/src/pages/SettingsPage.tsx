@@ -281,6 +281,30 @@ export default function SettingsPage() {
     },
   });
 
+  // Enable transfer agreement toggle mutation
+  const updateEnableTransferAgreementMutation = useMutation({
+    mutationFn: async (enableTransferAgreement: boolean) => {
+      const response = await apiRequest('PATCH', '/api/tenant/settings', { enableTransferAgreement });
+      return response.json();
+    },
+    onSuccess: (_, enableTransferAgreement) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/tenant/settings'] });
+      toast({
+        title: enableTransferAgreement ? "Transfer agreements enabled" : "Transfer agreements disabled",
+        description: enableTransferAgreement 
+          ? "A transfer agreement can be generated for transport events." 
+          : "No transfer agreements will be generated.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to update transfer agreement settings",
+        description: error.message || "Please try again later.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const updateTwilioMutation = useMutation({
     mutationFn: async (settings: TwilioSettingsData) => {
       const response = await apiRequest('PATCH', '/api/tenant/settings/twilio', settings);
@@ -2017,6 +2041,37 @@ export default function SettingsPage() {
                         <AlertDescription>
                           The spay/neuter agreement will only appear for animals that are not already spayed or neutered, 
                           and only when staff sets a spay/neuter deadline during checkout.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+
+                    <Separator />
+
+                    {/* Transfer Agreement Toggle */}
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="enable-transfer-agreement-toggle" className="text-base font-medium">
+                          Enable Transfer Agreements
+                        </Label>
+                        <p className="text-sm text-muted-foreground">
+                          When enabled, you can generate transfer agreements for transport events. 
+                          These agreements document the transfer of animal ownership between organizations.
+                        </p>
+                      </div>
+                      <Switch
+                        id="enable-transfer-agreement-toggle"
+                        checked={data?.tenant?.enableTransferAgreement || false}
+                        disabled={updateEnableTransferAgreementMutation.isPending}
+                        onCheckedChange={(checked) => updateEnableTransferAgreementMutation.mutate(checked)}
+                        data-testid="switch-enable-transfer-agreement"
+                      />
+                    </div>
+                    {data?.tenant?.enableTransferAgreement && (
+                      <Alert>
+                        <Info className="h-4 w-4" />
+                        <AlertDescription>
+                          Transfer agreements can be generated from the Collaboration Hub when viewing transport details.
+                          Many organizations already have existing agreements with partners and may not need this feature.
                         </AlertDescription>
                       </Alert>
                     )}

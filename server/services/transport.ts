@@ -11,6 +11,9 @@ import {
   pendingTransfers,
   animals,
   vaccineRecords,
+  procedureLogs,
+  diagnosticTests,
+  medicalPrescriptions,
   medicalExams,
   medicalFiles,
   tenants,
@@ -1873,6 +1876,335 @@ export class TransportService {
         warnings,
       },
       animals: animalResults,
+    };
+  }
+
+  /**
+   * Generate Medical Packet for a single animal
+   * Includes vaccination history, procedures, and medical notes
+   */
+  static async generateMedicalPacket(
+    tenantId: string,
+    transportId: string,
+    animalId: string
+  ): Promise<{
+    animal: any;
+    vaccinations: any[];
+    procedures: any[];
+    diagnostics: any[];
+    prescriptions: any[];
+    exams: any[];
+    generatedAt: string;
+    transportInfo: any;
+  }> {
+    const transport = await this.getTransport(tenantId, transportId);
+    if (!transport) {
+      throw new Error('Transport not found');
+    }
+
+    // Get animal info
+    const [animal] = await db
+      .select()
+      .from(animals)
+      .where(and(
+        eq(animals.id, animalId),
+        eq(animals.tenantId, tenantId)
+      ));
+
+    if (!animal) {
+      throw new Error('Animal not found');
+    }
+
+    // Get vaccination records
+    const vaccinations = await db
+      .select()
+      .from(vaccineRecords)
+      .where(and(
+        eq(vaccineRecords.animalId, animalId),
+        eq(vaccineRecords.tenantId, tenantId)
+      ))
+      .orderBy(desc(vaccineRecords.dateAdministered));
+
+    // Get procedures
+    const procedures = await db
+      .select()
+      .from(procedureLogs)
+      .where(and(
+        eq(procedureLogs.animalId, animalId),
+        eq(procedureLogs.tenantId, tenantId)
+      ))
+      .orderBy(desc(procedureLogs.procedureDate));
+
+    // Get diagnostics
+    const diagnostics = await db
+      .select()
+      .from(diagnosticTests)
+      .where(and(
+        eq(diagnosticTests.animalId, animalId),
+        eq(diagnosticTests.tenantId, tenantId)
+      ))
+      .orderBy(desc(diagnosticTests.testDate));
+
+    // Get prescriptions
+    const prescriptions = await db
+      .select()
+      .from(medicalPrescriptions)
+      .where(and(
+        eq(medicalPrescriptions.animalId, animalId),
+        eq(medicalPrescriptions.tenantId, tenantId)
+      ))
+      .orderBy(desc(medicalPrescriptions.startDate));
+
+    // Get exams
+    const exams = await db
+      .select()
+      .from(medicalExams)
+      .where(and(
+        eq(medicalExams.animalId, animalId),
+        eq(medicalExams.tenantId, tenantId)
+      ))
+      .orderBy(desc(medicalExams.examDate));
+
+    return {
+      animal: {
+        id: animal.id,
+        name: animal.name,
+        species: animal.species,
+        breed: animal.breed,
+        age: animal.age,
+        sex: animal.sex,
+        weight: animal.weight,
+        microchipNumber: animal.microchipNumber,
+        colorMarkings: animal.colorMarkings,
+        spayedNeutered: animal.spayedNeutered,
+        intakeDate: animal.intakeDate,
+      },
+      vaccinations,
+      procedures,
+      diagnostics,
+      prescriptions,
+      exams,
+      generatedAt: new Date().toISOString(),
+      transportInfo: {
+        id: transport.id,
+        name: transport.name,
+        departureDate: transport.departureDate,
+        destination: transport.destinationLocation,
+        partnerOrganization: transport.partnerOrganizationName,
+      },
+    };
+  }
+
+  /**
+   * Toggle microchip release status for a manifest item
+   */
+  static async toggleMicrochipRelease(
+    tenantId: string,
+    itemId: string,
+    completed: boolean,
+    userId: string
+  ): Promise<{ success: boolean; item: any }> {
+    const [updated] = await db
+      .update(transportManifestItems)
+      .set({
+        microchipReleaseCompleted: completed,
+        microchipReleaseCompletedAt: completed ? new Date() : null,
+        microchipReleaseConfirmedBy: completed ? userId : null,
+        updatedAt: new Date(),
+      })
+      .where(and(
+        eq(transportManifestItems.id, itemId),
+        eq(transportManifestItems.tenantId, tenantId)
+      ))
+      .returning();
+
+    if (!updated) {
+      throw new Error('Manifest item not found');
+    }
+
+    return { success: true, item: updated };
+  }
+
+  /**
+   * Generate batch medical packet for all animals on a transport manifest
+   */
+  static async generateBatchMedicalPacket(
+    tenantId: string,
+    transportId: string
+  ): Promise<{
+    transport: any;
+    animals: any[];
+    generatedAt: string;
+  }> {
+    const transport = await this.getTransport(tenantId, transportId);
+    if (!transport) {
+      throw new Error('Transport not found');
+    }
+
+    const manifestItems = await this.listManifestItems(tenantId, transportId);
+    
+    const animalPackets = await Promise.all(
+      manifestItems.map(async (item) => {
+        try {
+          return await this.generateMedicalPacket(tenantId, transportId, item.animalId);
+        } catch {
+          return null;
+        }
+      })
+    );
+
+    return {
+      transport: {
+        id: transport.id,
+        name: transport.name,
+        departureDate: transport.departureDate,
+        destination: transport.destinationLocation,
+        partnerOrganization: transport.partnerOrganizationName,
+      },
+      animals: animalPackets.filter(Boolean),
+      generatedAt: new Date().toISOString(),
+    };
+  }
+
+  // Generate Transfer Agreement for org-to-org ownership transfer
+  static async generateTransferAgreement(
+    tenantId: string,
+    transportId: string
+  ): Promise<{
+    transferringOrganization: any;
+    receivingOrganization: any;
+    transportInfo: any;
+    animals: any[];
+    agreementDate: string;
+    generatedAt: string;
+    agreementTerms: string[];
+  }> {
+    // Get transport with all details
+    const transport = await this.getTransport(tenantId, transportId);
+    if (!transport) {
+      throw new Error('Transport not found');
+    }
+
+    // Get tenant (transferring org) info
+    const [tenant] = await db
+      .select({
+        id: tenants.id,
+        name: tenants.name,
+        contactEmail: tenants.contactEmail,
+        contactPhone: tenants.contactPhone,
+        footerAddress: tenants.footerAddress,
+      })
+      .from(tenants)
+      .where(eq(tenants.id, tenantId));
+
+    // Get manifest items with animal details
+    const manifestItems = await db
+      .select({
+        id: transportManifestItems.id,
+        animalId: transportManifestItems.animalId,
+        animal: {
+          id: animals.id,
+          name: animals.name,
+          species: animals.species,
+          breed: animals.breed,
+          gender: animals.gender,
+          age: animals.age,
+          color: animals.color,
+          microchipNumber: animals.microchipNumber,
+          status: animals.status,
+        },
+      })
+      .from(transportManifestItems)
+      .leftJoin(animals, eq(animals.id, transportManifestItems.animalId))
+      .where(and(
+        eq(transportManifestItems.transportId, transportId),
+        eq(transportManifestItems.tenantId, tenantId),
+        ne(transportManifestItems.status, 'removed')
+      ))
+      .orderBy(transportManifestItems.addedAt);
+
+    // Determine transport direction for agreement language
+    const isOutbound = transport.transportType === 'outbound';
+    
+    // Standard transfer agreement terms
+    const agreementTerms = [
+      `${isOutbound ? 'RELEASING' : 'RECEIVING'} ORGANIZATION agrees to transfer ownership of the animal(s) listed herein.`,
+      'All animals are transferred in their current condition with no express or implied warranties.',
+      'The receiving organization assumes full responsibility for the care, medical treatment, and placement of all transferred animals.',
+      'The receiving organization agrees to make reasonable efforts to place animals in appropriate permanent homes.',
+      'Neither party shall be liable for any injury or illness that may occur after the transfer is complete.',
+      'This agreement shall be governed by the laws of the states in which both organizations operate.',
+      'Both parties acknowledge receipt of medical records and vaccination histories for all transferred animals.',
+      'The transferring organization releases all claims to the animals upon signature of this agreement.',
+    ];
+
+    // Calculate total transfer fees if applicable
+    const totalPullFee = transport.pullFee ? parseFloat(transport.pullFee) * manifestItems.length : 0;
+    const transportFee = transport.transportFee ? parseFloat(transport.transportFee) : 0;
+
+    return {
+      transferringOrganization: isOutbound ? {
+        name: tenant?.name || 'Unknown Organization',
+        contactEmail: tenant?.contactEmail || '',
+        contactPhone: tenant?.contactPhone || '',
+        address: transport.originPhysicalAddress || tenant?.footerAddress || '',
+      } : {
+        name: transport.partnerOrganizationName || 'Partner Organization',
+        contactName: transport.partnerContactName || '',
+        contactEmail: transport.partnerContactEmail || '',
+        contactPhone: transport.partnerContactPhone || '',
+        address: transport.originPhysicalAddress || '',
+      },
+      receivingOrganization: isOutbound ? {
+        name: transport.partnerOrganizationName || 'Partner Organization',
+        contactName: transport.partnerContactName || '',
+        contactEmail: transport.partnerContactEmail || '',
+        contactPhone: transport.partnerContactPhone || '',
+        address: transport.destinationPhysicalAddress || '',
+      } : {
+        name: tenant?.name || 'Unknown Organization',
+        contactEmail: tenant?.contactEmail || '',
+        contactPhone: tenant?.contactPhone || '',
+        address: transport.destinationPhysicalAddress || tenant?.footerAddress || '',
+      },
+      transportInfo: {
+        id: transport.id,
+        name: transport.name,
+        transportType: transport.transportType,
+        departureDate: transport.departureDate,
+        origin: transport.originLocation,
+        destination: transport.destinationLocation,
+        driverName: transport.driverName,
+        vehicleInfo: transport.vehicleInfo,
+        pullFeePerAnimal: transport.pullFee,
+        transportFee: transport.transportFee,
+        totalPullFee,
+        totalFees: totalPullFee + transportFee,
+        feeNotes: transport.feeNotes,
+      },
+      animals: manifestItems.map(item => ({
+        id: item.animal?.id,
+        name: item.animal?.name || 'Unknown',
+        species: item.animal?.species || 'Unknown',
+        breed: item.animal?.breed || 'Unknown',
+        gender: item.animal?.gender || 'Unknown',
+        age: item.animal?.age || 'Unknown',
+        color: item.animal?.color || '',
+        microchipNumber: item.animal?.microchipNumber || 'None',
+      })),
+      agreementDate: transport.departureDate 
+        ? new Date(transport.departureDate).toLocaleDateString('en-US', { 
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric' 
+          })
+        : new Date().toLocaleDateString('en-US', { 
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric' 
+          }),
+      generatedAt: new Date().toISOString(),
+      agreementTerms,
     };
   }
 }

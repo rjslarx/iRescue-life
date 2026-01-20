@@ -257,6 +257,9 @@ export const tenants = pgTable("tenants", {
   // Quick actions customization (admin can configure which actions appear in dashboard quick actions)
   quickActionsConfig: text("quick_actions_config").array(), // Array of quick action IDs (e.g., ["add-animal", "record-donation", "send-email"])
   
+  // Transfer workflow settings
+  enableTransferAgreement: boolean("enable_transfer_agreement").notNull().default(false), // Whether to generate transfer agreements for transport events
+  
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
@@ -1186,6 +1189,44 @@ export const insertContactSchema = createInsertSchema(contacts).omit({
 });
 export type InsertContact = z.infer<typeof insertContactSchema>;
 export type Contact = typeof contacts.$inferSelect;
+
+// Partner Organizations table - rescues, sanctuaries, and other orgs for transfers
+export const partnerOrganizations = pgTable("partner_organizations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  name: text("name").notNull(),
+  organizationType: text("organization_type").$type<"rescue" | "sanctuary" | "shelter" | "foster_network" | "other">().default("rescue"),
+  contactName: text("contact_name"),
+  contactEmail: text("contact_email"),
+  contactPhone: text("contact_phone"),
+  address: text("address"),
+  city: text("city"),
+  state: text("state"),
+  zipCode: text("zip_code"),
+  website: text("website"),
+  notes: text("notes"),
+  // Transfer tracking
+  totalTransfersTo: integer("total_transfers_to").notNull().default(0),
+  totalTransfersFrom: integer("total_transfers_from").notNull().default(0),
+  lastTransferDate: timestamp("last_transfer_date"),
+  // Status
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  uniqueName: unique().on(table.tenantId, table.name),
+}));
+
+export const insertPartnerOrganizationSchema = createInsertSchema(partnerOrganizations).omit({
+  id: true,
+  totalTransfersTo: true,
+  totalTransfersFrom: true,
+  lastTransferDate: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertPartnerOrganization = z.infer<typeof insertPartnerOrganizationSchema>;
+export type PartnerOrganization = typeof partnerOrganizations.$inferSelect;
 
 // Happy tails table - success stories
 export const happyTails = pgTable("happy_tails", {
@@ -3209,6 +3250,10 @@ export const transportEvents = pgTable("transport_events", {
   // Physical addresses for CVI (separate from mailing/PO Box)
   originPhysicalAddress: text("origin_physical_address"), // Street address, no PO Boxes
   destinationPhysicalAddress: text("destination_physical_address"), // Street address, no PO Boxes
+  // Transfer fees for expense tracking
+  pullFee: numeric("pull_fee", { precision: 10, scale: 2 }), // Fee charged per animal by sending org
+  transportFee: numeric("transport_fee", { precision: 10, scale: 2 }), // Transportation cost
+  feeNotes: text("fee_notes"), // Notes about fee arrangements
   createdBy: uuid("created_by").references(() => users.id, { onDelete: 'set null' }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -3483,6 +3528,10 @@ export const transportManifestItems = pgTable("transport_manifest_items", {
   healthCertificateDocId: uuid("health_certificate_doc_id"), // Link to document
   cviDocId: uuid("cvi_doc_id"),
   documentValidationErrors: text("document_validation_errors").array().default(sql`ARRAY[]::text[]`),
+  // Microchip release checklist (required before departure for ownership transfer)
+  microchipReleaseCompleted: boolean("microchip_release_completed").default(false),
+  microchipReleaseCompletedAt: timestamp("microchip_release_completed_at"),
+  microchipReleaseConfirmedBy: uuid("microchip_release_confirmed_by").references(() => users.id, { onDelete: 'set null' }),
   // Delivery status
   isDelivered: boolean("is_delivered").default(false),
   deliveredAt: timestamp("delivered_at"),

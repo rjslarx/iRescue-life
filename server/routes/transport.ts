@@ -863,6 +863,62 @@ router.get('/events/:transportId/cvi-compliance', requireTenant, requireAuth, as
   }
 });
 
+// Medical Packet Generator - generate printable medical history for transfer
+router.get('/events/:transportId/medical-packet/:animalId', requireTenant, requireAuth, async (req, res, next) => {
+  try {
+    const result = await TransportService.generateMedicalPacket(
+      req.tenant!.id, 
+      req.params.transportId,
+      req.params.animalId
+    );
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Batch Medical Packet - generate for all animals on manifest
+router.get('/events/:transportId/medical-packet', requireTenant, requireAuth, async (req, res, next) => {
+  try {
+    const result = await TransportService.generateBatchMedicalPacket(
+      req.tenant!.id, 
+      req.params.transportId
+    );
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Toggle microchip release status for a manifest item
+router.patch('/manifest/:itemId/microchip-release', requireTenant, requireAuth, async (req, res, next) => {
+  try {
+    const { completed } = req.body;
+    const result = await TransportService.toggleMicrochipRelease(
+      req.tenant!.id,
+      req.params.itemId,
+      completed,
+      req.user!.id
+    );
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Transfer Agreement Generator - generate printable transfer agreement for org-to-org transfers
+router.get('/events/:transportId/transfer-agreement', requireTenant, requireAuth, async (req, res, next) => {
+  try {
+    const result = await TransportService.generateTransferAgreement(
+      req.tenant!.id, 
+      req.params.transportId
+    );
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.post('/events/:transportId/finalize-manifest', requireTenant, requireAuth, async (req, res, next) => {
   try {
     const result = await TransportService.finalizeManifest(req.tenant!.id, req.params.transportId);

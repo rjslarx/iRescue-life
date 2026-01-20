@@ -19,6 +19,7 @@ import DonationLinksPage from "@/pages/DonationLinksPage";
 import GrantsPage from "@/pages/GrantsPage";
 import DonorsPage from "@/pages/DonorsPage";
 import ContactsPage from "@/pages/ContactsPage";
+import PartnerOrganizationsPage from "@/pages/PartnerOrganizationsPage";
 import ForgotPasswordPage from "@/pages/ForgotPasswordPage";
 import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import AcceptInvitationPage from "@/pages/AcceptInvitationPage";
@@ -211,6 +212,7 @@ function RouterSwitch() {
       <ProtectedRoute path="/dashboard/grants" pageId="grants" component={GrantsPage} />
       <ProtectedRoute path="/dashboard/donors" pageId="donors" component={DonorsPage} />
       <ProtectedRoute path="/dashboard/contacts" pageId="contacts" component={ContactsPage} />
+      <ProtectedRoute path="/dashboard/partner-organizations" pageId="contacts" component={PartnerOrganizationsPage} />
       <ProtectedRoute path="/dashboard/volunteers" pageId="volunteers" component={VolunteerManagementPage} />
       <ProtectedRoute path="/dashboard/reports" pageId="analytics" component={Analytics} />
       <ProtectedRoute path="/dashboard/my-fosters" pageId="foster-management" component={MyFostersPage} />

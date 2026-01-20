@@ -65,6 +65,7 @@ import {
   Palette,
   Video,
   Kanban,
+  Building2,
 } from "lucide-react";
 
 interface AppSidebarProps {
@@ -311,6 +312,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
         { title: "Volunteer Management", url: "/dashboard/volunteers", icon: UserCircle },
         { title: "Volunteer Pipeline", url: "/dashboard/volunteer-pipeline", icon: Kanban },
         { title: "Contacts", url: "/dashboard/contacts", icon: UserCircle },
+        { title: "Partner Organizations", url: "/dashboard/partner-organizations", icon: Building2 },
         { title: "Collaboration Hub", url: "/dashboard/collaboration", icon: Truck },
       ],
       defaultOpen: false,
@@ -389,6 +391,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
         { title: "Volunteer Management", url: "/dashboard/volunteers", icon: UserCircle },
         { title: "Volunteer Pipeline", url: "/dashboard/volunteer-pipeline", icon: Kanban },
         { title: "Contacts", url: "/dashboard/contacts", icon: UserCircle },
+        { title: "Partner Organizations", url: "/dashboard/partner-organizations", icon: Building2 },
         { title: "Collaboration Hub", url: "/dashboard/collaboration", icon: Truck },
       ],
       defaultOpen: false,
@@ -503,6 +506,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
     '/dashboard/calendar': 'calendar',
     '/dashboard/site-permissions': 'site-permissions',
     '/dashboard/contacts': 'donors',
+    '/dashboard/partner-organizations': 'donors',
     '/dashboard/documents': 'documents',
     '/dashboard/content-pages': 'custom-pages',
     '/dashboard/reports': 'analytics',

@@ -56,9 +56,12 @@ import {
   History,
   Upload,
   Play,
+  DollarSign,
+  ChevronDown,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useTenant } from "@/contexts/TenantContext";
 import { MedicalFileUploadDialog } from "@/components/MedicalFileUploadDialog";
 import { CVIHealthCheck } from "@/components/CVIHealthCheck";
@@ -100,6 +103,10 @@ const transportFormSchema = z.object({
   importPermitState: z.string().optional(),
   originPhysicalAddress: z.string().optional(),
   destinationPhysicalAddress: z.string().optional(),
+  // Transfer fees
+  pullFee: z.string().optional(),
+  transportFee: z.string().optional(),
+  feeNotes: z.string().optional(),
 });
 
 type TransportFormData = z.infer<typeof transportFormSchema>;
@@ -255,6 +262,19 @@ function AlertCard({ alert, onClick }: { alert: TransferAlert; onClick: () => vo
   );
 }
 
+interface PartnerOrganization {
+  id: string;
+  name: string;
+  organizationType: string | null;
+  contactName: string | null;
+  contactEmail: string | null;
+  contactPhone: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  zipCode: string | null;
+}
+
 function CreateTransportDialog({ 
   open, 
   onOpenChange, 
@@ -265,6 +285,12 @@ function CreateTransportDialog({
   onSuccess: () => void;
 }) {
   const { toast } = useToast();
+  
+  const { data: partnerOrgsData } = useQuery<{ organizations: PartnerOrganization[] }>({
+    queryKey: ['/api/partner-organizations'],
+    enabled: open,
+  });
+  const partnerOrgs = partnerOrgsData?.organizations || [];
   
   const form = useForm<TransportFormData>({
     resolver: zodResolver(transportFormSchema),
@@ -293,6 +319,10 @@ function CreateTransportDialog({
       importPermitState: "",
       originPhysicalAddress: "",
       destinationPhysicalAddress: "",
+      // Transfer fees
+      pullFee: "",
+      transportFee: "",
+      feeNotes: "",
     },
   });
 
@@ -484,13 +514,37 @@ function CreateTransportDialog({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Organization Name</FormLabel>
-                    <FormControl>
-                      <Input 
-                        placeholder="Partner Rescue Name" 
-                        {...field} 
-                        data-testid="input-partner-org"
-                      />
-                    </FormControl>
+                    <Select 
+                      value={field.value} 
+                      onValueChange={(value) => {
+                        field.onChange(value);
+                        const selectedOrg = partnerOrgs.find(org => org.name === value);
+                        if (selectedOrg) {
+                          if (selectedOrg.contactName) form.setValue('partnerContactName', selectedOrg.contactName);
+                          if (selectedOrg.contactEmail) form.setValue('partnerContactEmail', selectedOrg.contactEmail);
+                          if (selectedOrg.contactPhone) form.setValue('partnerContactPhone', selectedOrg.contactPhone);
+                          const fullAddress = [selectedOrg.address, selectedOrg.city, selectedOrg.state, selectedOrg.zipCode].filter(Boolean).join(', ');
+                          if (fullAddress) form.setValue('destinationPhysicalAddress', fullAddress);
+                        }
+                      }}
+                    >
+                      <FormControl>
+                        <SelectTrigger data-testid="select-partner-org">
+                          <SelectValue placeholder="Select partner organization" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {partnerOrgs.length === 0 ? (
+                          <SelectItem value="_none" disabled>No partners added yet</SelectItem>
+                        ) : (
+                          partnerOrgs.map((org) => (
+                            <SelectItem key={org.id} value={org.name}>
+                              {org.name}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -758,6 +812,77 @@ function CreateTransportDialog({
                 )}
               />
             </div>
+
+            <Collapsible className="mt-4">
+              <CollapsibleTrigger className="flex items-center gap-2 text-sm font-medium hover-elevate p-2 rounded-md w-full">
+                <DollarSign className="h-4 w-4" />
+                Transfer Fees (Optional)
+                <ChevronDown className="h-4 w-4 ml-auto" />
+              </CollapsibleTrigger>
+              <CollapsibleContent className="pt-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <FormField
+                    control={form.control}
+                    name="pullFee"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Pull Fee (per animal)</FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            placeholder="0.00" 
+                            {...field} 
+                            data-testid="input-pull-fee"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="transportFee"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Transport Fee</FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            placeholder="0.00" 
+                            {...field} 
+                            data-testid="input-transport-fee"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="feeNotes"
+                    render={({ field }) => (
+                      <FormItem className="sm:col-span-2">
+                        <FormLabel>Fee Notes</FormLabel>
+                        <FormControl>
+                          <Textarea 
+                            placeholder="Fee arrangements, payment details, etc." 
+                            {...field} 
+                            data-testid="input-fee-notes"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
 
             <FormField
               control={form.control}
@@ -1301,6 +1426,89 @@ function ManifestTab({ transportId, transportStatus, open }: { transportId: stri
     },
   });
 
+  const [generatingPacketForAnimal, setGeneratingPacketForAnimal] = useState<string | null>(null);
+  const [generatingBatchPackets, setGeneratingBatchPackets] = useState(false);
+  const [medicalPacketData, setMedicalPacketData] = useState<any>(null);
+  const [batchPacketData, setBatchPacketData] = useState<any[]>([]);
+  const [showMedicalPacketDialog, setShowMedicalPacketDialog] = useState(false);
+
+  const generateMedicalPacketMutation = useMutation({
+    mutationFn: async (animalId: string) => {
+      setGeneratingPacketForAnimal(animalId);
+      const response = await apiRequest('GET', `/api/transport/events/${transportId}/medical-packet/${animalId}`);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to generate medical packet');
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      setGeneratingPacketForAnimal(null);
+      setMedicalPacketData(data);
+      setBatchPacketData([]);
+      setShowMedicalPacketDialog(true);
+    },
+    onError: (error: any) => {
+      setGeneratingPacketForAnimal(null);
+      toast({
+        title: "Failed to generate medical packet",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const generateBatchMedicalPacketsMutation = useMutation({
+    mutationFn: async () => {
+      setGeneratingBatchPackets(true);
+      const response = await apiRequest('GET', `/api/transport/events/${transportId}/medical-packet`);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to generate batch medical packets');
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      setGeneratingBatchPackets(false);
+      setBatchPacketData(data.packets || []);
+      setMedicalPacketData(null);
+      setShowMedicalPacketDialog(true);
+    },
+    onError: (error: any) => {
+      setGeneratingBatchPackets(false);
+      toast({
+        title: "Failed to generate batch medical packets",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const toggleMicrochipReleaseMutation = useMutation({
+    mutationFn: async ({ itemId, completed }: { itemId: string; completed: boolean }) => {
+      const response = await apiRequest('PATCH', `/api/transport/manifest/${itemId}/microchip-release`, { completed });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update microchip release status');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/transport/events/${transportId}/manifest`] });
+      toast({
+        title: "Microchip release updated",
+        description: "Microchip release status has been updated.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to update microchip release",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleCopyRunSheetUrl = async () => {
     if (runSheetUrl) {
       await navigator.clipboard.writeText(runSheetUrl);
@@ -1457,6 +1665,29 @@ function ManifestTab({ transportId, transportStatus, open }: { transportId: stri
         </Alert>
       )}
 
+      {transportStatus === 'confirmed' && manifestItems.length > 0 && (() => {
+        const pendingMicrochipReleases = manifestItems.filter(
+          (item) => item.animal?.microchipNumber && !item.microchipReleaseCompleted
+        );
+        if (pendingMicrochipReleases.length === 0) return null;
+        return (
+          <Alert className="bg-amber-50 dark:bg-amber-950 border-amber-300 dark:border-amber-700">
+            <Radio className="h-4 w-4 text-amber-600" />
+            <AlertDescription className="text-amber-800 dark:text-amber-200">
+              <strong>Microchip Release Reminder:</strong> {pendingMicrochipReleases.length} animal(s) have microchips that need to be released before departure.
+              <ul className="mt-1 text-sm list-disc list-inside">
+                {pendingMicrochipReleases.slice(0, 3).map((item) => (
+                  <li key={item.id}>{item.animal?.name || 'Unknown'} ({item.animal?.microchipNumber})</li>
+                ))}
+                {pendingMicrochipReleases.length > 3 && (
+                  <li>...and {pendingMicrochipReleases.length - 3} more</li>
+                )}
+              </ul>
+            </AlertDescription>
+          </Alert>
+        );
+      })()}
+
       {validationData && validationData.canFinalize && !validationData.isValid && (
         <Alert className="bg-amber-50 dark:bg-amber-950 border-amber-300 dark:border-amber-700">
           <AlertTriangle className="h-4 w-4 text-amber-600" />
@@ -1593,8 +1824,26 @@ function ManifestTab({ transportId, transportStatus, open }: { transportId: stri
         </div>
 
         <div className="space-y-3">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
             <h5 className="text-sm font-medium">On Manifest ({manifestItems.length})</h5>
+            {manifestItems.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  generateBatchMedicalPacketsMutation.mutate();
+                }}
+                disabled={generatingBatchPackets}
+                data-testid="button-batch-medical-packets"
+              >
+                {generatingBatchPackets ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                ) : (
+                  <FileText className="h-4 w-4 mr-1" />
+                )}
+                Medical Packets
+              </Button>
+            )}
           </div>
 
           <div
@@ -1685,6 +1934,36 @@ function ManifestTab({ transportId, transportStatus, open }: { transportId: stri
                               {item.specialInstructions}
                             </div>
                           )}
+                          {item.animal?.microchipNumber && (
+                            <div className="flex items-center gap-2 mt-2 p-2 bg-muted/50 rounded border">
+                              <Checkbox
+                                id={`microchip-release-${item.id}`}
+                                checked={item.microchipReleaseCompleted || false}
+                                onCheckedChange={(checked) => {
+                                  toggleMicrochipReleaseMutation.mutate({
+                                    itemId: item.id,
+                                    completed: checked === true,
+                                  });
+                                }}
+                                disabled={toggleMicrochipReleaseMutation.isPending}
+                                data-testid={`checkbox-microchip-release-${item.id}`}
+                              />
+                              <label
+                                htmlFor={`microchip-release-${item.id}`}
+                                className="text-sm cursor-pointer flex items-center gap-1"
+                              >
+                                <Radio className="h-3 w-3" />
+                                Microchip Released
+                                <span className="text-muted-foreground">({item.animal.microchipNumber})</span>
+                              </label>
+                              {item.microchipReleaseCompleted && (
+                                <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                                  <CheckCircle className="h-3 w-3 mr-1" />
+                                  Done
+                                </Badge>
+                              )}
+                            </div>
+                          )}
                           {hasErrors && (
                             <div className="mt-2 space-y-1">
                               {itemValidation.errors.map((error, idx) => (
@@ -1711,15 +1990,31 @@ function ManifestTab({ transportId, transportStatus, open }: { transportId: stri
                             </div>
                           )}
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => removeManifestItemMutation.mutate(item.id)}
-                          disabled={removeManifestItemMutation.isPending}
-                          data-testid={`button-remove-manifest-${item.id}`}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => generateMedicalPacketMutation.mutate(item.animalId)}
+                            disabled={generatingPacketForAnimal === item.animalId}
+                            title="Generate Medical Packet"
+                            data-testid={`button-medical-packet-${item.animalId}`}
+                          >
+                            {generatingPacketForAnimal === item.animalId ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <FileText className="h-4 w-4 text-muted-foreground" />
+                            )}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => removeManifestItemMutation.mutate(item.id)}
+                            disabled={removeManifestItemMutation.isPending}
+                            data-testid={`button-remove-manifest-${item.id}`}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
@@ -1743,6 +2038,196 @@ function ManifestTab({ transportId, transportStatus, open }: { transportId: stri
           }}
         />
       )}
+
+      <Dialog open={showMedicalPacketDialog} onOpenChange={setShowMedicalPacketDialog}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              Medical Packet{batchPacketData.length > 1 ? 's' : ''}
+            </DialogTitle>
+            <DialogDescription>
+              {batchPacketData.length > 0 
+                ? `Medical records for ${batchPacketData.length} animal(s)`
+                : medicalPacketData?.animal?.name 
+                  ? `Medical records for ${medicalPacketData.animal.name}`
+                  : 'Animal medical records for transfer'}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-6 print:space-y-4" id="medical-packet-content">
+            {(batchPacketData.length > 0 ? batchPacketData : [medicalPacketData]).filter(Boolean).map((packet: any, idx: number) => (
+              <div key={packet?.animal?.id || idx} className="border rounded-lg p-4 print:border-2 print:break-after-page">
+                <div className="flex items-center gap-3 mb-4">
+                  <PawPrint className="h-6 w-6 text-primary" />
+                  <div>
+                    <h3 className="text-lg font-semibold">{packet?.animal?.name || 'Unknown Animal'}</h3>
+                    <p className="text-sm text-muted-foreground">
+                      {packet?.animal?.species} {packet?.animal?.breed ? `- ${packet?.animal?.breed}` : ''} 
+                      {packet?.animal?.age ? ` | ${packet?.animal?.age}` : ''}
+                      {packet?.animal?.sex ? ` | ${packet?.animal?.sex}` : ''}
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="grid gap-4 sm:grid-cols-2 mb-4">
+                  <div className="text-sm">
+                    <span className="font-medium">Microchip:</span>{' '}
+                    {packet?.animal?.microchipNumber || 'Not microchipped'}
+                  </div>
+                  <div className="text-sm">
+                    <span className="font-medium">Spay/Neuter:</span>{' '}
+                    {packet?.animal?.spayNeuterStatus || 'Unknown'}
+                  </div>
+                  <div className="text-sm">
+                    <span className="font-medium">Weight:</span>{' '}
+                    {packet?.animal?.weight ? `${packet.animal.weight} lbs` : 'Unknown'}
+                  </div>
+                  <div className="text-sm">
+                    <span className="font-medium">Color:</span>{' '}
+                    {packet?.animal?.color || 'Unknown'}
+                  </div>
+                </div>
+
+                <Separator className="my-4" />
+
+                {packet?.vaccinations?.length > 0 && (
+                  <div className="mb-4">
+                    <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                      <Shield className="h-4 w-4" />
+                      Vaccinations ({packet.vaccinations.length})
+                    </h4>
+                    <div className="space-y-1">
+                      {packet.vaccinations.map((vax: any, vIdx: number) => (
+                        <div key={vIdx} className="text-sm flex items-center justify-between py-1 border-b border-muted last:border-0">
+                          <span className="font-medium">{vax.vaccineName}</span>
+                          <span className="text-muted-foreground">
+                            {vax.dateAdministered ? new Date(vax.dateAdministered).toLocaleDateString() : 'Unknown date'}
+                            {vax.expirationDate && ` (exp: ${new Date(vax.expirationDate).toLocaleDateString()})`}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {packet?.procedures?.length > 0 && (
+                  <div className="mb-4">
+                    <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                      <FileText className="h-4 w-4" />
+                      Procedures ({packet.procedures.length})
+                    </h4>
+                    <div className="space-y-1">
+                      {packet.procedures.map((proc: any, pIdx: number) => (
+                        <div key={pIdx} className="text-sm flex items-center justify-between py-1 border-b border-muted last:border-0">
+                          <span className="font-medium">{proc.procedureName}</span>
+                          <span className="text-muted-foreground">
+                            {proc.procedureDate ? new Date(proc.procedureDate).toLocaleDateString() : 'Unknown date'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {packet?.diagnostics?.length > 0 && (
+                  <div className="mb-4">
+                    <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                      <AlertCircle className="h-4 w-4" />
+                      Diagnostics ({packet.diagnostics.length})
+                    </h4>
+                    <div className="space-y-1">
+                      {packet.diagnostics.map((diag: any, dIdx: number) => (
+                        <div key={dIdx} className="text-sm py-1 border-b border-muted last:border-0">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium">{diag.testName}</span>
+                            <span className="text-muted-foreground">
+                              {diag.testDate ? new Date(diag.testDate).toLocaleDateString() : 'Unknown date'}
+                            </span>
+                          </div>
+                          <div className="text-muted-foreground">Result: {diag.result}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {packet?.prescriptions?.length > 0 && (
+                  <div className="mb-4">
+                    <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                      <Pill className="h-4 w-4" />
+                      Prescriptions ({packet.prescriptions.length})
+                    </h4>
+                    <div className="space-y-1">
+                      {packet.prescriptions.map((rx: any, rxIdx: number) => (
+                        <div key={rxIdx} className="text-sm py-1 border-b border-muted last:border-0">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium">{rx.medicationName}</span>
+                            <span className="text-muted-foreground">{rx.dosage}</span>
+                          </div>
+                          <div className="text-muted-foreground">
+                            {rx.frequency} | {rx.route}
+                            {rx.startDate && ` | Started: ${new Date(rx.startDate).toLocaleDateString()}`}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {packet?.exams?.length > 0 && (
+                  <div className="mb-4">
+                    <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                      <User className="h-4 w-4" />
+                      Exams ({packet.exams.length})
+                    </h4>
+                    <div className="space-y-1">
+                      {packet.exams.map((exam: any, eIdx: number) => (
+                        <div key={eIdx} className="text-sm py-1 border-b border-muted last:border-0">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium">{exam.examType}</span>
+                            <span className="text-muted-foreground">
+                              {exam.examDate ? new Date(exam.examDate).toLocaleDateString() : 'Unknown date'}
+                            </span>
+                          </div>
+                          {exam.veterinarian && <div className="text-muted-foreground">Vet: {exam.veterinarian}</div>}
+                          {exam.findings && <div className="text-muted-foreground mt-1">{exam.findings}</div>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {!packet?.vaccinations?.length && !packet?.procedures?.length && !packet?.diagnostics?.length && !packet?.prescriptions?.length && !packet?.exams?.length && (
+                  <div className="text-center py-6 text-muted-foreground">
+                    <AlertCircle className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                    <p>No medical records found for this animal.</p>
+                  </div>
+                )}
+
+                <div className="text-xs text-muted-foreground mt-4 pt-2 border-t">
+                  Generated: {new Date().toLocaleString()}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <DialogFooter className="print:hidden">
+            <Button variant="outline" onClick={() => setShowMedicalPacketDialog(false)}>
+              Close
+            </Button>
+            <Button 
+              onClick={() => {
+                window.print();
+              }}
+              data-testid="button-print-medical-packet"
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Print / Save PDF
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -1768,6 +2253,9 @@ function TransportDetailDialog({
   const [externalPhone, setExternalPhone] = useState("");
   const [externalOrganization, setExternalOrganization] = useState("");
   const [newComment, setNewComment] = useState("");
+  const [showTransferAgreement, setShowTransferAgreement] = useState(false);
+  const [transferAgreementData, setTransferAgreementData] = useState<any>(null);
+  const [generatingAgreement, setGeneratingAgreement] = useState(false);
 
   // Fetch team members for dropdown
   const { data: usersData } = useQuery<{ users: UserType[] }>({
@@ -1801,6 +2289,31 @@ function TransportDetailDialog({
       toast({
         title: "Failed to add comment",
         description: error.message || "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const generateTransferAgreementMutation = useMutation({
+    mutationFn: async () => {
+      setGeneratingAgreement(true);
+      const response = await apiRequest('GET', `/api/transport/events/${transport?.id}/transfer-agreement`);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to generate transfer agreement');
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      setGeneratingAgreement(false);
+      setTransferAgreementData(data);
+      setShowTransferAgreement(true);
+    },
+    onError: (error: any) => {
+      setGeneratingAgreement(false);
+      toast({
+        title: "Failed to generate transfer agreement",
+        description: error.message,
         variant: "destructive",
       });
     },
@@ -2019,8 +2532,23 @@ function TransportDetailDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {/* Active Transport Mode Button */}
-        <div className="flex justify-end">
+        {/* Action Buttons */}
+        <div className="flex justify-end gap-2 flex-wrap">
+          {tenant?.enableTransferAgreement && (
+            <Button 
+              variant="outline" 
+              onClick={() => generateTransferAgreementMutation.mutate()}
+              disabled={generatingAgreement}
+              data-testid="button-generate-transfer-agreement"
+            >
+              {generatingAgreement ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <FileText className="h-4 w-4 mr-2" />
+              )}
+              Transfer Agreement
+            </Button>
+          )}
           <Link href={`/dashboard/transport/${transport.id}/active`}>
             <Button variant="default" data-testid="button-start-active-mode">
               <Play className="h-4 w-4 mr-2" />
@@ -2133,6 +2661,38 @@ function TransportDetailDialog({
                           <div>
                             <span className="text-muted-foreground">Driver Phone:</span>{" "}
                             {transport.driverPhone}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {(transport.pullFee || transport.transportFee || transport.feeNotes) && (
+                  <>
+                    <Separator />
+                    <div>
+                      <h4 className="font-medium mb-2 flex items-center gap-2">
+                        <DollarSign className="h-4 w-4" />
+                        Transfer Fees
+                      </h4>
+                      <div className="grid gap-2 md:grid-cols-2 text-sm">
+                        {transport.pullFee && (
+                          <div>
+                            <span className="text-muted-foreground">Pull Fee (per animal):</span>{" "}
+                            ${parseFloat(transport.pullFee).toFixed(2)}
+                          </div>
+                        )}
+                        {transport.transportFee && (
+                          <div>
+                            <span className="text-muted-foreground">Transport Fee:</span>{" "}
+                            ${parseFloat(transport.transportFee).toFixed(2)}
+                          </div>
+                        )}
+                        {transport.feeNotes && (
+                          <div className="md:col-span-2">
+                            <span className="text-muted-foreground">Fee Notes:</span>{" "}
+                            {transport.feeNotes}
                           </div>
                         )}
                       </div>
@@ -2817,6 +3377,217 @@ function PendingTransfersTab({
             >
               {declineMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Decline Transfer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Transfer Agreement Dialog */}
+      <Dialog open={showTransferAgreement} onOpenChange={setShowTransferAgreement}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto print:max-w-none print:max-h-none print:overflow-visible">
+          <DialogHeader className="print:mb-4">
+            <DialogTitle className="text-xl font-bold">Transfer Agreement</DialogTitle>
+            <DialogDescription>
+              Printable agreement for org-to-org animal transfer
+            </DialogDescription>
+          </DialogHeader>
+
+          {transferAgreementData && (
+            <div className="space-y-6 print:space-y-4" id="transfer-agreement-content">
+              {/* Header */}
+              <div className="text-center border-b pb-4 print:pb-2">
+                <h1 className="text-2xl font-bold uppercase print:text-xl">Animal Transfer Agreement</h1>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Agreement Date: {transferAgreementData.agreementDate}
+                </p>
+              </div>
+
+              {/* Organizations */}
+              <div className="grid gap-6 md:grid-cols-2 print:gap-4">
+                <div className="space-y-2">
+                  <h3 className="font-semibold text-sm uppercase tracking-wide">Releasing Organization</h3>
+                  <div className="bg-muted/50 p-3 rounded-md print:bg-gray-50 print:border">
+                    <p className="font-medium">{transferAgreementData.transferringOrganization.name}</p>
+                    {transferAgreementData.transferringOrganization.contactName && (
+                      <p className="text-sm">Contact: {transferAgreementData.transferringOrganization.contactName}</p>
+                    )}
+                    {transferAgreementData.transferringOrganization.contactEmail && (
+                      <p className="text-sm">{transferAgreementData.transferringOrganization.contactEmail}</p>
+                    )}
+                    {transferAgreementData.transferringOrganization.contactPhone && (
+                      <p className="text-sm">{transferAgreementData.transferringOrganization.contactPhone}</p>
+                    )}
+                    {transferAgreementData.transferringOrganization.address && (
+                      <p className="text-sm mt-1">{transferAgreementData.transferringOrganization.address}</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <h3 className="font-semibold text-sm uppercase tracking-wide">Receiving Organization</h3>
+                  <div className="bg-muted/50 p-3 rounded-md print:bg-gray-50 print:border">
+                    <p className="font-medium">{transferAgreementData.receivingOrganization.name}</p>
+                    {transferAgreementData.receivingOrganization.contactName && (
+                      <p className="text-sm">Contact: {transferAgreementData.receivingOrganization.contactName}</p>
+                    )}
+                    {transferAgreementData.receivingOrganization.contactEmail && (
+                      <p className="text-sm">{transferAgreementData.receivingOrganization.contactEmail}</p>
+                    )}
+                    {transferAgreementData.receivingOrganization.contactPhone && (
+                      <p className="text-sm">{transferAgreementData.receivingOrganization.contactPhone}</p>
+                    )}
+                    {transferAgreementData.receivingOrganization.address && (
+                      <p className="text-sm mt-1">{transferAgreementData.receivingOrganization.address}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Transport Info */}
+              <div className="space-y-2">
+                <h3 className="font-semibold text-sm uppercase tracking-wide">Transport Details</h3>
+                <div className="grid gap-2 md:grid-cols-3 text-sm bg-muted/50 p-3 rounded-md print:bg-gray-50 print:border">
+                  <div>
+                    <span className="text-muted-foreground">Transport Name:</span>{' '}
+                    {transferAgreementData.transportInfo.name}
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Type:</span>{' '}
+                    {transferAgreementData.transportInfo.transportType}
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Date:</span>{' '}
+                    {transferAgreementData.agreementDate}
+                  </div>
+                  {transferAgreementData.transportInfo.origin && (
+                    <div>
+                      <span className="text-muted-foreground">Origin:</span>{' '}
+                      {transferAgreementData.transportInfo.origin}
+                    </div>
+                  )}
+                  {transferAgreementData.transportInfo.destination && (
+                    <div>
+                      <span className="text-muted-foreground">Destination:</span>{' '}
+                      {transferAgreementData.transportInfo.destination}
+                    </div>
+                  )}
+                  {transferAgreementData.transportInfo.driverName && (
+                    <div>
+                      <span className="text-muted-foreground">Driver:</span>{' '}
+                      {transferAgreementData.transportInfo.driverName}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Animal List */}
+              <div className="space-y-2">
+                <h3 className="font-semibold text-sm uppercase tracking-wide">Animals Being Transferred ({transferAgreementData.animals.length})</h3>
+                <div className="border rounded-md overflow-hidden print:border-gray-300">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/50 print:bg-gray-100">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-medium">Name</th>
+                        <th className="px-3 py-2 text-left font-medium">Species</th>
+                        <th className="px-3 py-2 text-left font-medium">Breed</th>
+                        <th className="px-3 py-2 text-left font-medium">Gender</th>
+                        <th className="px-3 py-2 text-left font-medium">Microchip</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {transferAgreementData.animals.map((animal: any, index: number) => (
+                        <tr key={animal.id || index}>
+                          <td className="px-3 py-2">{animal.name}</td>
+                          <td className="px-3 py-2">{animal.species}</td>
+                          <td className="px-3 py-2">{animal.breed}</td>
+                          <td className="px-3 py-2">{animal.gender}</td>
+                          <td className="px-3 py-2 font-mono text-xs">{animal.microchipNumber}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Fees */}
+              {(transferAgreementData.transportInfo.pullFeePerAnimal || transferAgreementData.transportInfo.transportFee) && (
+                <div className="space-y-2">
+                  <h3 className="font-semibold text-sm uppercase tracking-wide">Transfer Fees</h3>
+                  <div className="grid gap-2 md:grid-cols-3 text-sm bg-muted/50 p-3 rounded-md print:bg-gray-50 print:border">
+                    {transferAgreementData.transportInfo.pullFeePerAnimal && (
+                      <div>
+                        <span className="text-muted-foreground">Pull Fee (per animal):</span>{' '}
+                        ${parseFloat(transferAgreementData.transportInfo.pullFeePerAnimal).toFixed(2)}
+                      </div>
+                    )}
+                    {transferAgreementData.transportInfo.totalPullFee > 0 && (
+                      <div>
+                        <span className="text-muted-foreground">Total Pull Fees:</span>{' '}
+                        ${transferAgreementData.transportInfo.totalPullFee.toFixed(2)}
+                      </div>
+                    )}
+                    {transferAgreementData.transportInfo.transportFee && (
+                      <div>
+                        <span className="text-muted-foreground">Transport Fee:</span>{' '}
+                        ${parseFloat(transferAgreementData.transportInfo.transportFee).toFixed(2)}
+                      </div>
+                    )}
+                    {transferAgreementData.transportInfo.totalFees > 0 && (
+                      <div className="md:col-span-3 font-semibold">
+                        <span>Total Fees:</span>{' '}
+                        ${transferAgreementData.transportInfo.totalFees.toFixed(2)}
+                      </div>
+                    )}
+                    {transferAgreementData.transportInfo.feeNotes && (
+                      <div className="md:col-span-3">
+                        <span className="text-muted-foreground">Notes:</span>{' '}
+                        {transferAgreementData.transportInfo.feeNotes}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Agreement Terms */}
+              <div className="space-y-2">
+                <h3 className="font-semibold text-sm uppercase tracking-wide">Terms and Conditions</h3>
+                <ol className="list-decimal list-inside space-y-2 text-sm pl-2">
+                  {transferAgreementData.agreementTerms.map((term: string, index: number) => (
+                    <li key={index} className="text-muted-foreground">{term}</li>
+                  ))}
+                </ol>
+              </div>
+
+              {/* Signature Lines */}
+              <div className="grid gap-8 md:grid-cols-2 mt-8 pt-4 border-t print:mt-4 print:pt-2">
+                <div className="space-y-4">
+                  <p className="text-sm font-medium">Releasing Organization Representative</p>
+                  <div className="border-b border-dashed pt-8"></div>
+                  <p className="text-xs text-muted-foreground">Signature / Date</p>
+                  <div className="border-b border-dashed pt-6"></div>
+                  <p className="text-xs text-muted-foreground">Printed Name / Title</p>
+                </div>
+                <div className="space-y-4">
+                  <p className="text-sm font-medium">Receiving Organization Representative</p>
+                  <div className="border-b border-dashed pt-8"></div>
+                  <p className="text-xs text-muted-foreground">Signature / Date</p>
+                  <div className="border-b border-dashed pt-6"></div>
+                  <p className="text-xs text-muted-foreground">Printed Name / Title</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="print:hidden">
+            <Button variant="outline" onClick={() => setShowTransferAgreement(false)}>
+              Close
+            </Button>
+            <Button
+              onClick={() => window.print()}
+              data-testid="button-print-transfer-agreement"
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Print / Save PDF
             </Button>
           </DialogFooter>
         </DialogContent>

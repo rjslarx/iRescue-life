@@ -11192,6 +11192,145 @@ View this submission in Custom Forms > ${form.name} > Submissions
   });
 
   // ============================================================================
+  // Partner Organizations Routes
+  // ============================================================================
+
+  /**
+   * GET /api/partner-organizations
+   * Get all partner organizations for the tenant
+   */
+  app.get('/api/partner-organizations', requireTenant, requireAuth, requireRole('staff'), async (req, res, next) => {
+    try {
+      const { partnerOrganizations } = await import('@shared/schema');
+      const includeArchived = req.query.includeArchived === 'true';
+      
+      let query = db
+        .select()
+        .from(partnerOrganizations)
+        .where(eq(partnerOrganizations.tenantId, req.tenant!.id));
+      
+      if (!includeArchived) {
+        query = query.where(eq(partnerOrganizations.isActive, true)) as any;
+      }
+      
+      const orgs = await query.orderBy(partnerOrganizations.name);
+      res.json({ organizations: orgs });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/partner-organizations/:id
+   * Get a single partner organization
+   */
+  app.get('/api/partner-organizations/:id', requireTenant, requireAuth, requireRole('staff'), async (req, res, next) => {
+    try {
+      const { partnerOrganizations } = await import('@shared/schema');
+      
+      const [org] = await db
+        .select()
+        .from(partnerOrganizations)
+        .where(and(
+          eq(partnerOrganizations.id, req.params.id),
+          eq(partnerOrganizations.tenantId, req.tenant!.id)
+        ));
+      
+      if (!org) {
+        return res.status(404).json({ error: 'Partner organization not found' });
+      }
+      
+      res.json({ organization: org });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/partner-organizations
+   * Create a new partner organization
+   */
+  app.post('/api/partner-organizations', requireTenant, requireAuth, requireRole('staff'), async (req, res, next) => {
+    try {
+      const { partnerOrganizations, insertPartnerOrganizationSchema } = await import('@shared/schema');
+      
+      const parsed = insertPartnerOrganizationSchema.parse({
+        ...req.body,
+        tenantId: req.tenant!.id,
+      });
+      
+      const [org] = await db
+        .insert(partnerOrganizations)
+        .values(parsed)
+        .returning();
+      
+      res.status(201).json({ organization: org });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * PATCH /api/partner-organizations/:id
+   * Update a partner organization
+   */
+  app.patch('/api/partner-organizations/:id', requireTenant, requireAuth, requireRole('staff'), async (req, res, next) => {
+    try {
+      const { partnerOrganizations } = await import('@shared/schema');
+      
+      const [org] = await db
+        .update(partnerOrganizations)
+        .set({
+          ...req.body,
+          updatedAt: new Date(),
+        })
+        .where(and(
+          eq(partnerOrganizations.id, req.params.id),
+          eq(partnerOrganizations.tenantId, req.tenant!.id)
+        ))
+        .returning();
+      
+      if (!org) {
+        return res.status(404).json({ error: 'Partner organization not found' });
+      }
+      
+      res.json({ organization: org });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * DELETE /api/partner-organizations/:id
+   * Archive (soft delete) a partner organization
+   */
+  app.delete('/api/partner-organizations/:id', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+    try {
+      const { partnerOrganizations } = await import('@shared/schema');
+      
+      const [org] = await db
+        .update(partnerOrganizations)
+        .set({
+          isActive: false,
+          updatedAt: new Date(),
+        })
+        .where(and(
+          eq(partnerOrganizations.id, req.params.id),
+          eq(partnerOrganizations.tenantId, req.tenant!.id)
+        ))
+        .returning();
+      
+      if (!org) {
+        return res.status(404).json({ error: 'Partner organization not found' });
+      }
+      
+      res.json({ success: true, message: 'Partner organization archived' });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // ============================================================================
   // Happy Tails Routes
   // ============================================================================
 
@@ -14219,6 +14358,7 @@ Submitted: ${new Date().toLocaleString()}
         stripeLink: z.string().url().optional().or(z.literal("")),
         passFeesToAdopter: z.boolean().optional(),
         requireSpayNeuterContract: z.boolean().optional(),
+        enableTransferAgreement: z.boolean().optional(),
       });
 
       const parsedSettings = settingsSchema.parse(req.body);
@@ -14229,6 +14369,7 @@ Submitted: ${new Date().toLocaleString()}
       if (parsedSettings.stripeLink !== undefined) settingsToUpdate.stripeLink = parsedSettings.stripeLink;
       if (parsedSettings.passFeesToAdopter !== undefined) settingsToUpdate.passFeesToAdopter = parsedSettings.passFeesToAdopter;
       if (parsedSettings.requireSpayNeuterContract !== undefined) settingsToUpdate.requireSpayNeuterContract = parsedSettings.requireSpayNeuterContract;
+      if (parsedSettings.enableTransferAgreement !== undefined) settingsToUpdate.enableTransferAgreement = parsedSettings.enableTransferAgreement;
 
       const [updatedTenant] = await db
         .update(tenants)
