@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import session from 'express-session';
 import createMemoryStore from 'memorystore';
 import connectPgSimple from 'connect-pg-simple';
-import { users } from '@shared/schema';
+import { users, tenants } from '@shared/schema';
 import { db } from '../db';
 import { eq, and } from 'drizzle-orm';
 import pg from 'pg';
@@ -234,4 +234,46 @@ export function requireRole(...roles: string[]) {
       message: `This action requires one of the following roles: ${roles.join(', ')}. Your active role is: ${req.user.activeRole}`
     });
   };
+}
+
+/**
+ * Middleware to require organization owner access
+ * Only the tenant owner (user whose ID matches tenant.ownerId) can access protected settings
+ * Platform admins also get owner access for impersonation purposes
+ */
+export async function requireOwner(req: Request, res: Response, next: NextFunction) {
+  if (!req.user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  
+  // Platform admins have full access during impersonation
+  if (req.user.roles.includes('platform_admin')) {
+    return next();
+  }
+  
+  try {
+    // Get the tenant to check owner
+    const [tenant] = await db
+      .select({ ownerId: tenants.ownerId })
+      .from(tenants)
+      .where(eq(tenants.id, req.user.tenantId))
+      .limit(1);
+    
+    if (!tenant) {
+      return res.status(404).json({ error: 'Organization not found' });
+    }
+    
+    // Check if user is the owner
+    if (tenant.ownerId === req.user.id) {
+      return next();
+    }
+    
+    return res.status(403).json({ 
+      error: 'Forbidden',
+      message: 'Only the organization owner can access this resource. Contact your organization owner to make changes.'
+    });
+  } catch (error) {
+    console.error('Error checking owner access:', error);
+    return res.status(500).json({ error: 'Failed to verify owner access' });
+  }
 }
