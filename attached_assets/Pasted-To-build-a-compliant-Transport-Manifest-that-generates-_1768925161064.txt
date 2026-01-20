@@ -1,0 +1,76 @@
+To build a compliant "Transport Manifest" that generates a valid Certificate of Veterinary Inspection (CVI) (often based on USDA APHIS Form 7001), you need to capture specific data points.
+
+If your database is missing just one of these (like the "Vaccine Lot Number"), the transport can legally be turned around at state lines.
+
+Here are the database fields you need to add to your schema, grouped by category.
+
+1. The "Must Have" Medical Data (The Deal Breakers)
+This is where most rescues fail. You cannot just say "Rabies: Yes." You need the full metadata of the vial used.
+
+rabies_vaccine_date_administered: (Date)
+
+rabies_vaccine_expiration_date: (Date) – Critical for 1-year vs. 3-year logic.
+
+rabies_vaccine_manufacturer: (String) – e.g., "Zoetis"
+
+rabies_vaccine_product_name: (String) – e.g., "Defensor 3"
+
+rabies_vaccine_lot_number: (String) – e.g., "345-A"
+
+rabies_tag_number: (String) – The physical metal tag number.
+
+microchip_number: (String) – The USDA requires "Official Identification." For dogs, this is the microchip.
+
+2. The Animal Description
+species: (String) – Dog/Cat
+
+breed: (String) – Must be specific. "Mix" is often rejected by strict states; "Labrador Mix" is better.
+
+age_months: (Integer) – Calculated from DOB.
+
+sex: (String) – M/F
+
+altered_status: (Boolean) – Spayed/Neutered?
+
+color_and_markings: (String) – e.g., "Black with white chest."
+
+3. The Logistics (Consignor / Consignee)
+For a CVI, you must list who is shipping and who is receiving.
+
+Consignor (Sender):
+
+origin_name: (Your Tenant's Name)
+
+origin_address: (Physical street address, no PO Boxes)
+
+origin_phone: (Contact number)
+
+Consignee (Receiver):
+
+destination_name: (The Partner Rescue)
+
+destination_address: (Physical address)
+
+destination_phone: (Contact number)
+
+4. The "Gotcha" Fields (State-Specific)
+Some states (like Connecticut, Massachusetts, and Colorado) require an "Import Permit" before the truck leaves. You need a field to store this for the trip.
+
+import_permit_number: (String) – Issued by the receiving State Vet.
+
+inspection_date: (Date) – The CVI is usually valid for 10-30 days from this date.
+
+accredited_vet_license_number: (String) – The license number of the vet signing the paperwork.
+
+Developer Tip: The "Health Cert Generator"
+If you want to blow your users away, build a feature that takes these fields and prints them directly onto a standard USDA APHIS Form 7001 (or a PDF replica).
+
+The Workflow:
+
+User clicks "Generate CVI" for a specific Transport.
+
+System checks: "Do we have Lot Numbers for all 20 dogs?"
+
+If Missing: It highlights the specific dog in red.
+
+If Complete: It generates a single PDF with all animals listed (you can attach an "Addendum" page for lists of more than 5 animals).

@@ -1,0 +1,106 @@
+Here is a React component designed to be embedded inside your Transport Manifest row.
+
+It doesn't just check the date; it checks for the "Three Deadly Sins" of transport paperwork:
+
+Is the vaccine expired relative to the departure date?
+
+Is the specific data (Lot #) missing?
+
+Is the animal too young (under 12 weeks is often illegal to transport across state lines without mom)?
+
+The Component: CVIHealthCheck.js
+JavaScript
+
+import React from 'react';
+import { AlertTriangle, CheckCircle, XCircle } from 'lucide-react'; // Assuming you use Lucide icons
+
+const CVIHealthCheck = ({ animal, transportDate }) => {
+  // Parse dates
+  const departure = new Date(transportDate);
+  const rabiesExpires = animal.rabies_expires_at ? new Date(animal.rabies_expires_at) : null;
+  
+  // LOGIC 1: Data Completeness Check
+  const hasRabiesData = animal.rabies_manufacturer && animal.rabies_lot_number;
+  
+  // LOGIC 2: Date Validity Check
+  const isExpired = rabiesExpires && rabiesExpires < departure;
+  const isCloseCall = rabiesExpires && rabiesExpires < new Date(departure.getTime() + (30 * 24 * 60 * 60 * 1000)); // Expires within 30 days after trip
+
+  // LOGIC 3: Age Check (Puppies under 3-4 months usually can't get Rabies)
+  // Assuming animal.dob is available
+  const dob = new Date(animal.dob);
+  const ageInWeeks = (departure - dob) / (1000 * 60 * 60 * 24 * 7);
+  const isTooYoung = ageInWeeks < 12; 
+
+  // RENDER STATES --------------------------------------------
+
+  // Case A: Puppy Exemption (Logic varies by state, but let's flag it)
+  if (isTooYoung) {
+    return (
+      <div className="flex items-center text-yellow-600 bg-yellow-50 px-2 py-1 rounded border border-yellow-200">
+        <AlertTriangle size={16} className="mr-2" />
+        <span className="text-xs font-semibold">Underage (No Rabies Req?)</span>
+      </div>
+    );
+  }
+
+  // Case B: Missing Data (Automatic Fail)
+  if (!rabiesExpires || !hasRabiesData) {
+    return (
+      <div className="flex items-center text-red-700 bg-red-50 px-2 py-1 rounded border border-red-200">
+        <XCircle size={16} className="mr-2" />
+        <div className="flex flex-col">
+          <span className="text-xs font-bold">MISSING DATA</span>
+          <span className="text-[10px]">Need Lot # or Expiry</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Case C: Expired Vaccine (Automatic Fail)
+  if (isExpired) {
+    return (
+      <div className="flex items-center text-red-700 bg-red-50 px-2 py-1 rounded border border-red-200">
+        <XCircle size={16} className="mr-2" />
+        <div className="flex flex-col">
+          <span className="text-xs font-bold">EXPIRED</span>
+          <span className="text-[10px]">Expired on {rabiesExpires.toLocaleDateString()}</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Case D: Valid (Success)
+  return (
+    <div className="flex items-center text-green-700 bg-green-50 px-2 py-1 rounded border border-green-200">
+      <CheckCircle size={16} className="mr-2" />
+      <div className="flex flex-col">
+        <span className="text-xs font-bold">Ready for Transport</span>
+        {isCloseCall && (
+          <span className="text-[10px] text-orange-600">
+            Expires soon ({rabiesExpires.toLocaleDateString()})
+          </span>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default CVIHealthCheck;
+How to use this in your Manifest Table
+You loop through your manifest items and drop this component into the "Status" column.
+
+JavaScript
+
+{manifestDogs.map((dog) => (
+  <tr key={dog.id}>
+    <td>{dog.name}</td>
+    <td>{dog.breed}</td>
+    <td>
+      {/* Pass the dynamic transport date, not just 'today' */}
+      <CVIHealthCheck animal={dog} transportDate={transport.departure_date} />
+    </td>
+  </tr>
+))}
+Why this logic is safer
+A standard check just looks at today. But if I am planning a transport for next Friday, and the vaccine expires this Wednesday, a standard check would say "Green/Valid" right now. Then, on Friday morning when you load the van, the driver checks the paperwork and realizes the dog can't go. This component prevents that "Day-Of" disaster by comparing against the transportDate.
