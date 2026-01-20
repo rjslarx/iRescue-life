@@ -282,7 +282,8 @@ export default function AcceptInvitationPage() {
             </div>
 
             <div>
-              <Label htmlFor="phone">Mobile Phone *</Label>
+              <Label htmlFor="phone">Your Personal Mobile Phone *</Label>
+              <p className="text-xs text-muted-foreground mb-1">Enter your own phone number, not the rescue's</p>
               <div className="relative">
                 <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -291,15 +292,17 @@ export default function AcceptInvitationPage() {
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   required
-                  placeholder="(555) 123-4567"
+                  placeholder="Your personal phone number"
                   className="pl-10"
+                  autoComplete="off"
                   data-testid="input-phone"
                 />
               </div>
             </div>
 
             <div>
-              <Label htmlFor="address">Mailing Address *</Label>
+              <Label htmlFor="address">Your Home Address *</Label>
+              <p className="text-xs text-muted-foreground mb-1">Enter your personal mailing address, not the rescue's</p>
               <div className="relative">
                 <MapPin className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -308,8 +311,9 @@ export default function AcceptInvitationPage() {
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
                   required
-                  placeholder="123 Main St, City, State ZIP"
+                  placeholder="Your home address"
                   className="pl-10"
+                  autoComplete="off"
                   data-testid="input-address"
                 />
               </div>
