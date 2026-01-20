@@ -47,6 +47,28 @@ app.use(express.urlencoded({ extended: false, limit: '50mb' }));
 // Cookie parser middleware (needed for PWA manifest tenant hint cookies)
 app.use(cookieParser());
 
+// Apple Pay domain verification file - must be served BEFORE tenant middleware
+// This file is required by Apple/Stripe to verify domain ownership for Apple Pay
+// The file is the same for all Stripe accounts, hosted at a standard URL
+app.get('/.well-known/apple-developer-merchantid-domain-association', async (_req, res) => {
+  try {
+    // Fetch the standard Apple Pay domain association file from Stripe
+    const response = await fetch('https://stripe.com/files/apple-pay/apple-developer-merchantid-domain-association');
+    if (response.ok) {
+      const fileContent = await response.text();
+      res.set('Content-Type', 'text/plain');
+      res.send(fileContent);
+      return;
+    }
+    
+    console.error('[APPLE PAY] Failed to fetch domain association file from Stripe:', response.status);
+    res.status(500).send('Unable to fetch domain association file');
+  } catch (error) {
+    console.error('[APPLE PAY] Error serving domain association file:', error);
+    res.status(500).send('Error serving domain association file');
+  }
+});
+
 // Session middleware
 app.use(sessionMiddleware);
 
