@@ -39,6 +39,20 @@ A native e-signature system for adoption contracts includes a template editor (R
 **Technical Implementations:**
 "Paw Pay" utilizes Stripe Connect with a "SaaS + 0%" two-tier subscription model (Free and Professional). A 14-day Pro trial is available once per organization, reverting to the Free tier upon expiration. Stripe Standard Connect OAuth manages tenant payments. A "Donor Covers Fees" feature calculates gross-up amounts. ACH bank transfer is supported for one-time donations. Sensitive data uses AES-256-GCM encryption. Unified file storage prioritizes Google Drive, falling back to Replit object storage. Email services integrate Resend with optional Google Workspace Gmail API. Platform admin security includes subdomain resolution, RBAC, frontend guards, authenticated sessions, and TOTP MFA. Production security features rate limiting, Helmet, CORS fail-closed, environment validation, and session hardening. Google Analytics 4 is integrated. Optional Google Workspace integration provides Gmail API, Calendar sync, and Drive storage.
 
+**Transfer Workflow & Partner Organizations:**
+The platform supports comprehensive org-to-org animal transfers with partner organization management. Partner organizations are stored separately from general contacts, with fields for name, contact info, address, and notes. Transfer features include:
+- **Partner Organization Management:** Dedicated page under People section with add/edit/archive functionality
+- **Medical Packet Generator:** One-click export of vaccination, procedures, diagnostics, prescriptions, and exams as printable summary (individual or batch)
+- **Microchip Release Checklist:** Checkbox on manifest items with reminder alert before departure for animals with unreleased microchips
+- **Transfer Fee Tracking:** Pull fee (per animal), transport fee, and fee notes fields on transport events
+- **Optional Transfer Agreements:** Tenant setting (enableTransferAgreement, defaults false) to generate printable org-to-org ownership transfer agreements with organizations, animal list, fees, legal terms, and signature lines
+
+API routes for transfer workflow:
+- GET `/api/transport/events/:transportId/medical-packet/:animalId` (individual animal)
+- GET `/api/transport/events/:transportId/medical-packet` (batch for all animals)
+- PATCH `/api/transport/manifest/:itemId/microchip-release` (toggle release status)
+- GET `/api/transport/events/:transportId/transfer-agreement` (generate agreement)
+
 **Petfinder FTP Sync Integration:**
 The platform automates animal synchronization to Petfinder via FTP. Tenants configure FTP credentials, and the system generates Petfinder-compatible CSVs, maps breeds, calculates animal ages, and uploads images. Syncs can be scheduled (every 6 hours) or triggered manually, with sync status and errors tracked.
 
