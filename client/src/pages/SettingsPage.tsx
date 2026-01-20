@@ -114,6 +114,11 @@ const twilioSettingsSchema = z.object({
 const donationSectionSchema = z.object({
   sectionHeading: z.string().max(100).optional(),
   sectionDescription: z.string().max(500).optional(),
+  sectionDescriptionExtended: z.string().max(1000).optional(),
+  sectionImageUrl: z.string().refine(
+    (val) => val === "" || val.startsWith("/") || val.startsWith("http://") || val.startsWith("https://"),
+    { message: "Must be a valid URL or storage path" }
+  ).optional().or(z.literal("")),
   monthlyGivingTitle: z.string().max(100).optional(),
   monthlyGivingDescription: z.string().max(500).optional(),
   monthlyGivingIcon: z.enum(["shield", "heart", "paw", "star", "hand-heart", "users", "home"]).optional(),
@@ -460,6 +465,8 @@ export default function SettingsPage() {
     defaultValues: {
       sectionHeading: (data?.tenant as any)?.donationSection?.sectionHeading || "",
       sectionDescription: (data?.tenant as any)?.donationSection?.sectionDescription || "",
+      sectionDescriptionExtended: (data?.tenant as any)?.donationSection?.sectionDescriptionExtended || "",
+      sectionImageUrl: (data?.tenant as any)?.donationSection?.sectionImageUrl || "",
       monthlyGivingTitle: (data?.tenant as any)?.donationSection?.monthlyGivingTitle || "",
       monthlyGivingDescription: (data?.tenant as any)?.donationSection?.monthlyGivingDescription || "",
       monthlyGivingIcon: (data?.tenant as any)?.donationSection?.monthlyGivingIcon || "shield",
@@ -471,6 +478,8 @@ export default function SettingsPage() {
     values: data?.tenant ? {
       sectionHeading: (data.tenant as any)?.donationSection?.sectionHeading || "",
       sectionDescription: (data.tenant as any)?.donationSection?.sectionDescription || "",
+      sectionDescriptionExtended: (data.tenant as any)?.donationSection?.sectionDescriptionExtended || "",
+      sectionImageUrl: (data.tenant as any)?.donationSection?.sectionImageUrl || "",
       monthlyGivingTitle: (data.tenant as any)?.donationSection?.monthlyGivingTitle || "",
       monthlyGivingDescription: (data.tenant as any)?.donationSection?.monthlyGivingDescription || "",
       monthlyGivingIcon: (data.tenant as any)?.donationSection?.monthlyGivingIcon || "shield",
@@ -1660,7 +1669,52 @@ export default function SettingsPage() {
                                 />
                               </FormControl>
                               <FormDescription>
-                                The description text shown below the heading
+                                The short description text shown below the heading
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={donationSectionForm.control}
+                          name="sectionDescriptionExtended"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Extended Description</FormLabel>
+                              <FormControl>
+                                <Textarea 
+                                  placeholder="Your financial contribution enables us to be there for our community, taking care of unwanted, homeless and often sick or injured cats and dogs. Please consider supporting our efforts to provide shelter, food and medical attention to the animals in our care." 
+                                  rows={4}
+                                  data-testid="input-donation-description-extended"
+                                  {...field} 
+                                />
+                              </FormControl>
+                              <FormDescription>
+                                The longer paragraph shown below the short description (optional)
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={donationSectionForm.control}
+                          name="sectionImageUrl"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Section Image</FormLabel>
+                              <FormControl>
+                                <ObjectUploader
+                                  value={field.value ? [field.value] : []}
+                                  onChange={(urls) => field.onChange(urls[0] || "")}
+                                  maxFiles={1}
+                                  accept="image/*"
+                                  data-testid="uploader-donation-section-image"
+                                />
+                              </FormControl>
+                              <FormDescription>
+                                An optional image to display below the text in the Support Our Mission section
                               </FormDescription>
                               <FormMessage />
                             </FormItem>

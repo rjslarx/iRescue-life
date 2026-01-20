@@ -674,6 +674,18 @@ export default function Home() {
                   )}
                 </div>
               )}
+              
+              {/* Section Image */}
+              {(tenant as any)?.donationSection?.sectionImageUrl && (
+                <div className="mt-6" data-testid="donation-section-image-container">
+                  <img 
+                    src={(tenant as any).donationSection.sectionImageUrl} 
+                    alt="Support our mission" 
+                    className="w-full rounded-md object-cover max-h-80"
+                    data-testid="img-donation-section"
+                  />
+                </div>
+              )}
             </div>
             
             {/* Right column: Donation form */}
