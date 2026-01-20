@@ -129,16 +129,28 @@ export function getPlatformConfig(): PlatformConfig {
 /**
  * Get the platform fee percentage for a given subscription tier
  * 
- * Business Logic:
- * - Self-hosted: Always apply the mandatory platform fee (supports open-source project)
- * - Hosted platform + Free/Trial: Apply platform fee (they're not paying subscription)
- * - Hosted platform + Paid tiers: 0% platform fee (included in subscription)
- * - Hosted platform + Unknown tier: Defaults to platform fee (conservative approach)
+ * Business Logic (in order of precedence):
+ * 1. Tenant-specific override (platformFeePercent field) - always takes priority if set
+ *    This allows for special cases like conflict-of-interest avoidance or partnerships
+ * 2. Self-hosted: Always apply the mandatory platform fee (supports open-source project)
+ * 3. Hosted platform + Free/Trial: Apply platform fee (they're not paying subscription)
+ * 4. Hosted platform + Paid tiers: 0% platform fee (included in subscription)
+ * 5. Hosted platform + Unknown tier: Defaults to platform fee (conservative approach)
  * 
  * @param subscriptionTier - The tenant's subscription tier
+ * @param tenantPlatformFeePercent - Optional tenant-specific fee override (null means use default)
  * @returns The platform fee percentage to apply
  */
-export function getPlatformFeePercent(subscriptionTier?: string): number {
+export function getPlatformFeePercent(
+  subscriptionTier?: string,
+  tenantPlatformFeePercent?: number | null
+): number {
+  // Check for tenant-specific override FIRST (highest priority)
+  // A value of 0 is valid (no platform fee), so we check for null/undefined explicitly
+  if (tenantPlatformFeePercent !== null && tenantPlatformFeePercent !== undefined) {
+    return tenantPlatformFeePercent;
+  }
+  
   const config = getPlatformConfig();
   
   if (!config.isHostedPlatform) {
@@ -173,13 +185,15 @@ export function isPaidSubscriptionTier(subscriptionTier?: string): boolean {
  * 
  * @param amountInCents - The payment amount in cents
  * @param subscriptionTier - The tenant's subscription tier
+ * @param tenantPlatformFeePercent - Optional tenant-specific fee override (null means use default)
  * @returns The platform fee in cents (rounded)
  */
 export function calculatePlatformFee(
   amountInCents: number,
-  subscriptionTier?: string
+  subscriptionTier?: string,
+  tenantPlatformFeePercent?: number | null
 ): number {
-  const feePercent = getPlatformFeePercent(subscriptionTier);
+  const feePercent = getPlatformFeePercent(subscriptionTier, tenantPlatformFeePercent);
   return Math.round(amountInCents * (feePercent / 100));
 }
 
@@ -261,11 +275,13 @@ export function shouldBlockPaymentWithoutFees(tenant?: { stripeConnectedAccountI
  * 
  * @param baseAmountCents - The intended donation amount in cents
  * @param subscriptionTier - The tenant's subscription tier (affects platform fee)
+ * @param tenantPlatformFeePercent - Optional tenant-specific fee override (null means use default)
  * @returns Object with breakdown of fees and total charge amount
  */
 export function calculateDonorCoversFees(
   baseAmountCents: number,
-  subscriptionTier?: string
+  subscriptionTier?: string,
+  tenantPlatformFeePercent?: number | null
 ): {
   baseAmount: number;
   stripeFee: number;
@@ -273,7 +289,7 @@ export function calculateDonorCoversFees(
   totalAmount: number;
   feesCovered: number;
 } {
-  const platformFeePercent = getPlatformFeePercent(subscriptionTier);
+  const platformFeePercent = getPlatformFeePercent(subscriptionTier, tenantPlatformFeePercent);
   const totalPercentFee = (STRIPE_PROCESSING_FEE_PERCENT + platformFeePercent) / 100;
   
   // Gross-up formula: total = (base + fixed) / (1 - percentFees)
@@ -299,11 +315,13 @@ export function calculateDonorCoversFees(
  * 
  * @param baseAmountCents - The intended donation amount in cents
  * @param subscriptionTier - The tenant's subscription tier
+ * @param tenantPlatformFeePercent - Optional tenant-specific fee override (null means use default)
  * @returns Formatted fee information for UI display
  */
 export function getFeeBreakdownDisplay(
   baseAmountCents: number,
-  subscriptionTier?: string
+  subscriptionTier?: string,
+  tenantPlatformFeePercent?: number | null
 ): {
   baseAmountFormatted: string;
   feesFormatted: string;
@@ -311,8 +329,8 @@ export function getFeeBreakdownDisplay(
   platformFeePercent: number;
   hasPlatformFee: boolean;
 } {
-  const fees = calculateDonorCoversFees(baseAmountCents, subscriptionTier);
-  const platformFeePercent = getPlatformFeePercent(subscriptionTier);
+  const fees = calculateDonorCoversFees(baseAmountCents, subscriptionTier, tenantPlatformFeePercent);
+  const platformFeePercent = getPlatformFeePercent(subscriptionTier, tenantPlatformFeePercent);
   
   return {
     baseAmountFormatted: `$${(fees.baseAmount / 100).toFixed(2)}`,

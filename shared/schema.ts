@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, integer, boolean, jsonb, unique, numeric, serial, decimal } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, integer, boolean, jsonb, unique, numeric, serial, decimal, real } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -264,6 +264,10 @@ export const tenants = pgTable("tenants", {
   // Only the owner can modify sensitive settings (branding, integrations, billing, etc.)
   // Note: This is a UUID reference to users.id, but defined without FK to avoid circular reference
   ownerId: uuid("owner_id"), // Nullable initially - will be set during signup or migration
+  
+  // Platform fee override (null = use default based on tier, 0 = no platform fee)
+  // Used for special cases like conflict-of-interest avoidance or partnerships
+  platformFeePercent: real("platform_fee_percent"), // e.g., 0 for no fee, 2.5 for 2.5%
   
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
