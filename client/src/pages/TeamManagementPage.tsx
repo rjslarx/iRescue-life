@@ -43,7 +43,7 @@ interface User {
   id: string;
   email: string;
   fullName: string;
-  roles: Array<"admin" | "board_member" | "staff" | "foster" | "volunteer">;
+  roles: Array<"owner" | "admin" | "board_member" | "staff" | "foster" | "volunteer">;
   createdAt: Date;
 }
 
@@ -51,7 +51,7 @@ interface Invitation {
   id: string;
   email: string;
   fullName: string | null;
-  roles: Array<"admin" | "board_member" | "staff" | "foster" | "volunteer">;
+  roles: Array<"owner" | "admin" | "board_member" | "staff" | "foster" | "volunteer">;
   expiresAt: Date;
   createdAt: Date;
   invitedBy: {
@@ -70,6 +70,7 @@ interface InvitationsData {
 }
 
 const AVAILABLE_ROLES = [
+  { value: "owner", label: "Owner" },
   { value: "admin", label: "Admin" },
   { value: "board_member", label: "Board Member" },
   { value: "staff", label: "Staff" },
@@ -93,14 +94,17 @@ export default function TeamManagementPage() {
     roles: ["volunteer"] as Array<"admin" | "board_member" | "staff" | "foster" | "volunteer">,
   });
 
+  // Check if current user is an owner (can manage all users including admins)
+  const isCurrentUserOwner = currentUser?.roles?.includes('owner') || false;
+  
   const { data: usersData, isLoading: isLoadingUsers } = useQuery<UsersData>({
     queryKey: ['/api/users'],
-    enabled: currentUser?.activeRole === 'admin',
+    enabled: currentUser?.activeRole === 'admin' || currentUser?.activeRole === 'owner',
   });
 
   const { data: invitationsData, isLoading: isLoadingInvitations } = useQuery<InvitationsData>({
     queryKey: ['/api/invitations'],
-    enabled: currentUser?.activeRole === 'admin',
+    enabled: currentUser?.activeRole === 'admin' || currentUser?.activeRole === 'owner',
   });
 
   const sendInvitationMutation = useMutation({
@@ -237,6 +241,8 @@ export default function TeamManagementPage() {
 
   const getRoleBadgeVariant = (role: string) => {
     switch (role) {
+      case "owner":
+        return "destructive"; // Same as admin but for owner
       case "admin":
         return "destructive";
       case "board_member":
@@ -250,6 +256,7 @@ export default function TeamManagementPage() {
 
   const getRoleLabel = (role: string) => {
     const labels: Record<string, string> = {
+      owner: "Owner",
       admin: "Admin",
       board_member: "Board Member",
       staff: "Staff",
@@ -327,17 +334,75 @@ export default function TeamManagementPage() {
       return;
     }
     
+    // Prevent owners from removing their own owner role
+    if (isRemoving && role === 'owner' && user.id === currentUser?.id) {
+      toast({
+        title: "Cannot Remove Owner Role",
+        description: "You cannot remove your own owner role. Transfer ownership to another user first.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     handleUpdateRoles(user.id, newRoles);
   };
+  
+  // Check if a specific role checkbox should be disabled for a user
+  const isRoleDisabled = (targetUser: User, role: string): boolean => {
+    // Always disable while mutation is pending
+    if (updateUserMutation.isPending) return true;
+    
+    // Owners cannot remove their own owner role
+    if (role === 'owner' && targetUser.id === currentUser?.id) {
+      return true;
+    }
+    
+    return false;
+  };
 
-  if (currentUser && currentUser.activeRole !== 'admin') {
+  // Check if the current user can edit another user's roles
+  // Only owners can edit admin/owner users
+  const canEditUserRoles = (targetUser: User): boolean => {
+    if (isCurrentUserOwner) {
+      return true; // Owner can edit anyone
+    }
+    // Regular admins cannot edit users who have admin or owner roles
+    const targetHasPrivilegedRole = targetUser.roles.includes('admin') || targetUser.roles.includes('owner');
+    return !targetHasPrivilegedRole;
+  };
+
+  // Check if the current user can delete another user
+  // Only owners can delete admin users
+  const canDeleteUser = (targetUser: User): boolean => {
+    if (targetUser.id === currentUser?.id) {
+      return false; // Cannot delete yourself
+    }
+    if (isCurrentUserOwner) {
+      // Owner can delete admins but not other owners
+      return !targetUser.roles.includes('owner');
+    }
+    // Regular admins cannot delete admin or owner users
+    const targetHasPrivilegedRole = targetUser.roles.includes('admin') || targetUser.roles.includes('owner');
+    return !targetHasPrivilegedRole;
+  };
+
+  // Get available roles for editing (non-owners can't assign owner/admin)
+  const getEditableRoles = () => {
+    if (isCurrentUserOwner) {
+      return AVAILABLE_ROLES;
+    }
+    // Non-owners can only assign non-privileged roles
+    return AVAILABLE_ROLES.filter(r => r.value !== 'owner' && r.value !== 'admin');
+  };
+
+  if (currentUser && currentUser.activeRole !== 'admin' && currentUser.activeRole !== 'owner') {
     return (
       <div className="min-h-screen flex items-center justify-center p-6">
         <Card className="max-w-md p-8 text-center">
           <Shield className="h-16 w-16 mx-auto mb-4 text-destructive" />
           <h1 className="text-2xl font-bold mb-2">Access Denied</h1>
           <p className="text-muted-foreground">
-            Only administrators can access team management. Please contact your admin if you need access.
+            Only administrators and owners can access team management. Please contact your admin if you need access.
           </p>
         </Card>
       </div>
@@ -655,32 +720,37 @@ export default function TeamManagementPage() {
                                   
                                   <div className="border-t pt-4">
                                     <Label className="text-base font-medium">Roles</Label>
-                                    {user.roles.includes('admin') ? (
+                                    {!canEditUserRoles(user) ? (
                                       <div className="bg-muted/50 border rounded-lg p-3 mt-2 space-y-1">
                                         <div className="flex items-center gap-2">
                                           <Shield className="h-4 w-4 text-primary" />
-                                          <span className="text-sm font-medium">Admin Role</span>
+                                          <span className="text-sm font-medium">
+                                            {user.roles.includes('owner') ? 'Owner' : 'Admin'} Role
+                                          </span>
                                         </div>
                                         <p className="text-xs text-muted-foreground">
-                                          Admins automatically have full access to all features.
+                                          Only the organization owner can modify admin or owner roles.
                                         </p>
                                       </div>
                                     ) : (
                                       <div className="space-y-3 mt-2">
-                                        {AVAILABLE_ROLES.map((role) => (
+                                        {getEditableRoles().map((role) => (
                                           <div key={role.value} className="flex items-center space-x-2">
                                             <Checkbox
                                               id={`edit-role-mobile-${user.id}-${role.value}`}
                                               checked={user.roles.includes(role.value as any)}
                                               onCheckedChange={() => toggleEditRole(user, role.value)}
-                                              disabled={updateUserMutation.isPending}
+                                              disabled={isRoleDisabled(user, role.value)}
                                               data-testid={`checkbox-edit-role-mobile-${user.id}-${role.value}`}
                                             />
                                             <Label
                                               htmlFor={`edit-role-mobile-${user.id}-${role.value}`}
-                                              className="text-sm font-normal cursor-pointer"
+                                              className={`text-sm font-normal ${isRoleDisabled(user, role.value) ? 'text-muted-foreground cursor-not-allowed' : 'cursor-pointer'}`}
                                             >
                                               {role.label}
+                                              {role.value === 'owner' && user.id === currentUser?.id && (
+                                                <span className="text-xs text-muted-foreground ml-1">(cannot remove)</span>
+                                              )}
                                             </Label>
                                           </div>
                                         ))}
@@ -690,7 +760,7 @@ export default function TeamManagementPage() {
                                 </div>
                               </DialogContent>
                             </Dialog>
-                            {user.id !== currentUser?.id && (
+                            {canDeleteUser(user) && (
                               <Button
                                 size="icon"
                                 variant="destructive"
@@ -794,32 +864,37 @@ export default function TeamManagementPage() {
                                         
                                         <div className="border-t pt-4">
                                           <Label className="text-base font-medium">Roles</Label>
-                                          {user.roles.includes('admin') ? (
+                                          {!canEditUserRoles(user) ? (
                                             <div className="bg-muted/50 border rounded-lg p-3 mt-2 space-y-1">
                                               <div className="flex items-center gap-2">
                                                 <Shield className="h-4 w-4 text-primary" />
-                                                <span className="text-sm font-medium">Admin Role</span>
+                                                <span className="text-sm font-medium">
+                                                  {user.roles.includes('owner') ? 'Owner' : 'Admin'} Role
+                                                </span>
                                               </div>
                                               <p className="text-xs text-muted-foreground">
-                                                Admins automatically have full access to all features.
+                                                Only the organization owner can modify admin or owner roles.
                                               </p>
                                             </div>
                                           ) : (
                                             <div className="space-y-3 mt-2">
-                                              {AVAILABLE_ROLES.map((role) => (
+                                              {getEditableRoles().map((role) => (
                                                 <div key={role.value} className="flex items-center space-x-2">
                                                   <Checkbox
                                                     id={`edit-role-${user.id}-${role.value}`}
                                                     checked={user.roles.includes(role.value as any)}
                                                     onCheckedChange={() => toggleEditRole(user, role.value)}
-                                                    disabled={updateUserMutation.isPending}
+                                                    disabled={isRoleDisabled(user, role.value)}
                                                     data-testid={`checkbox-edit-role-${user.id}-${role.value}`}
                                                   />
                                                   <Label
                                                     htmlFor={`edit-role-${user.id}-${role.value}`}
-                                                    className="text-sm font-normal cursor-pointer"
+                                                    className={`text-sm font-normal ${isRoleDisabled(user, role.value) ? 'text-muted-foreground cursor-not-allowed' : 'cursor-pointer'}`}
                                                   >
                                                     {role.label}
+                                                    {role.value === 'owner' && user.id === currentUser?.id && (
+                                                      <span className="text-xs text-muted-foreground ml-1">(cannot remove)</span>
+                                                    )}
                                                   </Label>
                                                 </div>
                                               ))}
@@ -829,7 +904,7 @@ export default function TeamManagementPage() {
                                       </div>
                                     </DialogContent>
                                   </Dialog>
-                                  {user.id !== currentUser?.id && (
+                                  {canDeleteUser(user) && (
                                     <Button
                                       size="sm"
                                       variant="destructive"

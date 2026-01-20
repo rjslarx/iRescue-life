@@ -3330,9 +3330,11 @@ Crawl-delay: 1
 
   /**
    * PATCH /api/users/:id
-   * Update user role (admin only)
+   * Update user role (admin/owner only)
+   * Owner can modify any user including admins
+   * Admin can only modify non-admin and non-owner users
    */
-  app.patch('/api/users/:id', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+  app.patch('/api/users/:id', requireTenant, requireAuth, requireRole('admin', 'owner'), async (req, res, next) => {
     try {
       // Validate UUID to prevent database errors
       if (!isValidUUID(req.params.id)) {
@@ -3342,11 +3344,59 @@ Crawl-delay: 1
       const { users } = await import('@shared/schema');
       
       const updateSchema = z.object({
-        roles: z.array(z.enum(['admin', 'board_member', 'staff', 'foster', 'volunteer'])).min(1).optional(),
+        roles: z.array(z.enum(['owner', 'admin', 'board_member', 'staff', 'foster', 'volunteer'])).min(1).optional(),
         fullName: z.string().min(1).optional(),
       });
 
       const data = updateSchema.parse(req.body);
+      
+      // Check if current user is an owner
+      const isCurrentUserOwner = req.user!.roles.includes('owner');
+      
+      // Get the target user to check their current roles
+      const [targetUser] = await db
+        .select({ id: users.id, roles: users.roles })
+        .from(users)
+        .where(
+          and(
+            eq(users.id, req.params.id),
+            eq(users.tenantId, req.tenant!.id)
+          )
+        )
+        .limit(1);
+      
+      if (!targetUser) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      
+      const targetHasOwnerRole = targetUser.roles.includes('owner');
+      const targetHasAdminRole = targetUser.roles.includes('admin');
+      
+      // Prevent non-owners from modifying owners or admins
+      if (!isCurrentUserOwner && (targetHasOwnerRole || targetHasAdminRole)) {
+        return res.status(403).json({ 
+          error: 'Only owners can modify admin or owner roles',
+          message: 'You do not have permission to change the roles of this user. Only the organization owner can modify admin or owner roles.'
+        });
+      }
+      
+      // Prevent admins from assigning owner or admin roles
+      if (!isCurrentUserOwner && data.roles) {
+        if (data.roles.includes('owner') || data.roles.includes('admin')) {
+          return res.status(403).json({ 
+            error: 'Only owners can assign admin or owner roles',
+            message: 'You do not have permission to assign admin or owner roles. Only the organization owner can grant these privileges.'
+          });
+        }
+      }
+      
+      // Prevent removing owner role from yourself (owner must transfer ownership first)
+      if (isCurrentUserOwner && req.params.id === req.user!.id && data.roles && !data.roles.includes('owner')) {
+        return res.status(400).json({ 
+          error: 'Cannot remove owner role from yourself',
+          message: 'You cannot remove your own owner role. Transfer ownership to another user first.'
+        });
+      }
 
       const [updatedUser] = await db
         .update(users)
@@ -3392,9 +3442,11 @@ Crawl-delay: 1
 
   /**
    * DELETE /api/users/:id
-   * Delete user (admin only)
+   * Delete user (admin/owner only)
+   * Owner can delete any user including admins
+   * Admin can only delete non-admin and non-owner users
    */
-  app.delete('/api/users/:id', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+  app.delete('/api/users/:id', requireTenant, requireAuth, requireRole('admin', 'owner'), async (req, res, next) => {
     try {
       // Validate UUID to prevent database errors
       if (!isValidUUID(req.params.id)) {
@@ -3403,9 +3455,47 @@ Crawl-delay: 1
       
       const { users } = await import('@shared/schema');
       
-      // Prevent admins from deleting themselves
+      // Prevent users from deleting themselves
       if (req.params.id === req.user!.id) {
         return res.status(400).json({ error: 'You cannot delete your own account' });
+      }
+      
+      // Check if current user is an owner
+      const isCurrentUserOwner = req.user!.roles.includes('owner');
+      
+      // Get the target user to check their current roles
+      const [targetUser] = await db
+        .select({ id: users.id, roles: users.roles })
+        .from(users)
+        .where(
+          and(
+            eq(users.id, req.params.id),
+            eq(users.tenantId, req.tenant!.id)
+          )
+        )
+        .limit(1);
+      
+      if (!targetUser) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      
+      const targetHasOwnerRole = targetUser.roles.includes('owner');
+      const targetHasAdminRole = targetUser.roles.includes('admin');
+      
+      // Prevent non-owners from deleting owners or admins
+      if (!isCurrentUserOwner && (targetHasOwnerRole || targetHasAdminRole)) {
+        return res.status(403).json({ 
+          error: 'Only owners can delete admin or owner accounts',
+          message: 'You do not have permission to delete this user. Only the organization owner can remove admin accounts.'
+        });
+      }
+      
+      // Prevent anyone from deleting the owner (owner role must be transferred first)
+      if (targetHasOwnerRole) {
+        return res.status(400).json({ 
+          error: 'Cannot delete the organization owner',
+          message: 'The owner account cannot be deleted. Transfer ownership to another user first.'
+        });
       }
 
       const [deletedUser] = await db
