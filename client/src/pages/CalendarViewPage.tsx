@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, parseISO, addMonths, subMonths } from "date-fns";
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, parseISO, addMonths, subMonths, getDay } from "date-fns";
 import DashboardLayout from "@/components/DashboardLayout";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTenant } from "@/contexts/TenantContext";
@@ -221,6 +221,10 @@ export default function CalendarViewPage() {
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(currentMonth);
   const calendarDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
+  
+  // Calculate empty cells needed before the first day of the month
+  // getDay returns 0 for Sunday, 1 for Monday, etc.
+  const firstDayOffset = getDay(monthStart);
 
   const toggleCalendarFilter = (calendarId: string) => {
     const newSelected = new Set(selectedCalendars);
@@ -506,6 +510,11 @@ export default function CalendarViewPage() {
                         <div key={day} className="text-center text-sm font-semibold p-2">
                           {day}
                         </div>
+                      ))}
+
+                      {/* Empty cells before first day of month */}
+                      {Array.from({ length: firstDayOffset }).map((_, idx) => (
+                        <div key={`empty-${idx}`} className="min-h-24 p-2" />
                       ))}
 
                       {/* Calendar days */}
