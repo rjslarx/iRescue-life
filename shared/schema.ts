@@ -468,9 +468,9 @@ export const animals = pgTable("animals", {
   catFriendly: boolean("cat_friendly"), // Good with cats
   dogFriendly: boolean("dog_friendly"), // Good with dogs
   needsFence: boolean("needs_fence"), // Animal requires a fenced yard for foster placement
-  // Subscription limits: Only "active" statuses (available, pending, foster, medical_hold) count toward
-  // subscription tier animal limits. "adopted" and "deceased" statuses do NOT count - enables unlimited historical records.
-  status: text("status").notNull().default("available").$type<"available" | "pending" | "adopted" | "foster" | "medical_hold" | "deceased">(),
+  // Subscription limits: Only "active" statuses (available, pending, foster, medical_hold, pending_transport) count toward
+  // subscription tier animal limits. "adopted", "deceased", and "transferred_out" statuses do NOT count - enables unlimited historical records.
+  status: text("status").notNull().default("available").$type<"available" | "pending" | "adopted" | "foster" | "medical_hold" | "deceased" | "pending_transport" | "transferred_out">(),
   intakeDate: timestamp("intake_date").notNull().defaultNow(),
   intakeSource: text("intake_source").$type<"stray" | "owner_surrender" | "transfer" | "born_in_care" | "other">(), // How the animal came to the rescue
   weight: text("weight"), // Current weight (e.g., "25 lbs", "4.2 kg")
@@ -3474,6 +3474,8 @@ export const transportManifestItems = pgTable("transport_manifest_items", {
   importedAnimalId: uuid("imported_animal_id"), // The new animal record created in receiver's org
   importedBy: uuid("imported_by").references(() => users.id, { onDelete: 'set null' }),
   importDeclineReason: text("import_decline_reason"),
+  // Previous status tracking (for rollback when removed from manifest)
+  previousAnimalStatus: text("previous_animal_status").$type<"available" | "pending" | "adopted" | "foster" | "medical_hold" | "deceased" | "pending_transport" | "transferred_out">(),
   // Timestamps
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),

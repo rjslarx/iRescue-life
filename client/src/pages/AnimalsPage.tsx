@@ -24,7 +24,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTenant } from "@/contexts/TenantContext";
-import { Plus, Loader2, ExternalLink, Check, Stethoscope, Upload, X, ChevronLeft, ChevronRight, FileText, Pencil, ClipboardList, Calendar, ChevronDown, ChevronUp, Cat, Dog, Camera, Sparkles, Palette, ChevronsUpDown, AlertCircle, Wand2, FileUp, MapPin, Users } from "lucide-react";
+import { Plus, Loader2, ExternalLink, Check, Stethoscope, Upload, X, ChevronLeft, ChevronRight, FileText, Pencil, ClipboardList, Calendar, ChevronDown, ChevronUp, Cat, Dog, Camera, Sparkles, Palette, ChevronsUpDown, AlertCircle, Wand2, FileUp, MapPin, Users, Truck } from "lucide-react";
 import { z } from "zod";
 import { cn } from "@/lib/utils";
 import { ObjectUploader } from "@/components/ObjectUploader";
@@ -81,7 +81,7 @@ const animalFormSchema = insertAnimalSchema.omit({ tenantId: true }).extend({
   dogFriendly: friendlyStatusEnum.optional(),
   childFriendly: friendlyStatusEnum.optional(),
   photoUrls: z.array(z.string()).optional().default([]),
-  status: z.enum(["available", "pending", "adopted", "foster", "medical_hold", "deceased"]).default("available"),
+  status: z.enum(["available", "pending", "adopted", "foster", "medical_hold", "deceased", "pending_transport", "transferred_out"]).default("available"),
   postedToPetfinder: z.boolean().default(false),
   petfinderUrl: z.string().optional().refine((val) => !val || val === '' || z.string().url().safeParse(val).success, {
     message: "Must be a valid URL"
@@ -1691,15 +1691,23 @@ export default function AnimalsPage() {
     }
   }, []);
   
-  // Separate animals into active, adopted, and deceased
-  const allActiveAnimals = animals.filter(animal => animal.status !== "adopted" && animal.status !== "deceased");
+  // Separate animals into active, adopted, deceased, and transferred out
+  const allActiveAnimals = animals.filter(animal => 
+    animal.status !== "adopted" && 
+    animal.status !== "deceased" && 
+    animal.status !== "transferred_out"
+  );
   const adoptedAnimals = animals.filter(animal => animal.status === "adopted");
   const deceasedAnimals = animals.filter(animal => animal.status === "deceased");
+  const transferredOutAnimals = animals.filter(animal => animal.status === "transferred_out");
   
   // Filter active animals based on status filter
+  // Handle transferred_out specially since it's shown as a separate category
   const activeAnimals = statusFilter === "all" 
     ? allActiveAnimals 
-    : allActiveAnimals.filter(animal => animal.status === statusFilter);
+    : statusFilter === "transferred_out"
+      ? transferredOutAnimals
+      : allActiveAnimals.filter(animal => animal.status === statusFilter);
 
   const createAnimalMutation = useMutation({
     mutationFn: async (animalData: AnimalFormData) => {
@@ -1894,6 +1902,10 @@ export default function AnimalsPage() {
         return "bg-red-500";
       case "deceased":
         return "bg-gray-700";
+      case "pending_transport":
+        return "bg-orange-500";
+      case "transferred_out":
+        return "bg-indigo-500";
       default:
         return "bg-gray-500";
     }
@@ -1974,6 +1986,12 @@ export default function AnimalsPage() {
                         <SelectItem value="medical_hold">
                           Medical Hold ({allActiveAnimals.filter(a => a.status === "medical_hold").length})
                         </SelectItem>
+                        <SelectItem value="pending_transport">
+                          Pending Transport ({allActiveAnimals.filter(a => a.status === "pending_transport").length})
+                        </SelectItem>
+                        <SelectItem value="transferred_out">
+                          Transferred Out ({animals.filter(a => a.status === "transferred_out").length})
+                        </SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -2044,6 +2062,17 @@ export default function AnimalsPage() {
                               </Badge>
                             </div>
                           </CardHeader>
+                          {animal.status === 'pending_transport' && (
+                            <div className="mx-4 mb-2 p-2 bg-orange-100 dark:bg-orange-900/30 rounded-md border border-orange-300 dark:border-orange-700">
+                              <div className="flex items-center gap-2 text-orange-700 dark:text-orange-300">
+                                <Truck className="h-4 w-4" />
+                                <span className="text-sm font-medium">Manifested for Transport</span>
+                              </div>
+                              <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">
+                                This animal is reserved for an upcoming transport and cannot be adopted.
+                              </p>
+                            </div>
+                          )}
                           <CardContent className="space-y-4">
                             {animal.photoUrls && animal.photoUrls.length > 0 && (
                               <div className="relative w-full aspect-[4/3] bg-muted rounded-md overflow-hidden">
@@ -2359,6 +2388,17 @@ export default function AnimalsPage() {
                         </Badge>
                       </div>
                     </CardHeader>
+                    {animal.status === 'pending_transport' && (
+                      <div className="mx-4 mb-2 p-2 bg-orange-100 dark:bg-orange-900/30 rounded-md border border-orange-300 dark:border-orange-700">
+                        <div className="flex items-center gap-2 text-orange-700 dark:text-orange-300">
+                          <Truck className="h-4 w-4" />
+                          <span className="text-sm font-medium">Manifested for Transport</span>
+                        </div>
+                        <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">
+                          This animal is reserved for an upcoming transport and cannot be adopted.
+                        </p>
+                      </div>
+                    )}
                     <CardContent className="space-y-4">
                       {animal.photoUrls && animal.photoUrls.length > 0 && (
                         <div className="relative w-full aspect-[4/3] bg-muted rounded-md overflow-hidden">

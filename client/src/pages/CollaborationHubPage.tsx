@@ -951,7 +951,7 @@ function CreateAlertDialog({
   );
 }
 
-function ManifestTab({ transportId, open }: { transportId: string; open: boolean }) {
+function ManifestTab({ transportId, transportStatus, open }: { transportId: string; transportStatus: string; open: boolean }) {
   const { toast } = useToast();
   const [selectedAnimalId, setSelectedAnimalId] = useState("");
   const [destinationOrgName, setDestinationOrgName] = useState("");
@@ -1097,6 +1097,33 @@ function ManifestTab({ transportId, open }: { transportId: string; open: boolean
     },
   });
 
+  const departTransportMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest('POST', `/api/transport/events/${transportId}/depart`);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to depart transport');
+      }
+      return response.json();
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/transport/events', transportId] });
+      queryClient.invalidateQueries({ queryKey: ['/api/transport/events'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/animals'] });
+      toast({
+        title: "Transport departed",
+        description: data.message || `${data.animalsUpdated} animal(s) marked as transferred out.`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Cannot depart transport",
+        description: error.message || "Failed to mark transport as departed.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleCopyRunSheetUrl = async () => {
     if (runSheetUrl) {
       await navigator.clipboard.writeText(runSheetUrl);
@@ -1202,6 +1229,19 @@ function ManifestTab({ transportId, open }: { transportId: string; open: boolean
             <CheckCircle className="h-4 w-4 mr-2" />
             Finalize
           </Button>
+          {transportStatus === 'confirmed' && manifestItems.length > 0 && (
+            <Button
+              size="sm"
+              variant="default"
+              onClick={() => departTransportMutation.mutate()}
+              disabled={departTransportMutation.isPending}
+              data-testid="button-depart-transport"
+            >
+              {departTransportMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              <Truck className="h-4 w-4 mr-2" />
+              Depart Transport
+            </Button>
+          )}
         </div>
       </div>
 
@@ -1921,7 +1961,7 @@ function TransportDetailDialog({
           </TabsContent>
 
           <TabsContent value="manifest">
-            <ManifestTab transportId={transport.id} open={open} />
+            <ManifestTab transportId={transport.id} transportStatus={transport.status} open={open} />
           </TabsContent>
 
           <TabsContent value="participants" className="space-y-4">

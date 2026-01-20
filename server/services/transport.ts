@@ -656,6 +656,8 @@ export class TransportService {
       originOrgName: tenant[0]?.name || 'Unknown Organization',
       hasHealthCertificate: !!healthCertDoc,
       hasCvi: !!cviDoc,
+      // Store the animal's current status so we can restore it if removed from manifest
+      previousAnimalStatus: animal.status,
     };
     
     // Add optional fields only if they have values
@@ -670,6 +672,14 @@ export class TransportService {
     const [item] = await db.insert(transportManifestItems)
       .values(insertData)
       .returning();
+
+    // Update animal status to pending_transport (Stage 1: Soft Lock)
+    await db.update(animals)
+      .set({
+        status: 'pending_transport',
+        updatedAt: new Date(),
+      })
+      .where(eq(animals.id, data.animalId));
 
     return { item, validationErrors };
   }
@@ -731,12 +741,26 @@ export class TransportService {
   }
 
   static async removeManifestItem(tenantId: string, itemId: string): Promise<boolean> {
+    // First get the manifest item to restore the animal's previous status
+    const item = await this.getManifestItem(tenantId, itemId);
+    if (!item) return false;
+
     const result = await db.delete(transportManifestItems)
       .where(and(
         eq(transportManifestItems.id, itemId),
         eq(transportManifestItems.tenantId, tenantId)
       ))
       .returning();
+
+    if (result.length > 0 && item.previousAnimalStatus) {
+      // Restore animal to previous status (Rollback from Soft Lock)
+      await db.update(animals)
+        .set({
+          status: item.previousAnimalStatus,
+          updatedAt: new Date(),
+        })
+        .where(eq(animals.id, item.animalId));
+    }
 
     return result.length > 0;
   }
@@ -1450,6 +1474,66 @@ export class TransportService {
       userName,
       metadata: { previousStatus, newStatus },
     });
+  }
+
+  /**
+   * Depart Transport (Stage 3: Hard Close)
+   * Updates transport status to 'in_transit' and batch updates all manifest animals to 'transferred_out'
+   */
+  static async departTransport(
+    tenantId: string,
+    transportId: string,
+    userId?: string,
+    userName?: string
+  ): Promise<{ success: boolean; animalsUpdated: number; transport: TransportEvent | null }> {
+    const transport = await this.getTransport(tenantId, transportId);
+    if (!transport) {
+      return { success: false, animalsUpdated: 0, transport: null };
+    }
+
+    // Get all manifest items for this transport
+    const manifestItems = await this.listManifestItems(tenantId, transportId);
+    
+    if (manifestItems.length === 0) {
+      return { success: false, animalsUpdated: 0, transport: null };
+    }
+
+    // Batch update all animals to transferred_out status
+    const animalIds = manifestItems.map(item => item.animalId);
+    const now = new Date();
+
+    // Get the destination org name from transport
+    const destinationOrg = transport.partnerOrganizationName || 'Partner Organization';
+
+    await db.update(animals)
+      .set({
+        status: 'transferred_out',
+        notes: sql`COALESCE(notes, '') || '\n\nTransferred to ' || ${destinationOrg} || ' on ' || ${now.toLocaleDateString()}`,
+        updatedAt: now,
+      })
+      .where(inArray(animals.id, animalIds));
+
+    // Update transport status to in_transit
+    const [updatedTransport] = await db.update(transportEvents)
+      .set({
+        status: 'in_transit',
+        departureDate: now,
+        updatedAt: now,
+      })
+      .where(and(
+        eq(transportEvents.id, transportId),
+        eq(transportEvents.tenantId, tenantId)
+      ))
+      .returning();
+
+    // Log the departure
+    await this.logTransportEvent(tenantId, transportId, 'status_change', `Transport departed with ${animalIds.length} animal(s)`, {
+      userId,
+      userName,
+      metadata: { animalsUpdated: animalIds.length, destination: destinationOrg },
+    });
+
+    return { success: true, animalsUpdated: animalIds.length, transport: updatedTransport };
   }
 }
 

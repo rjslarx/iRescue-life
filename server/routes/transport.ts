@@ -870,6 +870,37 @@ router.post('/events/:transportId/finalize-manifest', requireTenant, requireAuth
   }
 });
 
+// Depart Transport (Stage 3: Hard Close)
+// Batch updates all manifest animals to transferred_out and marks transport as in_transit
+router.post('/events/:transportId/depart', requireTenant, requireAuth, async (req, res, next) => {
+  try {
+    const user = req.user!;
+    const userName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || undefined;
+    
+    const result = await TransportService.departTransport(
+      req.tenant!.id, 
+      req.params.transportId,
+      user.id,
+      userName
+    );
+    
+    if (!result.success) {
+      return res.status(400).json({ 
+        error: 'Failed to depart transport. Ensure the transport has animals in its manifest.',
+      });
+    }
+    
+    res.json({ 
+      success: true, 
+      message: `Transport departed successfully. ${result.animalsUpdated} animal(s) marked as transferred.`,
+      animalsUpdated: result.animalsUpdated,
+      transport: result.transport,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // ============================================================================
 // Mobile Run Sheet Routes (Public Access)
 // ============================================================================

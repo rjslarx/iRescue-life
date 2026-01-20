@@ -211,6 +211,16 @@ export async function createCheckoutSession(
     throw new Error('Animal not found or does not belong to this organization');
   }
 
+  // Block checkout for animals that are pending transport
+  if (animal.status === 'pending_transport') {
+    throw new Error('This animal is currently manifested for transport and cannot proceed with adoption checkout. Remove the animal from the transport manifest first.');
+  }
+
+  // Block checkout for animals that have already been transferred out
+  if (animal.status === 'transferred_out') {
+    throw new Error('This animal has been transferred to another organization and is no longer available for adoption.');
+  }
+
   // Validate grant if provided
   if (data.grantId) {
     const [grant] = await db
