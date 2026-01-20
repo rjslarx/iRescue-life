@@ -5938,6 +5938,7 @@ Submitted: ${new Date().toLocaleString()}
           passFeesToAdopter: tenants.passFeesToAdopter,
           requireSpayNeuterContract: tenants.requireSpayNeuterContract,
           name: tenants.name,
+          platformFeePercent: tenants.platformFeePercent,
         })
         .from(tenants)
         .where(eq(tenants.id, session.tenantId))
@@ -6119,8 +6120,8 @@ Submitted: ${new Date().toLocaleString()}
         };
       }
 
-      // Calculate fee info for display
-      const platformFeePercent = getPlatformFeePercent(tenant?.subscriptionTier || 'free');
+      // Calculate fee info for display (pass tenant override if set)
+      const platformFeePercent = getPlatformFeePercent(tenant?.subscriptionTier || 'free', tenant?.platformFeePercent);
       
       res.json({
         session: {
@@ -9384,8 +9385,8 @@ View this submission in Custom Forms > ${form.name} > Submissions
         typescript: true,
       });
       
-      // Get platform fee percent based on tenant tier
-      const platformFeePercent = getPlatformFeePercent(tenant.subscriptionTier as 'free' | 'professional');
+      // Get platform fee percent based on tenant tier (pass tenant override if set)
+      const platformFeePercent = getPlatformFeePercent(tenant.subscriptionTier as 'free' | 'professional', tenant.platformFeePercent);
       
       // Build Stripe metadata for campaign tracking
       const stripeMetadata: Record<string, string> = {
@@ -9606,7 +9607,7 @@ View this submission in Custom Forms > ${form.name} > Submissions
         typescript: true,
       });
       
-      const platformFeePercent = getPlatformFeePercent(tenant.subscriptionTier as 'free' | 'professional');
+      const platformFeePercent = getPlatformFeePercent(tenant.subscriptionTier as 'free' | 'professional', tenant.platformFeePercent);
       
       // Build the product with pet metadata
       const title = `Sponsor ${animal.name}`;
@@ -9730,7 +9731,7 @@ View this submission in Custom Forms > ${form.name} > Submissions
         typescript: true,
       });
       
-      const platformFeePercent = getPlatformFeePercent(tenant.subscriptionTier as 'free' | 'professional');
+      const platformFeePercent = getPlatformFeePercent(tenant.subscriptionTier as 'free' | 'professional', tenant.platformFeePercent);
       
       // Define the 3 tiers
       const tiers = [
@@ -9844,7 +9845,7 @@ View this submission in Custom Forms > ${form.name} > Submissions
         typescript: true,
       });
       
-      const platformFeePercent = getPlatformFeePercent(tenant.subscriptionTier as 'free' | 'professional');
+      const platformFeePercent = getPlatformFeePercent(tenant.subscriptionTier as 'free' | 'professional', tenant.platformFeePercent);
       
       const stripeMetadata: Record<string, string> = {
         campaign_type: 'emergency_fund',
@@ -9959,7 +9960,7 @@ View this submission in Custom Forms > ${form.name} > Submissions
         typescript: true,
       });
       
-      const platformFeePercent = getPlatformFeePercent(tenant.subscriptionTier as 'free' | 'professional');
+      const platformFeePercent = getPlatformFeePercent(tenant.subscriptionTier as 'free' | 'professional', tenant.platformFeePercent);
       
       const title = `${data.eventName} - Donate Now`;
       const stripeMetadata: Record<string, string> = {
@@ -16574,8 +16575,9 @@ Submitted: ${new Date().toLocaleString()}
         .limit(1);
 
       const subscriptionTier = tenant?.subscriptionTier || 'free';
-      const feeCalc = calculateDonorCoversFees(amount, subscriptionTier);
-      const platformFeePercent = getPlatformFeePercent(subscriptionTier);
+      const tenantPlatformFeePercent = tenant?.platformFeePercent;
+      const feeCalc = calculateDonorCoversFees(amount, subscriptionTier, tenantPlatformFeePercent);
+      const platformFeePercent = getPlatformFeePercent(subscriptionTier, tenantPlatformFeePercent);
       
       res.json({
         baseAmount: feeCalc.baseAmount,
@@ -16633,14 +16635,14 @@ Submitted: ${new Date().toLocaleString()}
       let chargeAmount = data.amount;
       let feesCovered = 0;
       if (data.donorCoversFees) {
-        const feeCalc = calculateDonorCoversFees(data.amount, tenant.subscriptionTier || 'free');
+        const feeCalc = calculateDonorCoversFees(data.amount, tenant.subscriptionTier || 'free', tenant.platformFeePercent);
         chargeAmount = feeCalc.totalAmount;
         feesCovered = feeCalc.feesCovered;
       }
 
-      // Calculate platform fee on the charge amount
-      const platformFeeAmount = calculatePlatformFee(chargeAmount, tenant.subscriptionTier || 'free');
-      const platformFeePercent = getPlatformFeePercent(tenant.subscriptionTier || 'free');
+      // Calculate platform fee on the charge amount (pass tenant override if set)
+      const platformFeeAmount = calculatePlatformFee(chargeAmount, tenant.subscriptionTier || 'free', tenant.platformFeePercent);
+      const platformFeePercent = getPlatformFeePercent(tenant.subscriptionTier || 'free', tenant.platformFeePercent);
 
       // Check if using custom domain - if so, don't include tenant path
       const isCustomDomain = tenant.customDomain && tenant.customDomainVerified;
@@ -23725,14 +23727,14 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
       let chargeAmount = baseAmount;
       let feesCovered = 0;
       if (data.donorCoversFees) {
-        const feeCalc = calculateDonorCoversFees(baseAmount, tenant.subscriptionTier || 'free');
+        const feeCalc = calculateDonorCoversFees(baseAmount, tenant.subscriptionTier || 'free', tenant.platformFeePercent);
         chargeAmount = feeCalc.totalAmount;
         feesCovered = feeCalc.feesCovered;
       }
 
-      // Calculate platform fee
-      const platformFeeAmount = calculatePlatformFee(chargeAmount, tenant.subscriptionTier || 'free');
-      const platformFeePercent = getPlatformFeePercent(tenant.subscriptionTier || 'free');
+      // Calculate platform fee (pass tenant override if set)
+      const platformFeeAmount = calculatePlatformFee(chargeAmount, tenant.subscriptionTier || 'free', tenant.platformFeePercent);
+      const platformFeePercent = getPlatformFeePercent(tenant.subscriptionTier || 'free', tenant.platformFeePercent);
 
       // Build URLs
       const isCustomDomain = tenant.customDomain && tenant.customDomainVerified;

@@ -27,6 +27,9 @@ export interface TenantContext {
   stripeLink?: string | null;
   stripeEnabled?: boolean;
   stripePublishableKey?: string | null;
+  stripeConnectedAccountId?: string | null;
+  subscriptionTier?: string | null;
+  platformFeePercent?: number | null;
   resendEnabled?: boolean;
   resendFromEmail?: string | null;
   resendFromName?: string | null;
@@ -353,6 +356,9 @@ export async function resolveTenant(req: Request, res: Response, next: NextFunct
           stripeLink: tenants.stripeLink,
           stripeEnabled: tenants.stripeEnabled,
           stripePublishableKey: tenants.stripePublishableKey,
+          stripeConnectedAccountId: tenants.stripeConnectedAccountId,
+          subscriptionTier: tenants.subscriptionTier,
+          platformFeePercent: tenants.platformFeePercent,
           resendEnabled: tenants.resendEnabled,
           resendFromEmail: tenants.resendFromEmail,
           resendFromName: tenants.resendFromName,
@@ -420,6 +426,9 @@ export async function resolveTenant(req: Request, res: Response, next: NextFunct
         stripeLink: tenant.stripeLink,
         stripeEnabled: tenant.stripeEnabled,
         stripePublishableKey: tenant.stripePublishableKey,
+        stripeConnectedAccountId: tenant.stripeConnectedAccountId,
+        subscriptionTier: tenant.subscriptionTier,
+        platformFeePercent: tenant.platformFeePercent,
         resendEnabled: tenant.resendEnabled,
         resendFromEmail: tenant.resendFromEmail,
         resendFromName: tenant.resendFromName,

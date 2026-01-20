@@ -179,8 +179,8 @@ export async function processDonationPayment(
       };
     }
 
-    // Calculate base platform fee info
-    const platformFeePercent = getPlatformFeePercent(tenant.subscriptionTier);
+    // Calculate base platform fee info (pass tenant override if set)
+    const platformFeePercent = getPlatformFeePercent(tenant.subscriptionTier, tenant.platformFeePercent);
     
     // Handle "Donor Covers Fees" calculation
     let chargeAmount = params.amount;
@@ -189,13 +189,13 @@ export async function processDonationPayment(
     
     if (donorCoversFees) {
       // Gross up the amount so rescue receives the full base amount
-      const feeCalc = calculateDonorCoversFees(params.amount, tenant.subscriptionTier);
+      const feeCalc = calculateDonorCoversFees(params.amount, tenant.subscriptionTier, tenant.platformFeePercent);
       chargeAmount = feeCalc.totalAmount;
       feesCoveredAmount = feeCalc.feesCovered;
     }
     
-    // Calculate platform fee on the actual charge amount
-    const platformFeeAmount = calculatePlatformFee(chargeAmount, tenant.subscriptionTier);
+    // Calculate platform fee on the actual charge amount (pass tenant override if set)
+    const platformFeeAmount = calculatePlatformFee(chargeAmount, tenant.subscriptionTier, tenant.platformFeePercent);
 
     // Check if payments should be blocked due to missing fee configuration
     if (shouldBlockPaymentWithoutFees(tenant)) {
@@ -344,8 +344,8 @@ export async function processAdoptionFeePayment(
       };
     }
 
-    // Calculate base platform fee info
-    const platformFeePercent = getPlatformFeePercent(tenant.subscriptionTier);
+    // Calculate base platform fee info (pass tenant override if set)
+    const platformFeePercent = getPlatformFeePercent(tenant.subscriptionTier, tenant.platformFeePercent);
     
     // Handle "Adopter Covers Fees" calculation
     let chargeAmount = params.amount;
@@ -353,13 +353,13 @@ export async function processAdoptionFeePayment(
     const donorCoversFees = params.donorCoversFees === true;
     
     if (donorCoversFees) {
-      const feeCalc = calculateDonorCoversFees(params.amount, tenant.subscriptionTier);
+      const feeCalc = calculateDonorCoversFees(params.amount, tenant.subscriptionTier, tenant.platformFeePercent);
       chargeAmount = feeCalc.totalAmount;
       feesCoveredAmount = feeCalc.feesCovered;
     }
     
-    // Calculate platform fee on the actual charge amount
-    const platformFeeAmount = calculatePlatformFee(chargeAmount, tenant.subscriptionTier);
+    // Calculate platform fee on the actual charge amount (pass tenant override if set)
+    const platformFeeAmount = calculatePlatformFee(chargeAmount, tenant.subscriptionTier, tenant.platformFeePercent);
 
     // Check if payments should be blocked due to missing fee configuration
     if (shouldBlockPaymentWithoutFees(tenant)) {
@@ -511,9 +511,9 @@ export async function processShopPayment(
       };
     }
 
-    // Calculate platform fee
-    const platformFeePercent = getPlatformFeePercent(tenant.subscriptionTier);
-    const platformFeeAmount = calculatePlatformFee(amount, tenant.subscriptionTier);
+    // Calculate platform fee (pass tenant override if set)
+    const platformFeePercent = getPlatformFeePercent(tenant.subscriptionTier, tenant.platformFeePercent);
+    const platformFeeAmount = calculatePlatformFee(amount, tenant.subscriptionTier, tenant.platformFeePercent);
 
     // Check if payments should be blocked due to missing fee configuration
     if (shouldBlockPaymentWithoutFees(tenant)) {
@@ -665,12 +665,12 @@ export async function processFormFeePayment(
       };
     }
 
-    // Calculate base platform fee info
-    const platformFeePercent = getPlatformFeePercent(tenant.subscriptionTier);
+    // Calculate base platform fee info (pass tenant override if set)
+    const platformFeePercent = getPlatformFeePercent(tenant.subscriptionTier, tenant.platformFeePercent);
     const chargeAmount = totalBaseAmount;
     
-    // Calculate platform fee on the total charge amount
-    const platformFeeAmount = calculatePlatformFee(chargeAmount, tenant.subscriptionTier);
+    // Calculate platform fee on the total charge amount (pass tenant override if set)
+    const platformFeeAmount = calculatePlatformFee(chargeAmount, tenant.subscriptionTier, tenant.platformFeePercent);
 
     // Check if payments should be blocked due to missing fee configuration
     if (shouldBlockPaymentWithoutFees(tenant)) {
@@ -798,8 +798,11 @@ export async function processFormFeePayment(
 /**
  * Get platform fee information for display to users
  * This can be used to show transparency about fees
+ * 
+ * @param subscriptionTier - The tenant's subscription tier
+ * @param tenantPlatformFeePercent - Optional tenant-specific fee override (null means use default)
  */
-export function getPlatformFeeInfo(subscriptionTier?: string): {
+export function getPlatformFeeInfo(subscriptionTier?: string, tenantPlatformFeePercent?: number | null): {
   percent: number;
   isHosted: boolean;
   isCollected: boolean;
@@ -807,13 +810,19 @@ export function getPlatformFeeInfo(subscriptionTier?: string): {
   isPaidTier: boolean;
 } {
   const config = getPlatformConfig();
-  const percent = getPlatformFeePercent(subscriptionTier);
+  const percent = getPlatformFeePercent(subscriptionTier, tenantPlatformFeePercent);
   const isCollected = isStripeConnectConfigured();
   const isPaidTier = subscriptionTier === 'professional';
   
   let description: string;
   
-  if (!config.isHostedPlatform) {
+  // Check if this is a tenant override scenario
+  const hasOverride = tenantPlatformFeePercent !== null && tenantPlatformFeePercent !== undefined;
+  
+  if (hasOverride && percent === 0) {
+    // Tenant has 0% override (e.g., conflict of interest avoidance)
+    description = 'No platform fee applies to this organization.';
+  } else if (!config.isHostedPlatform) {
     // Self-hosted mode
     if (isCollected) {
       description = `A ${percent}% platform fee supports the iRescue.life open-source project.`;
@@ -840,18 +849,23 @@ export function getPlatformFeeInfo(subscriptionTier?: string): {
 /**
  * Calculate estimated fees for a payment amount
  * Useful for displaying fee breakdown before payment
+ * 
+ * @param amountInCents - The payment amount in cents
+ * @param subscriptionTier - The tenant's subscription tier
+ * @param tenantPlatformFeePercent - Optional tenant-specific fee override (null means use default)
  */
 export function estimateFees(
   amountInCents: number,
-  subscriptionTier?: string
+  subscriptionTier?: string,
+  tenantPlatformFeePercent?: number | null
 ): {
   subtotal: number;
   platformFee: number;
   platformFeePercent: number;
   total: number;
 } {
-  const platformFeePercent = getPlatformFeePercent(subscriptionTier);
-  const platformFee = calculatePlatformFee(amountInCents, subscriptionTier);
+  const platformFeePercent = getPlatformFeePercent(subscriptionTier, tenantPlatformFeePercent);
+  const platformFee = calculatePlatformFee(amountInCents, subscriptionTier, tenantPlatformFeePercent);
   
   return {
     subtotal: amountInCents,

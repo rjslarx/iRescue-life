@@ -243,13 +243,14 @@ export async function createCheckoutSession(
     .select({
       passFeesToAdopter: tenants.passFeesToAdopter,
       subscriptionTier: tenants.subscriptionTier,
+      platformFeePercent: tenants.platformFeePercent,
     })
     .from(tenants)
     .where(eq(tenants.id, tenantId))
     .limit(1);
 
   const passFeesToAdopter = tenant?.passFeesToAdopter || false;
-  const platformFeePercent = getPlatformFeePercent(tenant?.subscriptionTier || 'free');
+  const platformFeePercent = getPlatformFeePercent(tenant?.subscriptionTier || 'free', tenant?.platformFeePercent);
 
   // Generate secure token
   const token = generateSecureToken();
@@ -449,13 +450,14 @@ export async function updateCheckoutSession(
       .select({
         passFeesToAdopter: tenants.passFeesToAdopter,
         subscriptionTier: tenants.subscriptionTier,
+        platformFeePercent: tenants.platformFeePercent,
       })
       .from(tenants)
       .where(eq(tenants.id, tenantId))
       .limit(1);
 
     const passFeesToAdopter = tenant?.passFeesToAdopter || false;
-    const platformFeePercent = getPlatformFeePercent(tenant?.subscriptionTier || 'free');
+    const platformFeePercent = getPlatformFeePercent(tenant?.subscriptionTier || 'free', tenant?.platformFeePercent);
 
     totals = calculateTotals(
       updates.baseFee || session.baseFee,
