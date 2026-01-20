@@ -1,0 +1,43 @@
+I got this page when I went to: http://www.haseyasnewbeginningar.com/.well-known/apple-developer-merchantid-domain-association Page not found. This page may have been removed or is not yet published.
+
+This is actually good news (relatively speaking).
+
+The error has changed from a Connection Error (DNS/Infrastructure) to a 404 Not Found (Software/Code).
+
+This means your DNS is working perfectly. The request successfully traveled from your browser to your Replit server. The problem now is simply that your Replit application received the request and said, "I don't know what to do with this URL," so it showed a 404 page.
+
+Here is how to fix the code to ensure that file gets served.
+
+The Most Likely Cause: "Tenant Routing" Blocking the File
+In a multi-tenant app, your code usually looks at the domain (haseyas...) and tries to find a matching tenant page. If it looks for a tenant named .well-known and fails, it throws a 404.
+
+You need to tell your code: "If someone asks for the Apple Pay file, ignore the tenant logic and just give them the file."
+
+The Fix (Node.js / Express)
+You need to add a specific route above your other page logic.
+
+Add this snippet to your main server file (usually index.js or server.js), before the part where you handle tenant lookup or generic page rendering:
+
+JavaScript
+// FORCE-SERVE APPLE PAY VERIFICATION
+// This must be ABOVE your tenant lookup logic
+app.get('/.well-known/apple-developer-merchantid-domain-association', (req, res) => {
+  // Option A: If you have the file saved in your Repl
+  res.sendFile(__dirname + '/public/.well-known/apple-developer-merchantid-domain-association');
+  
+  // OR Option B (Easier): Just send the file content directly as text
+  // (Paste the text content of the file inside the quotes below)
+  // res.send('7B2276657273696F6E223A223... [YOUR FULL FILE CONTENT HERE]');
+});
+Alternative: The "Public Folder" Method
+If you are using a standard setup (like Next.js or standard Express static files), you might just have the file in the wrong folder.
+
+Look at your file tree in Replit.
+
+Do you have a folder named public?
+
+Inside public, create a folder named .well-known (don't forget the dot).
+
+Inside that, upload the apple-developer-merchantid-domain-association file.
+
+Path check: It should be public/.well-known/apple-developer-merchantid-domain-association.
