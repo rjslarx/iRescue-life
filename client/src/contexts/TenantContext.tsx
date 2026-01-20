@@ -36,10 +36,16 @@ function isReservedPath(segment: string | null): boolean {
 }
 
 // Clean up any stale reserved path stored as tenant
+// Exception: 'platform' is always valid - it's explicitly handled by the platform admin flow
 function cleanupStaleStorage(): void {
   if (typeof window === 'undefined') return;
   const stored = localStorage.getItem(STORAGE_KEY);
   if (stored && RESERVED_PATHS.includes(stored.toLowerCase())) {
+    // Never remove 'platform' - it's a valid special tenant for platform admin
+    // The platform admin flow explicitly manages this value
+    if (stored.toLowerCase() === 'platform') {
+      return;
+    }
     console.log('[TENANT CLEANUP] Removing stale reserved path from storage:', stored);
     localStorage.removeItem(STORAGE_KEY);
   }
