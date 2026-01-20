@@ -26,6 +26,7 @@ export const tenants = pgTable("tenants", {
   // Custom domain settings
   customDomain: text("custom_domain").unique(), // e.g., "fluffypaws.org" or "www.fluffypaws.org"
   customDomainVerified: boolean("custom_domain_verified").notNull().default(false),
+  applePayDomainRegistered: boolean("apple_pay_domain_registered").notNull().default(false), // Whether domain is registered with Stripe for Apple Pay
   // Payment integration settings
   stripeLink: text("stripe_link"), // Custom Stripe payment link
   // Stripe settings (encrypted API keys per tenant)
