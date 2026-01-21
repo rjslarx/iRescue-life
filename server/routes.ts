@@ -6,7 +6,7 @@ import { requireAuth, requireRole, requireOwner } from "./middleware/auth";
 import { loginUser, createTenantWithAdmin, createUser } from "./services/auth";
 import { PushNotificationService } from "./services/push-notifications";
 import { db } from "./db";
-import { tenants, users, demoRequests, insertDemoRequestSchema, smsMessageLogs, emailEvents, animals, platformIntegrations, newsletterCampaigns, newsletterSubscribers, happyTails, adoptionCheckoutSessions, pageVisits, customFormSubmissions, customForms, applications, fosterApplications, volunteerApplications } from "@shared/schema";
+import { tenants, users, demoRequests, insertDemoRequestSchema, smsMessageLogs, emailEvents, animals, platformIntegrations, newsletterCampaigns, newsletterSubscribers, happyTails, adoptionCheckoutSessions, pageVisits, customFormSubmissions, customForms, applications, fosterApplications, volunteerApplications, donations, calendarEvents } from "@shared/schema";
 import { eq, and, desc, sql, inArray, lt, ilike, gte, count } from "drizzle-orm";
 import { z } from "zod";
 import { authLimiter, signupLimiter, passwordResetLimiter, emailLimiter } from "./config/security";
@@ -2675,16 +2675,7 @@ Crawl-delay: 1
    */
   app.get('/api/dashboard/activity', requireTenant, requireAuth, async (req, res, next) => {
     try {
-      const { 
-        applications, 
-        donations, 
-        animals, 
-        volunteerApplications, 
-        fosterApplications,
-        calendarEvents,
-        happyTails 
-      } = await import('@shared/schema');
-      const { desc } = await import('drizzle-orm');
+      // Tables are imported statically at top of file: applications, donations, animals, volunteerApplications, fosterApplications, calendarEvents, happyTails
 
       // Fetch recent data from all sources
       const [
