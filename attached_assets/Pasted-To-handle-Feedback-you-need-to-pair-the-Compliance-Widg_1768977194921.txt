@@ -1,0 +1,100 @@
+To handle Feedback, you need to pair the Compliance Widget with a second component: The "Action Center" (or Triage Feed).
+
+Here is how to design the Tenant Dashboard to handle both Compliance (Missing Data) and Feedback (Incoming Data).
+
+1. The Dashboard Layout: "Silence vs. Noise"
+Imagine the Tenant's dashboard split into two distinct columns or zones.
+
+Left Column: The Compliance Monitor (The "Silence")
+Goal: Catch people who are ignoring you.
+
+Logic: "If due_date < now AND status != done".
+
+What it shows:
+
+🔴 Overdue Meds: "3 Fosters missed heartworm prevention yesterday."
+
+🔴 Missing Content: "Spot (Foster: Sarah) has been in care 7 days but has no Bio."
+
+🔴 Ghosting: "Adopter Mike hasn't opened the '6-month Check-in'."
+
+Right Column: The Action Feed (The "Noise")
+Goal: Process incoming requests and updates.
+
+Logic: "New row inserted in feedback, supply_requests, or medical_logs".
+
+What it shows:
+
+🟢 Foster Update: "Sarah logged: 'Spot ate well, but stool is loose.'" (Medical)
+
+📦 Supply Request: "Mike needs: Puppy Pads." (Inventory)
+
+💌 Happy Tail: "Adopter Jen uploaded a photo: 'First nap on the couch!'" (Marketing)
+
+2. Handling Foster Feedback (Operational)
+Fosters generate work for the rescue. Their feedback needs to be routed to specific departments (Medical vs. Supplies).
+
+The "Red Flag" Logic: You don't want the Tenant to read every single "He ate dinner" log. You need to filter for Exceptions.
+
+Standard Log: "Ate 1 cup. Activity Normal." -> System Action: Save to DB, do not notify Admin.
+
+Alert Log: "Vomiting. Lethargic." -> System Action: Trigger "Medical Alert" in the Action Feed. Highlight in RED.
+
+The Supply Workflow:
+
+Foster Input: Clicks "Request Supplies" -> Selects "Heartworm Prevention" -> Quantity: 1.
+
+Tenant View: Appears in the Action Feed.
+
+Action Buttons: [Mark Ready for Pickup] | [Out of Stock].
+
+Closing the Loop: When the Tenant clicks [Mark Ready], the Foster gets a Push Notification: "Your meds are at the front desk!"
+
+3. Handling Adopter Feedback (Marketing & Retention)
+Adopter feedback is valuable content. You need to make it easy to re-purpose it.
+
+The "Happy Tail" Pipeline:
+
+Adopter Input: Responds to the "3-Day Check-in" with a photo of the dog.
+
+Tenant View: Appears in the Action Feed as "Marketing Gold."
+
+Action Button: [Post to Facebook] (or [Download for Socials]).
+
+Action Button: [Save to 'Success Stories' Page].
+
+Why this matters: Most rescues lose these photos in random text threads. Your platform centralizes them into a content library.
+
+The "Issue" Triage:
+
+Adopter Input: Responds to a survey: "He is growling at my husband."
+
+Tenant View: This creates a "Behavior Ticket."
+
+It shouldn't just sit in a feed. It should trigger an email to the rescue's Trainer or Director immediately.
+
+4. How to Build the "Action Center" (UI Concept)
+Don't build a complex ticketing system (like Jira). Just build a "Done" button feed.
+
+Visual Concept: A list of cards sorted by "Newest." Each card must have a way to dismiss it.
+
+[ MEDICAL ALERT ] - 2 mins ago Foster: Sarah (Dog: Spot) Note: "Spot has a rash on his belly." [View Photo]
+
+[Reply] [Assign to Vet] [Dismiss]
+
+[ SUPPLY REQUEST ] - 1 hour ago Foster: Mike Item: Large Crate
+
+[Approve] [Deny]
+
+[ ADOPTER UPDATE ] - 3 hours ago Adopter: Emily (Dog: Luna) Note: "Luna loves the cat!"
+
+[Add to Bio] [Share] [Dismiss]
+
+5. Summary: The Complete "Control Room"
+To fully monitor your tenants' operations, your Dashboard needs three widgets, not one:
+
+Compliance (The Watchdog): Who missed a deadline? (Automated Nudges).
+
+Action Center (The Inbox): Who needs help or sent data? (Triage).
+
+Inventory (The Warehouse): Who needs supplies? (Logistics).
