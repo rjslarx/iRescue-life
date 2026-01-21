@@ -7,7 +7,6 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { useQuery } from "@tanstack/react-query";
 import { 
@@ -158,8 +157,8 @@ export function ViewApplicationDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col" data-testid="dialog-view-application">
-        <DialogHeader className="flex-shrink-0">
+      <DialogContent className="max-w-2xl max-h-[90vh] !grid !grid-rows-[auto_1fr_auto] overflow-hidden" data-testid="dialog-view-application">
+        <DialogHeader>
           <DialogTitle className="flex items-center gap-2" data-testid="text-dialog-title">
             {getTypeIcon(applicationType)}
             {getTypeLabel(applicationType)}
@@ -169,7 +168,7 @@ export function ViewApplicationDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 min-h-0 pr-4">
+        <div className="overflow-y-auto pr-4 min-h-0">
           <div className="space-y-6">
             {/* Applicant Header */}
             <div className="space-y-4">
@@ -270,9 +269,9 @@ export function ViewApplicationDialog({
               )}
             </div>
           </div>
-        </ScrollArea>
+        </div>
 
-        <div className="flex justify-end pt-4 flex-shrink-0">
+        <div className="flex justify-end pt-4 border-t">
           <Button 
             variant="outline" 
             onClick={() => onOpenChange(false)}
