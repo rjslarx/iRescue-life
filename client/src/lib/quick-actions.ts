@@ -82,8 +82,8 @@ export const ALL_QUICK_ACTIONS: QuickAction[] = [
   },
   {
     id: "medical-task",
-    label: "Medical Task",
-    description: "Create a new medical task",
+    label: "Daily Medication Tasks",
+    description: "View and manage daily medication tasks",
     icon: Stethoscope,
     href: "/dashboard/medical-tasks",
     actionType: "navigate",
