@@ -8,6 +8,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { ApplicationWithAnimal } from "@shared/schema";
 import { Link } from "wouter";
+import DashboardLayout from "@/components/DashboardLayout";
 
 export default function AnimalApplicationsPage() {
   const { animalId } = useParams<{ animalId: string }>();
@@ -79,26 +80,31 @@ export default function AnimalApplicationsPage() {
 
   if (animalLoading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-      </div>
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-full">
+          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+        </div>
+      </DashboardLayout>
     );
   }
 
   if (!animal) {
     return (
-      <div className="flex flex-col items-center justify-center h-full gap-4">
-        <p className="text-muted-foreground">Animal not found</p>
-        <Button onClick={() => navigate('/dashboard/animals')} variant="outline">
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to Animals
-        </Button>
-      </div>
+      <DashboardLayout>
+        <div className="flex flex-col items-center justify-center h-full gap-4">
+          <p className="text-muted-foreground">Animal not found</p>
+          <Button onClick={() => navigate('/dashboard/animals')} variant="outline">
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back to Animals
+          </Button>
+        </div>
+      </DashboardLayout>
     );
   }
 
   return (
-    <div className="h-full overflow-auto">
+    <DashboardLayout>
+      <div className="h-full overflow-auto">
       <div className="container mx-auto p-6 space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between flex-wrap gap-4">
@@ -222,5 +228,6 @@ export default function AnimalApplicationsPage() {
         )}
       </div>
     </div>
+    </DashboardLayout>
   );
 }
