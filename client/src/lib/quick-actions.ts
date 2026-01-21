@@ -10,6 +10,9 @@ import {
   Home,
   Stethoscope,
   Package,
+  Inbox,
+  Kanban,
+  UserCheck,
   type LucideIcon
 } from "lucide-react";
 
@@ -102,6 +105,46 @@ export const ALL_QUICK_ACTIONS: QuickAction[] = [
     description: "Access analytics and reports",
     icon: ClipboardList,
     href: "/dashboard/analytics",
+    actionType: "navigate",
+  },
+  {
+    id: "adoption-applications",
+    label: "Adoption Applications",
+    description: "View and manage adoption applications",
+    icon: FileText,
+    href: "/dashboard/applications",
+    actionType: "navigate",
+  },
+  {
+    id: "foster-pipeline",
+    label: "Foster Pipeline",
+    description: "Manage foster application pipeline",
+    icon: Kanban,
+    href: "/dashboard/foster-pipeline",
+    actionType: "navigate",
+  },
+  {
+    id: "volunteer-pipeline",
+    label: "Volunteer Pipeline",
+    description: "Manage volunteer application pipeline",
+    icon: UserCheck,
+    href: "/dashboard/volunteer-pipeline",
+    actionType: "navigate",
+  },
+  {
+    id: "check-inbox",
+    label: "Check Inbox",
+    description: "View and respond to messages",
+    icon: Inbox,
+    href: "/dashboard/communications",
+    actionType: "navigate",
+  },
+  {
+    id: "calendar",
+    label: "Calendar",
+    description: "View upcoming events and schedule",
+    icon: Calendar,
+    href: "/dashboard/calendar",
     actionType: "navigate",
   },
 ];
