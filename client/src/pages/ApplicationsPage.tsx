@@ -5,6 +5,7 @@ import { AdoptionDialog } from "@/components/AdoptionDialog";
 import { AssignFosterDialog } from "@/components/AssignFosterDialog";
 import { FinalizeAdoptionDialog } from "@/components/FinalizeAdoptionDialog";
 import { ApproveAndSendAgreementDialog } from "@/components/ApproveAndSendAgreementDialog";
+import { ViewApplicationDialog } from "@/components/ViewApplicationDialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -25,6 +26,16 @@ interface ApprovalApplicationData {
   animalName?: string;
 }
 
+interface ViewApplicationData {
+  id: string;
+  applicantName: string;
+  email: string;
+  phone: string;
+  stage: string;
+  animalName?: string;
+  createdAt?: string;
+}
+
 export default function ApplicationsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -32,6 +43,8 @@ export default function ApplicationsPage() {
   const [finalizeDialogOpen, setFinalizeDialogOpen] = useState(false);
   const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
   const [applicationToApprove, setApplicationToApprove] = useState<ApprovalApplicationData | null>(null);
+  const [viewDialogOpen, setViewDialogOpen] = useState(false);
+  const [applicationToView, setApplicationToView] = useState<ViewApplicationData | null>(null);
 
   const { data: tenantData } = useQuery<{ tenant: Tenant }>({
     queryKey: ['/api/tenant'],
@@ -309,6 +322,20 @@ export default function ApplicationsPage() {
     }
   };
 
+  const handleViewApplication = (application: { id: string; applicantName: string; email: string; phone: string; stage: string; animalName?: string }) => {
+    const fullApp = data?.applications.find(a => a.id === application.id);
+    setApplicationToView({
+      id: application.id,
+      applicantName: application.applicantName,
+      email: application.email,
+      phone: application.phone,
+      stage: application.stage,
+      animalName: application.animalName,
+      createdAt: fullApp?.createdAt?.toString(),
+    });
+    setViewDialogOpen(true);
+  };
+
   return (
     <DashboardLayout
       title="Application Workflow"
@@ -327,6 +354,7 @@ export default function ApplicationsPage() {
                   onAssignAnimal={handleAssignAnimal}
                   onStartCheckout={handleStartCheckout}
                   onFeePendingClick={handleFeePendingClick}
+                  onViewApplication={handleViewApplication}
                   sendingContractId={sendingContractId}
                   subscriptionTier={tenantData?.tenant?.subscriptionTier}
                 />
@@ -485,6 +513,19 @@ export default function ApplicationsPage() {
         onSuccess={() => {
           queryClient.invalidateQueries({ queryKey: ['/api/applications'] });
           queryClient.invalidateQueries({ queryKey: ['/api/adoptions/checkouts'] });
+        }}
+      />
+
+      {/* View Application Dialog */}
+      <ViewApplicationDialog
+        application={applicationToView}
+        applicationType="adoption"
+        open={viewDialogOpen}
+        onOpenChange={(open) => {
+          setViewDialogOpen(open);
+          if (!open) {
+            setApplicationToView(null);
+          }
         }}
       />
     </DashboardLayout>

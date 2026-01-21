@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   FileSignature, 
   Clock, 
@@ -13,7 +14,9 @@ import {
   CheckCircle2, 
   UserCheck,
   XCircle,
-  Send
+  Send,
+  Eye,
+  ArrowRight
 } from "lucide-react";
 
 interface FosterAgreementStatus {
@@ -43,6 +46,7 @@ interface FosterKanbanBoardProps {
   applications: FosterApplication[];
   onMoveApplication?: (applicationId: string, newStage: string) => void;
   onSendAgreement?: (application: FosterApplication) => void;
+  onViewApplication?: (application: FosterApplication) => void;
   sendingAgreementId?: string | null;
 }
 
@@ -115,6 +119,7 @@ export default function FosterKanbanBoard({
   applications, 
   onMoveApplication, 
   onSendAgreement,
+  onViewApplication,
   sendingAgreementId 
 }: FosterKanbanBoardProps) {
   const [draggedId, setDraggedId] = useState<string | null>(null);
@@ -189,6 +194,54 @@ export default function FosterKanbanBoard({
                               {stage.id === "active_pool" && (
                                 <FosterPreferenceBadges app={app} />
                               )}
+
+                              {/* Mobile-friendly stage selector and view button */}
+                              <div className="flex gap-2 mt-3 pt-2 border-t">
+                                {onViewApplication && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="flex-1"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onViewApplication(app);
+                                    }}
+                                    data-testid={`button-view-foster-application-${app.id}`}
+                                  >
+                                    <Eye className="h-4 w-4 mr-1" />
+                                    View
+                                  </Button>
+                                )}
+                                {onMoveApplication && (
+                                  <Select
+                                    value={normalizeStage(app.stage)}
+                                    onValueChange={(newStage) => {
+                                      if (newStage !== normalizeStage(app.stage)) {
+                                        onMoveApplication(app.id, newStage);
+                                      }
+                                    }}
+                                  >
+                                    <SelectTrigger 
+                                      className="flex-1 h-8 text-xs"
+                                      onClick={(e) => e.stopPropagation()}
+                                      data-testid={`select-foster-stage-${app.id}`}
+                                    >
+                                      <ArrowRight className="h-3 w-3 mr-1" />
+                                      <SelectValue placeholder="Move to..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {stages.filter(s => s.id !== normalizeStage(app.stage)).map((s) => (
+                                        <SelectItem key={s.id} value={s.id} data-testid={`option-foster-stage-${s.id}-${app.id}`}>
+                                          <div className="flex items-center gap-2">
+                                            <div className={`h-2 w-2 rounded-full ${s.color}`} />
+                                            {s.label}
+                                          </div>
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                )}
+                              </div>
 
                               {stage.id === "agreement" && onSendAgreement && !app.agreementStatus && (
                                 <Button

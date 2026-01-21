@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import FosterKanbanBoard from "@/components/FosterKanbanBoard";
+import { ViewApplicationDialog } from "@/components/ViewApplicationDialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -27,12 +28,23 @@ interface SendAgreementDialogData {
   applicantPhone: string;
 }
 
+interface ViewApplicationData {
+  id: string;
+  applicantName: string;
+  email: string;
+  phone: string;
+  stage: string;
+  createdAt?: string;
+}
+
 export default function FosterApplicationsPipelinePage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [sendingAgreementId, setSendingAgreementId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"pipeline" | "active_pool">("pipeline");
   const [searchQuery, setSearchQuery] = useState("");
+  const [viewDialogOpen, setViewDialogOpen] = useState(false);
+  const [applicationToView, setApplicationToView] = useState<ViewApplicationData | null>(null);
   const [filters, setFilters] = useState({
     hasFencedYard: false,
     acceptsLargeDogs: false,
@@ -203,6 +215,19 @@ export default function FosterApplicationsPipelinePage() {
     });
   };
 
+  const handleViewApplication = (application: { id: string; applicantName: string; email: string; phone: string; stage: string }) => {
+    const fullApp = data?.applications.find(a => a.id === application.id);
+    setApplicationToView({
+      id: application.id,
+      applicantName: application.applicantName,
+      email: application.email,
+      phone: application.phone,
+      stage: application.stage,
+      createdAt: fullApp?.createdAt?.toString(),
+    });
+    setViewDialogOpen(true);
+  };
+
   const activeFiltersCount = Object.values(filters).filter(Boolean).length;
 
   if (isLoading) {
@@ -252,6 +277,7 @@ export default function FosterApplicationsPipelinePage() {
               applications={applications}
               onMoveApplication={handleMoveApplication}
               onSendAgreement={handleSendAgreement}
+              onViewApplication={handleViewApplication}
               sendingAgreementId={sendingAgreementId}
             />
           </TabsContent>
@@ -387,6 +413,19 @@ export default function FosterApplicationsPipelinePage() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* View Application Dialog */}
+      <ViewApplicationDialog
+        application={applicationToView}
+        applicationType="foster"
+        open={viewDialogOpen}
+        onOpenChange={(open) => {
+          setViewDialogOpen(open);
+          if (!open) {
+            setApplicationToView(null);
+          }
+        }}
+      />
     </DashboardLayout>
   );
 }

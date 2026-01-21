@@ -3,7 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Check, CreditCard, FileSignature, Clock, Loader2, DollarSign, X, Banknote } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Check, CreditCard, FileSignature, Clock, Loader2, DollarSign, X, Banknote, Eye, ArrowRight } from "lucide-react";
 import { RecordOfflinePaymentDialog } from "./RecordOfflinePaymentDialog";
 
 interface CheckoutStatus {
@@ -33,6 +34,7 @@ interface KanbanBoardProps {
   onAssignAnimal?: (application: Application) => void;
   onStartCheckout?: (applicationId: string, animalId: string, signerEmail: string, signerName: string) => void;
   onFeePendingClick?: (application: Application) => void;
+  onViewApplication?: (application: Application) => void;
   sendingContractId?: string | null;
   subscriptionTier?: "free" | "professional"; // Only Professional tier can record offline payments
 }
@@ -87,7 +89,7 @@ function AdoptionFeeStatusBadge({ status, amount }: { status: string; amount?: s
   );
 }
 
-export default function KanbanBoard({ applications, onMoveApplication, onAssignAnimal, onStartCheckout, onFeePendingClick, sendingContractId, subscriptionTier }: KanbanBoardProps) {
+export default function KanbanBoard({ applications, onMoveApplication, onAssignAnimal, onStartCheckout, onFeePendingClick, onViewApplication, sendingContractId, subscriptionTier }: KanbanBoardProps) {
   const [offlinePaymentApp, setOfflinePaymentApp] = useState<Application | null>(null);
   
   // Only Professional tier can record offline payments (Free tier must use Stripe for platform fee collection)
@@ -178,6 +180,55 @@ export default function KanbanBoard({ applications, onMoveApplication, onAssignA
                                 <p>{app.email}</p>
                                 <p>{app.phone}</p>
                               </div>
+                              
+                              {/* Mobile-friendly stage selector and view button */}
+                              <div className="flex gap-2 mt-3 pt-2 border-t">
+                                {onViewApplication && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="flex-1"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onViewApplication(app);
+                                    }}
+                                    data-testid={`button-view-application-${app.id}`}
+                                  >
+                                    <Eye className="h-4 w-4 mr-1" />
+                                    View
+                                  </Button>
+                                )}
+                                {onMoveApplication && (
+                                  <Select
+                                    value={app.stage}
+                                    onValueChange={(newStage) => {
+                                      if (newStage !== app.stage) {
+                                        onMoveApplication(app.id, newStage);
+                                      }
+                                    }}
+                                  >
+                                    <SelectTrigger 
+                                      className="flex-1 h-8 text-xs"
+                                      onClick={(e) => e.stopPropagation()}
+                                      data-testid={`select-stage-${app.id}`}
+                                    >
+                                      <ArrowRight className="h-3 w-3 mr-1" />
+                                      <SelectValue placeholder="Move to..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {stages.filter(s => s.id !== app.stage).map((s) => (
+                                        <SelectItem key={s.id} value={s.id} data-testid={`option-stage-${s.id}-${app.id}`}>
+                                          <div className="flex items-center gap-2">
+                                            <div className={`h-2 w-2 rounded-full ${s.color}`} />
+                                            {s.label}
+                                          </div>
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                )}
+                              </div>
+
                               {stage.id === "approved" && onAssignAnimal && !app.checkoutStatus && (
                                 <Button
                                   size="sm"

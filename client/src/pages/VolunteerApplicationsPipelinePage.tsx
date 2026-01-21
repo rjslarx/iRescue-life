@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import VolunteerKanbanBoard from "@/components/VolunteerKanbanBoard";
+import { ViewApplicationDialog } from "@/components/ViewApplicationDialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -12,12 +13,23 @@ import { Input } from "@/components/ui/input";
 import type { VolunteerApplication } from "@shared/schema";
 import DashboardLayout from "@/components/DashboardLayout";
 
+interface ViewApplicationData {
+  id: string;
+  applicantName: string;
+  applicantEmail: string;
+  applicantPhone: string;
+  pipelineStatus: string;
+  createdAt?: string;
+}
+
 export default function VolunteerApplicationsPipelinePage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [sendingWaiverId, setSendingWaiverId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"pipeline" | "active_pool">("pipeline");
   const [searchQuery, setSearchQuery] = useState("");
+  const [viewDialogOpen, setViewDialogOpen] = useState(false);
+  const [applicationToView, setApplicationToView] = useState<ViewApplicationData | null>(null);
 
   const { data, isLoading } = useQuery<{ applications: VolunteerApplication[] }>({
     queryKey: ['/api/volunteer-applications'],
@@ -111,6 +123,19 @@ export default function VolunteerApplicationsPipelinePage() {
     sendWaiverMutation.mutate(application);
   };
 
+  const handleViewApplication = (application: { id: string; applicantName: string; applicantEmail: string; applicantPhone: string; pipelineStatus: string }) => {
+    const fullApp = applications.find(a => a.id === application.id);
+    setApplicationToView({
+      id: application.id,
+      applicantName: application.applicantName,
+      applicantEmail: application.applicantEmail,
+      applicantPhone: application.applicantPhone,
+      pipelineStatus: application.pipelineStatus,
+      createdAt: fullApp?.createdAt?.toString(),
+    });
+    setViewDialogOpen(true);
+  };
+
   if (isLoading) {
     return (
       <DashboardLayout
@@ -152,6 +177,7 @@ export default function VolunteerApplicationsPipelinePage() {
               applications={kanbanApplications}
               onMoveApplication={handleMoveApplication}
               onSendWaiver={handleSendWaiver}
+              onViewApplication={handleViewApplication}
               sendingWaiverId={sendingWaiverId}
             />
           </TabsContent>
@@ -228,6 +254,19 @@ export default function VolunteerApplicationsPipelinePage() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* View Application Dialog */}
+      <ViewApplicationDialog
+        application={applicationToView}
+        applicationType="volunteer"
+        open={viewDialogOpen}
+        onOpenChange={(open) => {
+          setViewDialogOpen(open);
+          if (!open) {
+            setApplicationToView(null);
+          }
+        }}
+      />
     </DashboardLayout>
   );
 }
