@@ -19,6 +19,7 @@ import FosterUpdateDialog from "@/components/FosterUpdateDialog";
 import MedicalRemindersWidget from "@/components/MedicalRemindersWidget";
 import RecentActivityWidget from "@/components/RecentActivityWidget";
 import FormSubmissionsWidget from "@/components/FormSubmissionsWidget";
+import PendingApplicationsWidget from "@/components/PendingApplicationsWidget";
 import { TemperatureWidget } from "@/components/TemperatureWidget";
 import WebsiteVisitsWidget from "@/components/WebsiteVisitsWidget";
 import { formatDistanceToNow } from "date-fns";
@@ -537,6 +538,11 @@ export default function Dashboard() {
 
           <RecentActivityWidget />
         </div>
+
+        {/* Pending Applications Widget - Only for admin/staff */}
+        {(user?.activeRole === 'admin' || user?.activeRole === 'staff') && (
+          <PendingApplicationsWidget />
+        )}
 
         {/* Foster Management Alerts - Only for admin/staff */}
         {(user?.activeRole === 'admin' || user?.activeRole === 'staff') && (

@@ -3160,6 +3160,218 @@ Crawl-delay: 1
   });
 
   /**
+   * GET /api/dashboard/pending-applications
+   * Get all pending applications across all types (adoption, foster, volunteer) for dashboard widget
+   */
+  app.get('/api/dashboard/pending-applications', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const pendingApps: Array<{
+        id: string;
+        type: 'adoption' | 'foster' | 'volunteer';
+        applicantName: string;
+        applicantEmail: string;
+        applicantPhone: string;
+        status: string;
+        createdAt: Date;
+        animalName?: string;
+        animalId?: string;
+        formData?: Record<string, any>;
+      }> = [];
+
+      // Fetch all pending adoption applications
+      const adoptionApps = await db.select({
+        id: applications.id,
+        applicantName: applications.applicantName,
+        applicantEmail: applications.applicantEmail,
+        applicantPhone: applications.applicantPhone,
+        stage: applications.stage,
+        createdAt: applications.createdAt,
+        animalId: applications.animalId,
+        customResponses: applications.customResponses,
+        notes: applications.notes,
+      })
+        .from(applications)
+        .where(
+          and(
+            eq(applications.tenantId, req.tenant!.id),
+            inArray(applications.stage, ['new', 'screening', 'vet_check', 'home_visit'])
+          )
+        )
+        .orderBy(desc(applications.createdAt))
+        .limit(20);
+
+      // Get animal names for adoption applications
+      const animalIds = adoptionApps.map(a => a.animalId).filter(Boolean);
+      let animalNamesMap = new Map<string, string>();
+      if (animalIds.length > 0) {
+        const animalsData = await db.select({
+          id: animals.id,
+          name: animals.name,
+        })
+          .from(animals)
+          .where(inArray(animals.id, animalIds as string[]));
+        animalNamesMap = new Map(animalsData.map(a => [a.id, a.name]));
+      }
+
+      for (const app of adoptionApps) {
+        pendingApps.push({
+          id: app.id,
+          type: 'adoption',
+          applicantName: app.applicantName,
+          applicantEmail: app.applicantEmail,
+          applicantPhone: app.applicantPhone,
+          status: app.stage,
+          createdAt: app.createdAt,
+          animalId: app.animalId,
+          animalName: animalNamesMap.get(app.animalId) || undefined,
+          formData: {
+            ...app.customResponses,
+            notes: app.notes,
+          },
+        });
+      }
+
+      // Fetch all pending foster applications
+      const fosterApps = await db.select({
+        id: fosterApplications.id,
+        applicantName: fosterApplications.applicantName,
+        applicantEmail: fosterApplications.applicantEmail,
+        applicantPhone: fosterApplications.applicantPhone,
+        status: fosterApplications.status,
+        createdAt: fosterApplications.createdAt,
+        customResponses: fosterApplications.customResponses,
+        address: fosterApplications.address,
+        housingType: fosterApplications.housingType,
+        hasYard: fosterApplications.hasYard,
+        hasOtherPets: fosterApplications.hasOtherPets,
+        otherPetsDetails: fosterApplications.otherPetsDetails,
+        experience: fosterApplications.experience,
+        availability: fosterApplications.availability,
+        preferences: fosterApplications.preferences,
+        vetReference: fosterApplications.vetReference,
+        personalReference: fosterApplications.personalReference,
+        notes: fosterApplications.notes,
+        hasFencedYard: fosterApplications.hasFencedYard,
+        acceptsLargeDogs: fosterApplications.acceptsLargeDogs,
+        acceptsCats: fosterApplications.acceptsCats,
+        acceptsPuppies: fosterApplications.acceptsPuppies,
+        acceptsSeniors: fosterApplications.acceptsSeniors,
+        acceptsMedicalNeeds: fosterApplications.acceptsMedicalNeeds,
+        maxAnimals: fosterApplications.maxAnimals,
+      })
+        .from(fosterApplications)
+        .where(
+          and(
+            eq(fosterApplications.tenantId, req.tenant!.id),
+            inArray(fosterApplications.status, ['new_app', 'interview', 'home_check', 'orientation', 'agreement'])
+          )
+        )
+        .orderBy(desc(fosterApplications.createdAt))
+        .limit(20);
+
+      for (const app of fosterApps) {
+        pendingApps.push({
+          id: app.id,
+          type: 'foster',
+          applicantName: app.applicantName,
+          applicantEmail: app.applicantEmail,
+          applicantPhone: app.applicantPhone,
+          status: app.status,
+          createdAt: app.createdAt,
+          formData: {
+            ...app.customResponses,
+            address: app.address,
+            housingType: app.housingType,
+            hasYard: app.hasYard,
+            hasOtherPets: app.hasOtherPets,
+            otherPetsDetails: app.otherPetsDetails,
+            experience: app.experience,
+            availability: app.availability,
+            preferences: app.preferences,
+            vetReference: app.vetReference,
+            personalReference: app.personalReference,
+            notes: app.notes,
+            hasFencedYard: app.hasFencedYard,
+            acceptsLargeDogs: app.acceptsLargeDogs,
+            acceptsCats: app.acceptsCats,
+            acceptsPuppies: app.acceptsPuppies,
+            acceptsSeniors: app.acceptsSeniors,
+            acceptsMedicalNeeds: app.acceptsMedicalNeeds,
+            maxAnimals: app.maxAnimals,
+          },
+        });
+      }
+
+      // Fetch all pending volunteer applications
+      const volunteerApps = await db.select({
+        id: volunteerApplications.id,
+        applicantName: volunteerApplications.applicantName,
+        applicantEmail: volunteerApplications.applicantEmail,
+        applicantPhone: volunteerApplications.applicantPhone,
+        status: volunteerApplications.status,
+        pipelineStatus: volunteerApplications.pipelineStatus,
+        createdAt: volunteerApplications.createdAt,
+        customResponses: volunteerApplications.customResponses,
+        address: volunteerApplications.address,
+        experience: volunteerApplications.experience,
+        availability: volunteerApplications.availability,
+        interests: volunteerApplications.interests,
+        skills: volunteerApplications.skills,
+        emergencyContactName: volunteerApplications.emergencyContactName,
+        emergencyContactPhone: volunteerApplications.emergencyContactPhone,
+        notes: volunteerApplications.notes,
+      })
+        .from(volunteerApplications)
+        .where(
+          and(
+            eq(volunteerApplications.tenantId, req.tenant!.id),
+            inArray(volunteerApplications.pipelineStatus, ['new_applicant', 'orientation_scheduled', 'waiver_needed'])
+          )
+        )
+        .orderBy(desc(volunteerApplications.createdAt))
+        .limit(20);
+
+      for (const app of volunteerApps) {
+        pendingApps.push({
+          id: app.id,
+          type: 'volunteer',
+          applicantName: app.applicantName,
+          applicantEmail: app.applicantEmail,
+          applicantPhone: app.applicantPhone,
+          status: app.pipelineStatus,
+          createdAt: app.createdAt,
+          formData: {
+            ...app.customResponses,
+            address: app.address,
+            experience: app.experience,
+            availability: app.availability,
+            interests: app.interests,
+            skills: app.skills,
+            emergencyContactName: app.emergencyContactName,
+            emergencyContactPhone: app.emergencyContactPhone,
+            notes: app.notes,
+          },
+        });
+      }
+
+      // Sort all by date, most recent first
+      pendingApps.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+      // Calculate counts
+      const counts = {
+        adoption: pendingApps.filter(a => a.type === 'adoption').length,
+        foster: pendingApps.filter(a => a.type === 'foster').length,
+        volunteer: pendingApps.filter(a => a.type === 'volunteer').length,
+        total: pendingApps.length,
+      };
+
+      res.json({ applications: pendingApps.slice(0, 30), counts });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * GET /api/activity-logs
    * Get recent activity timeline for tenant admin dashboard
    * Returns logged activities with user info, color-coded by category
