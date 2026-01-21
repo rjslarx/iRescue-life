@@ -290,6 +290,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
       title: "Overview",
       items: [
         { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
+        { title: "Operations Center", url: "/dashboard/operations", icon: Radio },
       ],
       defaultOpen: true,
     },
@@ -369,6 +370,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
       title: "Overview",
       items: [
         { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
+        { title: "Operations Center", url: "/dashboard/operations", icon: Radio },
       ],
       defaultOpen: true,
     },
@@ -431,6 +433,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
       title: "Overview",
       items: [
         { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
+        { title: "Operations Center", url: "/dashboard/operations", icon: Radio },
       ],
       defaultOpen: true,
     },

@@ -11,6 +11,8 @@ import {
   fosterSupplyRequests,
   fosterBioSubmissions,
   fosterPhotoUploads,
+  happyTailUpdates,
+  happyTails,
   magicLinks,
   vaccineRecords,
   procedureLogs
@@ -997,6 +999,352 @@ router.get("/staff/dashboard", requireAuth, requireStaffRole, async (req, res) =
   } catch (error) {
     console.error("Error fetching staff dashboard:", error);
     res.status(500).json({ message: "Failed to fetch dashboard stats" });
+  }
+});
+
+// GET /api/foster-portal/staff/action-center - Unified action feed for staff operations dashboard
+router.get("/staff/action-center", requireAuth, requireStaffRole, async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
+    
+    const [supplyRequests, bioSubmissions, flaggedBehavior, photoApprovals, pendingHappyTails] = await Promise.all([
+      // Supply requests (pending and preparing)
+      db
+        .select({
+          id: fosterSupplyRequests.id,
+          animalId: fosterSupplyRequests.animalId,
+          animalName: animals.name,
+          fosterName: users.fullName,
+          fosterEmail: users.email,
+          items: fosterSupplyRequests.items,
+          notes: fosterSupplyRequests.notes,
+          status: fosterSupplyRequests.status,
+          createdAt: fosterSupplyRequests.createdAt,
+        })
+        .from(fosterSupplyRequests)
+        .innerJoin(animals, eq(fosterSupplyRequests.animalId, animals.id))
+        .innerJoin(users, eq(fosterSupplyRequests.userId, users.id))
+        .where(
+          and(
+            eq(fosterSupplyRequests.tenantId, req.tenant!.id),
+            sql`${fosterSupplyRequests.status} IN ('pending', 'preparing', 'ready')`
+          )
+        )
+        .orderBy(desc(fosterSupplyRequests.createdAt))
+        .limit(limit),
+      
+      // Bio submissions awaiting review
+      db
+        .select({
+          id: fosterBioSubmissions.id,
+          animalId: fosterBioSubmissions.animalId,
+          animalName: animals.name,
+          fosterName: users.fullName,
+          generatedBio: fosterBioSubmissions.generatedBio,
+          status: fosterBioSubmissions.status,
+          createdAt: fosterBioSubmissions.createdAt,
+        })
+        .from(fosterBioSubmissions)
+        .innerJoin(animals, eq(fosterBioSubmissions.animalId, animals.id))
+        .innerJoin(users, eq(fosterBioSubmissions.userId, users.id))
+        .where(
+          and(
+            eq(fosterBioSubmissions.tenantId, req.tenant!.id),
+            eq(fosterBioSubmissions.status, 'pending')
+          )
+        )
+        .orderBy(desc(fosterBioSubmissions.createdAt))
+        .limit(limit),
+      
+      // Flagged behavior notes
+      db
+        .select({
+          id: fosterBehaviorNotes.id,
+          animalId: fosterBehaviorNotes.animalId,
+          animalName: animals.name,
+          fosterName: users.fullName,
+          note: fosterBehaviorNotes.note,
+          isFlagged: fosterBehaviorNotes.isFlagged,
+          createdAt: fosterBehaviorNotes.createdAt,
+        })
+        .from(fosterBehaviorNotes)
+        .innerJoin(animals, eq(fosterBehaviorNotes.animalId, animals.id))
+        .innerJoin(users, eq(fosterBehaviorNotes.userId, users.id))
+        .where(
+          and(
+            eq(fosterBehaviorNotes.tenantId, req.tenant!.id),
+            eq(fosterBehaviorNotes.isFlagged, true),
+            isNull(fosterBehaviorNotes.staffReviewedAt)
+          )
+        )
+        .orderBy(desc(fosterBehaviorNotes.createdAt))
+        .limit(limit),
+      
+      // Photo uploads awaiting approval
+      db
+        .select({
+          id: fosterPhotoUploads.id,
+          animalId: fosterPhotoUploads.animalId,
+          animalName: animals.name,
+          fosterName: users.fullName,
+          photoUrls: fosterPhotoUploads.photoUrls,
+          createdAt: fosterPhotoUploads.createdAt,
+        })
+        .from(fosterPhotoUploads)
+        .innerJoin(animals, eq(fosterPhotoUploads.animalId, animals.id))
+        .innerJoin(users, eq(fosterPhotoUploads.userId, users.id))
+        .where(
+          and(
+            eq(fosterPhotoUploads.tenantId, req.tenant!.id),
+            eq(fosterPhotoUploads.isApproved, false)
+          )
+        )
+        .orderBy(desc(fosterPhotoUploads.createdAt))
+        .limit(limit),
+      
+      // Happy tail updates awaiting approval (marketing content)
+      db
+        .select({
+          id: happyTailUpdates.id,
+          animalId: happyTailUpdates.animalId,
+          animalName: animals.name,
+          adopterName: users.fullName,
+          photoUrls: happyTailUpdates.photoUrls,
+          message: happyTailUpdates.message,
+          isApproved: happyTailUpdates.isApproved,
+          createdAt: happyTailUpdates.createdAt,
+        })
+        .from(happyTailUpdates)
+        .innerJoin(animals, eq(happyTailUpdates.animalId, animals.id))
+        .innerJoin(users, eq(happyTailUpdates.userId, users.id))
+        .where(
+          and(
+            eq(happyTailUpdates.tenantId, req.tenant!.id),
+            eq(happyTailUpdates.isApproved, false)
+          )
+        )
+        .orderBy(desc(happyTailUpdates.createdAt))
+        .limit(limit),
+    ]);
+
+    // Transform into unified action items
+    const actionItems = [
+      ...supplyRequests.map(r => ({
+        id: r.id,
+        type: 'supply_request' as const,
+        category: 'logistics',
+        title: `Supply Request`,
+        description: `${r.fosterName} needs ${(r.items as any[])?.length || 0} items for ${r.animalName}`,
+        animalId: r.animalId,
+        animalName: r.animalName,
+        personName: r.fosterName,
+        status: r.status,
+        data: { items: r.items, notes: r.notes },
+        createdAt: r.createdAt,
+      })),
+      ...bioSubmissions.map(b => ({
+        id: b.id,
+        type: 'bio_submission' as const,
+        category: 'content',
+        title: `Bio Submission`,
+        description: `${b.fosterName} submitted a bio for ${b.animalName}`,
+        animalId: b.animalId,
+        animalName: b.animalName,
+        personName: b.fosterName,
+        status: b.status,
+        data: { generatedBio: b.generatedBio },
+        createdAt: b.createdAt,
+      })),
+      ...flaggedBehavior.map(n => ({
+        id: n.id,
+        type: 'behavior_alert' as const,
+        category: 'medical',
+        title: `Behavior Alert`,
+        description: n.note?.substring(0, 100) + (n.note && n.note.length > 100 ? '...' : ''),
+        animalId: n.animalId,
+        animalName: n.animalName,
+        personName: n.fosterName,
+        status: 'flagged',
+        data: { note: n.note },
+        createdAt: n.createdAt,
+      })),
+      ...photoApprovals.map(p => ({
+        id: p.id,
+        type: 'photo_approval' as const,
+        category: 'content',
+        title: `Photo Upload`,
+        description: `${p.fosterName} uploaded ${(p.photoUrls as string[])?.length || 0} photos of ${p.animalName}`,
+        animalId: p.animalId,
+        animalName: p.animalName,
+        personName: p.fosterName,
+        status: 'pending',
+        data: { photoUrls: p.photoUrls },
+        createdAt: p.createdAt,
+      })),
+      ...pendingHappyTails.map(h => ({
+        id: h.id,
+        type: 'happy_tail' as const,
+        category: 'marketing',
+        title: `Happy Tail`,
+        description: h.message?.substring(0, 100) || `${h.adopterName} shared an update about ${h.animalName}`,
+        animalId: h.animalId,
+        animalName: h.animalName,
+        personName: h.adopterName,
+        status: h.isApproved ? 'approved' : 'pending',
+        data: { photoUrls: h.photoUrls, message: h.message },
+        createdAt: h.createdAt,
+      })),
+    ].sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime());
+
+    res.json({ actionItems });
+  } catch (error) {
+    console.error("Error fetching action center:", error);
+    res.status(500).json({ message: "Failed to fetch action center" });
+  }
+});
+
+// GET /api/foster-portal/staff/happy-tail-updates - Get pending happy tail updates for approval
+router.get("/staff/happy-tail-updates", requireAuth, requireStaffRole, async (req, res) => {
+  try {
+    const updates = await db
+      .select({
+        id: happyTailUpdates.id,
+        animalId: happyTailUpdates.animalId,
+        animalName: animals.name,
+        userId: happyTailUpdates.userId,
+        adopterName: users.fullName,
+        adopterEmail: users.email,
+        photoUrls: happyTailUpdates.photoUrls,
+        message: happyTailUpdates.message,
+        isApproved: happyTailUpdates.isApproved,
+        isShared: happyTailUpdates.isShared,
+        createdAt: happyTailUpdates.createdAt,
+      })
+      .from(happyTailUpdates)
+      .innerJoin(animals, eq(happyTailUpdates.animalId, animals.id))
+      .innerJoin(users, eq(happyTailUpdates.userId, users.id))
+      .where(eq(happyTailUpdates.tenantId, req.tenant!.id))
+      .orderBy(desc(happyTailUpdates.createdAt))
+      .limit(50);
+
+    res.json(updates);
+  } catch (error) {
+    console.error("Error fetching happy tail updates:", error);
+    res.status(500).json({ message: "Failed to fetch happy tail updates" });
+  }
+});
+
+// PATCH /api/foster-portal/staff/happy-tail-updates/:id/approve - Approve a happy tail update
+router.patch("/staff/happy-tail-updates/:id/approve", requireAuth, requireStaffRole, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const [update] = await db
+      .update(happyTailUpdates)
+      .set({
+        isApproved: true,
+        approvedBy: req.user!.id,
+        approvedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(happyTailUpdates.id, id),
+          eq(happyTailUpdates.tenantId, req.tenant!.id)
+        )
+      )
+      .returning();
+
+    if (!update) {
+      return res.status(404).json({ message: "Update not found" });
+    }
+
+    res.json(update);
+  } catch (error) {
+    console.error("Error approving happy tail update:", error);
+    res.status(500).json({ message: "Failed to approve update" });
+  }
+});
+
+// POST /api/foster-portal/staff/happy-tail-updates/:id/promote - Promote to success story
+router.post("/staff/happy-tail-updates/:id/promote", requireAuth, requireStaffRole, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Get the happy tail update
+    const [update] = await db
+      .select({
+        update: happyTailUpdates,
+        animalName: animals.name,
+        adopterName: users.fullName,
+      })
+      .from(happyTailUpdates)
+      .innerJoin(animals, eq(happyTailUpdates.animalId, animals.id))
+      .innerJoin(users, eq(happyTailUpdates.userId, users.id))
+      .where(
+        and(
+          eq(happyTailUpdates.id, id),
+          eq(happyTailUpdates.tenantId, req.tenant!.id)
+        )
+      );
+
+    if (!update) {
+      return res.status(404).json({ message: "Update not found" });
+    }
+
+    // Create a success story from the happy tail update
+    const [successStory] = await db.insert(happyTails).values({
+      tenantId: req.tenant!.id,
+      animalName: update.animalName,
+      adopterName: update.adopterName,
+      story: update.update.message || `${update.animalName} found their forever home!`,
+      date: new Date().toISOString().split('T')[0],
+      photoUrl: (update.update.photoUrls as string[])?.[0] || null,
+      isPublished: false,
+    }).returning();
+
+    // Mark the update as shared
+    await db
+      .update(happyTailUpdates)
+      .set({
+        isShared: true,
+        sharedAt: new Date(),
+      })
+      .where(eq(happyTailUpdates.id, id));
+
+    res.json({ 
+      message: "Success story created", 
+      successStory,
+      updateId: id 
+    });
+  } catch (error) {
+    console.error("Error promoting happy tail update:", error);
+    res.status(500).json({ message: "Failed to promote update" });
+  }
+});
+
+// DELETE /api/foster-portal/staff/happy-tail-updates/:id - Delete a happy tail update
+router.delete("/staff/happy-tail-updates/:id", requireAuth, requireStaffRole, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const [deleted] = await db
+      .delete(happyTailUpdates)
+      .where(
+        and(
+          eq(happyTailUpdates.id, id),
+          eq(happyTailUpdates.tenantId, req.tenant!.id)
+        )
+      )
+      .returning();
+
+    if (!deleted) {
+      return res.status(404).json({ message: "Update not found" });
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Error deleting happy tail update:", error);
+    res.status(500).json({ message: "Failed to delete update" });
   }
 });
 
