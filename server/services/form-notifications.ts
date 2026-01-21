@@ -60,8 +60,18 @@ export async function sendFormSubmissionNotification(data: FormSubmissionData): 
       return;
     }
 
-    const recipientEmail = tenant.formNotificationEmail || tenant.contactEmail;
-    if (!recipientEmail) {
+    // Parse comma-separated emails or fall back to contact email
+    let recipientEmails: string[] = [];
+    if (tenant.formNotificationEmail) {
+      recipientEmails = tenant.formNotificationEmail
+        .split(',')
+        .map(e => e.trim())
+        .filter(e => e && e.includes('@'));
+    }
+    if (recipientEmails.length === 0 && tenant.contactEmail) {
+      recipientEmails = [tenant.contactEmail];
+    }
+    if (recipientEmails.length === 0) {
       console.log('No notification email configured for tenant:', tenant.subdomain);
       return;
     }
@@ -146,14 +156,23 @@ This notification was sent because form submission notifications are enabled for
       console.warn(`Email service not configured for tenant ${data.tenantId}, skipping form notification`);
       return;
     }
-    await emailService.send({
-      to: recipientEmail,
-      subject,
-      html: htmlBody,
-      text: textBody,
-    });
-
-    console.log(`Form notification sent for ${data.formType} application to ${recipientEmail}`);
+    
+    // Send to all configured notification emails
+    for (const recipientEmail of recipientEmails) {
+      try {
+        await emailService.send({
+          to: recipientEmail,
+          subject,
+          html: htmlBody,
+          text: textBody,
+        });
+        console.log(`Form notification sent for ${data.formType} application to ${recipientEmail}`);
+      } catch (emailError) {
+        console.error(`Failed to send form notification to ${recipientEmail}:`, emailError);
+      }
+    }
+    
+    console.log(`Form notifications sent for ${data.formType} application to ${recipientEmails.length} recipient(s)`);
   } catch (error) {
     console.error('Failed to send form submission notification:', error);
   }

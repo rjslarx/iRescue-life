@@ -25,7 +25,7 @@ import VolunteerDigestSettings from "@/components/VolunteerDigestSettings";
 import QuickActionsSettings from "@/components/QuickActionsSettings";
 import { GoveeSettings } from "@/components/GoveeSettings";
 import { StripeConnectBanner } from "@/components/StripeConnectBanner";
-import { Save, Loader2, DollarSign, CreditCard, AlertCircle, CheckCircle2, Mail, Palette, Globe, ExternalLink, Copy, Inbox, HelpCircle, Check, Info, MessageSquare, Phone, FileSignature, Heart, Shield, Star, Users, Home, HandHeart, PawPrint, Upload, FileUp } from "lucide-react";
+import { Save, Loader2, DollarSign, CreditCard, AlertCircle, CheckCircle2, Mail, Palette, Globe, ExternalLink, Copy, Inbox, HelpCircle, Check, Info, MessageSquare, Phone, FileSignature, Heart, Shield, Star, Users, Home, HandHeart, PawPrint, Upload, FileUp, X, Plus } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { z } from "zod";
@@ -44,6 +44,118 @@ const urlOrPathSchema = z.string().refine(
   (val) => val === "" || val.startsWith("/") || val.startsWith("http://") || val.startsWith("https://"),
   { message: "Must be a valid URL or storage path" }
 ).optional().or(z.literal(""));
+
+// Multi-email input component for notification emails
+function MultiEmailInput({ control, name }: { control: any; name: string }) {
+  const [newEmail, setNewEmail] = useState('');
+  const [emailError, setEmailError] = useState('');
+  
+  return (
+    <FormField
+      control={control}
+      name={name}
+      render={({ field }) => {
+        const emails = field.value 
+          ? field.value.split(',').map((e: string) => e.trim()).filter((e: string) => e) 
+          : [];
+        
+        const addEmail = () => {
+          const email = newEmail.trim().toLowerCase();
+          if (!email) return;
+          
+          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+          if (!emailRegex.test(email)) {
+            setEmailError('Please enter a valid email address');
+            return;
+          }
+          
+          if (emails.includes(email)) {
+            setEmailError('This email is already added');
+            return;
+          }
+          
+          setEmailError('');
+          const newEmails = [...emails, email];
+          field.onChange(newEmails.join(', '));
+          setNewEmail('');
+        };
+        
+        const removeEmail = (emailToRemove: string) => {
+          const newEmails = emails.filter((e: string) => e !== emailToRemove);
+          field.onChange(newEmails.length > 0 ? newEmails.join(', ') : '');
+        };
+        
+        return (
+          <FormItem>
+            <FormLabel>Notification Emails</FormLabel>
+            <div className="space-y-3">
+              {emails.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {emails.map((email: string) => (
+                    <Badge 
+                      key={email} 
+                      variant="secondary" 
+                      className="flex items-center gap-1 pr-0.5"
+                      data-testid={`badge-email-${email}`}
+                    >
+                      {email}
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-5 w-5 p-0 ml-1"
+                        onClick={() => removeEmail(email)}
+                        data-testid={`button-remove-email-${email}`}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </Badge>
+                  ))}
+                </div>
+              )}
+              
+              <div className="flex gap-2">
+                <Input 
+                  type="email"
+                  placeholder="Add notification email..." 
+                  value={newEmail}
+                  onChange={(e) => {
+                    setNewEmail(e.target.value);
+                    setEmailError('');
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      addEmail();
+                    }
+                  }}
+                  data-testid="input-notification-email"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={addEmail}
+                  data-testid="button-add-email"
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add
+                </Button>
+              </div>
+              
+              {emailError && (
+                <p className="text-sm text-destructive">{emailError}</p>
+              )}
+            </div>
+            <FormDescription>
+              Email addresses to receive form submission alerts. Falls back to Contact Email if none set.
+            </FormDescription>
+            <FormMessage />
+          </FormItem>
+        );
+      }}
+    />
+  );
+}
 
 const sponsorLogoSchema = z.object({
   id: z.string(),
@@ -77,7 +189,7 @@ const brandingSettingsSchema = z.object({
   contactEmail: z.string().email().optional().or(z.literal("")),
   contactPhone: z.string().optional(),
   formNotificationsEnabled: z.boolean().optional(),
-  formNotificationEmail: z.string().email().optional().or(z.literal("")),
+  formNotificationEmail: z.string().optional(), // Comma-separated emails
   footerText: z.string().optional(),
   footerHours: z.string().optional(),
   footerAddress: z.string().optional(),
@@ -1387,26 +1499,9 @@ export default function SettingsPage() {
                             )}
                           />
 
-                          <FormField
+                          <MultiEmailInput 
                             control={brandingForm.control}
                             name="formNotificationEmail"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Notification Email</FormLabel>
-                                <FormControl>
-                                  <Input 
-                                    type="email"
-                                    placeholder="notifications@yourrescue.org" 
-                                    data-testid="input-notification-email"
-                                    {...field} 
-                                  />
-                                </FormControl>
-                                <FormDescription>
-                                  Email address to receive form submission alerts. Falls back to Contact Email if not set.
-                                </FormDescription>
-                                <FormMessage />
-                              </FormItem>
-                            )}
                           />
                         </div>
 
