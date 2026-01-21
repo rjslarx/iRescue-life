@@ -6,7 +6,7 @@ import { requireAuth, requireRole, requireOwner } from "./middleware/auth";
 import { loginUser, createTenantWithAdmin, createUser } from "./services/auth";
 import { PushNotificationService } from "./services/push-notifications";
 import { db } from "./db";
-import { tenants, users, demoRequests, insertDemoRequestSchema, smsMessageLogs, emailEvents, animals, platformIntegrations, newsletterCampaigns, newsletterSubscribers, happyTails, adoptionCheckoutSessions, pageVisits, customFormSubmissions, customForms, applications, fosterApplications, volunteerApplications, donations, calendarEvents } from "@shared/schema";
+import { tenants, users, demoRequests, insertDemoRequestSchema, smsMessageLogs, emailEvents, animals, platformIntegrations, newsletterCampaigns, newsletterSubscribers, happyTails, adoptionCheckoutSessions, pageVisits, customFormSubmissions, customForms, applications, fosterApplications, volunteerApplications, donations, calendarEvents, contacts, insertContactSchema } from "@shared/schema";
 import { eq, and, desc, sql, inArray, lt, ilike, gte, count } from "drizzle-orm";
 import { z } from "zod";
 import { authLimiter, signupLimiter, passwordResetLimiter, emailLimiter } from "./config/security";
@@ -11312,8 +11312,6 @@ View this submission in Custom Forms > ${form.name} > Submissions
    */
   app.get('/api/contacts', requireTenant, requireAuth, requireRole('staff'), async (req, res, next) => {
     try {
-      const { contacts, users } = await import('@shared/schema');
-      
       // Get all contacts with optional user linkage
       const contactList = await db
         .select({
@@ -11352,8 +11350,6 @@ View this submission in Custom Forms > ${form.name} > Submissions
    */
   app.post('/api/contacts', requireTenant, requireAuth, requireRole('staff'), async (req, res, next) => {
     try {
-      const { contacts, insertContactSchema } = await import('@shared/schema');
-      
       const data = insertContactSchema.parse({
         ...req.body,
         tenantId: req.tenant!.id,
@@ -11377,7 +11373,6 @@ View this submission in Custom Forms > ${form.name} > Submissions
    */
   app.patch('/api/contacts/:id', requireTenant, requireAuth, requireRole('staff'), async (req, res, next) => {
     try {
-      const { contacts } = await import('@shared/schema');
       const contactId = req.params.id;
       
       const [updated] = await db
@@ -11408,7 +11403,6 @@ View this submission in Custom Forms > ${form.name} > Submissions
    */
   app.delete('/api/contacts/:id', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
     try {
-      const { contacts } = await import('@shared/schema');
       const contactId = req.params.id;
       
       const [deleted] = await db
@@ -11437,7 +11431,6 @@ View this submission in Custom Forms > ${form.name} > Submissions
    */
   app.post('/api/contacts/import', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
     try {
-      const { contacts } = await import('@shared/schema');
       const Papa = await import('papaparse');
       const multer = (await import('multer')).default;
       
