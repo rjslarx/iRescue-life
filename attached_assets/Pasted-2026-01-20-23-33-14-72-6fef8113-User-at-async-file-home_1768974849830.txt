@@ -1,0 +1,108 @@
+2026-01-20 23:33:14.72
+6fef8113
+User
+at async file:///home/runner/workspace/node_modules/drizzle-orm/node-postgres/session.js:83:22
+2026-01-20 23:33:14.72
+6fef8113
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-01-20 23:33:14.72
+6fef8113
+User
+at async file:///home/runner/workspace/dist/index.js:46849:22
+2026-01-20 23:39:02.85
+6fef8113
+User
+at async file:///home/runner/workspace/dist/index.js:46849:22
+2026-01-20 23:39:02.85
+6fef8113
+User
+at /home/runner/workspace/node_modules/pg-pool/index.js:45:11
+2026-01-20 23:39:02.85
+6fef8113
+User
+error: invalid input syntax for type uuid: "admin"
+2026-01-20 23:39:02.85
+6fef8113
+User
+at async file:///home/runner/workspace/node_modules/drizzle-orm/node-postgres/session.js:83:22
+2026-01-20 23:39:02.85
+6fef8113
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-01-20 23:41:59.59
+6fef8113
+User
+at /home/runner/workspace/node_modules/pg-pool/index.js:45:11
+2026-01-20 23:41:59.59
+6fef8113
+User
+at async file:///home/runner/workspace/dist/index.js:46849:22
+2026-01-20 23:41:59.59
+6fef8113
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-01-20 23:41:59.59
+6fef8113
+User
+error: invalid input syntax for type uuid: "admin"
+2026-01-20 23:41:59.59
+6fef8113
+User
+at async file:///home/runner/workspace/node_modules/drizzle-orm/node-postgres/session.js:83:22
+2026-01-20 23:42:17.26
+6fef8113
+User
+at async file:///home/runner/workspace/dist/index.js:46849:22
+2026-01-20 23:42:17.26
+6fef8113
+User
+at async file:///home/runner/workspace/node_modules/drizzle-orm/node-postgres/session.js:83:22
+2026-01-20 23:42:45.21
+6fef8113
+User
+at /home/runner/workspace/node_modules/pg-pool/index.js:45:11
+2026-01-20 23:42:45.21
+6fef8113
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-01-20 23:42:58.60
+6fef8113
+User
+at async file:///home/runner/workspace/dist/index.js:46849:22
+2026-01-20 23:42:58.60
+6fef8113
+User
+at async file:///home/runner/workspace/node_modules/drizzle-orm/node-postgres/session.js:83:22
+2026-01-20 23:42:58.60
+6fef8113
+User
+at /home/runner/workspace/node_modules/pg-pool/index.js:45:11
+2026-01-20 23:42:58.60
+6fef8113
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-01-20 23:42:58.60
+6fef8113
+User
+error: invalid input syntax for type uuid: "owner"
+2026-01-20 23:42:58.65
+6fef8113
+User
+at async file:///home/runner/workspace/node_modules/drizzle-orm/node-postgres/session.js:83:22
+2026-01-20 23:42:58.65
+6fef8113
+User
+error: invalid input syntax for type uuid: "volunteer"
+2026-01-20 23:42:58.65
+6fef8113
+User
+at /home/runner/workspace/node_modules/pg-pool/index.js:45:11
+2026-01-20 23:42:58.65
+6fef8113
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-01-20 23:43:13.10
+6fef8113
+User
+error: invalid input syntax for type uuid: "owner"

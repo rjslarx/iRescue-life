@@ -11744,6 +11744,10 @@ Submitted: ${new Date().toLocaleString()}
    */
   app.patch('/api/foster-applications/:id', requireTenant, requireAuth, requireRole('staff'), async (req, res, next) => {
     try {
+      if (!isValidUUID(req.params.id)) {
+        return res.status(400).json({ error: 'Invalid application ID format' });
+      }
+      
       const { fosterApplications } = await import('@shared/schema');
       
       const updateSchema = z.object({
@@ -11790,6 +11794,10 @@ Submitted: ${new Date().toLocaleString()}
    */
   app.patch('/api/foster-applications/:id/status', requireTenant, requireAuth, requireRole('staff'), async (req, res, next) => {
     try {
+      if (!isValidUUID(req.params.id)) {
+        return res.status(400).json({ error: 'Invalid application ID format' });
+      }
+      
       const { fosterApplications } = await import('@shared/schema');
       
       const updateSchema = z.object({
@@ -12446,6 +12454,10 @@ Submitted: ${new Date().toLocaleString()}
    */
   app.patch('/api/volunteer-applications/:id', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) =>{
     try {
+      if (!isValidUUID(req.params.id)) {
+        return res.status(400).json({ error: 'Invalid application ID format' });
+      }
+      
       const { volunteerApplications } = await import('@shared/schema');
       
       const updateSchema = z.object({
@@ -12494,6 +12506,10 @@ Submitted: ${new Date().toLocaleString()}
    */
   app.patch('/api/volunteer-applications/:id/pipeline-status', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
     try {
+      if (!isValidUUID(req.params.id)) {
+        return res.status(400).json({ error: 'Invalid application ID format' });
+      }
+      
       const { volunteerApplications } = await import('@shared/schema');
       
       const updateSchema = z.object({
@@ -12542,6 +12558,10 @@ Submitted: ${new Date().toLocaleString()}
    */
   app.post('/api/volunteer-applications/:id/send-waiver', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
     try {
+      if (!isValidUUID(req.params.id)) {
+        return res.status(400).json({ error: 'Invalid application ID format' });
+      }
+      
       const { volunteerApplications, customForms } = await import('@shared/schema');
       const { getFormById, createSubmission, generateSecureToken, updateSubmission } = await import('./services/custom-form');
       const { EmailService } = await import('./lib/email-service');
