@@ -56,6 +56,56 @@ API routes for transfer workflow:
 **Petfinder FTP Sync Integration:**
 The platform automates animal synchronization to Petfinder via FTP. Tenants configure FTP credentials, and the system generates Petfinder-compatible CSVs, maps breeds, calculates animal ages, and uploads images. Syncs can be scheduled (every 6 hours) or triggered manually, with sync status and errors tracked.
 
+**Adopter Portal ("My Pets"):**
+A dedicated portal for pet adopters accessible at `/my-pets` with password-less magic link authentication. Features include:
+- **Pet Dashboard:** View all adopted pets with photos and adoption dates
+- **Compliance Tab:** Download vaccination certificates, view microchip numbers with registry links, access medical exam history
+- **Health Tab:** Medication reminder tracking with one-click confirmation via magic links, weight logging with visual graph
+- **Alumni Tab:** Submit Happy Tail photo updates that feed back to the rescue organization
+- **PWA Install Prompt:** iOS-specific instructions for adding to Home Screen (required for push notifications on iOS)
+- **Double Tap Notifications:** Medication reminders sent via email on due dates with 48-hour follow-up for unconfirmed medications
+- **Magic Links:** Password-less one-click confirmation for medication reminders, tokens expire after 7 days and single-use
+- **Staff Compliance Dashboard:** Track adopter medication compliance rates, view overdue reminders, recent confirmations
+
+Adopter Portal Routes:
+- `/my-pets` - Pet dashboard
+- `/my-pets/:animalId` - Pet detail with Compliance/Health/Alumni tabs
+- `/my-pets/login` - Magic link login page
+- `/dashboard/adopter-compliance` - Staff compliance tracking dashboard
+
+API Endpoints (mounted at `/api/adopter/`):
+- GET `/my-pets` - Get user's adopted animals
+- GET `/pets/:animalId` - Get single adopted animal details
+- GET `/pets/:animalId/vaccinations` - Get vaccination records
+- GET `/pets/:animalId/exams` - Get medical exam history
+- GET `/pets/:animalId/medications` - Get medication reminders
+- POST `/pets/:animalId/medications` - Create medication reminder
+- POST `/pets/:animalId/medications/:reminderId/confirm` - Confirm medication given
+- GET `/pets/:animalId/weight` - Get weight logs
+- POST `/pets/:animalId/weight` - Log new weight
+- POST `/pets/:animalId/happy-tail` - Submit Happy Tail update
+- GET `/confirm-medication/:token` - Magic link medication confirmation
+- POST `/magic-login` - Authenticate via magic link token
+- POST `/request-magic-link` - Request new login magic link
+- GET `/staff/compliance/stats` - Get compliance statistics
+- GET `/staff/compliance/reminders` - Get all reminders with details
+- GET `/staff/compliance/confirmations` - Get recent confirmation logs
+
+Database Tables:
+- `animal_adopters` - Links users to adopted animals with adoption date
+- `adopter_weight_logs` - Weight tracking entries
+- `adopter_medication_reminders` - Scheduled medication reminders
+- `medication_confirmation_logs` - Confirmation history
+- `happy_tail_updates` - Photo updates from adopters
+- `magic_links` - Authentication and confirmation tokens
+
+Scheduled Jobs:
+- Adopter medication notifications run at 9 AM and 6 PM UTC
+- Due date notifications + 48-hour follow-up for unconfirmed medications
+
+**Adoption Success Emails ("Success Loop"):**
+Automated personalized emails sent to sponsors when their sponsored animal gets adopted, featuring "going home" photos and encouraging continued engagement with the rescue. Sponsor donations converted to one-time payments to avoid cancellation issues after adoption.
+
 ## External Dependencies
 - **Stripe:** Payment gateway.
 - **Resend:** Email delivery.

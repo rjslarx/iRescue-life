@@ -95,6 +95,10 @@ import ShopManagementPage from "@/pages/ShopManagementPage";
 import CollaborationHubPage from "@/pages/CollaborationHubPage";
 import RunSheetPage from "@/pages/RunSheetPage";
 import ActiveTransportPage from "@/pages/ActiveTransportPage";
+import AdopterPortalPage from "@/pages/AdopterPortalPage";
+import AdopterPetDetailPage from "@/pages/AdopterPetDetailPage";
+import AdopterLoginPage from "@/pages/AdopterLoginPage";
+import AdopterCompliancePage from "@/pages/AdopterCompliancePage";
 import PlatformDashboard from "@/pages/platform/PlatformDashboard";
 import TenantsPage from "@/pages/platform/TenantsPage";
 import UsersPage from "@/pages/platform/UsersPage";
@@ -221,6 +225,14 @@ function RouterSwitch() {
       <ProtectedRoute path="/dashboard/my-fosters/:animalId" pageId="foster-management" component={FosterAnimalProfilePage} />
       <ProtectedRoute path="/dashboard/foster-mobile" pageId="foster-management" component={FosterMobilePortal} />
       <ProtectedRoute path="/dashboard/foster-management" pageId="foster-management" component={FosterManagementPage} />
+      
+      {/* Adopter Portal routes - for adopter role users to access their pets */}
+      <Route path="/my-pets/login" component={AdopterLoginPage} />
+      <Route path="/my-pets/:animalId" component={AdopterPetDetailPage} />
+      <Route path="/my-pets" component={AdopterPortalPage} />
+      
+      {/* Staff compliance dashboard for medication tracking */}
+      <ProtectedRoute path="/dashboard/adopter-compliance" pageId="analytics" component={AdopterCompliancePage} />
       <ProtectedRoute path="/dashboard/foster-pipeline" pageId="foster-management" component={FosterApplicationsPipelinePage} />
       <ProtectedRoute path="/dashboard/volunteer-applications" pageId="volunteers" component={VolunteerApplicationManagementPage} />
       <ProtectedRoute path="/dashboard/volunteer-pipeline" pageId="volunteers" component={VolunteerApplicationsPipelinePage} />

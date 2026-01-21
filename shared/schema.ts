@@ -288,7 +288,7 @@ export const users = pgTable("users", {
   passwordHash: text("password_hash").notNull(),
   fullName: text("full_name").notNull(),
   phone: text("phone"), // For SMS broadcasts
-  roles: text("roles").array().notNull().$type<("admin" | "board_member" | "staff" | "foster" | "volunteer" | "platform_admin")[]>(),
+  roles: text("roles").array().notNull().$type<("admin" | "board_member" | "staff" | "foster" | "volunteer" | "platform_admin" | "adopter")[]>(),
   isActive: boolean("is_active").notNull().default(true),
   // MFA fields
   mfaEnabled: boolean("mfa_enabled").notNull().default(false),
@@ -343,7 +343,7 @@ export const userInvitations = pgTable("user_invitations", {
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
   email: text("email").notNull(),
   fullName: text("full_name"),
-  roles: text("roles").array().notNull().$type<("admin" | "board_member" | "staff" | "foster" | "volunteer")[]>(),
+  roles: text("roles").array().notNull().$type<("admin" | "board_member" | "staff" | "foster" | "volunteer" | "adopter")[]>(),
   token: text("token").notNull().unique(),
   invitedBy: uuid("invited_by").notNull().references(() => users.id, { onDelete: 'cascade' }),
   expiresAt: timestamp("expires_at").notNull(),
@@ -526,6 +526,137 @@ export const insertAnimalSchema = createInsertSchema(animals).omit({
 });
 export type InsertAnimal = z.infer<typeof insertAnimalSchema>;
 export type Animal = typeof animals.$inferSelect;
+
+// Animal Adopters - links adopters (users with adopter role) to the animals they've adopted
+// This enables scoped access: adopters can only see their own pets
+export const animalAdopters = pgTable("animal_adopters", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  animalId: uuid("animal_id").notNull().references(() => animals.id, { onDelete: 'cascade' }),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  adoptedAt: timestamp("adopted_at").notNull().defaultNow(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  uniqueAdoption: unique().on(table.animalId, table.userId),
+}));
+
+export const insertAnimalAdopterSchema = createInsertSchema(animalAdopters).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertAnimalAdopter = z.infer<typeof insertAnimalAdopterSchema>;
+export type AnimalAdopter = typeof animalAdopters.$inferSelect;
+
+// Adopter Weight Logs - tracks pet weight over time (adopter portal feature)
+export const adopterWeightLogs = pgTable("adopter_weight_logs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  animalId: uuid("animal_id").notNull().references(() => animals.id, { onDelete: 'cascade' }),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  weight: text("weight").notNull(), // e.g., "25 lbs", "11.3 kg"
+  weightUnit: text("weight_unit").notNull().$type<"lbs" | "kg">().default("lbs"),
+  weightValue: integer("weight_value"), // Numeric value in tenths for graphing (e.g., 253 = 25.3 lbs)
+  loggedAt: timestamp("logged_at").notNull().defaultNow(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertAdopterWeightLogSchema = createInsertSchema(adopterWeightLogs).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertAdopterWeightLog = z.infer<typeof insertAdopterWeightLogSchema>;
+export type AdopterWeightLog = typeof adopterWeightLogs.$inferSelect;
+
+// Adopter Medication Reminders - medication schedules for adopter portal
+export const adopterMedicationReminders = pgTable("adopter_medication_reminders", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  animalId: uuid("animal_id").notNull().references(() => animals.id, { onDelete: 'cascade' }),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  medicationName: text("medication_name").notNull(), // e.g., "Heartworm Prevention", "Flea/Tick"
+  dosage: text("dosage"), // e.g., "1 tablet", "0.5ml"
+  frequency: text("frequency").notNull().$type<"daily" | "weekly" | "monthly" | "yearly">(),
+  nextDueDate: timestamp("next_due_date").notNull(),
+  lastConfirmedDate: timestamp("last_confirmed_date"),
+  lastNotifiedDate: timestamp("last_notified_date"), // Track when notification was last sent
+  isActive: boolean("is_active").notNull().default(true),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertAdopterMedicationReminderSchema = createInsertSchema(adopterMedicationReminders).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertAdopterMedicationReminder = z.infer<typeof insertAdopterMedicationReminderSchema>;
+export type AdopterMedicationReminder = typeof adopterMedicationReminders.$inferSelect;
+
+// Medication Confirmation Logs - tracks when adopters confirm giving medication
+export const medicationConfirmationLogs = pgTable("medication_confirmation_logs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  reminderId: uuid("reminder_id").notNull().references(() => adopterMedicationReminders.id, { onDelete: 'cascade' }),
+  animalId: uuid("animal_id").notNull().references(() => animals.id, { onDelete: 'cascade' }),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  confirmedAt: timestamp("confirmed_at").notNull().defaultNow(),
+  confirmedVia: text("confirmed_via").notNull().$type<"push" | "email" | "app">(), // How they confirmed
+  dueDate: timestamp("due_date").notNull(), // The due date this confirmation is for
+});
+
+export const insertMedicationConfirmationLogSchema = createInsertSchema(medicationConfirmationLogs).omit({
+  id: true,
+});
+export type InsertMedicationConfirmationLog = z.infer<typeof insertMedicationConfirmationLogSchema>;
+export type MedicationConfirmationLog = typeof medicationConfirmationLogs.$inferSelect;
+
+// Happy Tail Updates - adopter-submitted photos and updates for social media content
+export const happyTailUpdates = pgTable("happy_tail_updates", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  animalId: uuid("animal_id").notNull().references(() => animals.id, { onDelete: 'cascade' }),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  photoUrls: text("photo_urls").array(),
+  message: text("message"), // Optional update message from adopter
+  isApproved: boolean("is_approved").notNull().default(false), // Staff must approve before sharing
+  approvedBy: uuid("approved_by").references(() => users.id, { onDelete: 'set null' }),
+  approvedAt: timestamp("approved_at"),
+  isShared: boolean("is_shared").notNull().default(false), // Has it been shared on social media
+  sharedAt: timestamp("shared_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertHappyTailUpdateSchema = createInsertSchema(happyTailUpdates).omit({
+  id: true,
+  createdAt: true,
+  approvedAt: true,
+  sharedAt: true,
+});
+export type InsertHappyTailUpdate = z.infer<typeof insertHappyTailUpdateSchema>;
+export type HappyTailUpdate = typeof happyTailUpdates.$inferSelect;
+
+// Magic Links - secure one-time links for adopter actions (medication confirm, etc.)
+export const magicLinks = pgTable("magic_links", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  token: text("token").notNull().unique(),
+  action: text("action").notNull().$type<"confirm_medication" | "login" | "set_password">(),
+  targetId: uuid("target_id"), // e.g., reminderId for confirm_medication
+  expiresAt: timestamp("expires_at").notNull(),
+  usedAt: timestamp("used_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertMagicLinkSchema = createInsertSchema(magicLinks).omit({
+  id: true,
+  createdAt: true,
+  usedAt: true,
+});
+export type InsertMagicLink = z.infer<typeof insertMagicLinkSchema>;
+export type MagicLink = typeof magicLinks.$inferSelect;
 
 // Animal Notes table - staff notes about animals
 export const animalNotes = pgTable("animal_notes", {

@@ -11,6 +11,7 @@ import { eq, and, desc, sql, inArray, lt, ilike, gte, count } from "drizzle-orm"
 import { z } from "zod";
 import { authLimiter, signupLimiter, passwordResetLimiter, emailLimiter } from "./config/security";
 import QRCode from "qrcode";
+import adopterPortalRouter from "./routes/adopter-portal";
 
 // Build version identifier for debugging production deployments
 const BUILD_VERSION = "2025-01-16-v1-uuid-validation";
@@ -4222,7 +4223,23 @@ Crawl-delay: 1
           console.log(`[Adoption Success] Sent ${emailResults.sent} emails for ${animal.name}, failed: ${emailResults.failed}`);
         } catch (emailError) {
           console.error('[Adoption Success] Failed to send sponsor emails:', emailError);
-          // Don't fail the update if emails fail
+        }
+        
+        // Create adopter portal account if adopter email is provided
+        if (data.adopterEmail && data.adopterName) {
+          try {
+            const { onboardAdopter } = await import('./services/adopter-onboarding');
+            const onboardResult = await onboardAdopter(
+              req.tenant!.id,
+              animal.id,
+              data.adopterEmail,
+              data.adopterName,
+              data.adoptionDate ? new Date(data.adoptionDate) : new Date()
+            );
+            console.log(`[Adopter Portal] Onboarded ${data.adopterEmail} for ${animal.name}: ${onboardResult.success ? 'success' : 'failed'}`);
+          } catch (onboardError) {
+            console.error('[Adopter Portal] Failed to onboard adopter:', onboardError);
+          }
         }
       }
       
@@ -25286,6 +25303,11 @@ The user asking is a tenant administrator or staff member.`;
       next(error);
     }
   });
+
+  // ============================================================================
+  // Adopter Portal Routes
+  // ============================================================================
+  app.use('/api/adopter', requireTenant, adopterPortalRouter);
 
   const httpServer = createServer(app);
 

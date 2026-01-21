@@ -1,0 +1,56 @@
+Here are 5 strategies to ensure your Adopter emails actually get read.
+1. The "Transactional" Subject Line (The Trojan Horse)
+Don't write marketing subject lines. Write "Official Business" subject lines. People ignore "Newsletters," but they fear missing "Account Alerts."
+• ❌ Weak: "Monthly update for Spot"
+• ❌ Weak: "Heartworm reminder!"
+• ✅ Strong: "ACTION REQUIRED: Medical Records for Spot"
+• ✅ Strong: "Receipt: Your November Heartworm Prevention"
+• ✅ Strong: "Alert: Vaccination Expiring in 3 Days"
+Why it works: It triggers loss aversion. They open it because they think, "Uh oh, what is expiring?"
+2. The "Pre-Header" text (The Second Subject Line)
+In Gmail on a phone, the user sees the Subject Line (Bold) and the Snippet (Grey text). Most developers ignore the snippet, so it accidentally says "View this email in browser..." or "Unsubscribe..."
+Fix: Hard-code a hidden "preview" span at the very top of your HTML email template.
+<span style="display:none;font-size:0px;line-height:0px;">
+  Spot needs his pill today to stay healthy. Tap to confirm...
+</span>
+3. The "Reply-to" Hack
+Gmail's spam filter is aggressive. The single best signal to Google that "This is important" is if the user replies.
+• The Tactic: End your automated email with a question.
+• "P.S. How is Spot settling in? Reply with a photo—we'd love to see him!"
+• The Result: When they reply "He's great!" and attach a pic, Gmail permanently whitelists your domain for that user. They will never miss a future email.
+4. The "Automatic Bump" (The 48-Hour Rule)
+Since sending is free, write a script for "Unopened" emails (using click-tracking as a proxy since Open tracking is broken).
+• Trigger: If the user hasn't clicked the "Confirm Meds" button in 48 hours.
+• Action: Send the exact same email but with a new subject line.
+• Original: "Heartworm Reminder for Spot"
+• Resend: "Did you see this? Spot's meds are due."
+5. Focus on "Click Rate," not "Open Rate"
+Since you can't trust Open Rates anymore, train your tenants to look at Clicks.
+• Don't send an email that says "Give the pill."
+• Send an email that says "Click here to log the pill."
+• If they click, you know 100% they opened it, read it, and took action.
+Here is the psychology behind why Push First, Email Second (or simultaneous) is the better workflow for an Adopter Portal.
+1. The "Channel Psychology" (Why Push comes first)
+• Push Notifications are "Interruptive" (Do it Now).  
+• They appear on the lock screen. The user sees it, taps it, clicks "Confirm," and is done in 3 seconds. It is the path of least resistance.
+• Emails are "Asynchronous" (Do it Later).  
+• Emails get buried. Users often mentally categorize email as a "To-Do List" to check when they have time.
+The Flaw in "Email First": If you send an email on the 1st and a push on the 3rd, you are wasting the "instant" power of the Push when the task is actually due. You are turning the Push into a "Nag" rather than a "Helper."
+2. The Recommended Flow: "The Double Tap"
+Since you have both channels for free, use them to reinforce each other, not as backups.
+• Moment of Due Date (e.g., 9:00 AM):
+• Action: Send BOTH (Push + Email).
+• The Push: "💊 Time for Spot's heartworm pill! Tap to confirm." (Drives instant action).
+• The Email: "Action Required: Monthly Prevention Due." (Serves as the persistent record/searchable receipt).
+• 48 Hours Later (The Logic Check):
+• Trigger: User has not clicked "Confirm."
+• Action: Send Remider Email Only.
+• Why Email here? If they ignored the Push on Day 1, it's gone from their lock screen. Sending another Push might feel like spamming. An email with the subject "OVERDUE: You missed Spot's pill" sits in their inbox staring at them until they delete it or act on it.
+3. The "One-Click" Requirement (Deep Linking)
+Whether it's Push or Email, the most critical success factor is where the link goes.
+If the user clicks the notification and lands on the Home Page where they have to login -> find the dog -> find the records -> click confirm... they will quit.
+You must implement Deep Links (or Magic Links):
+• The URL: https://irescue.life/portal/confirm-meds?token=xyz123
+• The Experience: They click the link -> It opens the PWA -> It instantly shows a modal: "Did you give Spot his pill?" -> [Yes] / [No].
+• No Login: For this specific action, use a secure, one-time token so they don't even have to type their password.
+

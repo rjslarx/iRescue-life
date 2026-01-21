@@ -1,0 +1,30 @@
+You have to "trojan horse" the PWA into their phone by giving them something they need.
+Here is the strategy to make this work for your tenants:
+1. The "Digital Adoption Packet" Strategy
+Don't ask them to download an "Alert App." Give them a "New Parent Portal."
+Instead of handing them a folder of paper at adoption, the tenant sends a link: “Here is Spot’s Medical Records and Legal Ownership Transfer.”
+• The Hook: To access the Vaccination Certificate (which they need for their vet/apartment), they simply "Save" the app to their phone.
+• The Feature: Once installed, the PWA has a "Reminders" tab.
+• Heartworm Prevention Date (Monthly)
+• Rabies Expiration
+• Post-Adoption Check-in
+2. The Tech Stack (Don't build from scratch)
+Coding raw Web Push API + Service Workers + VAPID keys is painful and fragile.
+Recommendation: Use OneSignal.
+• Why: They have a Free Tier that is perfect for your volume.
+• The Benefit: They handle the complex "token management" (keeping track of which device belongs to "Adopter John").
+• Integration: You just add their SDK to your React/Next.js frontend. When user_id: 123 (John) logs in, you call OneSignal.login('123'). Now your backend can just say "Send message to user 123," and OneSignal handles the delivery.
+3. The "Hybrid" Workflow (The Safety Net)
+Since push notifications can be disabled by the user, you cannot rely on them 100% for legal notices.
+• Primary: Send PWA Push (Free).
+• Fallback: If the user has not enabled notifications (or the push fails), fail over to Email (also Free/Cheap via SendGrid/Resend).
+• Last Resort: Only use SMS if they ignore both.
+4. The iOS "Gotcha" (Critical)
+As of iOS 16.4, iPhones DO support Web Push, but only if the user adds the app to their Home Screen.  
+• The UI Fix: You need a customized "Install Prompt" for iOS users.
+• Detection: If (navigator.userAgent.match(/iPhone/)), show a floating banner with an arrow pointing to the "Share" button: "Tap Share and 'Add to Home Screen' to save your Vet Records."
+5. Unique Feature Idea: "The Monthly Check-in"
+To justify the notifications, make them interactive.
+• Notification: "It's the 1st of the month! Have you given Spot his heartworm pill?"
+• Action Buttons (in the notification): [Yes, Done] | [Remind me in 1 hour]
+• Data Win: If they click "Yes," you log that in the database. The Rescue Tenant can now see a report: "90% of our adopters are compliant with meds!" — This is a huge stat for them to show their donors.

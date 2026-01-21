@@ -253,6 +253,25 @@ export function initializeScheduler() {
   });
 
   console.log(`✓ Petfinder sync scheduled for: ${petfinderSyncSchedule} (UTC)`);
+
+  // Schedule adopter medication reminders twice daily at 9:00 AM and 6:00 PM UTC
+  // "0 9,18 * * *" means: at minute 0, hours 9 and 18, every day
+  // This sends due date notifications and 48-hour follow-ups for unconfirmed medications
+  const adopterMedicationSchedule = process.env.ADOPTER_MEDICATION_SCHEDULE || "0 9,18 * * *";
+  
+  cron.schedule(adopterMedicationSchedule, async () => {
+    console.log("💊 Running adopter medication notifications...");
+    try {
+      const { runMedicationNotifications } = await import("../services/medication-notifications");
+      await runMedicationNotifications();
+    } catch (error) {
+      console.error(`❌ Adopter medication notifications failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }, {
+    timezone: "UTC"
+  });
+
+  console.log(`✓ Adopter medication notifications scheduled for: ${adopterMedicationSchedule} (UTC)`);
   
   // Log next scheduled run times
   const nextMidnight = new Date();

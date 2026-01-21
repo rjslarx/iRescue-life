@@ -1,0 +1,30 @@
+By creating an "Adopter" role, you transform your software from a simple record-keeping tool into a "Pet Ownership Platform" that keeps the user engaged for years, not just on adoption day.
+Here is how you should structure this "Adopter Portal" using your existing role-based architecture.
+1. The "Adopter" Role Permissions
+Unlike your Admin or Volunteer roles which see everything, the Adopter role is scoped to specific records.
+• Permission Rule: Can View Animal WHERE adopter_id = current_user.id
+• The UX: When they log in to the PWA, they don't see a dashboard of stats. They see "My Pets" with a big photo of their dog.
+2. What belongs in their "Unique Space"?
+Don't just make it a receipt. Make it a "Digital Glovebox" for their pet. This gives them a reason to keep the app installed.
+• 🛡️ The "Compliance" Tab (The Hook):
+• Vaccine Records: A downloadable PDF of their Rabies cert (needed for boarding/grooming).
+• Microchip: The chip number and a direct link to the registry to update their address.
+• 🩺 The "Health" Tab:
+• Reminders: "Next Heartworm Pill: Oct 1st."
+• Weight Tracker: A simple graph they can update.
+• 💌 The "Alumni" Tab (The "Sticky" Feature):
+• "Happy Tail" Updates: A form where they can upload a photo of the dog on the couch.
+• Why this matters: Rescues are desperate for "Where are they now?" content for social media. This feeds that content directly back to the tenant.
+3. The Automation Flow (How to onboard them)
+The "Magic Moment" happens the second the Volunteer marks the dog as "Adopted" in your system.
+1. Volunteer Action: Clicks "Finalize Adoption" and enters the Adopter's email.
+2. System Action:
+• Changes Dog Status to Adopted.
+• Creates a User Account with role Adopter.
+• Triggers Email: "Welcome Home! Here is the link to Spot's permanent medical records. Click here to access your portal."
+3. No Sign-up Friction: They click the link, set a password, and boom—they are looking at their dog's records.
+4. The Business Opportunity (Monetization)
+Since you are building a SaaS, this "Adopter Portal" is prime real estate for ethical monetization that benefits the rescue.
+• The "Donate" Button: Right next to the dog's face. "Love Spot? Buy a bag of food for his friends still at the shelter."
+• Affiliate Integration: A "Shop for Spot" button.
+• Link to Chewy/Amazon: "Here is the food Spot was eating at the rescue." (You or the Tenant earns the affiliate commission).
