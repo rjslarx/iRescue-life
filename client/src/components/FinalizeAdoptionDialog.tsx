@@ -14,8 +14,9 @@ import { z } from "zod";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
-import { Loader2, Send, Link as LinkIcon, X, CheckCircle2, FileText, Star } from "lucide-react";
+import { Loader2, Send, Link as LinkIcon, X, CheckCircle2, FileText, Star, Heart } from "lucide-react";
 import type { Animal, Application, Grant, Tenant } from "@shared/schema";
+import { HealthPlanProposalModal } from "./HealthPlanProposalModal";
 
 interface ContractTemplate {
   id: number;
@@ -50,6 +51,9 @@ export function FinalizeAdoptionDialog({ open, onOpenChange, animal }: FinalizeA
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [checkoutToken, setCheckoutToken] = useState<string | null>(null);
   const [sessionCreated, setSessionCreated] = useState(false);
+  const [showHealthPlanModal, setShowHealthPlanModal] = useState(false);
+  const [selectedAdopterId, setSelectedAdopterId] = useState<string | null>(null);
+  const [selectedAdopterName, setSelectedAdopterName] = useState<string>("");
 
   const { data: tenantData } = useQuery<{ tenant: Tenant }>({
     queryKey: ['/api/tenant'],
@@ -144,10 +148,19 @@ export function FinalizeAdoptionDialog({ open, onOpenChange, animal }: FinalizeA
       const response = await apiRequest('POST', '/api/adoptions/checkouts', data);
       return response.json();
     },
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => {
       setSessionId(data.session.id);
       setCheckoutToken(data.token);
       setSessionCreated(true);
+      
+      const selectedApp = approvedApplications.find(a => a.id === variables.applicationId);
+      if (selectedApp) {
+        setSelectedAdopterName(selectedApp.applicantName);
+        if (data.session.adopterContactId) {
+          setSelectedAdopterId(data.session.adopterContactId);
+        }
+      }
+      
       queryClient.invalidateQueries({ queryKey: ['/api/adoptions/checkouts'] });
       toast({
         title: "Checkout session created",
@@ -577,6 +590,27 @@ export function FinalizeAdoptionDialog({ open, onOpenChange, animal }: FinalizeA
               </Card>
             )}
 
+            <div className="flex items-center gap-2 p-3 rounded-lg bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800">
+              <Heart className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                  Set up health reminders?
+                </p>
+                <p className="text-xs text-blue-700 dark:text-blue-300">
+                  Auto-generate vaccination and medication reminders for the adopter
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setShowHealthPlanModal(true)}
+                data-testid="button-setup-health-plan"
+              >
+                Setup
+              </Button>
+            </div>
+
             <DialogFooter className="flex-col sm:flex-row gap-2">
               <Button
                 type="button"
@@ -610,6 +644,24 @@ export function FinalizeAdoptionDialog({ open, onOpenChange, animal }: FinalizeA
               </Button>
             </DialogFooter>
           </div>
+        )}
+
+        {showHealthPlanModal && selectedAdopterId && (
+          <HealthPlanProposalModal
+            open={showHealthPlanModal}
+            onOpenChange={setShowHealthPlanModal}
+            animalId={animal.id}
+            animalName={animal.name}
+            adopterId={selectedAdopterId}
+            adopterName={selectedAdopterName}
+            adoptionDate={new Date()}
+            onComplete={() => {
+              toast({
+                title: "Health plan created",
+                description: "Automated reminders have been scheduled for the adopter",
+              });
+            }}
+          />
         )}
       </DialogContent>
     </Dialog>

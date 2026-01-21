@@ -1025,4 +1025,428 @@ router.get("/staff/compliance/confirmations", requireAuth, async (req, res) => {
   }
 });
 
+// GET /api/staff/animals/:animalId/health-preview - Generate proposed health plan for adoption
+router.get("/staff/animals/:animalId/health-preview", requireAuth, async (req, res) => {
+  try {
+    const { animalId } = req.params;
+    const adoptionDateStr = req.query.adoptionDate as string | undefined;
+    const adoptionDate = adoptionDateStr ? new Date(adoptionDateStr) : new Date();
+    
+    const animal = await db
+      .select()
+      .from(animals)
+      .where(
+        and(
+          eq(animals.id, animalId),
+          eq(animals.tenantId, req.tenant!.id)
+        )
+      )
+      .limit(1)
+      .then(rows => rows[0]);
+
+    if (!animal) {
+      return res.status(404).json({ message: "Animal not found" });
+    }
+
+    const vaccines = await db
+      .select()
+      .from(vaccineRecords)
+      .where(
+        and(
+          eq(vaccineRecords.animalId, animalId),
+          eq(vaccineRecords.tenantId, req.tenant!.id)
+        )
+      )
+      .orderBy(desc(vaccineRecords.dateGiven));
+
+    const { generateHealthPlan, getVaccineRecordsFromMedicalHistory } = await import('../utils/healthPlanGenerator');
+    
+    const medicalHistory = getVaccineRecordsFromMedicalHistory(
+      vaccines.map(v => ({
+        vaccineName: v.itemName,
+        dateAdministered: v.dateGiven,
+        expirationDate: v.expirationDate,
+      }))
+    );
+
+    const healthPlan = generateHealthPlan(
+      {
+        id: animal.id,
+        species: animal.species || 'Dog',
+        dob: animal.dateOfBirth || null,
+        intakeDate: animal.intakeDate || null,
+      },
+      medicalHistory,
+      adoptionDate
+    );
+
+    res.json({
+      animalId: animal.id,
+      animalName: animal.name,
+      species: animal.species,
+      adoptionDate,
+      proposedReminders: healthPlan,
+      recentVaccinations: vaccines.slice(0, 5).map(v => ({
+        name: v.itemName,
+        dateGiven: v.dateGiven,
+        expirationDate: v.expirationDate,
+      })),
+    });
+  } catch (error) {
+    console.error("Error generating health preview:", error);
+    res.status(500).json({ message: "Failed to generate health preview" });
+  }
+});
+
+// POST /api/staff/health-plan/bulk-create - Create multiple medication reminders from health plan
+router.post("/staff/health-plan/bulk-create", requireAuth, async (req, res) => {
+  try {
+    const schema = z.object({
+      animalId: z.string().uuid(),
+      adopterId: z.string().uuid(),
+      reminders: z.array(z.object({
+        type: z.string(),
+        dueDate: z.coerce.date(),
+        isRecurring: z.boolean(),
+        recurrenceRule: z.enum(['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY']).optional(),
+        notes: z.string().optional(),
+        reminderType: z.enum(['vaccine_booster', 'heartworm', 'flea_tick', 'other']).optional(),
+      })),
+    });
+
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid request", errors: parsed.error.errors });
+    }
+
+    const { animalId, adopterId, reminders } = parsed.data;
+
+    const animal = await db
+      .select()
+      .from(animals)
+      .where(
+        and(
+          eq(animals.id, animalId),
+          eq(animals.tenantId, req.tenant!.id)
+        )
+      )
+      .limit(1)
+      .then(rows => rows[0]);
+
+    if (!animal) {
+      return res.status(404).json({ message: "Animal not found" });
+    }
+
+    const { users } = await import('@shared/schema');
+    const adopter = await db
+      .select()
+      .from(users)
+      .where(
+        and(
+          eq(users.id, adopterId),
+          eq(users.tenantId, req.tenant!.id)
+        )
+      )
+      .limit(1)
+      .then(rows => rows[0]);
+
+    if (!adopter) {
+      return res.status(404).json({ message: "Adopter not found" });
+    }
+
+    const frequencyMap: Record<string, 'daily' | 'weekly' | 'monthly' | 'yearly'> = {
+      'DAILY': 'daily',
+      'WEEKLY': 'weekly',
+      'MONTHLY': 'monthly',
+      'YEARLY': 'yearly',
+    };
+
+    const createdReminders = [];
+
+    for (const reminder of reminders) {
+      const frequency = reminder.isRecurring && reminder.recurrenceRule
+        ? frequencyMap[reminder.recurrenceRule] || 'monthly'
+        : 'yearly';
+
+      const [created] = await db
+        .insert(adopterMedicationReminders)
+        .values({
+          tenantId: req.tenant!.id,
+          animalId,
+          userId: adopterId,
+          medicationName: reminder.type,
+          frequency,
+          nextDueDate: reminder.dueDate,
+          notes: reminder.notes || null,
+          isActive: true,
+        })
+        .returning();
+
+      createdReminders.push(created);
+    }
+
+    res.json({
+      message: `Created ${createdReminders.length} health reminders`,
+      reminders: createdReminders,
+    });
+  } catch (error) {
+    console.error("Error creating health plan:", error);
+    res.status(500).json({ message: "Failed to create health plan" });
+  }
+});
+
+// GET /api/staff/compliance/expiring-soon - Get animals with vaccines expiring in next 30 days
+router.get("/staff/compliance/expiring-soon", requireAuth, async (req, res) => {
+  try {
+    const { sql } = await import("drizzle-orm");
+    const thirtyDaysFromNow = new Date();
+    thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const expiring = await db
+      .select({
+        reminder: adopterMedicationReminders,
+        animal: animals,
+      })
+      .from(adopterMedicationReminders)
+      .innerJoin(animals, eq(adopterMedicationReminders.animalId, animals.id))
+      .where(
+        and(
+          eq(adopterMedicationReminders.tenantId, req.tenant!.id),
+          eq(adopterMedicationReminders.isActive, true),
+          sql`${adopterMedicationReminders.nextDueDate} >= ${today}`,
+          sql`${adopterMedicationReminders.nextDueDate} <= ${thirtyDaysFromNow}`
+        )
+      )
+      .orderBy(asc(adopterMedicationReminders.nextDueDate));
+
+    const { users } = await import('@shared/schema');
+    const result = [];
+
+    for (const { reminder, animal } of expiring) {
+      const adopter = await db
+        .select()
+        .from(animalAdopters)
+        .where(eq(animalAdopters.animalId, animal.id))
+        .limit(1)
+        .then(rows => rows[0]);
+
+      let adopterName = 'Unknown';
+      let adopterEmail = '';
+
+      if (adopter) {
+        const user = await db
+          .select()
+          .from(users)
+          .where(eq(users.id, adopter.userId))
+          .limit(1)
+          .then(rows => rows[0]);
+
+        if (user) {
+          adopterName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email;
+          adopterEmail = user.email;
+        }
+      }
+
+      result.push({
+        id: reminder.id,
+        animalId: animal.id,
+        animalName: animal.name,
+        medicationName: reminder.medicationName,
+        nextDueDate: reminder.nextDueDate,
+        adopterName,
+        adopterEmail,
+        daysUntilDue: Math.ceil((new Date(reminder.nextDueDate).getTime() - today.getTime()) / (1000 * 60 * 60 * 24)),
+      });
+    }
+
+    res.json(result);
+  } catch (error) {
+    console.error("Error fetching expiring reminders:", error);
+    res.status(500).json({ message: "Failed to fetch expiring reminders" });
+  }
+});
+
+// GET /api/staff/compliance/at-risk - Get adopters who missed 2+ consecutive confirmations
+router.get("/staff/compliance/at-risk", requireAuth, async (req, res) => {
+  try {
+    const { sql } = await import("drizzle-orm");
+    const { users } = await import('@shared/schema');
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const overdueReminders = await db
+      .select({
+        reminder: adopterMedicationReminders,
+        animal: animals,
+      })
+      .from(adopterMedicationReminders)
+      .innerJoin(animals, eq(adopterMedicationReminders.animalId, animals.id))
+      .where(
+        and(
+          eq(adopterMedicationReminders.tenantId, req.tenant!.id),
+          eq(adopterMedicationReminders.isActive, true),
+          sql`${adopterMedicationReminders.nextDueDate} < ${today}`
+        )
+      )
+      .orderBy(asc(adopterMedicationReminders.nextDueDate));
+
+    const adopterMissedCounts: Record<string, {
+      userId: string;
+      name: string;
+      email: string;
+      missedCount: number;
+      oldestMissedDate: Date;
+      reminders: Array<{
+        id: string;
+        animalName: string;
+        medicationName: string;
+        dueDate: Date;
+        daysMissed: number;
+      }>;
+    }> = {};
+
+    for (const { reminder, animal } of overdueReminders) {
+      const adopter = await db
+        .select()
+        .from(animalAdopters)
+        .where(
+          and(
+            eq(animalAdopters.animalId, animal.id),
+            eq(animalAdopters.tenantId, req.tenant!.id)
+          )
+        )
+        .limit(1)
+        .then(rows => rows[0]);
+
+      if (!adopter) continue;
+
+      const user = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, adopter.userId))
+        .limit(1)
+        .then(rows => rows[0]);
+
+      if (!user) continue;
+
+      const daysMissed = Math.floor((today.getTime() - new Date(reminder.nextDueDate).getTime()) / (1000 * 60 * 60 * 24));
+
+      if (!adopterMissedCounts[user.id]) {
+        adopterMissedCounts[user.id] = {
+          userId: user.id,
+          name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email,
+          email: user.email,
+          missedCount: 0,
+          oldestMissedDate: new Date(reminder.nextDueDate),
+          reminders: [],
+        };
+      }
+
+      adopterMissedCounts[user.id].missedCount++;
+      if (new Date(reminder.nextDueDate) < adopterMissedCounts[user.id].oldestMissedDate) {
+        adopterMissedCounts[user.id].oldestMissedDate = new Date(reminder.nextDueDate);
+      }
+
+      adopterMissedCounts[user.id].reminders.push({
+        id: reminder.id,
+        animalName: animal.name,
+        medicationName: reminder.medicationName,
+        dueDate: reminder.nextDueDate,
+        daysMissed,
+      });
+    }
+
+    const atRiskAdopters = Object.values(adopterMissedCounts)
+      .filter(a => a.missedCount >= 2)
+      .sort((a, b) => b.missedCount - a.missedCount);
+
+    res.json(atRiskAdopters);
+  } catch (error) {
+    console.error("Error fetching at-risk adopters:", error);
+    res.status(500).json({ message: "Failed to fetch at-risk adopters" });
+  }
+});
+
+// POST /api/staff/compliance/nudge/:userId - Send a nudge email to an adopter
+router.post("/staff/compliance/nudge/:userId", requireAuth, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { users } = await import('@shared/schema');
+    
+    const user = await db
+      .select()
+      .from(users)
+      .where(
+        and(
+          eq(users.id, userId),
+          eq(users.tenantId, req.tenant!.id)
+        )
+      )
+      .limit(1)
+      .then(rows => rows[0]);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const { sql } = await import("drizzle-orm");
+    const today = new Date();
+    
+    const overdueReminders = await db
+      .select({
+        reminder: adopterMedicationReminders,
+        animal: animals,
+      })
+      .from(adopterMedicationReminders)
+      .innerJoin(animals, eq(adopterMedicationReminders.animalId, animals.id))
+      .innerJoin(animalAdopters, and(
+        eq(animalAdopters.animalId, animals.id),
+        eq(animalAdopters.userId, userId)
+      ))
+      .where(
+        and(
+          eq(adopterMedicationReminders.tenantId, req.tenant!.id),
+          eq(adopterMedicationReminders.isActive, true),
+          sql`${adopterMedicationReminders.nextDueDate} < ${today}`
+        )
+      );
+
+    const { EmailService } = await import('../lib/email-service');
+    const emailService = await EmailService.forTenant(req.tenant!.id);
+
+    if (!emailService) {
+      return res.status(500).json({ message: "Email service not configured" });
+    }
+
+    const remindersList = overdueReminders.map(({ reminder, animal }) => 
+      `<li>${animal.name}: ${reminder.medicationName} (due ${new Date(reminder.nextDueDate).toLocaleDateString()})</li>`
+    ).join('');
+
+    const html = `
+      <h2>Quick Check-In About Your Pet's Health</h2>
+      <p>Hi ${user.firstName || 'there'},</p>
+      <p>We noticed a few health reminders might need your attention:</p>
+      <ul>${remindersList}</ul>
+      <p>No worries if life got busy! Just wanted to make sure everything is okay with your furry family member.</p>
+      <p>If you've already given the medication, you can log in to update the record. If you have any questions about your pet's health, please don't hesitate to reach out.</p>
+      <p>We're here to help!</p>
+    `;
+
+    await emailService.send({
+      to: user.email,
+      subject: "Quick Check-In About Your Pet's Health",
+      html,
+    });
+
+    res.json({ message: "Nudge email sent successfully" });
+  } catch (error) {
+    console.error("Error sending nudge:", error);
+    res.status(500).json({ message: "Failed to send nudge email" });
+  }
+});
+
 export default router;
