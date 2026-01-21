@@ -17432,13 +17432,18 @@ Submitted: ${new Date().toLocaleString()}
             // Don't fail the webhook if contact creation fails
           }
 
-          // If this is a sponsor-pet donation, also create a donation record with sponsoredAnimalId
-          // This enables the adoption success email loop
+          // Create a donation record for ALL completed Stripe payments
+          // This ensures they appear in Analytics Financial Overview
+          // Note: Primary idempotency is enforced above via payments.stripePaymentIntentId check
+          // - If payment already exists, we return early before reaching this code
+          // - The only theoretical race is simultaneous webhook delivery, which is extremely rare
           const campaignType = session.metadata?.campaign_type;
           const petId = session.metadata?.pet_id;
-          if (campaignType === 'sponsor_pet' && petId && isPaymentComplete) {
+          if (isPaymentComplete) {
             try {
-              await db.insert(donations).values({
+              const amountCents = session.amount_total || 0;
+              
+              const donationData: any = {
                 tenantId: tenant.id,
                 donorId: donor.id,
                 donorName: customerName,
@@ -17447,14 +17452,21 @@ Submitted: ${new Date().toLocaleString()}
                 donorState,
                 donorCountry,
                 donationType: 'cash',
-                amount: session.amount_total || 0,
-                sponsoredAnimalId: petId,
+                amount: amountCents, // Store in cents to match schema
                 source: 'stripe',
                 date: new Date(),
-              });
-              console.log(`[Webhook] Created sponsor donation for animal ${petId} from ${customerEmail}`);
+                message: `Stripe payment: ${session.payment_intent || session.id}`, // Track payment reference
+              };
+              
+              // Include sponsoredAnimalId if this is a sponsor-pet campaign
+              if (campaignType === 'sponsor_pet' && petId) {
+                donationData.sponsoredAnimalId = petId;
+              }
+              
+              await db.insert(donations).values(donationData);
+              console.log(`[Webhook] Created donation record for ${customerEmail}, amount: ${amountCents} cents, payment: ${session.payment_intent}`);
             } catch (donationError) {
-              console.error('[Webhook] Failed to create sponsor donation record:', donationError);
+              console.error('[Webhook] Failed to create donation record:', donationError);
               // Don't fail the webhook if donation record creation fails
             }
           }
