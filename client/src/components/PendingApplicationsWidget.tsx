@@ -84,6 +84,7 @@ function getTypeBadgeVariant(type: string): "default" | "secondary" | "outline" 
 function getStatusLabel(status: string): string {
   const statusMap: Record<string, string> = {
     new: 'New',
+    pending: 'New',
     new_app: 'New',
     screening: 'Screening',
     vet_check: 'Vet Check',

@@ -3263,7 +3263,7 @@ Crawl-delay: 1
         .where(
           and(
             eq(fosterApplications.tenantId, req.tenant!.id),
-            inArray(fosterApplications.status, ['new_app', 'interview', 'home_check', 'orientation', 'agreement'])
+            inArray(fosterApplications.status, ['pending', 'new_app', 'interview', 'home_check', 'orientation', 'agreement'])
           )
         )
         .orderBy(desc(fosterApplications.createdAt))

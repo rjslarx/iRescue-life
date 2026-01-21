@@ -61,6 +61,7 @@ function getTypeLabel(type: string): string {
 function getStatusLabel(status: string): string {
   const statusMap: Record<string, string> = {
     new: 'New',
+    pending: 'New Application',
     new_app: 'New Application',
     screening: 'Screening',
     vet_check: 'Vet Check',
@@ -170,7 +171,7 @@ export function ApplicationDetailsDialog({ application, open, onOpenChange }: Ap
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
-        <DialogHeader>
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle className="flex items-center gap-2" data-testid="dialog-title">
             {getTypeIcon(application.type)}
             {getTypeLabel(application.type)}
@@ -180,7 +181,7 @@ export function ApplicationDetailsDialog({ application, open, onOpenChange }: Ap
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 pr-4">
+        <ScrollArea className="flex-1 min-h-0 pr-4">
           <div className="space-y-6">
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -265,7 +266,7 @@ export function ApplicationDetailsDialog({ application, open, onOpenChange }: Ap
           </div>
         </ScrollArea>
 
-        <div className="flex justify-end gap-2 pt-4 border-t mt-4">
+        <div className="flex justify-end gap-2 pt-4 border-t mt-4 flex-shrink-0">
           <Button variant="outline" onClick={() => onOpenChange(false)} data-testid="button-close">
             Close
           </Button>
