@@ -4395,6 +4395,236 @@ Crawl-delay: 1
   });
 
   /**
+   * GET /api/animals/:id/medical-fund
+   * Get medical fund campaign status for an animal
+   */
+  app.get('/api/animals/:id/medical-fund', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      if (!isValidUUID(req.params.id)) {
+        return res.status(400).json({ error: 'Invalid animal ID format' });
+      }
+      
+      const { animals, donationLinks } = await import('@shared/schema');
+      
+      const animal = await db.query.animals.findFirst({
+        where: and(
+          eq(animals.id, req.params.id),
+          eq(animals.tenantId, req.tenant!.id)
+        ),
+      });
+      
+      if (!animal) {
+        return res.status(404).json({ error: 'Animal not found' });
+      }
+      
+      // Check if there's an existing donation link for this animal's medical fund
+      const existingLink = await db.query.donationLinks.findFirst({
+        where: and(
+          eq(donationLinks.tenantId, req.tenant!.id),
+          eq(donationLinks.animalId, req.params.id),
+          eq(donationLinks.campaignType, 'medical_fund'),
+          eq(donationLinks.isActive, true)
+        ),
+      });
+      
+      const hasCampaign = !!existingLink;
+      // medicalFundGoal/Raised are stored in dollars in the DB, convert to cents for frontend
+      const goal = animal.medicalFundGoal ? Math.round(parseFloat(String(animal.medicalFundGoal)) * 100) : null;
+      const raised = animal.medicalFundRaised ? Math.round(parseFloat(String(animal.medicalFundRaised)) * 100) : 0;
+      
+      // Generate QR code if campaign exists
+      let qrCodeUrl: string | null = null;
+      if (existingLink?.stripePaymentLinkUrl) {
+        qrCodeUrl = await QRCode.toDataURL(existingLink.stripePaymentLinkUrl, {
+          width: 256,
+          margin: 2,
+          color: { dark: '#000000', light: '#ffffff' },
+        });
+      }
+      
+      res.json({
+        hasCampaign,
+        goal,
+        raised,
+        url: existingLink?.stripePaymentLinkUrl || null,
+        qrCodeUrl,
+        campaignId: existingLink?.id || null,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/animals/:id/medical-fund
+   * Create a medical fund campaign for an animal
+   */
+  app.post('/api/animals/:id/medical-fund', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      if (!isValidUUID(req.params.id)) {
+        return res.status(400).json({ error: 'Invalid animal ID format' });
+      }
+      
+      const { animals, donationLinks } = await import('@shared/schema');
+      const { getPlatformStripeSecretKey, getPlatformFeePercent } = await import('./config/platform');
+      const Stripe = (await import('stripe')).default;
+      
+      const medicalFundSchema = z.object({
+        title: z.string().min(1).max(200),
+        description: z.string().optional(),
+        goal: z.number().min(0).nullable().optional(), // Goal amount in dollars
+      });
+      
+      const data = medicalFundSchema.parse(req.body);
+      const tenant = req.tenant!;
+      
+      // Check if animal exists
+      const animal = await db.query.animals.findFirst({
+        where: and(
+          eq(animals.id, req.params.id),
+          eq(animals.tenantId, tenant.id)
+        ),
+      });
+      
+      if (!animal) {
+        return res.status(404).json({ error: 'Animal not found' });
+      }
+      
+      if (!tenant.stripeConnectedAccountId) {
+        return res.status(400).json({ error: 'Stripe Connect is not configured. Please configure Stripe in your organization settings.' });
+      }
+      
+      const platformStripeKey = getPlatformStripeSecretKey();
+      if (!platformStripeKey) {
+        return res.status(500).json({ error: 'Platform Stripe key not configured.' });
+      }
+      
+      // Check for existing active campaign
+      const existingLink = await db.query.donationLinks.findFirst({
+        where: and(
+          eq(donationLinks.tenantId, tenant.id),
+          eq(donationLinks.animalId, req.params.id),
+          eq(donationLinks.campaignType, 'medical_fund'),
+          eq(donationLinks.isActive, true)
+        ),
+      });
+      
+      if (existingLink) {
+        return res.status(400).json({ error: 'A medical fund campaign already exists for this animal.' });
+      }
+      
+      const stripe = new Stripe(platformStripeKey, {
+        apiVersion: '2025-09-30.clover',
+        typescript: true,
+      });
+      
+      const platformFeePercent = getPlatformFeePercent(tenant.subscriptionTier as 'free' | 'professional', tenant.platformFeePercent);
+      
+      const goalInCents = data.goal ? Math.round(data.goal * 100) : null;
+      const suggestedAmount = 2500; // $25 default suggestion
+      
+      const stripeMetadata: Record<string, string> = {
+        campaign_type: 'medical_fund',
+        pet_id: animal.id,
+        pet_name: animal.name,
+        tenant_id: tenant.id,
+      };
+      if (goalInCents) stripeMetadata.goal_amount = String(goalInCents);
+      
+      const productParams: Stripe.ProductCreateParams = {
+        name: data.title,
+        description: data.description || `Medical fund campaign for ${animal.name}`,
+        metadata: stripeMetadata,
+      };
+      if (animal.photoUrls && animal.photoUrls.length > 0) {
+        productParams.images = [animal.photoUrls[0]];
+      }
+      
+      const product = await stripe.products.create(
+        productParams,
+        { stripeAccount: tenant.stripeConnectedAccountId }
+      );
+      
+      // Create a one-time price
+      const price = await stripe.prices.create({
+        product: product.id,
+        unit_amount: suggestedAmount,
+        currency: 'usd',
+      }, { stripeAccount: tenant.stripeConnectedAccountId });
+      
+      const paymentLinkParams: Stripe.PaymentLinkCreateParams = {
+        line_items: [{ 
+          price: price.id, 
+          quantity: 1,
+          adjustable_quantity: { enabled: true, minimum: 1, maximum: 100 },
+        }],
+        allow_promotion_codes: false,
+        billing_address_collection: 'auto',
+      };
+      
+      if (platformFeePercent > 0) {
+        paymentLinkParams.application_fee_percent = Math.round(platformFeePercent * 100) / 100;
+      }
+      
+      const paymentLink = await stripe.paymentLinks.create(
+        paymentLinkParams,
+        { stripeAccount: tenant.stripeConnectedAccountId }
+      );
+      
+      // Create donation link record
+      const [newLink] = await db.insert(donationLinks).values({
+        tenantId: tenant.id,
+        title: data.title,
+        description: data.description,
+        amount: suggestedAmount,
+        isRecurring: false,
+        campaignType: 'medical_fund',
+        animalId: animal.id,
+        goalAmount: goalInCents,
+        imageUrl: animal.photoUrls?.[0],
+        stripeProductId: product.id,
+        stripePriceId: price.id,
+        stripePaymentLinkId: paymentLink.id,
+        stripePaymentLinkUrl: paymentLink.url,
+        createdById: req.user!.id,
+      }).returning();
+      
+      // Update animal with medical fund goal (stored in dollars)
+      if (data.goal) {
+        await db.update(animals)
+          .set({ 
+            medicalFundGoal: String(data.goal),
+            updatedAt: new Date(),
+          })
+          .where(eq(animals.id, animal.id));
+      }
+      
+      // Generate QR code for the payment link
+      const qrCodeUrl = await QRCode.toDataURL(paymentLink.url, {
+        width: 256,
+        margin: 2,
+        color: { dark: '#000000', light: '#ffffff' },
+      });
+      
+      res.json({
+        success: true,
+        hasCampaign: true,
+        goal: goalInCents,
+        raised: 0,
+        url: paymentLink.url,
+        qrCodeUrl,
+        campaignId: newLink.id,
+      });
+    } catch (error: any) {
+      console.error('[MEDICAL_FUND] Error creating campaign:', error);
+      if (error.type === 'StripeInvalidRequestError') {
+        return res.status(400).json({ error: error.message });
+      }
+      next(error);
+    }
+  });
+
+  /**
    * POST /api/animals
    * Create new animal (staff only)
    */

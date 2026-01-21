@@ -1004,7 +1004,7 @@ export type InsertSubscription = z.infer<typeof insertSubscriptionSchema>;
 export type Subscription = typeof subscriptions.$inferSelect;
 
 // Campaign types for donation links
-export type DonationCampaignType = "general" | "sponsor_pet" | "virtual_kennel" | "emergency_fund" | "event";
+export type DonationCampaignType = "general" | "sponsor_pet" | "virtual_kennel" | "emergency_fund" | "event" | "medical_fund";
 
 // Donation links table - shareable Stripe payment links for social media fundraising
 export const donationLinks = pgTable("donation_links", {
