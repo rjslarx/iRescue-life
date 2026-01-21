@@ -1,0 +1,77 @@
+Here is a set of "Success Loop" email templates you can use. I recommend coding these with Handlebars ({{ }}) or a similar templating engine so your tenants don't have to rewrite them.
+
+I have included two versions: one focused on Pure Emotion (best for general sponsors) and one focused on Impact (best for recurring/heavy donors).
+
+Variables You Will Need
+Ensure your backend passes these values to your email sender (SendGrid/Mailgun/Postmark):
+
+{{donor_first_name}}
+
+{{animal_name}}
+
+{{rescue_org_name}}
+
+{{animal_profile_photo_url}} (The "Freedom Photo")
+
+{{link_to_available_dogs}}
+
+Option 1: The "Pure Joy" Template (Short & Visual)
+Best for: One-time donors who gave <$50.
+
+Subject: 🐾 You helped {{animal_name}} find a home! Preheader: See the happy ending you made possible.
+
+Body:
+
+Hi {{donor_first_name}},
+
+We have some incredible news to share.
+
+{{animal_name}} has been adopted!
+
+Because of generous sponsors like you, {{animal_name}} received the care, food, and medical attention needed to be ready for this day. While we will miss having those paws around the rescue, we are thrilled to see them start their new life.
+
+Here is the face you helped save:
+
+[ IMAGE: {{animal_profile_photo_url}} ]
+
+Thank you for being part of {{animal_name}}'s journey. You didn't just donate; you helped rewrite a story.
+
+With gratitude, The Team at {{rescue_org_name}}
+
+Not ready to say goodbye? There are still tails wagging in our kennels waiting for a hero like you. Button: Meet the Other Dogs Waiting for a Sponsor
+
+Option 2: The "Impact" Template (Story-Driven)
+Best for: High-value donors or specific medical cases.
+
+Subject: Mission Accomplished: {{animal_name}} is going home. Preheader: Your sponsorship changed everything.
+
+Body:
+
+Dear {{donor_first_name}},
+
+Do you remember when you sponsored {{animal_name}}?
+
+At that time, we were hoping for the best but needed help to get there. Today, we are writing to tell you that you made it happen.
+
+{{animal_name}} has officially been adopted and is leaving {{rescue_org_name}} for a forever home.
+
+Your donation didn't just buy supplies—it bought time. It gave us the resources to keep {{animal_name}} safe, healthy, and loved until the right family walked through the door.
+
+[ IMAGE: {{animal_profile_photo_url}} ]
+
+We often say "it takes a village" to save a dog. Thank you for being a leader in ours.
+
+Sincerely, {{rescue_org_name}}
+
+P.S. Want to help another underdog beat the odds? Link: View our "Longest Resident" dogs here
+
+3. The "Code-It" Strategy (Technical Tip)
+Since you are the platform builder, you should automate the Photo Selection logic.
+
+Don't just use the default profile photo (which might be a sad "intake" photo).
+
+Logic: When the status changes to Adopted, check if a new photo was uploaded in the last 7 days.
+
+If Yes: Use that (it's likely a "Freedom Ride" or happy photo).
+
+If No: Use the existing profile photo.
