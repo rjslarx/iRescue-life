@@ -1,0 +1,127 @@
+Here is a JavaScript utility function (perfect for a Node.js/Next.js backend) that handles the logic.
+This isn't just a date adder; it includes the "Puppy Logic" (frequent boosters) vs. "Adult Logic" (annual/triennial updates), which is the hardest part to get right.
+The Logic Engine: healthPlanGenerator.js
+You can drop this file into your utils/ folder.
+import { addWeeks, addMonths, addYears, differenceInWeeks, differenceInMonths, isAfter } from 'date-fns';
+
+// CONFIGURATION: Easily tweakable standards
+const VACCINE_RULES = {
+  RABIES: {
+    minAgeWeeks: 12, // Can't get rabies before 12 weeks
+    puppyValidFor: { value: 1, unit: 'years' }, // 1st shot good for 1 year
+    adultValidFor: { value: 3, unit: 'years' }, // Boosters good for 3 years
+  },
+  DHPP: {
+    // Distemper/Parvo
+    puppySeriesInterval: { value: 3, unit: 'weeks' }, // Booster every 3 weeks
+    puppySeriesEndAge: 16, // Until 16 weeks old
+    adultValidFor: { value: 1, unit: 'years' }, // Annual booster
+  },
+  HEARTWORM: {
+    interval: { value: 1, unit: 'months' }, // Monthly
+  }
+};
+
+/**
+ * Calculates the recommended next due dates for an animal
+ * @param {Object} animal - { dob: Date, species: 'Dog' }
+ * @param {Array} medicalHistory - [{ type: 'Rabies', administered_at: Date }, ...]
+ */
+export function generateHealthPlan(animal, medicalHistory) {
+  const plan = [];
+  const today = new Date();
+  
+  // 1. Calculate Age Context
+  const ageInWeeks = differenceInWeeks(today, new Date(animal.dob));
+  const isPuppy = ageInWeeks < 20; // Rough cutoff for logic
+
+  // --- LOGIC: RABIES -----------------------------------------
+  const lastRabies = medicalHistory
+    .filter(r => r.type === 'Rabies')
+    .sort((a, b) => new Date(b.administered_at) - new Date(a.administered_at))[0];
+
+  let rabiesDue = null;
+
+  if (!lastRabies) {
+    // never had it
+    if (ageInWeeks >= VACCINE_RULES.RABIES.minAgeWeeks) {
+      rabiesDue = today; // Overdue immediately
+    } else {
+      // Too young, schedule for their 12th week birthday
+      rabiesDue = addWeeks(new Date(animal.dob), VACCINE_RULES.RABIES.minAgeWeeks);
+    }
+  } else {
+    // Had it before. Was it a 1-year or 3-year? 
+    // Heuristic: If it was their FIRST ever rabies, it's 1 year. Otherwise 3.
+    // Simplified Logic: If < 18 months old, assume last shot needs 1 year booster.
+    const validDuration = (ageInWeeks < 72) 
+      ? VACCINE_RULES.RABIES.puppyValidFor 
+      : VACCINE_RULES.RABIES.adultValidFor;
+      
+    rabiesDue = addYears(new Date(lastRabies.administered_at), validDuration.value);
+  }
+  
+  plan.push({
+    type: 'Rabies',
+    due_date: rabiesDue,
+    is_recurring: false, // Rabies is discrete, not a "subscription" like heartworm
+    notes: isPuppy ? '1-Year Puppy Shot' : '3-Year Booster'
+  });
+
+  // --- LOGIC: DHPP ( The Complex Series) ---------------------
+  const lastDHPP = medicalHistory
+    .filter(r => r.type === 'DHPP')
+    .sort((a, b) => new Date(b.administered_at) - new Date(a.administered_at))[0];
+
+  let dhppDue = null;
+
+  if (ageInWeeks < VACCINE_RULES.DHPP.puppySeriesEndAge) {
+    // It is a small puppy
+    if (!lastDHPP) {
+      dhppDue = today; // Needs first round now
+    } else {
+      // Needs booster 3 weeks after last shot
+      dhppDue = addWeeks(new Date(lastDHPP.administered_at), VACCINE_RULES.DHPP.puppySeriesInterval.value);
+    }
+  } else {
+    // Adult or Older Puppy
+    if (!lastDHPP) {
+      dhppDue = today;
+    } else {
+      // Annual Booster
+      dhppDue = addYears(new Date(lastDHPP.administered_at), VACCINE_RULES.DHPP.adultValidFor.value);
+    }
+  }
+
+  plan.push({
+    type: 'DHPP',
+    due_date: dhppDue,
+    is_recurring: false,
+    notes: (ageInWeeks < VACCINE_RULES.DHPP.puppySeriesEndAge) ? 'Puppy Booster Series' : 'Annual Booster'
+  });
+
+  // --- LOGIC: HEARTWORM (Simple Recurring) -------------------
+  // We always just set the NEXT one to 1 month from today (or adoption day)
+  plan.push({
+    type: 'Heartworm Prevention',
+    due_date: addMonths(today, 1),
+    is_recurring: true,
+    recurrence_rule: 'MONTHLY',
+    notes: 'Give on the same day every month'
+  });
+
+  return plan;
+}
+
+How to use this in your "Adoption Wizard"
+1. Frontend: When the Tenant clicks "Finalize Adoption," your UI calls an API endpoint: GET /api/animals/:id/health-preview.
+2. Backend: That endpoint runs the function above.
+3. UI Display: It shows the modal with the Calculated Dates pre-filled.
+• System says: "Rabies Due: Dec 12, 2026"
+• Human thinks: "Wait, the vet actually said come back in June."
+• Action: Human edits the date -> Clicks Confirm.
+4. Save: You save the final (human-verified) dates to your health_reminders table.
+Why this is better than SQL
+Doing ageInWeeks logic in SQL is painful and prone to timezone errors. Doing it in JavaScript allows you to use libraries like date-fns to handle "leap years," "3 weeks from now," and "age calculation" reliably.
+
+
