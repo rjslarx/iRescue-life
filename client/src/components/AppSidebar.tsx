@@ -351,6 +351,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
         { title: "Compliance & Watchdog", url: "/dashboard/compliance", icon: Shield },
         { title: "Platform Integrations", url: "/dashboard/platform-integrations", icon: Plug2 },
         { title: "Analytics & Reports", url: "/dashboard/analytics", icon: BarChart3 },
+        { title: "Adopter Portal Preview", url: "/dashboard/adopter-portal-preview", icon: Eye },
         { title: "Settings", url: "/dashboard/settings", icon: Settings },
       ],
       defaultOpen: false,
