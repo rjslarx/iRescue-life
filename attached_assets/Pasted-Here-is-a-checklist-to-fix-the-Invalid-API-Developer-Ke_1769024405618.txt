@@ -1,0 +1,48 @@
+Here is a checklist to fix the "Invalid API Developer Key" error for the Google Picker.
+
+1. Check HTTP Referrer Restrictions (Most Common Cause)
+The Google Picker is client-side, so your API key is visible in the browser. You likely restricted it to your domain (e.g., irescue.life) to prevent theft. If you are testing on localhost, it will fail.
+
+The Fix:
+
+Go to Google Cloud Console > Credentials.
+
+Click on the API Key you are using.
+
+Look at "Application restrictions." If "HTTP referrers (web sites)" is selected, ensure both of these are in the list:
+
+http://localhost:3000/* (or whatever port you use)
+
+https://irescue.life/* (Your production domain)
+
+Important: Changes can take 5 minutes to propagate.
+
+2. Enable the Required API Services
+A generic "Google Cloud Project" doesn't automatically have permission to use the Picker. You must explicitly turn on the "Google Picker API."
+
+The Fix:
+
+Go to Google Cloud Console > Library.
+
+Search for "Google Picker API".
+
+Click it and hit Enable.
+
+Note: If you are picking photos, also enable the "Google Photos Picker API." If picking Drive files, enable the "Google Drive API."
+
+3. The "Browser Key" vs. "Server Key" Confusion
+Ensure you are using the correct type of credential.
+
+API Key: This is for public data or identifying the app. The Picker requires an API Key passed in the setDeveloperKey() method.
+
+OAuth Client ID: This is for user permission. The Picker also requires an OAuth Token passed in the setOAuthToken() method.
+
+The Error: If you accidentally passed your Client ID string into the setDeveloperKey field, you will get the "Invalid API Key" error.
+
+4. Check for Hidden Characters
+If you copied the key from a PDF or a formatted email, you might have pasted a hidden whitespace character or a line break at the end of the string.
+
+The Fix: Delete the key in your code .env file and paste it again carefully, ensuring no spaces at the start or end.
+
+Summary: What to check first
+Go to your Credentials Dashboard. If the API key has a green checkmark next to "Restrictions," that is likely the culprit. Temporarily select "None" (remove restrictions) and save. If the Picker suddenly works, you know it was a domain mismatch. Then re-add the restrictions carefully.

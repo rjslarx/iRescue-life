@@ -9,7 +9,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { 
   Heart, 
   Home, 
@@ -17,7 +19,6 @@ import {
   Mail, 
   Phone,
   Calendar,
-  MapPin,
   PawPrint,
   ExternalLink,
   CheckCircle,
@@ -25,6 +26,13 @@ import {
 } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import type { PendingApplication } from "./PendingApplicationsWidget";
+
+interface FormField {
+  id: string;
+  label: string;
+  fieldType: string;
+  order: number;
+}
 
 interface ApplicationDetailsDialogProps {
   application: PendingApplication | null;
@@ -93,7 +101,20 @@ function getManagementLink(type: string): string {
   }
 }
 
-function formatFieldLabel(key: string): string {
+function getFormFieldsEndpoint(type: string): string {
+  switch (type) {
+    case 'adoption':
+      return '/api/adoption-form-fields';
+    case 'foster':
+      return '/api/foster-form-fields';
+    case 'volunteer':
+      return '/api/volunteer-form-fields';
+    default:
+      return '/api/adoption-form-fields';
+  }
+}
+
+function formatFallbackLabel(key: string): string {
   return key
     .replace(/([A-Z])/g, ' $1')
     .replace(/_/g, ' ')
@@ -127,46 +148,53 @@ function formatFieldValue(value: any): string | React.ReactNode {
 
 const excludedFields = ['notes'];
 
-const fieldOrder = [
-  'address',
-  'housingType',
-  'hasYard',
-  'hasFencedYard',
-  'hasOtherPets',
-  'otherPetsDetails',
-  'experience',
-  'availability',
-  'preferences',
-  'vetReference',
-  'personalReference',
-  'acceptsLargeDogs',
-  'acceptsCats',
-  'acceptsPuppies',
-  'acceptsSeniors',
-  'acceptsMedicalNeeds',
-  'maxAnimals',
-  'interests',
-  'skills',
-  'emergencyContactName',
-  'emergencyContactPhone',
-];
+function isUUID(str: string): boolean {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(str);
+}
 
 export function ApplicationDetailsDialog({ application, open, onOpenChange }: ApplicationDetailsDialogProps) {
+  const { data: formFieldsData, isLoading: isLoadingFields } = useQuery<{ fields: FormField[] }>({
+    queryKey: [application?.type ? getFormFieldsEndpoint(application.type) : '/api/adoption-form-fields'],
+    enabled: open && !!application,
+  });
+
   if (!application) return null;
 
   const formData = application.formData || {};
   const notes = formData.notes || null;
   
-  const sortedFields = Object.entries(formData)
-    .filter(([key]) => !excludedFields.includes(key) && formData[key] !== null && formData[key] !== undefined)
-    .sort((a, b) => {
-      const aIndex = fieldOrder.indexOf(a[0]);
-      const bIndex = fieldOrder.indexOf(b[0]);
-      if (aIndex === -1 && bIndex === -1) return a[0].localeCompare(b[0]);
-      if (aIndex === -1) return 1;
-      if (bIndex === -1) return -1;
-      return aIndex - bIndex;
+  const fieldLabelMap = new Map<string, { label: string; order: number }>();
+  if (formFieldsData?.fields) {
+    formFieldsData.fields.forEach((field) => {
+      fieldLabelMap.set(field.id, { label: field.label, order: field.order });
     });
+  }
+
+  const sortedFields = Object.entries(formData)
+    .filter(([key]) => !excludedFields.includes(key) && formData[key] !== null && formData[key] !== undefined && formData[key] !== '')
+    .sort((a, b) => {
+      const aField = fieldLabelMap.get(a[0]);
+      const bField = fieldLabelMap.get(b[0]);
+      
+      if (aField && bField) {
+        return aField.order - bField.order;
+      }
+      if (aField) return -1;
+      if (bField) return 1;
+      return a[0].localeCompare(b[0]);
+    });
+
+  const getFieldLabel = (key: string): string => {
+    const fieldInfo = fieldLabelMap.get(key);
+    if (fieldInfo) {
+      return fieldInfo.label;
+    }
+    if (isUUID(key)) {
+      return `Question ${key.slice(0, 8)}...`;
+    }
+    return formatFallbackLabel(key);
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -234,18 +262,29 @@ export function ApplicationDetailsDialog({ application, open, onOpenChange }: Ap
                   <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">
                     Application Responses
                   </h4>
-                  <div className="space-y-4">
-                    {sortedFields.map(([key, value]) => (
-                      <div key={key} className="space-y-1" data-testid={`field-${key}`}>
-                        <dt className="text-sm font-medium text-muted-foreground">
-                          {formatFieldLabel(key)}
-                        </dt>
-                        <dd className="text-sm">
-                          {formatFieldValue(value)}
-                        </dd>
-                      </div>
-                    ))}
-                  </div>
+                  {isLoadingFields ? (
+                    <div className="space-y-4">
+                      {[1, 2, 3].map((i) => (
+                        <div key={i} className="space-y-2">
+                          <Skeleton className="h-4 w-48" />
+                          <Skeleton className="h-4 w-64" />
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {sortedFields.map(([key, value]) => (
+                        <div key={key} className="space-y-1" data-testid={`field-${key}`}>
+                          <dt className="text-sm font-medium text-muted-foreground">
+                            {getFieldLabel(key)}
+                          </dt>
+                          <dd className="text-sm">
+                            {formatFieldValue(value)}
+                          </dd>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </>
             )}

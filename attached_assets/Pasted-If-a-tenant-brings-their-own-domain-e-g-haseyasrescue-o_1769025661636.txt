@@ -1,0 +1,50 @@
+If a tenant brings their own domain (e.g., haseyasrescue.org pointing to your platform), the API key restrictions you just set up for irescue.life will block them.
+
+The browser will tell Google: "I am making this request from haseyasrescue.org," and Google will say: "Sorry, that name isn't on the VIP list."
+
+You have two ways to handle this.
+
+Option 1: The "Whac-A-Mole" Method (Manual Entry)
+Every time a tenant adds a custom domain, you (the admin) must manually log into Google Cloud Console and add their domain to the API Key's allowed list.
+
+Pros: Highly secure. You know exactly who is using your key.
+
+Cons: It's annoying operational overhead. If a tenant launches on a Sunday and you aren't at your computer, their Google Picker will be broken until you fix it.
+
+The List: You would just keep appending to that same list:
+
+https://irescue.life/*
+
+https://haseyasrescue.org/*
+
+https://another-rescue.com/*
+
+Option 2: The "Proxy" Loader (The Advanced Solution)
+If you plan to have hundreds of tenants with custom domains, managing a list of 500 URLs in Google Cloud is a nightmare (and there is a limit of ~50-100 entries per key).
+
+To solve this, you need to load the Google API library from a consistent origin. This is a bit of a hack, but standard for white-label SaaS.
+
+The "Iframe Strategy": Instead of loading the Google Picker directly on haseyasrescue.org, you load it inside an iframe that points to api.irescue.life/picker-host.
+
+The Tenant Site: haseyasrescue.org loads an iframe: <iframe src="https://api.irescue.life/picker-host">.
+
+The Origin: Inside that iframe, the browser sees the URL is irescue.life.
+
+The Key: Google accepts the request because it matches your irescue.life/* rule.
+
+The Communication: You use window.postMessage to pass the selected file data from the iframe back to the main window.
+
+Recommendation
+Since you are just starting (and likely have < 20 tenants with custom domains right now), stick with Option 1 (Manual Entry).
+
+It takes 30 seconds to add a URL. Just add a step to your "Custom Domain Onboarding" checklist:
+
+Update DNS records.
+
+Update SSL certificate.
+
+Add Domain to Google API Key Whitelist.
+
+Once you hit 50+ custom domains, you can look into building the "Proxy/Iframe" solution to automate it.
+
+Important Note for OAuth: If your custom domain tenants want to use "Log in with Google," you will also need to add their domain to the "Authorized Javascript Origins" in your OAuth Client ID settings, or the login popup will fail too. The API Key is just for the Picker; the OAuth Client is for the User Identity. You have to update both.
