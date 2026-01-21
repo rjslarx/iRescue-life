@@ -64,6 +64,10 @@ export default function KennelGridPage() {
         return 'bg-yellow-500';
       case 'medical_hold':
         return 'bg-red-500';
+      case 'stray_hold':
+        return 'bg-orange-500';
+      case 'bite_hold':
+        return 'bg-red-600';
       default:
         return 'bg-gray-500';
     }

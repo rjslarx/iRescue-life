@@ -1118,6 +1118,8 @@ function AnimalForm({
                   <SelectItem value="adopted">Adopted</SelectItem>
                   <SelectItem value="foster">Foster</SelectItem>
                   <SelectItem value="medical_hold">Medical Hold</SelectItem>
+                  <SelectItem value="stray_hold">Stray Hold</SelectItem>
+                  <SelectItem value="bite_hold">Bite Hold</SelectItem>
                 </SelectContent>
               </Select>
               <FormMessage />
@@ -1985,6 +1987,12 @@ export default function AnimalsPage() {
                         </SelectItem>
                         <SelectItem value="medical_hold">
                           Medical Hold ({allActiveAnimals.filter(a => a.status === "medical_hold").length})
+                        </SelectItem>
+                        <SelectItem value="stray_hold">
+                          Stray Hold ({allActiveAnimals.filter(a => a.status === "stray_hold").length})
+                        </SelectItem>
+                        <SelectItem value="bite_hold">
+                          Bite Hold ({allActiveAnimals.filter(a => a.status === "bite_hold").length})
                         </SelectItem>
                         <SelectItem value="pending_transport">
                           Pending Transport ({allActiveAnimals.filter(a => a.status === "pending_transport").length})

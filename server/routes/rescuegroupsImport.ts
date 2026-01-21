@@ -77,7 +77,7 @@ function parsePetfinderGender(sex: string | undefined): 'Male' | 'Female' | 'Unk
   return 'Unknown';
 }
 
-function parseStatus(status: string | undefined): 'available' | 'pending' | 'adopted' | 'foster' | 'medical_hold' | 'deceased' {
+function parseStatus(status: string | undefined): 'available' | 'pending' | 'adopted' | 'foster' | 'medical_hold' | 'stray_hold' | 'bite_hold' | 'deceased' | 'pending_transport' | 'transferred_out' {
   if (!status) return 'available';
   const normalized = status.toLowerCase().trim();
   if (normalized === 'available' || normalized === 'adoptable' || normalized === 'active') return 'available';
@@ -85,8 +85,11 @@ function parseStatus(status: string | undefined): 'available' | 'pending' | 'ado
   if (normalized === 'pending' || normalized === 'hold' || normalized === 'on hold' || normalized === 'application' || normalized === 'reserved') return 'pending';
   if (normalized === 'foster' || normalized === 'fostered' || normalized === 'in foster' || normalized === 'foster care') return 'foster';
   if (normalized === 'medical' || normalized === 'medical_hold' || normalized === 'medical hold' || normalized === 'quarantine' || normalized === 'treatment') return 'medical_hold';
+  if (normalized === 'stray' || normalized === 'stray_hold' || normalized === 'stray hold' || normalized === 'intake') return 'stray_hold';
+  if (normalized === 'bite' || normalized === 'bite_hold' || normalized === 'bite hold' || normalized === 'bite quarantine') return 'bite_hold';
   if (normalized === 'deceased' || normalized === 'passed' || normalized === 'died' || normalized === 'euthanized' || normalized === 'rainbow bridge') return 'deceased';
-  if (normalized === 'stray' || normalized === 'intake') return 'available';
+  if (normalized === 'transfer' || normalized === 'transferred' || normalized === 'transferred_out') return 'transferred_out';
+  if (normalized === 'transport' || normalized === 'pending_transport' || normalized === 'pending transport') return 'pending_transport';
   return 'available';
 }
 
