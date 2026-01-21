@@ -158,8 +158,8 @@ export function ViewApplicationDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[85vh]" data-testid="dialog-view-application">
-        <DialogHeader>
+      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col" data-testid="dialog-view-application">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle className="flex items-center gap-2" data-testid="text-dialog-title">
             {getTypeIcon(applicationType)}
             {getTypeLabel(applicationType)}
@@ -169,7 +169,7 @@ export function ViewApplicationDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="max-h-[60vh] pr-4">
+        <ScrollArea className="flex-1 min-h-0 pr-4">
           <div className="space-y-6">
             {/* Applicant Header */}
             <div className="space-y-4">
@@ -272,7 +272,7 @@ export function ViewApplicationDialog({
           </div>
         </ScrollArea>
 
-        <div className="flex justify-end pt-4">
+        <div className="flex justify-end pt-4 flex-shrink-0">
           <Button 
             variant="outline" 
             onClick={() => onOpenChange(false)}
