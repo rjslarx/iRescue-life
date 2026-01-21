@@ -84,9 +84,9 @@ function getManagementLink(type: string): string {
     case 'adoption':
       return '/dashboard/applications';
     case 'foster':
-      return '/dashboard/foster-management';
+      return '/dashboard/foster-pipeline';
     case 'volunteer':
-      return '/dashboard/volunteer-management';
+      return '/dashboard/volunteer-pipeline';
     default:
       return '/dashboard';
   }
