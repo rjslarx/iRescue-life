@@ -18,6 +18,12 @@ import { z } from "zod";
 
 const router = Router();
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function isValidUUID(value: string | undefined): boolean {
+  if (!value) return false;
+  return UUID_REGEX.test(value);
+}
+
 // Middleware to ensure user has adopter role and is accessing their own data
 const requireAdopterRole = (req: any, res: any, next: any) => {
   if (!req.user) {
@@ -1376,6 +1382,9 @@ router.get("/staff/compliance/at-risk", requireAuth, async (req, res) => {
 router.post("/staff/compliance/nudge/:userId", requireAuth, async (req, res) => {
   try {
     const { userId } = req.params;
+    if (!isValidUUID(userId)) {
+      return res.status(400).json({ message: "Invalid user ID format" });
+    }
     const { users } = await import('@shared/schema');
     
     const user = await db
@@ -1523,6 +1532,9 @@ router.get("/admin/adopters", requireAuth, requireAdminRole, async (req, res) =>
 router.get("/admin/adopter-preview/:userId/pets", requireAuth, requireAdminRole, async (req, res) => {
   try {
     const { userId } = req.params;
+    if (!isValidUUID(userId)) {
+      return res.status(400).json({ message: "Invalid user ID format" });
+    }
     const tenantId = req.tenant!.id;
 
     const adoptedAnimals = await db
@@ -1554,6 +1566,9 @@ router.get("/admin/adopter-preview/:userId/pets", requireAuth, requireAdminRole,
 router.get("/admin/adopter-preview/:userId/pets/:animalId", requireAuth, requireAdminRole, async (req, res) => {
   try {
     const { userId, animalId } = req.params;
+    if (!isValidUUID(userId) || !isValidUUID(animalId)) {
+      return res.status(400).json({ message: "Invalid ID format" });
+    }
     const tenantId = req.tenant!.id;
 
     // Verify the adopter has this animal
@@ -1600,7 +1615,10 @@ router.get("/admin/adopter-preview/:userId/pets/:animalId", requireAuth, require
 // GET /api/admin/adopter-preview/:userId/pets/:animalId/vaccinations
 router.get("/admin/adopter-preview/:userId/pets/:animalId/vaccinations", requireAuth, requireAdminRole, async (req, res) => {
   try {
-    const { animalId } = req.params;
+    const { userId, animalId } = req.params;
+    if (!isValidUUID(userId) || !isValidUUID(animalId)) {
+      return res.status(400).json({ message: "Invalid ID format" });
+    }
     const tenantId = req.tenant!.id;
 
     const vaccinationRecords = await db
@@ -1624,7 +1642,10 @@ router.get("/admin/adopter-preview/:userId/pets/:animalId/vaccinations", require
 // GET /api/admin/adopter-preview/:userId/pets/:animalId/medical-exams
 router.get("/admin/adopter-preview/:userId/pets/:animalId/medical-exams", requireAuth, requireAdminRole, async (req, res) => {
   try {
-    const { animalId } = req.params;
+    const { userId, animalId } = req.params;
+    if (!isValidUUID(userId) || !isValidUUID(animalId)) {
+      return res.status(400).json({ message: "Invalid ID format" });
+    }
     const tenantId = req.tenant!.id;
 
     const exams = await db
@@ -1648,7 +1669,10 @@ router.get("/admin/adopter-preview/:userId/pets/:animalId/medical-exams", requir
 // GET /api/admin/adopter-preview/:userId/pets/:animalId/weight-logs
 router.get("/admin/adopter-preview/:userId/pets/:animalId/weight-logs", requireAuth, requireAdminRole, async (req, res) => {
   try {
-    const { animalId } = req.params;
+    const { userId, animalId } = req.params;
+    if (!isValidUUID(userId) || !isValidUUID(animalId)) {
+      return res.status(400).json({ message: "Invalid ID format" });
+    }
     const tenantId = req.tenant!.id;
 
     const logs = await db
@@ -1672,7 +1696,10 @@ router.get("/admin/adopter-preview/:userId/pets/:animalId/weight-logs", requireA
 // GET /api/admin/adopter-preview/:userId/pets/:animalId/medication-reminders
 router.get("/admin/adopter-preview/:userId/pets/:animalId/medication-reminders", requireAuth, requireAdminRole, async (req, res) => {
   try {
-    const { animalId } = req.params;
+    const { userId, animalId } = req.params;
+    if (!isValidUUID(userId) || !isValidUUID(animalId)) {
+      return res.status(400).json({ message: "Invalid ID format" });
+    }
     const tenantId = req.tenant!.id;
 
     const reminders = await db
@@ -1696,7 +1723,10 @@ router.get("/admin/adopter-preview/:userId/pets/:animalId/medication-reminders",
 // GET /api/admin/adopter-preview/:userId/pets/:animalId/happy-tails
 router.get("/admin/adopter-preview/:userId/pets/:animalId/happy-tails", requireAuth, requireAdminRole, async (req, res) => {
   try {
-    const { animalId } = req.params;
+    const { userId, animalId } = req.params;
+    if (!isValidUUID(userId) || !isValidUUID(animalId)) {
+      return res.status(400).json({ message: "Invalid ID format" });
+    }
     const tenantId = req.tenant!.id;
 
     const updates = await db
