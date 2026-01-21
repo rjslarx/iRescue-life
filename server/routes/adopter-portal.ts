@@ -9,7 +9,8 @@ import {
   happyTailUpdates,
   magicLinks,
   vaccineRecords,
-  medicalExams
+  medicalExams,
+  users
 } from "@shared/schema";
 import { eq, and, desc, asc } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth";
@@ -1446,6 +1447,273 @@ router.post("/staff/compliance/nudge/:userId", requireAuth, async (req, res) => 
   } catch (error) {
     console.error("Error sending nudge:", error);
     res.status(500).json({ message: "Failed to send nudge email" });
+  }
+});
+
+// ============================================
+// ADMIN PREVIEW ENDPOINTS
+// ============================================
+
+// Middleware to require admin role
+const requireAdminRole = (req: any, res: any, next: any) => {
+  if (!req.user) {
+    return res.status(401).json({ message: "Authentication required" });
+  }
+  if (!req.user.roles?.includes("admin")) {
+    return res.status(403).json({ message: "Admin role required" });
+  }
+  next();
+};
+
+// GET /api/admin/adopters - List all adopters with their adopted animals count
+router.get("/admin/adopters", requireAuth, requireAdminRole, async (req, res) => {
+  try {
+    const tenantId = req.tenant!.id;
+    
+    // Get all unique adopters with their adoption info
+    const adopters = await db
+      .select({
+        user: {
+          id: users.id,
+          email: users.email,
+          fullName: users.fullName,
+          phone: users.phone,
+        },
+        animalId: animalAdopters.animalId,
+        animalName: animals.name,
+        adoptedAt: animalAdopters.adoptedAt,
+      })
+      .from(animalAdopters)
+      .innerJoin(users, eq(animalAdopters.userId, users.id))
+      .innerJoin(animals, eq(animalAdopters.animalId, animals.id))
+      .where(eq(animalAdopters.tenantId, tenantId))
+      .orderBy(desc(animalAdopters.adoptedAt));
+
+    // Group by user
+    const adopterMap = new Map<string, {
+      id: string;
+      email: string;
+      fullName: string;
+      phone: string | null;
+      adoptedAnimals: Array<{ id: string; name: string; adoptedAt: Date }>;
+    }>();
+
+    for (const row of adopters) {
+      if (!adopterMap.has(row.user.id)) {
+        adopterMap.set(row.user.id, {
+          ...row.user,
+          adoptedAnimals: [],
+        });
+      }
+      adopterMap.get(row.user.id)!.adoptedAnimals.push({
+        id: row.animalId,
+        name: row.animalName,
+        adoptedAt: row.adoptedAt,
+      });
+    }
+
+    res.json(Array.from(adopterMap.values()));
+  } catch (error) {
+    console.error("Error fetching adopters:", error);
+    res.status(500).json({ message: "Failed to fetch adopters" });
+  }
+});
+
+// GET /api/admin/adopter-preview/:userId/pets - Get pets for specific adopter (admin preview)
+router.get("/admin/adopter-preview/:userId/pets", requireAuth, requireAdminRole, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const tenantId = req.tenant!.id;
+
+    const adoptedAnimals = await db
+      .select({
+        adoption: animalAdopters,
+        animal: animals,
+      })
+      .from(animalAdopters)
+      .innerJoin(animals, eq(animalAdopters.animalId, animals.id))
+      .where(
+        and(
+          eq(animalAdopters.userId, userId),
+          eq(animalAdopters.tenantId, tenantId)
+        )
+      )
+      .orderBy(desc(animalAdopters.adoptedAt));
+
+    res.json(adoptedAnimals.map(({ animal, adoption }) => ({
+      ...animal,
+      adoptedAt: adoption.adoptedAt,
+    })));
+  } catch (error) {
+    console.error("Error fetching adopter's pets:", error);
+    res.status(500).json({ message: "Failed to fetch adopter's pets" });
+  }
+});
+
+// GET /api/admin/adopter-preview/:userId/pets/:animalId - Get single animal for admin preview
+router.get("/admin/adopter-preview/:userId/pets/:animalId", requireAuth, requireAdminRole, async (req, res) => {
+  try {
+    const { userId, animalId } = req.params;
+    const tenantId = req.tenant!.id;
+
+    // Verify the adopter has this animal
+    const adoption = await db
+      .select()
+      .from(animalAdopters)
+      .where(
+        and(
+          eq(animalAdopters.animalId, animalId),
+          eq(animalAdopters.userId, userId),
+          eq(animalAdopters.tenantId, tenantId)
+        )
+      )
+      .limit(1)
+      .then(rows => rows[0]);
+
+    if (!adoption) {
+      return res.status(404).json({ message: "Adoption record not found" });
+    }
+
+    const animal = await db
+      .select()
+      .from(animals)
+      .where(
+        and(
+          eq(animals.tenantId, tenantId),
+          eq(animals.id, animalId)
+        )
+      )
+      .limit(1)
+      .then(rows => rows[0]);
+
+    if (!animal) {
+      return res.status(404).json({ message: "Animal not found" });
+    }
+
+    res.json({ ...animal, adoptedAt: adoption.adoptedAt });
+  } catch (error) {
+    console.error("Error fetching animal:", error);
+    res.status(500).json({ message: "Failed to fetch animal" });
+  }
+});
+
+// GET /api/admin/adopter-preview/:userId/pets/:animalId/vaccinations
+router.get("/admin/adopter-preview/:userId/pets/:animalId/vaccinations", requireAuth, requireAdminRole, async (req, res) => {
+  try {
+    const { animalId } = req.params;
+    const tenantId = req.tenant!.id;
+
+    const vaccinationRecords = await db
+      .select()
+      .from(vaccineRecords)
+      .where(
+        and(
+          eq(vaccineRecords.tenantId, tenantId),
+          eq(vaccineRecords.animalId, animalId)
+        )
+      )
+      .orderBy(desc(vaccineRecords.dateAdministered));
+
+    res.json(vaccinationRecords);
+  } catch (error) {
+    console.error("Error fetching vaccinations:", error);
+    res.status(500).json({ message: "Failed to fetch vaccinations" });
+  }
+});
+
+// GET /api/admin/adopter-preview/:userId/pets/:animalId/medical-exams
+router.get("/admin/adopter-preview/:userId/pets/:animalId/medical-exams", requireAuth, requireAdminRole, async (req, res) => {
+  try {
+    const { animalId } = req.params;
+    const tenantId = req.tenant!.id;
+
+    const exams = await db
+      .select()
+      .from(medicalExams)
+      .where(
+        and(
+          eq(medicalExams.tenantId, tenantId),
+          eq(medicalExams.animalId, animalId)
+        )
+      )
+      .orderBy(desc(medicalExams.examDate));
+
+    res.json(exams);
+  } catch (error) {
+    console.error("Error fetching medical exams:", error);
+    res.status(500).json({ message: "Failed to fetch medical exams" });
+  }
+});
+
+// GET /api/admin/adopter-preview/:userId/pets/:animalId/weight-logs
+router.get("/admin/adopter-preview/:userId/pets/:animalId/weight-logs", requireAuth, requireAdminRole, async (req, res) => {
+  try {
+    const { animalId } = req.params;
+    const tenantId = req.tenant!.id;
+
+    const logs = await db
+      .select()
+      .from(adopterWeightLogs)
+      .where(
+        and(
+          eq(adopterWeightLogs.tenantId, tenantId),
+          eq(adopterWeightLogs.animalId, animalId)
+        )
+      )
+      .orderBy(desc(adopterWeightLogs.loggedAt));
+
+    res.json(logs);
+  } catch (error) {
+    console.error("Error fetching weight logs:", error);
+    res.status(500).json({ message: "Failed to fetch weight logs" });
+  }
+});
+
+// GET /api/admin/adopter-preview/:userId/pets/:animalId/medication-reminders
+router.get("/admin/adopter-preview/:userId/pets/:animalId/medication-reminders", requireAuth, requireAdminRole, async (req, res) => {
+  try {
+    const { animalId } = req.params;
+    const tenantId = req.tenant!.id;
+
+    const reminders = await db
+      .select()
+      .from(adopterMedicationReminders)
+      .where(
+        and(
+          eq(adopterMedicationReminders.tenantId, tenantId),
+          eq(adopterMedicationReminders.animalId, animalId)
+        )
+      )
+      .orderBy(asc(adopterMedicationReminders.nextDueDate));
+
+    res.json(reminders);
+  } catch (error) {
+    console.error("Error fetching medication reminders:", error);
+    res.status(500).json({ message: "Failed to fetch medication reminders" });
+  }
+});
+
+// GET /api/admin/adopter-preview/:userId/pets/:animalId/happy-tails
+router.get("/admin/adopter-preview/:userId/pets/:animalId/happy-tails", requireAuth, requireAdminRole, async (req, res) => {
+  try {
+    const { animalId } = req.params;
+    const tenantId = req.tenant!.id;
+
+    const updates = await db
+      .select()
+      .from(happyTailUpdates)
+      .where(
+        and(
+          eq(happyTailUpdates.tenantId, tenantId),
+          eq(happyTailUpdates.animalId, animalId)
+        )
+      )
+      .orderBy(desc(happyTailUpdates.createdAt));
+
+    res.json(updates);
+  } catch (error) {
+    console.error("Error fetching happy tail updates:", error);
+    res.status(500).json({ message: "Failed to fetch happy tail updates" });
   }
 });
 
