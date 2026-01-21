@@ -12,7 +12,10 @@ import {
   Clock,
   CheckCircle,
   AlertCircle,
-  ChevronRight
+  ChevronRight,
+  Heart,
+  Home,
+  Users
 } from "lucide-react";
 
 interface FormSubmission {
@@ -21,10 +24,11 @@ interface FormSubmission {
   signerName: string | null;
   signerEmail: string | null;
   status: string;
-  createdAt: string;
+  createdAt: string | null;
   signedAt: string | null;
   feeAmount: number | null;
   paymentStatus: string | null;
+  type?: 'custom' | 'adoption' | 'foster' | 'volunteer';
 }
 
 interface FormSubmissionsResponse {
@@ -34,7 +38,36 @@ interface FormSubmissionsResponse {
     signed: number;
     completed: number;
     awaitingPayment: number;
+    newAdoptions?: number;
+    newFosters?: number;
+    newVolunteers?: number;
   };
+}
+
+function getTypeIcon(type?: string) {
+  switch (type) {
+    case 'adoption':
+      return <Heart className="h-4 w-4 text-pink-500" />;
+    case 'foster':
+      return <Home className="h-4 w-4 text-blue-500" />;
+    case 'volunteer':
+      return <Users className="h-4 w-4 text-green-500" />;
+    default:
+      return <FileText className="h-4 w-4 text-primary" />;
+  }
+}
+
+function getTypeColor(type?: string) {
+  switch (type) {
+    case 'adoption':
+      return 'bg-pink-500/10';
+    case 'foster':
+      return 'bg-blue-500/10';
+    case 'volunteer':
+      return 'bg-green-500/10';
+    default:
+      return 'bg-primary/10';
+  }
 }
 
 function getStatusBadge(submission: FormSubmission, submissionId: string) {
@@ -47,11 +80,20 @@ function getStatusBadge(submission: FormSubmission, submissionId: string) {
     );
   }
   
-  if (submission.status === 'completed') {
+  if (submission.status === 'completed' || submission.status === 'adopted') {
     return (
       <Badge variant="default" data-testid={`badge-status-completed-${submissionId}`}>
         <CheckCircle className="h-3 w-3 mr-1" />
-        Completed
+        {submission.status === 'adopted' ? 'Adopted' : 'Completed'}
+      </Badge>
+    );
+  }
+
+  if (submission.status === 'approved') {
+    return (
+      <Badge variant="default" data-testid={`badge-status-approved-${submissionId}`}>
+        <CheckCircle className="h-3 w-3 mr-1" />
+        Approved
       </Badge>
     );
   }
@@ -64,25 +106,36 @@ function getStatusBadge(submission: FormSubmission, submissionId: string) {
       </Badge>
     );
   }
+
+  if (submission.status === 'new') {
+    return (
+      <Badge variant="secondary" data-testid={`badge-status-new-${submissionId}`}>
+        <AlertCircle className="h-3 w-3 mr-1" />
+        New
+      </Badge>
+    );
+  }
   
   return (
     <Badge variant="outline" data-testid={`badge-status-pending-${submissionId}`}>
       <Clock className="h-3 w-3 mr-1" />
-      Pending
+      {submission.status || 'Pending'}
     </Badge>
   );
 }
 
 function SubmissionItem({ submission }: { submission: FormSubmission }) {
-  const timeAgo = formatDistanceToNow(new Date(submission.createdAt), { addSuffix: true });
+  const timeAgo = submission.createdAt 
+    ? formatDistanceToNow(new Date(submission.createdAt), { addSuffix: true })
+    : 'Unknown time';
   
   return (
     <div 
       className="flex items-center gap-3 py-3 border-b border-border last:border-0" 
       data-testid={`form-submission-${submission.id}`}
     >
-      <div className="flex-shrink-0 p-2 rounded-full bg-primary/10">
-        <FileText className="h-4 w-4 text-primary" />
+      <div className={`flex-shrink-0 p-2 rounded-full ${getTypeColor(submission.type)}`}>
+        {getTypeIcon(submission.type)}
       </div>
       
       <div className="flex-1 min-w-0">
@@ -127,33 +180,37 @@ export default function FormSubmissionsWidget() {
     refetchInterval: 30000,
   });
 
+  const totalNewApplications = (data?.counts?.newAdoptions || 0) + 
+    (data?.counts?.newFosters || 0) + 
+    (data?.counts?.newVolunteers || 0);
+
   return (
     <Card data-testid="card-form-submissions">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2">
             <FileText className="h-5 w-5 text-primary" />
-            <CardTitle className="text-lg">Form Submissions</CardTitle>
+            <CardTitle className="text-lg">Applications & Forms</CardTitle>
           </div>
           {data?.counts && (
-            <div className="flex items-center gap-2">
-              {data.counts.awaitingPayment > 0 && (
-                <Badge variant="secondary" className="gap-1" data-testid="badge-awaiting-payment-count">
-                  <DollarSign className="h-3 w-3" />
-                  {data.counts.awaitingPayment}
+            <div className="flex items-center gap-2 flex-wrap">
+              {totalNewApplications > 0 && (
+                <Badge variant="secondary" className="gap-1" data-testid="badge-new-applications-count">
+                  <AlertCircle className="h-3 w-3" />
+                  {totalNewApplications} new
                 </Badge>
               )}
-              {(data.counts.pending + data.counts.signed) > 0 && (
-                <Badge variant="outline" className="gap-1" data-testid="badge-new-submissions-count">
-                  <AlertCircle className="h-3 w-3" />
-                  {data.counts.pending + data.counts.signed} new
+              {data.counts.awaitingPayment > 0 && (
+                <Badge variant="outline" className="gap-1" data-testid="badge-awaiting-payment-count">
+                  <DollarSign className="h-3 w-3" />
+                  {data.counts.awaitingPayment}
                 </Badge>
               )}
             </div>
           )}
         </div>
         <CardDescription>
-          Recent custom form submissions
+          Recent adoption, foster, volunteer, and custom form submissions
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -167,7 +224,7 @@ export default function FormSubmissionsWidget() {
         ) : !data?.submissions.length ? (
           <div className="text-center py-6 text-muted-foreground" data-testid="empty-state">
             <FileText className="h-8 w-8 mx-auto mb-2 opacity-50" />
-            <p className="text-sm">No form submissions yet</p>
+            <p className="text-sm">No applications or form submissions yet</p>
           </div>
         ) : (
           <ScrollArea className="h-[280px] -mx-1 px-1" data-testid="submissions-list">
@@ -178,9 +235,9 @@ export default function FormSubmissionsWidget() {
         )}
         
         <div className="mt-4 pt-3 border-t">
-          <Link href="/dashboard/custom-forms" data-testid="link-view-all-forms">
-            <Button variant="outline" className="w-full gap-2" data-testid="button-view-all-forms">
-              View All Forms
+          <Link href="/dashboard/applications" data-testid="link-view-all-applications">
+            <Button variant="outline" className="w-full gap-2" data-testid="button-view-all-applications">
+              View All Applications
               <ChevronRight className="h-4 w-4" />
             </Button>
           </Link>

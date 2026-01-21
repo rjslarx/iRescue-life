@@ -2888,47 +2888,176 @@ Crawl-delay: 1
 
   /**
    * GET /api/dashboard/form-submissions
-   * Get recent custom form submissions for the dashboard widget
+   * Get recent form submissions for the dashboard widget
+   * Includes: adoption applications, foster applications, volunteer applications, and custom form submissions
    */
   app.get('/api/dashboard/form-submissions', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
     try {
-      const { customFormSubmissions, customForms } = await import('@shared/schema');
-      const { desc, isNull, isNotNull } = await import('drizzle-orm');
+      const { customFormSubmissions, customForms, applications, fosterApplications, volunteerApplications, animals } = await import('@shared/schema');
+      const { desc } = await import('drizzle-orm');
 
-      // Get recent submissions with form names
-      const submissions = await db
-        .select({
-          id: customFormSubmissions.id,
-          formName: customForms.name,
-          signerName: customFormSubmissions.signerName,
-          signerEmail: customFormSubmissions.signerEmail,
-          status: customFormSubmissions.status,
-          createdAt: customFormSubmissions.createdAt,
-          signedAt: customFormSubmissions.signedAt,
-          feeAmount: customFormSubmissions.feeAmount,
-          paymentStatus: customFormSubmissions.paymentStatus,
-        })
-        .from(customFormSubmissions)
-        .leftJoin(customForms, eq(customFormSubmissions.formId, customForms.id))
-        .where(eq(customFormSubmissions.tenantId, req.tenant!.id))
-        .orderBy(desc(customFormSubmissions.createdAt))
-        .limit(10);
+      // Fetch all types of submissions in parallel
+      const [customSubmissions, adoptionApps, fosterApps, volunteerApps] = await Promise.all([
+        // Custom form submissions
+        db
+          .select({
+            id: customFormSubmissions.id,
+            formName: customForms.name,
+            signerName: customFormSubmissions.signerName,
+            signerEmail: customFormSubmissions.signerEmail,
+            status: customFormSubmissions.status,
+            createdAt: customFormSubmissions.createdAt,
+            signedAt: customFormSubmissions.signedAt,
+            feeAmount: customFormSubmissions.feeAmount,
+            paymentStatus: customFormSubmissions.paymentStatus,
+          })
+          .from(customFormSubmissions)
+          .leftJoin(customForms, eq(customFormSubmissions.formId, customForms.id))
+          .where(eq(customFormSubmissions.tenantId, req.tenant!.id))
+          .orderBy(desc(customFormSubmissions.createdAt))
+          .limit(10),
+        
+        // Adoption applications
+        db
+          .select({
+            id: applications.id,
+            applicantName: applications.applicantName,
+            applicantEmail: applications.applicantEmail,
+            stage: applications.stage,
+            createdAt: applications.createdAt,
+            animalName: animals.name,
+          })
+          .from(applications)
+          .leftJoin(animals, eq(applications.animalId, animals.id))
+          .where(eq(applications.tenantId, req.tenant!.id))
+          .orderBy(desc(applications.createdAt))
+          .limit(10),
+        
+        // Foster applications
+        db
+          .select({
+            id: fosterApplications.id,
+            applicantName: fosterApplications.applicantName,
+            applicantEmail: fosterApplications.applicantEmail,
+            stage: fosterApplications.stage,
+            createdAt: fosterApplications.createdAt,
+          })
+          .from(fosterApplications)
+          .where(eq(fosterApplications.tenantId, req.tenant!.id))
+          .orderBy(desc(fosterApplications.createdAt))
+          .limit(10),
+        
+        // Volunteer applications
+        db
+          .select({
+            id: volunteerApplications.id,
+            applicantName: volunteerApplications.applicantName,
+            applicantEmail: volunteerApplications.applicantEmail,
+            stage: volunteerApplications.stage,
+            createdAt: volunteerApplications.createdAt,
+          })
+          .from(volunteerApplications)
+          .where(eq(volunteerApplications.tenantId, req.tenant!.id))
+          .orderBy(desc(volunteerApplications.createdAt))
+          .limit(10),
+      ]);
 
-      // Get counts for different statuses
-      const allSubmissions = await db
-        .select({
-          status: customFormSubmissions.status,
-          signedAt: customFormSubmissions.signedAt,
-          paymentStatus: customFormSubmissions.paymentStatus,
-        })
-        .from(customFormSubmissions)
-        .where(eq(customFormSubmissions.tenantId, req.tenant!.id));
+      // Transform and combine all submissions into a unified format
+      const allSubmissions: Array<{
+        id: string;
+        formName: string;
+        signerName: string | null;
+        signerEmail: string | null;
+        status: string;
+        createdAt: Date | null;
+        signedAt: Date | null;
+        feeAmount: number | null;
+        paymentStatus: string | null;
+        type: 'custom' | 'adoption' | 'foster' | 'volunteer';
+      }> = [];
 
+      // Add custom form submissions
+      for (const sub of customSubmissions) {
+        allSubmissions.push({
+          id: sub.id,
+          formName: sub.formName || 'Custom Form',
+          signerName: sub.signerName,
+          signerEmail: sub.signerEmail,
+          status: sub.status,
+          createdAt: sub.createdAt,
+          signedAt: sub.signedAt,
+          feeAmount: sub.feeAmount,
+          paymentStatus: sub.paymentStatus,
+          type: 'custom',
+        });
+      }
+
+      // Add adoption applications
+      for (const app of adoptionApps) {
+        allSubmissions.push({
+          id: app.id,
+          formName: app.animalName ? `Adoption Application - ${app.animalName}` : 'Adoption Application',
+          signerName: app.applicantName,
+          signerEmail: app.applicantEmail,
+          status: app.stage || 'new',
+          createdAt: app.createdAt,
+          signedAt: null,
+          feeAmount: null,
+          paymentStatus: null,
+          type: 'adoption',
+        });
+      }
+
+      // Add foster applications
+      for (const app of fosterApps) {
+        allSubmissions.push({
+          id: app.id,
+          formName: 'Foster Application',
+          signerName: app.applicantName,
+          signerEmail: app.applicantEmail,
+          status: app.stage || 'new',
+          createdAt: app.createdAt,
+          signedAt: null,
+          feeAmount: null,
+          paymentStatus: null,
+          type: 'foster',
+        });
+      }
+
+      // Add volunteer applications
+      for (const app of volunteerApps) {
+        allSubmissions.push({
+          id: app.id,
+          formName: 'Volunteer Application',
+          signerName: app.applicantName,
+          signerEmail: app.applicantEmail,
+          status: app.stage || 'new',
+          createdAt: app.createdAt,
+          signedAt: null,
+          feeAmount: null,
+          paymentStatus: null,
+          type: 'volunteer',
+        });
+      }
+
+      // Sort by createdAt descending and take top 10
+      allSubmissions.sort((a, b) => {
+        const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return dateB - dateA;
+      });
+      const submissions = allSubmissions.slice(0, 10);
+
+      // Calculate counts across all submission types
       const counts = {
-        pending: allSubmissions.filter(s => s.status === 'pending' && !s.signedAt).length,
-        signed: allSubmissions.filter(s => s.signedAt && s.status !== 'completed').length,
-        completed: allSubmissions.filter(s => s.status === 'completed').length,
-        awaitingPayment: allSubmissions.filter(s => s.paymentStatus === 'pending' && s.signedAt).length,
+        pending: customSubmissions.filter(s => s.status === 'pending' && !s.signedAt).length,
+        signed: customSubmissions.filter(s => s.signedAt && s.status !== 'completed').length,
+        completed: customSubmissions.filter(s => s.status === 'completed').length,
+        awaitingPayment: customSubmissions.filter(s => s.paymentStatus === 'pending' && s.signedAt).length,
+        // Add application counts
+        newAdoptions: adoptionApps.filter(a => a.stage === 'new').length,
+        newFosters: fosterApps.filter(a => a.stage === 'new').length,
+        newVolunteers: volunteerApps.filter(a => a.stage === 'new').length,
       };
 
       res.json({ submissions, counts });
@@ -14686,6 +14815,18 @@ Submitted: ${new Date().toLocaleString()}
     } catch (error) {
       next(error);
     }
+  });
+
+  /**
+   * GET /api/tenant/stripe/status
+   * Check if Stripe is configured for the tenant (for medical funds, donations, etc.)
+   */
+  app.get('/api/tenant/stripe/status', requireTenant, requireAuth, async (req, res) => {
+    const tenant = req.tenant!;
+    // Check if tenant has Stripe Connect configured (stripeConnectedAccountId)
+    // This is required for medical fund campaigns and donation links
+    const enabled = !!tenant.stripeConnectedAccountId;
+    res.json({ enabled });
   });
 
   /**
