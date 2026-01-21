@@ -6,7 +6,7 @@ import { requireAuth, requireRole, requireOwner } from "./middleware/auth";
 import { loginUser, createTenantWithAdmin, createUser } from "./services/auth";
 import { PushNotificationService } from "./services/push-notifications";
 import { db } from "./db";
-import { tenants, users, demoRequests, insertDemoRequestSchema, smsMessageLogs, emailEvents, animals, platformIntegrations, newsletterCampaigns, newsletterSubscribers, happyTails, adoptionCheckoutSessions, pageVisits } from "@shared/schema";
+import { tenants, users, demoRequests, insertDemoRequestSchema, smsMessageLogs, emailEvents, animals, platformIntegrations, newsletterCampaigns, newsletterSubscribers, happyTails, adoptionCheckoutSessions, pageVisits, customFormSubmissions, customForms, applications, fosterApplications, volunteerApplications } from "@shared/schema";
 import { eq, and, desc, sql, inArray, lt, ilike, gte, count } from "drizzle-orm";
 import { z } from "zod";
 import { authLimiter, signupLimiter, passwordResetLimiter, emailLimiter } from "./config/security";
@@ -2893,74 +2893,58 @@ Crawl-delay: 1
    */
   app.get('/api/dashboard/form-submissions', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
     try {
-      const { customFormSubmissions, customForms, applications, fosterApplications, volunteerApplications, animals } = await import('@shared/schema');
-      const { desc } = await import('drizzle-orm');
-
-      // Fetch all types of submissions in parallel
-      const [customSubmissions, adoptionApps, fosterApps, volunteerApps] = await Promise.all([
+      const tenantId = req.tenant!.id;
+      
+      // Fetch all types of submissions in parallel - using simpler queries without complex joins
+      const [customSubmissions, adoptionApps, fosterApps, volunteerApps, formsList, animalsList] = await Promise.all([
         // Custom form submissions
         db
-          .select({
-            id: customFormSubmissions.id,
-            formName: customForms.name,
-            signerName: customFormSubmissions.signerName,
-            signerEmail: customFormSubmissions.signerEmail,
-            status: customFormSubmissions.status,
-            createdAt: customFormSubmissions.createdAt,
-            signedAt: customFormSubmissions.signedAt,
-            feeAmount: customFormSubmissions.feeAmount,
-            paymentStatus: customFormSubmissions.paymentStatus,
-          })
+          .select()
           .from(customFormSubmissions)
-          .leftJoin(customForms, eq(customFormSubmissions.formId, customForms.id))
-          .where(eq(customFormSubmissions.tenantId, req.tenant!.id))
+          .where(eq(customFormSubmissions.tenantId, tenantId))
           .orderBy(desc(customFormSubmissions.createdAt))
           .limit(10),
         
         // Adoption applications
         db
-          .select({
-            id: applications.id,
-            applicantName: applications.applicantName,
-            applicantEmail: applications.applicantEmail,
-            stage: applications.stage,
-            createdAt: applications.createdAt,
-            animalName: animals.name,
-          })
+          .select()
           .from(applications)
-          .leftJoin(animals, eq(applications.animalId, animals.id))
-          .where(eq(applications.tenantId, req.tenant!.id))
+          .where(eq(applications.tenantId, tenantId))
           .orderBy(desc(applications.createdAt))
           .limit(10),
         
         // Foster applications
         db
-          .select({
-            id: fosterApplications.id,
-            applicantName: fosterApplications.applicantName,
-            applicantEmail: fosterApplications.applicantEmail,
-            stage: fosterApplications.stage,
-            createdAt: fosterApplications.createdAt,
-          })
+          .select()
           .from(fosterApplications)
-          .where(eq(fosterApplications.tenantId, req.tenant!.id))
+          .where(eq(fosterApplications.tenantId, tenantId))
           .orderBy(desc(fosterApplications.createdAt))
           .limit(10),
         
         // Volunteer applications
         db
-          .select({
-            id: volunteerApplications.id,
-            applicantName: volunteerApplications.applicantName,
-            applicantEmail: volunteerApplications.applicantEmail,
-            stage: volunteerApplications.stage,
-            createdAt: volunteerApplications.createdAt,
-          })
+          .select()
           .from(volunteerApplications)
-          .where(eq(volunteerApplications.tenantId, req.tenant!.id))
+          .where(eq(volunteerApplications.tenantId, tenantId))
           .orderBy(desc(volunteerApplications.createdAt))
           .limit(10),
+        
+        // Custom forms for name lookup
+        db
+          .select({ id: customForms.id, name: customForms.name })
+          .from(customForms)
+          .where(eq(customForms.tenantId, tenantId)),
+        
+        // Animals for name lookup
+        db
+          .select({ id: animals.id, name: animals.name })
+          .from(animals)
+          .where(eq(animals.tenantId, tenantId)),
       ]);
+
+      // Create lookup maps
+      const formNames = new Map(formsList.map(f => [f.id, f.name]));
+      const animalNames = new Map(animalsList.map(a => [a.id, a.name]));
 
       // Transform and combine all submissions into a unified format
       const allSubmissions: Array<{
@@ -2978,9 +2962,10 @@ Crawl-delay: 1
 
       // Add custom form submissions
       for (const sub of customSubmissions) {
+        const formName = sub.formId ? formNames.get(sub.formId) : null;
         allSubmissions.push({
           id: sub.id,
-          formName: sub.formName || 'Custom Form',
+          formName: formName || 'Custom Form',
           signerName: sub.signerName,
           signerEmail: sub.signerEmail,
           status: sub.status,
@@ -2994,9 +2979,10 @@ Crawl-delay: 1
 
       // Add adoption applications
       for (const app of adoptionApps) {
+        const animalName = app.animalId ? animalNames.get(app.animalId) : null;
         allSubmissions.push({
           id: app.id,
-          formName: app.animalName ? `Adoption Application - ${app.animalName}` : 'Adoption Application',
+          formName: animalName ? `Adoption Application - ${animalName}` : 'Adoption Application',
           signerName: app.applicantName,
           signerEmail: app.applicantEmail,
           status: app.stage || 'new',
