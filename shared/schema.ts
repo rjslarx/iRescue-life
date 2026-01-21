@@ -4756,3 +4756,152 @@ export const insertPageVisitSchema = createInsertSchema(pageVisits).omit({
 });
 export type InsertPageVisit = z.infer<typeof insertPageVisitSchema>;
 export type PageVisit = typeof pageVisits.$inferSelect;
+
+// Foster Tasks - daily task tracking for foster caregivers (medication, weight checks, photos)
+export const fosterTasks = pgTable("foster_tasks", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  animalId: uuid("animal_id").notNull().references(() => animals.id, { onDelete: 'cascade' }),
+  fosterUserId: uuid("foster_user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  taskType: text("task_type").notNull().$type<"medication" | "weight_check" | "photo_request" | "behavior_log" | "custom">(),
+  title: text("title").notNull(),
+  description: text("description"),
+  dueDate: timestamp("due_date"),
+  dueTime: text("due_time"), // e.g., "08:00", "17:00"
+  frequency: text("frequency").$type<"once" | "daily" | "weekly" | "monthly">().default("once"),
+  isActive: boolean("is_active").notNull().default(true),
+  completedAt: timestamp("completed_at"),
+  completedNotes: text("completed_notes"),
+  lastNotifiedDate: timestamp("last_notified_date"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertFosterTaskSchema = createInsertSchema(fosterTasks).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertFosterTask = z.infer<typeof insertFosterTaskSchema>;
+export type FosterTask = typeof fosterTasks.$inferSelect;
+
+// Foster Weight Logs - weight tracking for animals in foster care
+export const fosterWeightLogs = pgTable("foster_weight_logs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  animalId: uuid("animal_id").notNull().references(() => animals.id, { onDelete: 'cascade' }),
+  fosterUserId: uuid("foster_user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  weight: real("weight").notNull(),
+  unit: text("unit").notNull().$type<"lbs" | "kg" | "oz" | "g">().default("lbs"),
+  notes: text("notes"),
+  loggedAt: timestamp("logged_at").notNull().defaultNow(),
+});
+
+export const insertFosterWeightLogSchema = createInsertSchema(fosterWeightLogs).omit({
+  id: true,
+  loggedAt: true,
+});
+export type InsertFosterWeightLog = z.infer<typeof insertFosterWeightLogSchema>;
+export type FosterWeightLog = typeof fosterWeightLogs.$inferSelect;
+
+// Foster Behavior Notes - observations logged by fosters
+export const fosterBehaviorNotes = pgTable("foster_behavior_notes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  animalId: uuid("animal_id").notNull().references(() => animals.id, { onDelete: 'cascade' }),
+  fosterUserId: uuid("foster_user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  noteType: text("note_type").notNull().$type<"observation" | "concern" | "milestone" | "medical">(),
+  content: text("content").notNull(),
+  isFlagged: boolean("is_flagged").notNull().default(false), // Flag for staff attention
+  staffReviewedAt: timestamp("staff_reviewed_at"),
+  staffReviewedBy: uuid("staff_reviewed_by").references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertFosterBehaviorNoteSchema = createInsertSchema(fosterBehaviorNotes).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertFosterBehaviorNote = z.infer<typeof insertFosterBehaviorNoteSchema>;
+export type FosterBehaviorNote = typeof fosterBehaviorNotes.$inferSelect;
+
+// Foster Supply Requests - fosters requesting supplies from the rescue
+export const fosterSupplyRequests = pgTable("foster_supply_requests", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  fosterUserId: uuid("foster_user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  items: jsonb("items").notNull().$type<Array<{ item: string; quantity: number }>>(),
+  notes: text("notes"),
+  status: text("status").notNull().default("pending").$type<"pending" | "preparing" | "ready" | "completed" | "cancelled">(),
+  fulfilledAt: timestamp("fulfilled_at"),
+  fulfilledBy: uuid("fulfilled_by").references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertFosterSupplyRequestSchema = createInsertSchema(fosterSupplyRequests).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertFosterSupplyRequest = z.infer<typeof insertFosterSupplyRequestSchema>;
+export type FosterSupplyRequest = typeof fosterSupplyRequests.$inferSelect;
+
+// Foster Bio Submissions - foster-submitted bios for adoption profiles
+export const fosterBioSubmissions = pgTable("foster_bio_submissions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  animalId: uuid("animal_id").notNull().references(() => animals.id, { onDelete: 'cascade' }),
+  fosterUserId: uuid("foster_user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  // Guided prompts responses
+  isPottyTrained: boolean("is_potty_trained"),
+  isCrateTrained: boolean("is_crate_trained"),
+  isGoodWithKids: boolean("is_good_with_kids"),
+  isGoodWithCats: boolean("is_good_with_cats"),
+  isGoodWithDogs: boolean("is_good_with_dogs"),
+  energyLevel: text("energy_level").$type<"low" | "medium" | "high">(),
+  funniestQuirk: text("funniest_quirk"),
+  favoriteActivity: text("favorite_activity"),
+  idealHome: text("ideal_home"),
+  additionalNotes: text("additional_notes"),
+  // AI-generated bio from prompts
+  generatedBio: text("generated_bio"),
+  // Staff review
+  status: text("status").notNull().default("pending").$type<"pending" | "approved" | "rejected" | "needs_revision">(),
+  staffNotes: text("staff_notes"),
+  reviewedAt: timestamp("reviewed_at"),
+  reviewedBy: uuid("reviewed_by").references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertFosterBioSubmissionSchema = createInsertSchema(fosterBioSubmissions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertFosterBioSubmission = z.infer<typeof insertFosterBioSubmissionSchema>;
+export type FosterBioSubmission = typeof fosterBioSubmissions.$inferSelect;
+
+// Foster Photo Uploads - photos submitted by fosters for marketing
+export const fosterPhotoUploads = pgTable("foster_photo_uploads", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  animalId: uuid("animal_id").notNull().references(() => animals.id, { onDelete: 'cascade' }),
+  fosterUserId: uuid("foster_user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  photoUrl: text("photo_url").notNull(),
+  caption: text("caption"),
+  photoType: text("photo_type").$type<"profile" | "action" | "cute" | "other">().default("other"),
+  isApproved: boolean("is_approved").default(false),
+  isFeatured: boolean("is_featured").default(false), // Used as main profile photo
+  approvedAt: timestamp("approved_at"),
+  approvedBy: uuid("approved_by").references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertFosterPhotoUploadSchema = createInsertSchema(fosterPhotoUploads).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertFosterPhotoUpload = z.infer<typeof insertFosterPhotoUploadSchema>;
+export type FosterPhotoUpload = typeof fosterPhotoUploads.$inferSelect;

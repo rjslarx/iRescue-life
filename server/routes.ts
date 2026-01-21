@@ -12,6 +12,7 @@ import { z } from "zod";
 import { authLimiter, signupLimiter, passwordResetLimiter, emailLimiter } from "./config/security";
 import QRCode from "qrcode";
 import adopterPortalRouter from "./routes/adopter-portal";
+import fosterPortalRouter from "./routes/foster-portal";
 
 // Build version identifier for debugging production deployments
 const BUILD_VERSION = "2025-01-16-v1-uuid-validation";
@@ -25308,6 +25309,7 @@ The user asking is a tenant administrator or staff member.`;
   // Adopter Portal Routes
   // ============================================================================
   app.use('/api/adopter', requireTenant, adopterPortalRouter);
+  app.use('/api/foster', requireTenant, fosterPortalRouter);
 
   const httpServer = createServer(app);
 
