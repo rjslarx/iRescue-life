@@ -1,0 +1,50 @@
+You need a specific "Transition Step" during the adoption process where the historical data is converted into a future schedule.
+Here is how to build that "Review & Launch" workflow into your Tenant Dashboard.
+1. The Workflow: "The Adoption Checkout"
+Do not ask the rescue to set reminders manually. Build a "Release Wizard" that runs when they click "Finalize Adoption."
+Step A: The Logic Check (The "Review")
+The system analyzes the animal's current medical profile and presents a "Health Plan Proposal" in a modal window.
+• System Logic: "I see a Rabies vax given on Oct 1, 2025. It expires in 1 year." -> Proposal: "Schedule Rabies Reminder for Sept 1, 2026?"
+• System Logic: "This is a dog." -> Proposal: "Schedule Recurring Monthly Heartworm Reminder (Day 1 of Month)?"
+Step B: The Human Override
+The Tenant sees this list with checkboxes pre-checked.
+• [x] Rabies Booster: Due Oct 1, 2026
+• [x] Heartworm: Monthly (Starts Nov 1)
+• [ ] Bordetella: (User can check this if needed)
+• Action: The Tenant clicks "Approve & Adopt."
+Step C: The Generation
+The database instantly creates rows in a Reminders table.
+• Why this matters: If the dog dies or is returned, you just delete these rows. You don't have to query the medical history every day to "guess" if a reminder is due.
+2. The Dashboard Monitor: "Compliance, not Schedule"
+The Tenant does not want to see a calendar of "500 emails sending today." That is noise.
+They want to see "Who is ignoring us?"
+Build a "Compliance Widget" on their main dashboard:
+Widget: Adopter Health Engagement
+• Metric 1: Compliance Rate (e.g., "82% of adopters confirmed heartworm meds this month").
+• Metric 2: The "At-Risk" List.
+• Logic: Show adopters who have missed 2 consecutive confirmations.
+• Action Button: "Nudge" (Sends a manual "Is everything okay?" SMS).
+• Metric 3: Expiring Soon.
+• "5 dogs due for Rabies this month." (This prompts the rescue to prepare their "Use our Vet for a discount" email).
+3. The Technical Schema (The "Reminders" Table)
+You need a dedicated table for this. Do not try to run this off the Animals table.
+Table: health_reminders
+• id (PK)
+• animal_id (FK)
+• adopter_user_id (FK)
+• type (Enum: 'Heartworm', 'Flea', 'Rabies', 'DHPP')
+• due_date (DateTime)
+• status (Enum: 'Pending', 'Sent', 'Confirmed', 'Missed', 'Skipped')
+• recurring_interval (Enum: 'Monthly', 'Yearly', 'None')
+• last_sent_at (DateTime)
+4. The "Set it and Forget it" Cron Job
+You run a script once a day (e.g., at 9:00 AM Local Time).
+1. Find: SELECT * FROM health_reminders WHERE due_date = TODAY AND status = 'Pending'
+2. Action: Fire the Push Notification / Email.
+3. Update: Set status = 'Sent', last_sent_at = NOW().
+4. Regenerate (If Recurring): If recurring_interval == 'Monthly', immediately create a new row for TODAY + 1 Month.
+• Why create a new row? This creates a permanent history log ("They confirmed in Jan, Feb, and March, but missed April").
+5. Unique Feature: The "Snooze" Logic
+Real life is messy. If the reminder sends on Tuesday at 9 AM, the user might be at work.
+• The Feature: In the PWA Notification, include a "Remind me Saturday" button.
+• The Backend: Simply update the due_date to Saturday. The cron job will pick it up again then.
