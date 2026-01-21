@@ -9482,9 +9482,9 @@ View this submission in Custom Forms > ${form.name} > Submissions
         billing_address_collection: 'auto',
       };
       
-      // Apply platform fee only if > 0
+      // Apply platform fee only if > 0 (Stripe requires max 2 decimal places)
       if (platformFeePercent > 0) {
-        paymentLinkParams.application_fee_percent = platformFeePercent;
+        paymentLinkParams.application_fee_percent = Math.round(platformFeePercent * 100) / 100;
       }
       
       const paymentLink = await stripe.paymentLinks.create(
@@ -9694,8 +9694,9 @@ View this submission in Custom Forms > ${form.name} > Submissions
         billing_address_collection: 'auto',
       };
       
+      // Stripe requires max 2 decimal places for application_fee_percent
       if (platformFeePercent > 0) {
-        paymentLinkParams.application_fee_percent = platformFeePercent;
+        paymentLinkParams.application_fee_percent = Math.round(platformFeePercent * 100) / 100;
       }
       
       const paymentLink = await stripe.paymentLinks.create(
@@ -9814,8 +9815,9 @@ View this submission in Custom Forms > ${form.name} > Submissions
           billing_address_collection: 'auto',
         };
         
+        // Stripe requires max 2 decimal places for application_fee_percent
         if (platformFeePercent > 0) {
-          paymentLinkParams.application_fee_percent = platformFeePercent;
+          paymentLinkParams.application_fee_percent = Math.round(platformFeePercent * 100) / 100;
         }
         
         const paymentLink = await stripe.paymentLinks.create(
@@ -9932,8 +9934,9 @@ View this submission in Custom Forms > ${form.name} > Submissions
         billing_address_collection: 'auto',
       };
       
+      // Stripe requires max 2 decimal places for application_fee_percent
       if (platformFeePercent > 0) {
-        paymentLinkParams.application_fee_percent = platformFeePercent;
+        paymentLinkParams.application_fee_percent = Math.round(platformFeePercent * 100) / 100;
       }
       
       const paymentLink = await stripe.paymentLinks.create(
@@ -10042,8 +10045,9 @@ View this submission in Custom Forms > ${form.name} > Submissions
         billing_address_collection: 'auto',
       };
       
+      // Stripe requires max 2 decimal places for application_fee_percent
       if (platformFeePercent > 0) {
-        paymentLinkParams.application_fee_percent = platformFeePercent;
+        paymentLinkParams.application_fee_percent = Math.round(platformFeePercent * 100) / 100;
       }
       
       const paymentLink = await stripe.paymentLinks.create(
