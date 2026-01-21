@@ -905,6 +905,19 @@ export default function Home() {
 
           <div className="mt-8 pt-8 border-t text-center text-sm text-muted-foreground space-y-2">
             <p>{tenant?.footerText || `© ${new Date().getFullYear()} ${tenant?.name || "Animal Rescue"}. All rights reserved.`}</p>
+            <div className="flex items-center justify-center gap-4 flex-wrap">
+              <Link href="/privacy-policy" data-testid="link-footer-privacy">
+                <span className="hover:text-foreground transition-colors cursor-pointer">
+                  Privacy Policy
+                </span>
+              </Link>
+              <span className="text-muted-foreground/50">•</span>
+              <Link href="/terms-of-use" data-testid="link-footer-terms">
+                <span className="hover:text-foreground transition-colors cursor-pointer">
+                  Terms of Use
+                </span>
+              </Link>
+            </div>
             <p>
               Powered by <a href="https://irescue.life" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline" data-testid="link-powered-by">iRescue.life</a>
             </p>
