@@ -27,22 +27,14 @@ export default function AnimalApplicationsPage() {
 
   // Fetch all applications for this animal
   const { data: applicationsData, isLoading: applicationsLoading } = useQuery<{ applications: ApplicationWithAnimal[] }>({
-    queryKey: ['/api/applications', animalId],
-    queryFn: async () => {
-      // The backend supports filtering by animalId via query parameter
-      const response = await fetch(`/api/applications?animalId=${animalId}`, {
-        credentials: 'include',
-      });
-      if (!response.ok) {
-        throw new Error('Failed to fetch applications');
-      }
-      return response.json();
-    },
+    queryKey: ['/api/applications', { animalId }],
     enabled: !!animalId,
   });
 
+  // Filter applications client-side as a safeguard to ensure only this animal's applications show
+  const applications = (applicationsData?.applications || []).filter(app => app.animalId === animalId);
+
   const animal = animalData?.animal;
-  const applications = applicationsData?.applications || [];
 
   const updateStageMutation = useMutation({
     mutationFn: async ({ id, stage }: { id: string; stage: string }) => {
@@ -50,7 +42,7 @@ export default function AnimalApplicationsPage() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/applications', animalId] });
+      queryClient.invalidateQueries({ queryKey: ['/api/applications', { animalId }] });
       toast({
         title: "Application updated",
         description: "The application stage has been updated successfully.",
