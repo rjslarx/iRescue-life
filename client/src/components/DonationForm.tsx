@@ -46,10 +46,19 @@ export default function DonationForm({ sponsoredAnimalName, tenant }: DonationFo
   const donateMailingAddress = donationSection.donateMailingAddress || (tenant as any)?.footerAddress;
   
   // Initialize amount with a reasonable default
-  const [isMonthly, setIsMonthly] = useState(true);
+  // For animal sponsorships, force one-time only (no monthly option)
+  const isAnimalSponsorship = Boolean(sponsoredAnimalName);
+  const [isMonthly, setIsMonthly] = useState(isAnimalSponsorship ? false : true);
   const [amount, setAmount] = useState<number | null>(sponsoredAnimalName ? 25 : 30);
   const [customAmount, setCustomAmount] = useState("");
   const [donorCoversFees, setDonorCoversFees] = useState(true); // Default checked
+  
+  // Reset isMonthly to false when sponsoredAnimalName changes (prevents stale state)
+  useEffect(() => {
+    if (isAnimalSponsorship) {
+      setIsMonthly(false);
+    }
+  }, [isAnimalSponsorship]);
 
   // Calculate current donation amount in cents
   const currentAmountCents = Math.round((amount || parseFloat(customAmount) || 0) * 100);
@@ -126,7 +135,8 @@ export default function DonationForm({ sponsoredAnimalName, tenant }: DonationFo
 
     stripeCheckoutMutation.mutate({
       amount: donationAmount,
-      isRecurring: isMonthly,
+      // Hard-enforce one-time for animal sponsorships, regardless of state
+      isRecurring: !isAnimalSponsorship && isMonthly,
       donorCoversFees,
     });
   };
@@ -158,11 +168,11 @@ export default function DonationForm({ sponsoredAnimalName, tenant }: DonationFo
             </div>
             <div>
               <h2 className="text-xl font-bold text-foreground" data-testid="text-monthly-giving-title">
-                {monthlyGivingTitle}
+                {isAnimalSponsorship ? `Sponsor ${sponsoredAnimalName}` : monthlyGivingTitle}
               </h2>
               <p className="text-sm text-muted-foreground mt-1" data-testid="text-monthly-giving-description">
-                {sponsoredAnimalName 
-                  ? `Support ${sponsoredAnimalName}'s care with predictable monthly giving.`
+                {isAnimalSponsorship 
+                  ? `Your one-time gift helps cover ${sponsoredAnimalName}'s care, food, and medical needs.`
                   : monthlyGivingDescription}
               </p>
             </div>
@@ -182,6 +192,8 @@ export default function DonationForm({ sponsoredAnimalName, tenant }: DonationFo
         {/* Stripe Checkout - Primary donation method */}
         {hasStripe && (
           <div className="p-6 pt-4 space-y-4">
+            {/* Hide toggle for animal sponsorships - one-time only */}
+            {!isAnimalSponsorship && (
             <div className="grid grid-cols-2 gap-3">
               <button
                 type="button"
@@ -209,15 +221,19 @@ export default function DonationForm({ sponsoredAnimalName, tenant }: DonationFo
                 {monthlyButtonText}
               </button>
             </div>
+            )}
 
             {/* Heading between toggle and amounts */}
             <p className="text-center text-sm font-medium text-foreground">
-              {isMonthly ? "Be Their Monthly Hero" : "Be Their Hero"}
+              {isAnimalSponsorship 
+                ? `Support ${sponsoredAnimalName}` 
+                : (isMonthly ? "Be Their Monthly Hero" : "Be Their Hero")}
             </p>
 
             {/* Preset amount buttons - 3x2 grid like reference image */}
+            {/* For animal sponsorships, always show one-time amounts */}
             <div className="grid grid-cols-3 gap-2">
-              {(isMonthly ? monthlyAmounts : oneTimeAmounts).map((presetAmount: number) => (
+              {(isAnimalSponsorship ? oneTimeAmounts : (isMonthly ? monthlyAmounts : oneTimeAmounts)).map((presetAmount: number) => (
                 <button
                   key={presetAmount}
                   type="button"
@@ -316,16 +332,18 @@ export default function DonationForm({ sponsoredAnimalName, tenant }: DonationFo
               ) : (
                 <>
                   <Lock className="h-4 w-4 mr-2" />
-                  {isMonthly 
-                    ? `Donate $${donorCoversFees && feeData ? totalWithFeesDisplay : (amount || customAmount || '10')}/month` 
-                    : `Donate $${donorCoversFees && feeData ? totalWithFeesDisplay : (amount || customAmount || '50')} Now`}
+                  {/* Force one-time text for animal sponsorships */}
+                  {isAnimalSponsorship || !isMonthly
+                    ? `Donate $${donorCoversFees && feeData ? totalWithFeesDisplay : (amount || customAmount || '50')} Now`
+                    : `Donate $${donorCoversFees && feeData ? totalWithFeesDisplay : (amount || customAmount || '10')}/month`}
                 </>
               )}
             </Button>
             <p className="text-xs text-muted-foreground text-center">
-              {isMonthly 
-                ? "Cancel anytime • Secure monthly billing"
-                : "Secure one-time payment"}
+              {/* Force one-time text for animal sponsorships */}
+              {isAnimalSponsorship || !isMonthly 
+                ? "Secure one-time payment"
+                : "Cancel anytime • Secure monthly billing"}
             </p>
           </div>
         )}
