@@ -7,7 +7,6 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
@@ -198,8 +197,8 @@ export function ApplicationDetailsDialog({ application, open, onOpenChange }: Ap
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
-        <DialogHeader className="flex-shrink-0">
+      <DialogContent className="max-w-2xl max-h-[90vh] !grid !grid-rows-[auto_1fr_auto] overflow-hidden">
+        <DialogHeader>
           <DialogTitle className="flex items-center gap-2" data-testid="dialog-title">
             {getTypeIcon(application.type)}
             {getTypeLabel(application.type)}
@@ -209,7 +208,7 @@ export function ApplicationDetailsDialog({ application, open, onOpenChange }: Ap
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 min-h-0 pr-4">
+        <div className="overflow-y-auto pr-4 min-h-0">
           <div className="space-y-6">
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -303,9 +302,9 @@ export function ApplicationDetailsDialog({ application, open, onOpenChange }: Ap
               </>
             )}
           </div>
-        </ScrollArea>
+        </div>
 
-        <div className="flex justify-end gap-2 pt-4 border-t mt-4 flex-shrink-0">
+        <div className="flex justify-end gap-2 pt-4 border-t">
           <Button variant="outline" onClick={() => onOpenChange(false)} data-testid="button-close">
             Close
           </Button>
