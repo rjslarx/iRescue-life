@@ -197,7 +197,7 @@ export function ApplicationDetailsDialog({ application, open, onOpenChange }: Ap
                   <Mail className="h-4 w-4 text-muted-foreground" />
                   <a 
                     href={`mailto:${application.applicantEmail}`} 
-                    className="text-primary hover:underline"
+                    className="hover:underline"
                     data-testid="link-email"
                   >
                     {application.applicantEmail}
@@ -207,7 +207,7 @@ export function ApplicationDetailsDialog({ application, open, onOpenChange }: Ap
                   <Phone className="h-4 w-4 text-muted-foreground" />
                   <a 
                     href={`tel:${application.applicantPhone}`}
-                    className="text-primary hover:underline"
+                    className="hover:underline"
                     data-testid="link-phone"
                   >
                     {application.applicantPhone}
@@ -215,7 +215,7 @@ export function ApplicationDetailsDialog({ application, open, onOpenChange }: Ap
                 </div>
                 <div className="flex items-center gap-2 text-sm">
                   <Calendar className="h-4 w-4 text-muted-foreground" />
-                  <span>{format(new Date(application.createdAt), 'PPP')}</span>
+                  <span data-testid="text-created-date">{format(new Date(application.createdAt), 'PPP')}</span>
                 </div>
                 {application.type === 'adoption' && application.animalName && (
                   <div className="flex items-center gap-2 text-sm">

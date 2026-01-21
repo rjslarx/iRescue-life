@@ -51,7 +51,7 @@ function getTypeIcon(type: string) {
     case 'volunteer':
       return <Users className="h-4 w-4 text-green-500" />;
     default:
-      return <ClipboardList className="h-4 w-4 text-primary" />;
+      return <ClipboardList className="h-4 w-4 text-muted-foreground" />;
   }
 }
 
@@ -253,11 +253,11 @@ export default function PendingApplicationsWidget() {
                       </div>
                     </div>
                     <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1">
+                      <span className="flex items-center gap-1" data-testid={`text-time-${app.id}`}>
                         <Clock className="h-3 w-3" />
                         {formatDistanceToNow(new Date(app.createdAt), { addSuffix: true })}
                       </span>
-                      <Badge variant="outline" className="text-xs">
+                      <Badge variant="outline" className="text-xs" data-testid={`badge-status-${app.id}`}>
                         {getStatusLabel(app.status)}
                       </Badge>
                     </div>
