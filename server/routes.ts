@@ -4141,8 +4141,12 @@ Crawl-delay: 1
         return res.status(400).json({ error: 'Invalid animal ID format' });
       }
       
-      const { updateAnimal } = await import('./services/animals');
+      const { updateAnimal, getAnimalById } = await import('./services/animals');
       const { ObjectStorageService } = await import('./objectStorage');
+      
+      // Get the current animal state to detect status changes
+      const previousAnimal = await getAnimalById(req.tenant!.id, req.params.id);
+      const previousStatus = previousAnimal?.status;
       
       // Convert ISO date strings to Date objects
       const data = { ...req.body };
@@ -4203,6 +4207,23 @@ Crawl-delay: 1
         });
       } catch (logError) {
         console.error('Failed to log animal update activity:', logError);
+      }
+      
+      // Send adoption success emails to sponsors when status changes to "adopted"
+      if (data.status === 'adopted' && previousStatus !== 'adopted') {
+        try {
+          const { sendAdoptionSuccessEmails } = await import('./services/adoption-success-emails');
+          const goingHomePhoto = data.photoUrls?.[0] || animal.photoUrls?.[0];
+          const emailResults = await sendAdoptionSuccessEmails(
+            req.tenant!.id,
+            animal.id,
+            goingHomePhoto
+          );
+          console.log(`[Adoption Success] Sent ${emailResults.sent} emails for ${animal.name}, failed: ${emailResults.failed}`);
+        } catch (emailError) {
+          console.error('[Adoption Success] Failed to send sponsor emails:', emailError);
+          // Don't fail the update if emails fail
+        }
       }
       
       res.json({ success: true, animal });
@@ -9602,8 +9623,7 @@ View this submission in Custom Forms > ${form.name} > Submissions
       }
       
       const sponsorSchema = z.object({
-        amount: z.number().min(500).default(2500), // Default $25/month
-        interval: z.enum(['month', 'year']).default('month'),
+        amount: z.number().min(500).default(2500), // Default $25 one-time donation
       });
       
       const data = sponsorSchema.parse(req.body);
@@ -9655,9 +9675,9 @@ View this submission in Custom Forms > ${form.name} > Submissions
       
       const platformFeePercent = getPlatformFeePercent(tenant.subscriptionTier as 'free' | 'professional', tenant.platformFeePercent);
       
-      // Build the product with pet metadata
+      // Build the product with pet metadata (one-time donation, not recurring)
       const title = `Sponsor ${animal.name}`;
-      const description = `Become ${animal.name}'s monthly godparent and help cover their care costs.`;
+      const description = `Help cover ${animal.name}'s care costs with a one-time sponsorship donation.`;
       const imageUrl = animal.photoUrls?.[0];
       
       const stripeMetadata: Record<string, string> = {
@@ -9681,11 +9701,12 @@ View this submission in Custom Forms > ${form.name} > Submissions
         { stripeAccount: tenant.stripeConnectedAccountId }
       );
       
+      // Create one-time price (not recurring) to avoid subscription management issues when animal is adopted
       const price = await stripe.prices.create({
         product: product.id,
         unit_amount: data.amount,
         currency: 'usd',
-        recurring: { interval: data.interval },
+        // No recurring - this is a one-time sponsorship donation
       }, { stripeAccount: tenant.stripeConnectedAccountId });
       
       const paymentLinkParams: Stripe.PaymentLinkCreateParams = {
@@ -9709,8 +9730,7 @@ View this submission in Custom Forms > ${form.name} > Submissions
         title,
         description,
         amount: data.amount,
-        isRecurring: true,
-        interval: data.interval,
+        isRecurring: false, // One-time sponsorship - no subscription to cancel when adopted
         imageUrl,
         campaignType: 'sponsor_pet',
         animalId: animal.id,
@@ -17017,6 +17037,33 @@ Submitted: ${new Date().toLocaleString()}
           } catch (contactError) {
             console.error('Failed to create contact from Stripe donation:', contactError);
             // Don't fail the webhook if contact creation fails
+          }
+
+          // If this is a sponsor-pet donation, also create a donation record with sponsoredAnimalId
+          // This enables the adoption success email loop
+          const campaignType = session.metadata?.campaign_type;
+          const petId = session.metadata?.pet_id;
+          if (campaignType === 'sponsor_pet' && petId && isPaymentComplete) {
+            try {
+              await db.insert(donations).values({
+                tenantId: tenant.id,
+                donorId: donor.id,
+                donorName: customerName,
+                donorEmail: customerEmail,
+                donorCity,
+                donorState,
+                donorCountry,
+                donationType: 'cash',
+                amount: session.amount_total || 0,
+                sponsoredAnimalId: petId,
+                source: 'stripe',
+                date: new Date(),
+              });
+              console.log(`[Webhook] Created sponsor donation for animal ${petId} from ${customerEmail}`);
+            } catch (donationError) {
+              console.error('[Webhook] Failed to create sponsor donation record:', donationError);
+              // Don't fail the webhook if donation record creation fails
+            }
           }
 
           // Send appropriate email based on payment status
