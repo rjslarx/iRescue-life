@@ -3634,6 +3634,10 @@ Crawl-delay: 1
    */
   app.delete('/api/invitations/:id', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
     try {
+      if (!isValidUUID(req.params.id)) {
+        return res.status(400).json({ error: 'Invalid invitation ID format' });
+      }
+      
       const { cancelInvitation } = await import('./services/invitations');
       
       await cancelInvitation(req.params.id, req.tenant!.id);
@@ -3650,6 +3654,10 @@ Crawl-delay: 1
    */
   app.post('/api/invitations/:id/resend', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
     try {
+      if (!isValidUUID(req.params.id)) {
+        return res.status(400).json({ error: 'Invalid invitation ID format' });
+      }
+      
       const { resendInvitation, sendInvitationEmail } = await import('./services/invitations');
       const { users } = await import('@shared/schema');
       
@@ -5642,6 +5650,10 @@ Submitted: ${new Date().toLocaleString()}
    */
   app.patch('/api/applications/:id/stage', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
     try {
+      if (!isValidUUID(req.params.id)) {
+        return res.status(400).json({ error: 'Invalid application ID format' });
+      }
+      
       const { updateApplicationStage } = await import('./services/applications');
       const stageSchema = z.object({ stage: z.enum(['new', 'screening', 'vet_check', 'home_visit', 'approved', 'denied', 'adopted']) });
       
@@ -5843,6 +5855,10 @@ Submitted: ${new Date().toLocaleString()}
    */
   app.get('/api/adoptions/checkouts/:id', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
     try {
+      if (!isValidUUID(req.params.id)) {
+        return res.status(400).json({ error: 'Invalid checkout ID format' });
+      }
+      
       const { getCheckoutSession } = await import('./services/adoption-checkout');
       const session = await getCheckoutSession(req.tenant!.id, req.params.id);
       
@@ -5862,6 +5878,10 @@ Submitted: ${new Date().toLocaleString()}
    */
   app.patch('/api/adoptions/checkouts/:id', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
     try {
+      if (!isValidUUID(req.params.id)) {
+        return res.status(400).json({ error: 'Invalid checkout ID format' });
+      }
+      
       const { updateCheckoutSession } = await import('./services/adoption-checkout');
       
       const updateSchema = z.object({
@@ -5891,6 +5911,10 @@ Submitted: ${new Date().toLocaleString()}
    */
   app.post('/api/adoptions/checkouts/:id/send-link', requireTenant, requireAuth, requireRole('admin', 'staff'), emailLimiter, async (req, res, next) => {
     try {
+      if (!isValidUUID(req.params.id)) {
+        return res.status(400).json({ error: 'Invalid checkout ID format' });
+      }
+      
       const { getCheckoutSession, sendCheckoutLink, generateSecureToken, hashToken } = await import('./services/adoption-checkout');
       const { adoptionCheckoutSessions } = await import('@shared/schema');
       
@@ -5932,6 +5956,10 @@ Submitted: ${new Date().toLocaleString()}
    */
   app.post('/api/adoptions/checkouts/:id/cancel', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
     try {
+      if (!isValidUUID(req.params.id)) {
+        return res.status(400).json({ error: 'Invalid checkout ID format' });
+      }
+      
       const { cancelCheckoutSession } = await import('./services/adoption-checkout');
       const session = await cancelCheckoutSession(req.tenant!.id, req.params.id);
 
@@ -5952,6 +5980,10 @@ Submitted: ${new Date().toLocaleString()}
    */
   app.post('/api/adoptions/checkouts/:id/offline-payment', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
     try {
+      if (!isValidUUID(req.params.id)) {
+        return res.status(400).json({ error: 'Invalid checkout ID format' });
+      }
+      
       const { recordOfflinePayment, finalizeAdoption, getCheckoutSession } = await import('./services/adoption-checkout');
       
       const offlinePaymentSchema = z.object({
