@@ -243,8 +243,10 @@ export default function AnimalApplicationsPage() {
           stage: applicationToView.stage,
           createdAt: applicationToView.createdAt?.toString(),
           animalName: animal?.name,
-          formData: applicationToView.formData,
-          formResponses: applicationToView.formData,
+          notes: applicationToView.notes,
+          // Pass customResponses as formData for the dialog to display
+          formData: applicationToView.customResponses,
+          formResponses: applicationToView.customResponses,
         } : null}
         applicationType="adoption"
         open={viewDialogOpen}

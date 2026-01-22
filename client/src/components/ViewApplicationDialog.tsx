@@ -199,9 +199,10 @@ export function ViewApplicationDialog({
   const status = application.stage || application.pipelineStatus || 'new';
 
   const fullApplication = fullData?.application || application;
-  // Support both formData (adoption/foster) and formResponses naming conventions
+  // Support formData, formResponses, and customResponses naming conventions
   const formData = (fullApplication.formData as Record<string, unknown>) || 
-                   (fullApplication.formResponses as Record<string, unknown>) || {};
+                   (fullApplication.formResponses as Record<string, unknown>) ||
+                   (fullApplication.customResponses as Record<string, unknown>) || {};
   const notes = formData.notes || (fullApplication as Record<string, unknown>).notes || null;
 
   const fieldLabelMap = new Map<string, { label: string; order: number }>();
