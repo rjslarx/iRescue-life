@@ -16218,7 +16218,16 @@ Submitted: ${new Date().toLocaleString()}
         contactEmail: z.string().email().optional().or(z.literal("")),
         contactPhone: z.string().optional(),
         formNotificationsEnabled: z.boolean().optional(),
-        formNotificationEmail: z.string().email().optional().or(z.literal("")),
+        // Allow comma-separated email addresses for multiple recipients
+        formNotificationEmail: z.string().optional().or(z.literal("")).refine(
+          (val) => {
+            if (!val || val === "") return true;
+            const emails = val.split(",").map(e => e.trim()).filter(e => e);
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            return emails.every(email => emailRegex.test(email));
+          },
+          { message: "Invalid email format. Use comma-separated emails for multiple recipients." }
+        ),
         footerText: z.string().optional(),
         footerHours: z.string().optional(),
         footerAddress: z.string().optional(),
