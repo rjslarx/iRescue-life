@@ -777,16 +777,44 @@ export default function CalendarViewPage() {
                 
                 return (
               <>
-                {/* Volunteer Signup Confirmation */}
-                <div className="flex items-center gap-3 p-4 bg-primary/10 rounded-lg border border-primary/20">
-                  <UserCheck className="h-8 w-8 text-primary" />
-                  <div>
-                    <p className="font-medium">I want to volunteer!</p>
-                    <p className="text-sm text-muted-foreground">
-                      You'll be signed up as: {currentUser?.fullName || currentUser?.email}
-                    </p>
+                {/* Volunteer Signup - Check if user can add on behalf of others */}
+                {canAddToEvent(newEvent.calendarId) ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3 p-4 bg-primary/10 rounded-lg border border-primary/20">
+                      <UserCheck className="h-8 w-8 text-primary" />
+                      <div className="flex-1">
+                        <p className="font-medium">Schedule a Volunteer</p>
+                        <p className="text-sm text-muted-foreground">
+                          You can sign up yourself or another volunteer
+                        </p>
+                      </div>
+                    </div>
+                    <div>
+                      <Label htmlFor="volunteer-name">Volunteer Name *</Label>
+                      <Input
+                        id="volunteer-name"
+                        value={newEvent.title.replace(' - Signup', '')}
+                        onChange={(e) => setNewEvent({ ...newEvent, title: `${e.target.value} - Signup` })}
+                        placeholder="Enter volunteer name"
+                        required
+                        data-testid="input-volunteer-name"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Leave as your name to sign up yourself, or enter another volunteer's name
+                      </p>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="flex items-center gap-3 p-4 bg-primary/10 rounded-lg border border-primary/20">
+                    <UserCheck className="h-8 w-8 text-primary" />
+                    <div>
+                      <p className="font-medium">I want to volunteer!</p>
+                      <p className="text-sm text-muted-foreground">
+                        You'll be signed up as: {currentUser?.fullName || currentUser?.email}
+                      </p>
+                    </div>
+                  </div>
+                )}
 
                 {/* Date/Time Selection - show fixed times or time pickers */}
                 {hasFixedTimes ? (
