@@ -497,10 +497,16 @@ export default function KennelManagementPage() {
                                 min="1"
                                 max="100"
                                 value={row.capacity}
-                                onChange={(e) => updateRowMutation.mutate({ 
-                                  id: row.id, 
-                                  data: { capacity: parseInt(e.target.value) || 0 } 
-                                })}
+                                onChange={(e) => {
+                                  const value = parseInt(e.target.value);
+                                  // Only update if value is valid (at least 1)
+                                  if (!isNaN(value) && value >= 1 && value <= 100) {
+                                    updateRowMutation.mutate({ 
+                                      id: row.id, 
+                                      data: { capacity: value } 
+                                    });
+                                  }
+                                }}
                                 data-testid={`input-row-capacity-${row.id}`}
                               />
                             </div>
