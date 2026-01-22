@@ -66,6 +66,7 @@ interface Calendar {
   canDelete: boolean;
   themeSettings?: CalendarThemeSettings;
   eventFormSettings?: EventFormSettings;
+  minVolunteersRequired?: number;
 }
 
 interface CalendarPermission {
@@ -137,6 +138,7 @@ export default function CalendarManagementPage() {
     type: "custom" as Calendar["type"],
     color: CALENDAR_COLORS[0],
     isPublic: false,
+    minVolunteersRequired: 2,
   });
 
   const { data: calendarsData, isLoading } = useQuery<{ calendars: Calendar[] }>({
@@ -172,6 +174,7 @@ export default function CalendarManagementPage() {
         type: "custom",
         color: CALENDAR_COLORS[0],
         isPublic: false,
+        minVolunteersRequired: 2,
       });
       toast({
         title: "Calendar Created",
@@ -345,6 +348,7 @@ export default function CalendarManagementPage() {
           isPublic: editingCalendar.isPublic,
           themeSettings: editingCalendar.themeSettings,
           eventFormSettings: editingCalendar.eventFormSettings,
+          minVolunteersRequired: editingCalendar.minVolunteersRequired,
         },
       });
     }
@@ -481,6 +485,26 @@ export default function CalendarManagementPage() {
                   Show events on public home page
                 </Label>
               </div>
+              {newCalendar.type === "volunteer" && (
+                <div className="space-y-2">
+                  <Label htmlFor="min-volunteers">Minimum Volunteers Per Day</Label>
+                  <p className="text-xs text-muted-foreground">Days will be color-coded: red (0), yellow (below minimum), green (at or above minimum)</p>
+                  <Input
+                    id="min-volunteers"
+                    type="number"
+                    min={1}
+                    max={20}
+                    value={newCalendar.minVolunteersRequired}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value);
+                      if (!isNaN(val) && val >= 1 && val <= 20) {
+                        setNewCalendar({ ...newCalendar, minVolunteersRequired: val });
+                      }
+                    }}
+                    data-testid="input-min-volunteers"
+                  />
+                </div>
+              )}
               <div className="flex gap-2">
                 <Button
                   type="button"
@@ -682,6 +706,27 @@ export default function CalendarManagementPage() {
                   Show events on public home page
                 </Label>
               </div>
+              
+              {editingCalendar.type === "volunteer" && (
+                <div className="space-y-2">
+                  <Label htmlFor="edit-min-volunteers">Minimum Volunteers Per Day</Label>
+                  <p className="text-xs text-muted-foreground">Days will be color-coded: red (0), yellow (below minimum), green (at or above minimum)</p>
+                  <Input
+                    id="edit-min-volunteers"
+                    type="number"
+                    min={1}
+                    max={20}
+                    value={editingCalendar.minVolunteersRequired ?? 2}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value);
+                      if (!isNaN(val) && val >= 1 && val <= 20) {
+                        setEditingCalendar({ ...editingCalendar, minVolunteersRequired: val });
+                      }
+                    }}
+                    data-testid="input-edit-min-volunteers"
+                  />
+                </div>
+              )}
 
               {/* Theme Customization Section */}
               <div className="border-t pt-4 mt-4">

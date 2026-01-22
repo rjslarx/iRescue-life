@@ -57,6 +57,7 @@ interface Calendar {
     headerBackgroundImageUrl?: string;
   };
   eventFormSettings?: EventFormSettings;
+  minVolunteersRequired?: number;
 }
 
 interface CalendarEvent {
@@ -522,6 +523,33 @@ export default function CalendarViewPage() {
                         const dayEvents = getEventsForDate(day);
                         const isToday = isSameDay(day, new Date());
                         
+                        // Check if we're viewing volunteer calendars for color coding
+                        // Color coding applies when a single volunteer calendar is selected
+                        const selectedCalendarIds = Array.from(selectedCalendars);
+                        const viewedCalendars = selectedCalendarIds.length > 0
+                          ? calendarsData?.calendars.filter(c => selectedCalendars.has(c.id)) || []
+                          : [];
+                        // Only apply color coding when exactly one volunteer calendar is selected
+                        const singleVolunteerCalendar = viewedCalendars.length === 1 && viewedCalendars[0]?.type === 'volunteer' 
+                          ? viewedCalendars[0] 
+                          : null;
+                        
+                        // Calculate volunteer-based background color for volunteer calendars
+                        let volunteerBgColor: string | undefined;
+                        if (singleVolunteerCalendar && isSameMonth(day, currentMonth)) {
+                          // Count events from this volunteer calendar only for this day
+                          const volunteerEventsOnDay = dayEvents.filter(e => e.calendarId === singleVolunteerCalendar.id).length;
+                          const minRequired = singleVolunteerCalendar.minVolunteersRequired ?? 2;
+                          
+                          if (volunteerEventsOnDay === 0) {
+                            volunteerBgColor = 'rgba(239, 68, 68, 0.15)'; // Red - no volunteers
+                          } else if (volunteerEventsOnDay < minRequired) {
+                            volunteerBgColor = 'rgba(234, 179, 8, 0.2)'; // Yellow - below minimum
+                          } else {
+                            volunteerBgColor = 'rgba(34, 197, 94, 0.15)'; // Green - at or above minimum
+                          }
+                        }
+                        
                         return (
                           <button
                             key={idx}
@@ -533,7 +561,10 @@ export default function CalendarViewPage() {
                               calendar-day min-h-24 p-2 border rounded-md text-left hover-elevate active-elevate-2
                               ${!isSameMonth(day, currentMonth) ? 'opacity-40' : ''}
                             `}
-                            style={isToday ? { borderColor: accentColor, borderWidth: '2px' } : undefined}
+                            style={{
+                              ...(isToday ? { borderColor: accentColor, borderWidth: '2px' } : {}),
+                              ...(volunteerBgColor ? { backgroundColor: volunteerBgColor } : {}),
+                            }}
                             data-testid={`button-day-${format(day, 'yyyy-MM-dd')}`}
                           >
                             <div 

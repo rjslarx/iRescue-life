@@ -1529,6 +1529,7 @@ export const calendars = pgTable("calendars", {
   themeSettings: jsonb("theme_settings").$type<CalendarThemeSettings>(),
   eventFormSettings: jsonb("event_form_settings").$type<EventFormSettings>(), // Customizable event creation form fields
   googleCalendarId: text("google_calendar_id"), // ID of corresponding Google Calendar when synced to tenant's Google Workspace
+  minVolunteersRequired: integer("min_volunteers_required").default(2), // Minimum volunteers needed per day for volunteer-type calendars (used for color coding)
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
