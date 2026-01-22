@@ -30,7 +30,10 @@ interface MedicalFundStatus {
 const createCampaignSchema = z.object({
   title: z.string().min(1, "Title is required"),
   description: z.string().optional(),
-  goal: z.coerce.number().positive("Goal must be a positive number").optional().nullable(),
+  goal: z.preprocess(
+    (val) => (val === "" || val === undefined || val === null ? undefined : Number(val)),
+    z.number().positive("Goal must be a positive number").optional()
+  ),
 });
 
 type CreateCampaignData = z.infer<typeof createCampaignSchema>;
