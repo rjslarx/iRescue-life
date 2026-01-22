@@ -5687,6 +5687,10 @@ Crawl-delay: 1
    */
   app.delete('/api/kennel-buildings/:id', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
     try {
+      if (!isValidUUID(req.params.id)) {
+        return res.status(400).json({ error: 'Invalid building ID format' });
+      }
+      
       const { kennelBuildings } = await import('@shared/schema');
       const { eq, and } = await import('drizzle-orm');
       
@@ -5744,6 +5748,10 @@ Crawl-delay: 1
    */
   app.patch('/api/kennel-rows/:id', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
     try {
+      if (!isValidUUID(req.params.id)) {
+        return res.status(400).json({ error: 'Invalid row ID format' });
+      }
+      
       const { kennelRows } = await import('@shared/schema');
       const { eq, and } = await import('drizzle-orm');
       const { z } = await import('zod');
@@ -5792,6 +5800,10 @@ Crawl-delay: 1
    */
   app.delete('/api/kennel-rows/:id', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
     try {
+      if (!isValidUUID(req.params.id)) {
+        return res.status(400).json({ error: 'Invalid row ID format' });
+      }
+      
       const { kennelRows, animals } = await import('@shared/schema');
       const { eq, and } = await import('drizzle-orm');
       
@@ -6005,6 +6017,10 @@ Crawl-delay: 1
    */
   app.patch('/api/animal-notes/:id', requireTenant, requireAuth, requireRole('admin', 'staff', 'volunteer'), async (req, res, next) => {
     try {
+      if (!isValidUUID(req.params.id)) {
+        return res.status(400).json({ error: 'Invalid note ID format' });
+      }
+      
       const { animalNotes } = await import('@shared/schema');
       const { eq, and } = await import('drizzle-orm');
       
@@ -6040,6 +6056,10 @@ Crawl-delay: 1
    */
   app.delete('/api/animal-notes/:id', requireTenant, requireAuth, requireRole('admin', 'staff', 'volunteer'), async (req, res, next) => {
     try {
+      if (!isValidUUID(req.params.id)) {
+        return res.status(400).json({ error: 'Invalid note ID format' });
+      }
+      
       const { animalNotes } = await import('@shared/schema');
       const { eq, and } = await import('drizzle-orm');
       
