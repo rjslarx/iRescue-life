@@ -4130,6 +4130,10 @@ Crawl-delay: 1
    */
   app.post('/api/animals/:id/generate-ad-copy', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
     try {
+      if (!isValidUUID(req.params.id)) {
+        return res.status(400).json({ error: 'Invalid animal ID format' });
+      }
+      
       const { getAnimalById } = await import('./services/animals');
       const { generateAdCopy } = await import('./geminiAdCopy');
       
@@ -4230,6 +4234,10 @@ Crawl-delay: 1
    */
   app.post('/api/animals/:id/generate-bio', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
     try {
+      if (!isValidUUID(req.params.id)) {
+        return res.status(400).json({ error: 'Invalid animal ID format' });
+      }
+      
       const { getAnimalById } = await import('./services/animals');
       const { generateAnimalBio } = await import('./services/aiAnimalBio');
       
@@ -4284,6 +4292,10 @@ Crawl-delay: 1
    */
   app.get('/api/animals/:id/foster-history', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
     try {
+      if (!isValidUUID(req.params.id)) {
+        return res.status(400).json({ error: 'Invalid animal ID format' });
+      }
+      
       const { fosterAnimals, users } = await import('@shared/schema');
       
       const fosterHistory = await db
@@ -4322,6 +4334,10 @@ Crawl-delay: 1
    */
   app.get('/api/animals/:id/supply-requests', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
     try {
+      if (!isValidUUID(req.params.id)) {
+        return res.status(400).json({ error: 'Invalid animal ID format' });
+      }
+      
       const { supplyRequests, users } = await import('@shared/schema');
       
       const requests = await db
@@ -4361,6 +4377,10 @@ Crawl-delay: 1
    */
   app.get('/api/animals/:id/foster-updates', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
     try {
+      if (!isValidUUID(req.params.id)) {
+        return res.status(400).json({ error: 'Invalid animal ID format' });
+      }
+      
       const { fosterUpdates, users } = await import('@shared/schema');
       
       const updates = await db
@@ -4812,6 +4832,10 @@ Crawl-delay: 1
    */
   app.patch('/api/animals/:id/deceased', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
     try {
+      if (!isValidUUID(req.params.id)) {
+        return res.status(400).json({ error: 'Invalid animal ID format' });
+      }
+      
       const { animals } = await import('@shared/schema');
       const { z } = await import('zod');
       
@@ -5098,6 +5122,10 @@ Crawl-delay: 1
    */
   app.put('/api/animals/:id/photos', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
     try {
+      if (!isValidUUID(req.params.id)) {
+        return res.status(400).json({ error: 'Invalid animal ID format' });
+      }
+      
       const { ObjectStorageService } = await import('./objectStorage');
       const { getAnimalById, updateAnimal } = await import('./services/animals');
       
@@ -5318,6 +5346,10 @@ Crawl-delay: 1
    */
   app.patch('/api/kennels/:id', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
     try {
+      if (!isValidUUID(req.params.id)) {
+        return res.status(400).json({ error: 'Invalid kennel ID format' });
+      }
+      
       const { kennels } = await import('@shared/schema');
       const { eq, and } = await import('drizzle-orm');
       
@@ -5510,6 +5542,10 @@ Crawl-delay: 1
    */
   app.delete('/api/kennels/:id', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
     try {
+      if (!isValidUUID(req.params.id)) {
+        return res.status(400).json({ error: 'Invalid kennel ID format' });
+      }
+      
       const { kennels } = await import('@shared/schema');
       const { eq, and } = await import('drizzle-orm');
       
@@ -5602,6 +5638,10 @@ Crawl-delay: 1
    */
   app.patch('/api/kennel-buildings/:id', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
     try {
+      if (!isValidUUID(req.params.id)) {
+        return res.status(400).json({ error: 'Invalid building ID format' });
+      }
+      
       const { kennelBuildings } = await import('@shared/schema');
       const { eq, and } = await import('drizzle-orm');
       const { z } = await import('zod');
@@ -5836,6 +5876,10 @@ Crawl-delay: 1
    */
   app.patch('/api/animals/:id/kennel-assignment', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
     try {
+      if (!isValidUUID(req.params.id)) {
+        return res.status(400).json({ error: 'Invalid animal ID format' });
+      }
+      
       const { animals } = await import('@shared/schema');
       const { eq, and } = await import('drizzle-orm');
       const { z } = await import('zod');

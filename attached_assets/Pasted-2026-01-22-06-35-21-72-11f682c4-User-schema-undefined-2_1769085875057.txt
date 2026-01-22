@@ -1,0 +1,110 @@
+2026-01-22 06:35:21.72
+11f682c4
+User
+schema: undefined,
+2026-01-22 06:35:21.72
+11f682c4
+User
+at /home/runner/workspace/node_modules/pg-pool/index.js:45:11
+2026-01-22 06:35:21.72
+11f682c4
+User
+line: '3289',
+2026-01-22 06:35:21.72
+11f682c4
+User
+severity: 'FATAL',
+2026-01-22 06:35:21.72
+11f682c4
+User
+}
+2026-01-22 06:35:21.72
+11f682c4
+User
+code: '57P01',
+2026-01-22 06:35:21.72
+11f682c4
+User
+hint: undefined,
+2026-01-22 06:35:21.72
+11f682c4
+User
+length: 116,
+2026-01-22 06:35:21.72
+11f682c4
+User
+position: undefined,
+2026-01-22 06:35:21.72
+11f682c4
+User
+at async file:///home/runner/workspace/node_modules/drizzle-orm/node-postgres/session.js:83:22
+2026-01-22 06:35:21.72
+11f682c4
+User
+constraint: undefined,
+2026-01-22 06:35:21.73
+11f682c4
+User
+at ServerResponse.json (/home/runner/workspace/node_modules/express/lib/response.js:278:15)
+2026-01-22 06:35:21.73
+11f682c4
+User
+at next (/home/runner/workspace/node_modules/express/lib/router/index.js:280:10)
+2026-01-22 06:35:21.73
+11f682c4
+User
+at /home/runner/workspace/node_modules/express/lib/router/index.js:286:9
+2026-01-22 06:35:21.73
+11f682c4
+User
+at ServerResponse.header (/home/runner/workspace/node_modules/express/lib/response.js:794:10)
+2026-01-22 06:35:21.73
+11f682c4
+User
+at Layer.handle_error (/home/runner/workspace/node_modules/express/lib/router/layer.js:71:5)
+2026-01-22 06:35:21.73
+11f682c4
+User
+Error [ERR_HTTP_HEADERS_SENT]: Cannot set headers after they are sent to the client
+2026-01-22 06:35:21.73
+11f682c4
+User
+at ServerResponse.send (/home/runner/workspace/node_modules/express/lib/response.js:174:12)
+2026-01-22 06:35:21.73
+11f682c4
+User
+at file:///home/runner/workspace/dist/index.js:53236:24
+2026-01-22 06:35:21.73
+11f682c4
+User
+at Function.process_params (/home/runner/workspace/node_modules/express/lib/router/index.js:346:12)
+2026-01-22 06:35:21.73
+11f682c4
+User
+at trim_prefix (/home/runner/workspace/node_modules/express/lib/router/index.js:326:13)
+2026-01-22 06:35:21.73
+11f682c4
+User
+at ServerResponse.setHeader (node:_http_outgoing:655:11)
+2026-01-22 06:43:31.94
+11f682c4
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-01-22 06:43:31.94
+11f682c4
+User
+at async file:///home/runner/workspace/node_modules/drizzle-orm/node-postgres/session.js:83:22
+2026-01-22 06:43:31.94
+11f682c4
+User
+at /home/runner/workspace/node_modules/pg-pool/index.js:45:11
+2026-01-22 06:43:31.94
+11f682c4
+User
+error: invalid input syntax for type uuid: "admin"
+2026-01-22 06:43:31.94
+11f682c4
+User
+at async file:///home/runner/workspace/dist/index.js:48645:22
+Wrap
+Colors
