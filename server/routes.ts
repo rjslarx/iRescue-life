@@ -6089,14 +6089,34 @@ Crawl-delay: 1
 
   /**
    * GET /api/applications
-   * Get all applications (staff only)
+   * Get all applications with optional filtering by animalId or stage (staff only)
    */
   app.get('/api/applications', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
     try {
-      const { getApplicationsByTenant } = await import('./services/applications');
-      const applications = await getApplicationsByTenant(req.tenant!.id);
+      const { animalId, stage } = req.query;
       
-      res.json({ applications });
+      // If filtering by animalId, use direct query with filter
+      if (animalId && typeof animalId === 'string') {
+        const { applications } = await import('@shared/schema');
+        const conditions = [eq(applications.tenantId, req.tenant!.id), eq(applications.animalId, animalId)];
+        
+        if (stage && typeof stage === 'string') {
+          conditions.push(eq(applications.stage, stage as any));
+        }
+        
+        const applicationsList = await db
+          .select()
+          .from(applications)
+          .where(and(...conditions));
+        
+        return res.json({ applications: applicationsList });
+      }
+      
+      // Otherwise return all applications
+      const { getApplicationsByTenant } = await import('./services/applications');
+      const applicationsList = await getApplicationsByTenant(req.tenant!.id);
+      
+      res.json({ applications: applicationsList });
     } catch (error) {
       next(error);
     }
@@ -14789,38 +14809,6 @@ Submitted: ${new Date().toLocaleString()}
   // ============================================================================
   // Adoptions Routes
   // ============================================================================
-
-  /**
-   * GET /api/applications - Filter applications (animalId, stage)
-   * List applications with optional filters
-   */
-  app.get('/api/applications', requireTenant, requireAuth, async (req, res, next) => {
-    try {
-      const { applications } = await import('@shared/schema');
-      const { animalId, stage } = req.query;
-      
-      const conditions = [eq(applications.tenantId, req.tenant!.id)];
-
-      // Filter by animalId if provided
-      if (animalId && typeof animalId === 'string') {
-        conditions.push(eq(applications.animalId, animalId));
-      }
-
-      // Filter by stage if provided (e.g., 'approved')
-      if (stage && typeof stage === 'string') {
-        conditions.push(eq(applications.stage, stage as any));
-      }
-
-      const applicationsList = await db
-        .select()
-        .from(applications)
-        .where(and(...conditions));
-
-      res.json({ applications: applicationsList });
-    } catch (error) {
-      next(error);
-    }
-  });
 
   /**
    * POST /api/adoptions

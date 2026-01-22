@@ -25,14 +25,14 @@ export default function AnimalApplicationsPage() {
     enabled: !!animalId,
   });
 
-  // Fetch all applications for this animal
+  // Fetch all applications for this animal - pass animalId as query parameter
   const { data: applicationsData, isLoading: applicationsLoading } = useQuery<{ applications: ApplicationWithAnimal[] }>({
-    queryKey: ['/api/applications', { animalId }],
+    queryKey: [`/api/applications?animalId=${animalId}`],
     enabled: !!animalId,
   });
 
-  // Filter applications client-side as a safeguard to ensure only this animal's applications show
-  const applications = (applicationsData?.applications || []).filter(app => app.animalId === animalId);
+  // Applications are already filtered server-side by animalId
+  const applications = applicationsData?.applications || [];
 
   const animal = animalData?.animal;
 
@@ -42,7 +42,7 @@ export default function AnimalApplicationsPage() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/applications', { animalId }] });
+      queryClient.invalidateQueries({ queryKey: [`/api/applications?animalId=${animalId}`] });
       toast({
         title: "Application updated",
         description: "The application stage has been updated successfully.",
