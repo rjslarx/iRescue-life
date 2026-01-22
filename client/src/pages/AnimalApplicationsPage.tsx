@@ -243,6 +243,8 @@ export default function AnimalApplicationsPage() {
           stage: applicationToView.stage,
           createdAt: applicationToView.createdAt?.toString(),
           animalName: animal?.name,
+          formData: applicationToView.formData,
+          formResponses: applicationToView.formData,
         } : null}
         applicationType="adoption"
         open={viewDialogOpen}
