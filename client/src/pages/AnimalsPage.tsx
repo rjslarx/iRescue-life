@@ -81,7 +81,7 @@ const animalFormSchema = insertAnimalSchema.omit({ tenantId: true }).extend({
   dogFriendly: friendlyStatusEnum.optional(),
   childFriendly: friendlyStatusEnum.optional(),
   photoUrls: z.array(z.string()).optional().default([]),
-  status: z.enum(["available", "pending", "adopted", "foster", "medical_hold", "deceased", "pending_transport", "transferred_out"]).default("available"),
+  status: z.enum(["available", "pending", "adopted", "foster", "medical_hold", "stray_hold", "bite_hold", "deceased", "pending_transport", "transferred_out", "transfer"]).default("available"),
   postedToPetfinder: z.boolean().default(false),
   petfinderUrl: z.string().optional().refine((val) => !val || val === '' || z.string().url().safeParse(val).success, {
     message: "Must be a valid URL"
@@ -1120,6 +1120,7 @@ function AnimalForm({
                   <SelectItem value="medical_hold">Medical Hold</SelectItem>
                   <SelectItem value="stray_hold">Stray Hold</SelectItem>
                   <SelectItem value="bite_hold">Bite Hold</SelectItem>
+                  <SelectItem value="transfer">Transfer</SelectItem>
                 </SelectContent>
               </Select>
               <FormMessage />
@@ -1908,6 +1909,12 @@ export default function AnimalsPage() {
         return "bg-orange-500";
       case "transferred_out":
         return "bg-indigo-500";
+      case "transfer":
+        return "bg-teal-500";
+      case "stray_hold":
+        return "bg-amber-600";
+      case "bite_hold":
+        return "bg-rose-600";
       default:
         return "bg-gray-500";
     }
@@ -1993,6 +2000,9 @@ export default function AnimalsPage() {
                         </SelectItem>
                         <SelectItem value="bite_hold">
                           Bite Hold ({allActiveAnimals.filter(a => a.status === "bite_hold").length})
+                        </SelectItem>
+                        <SelectItem value="transfer">
+                          Transfer ({allActiveAnimals.filter(a => a.status === "transfer").length})
                         </SelectItem>
                         <SelectItem value="pending_transport">
                           Pending Transport ({allActiveAnimals.filter(a => a.status === "pending_transport").length})

@@ -6,7 +6,7 @@ export type FileCategory = 'animal-photos' | 'animal-medical' | 'animal-contract
 export type LegacyCategory = 'animals' | 'documents' | 'custom-pages';
 export type AnyCategory = FileCategory | LegacyCategory;
 export type FileVisibility = 'public' | 'private';
-export type AnimalStatus = 'available' | 'pending' | 'adopted' | 'foster' | 'medical_hold' | 'stray_hold' | 'bite_hold' | 'deceased' | 'pending_transport' | 'transferred_out';
+export type AnimalStatus = 'available' | 'pending' | 'adopted' | 'foster' | 'medical_hold' | 'stray_hold' | 'bite_hold' | 'deceased' | 'pending_transport' | 'transferred_out' | 'transfer';
 
 const LEGACY_CATEGORY_MAP: Record<LegacyCategory, FileCategory> = {
   'animals': 'animal-photos',

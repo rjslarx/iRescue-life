@@ -30,12 +30,15 @@ export default function KennelGridPage() {
   const kennelOccupancy = new Map<string, Animal[]>();
   const unassignedAnimals: Animal[] = [];
 
-  // Only include active animals (not adopted or deceased, and not in foster)
+  // Only include active animals (not adopted, deceased, or transferred out)
   const activeAnimals = animals.filter(
     (animal) =>
       animal.status === 'available' ||
       animal.status === 'pending' ||
-      animal.status === 'medical_hold'
+      animal.status === 'medical_hold' ||
+      animal.status === 'stray_hold' ||
+      animal.status === 'bite_hold' ||
+      animal.status === 'transfer'
   );
 
   activeAnimals.forEach((animal) => {
@@ -68,6 +71,8 @@ export default function KennelGridPage() {
         return 'bg-orange-500';
       case 'bite_hold':
         return 'bg-red-600';
+      case 'transfer':
+        return 'bg-teal-500';
       default:
         return 'bg-gray-500';
     }
