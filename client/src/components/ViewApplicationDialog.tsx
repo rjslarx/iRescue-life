@@ -8,6 +8,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useQuery } from "@tanstack/react-query";
 import { 
   Heart, 
@@ -18,12 +19,20 @@ import {
   Calendar,
   PawPrint,
   Loader2,
-  CheckCircle2,
+  CheckCircle,
+  XCircle,
   X
 } from "lucide-react";
-import { format } from "date-fns";
+import { format, formatDistanceToNow } from "date-fns";
 
 type ApplicationType = 'adoption' | 'foster' | 'volunteer';
+
+interface FormField {
+  id: string;
+  label: string;
+  fieldType: string;
+  order: number;
+}
 
 interface BaseApplication {
   id: string;
@@ -36,6 +45,8 @@ interface BaseApplication {
   pipelineStatus?: string;
   createdAt?: string;
   animalName?: string;
+  formResponses?: Record<string, unknown>;
+  formData?: Record<string, unknown>;
   [key: string]: unknown;
 }
 
@@ -68,10 +79,22 @@ function getTypeLabel(type: ApplicationType): string {
   }
 }
 
+function getFormFieldsEndpoint(type: ApplicationType): string {
+  switch (type) {
+    case 'adoption':
+      return '/api/adoption-form-fields';
+    case 'foster':
+      return '/api/foster-form-fields';
+    case 'volunteer':
+      return '/api/volunteer-form-fields';
+  }
+}
+
 function getStatusLabel(status: string): string {
   const statusMap: Record<string, string> = {
     new: 'New',
     new_app: 'New Application',
+    pending: 'New Application',
     screening: 'Screening',
     vet_check: 'Vet Check',
     home_visit: 'Home Visit',
@@ -87,12 +110,11 @@ function getStatusLabel(status: string): string {
     active_pool: 'Active Pool',
     adopted: 'Adopted',
     denied: 'Denied',
-    pending: 'Pending',
   };
   return statusMap[status] || status;
 }
 
-function formatFieldLabel(key: string): string {
+function formatFallbackLabel(key: string): string {
   return key
     .replace(/([A-Z])/g, ' $1')
     .replace(/_/g, ' ')
@@ -100,9 +122,21 @@ function formatFieldLabel(key: string): string {
     .trim();
 }
 
-function formatFieldValue(value: unknown): string {
-  if (value === null || value === undefined) return 'Not provided';
-  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+function formatFieldValue(value: unknown): string | React.ReactNode {
+  if (value === null || value === undefined) {
+    return <span className="text-muted-foreground italic">Not provided</span>;
+  }
+  if (typeof value === 'boolean') {
+    return value ? (
+      <span className="flex items-center gap-1 text-green-600 dark:text-green-400">
+        <CheckCircle className="h-4 w-4" /> Yes
+      </span>
+    ) : (
+      <span className="flex items-center gap-1 text-muted-foreground">
+        <XCircle className="h-4 w-4" /> No
+      </span>
+    );
+  }
   if (typeof value === 'string') {
     if (value.match(/^\d{4}-\d{2}-\d{2}/)) {
       try {
@@ -113,8 +147,18 @@ function formatFieldValue(value: unknown): string {
     }
     return value;
   }
-  if (Array.isArray(value)) return value.join(', ');
+  if (Array.isArray(value)) {
+    return value.join(', ');
+  }
+  if (typeof value === 'object') {
+    return JSON.stringify(value, null, 2);
+  }
   return String(value);
+}
+
+function isUUID(str: string): boolean {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(str);
 }
 
 const excludedFields = new Set([
@@ -122,7 +166,7 @@ const excludedFields = new Set([
   'applicantName', 'applicantEmail', 'applicantPhone', 'email', 'phone',
   'stage', 'pipelineStatus', 'status', 'animalName', 'checkoutStatus',
   'adoptionFeeStatus', 'adoptionFeeAmount', 'agreementStatus',
-  'holdHarmlessFormId', 'holdHarmlessSignedAt', 'formResponses'
+  'holdHarmlessFormId', 'holdHarmlessSignedAt', 'formResponses', 'formData', 'notes'
 ]);
 
 export function ViewApplicationDialog({
@@ -142,6 +186,11 @@ export function ViewApplicationDialog({
     enabled: open && !!application?.id,
   });
 
+  const { data: formFieldsData, isLoading: isLoadingFields } = useQuery<{ fields: FormField[] }>({
+    queryKey: [getFormFieldsEndpoint(applicationType)],
+    enabled: open && !!application,
+  });
+
   if (!application) return null;
 
   const email = application.email || application.applicantEmail;
@@ -150,10 +199,42 @@ export function ViewApplicationDialog({
   const status = application.stage || application.pipelineStatus || 'new';
 
   const fullApplication = fullData?.application || application;
-  
-  const displayFields = Object.entries(fullApplication)
-    .filter(([key]) => !excludedFields.has(key))
-    .filter(([, value]) => value !== null && value !== undefined && value !== '');
+  // Support both formData (adoption/foster) and formResponses naming conventions
+  const formData = (fullApplication.formData as Record<string, unknown>) || 
+                   (fullApplication.formResponses as Record<string, unknown>) || {};
+  const notes = formData.notes || (fullApplication as Record<string, unknown>).notes || null;
+
+  const fieldLabelMap = new Map<string, { label: string; order: number }>();
+  if (formFieldsData?.fields) {
+    formFieldsData.fields.forEach((field) => {
+      fieldLabelMap.set(field.id, { label: field.label, order: field.order });
+    });
+  }
+
+  const sortedFormResponses = Object.entries(formData)
+    .filter(([key]) => key !== 'notes' && formData[key] !== null && formData[key] !== undefined && formData[key] !== '')
+    .sort((a, b) => {
+      const aField = fieldLabelMap.get(a[0]);
+      const bField = fieldLabelMap.get(b[0]);
+      
+      if (aField && bField) {
+        return aField.order - bField.order;
+      }
+      if (aField) return -1;
+      if (bField) return 1;
+      return a[0].localeCompare(b[0]);
+    });
+
+  const getFieldLabel = (key: string): string => {
+    const fieldInfo = fieldLabelMap.get(key);
+    if (fieldInfo) {
+      return fieldInfo.label;
+    }
+    if (isUUID(key)) {
+      return `Question ${key.slice(0, 8)}...`;
+    }
+    return formatFallbackLabel(key);
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -164,15 +245,18 @@ export function ViewApplicationDialog({
             {getTypeLabel(applicationType)}
           </DialogTitle>
           <DialogDescription>
-            Full application details for {name}
+            {application.createdAt ? (
+              <>Submitted {formatDistanceToNow(new Date(application.createdAt), { addSuffix: true })}</>
+            ) : (
+              <>Full application details for {name}</>
+            )}
           </DialogDescription>
         </DialogHeader>
 
         <div className="overflow-y-auto pr-4 min-h-0">
           <div className="space-y-6">
-            {/* Applicant Header */}
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
                 <h3 className="text-lg font-semibold" data-testid="text-applicant-name">{name}</h3>
                 <Badge variant="secondary" data-testid="badge-status">
                   {getStatusLabel(status)}
@@ -217,57 +301,57 @@ export function ViewApplicationDialog({
               </div>
             </div>
 
-            <Separator />
-
-            {/* Application Details */}
-            <div className="space-y-4">
-              <h4 className="font-medium">Application Details</h4>
-              
-              {isLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                </div>
-              ) : displayFields.length > 0 ? (
-                <div className="grid gap-4">
-                  {displayFields.map(([key, value]) => (
-                    <div key={key} className="space-y-1">
-                      <p className="text-sm font-medium text-muted-foreground">
-                        {formatFieldLabel(key)}
-                      </p>
-                      <p className="text-sm" data-testid={`text-field-${key}`}>
-                        {formatFieldValue(value)}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground py-4 text-center">
-                  No additional application details available.
-                </p>
-              )}
-
-              {/* Form Responses if available */}
-              {fullApplication.formResponses && 
-               typeof fullApplication.formResponses === 'object' && 
-               Object.keys(fullApplication.formResponses as object).length > 0 && (
-                <>
-                  <Separator />
-                  <div className="space-y-4">
-                    <h4 className="font-medium">Form Responses</h4>
-                    <div className="grid gap-4">
-                      {Object.entries(fullApplication.formResponses as Record<string, unknown>).map(([question, answer]) => (
-                        <div key={question} className="space-y-1 p-3 rounded-md bg-muted/30">
-                          <p className="text-sm font-medium">{question}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {formatFieldValue(answer)}
-                          </p>
+            {(sortedFormResponses.length > 0 || isLoading || isLoadingFields) && (
+              <>
+                <Separator />
+                <div className="space-y-4">
+                  <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">
+                    Application Responses
+                  </h4>
+                  {(isLoading || isLoadingFields) ? (
+                    <div className="space-y-4">
+                      {[1, 2, 3].map((i) => (
+                        <div key={i} className="space-y-2">
+                          <Skeleton className="h-4 w-48" />
+                          <Skeleton className="h-4 w-64" />
                         </div>
                       ))}
                     </div>
-                  </div>
-                </>
-              )}
-            </div>
+                  ) : sortedFormResponses.length > 0 ? (
+                    <div className="space-y-4">
+                      {sortedFormResponses.map(([key, value]) => (
+                        <div key={key} className="space-y-1" data-testid={`field-${key}`}>
+                          <dt className="text-sm font-medium text-muted-foreground">
+                            {getFieldLabel(key)}
+                          </dt>
+                          <dd className="text-sm">
+                            {formatFieldValue(value)}
+                          </dd>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground py-4 text-center">
+                      No application responses available.
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
+
+            {notes && (
+              <>
+                <Separator />
+                <div className="space-y-2">
+                  <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">
+                    Staff Notes
+                  </h4>
+                  <p className="text-sm whitespace-pre-wrap bg-muted/50 p-3 rounded-md" data-testid="text-notes">
+                    {String(notes)}
+                  </p>
+                </div>
+              </>
+            )}
           </div>
         </div>
 

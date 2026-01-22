@@ -6103,6 +6103,29 @@ Crawl-delay: 1
   });
 
   /**
+   * GET /api/applications/:id
+   * Get a single application by ID with full details (staff only)
+   */
+  app.get('/api/applications/:id', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      if (!isValidUUID(req.params.id)) {
+        return res.status(400).json({ error: 'Invalid application ID format' });
+      }
+      
+      const { getApplicationById } = await import('./services/applications');
+      const application = await getApplicationById(req.tenant!.id, req.params.id);
+      
+      if (!application) {
+        return res.status(404).json({ error: 'Application not found' });
+      }
+      
+      res.json({ application });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * POST /api/applications
    * Submit adoption application (public)
    * Supports Google Ads conversion tracking via gclid parameter
