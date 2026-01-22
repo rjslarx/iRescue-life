@@ -76,6 +76,7 @@ interface CalendarPermission {
   canEdit: boolean;
   canAdd: boolean;
   canDelete: boolean;
+  canAssignOthers: boolean;
   userName: string;
   userEmail: string;
 }
@@ -87,6 +88,7 @@ interface CalendarRolePermission {
   canEdit: boolean;
   canAdd: boolean;
   canDelete: boolean;
+  canAssignOthers: boolean;
 }
 
 interface User {
@@ -129,8 +131,8 @@ export default function CalendarManagementPage() {
   const [managingPermissions, setManagingPermissions] = useState<Calendar | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<string>("");
   const [selectedRole, setSelectedRole] = useState<string>("");
-  const [newUserPermissions, setNewUserPermissions] = useState({ canEdit: true, canAdd: true, canDelete: true });
-  const [newRolePermissions, setNewRolePermissions] = useState({ canEdit: true, canAdd: true, canDelete: true });
+  const [newUserPermissions, setNewUserPermissions] = useState({ canEdit: true, canAdd: true, canDelete: true, canAssignOthers: false });
+  const [newRolePermissions, setNewRolePermissions] = useState({ canEdit: true, canAdd: true, canDelete: true, canAssignOthers: false });
 
   const [newCalendar, setNewCalendar] = useState({
     name: "",
@@ -236,7 +238,7 @@ export default function CalendarManagementPage() {
     mutationFn: async ({ calendarId, userId, permissions }: { 
       calendarId: string; 
       userId: string;
-      permissions: { canEdit: boolean; canAdd: boolean; canDelete: boolean };
+      permissions: { canEdit: boolean; canAdd: boolean; canDelete: boolean; canAssignOthers: boolean };
     }) => {
       return await apiRequest("POST", `/api/calendars/${calendarId}/permissions`, {
         userId,
@@ -246,7 +248,7 @@ export default function CalendarManagementPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/calendars', managingPermissions?.id, 'permissions'] });
       setSelectedUserId("");
-      setNewUserPermissions({ canEdit: true, canAdd: true, canDelete: true });
+      setNewUserPermissions({ canEdit: true, canAdd: true, canDelete: true, canAssignOthers: false });
       toast({
         title: "Permission Granted",
         description: "User permissions have been configured.",
@@ -285,7 +287,7 @@ export default function CalendarManagementPage() {
     mutationFn: async ({ calendarId, role, permissions }: { 
       calendarId: string; 
       role: string;
-      permissions: { canEdit: boolean; canAdd: boolean; canDelete: boolean };
+      permissions: { canEdit: boolean; canAdd: boolean; canDelete: boolean; canAssignOthers: boolean };
     }) => {
       return await apiRequest("POST", `/api/calendars/${calendarId}/role-permissions`, {
         role,
@@ -295,7 +297,7 @@ export default function CalendarManagementPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/calendars', managingPermissions?.id, 'role-permissions'] });
       setSelectedRole("");
-      setNewRolePermissions({ canEdit: true, canAdd: true, canDelete: true });
+      setNewRolePermissions({ canEdit: true, canAdd: true, canDelete: true, canAssignOthers: false });
       toast({
         title: "Role Permission Granted",
         description: "Role permissions have been configured.",
@@ -1163,6 +1165,15 @@ export default function CalendarManagementPage() {
                       />
                       <Label htmlFor="user-can-delete" className="text-sm cursor-pointer">Can Delete Events</Label>
                     </div>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="user-can-assign-others"
+                        checked={newUserPermissions.canAssignOthers}
+                        onCheckedChange={(checked) => setNewUserPermissions({ ...newUserPermissions, canAssignOthers: checked as boolean })}
+                        data-testid="checkbox-user-can-assign-others"
+                      />
+                      <Label htmlFor="user-can-assign-others" className="text-sm cursor-pointer">Can Assign Others</Label>
+                    </div>
                   </div>
                 )}
               </div>
@@ -1195,6 +1206,7 @@ export default function CalendarManagementPage() {
                               {permission.canAdd && <Badge variant="secondary">Add</Badge>}
                               {permission.canEdit && <Badge variant="secondary">Edit</Badge>}
                               {permission.canDelete && <Badge variant="secondary">Delete</Badge>}
+                              {permission.canAssignOthers && <Badge variant="secondary">Assign Others</Badge>}
                             </div>
                           </TableCell>
                           <TableCell className="text-right">
@@ -1275,6 +1287,15 @@ export default function CalendarManagementPage() {
                       />
                       <Label htmlFor="role-can-delete" className="text-sm cursor-pointer">Can Delete Events</Label>
                     </div>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="role-can-assign-others"
+                        checked={newRolePermissions.canAssignOthers}
+                        onCheckedChange={(checked) => setNewRolePermissions({ ...newRolePermissions, canAssignOthers: checked as boolean })}
+                        data-testid="checkbox-role-can-assign-others"
+                      />
+                      <Label htmlFor="role-can-assign-others" className="text-sm cursor-pointer">Can Assign Others</Label>
+                    </div>
                   </div>
                 )}
               </div>
@@ -1302,6 +1323,7 @@ export default function CalendarManagementPage() {
                               {permission.canAdd && <Badge variant="secondary">Add</Badge>}
                               {permission.canEdit && <Badge variant="secondary">Edit</Badge>}
                               {permission.canDelete && <Badge variant="secondary">Delete</Badge>}
+                              {permission.canAssignOthers && <Badge variant="secondary">Assign Others</Badge>}
                             </div>
                           </TableCell>
                           <TableCell className="text-right">

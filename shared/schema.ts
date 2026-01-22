@@ -1584,6 +1584,7 @@ export const calendarPermissions = pgTable("calendar_permissions", {
   canEdit: boolean("can_edit").notNull().default(true),
   canAdd: boolean("can_add").notNull().default(true),
   canDelete: boolean("can_delete").notNull().default(true),
+  canAssignOthers: boolean("can_assign_others").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (table) => ({
   uniquePermission: unique().on(table.calendarId, table.userId),
@@ -1605,6 +1606,7 @@ export const calendarRolePermissions = pgTable("calendar_role_permissions", {
   canEdit: boolean("can_edit").notNull().default(true),
   canAdd: boolean("can_add").notNull().default(true),
   canDelete: boolean("can_delete").notNull().default(true),
+  canAssignOthers: boolean("can_assign_others").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (table) => ({
   uniqueRolePermission: unique().on(table.calendarId, table.role),

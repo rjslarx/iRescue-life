@@ -50,6 +50,7 @@ interface Calendar {
   canEdit: boolean;
   canAdd: boolean;
   canDelete: boolean;
+  canAssignOthers: boolean;
   themeSettings?: {
     headerColor?: string;
     headerTextColor?: string;
@@ -298,6 +299,10 @@ export default function CalendarViewPage() {
 
   const canDeleteEvent = (calendarId: string) => {
     return calendarsData?.calendars.find(cal => cal.id === calendarId)?.canDelete ?? false;
+  };
+
+  const canAssignOthersToEvent = (calendarId: string) => {
+    return calendarsData?.calendars.find(cal => cal.id === calendarId)?.canAssignOthers ?? false;
   };
 
   const getFormSettingsForCalendar = (calendarId: string): EventFormSettings | null => {
@@ -777,8 +782,8 @@ export default function CalendarViewPage() {
                 
                 return (
               <>
-                {/* Volunteer Signup - Check if user can add on behalf of others */}
-                {canAddToEvent(newEvent.calendarId) ? (
+                {/* Volunteer Signup - Check if user can assign others */}
+                {canAssignOthersToEvent(newEvent.calendarId) ? (
                   <div className="space-y-3">
                     <div className="flex items-center gap-3 p-4 bg-primary/10 rounded-lg border border-primary/20">
                       <UserCheck className="h-8 w-8 text-primary" />

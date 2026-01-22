@@ -19934,6 +19934,7 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
             canEdit: calendarPermissions.canEdit,
             canAdd: calendarPermissions.canAdd,
             canDelete: calendarPermissions.canDelete,
+            canAssignOthers: calendarPermissions.canAssignOthers,
           })
           .from(calendarPermissions)
           .where(and(
@@ -19948,6 +19949,7 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
             canEdit: calendarRolePermissions.canEdit,
             canAdd: calendarRolePermissions.canAdd,
             canDelete: calendarRolePermissions.canDelete,
+            canAssignOthers: calendarRolePermissions.canAssignOthers,
           })
           .from(calendarRolePermissions)
           .where(and(
@@ -19956,7 +19958,7 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
           ));
         
         // Build permission map - merge user and role permissions (user permissions take precedence, then OR with role permissions)
-        const permissionMap = new Map<string, { canEdit: boolean; canAdd: boolean; canDelete: boolean }>();
+        const permissionMap = new Map<string, { canEdit: boolean; canAdd: boolean; canDelete: boolean; canAssignOthers: boolean }>();
         
         // First add role permissions
         for (const perm of rolePermissions) {
@@ -19966,12 +19968,14 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
               canEdit: existing.canEdit || perm.canEdit,
               canAdd: existing.canAdd || perm.canAdd,
               canDelete: existing.canDelete || perm.canDelete,
+              canAssignOthers: existing.canAssignOthers || perm.canAssignOthers,
             });
           } else {
             permissionMap.set(perm.calendarId, {
               canEdit: perm.canEdit,
               canAdd: perm.canAdd,
               canDelete: perm.canDelete,
+              canAssignOthers: perm.canAssignOthers,
             });
           }
         }
@@ -19984,12 +19988,14 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
               canEdit: existing.canEdit || perm.canEdit,
               canAdd: existing.canAdd || perm.canAdd,
               canDelete: existing.canDelete || perm.canDelete,
+              canAssignOthers: existing.canAssignOthers || perm.canAssignOthers,
             });
           } else {
             permissionMap.set(perm.calendarId, {
               canEdit: perm.canEdit,
               canAdd: perm.canAdd,
               canDelete: perm.canDelete,
+              canAssignOthers: perm.canAssignOthers,
             });
           }
         }
@@ -20002,6 +20008,7 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
             canEdit: perms?.canEdit ?? false,
             canAdd: perms?.canAdd ?? false,
             canDelete: perms?.canDelete ?? false,
+            canAssignOthers: perms?.canAssignOthers ?? false,
           };
         });
         
@@ -20014,6 +20021,7 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
         canEdit: true,
         canAdd: true,
         canDelete: true,
+        canAssignOthers: true,
       }));
 
       res.json({ calendars: calendarsWithPermissions });
@@ -20466,6 +20474,42 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
         if (!userPermission && !rolePermission) {
           return res.status(403).json({ error: 'You do not have permission to add events to this calendar' });
         }
+
+        // For volunteer calendars, check if user is trying to assign someone else
+        // If the title ends with " - Signup" and contains a different name, check canAssignOthers
+        if (calendar.type === 'volunteer' && eventData.title.endsWith(' - Signup')) {
+          const volunteerName = eventData.title.replace(' - Signup', '').trim().toLowerCase();
+          const userName = (req.user!.fullName || '').toLowerCase();
+          const userEmail = (req.user!.email || '').toLowerCase();
+          
+          // If the volunteer name doesn't match the current user, require canAssignOthers permission
+          if (volunteerName !== userName && volunteerName !== userEmail) {
+            const [userAssignPermission] = await db
+              .select()
+              .from(calendarPermissions)
+              .where(and(
+                eq(calendarPermissions.calendarId, eventData.calendarId),
+                eq(calendarPermissions.userId, req.user!.id),
+                eq(calendarPermissions.canAssignOthers, true)
+              ))
+              .limit(1);
+
+            const [roleAssignPermission] = await db
+              .select()
+              .from(calendarRolePermissions)
+              .where(and(
+                eq(calendarRolePermissions.calendarId, eventData.calendarId),
+                eq(calendarRolePermissions.tenantId, req.tenant!.id),
+                eq(calendarRolePermissions.canAssignOthers, true),
+                sql`${calendarRolePermissions.role} = ANY(${sql.raw(`ARRAY[${req.user!.roles.map(r => `'${r}'`).join(',')}]::text[]`)})`
+              ))
+              .limit(1);
+
+            if (!userAssignPermission && !roleAssignPermission) {
+              return res.status(403).json({ error: 'You do not have permission to schedule other volunteers. You can only sign up yourself.' });
+            }
+          }
+        }
       }
 
       // Create the event in database
@@ -20636,6 +20680,49 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
         if (!userPermission && !rolePermission) {
           return res.status(403).json({ error: 'You do not have permission to edit events in this calendar' });
         }
+
+        // For volunteer calendars, check if user is trying to change title to assign someone else
+        if (data.title && data.title.endsWith(' - Signup')) {
+          const { calendars } = await import('@shared/schema');
+          const [calendar] = await db
+            .select()
+            .from(calendars)
+            .where(eq(calendars.id, event.calendarId))
+            .limit(1);
+
+          if (calendar?.type === 'volunteer') {
+            const volunteerName = data.title.replace(' - Signup', '').trim().toLowerCase();
+            const userName = (req.user!.fullName || '').toLowerCase();
+            const userEmail = (req.user!.email || '').toLowerCase();
+            
+            if (volunteerName !== userName && volunteerName !== userEmail) {
+              const [userAssignPermission] = await db
+                .select()
+                .from(calendarPermissions)
+                .where(and(
+                  eq(calendarPermissions.calendarId, event.calendarId),
+                  eq(calendarPermissions.userId, req.user!.id),
+                  eq(calendarPermissions.canAssignOthers, true)
+                ))
+                .limit(1);
+
+              const [roleAssignPermission] = await db
+                .select()
+                .from(calendarRolePermissions)
+                .where(and(
+                  eq(calendarRolePermissions.calendarId, event.calendarId),
+                  eq(calendarRolePermissions.tenantId, req.tenant!.id),
+                  eq(calendarRolePermissions.canAssignOthers, true),
+                  sql`${calendarRolePermissions.role} = ANY(${sql.raw(`ARRAY[${req.user!.roles.map(r => `'${r}'`).join(',')}]::text[]`)})`
+                ))
+                .limit(1);
+
+              if (!userAssignPermission && !roleAssignPermission) {
+                return res.status(403).json({ error: 'You do not have permission to schedule other volunteers. You can only sign up yourself.' });
+              }
+            }
+          }
+        }
       }
 
       // Convert datetime strings to Date objects if provided
@@ -20779,6 +20866,7 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
           canEdit: calendarPermissions.canEdit,
           canAdd: calendarPermissions.canAdd,
           canDelete: calendarPermissions.canDelete,
+          canAssignOthers: calendarPermissions.canAssignOthers,
           userName: users.fullName,
           userEmail: users.email,
         })
@@ -20808,6 +20896,7 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
         canEdit: z.boolean().default(true),
         canAdd: z.boolean().default(true),
         canDelete: z.boolean().default(true),
+        canAssignOthers: z.boolean().default(false),
       });
 
       const data = permissionSchema.parse(req.body);
@@ -20836,6 +20925,7 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
           canEdit: data.canEdit,
           canAdd: data.canAdd,
           canDelete: data.canDelete,
+          canAssignOthers: data.canAssignOthers,
         })
         .returning();
 
@@ -20907,6 +20997,7 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
         canEdit: z.boolean().default(true),
         canAdd: z.boolean().default(true),
         canDelete: z.boolean().default(true),
+        canAssignOthers: z.boolean().default(false),
       });
 
       const data = rolePermissionSchema.parse(req.body);
@@ -20935,6 +21026,7 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
           canEdit: data.canEdit,
           canAdd: data.canAdd,
           canDelete: data.canDelete,
+          canAssignOthers: data.canAssignOthers,
         })
         .returning();
 
