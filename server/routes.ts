@@ -24099,6 +24099,42 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
   });
 
   /**
+   * GET /api/calendars/preview-image
+   * Generate a calendar preview image for social media sharing
+   */
+  app.get('/api/calendars/preview-image', requireTenant, async (req, res, next) => {
+    try {
+      const { generateCalendarScreenshot } = await import('./lib/calendar-screenshot/generator');
+      
+      const calendarIds = req.query.calendars 
+        ? (req.query.calendars as string).split(',').filter(id => id)
+        : undefined;
+      
+      const screenshot = await generateCalendarScreenshot({
+        tenantId: req.tenant!.id,
+        calendarIds,
+        width: 1200,
+        height: 630,
+      });
+      
+      if (!screenshot) {
+        return res.status(404).json({ error: 'Could not generate calendar preview' });
+      }
+      
+      res.set({
+        'Content-Type': 'image/png',
+        'Cache-Control': 'public, max-age=300', // 5 minutes
+        'Content-Length': screenshot.length,
+      });
+      
+      res.send(screenshot);
+    } catch (error) {
+      console.error('[CALENDAR-PREVIEW] Error:', error);
+      next(error);
+    }
+  });
+
+  /**
    * GET /api/calendars/export/ical
    * Export calendars as iCal (.ics) file
    */
