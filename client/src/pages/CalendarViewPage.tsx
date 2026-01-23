@@ -90,7 +90,7 @@ interface CalendarEvent {
 
 export default function CalendarViewPage() {
   const { user: currentUser } = useAuth();
-  const { basePath } = useTenant();
+  const { basePath, tenantId } = useTenant();
   const { toast } = useToast();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
@@ -112,6 +112,22 @@ export default function CalendarViewPage() {
     includeMeetLink: false,
     volunteerContactId: "" as string,
   });
+
+  // Fetch tenant data to get the subdomain for proper share URLs
+  const { data: tenantData } = useQuery<{ tenant: { subdomain: string; name: string } }>({
+    queryKey: ['/api/tenant', tenantId],
+  });
+  const tenantSubdomain = tenantData?.tenant?.subdomain;
+  
+  // Build share URL path - always include tenant subdomain for social sharing
+  const getShareBasePath = () => {
+    // For production/sharing, always use path-based tenant URLs
+    if (tenantSubdomain) {
+      return `/${tenantSubdomain}`;
+    }
+    // Fallback to basePath if tenant data not loaded yet
+    return basePath || '';
+  };
 
   const { data: calendarsData } = useQuery<{ calendars: Calendar[] }>({
     queryKey: ['/api/calendars'],
@@ -1333,7 +1349,8 @@ export default function CalendarViewPage() {
               className="w-full justify-start"
               onClick={() => {
                 const calendarParam = selectedCalendars.size > 0 ? `?calendars=${Array.from(selectedCalendars).join(',')}` : '';
-                const url = `${window.location.origin}${basePath}/dashboard/calendar${calendarParam}`;
+                const shareBasePath = getShareBasePath();
+                const url = `${window.location.origin}${shareBasePath}/dashboard/calendar${calendarParam}`;
                 navigator.clipboard.writeText(url);
                 toast({
                   title: "Link Copied",
@@ -1354,7 +1371,8 @@ export default function CalendarViewPage() {
                   size="sm"
                   onClick={() => {
                     const calendarParam = selectedCalendars.size > 0 ? `?calendars=${Array.from(selectedCalendars).join(',')}` : '';
-                    const url = `${window.location.origin}${basePath}/dashboard/calendar${calendarParam}`;
+                    const shareBasePath = getShareBasePath();
+                    const url = `${window.location.origin}${shareBasePath}/dashboard/calendar${calendarParam}`;
                     const selectedNames = calendarsData?.calendars.filter(c => selectedCalendars.has(c.id)).map(c => c.name).join(', ') || 'our';
                     const text = `Check out ${selectedNames} calendar!`;
                     window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}&quote=${encodeURIComponent(text)}`, '_blank');
@@ -1369,7 +1387,8 @@ export default function CalendarViewPage() {
                   size="sm"
                   onClick={() => {
                     const calendarParam = selectedCalendars.size > 0 ? `?calendars=${Array.from(selectedCalendars).join(',')}` : '';
-                    const url = `${window.location.origin}${basePath}/dashboard/calendar${calendarParam}`;
+                    const shareBasePath = getShareBasePath();
+                    const url = `${window.location.origin}${shareBasePath}/dashboard/calendar${calendarParam}`;
                     const selectedNames = calendarsData?.calendars.filter(c => selectedCalendars.has(c.id)).map(c => c.name).join(', ') || 'our';
                     const text = `Check out ${selectedNames} calendar!`;
                     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
@@ -1395,7 +1414,8 @@ export default function CalendarViewPage() {
                   size="sm"
                   onClick={() => {
                     const calendarParam = selectedCalendars.size > 0 ? `?calendars=${Array.from(selectedCalendars).join(',')}` : '';
-                    const url = `${window.location.origin}${basePath}/dashboard/calendar${calendarParam}`;
+                    const shareBasePath = getShareBasePath();
+                    const url = `${window.location.origin}${shareBasePath}/dashboard/calendar${calendarParam}`;
                     const selectedNames = calendarsData?.calendars.filter(c => selectedCalendars.has(c.id)).map(c => c.name).join(', ') || 'our';
                     const text = `Check out ${selectedNames} calendar!`;
                     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
@@ -1421,7 +1441,8 @@ export default function CalendarViewPage() {
                   size="sm"
                   onClick={() => {
                     const calendarParam = selectedCalendars.size > 0 ? `?calendars=${Array.from(selectedCalendars).join(',')}` : '';
-                    const url = `${window.location.origin}${basePath}/dashboard/calendar${calendarParam}`;
+                    const shareBasePath = getShareBasePath();
+                    const url = `${window.location.origin}${shareBasePath}/dashboard/calendar${calendarParam}`;
                     const selectedNames = calendarsData?.calendars.filter(c => selectedCalendars.has(c.id)).map(c => c.name).join(', ') || 'our';
                     const subject = `${selectedNames} Calendar`;
                     const body = `Check out ${selectedNames} calendar: ${url}`;
