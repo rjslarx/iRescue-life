@@ -20574,10 +20574,12 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
       }
       
       // Prepare full event data with backend-controlled fields
+      // Note: volunteerContactId is excluded because the schema references contacts table 
+      // but frontend sends user IDs. This field should not be used for volunteer scheduling.
+      const { volunteerContactId: _unused, ...validatedDataWithoutVolunteer } = validatedData;
       const eventData = {
-        ...validatedData,
+        ...validatedDataWithoutVolunteer,
         customPageId: validatedData.customPageId && validatedData.customPageId !== "" ? validatedData.customPageId : null,
-        volunteerContactId: validatedData.volunteerContactId && validatedData.volunteerContactId !== "" ? validatedData.volunteerContactId : null,
         tenantId: req.tenant!.id,
         createdBy: req.user!.id,
       };
