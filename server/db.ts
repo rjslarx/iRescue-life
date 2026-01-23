@@ -15,7 +15,9 @@ export const pool = new Pool({
   // Connection pool settings for Neon serverless
   max: 20,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 10000,
+  connectionTimeoutMillis: 30000, // Increased for cold starts
+  keepAlive: true,
+  keepAliveInitialDelayMillis: 10000,
 });
 
 // Handle pool errors gracefully to prevent crashes from Neon connection terminations
