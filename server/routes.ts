@@ -16679,6 +16679,13 @@ Submitted: ${new Date().toLocaleString()}
       const donationSectionSchema = z.object({
         sectionHeading: z.string().max(100).optional().nullable(),
         sectionDescription: z.string().max(500).optional().nullable(),
+        sectionDescriptionExtended: z.string().max(1000).optional().nullable(),
+        sectionImageUrl: z.string().refine(
+          (val) => !val || val === "" || val.startsWith("/") || val.startsWith("http://") || val.startsWith("https://"),
+          { message: "Must be a valid URL or storage path" }
+        ).optional().nullable().or(z.literal("")),
+        impactStatement: z.string().max(500).optional().nullable(),
+        sectionLabel: z.string().max(100).optional().nullable(),
         monthlyGivingTitle: z.string().max(100).optional().nullable(),
         monthlyGivingDescription: z.string().max(500).optional().nullable(),
         monthlyGivingIcon: z.enum(["shield", "heart", "paw", "star", "hand-heart", "users", "home"]).optional().nullable(),
