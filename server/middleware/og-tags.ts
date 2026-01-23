@@ -148,10 +148,9 @@ export async function injectOGTags(req: Request, res: Response, next: NextFuncti
         : `View our calendar of events at ${tenant.name}`;
       
       const baseUrl = `${req.protocol}://${req.get('host')}`;
-      // Use tenant logo if available, otherwise default icon
-      const image = tenant.logoUrl 
-        ? (tenant.logoUrl.startsWith('http') ? tenant.logoUrl : `${baseUrl}${tenant.logoUrl}`)
-        : `${baseUrl}/icon-512.png`;
+      // Use dynamically generated calendar preview image
+      const calendarParam = calendarIds.length > 0 ? `?calendars=${calendarIds.join(',')}` : '';
+      const image = `${baseUrl}/${tenant.subdomain}/api/calendars/preview-image${calendarParam}`;
       const canonicalUrl = `${baseUrl}/${tenant.subdomain}${url}`;
       
       const ogTags = `
@@ -161,6 +160,8 @@ export async function injectOGTags(req: Request, res: Response, next: NextFuncti
     <meta property="og:title" content="${escapeHtml(title)}" />
     <meta property="og:description" content="${escapeHtml(description)}" />
     <meta property="og:image" content="${escapeHtml(image)}" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
     <meta property="og:site_name" content="${escapeHtml(tenant.name)}" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="${escapeHtml(title)}" />
