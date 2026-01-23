@@ -1570,6 +1570,8 @@ export const calendarEvents = pgTable("calendar_events", {
   includeMeetLink: boolean("include_meet_link").notNull().default(false), // Whether user requested Meet link
   virtualMeetingProvider: text("virtual_meeting_provider").$type<"google_meet" | "zoom" | "teams">(), // Future-proof for other providers
   virtualMeetingLink: text("virtual_meeting_link"), // The actual meeting URL
+  // Volunteer scheduling - links to contact for notifications
+  volunteerContactId: uuid("volunteer_contact_id").references(() => contacts.id, { onDelete: 'set null' }),
   // Audit fields
   createdBy: uuid("created_by").notNull().references(() => users.id, { onDelete: 'cascade' }),
   createdAt: timestamp("created_at").notNull().defaultNow(),

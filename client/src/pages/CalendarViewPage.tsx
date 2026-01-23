@@ -42,6 +42,14 @@ import { Checkbox } from "@/components/ui/checkbox";
 import type { EventFormSettings } from "@shared/schema";
 import { DEFAULT_EVENT_FORM_SETTINGS } from "@shared/schema";
 
+interface VolunteerContact {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  tags: string[] | null;
+}
+
 interface Calendar {
   id: string;
   name: string;
@@ -102,6 +110,7 @@ export default function CalendarViewPage() {
     location: "",
     customPageId: null as string | null,
     includeMeetLink: false,
+    volunteerContactId: "" as string,
   });
 
   const { data: calendarsData } = useQuery<{ calendars: Calendar[] }>({
@@ -116,6 +125,17 @@ export default function CalendarViewPage() {
     queryKey: ['/api/events'],
   });
 
+  // Fetch contacts with 'volunteer' tag for dropdown selection
+  const { data: volunteerContactsData } = useQuery<{ contacts: VolunteerContact[] }>({
+    queryKey: ['/api/contacts'],
+    select: (data) => ({
+      contacts: (data.contacts || []).filter((contact: VolunteerContact) => 
+        contact.tags?.some(tag => tag.toLowerCase() === 'volunteer')
+      )
+    })
+  });
+  const volunteerContacts = volunteerContactsData?.contacts || [];
+
   const createEventMutation = useMutation({
     mutationFn: async (eventData: typeof newEvent) => {
       return await apiRequest("POST", "/api/events", {
@@ -127,6 +147,7 @@ export default function CalendarViewPage() {
         location: eventData.location || undefined,
         customPageId: eventData.customPageId || "",
         includeMeetLink: eventData.includeMeetLink,
+        volunteerContactId: eventData.volunteerContactId || undefined,
       });
     },
     onSuccess: () => {
@@ -141,6 +162,7 @@ export default function CalendarViewPage() {
         location: "",
         customPageId: null,
         includeMeetLink: false,
+        volunteerContactId: "",
       });
       toast({
         title: "Event Created",
@@ -796,17 +818,57 @@ export default function CalendarViewPage() {
                     </div>
                     <div>
                       <Label htmlFor="volunteer-name">Volunteer Name *</Label>
-                      <Input
-                        id="volunteer-name"
-                        value={newEvent.title.replace(' - Signup', '')}
-                        onChange={(e) => setNewEvent({ ...newEvent, title: `${e.target.value} - Signup` })}
-                        placeholder="Enter volunteer name"
-                        required
-                        data-testid="input-volunteer-name"
-                      />
+                      <Select
+                        value={newEvent.volunteerContactId || "self"}
+                        onValueChange={(value) => {
+                          if (value === "self") {
+                            setNewEvent({ 
+                              ...newEvent, 
+                              volunteerContactId: "",
+                              title: `${currentUser?.fullName || currentUser?.email || 'Volunteer'} - Signup`
+                            });
+                          } else {
+                            const selectedContact = volunteerContacts.find(c => c.id === value);
+                            if (selectedContact) {
+                              setNewEvent({ 
+                                ...newEvent, 
+                                volunteerContactId: value,
+                                title: `${selectedContact.name} - Signup`
+                              });
+                            }
+                          }
+                        }}
+                      >
+                        <SelectTrigger data-testid="select-volunteer-name">
+                          <SelectValue placeholder="Select a volunteer" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="self">
+                            <div className="flex items-center gap-2">
+                              <UserCheck className="h-4 w-4 text-primary" />
+                              Myself ({currentUser?.fullName || currentUser?.email})
+                            </div>
+                          </SelectItem>
+                          {volunteerContacts.map((contact) => (
+                            <SelectItem key={contact.id} value={contact.id}>
+                              <div className="flex flex-col">
+                                <span>{contact.name}</span>
+                                {contact.email && (
+                                  <span className="text-xs text-muted-foreground">{contact.email}</span>
+                                )}
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       <p className="text-xs text-muted-foreground mt-1">
-                        Leave as your name to sign up yourself, or enter another volunteer's name
+                        Select yourself or choose a volunteer from your contacts list
                       </p>
+                      {volunteerContacts.length === 0 && (
+                        <p className="text-xs text-amber-600 mt-1">
+                          No volunteer contacts found. Add contacts with a "volunteer" tag to see them here.
+                        </p>
+                      )}
                     </div>
                   </div>
                 ) : (
