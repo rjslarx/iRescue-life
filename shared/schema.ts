@@ -889,21 +889,30 @@ export type ApplicationWithAnimal = Application & {
   animalName?: string;
 };
 
+// Donation type for IRS-compliant tracking
+export type DonationType = "cash" | "check" | "in_kind_goods" | "in_kind_services";
+
 // Donations table - donations per tenant (supports cash and in-kind for IRS compliance)
 export const donations = pgTable("donations", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
   donorId: uuid("donor_id").references(() => donors.id, { onDelete: 'set null' }),
+  contactId: uuid("contact_id"), // Link to contact record (no FK constraint due to declaration order)
   donorName: text("donor_name").notNull(),
   donorEmail: text("donor_email").notNull(),
   donorAddress: text("donor_address"), // For receipt mailing
   donorCity: text("donor_city"), // City for public display in donation widget
   donorState: text("donor_state"), // State/region for public display in donation widget
+  donorZip: text("donor_zip"), // Zip code for receipts
   donorCountry: text("donor_country"), // Country for public display in donation widget
   isPublic: boolean("is_public").notNull().default(true), // Whether donation can be shown publicly in widget
-  donationType: text("donation_type").notNull().default("cash").$type<"cash" | "in_kind">(),
-  amount: integer("amount"), // Amount in cents (e.g., $10.00 = 1000). Required for cash, ignored for in-kind
-  description: text("description"), // Required for in-kind (e.g., "5 bags of dog food")
+  donationType: text("donation_type").notNull().default("cash").$type<DonationType>(),
+  amount: integer("amount"), // Amount in cents (e.g., $10.00 = 1000). Required for cash/check, ignored for in-kind
+  description: text("description"), // Required for in-kind (e.g., "5 bags of dog food, Large wire crate")
+  donorStatedValue: integer("donor_stated_value"), // Donor's stated value in cents (for internal records only - not on receipts)
+  estimatedValue: integer("estimated_value"), // Rescue's estimated value in cents (for internal accounting/reports)
+  paymentMethod: text("payment_method").$type<"cash" | "check" | "credit_card" | "bank_transfer" | "other">(), // For cash/check donations
+  checkNumber: text("check_number"), // Check number if payment method is check
   message: text("message"),
   sponsoredAnimalId: uuid("sponsored_animal_id").references(() => animals.id),
   source: text("source").notNull().default("manual").$type<"manual" | "online_form" | "quickbooks_import" | "stripe">(),
