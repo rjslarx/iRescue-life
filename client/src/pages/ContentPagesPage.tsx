@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -44,6 +44,17 @@ export default function ContentPagesPage() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [deletePageId, setDeletePageId] = useState<string | null>(null);
   const [editingPage, setEditingPage] = useState<CustomPage | null>(null);
+  
+  // Counter to force fresh dialog instances when opening (uses state to trigger re-render)
+  const [createDialogKey, setCreateDialogKey] = useState(0);
+  
+  // Increment counter each time create dialog opens to force fresh component
+  const handleCreateDialogOpen = (open: boolean) => {
+    if (open) {
+      setCreateDialogKey(prev => prev + 1);
+    }
+    setIsCreateDialogOpen(open);
+  };
 
   // Fetch pages
   const { data, isLoading } = useQuery<{ pages: CustomPage[] }>({
@@ -141,19 +152,22 @@ export default function ContentPagesPage() {
   return (
       <div className="container mx-auto p-6 space-y-6">
         <div className="flex items-center justify-end">
-          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+          <Dialog open={isCreateDialogOpen} onOpenChange={handleCreateDialogOpen}>
             <DialogTrigger asChild>
               <Button data-testid="button-create-page">
                 <Plus className="w-4 h-4 mr-2" />
                 New Page
               </Button>
             </DialogTrigger>
-            <PageFormDialog
-              mode="create"
-              onSubmit={(data) => createMutation.mutate(data)}
-              isPending={createMutation.isPending}
-              generateSlug={generateSlug}
-            />
+            {isCreateDialogOpen && (
+              <PageFormDialog
+                key={`create-dialog-${createDialogKey}`}
+                mode="create"
+                onSubmit={(data) => createMutation.mutate(data)}
+                isPending={createMutation.isPending}
+                generateSlug={generateSlug}
+              />
+            )}
           </Dialog>
         </div>
 
@@ -176,7 +190,7 @@ export default function ContentPagesPage() {
               <p className="text-sm text-muted-foreground mb-4">
                 Create your first custom page to provide information to your visitors
               </p>
-              <Button onClick={() => setIsCreateDialogOpen(true)} data-testid="button-create-first-page">
+              <Button onClick={() => handleCreateDialogOpen(true)} data-testid="button-create-first-page">
                 <Plus className="w-4 h-4 mr-2" />
                 Create Your First Page
               </Button>
@@ -248,6 +262,7 @@ export default function ContentPagesPage() {
             if (!open) setEditingPage(null);
           }}>
             <PageFormDialog
+              key={`edit-dialog-${editingPage.id}`}
               mode="edit"
               defaultValues={editingPage}
               onSubmit={(data) => updateMutation.mutate({ id: editingPage.id, data })}
@@ -306,16 +321,7 @@ function PageFormDialog({
 
   const form = useForm<PageFormData>({
     resolver: zodResolver(pageFormSchema),
-    defaultValues: defaultValues ? {
-      title: defaultValues.title,
-      slug: defaultValues.slug,
-      excerpt: defaultValues.excerpt || '',
-      contentMarkdown: defaultValues.contentMarkdown || '',
-      contentBlocks: (defaultValues.contentBlocks as PageBlock[]) || [],
-      useBlockEditor: defaultValues.useBlockEditor !== false,
-      isPublished: defaultValues.isPublished,
-      showInNavigation: defaultValues.showInNavigation || false,
-    } : {
+    defaultValues: {
       title: '',
       slug: '',
       excerpt: '',
@@ -326,6 +332,41 @@ function PageFormDialog({
       showInNavigation: false,
     },
   });
+
+  // Reset all state when mode or defaultValues change to prevent content leaking between dialogs
+  useEffect(() => {
+    if (mode === 'create') {
+      // Reset to empty state for create mode
+      setContentBlocks([]);
+      setUseBlockEditor(true);
+      setUploadedImages([]);
+      form.reset({
+        title: '',
+        slug: '',
+        excerpt: '',
+        contentMarkdown: '',
+        contentBlocks: [],
+        useBlockEditor: true,
+        isPublished: false,
+        showInNavigation: false,
+      });
+    } else if (defaultValues) {
+      // Load content from the page being edited
+      setContentBlocks((defaultValues.contentBlocks as PageBlock[]) || []);
+      setUseBlockEditor(defaultValues.useBlockEditor !== false);
+      setUploadedImages([]);
+      form.reset({
+        title: defaultValues.title,
+        slug: defaultValues.slug,
+        excerpt: defaultValues.excerpt || '',
+        contentMarkdown: defaultValues.contentMarkdown || '',
+        contentBlocks: (defaultValues.contentBlocks as PageBlock[]) || [],
+        useBlockEditor: defaultValues.useBlockEditor !== false,
+        isPublished: defaultValues.isPublished,
+        showInNavigation: defaultValues.showInNavigation || false,
+      });
+    }
+  }, [mode, defaultValues?.id, form]);
 
   const currentContent = form.watch('contentMarkdown');
 
@@ -390,7 +431,7 @@ function PageFormDialog({
                   <Input
                     {...field}
                     onChange={(e) => handleTitleChange(e.target.value)}
-                    placeholder="Adoption Process"
+                    placeholder="Enter page title"
                     data-testid="input-page-title"
                   />
                 </FormControl>
@@ -408,7 +449,7 @@ function PageFormDialog({
                 <FormControl>
                   <Input
                     {...field}
-                    placeholder="adoption-process"
+                    placeholder="enter-url-slug"
                     data-testid="input-page-slug"
                   />
                 </FormControl>
