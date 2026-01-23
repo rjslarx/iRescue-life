@@ -826,13 +826,17 @@ router.post("/request-magic-link", async (req, res) => {
     const loginUrl = `${baseUrl}${tenantPath}/my-pets/login?token=${magicLinkToken}`;
 
     const { EmailService } = await import('../lib/email-service');
-    const emailService = new EmailService();
+    const emailService = await EmailService.forTenant(user.tenantId);
+    
+    if (!emailService) {
+      console.warn(`[Adopter Portal] No email service available for tenant ${user.tenantId}`);
+      return res.status(500).json({ message: "Email service unavailable" });
+    }
 
-    await emailService.sendEmail(
-      user.tenantId,
-      user.email,
-      'Your Pet Portal Login Link',
-      `
+    await emailService.send({
+      to: user.email,
+      subject: 'Your Pet Portal Login Link',
+      html: `
         <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
           <h2>Hi ${user.firstName || 'there'},</h2>
           <p>You requested access to your Pet Portal. Click the button below to log in instantly:</p>
@@ -845,8 +849,7 @@ router.post("/request-magic-link", async (req, res) => {
           <p style="color: #999; font-size: 12px;">If you didn't request this link, you can safely ignore this email.</p>
         </div>
       `,
-      { category: 'adopter_portal', tags: ['magic-link', 'login'] }
-    );
+    });
 
     res.json({ success: true, message: "If an account exists with this email, a login link will be sent." });
   } catch (error) {

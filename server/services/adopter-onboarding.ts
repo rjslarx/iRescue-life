@@ -147,7 +147,12 @@ export async function sendAdopterWelcomeEmail(
     const magicLinkUrl = `${baseUrl}${tenantPath}/my-pets/login?token=${magicLinkToken}`;
 
     const { EmailService } = await import('../lib/email-service');
-    const emailService = new EmailService();
+    const emailService = await EmailService.forTenant(tenantId);
+    
+    if (!emailService) {
+      console.warn(`[Adopter Onboarding] No email service available for tenant ${tenantId}`);
+      return false;
+    }
 
     const animalPhoto = (animal.photoUrls as string[])?.[0] || '';
 
@@ -249,16 +254,11 @@ export async function sendAdopterWelcomeEmail(
 </body>
 </html>`;
 
-    await emailService.sendEmail(
-      tenantId,
-      user.email,
+    await emailService.send({
+      to: user.email,
       subject,
       html,
-      {
-        category: 'adopter_portal',
-        tags: ['welcome', 'adopter'],
-      }
-    );
+    });
 
     console.log(`[Adopter Onboarding] Sent welcome email to ${user.email} for ${animal.name}`);
     return true;

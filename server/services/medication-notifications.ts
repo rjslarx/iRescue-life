@@ -92,7 +92,13 @@ export async function sendDueDateNotifications(): Promise<NotificationResult> {
         const portalUrl = `${baseUrl}${tenantPath}/my-pets/${animal.id}?tab=health`;
 
         const { EmailService } = await import('../lib/email-service');
-        const emailService = new EmailService();
+        const emailService = await EmailService.forTenant(reminder.tenantId);
+        
+        if (!emailService) {
+          console.warn(`[Medication Reminder] No email service available for tenant ${reminder.tenantId}`);
+          result.skipped++;
+          continue;
+        }
 
         const animalPhoto = (animal.photoUrls as string[])?.[0] || '';
         const subject = `ACTION REQUIRED: ${reminder.medicationName} for ${animal.name}`;
@@ -179,16 +185,11 @@ export async function sendDueDateNotifications(): Promise<NotificationResult> {
 </body>
 </html>`;
 
-        await emailService.sendEmail(
-          reminder.tenantId,
-          user.email,
+        await emailService.send({
+          to: user.email,
           subject,
           html,
-          {
-            category: 'medication_reminder',
-            tags: ['medication', 'reminder', 'double-tap'],
-          }
-        );
+        });
 
         await db
           .update(adopterMedicationReminders)
@@ -302,7 +303,13 @@ export async function sendFollowUpNotifications(): Promise<NotificationResult> {
         const portalUrl = `${baseUrl}${tenantPath}/my-pets/${animal.id}?tab=health`;
 
         const { EmailService } = await import('../lib/email-service');
-        const emailService = new EmailService();
+        const emailService = await EmailService.forTenant(reminder.tenantId);
+        
+        if (!emailService) {
+          console.warn(`[Medication Reminder] No email service available for tenant ${reminder.tenantId}`);
+          result.skipped++;
+          continue;
+        }
 
         const animalPhoto = (animal.photoUrls as string[])?.[0] || '';
         const subject = `REMINDER: ${animal.name}'s ${reminder.medicationName} is overdue`;
@@ -386,16 +393,11 @@ export async function sendFollowUpNotifications(): Promise<NotificationResult> {
 </body>
 </html>`;
 
-        await emailService.sendEmail(
-          reminder.tenantId,
-          user.email,
+        await emailService.send({
+          to: user.email,
           subject,
           html,
-          {
-            category: 'medication_reminder',
-            tags: ['medication', 'follow-up', 'overdue'],
-          }
-        );
+        });
 
         console.log(`[Medication Reminder] Sent follow-up notification for ${animal.name}'s ${reminder.medicationName} to ${user.email}`);
         result.sent++;

@@ -1,0 +1,110 @@
+2026-01-22 19:33:07.18
+fcd6c36d
+User
+_maxListeners: undefined,
+2026-01-22 19:33:07.18
+fcd6c36d
+User
+at Connection.emit (node:events:524:28)
+2026-01-22 19:33:07.18
+fcd6c36d
+User
+length: 116,
+2026-01-22 19:33:07.18
+fcd6c36d
+User
+table: undefined,
+2026-01-22 19:33:07.18
+fcd6c36d
+User
+at /home/runner/workspace/node_modules/pg/lib/connection.js:116:12
+2026-01-22 19:33:07.18
+fcd6c36d
+User
+internalPosition: undefined,
+2026-01-22 19:33:07.18
+fcd6c36d
+User
+error: terminating connection due to administrator command
+2026-01-22 19:33:07.18
+fcd6c36d
+User
+at Client._handleErrorEvent (/home/runner/workspace/node_modules/pg/lib/client.js:350:10)
+2026-01-22 19:33:07.18
+fcd6c36d
+User
+at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)
+2026-01-22 19:33:07.18
+fcd6c36d
+User
+connectionParameters: ConnectionParameters {
+2026-01-22 19:33:07.18
+fcd6c36d
+User
+hint: undefined,
+2026-01-22 19:33:07.18
+fcd6c36d
+User
+at TLSSocket.emit (node:events:524:28)
+2026-01-22 19:33:07.18
+fcd6c36d
+User
+constraint: undefined,
+2026-01-22 19:33:07.18
+fcd6c36d
+User
+at Readable.push (node:internal/streams/readable:392:5)
+2026-01-22 19:33:07.18
+fcd6c36d
+User
+at addChunk (node:internal/streams/readable:561:12)
+2026-01-22 19:33:07.18
+fcd6c36d
+User
+at TLSSocket. (/home/runner/workspace/node_modules/pg-protocol/dist/index.js:11:42)
+2026-01-22 19:33:07.18
+fcd6c36d
+User
+at Parser.handlePacket (/home/runner/workspace/node_modules/pg-protocol/dist/parser.js:122:29)
+2026-01-22 19:33:07.18
+fcd6c36d
+User
+detail: undefined,
+2026-01-22 19:33:07.18
+fcd6c36d
+User
+routine: 'ProcessInterrupts',
+2026-01-22 19:33:07.18
+fcd6c36d
+User
+severity: 'FATAL',
+2026-01-22 19:33:07.18
+fcd6c36d
+User
+at Client.emit (node:events:524:28)
+2026-01-22 19:33:14.28
+fcd6c36d
+User
+npm notice To update run: npm install -g npm@11.8.0
+2026-01-22 19:33:14.28
+fcd6c36d
+User
+npm notice
+2026-01-22 19:33:14.28
+fcd6c36d
+User
+npm notice New major version of npm available! 10.8.2 -> 11.8.0
+2026-01-22 19:33:14.28
+fcd6c36d
+User
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.8.0
+2026-01-22 19:33:14.28
+fcd6c36d
+User
+npm notice
+2026-01-22 19:33:15.88
+fcd6c36d
+System
+command finished with error [npm run start]: exit status 1
+Wrap
+Colors

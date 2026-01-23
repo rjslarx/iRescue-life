@@ -8,7 +8,7 @@ import {
 } from '@shared/schema';
 import { eq, and, lte, isNull, or, sql } from 'drizzle-orm';
 import { GoveeService, isTemperatureSensorModel } from '../lib/govee-service';
-import { sendEmail } from '../lib/email';
+import { EmailService } from '../lib/email-service';
 
 const POLLING_INTERVAL_MS = 10 * 60 * 1000;
 let pollingInterval: NodeJS.Timeout | null = null;
@@ -250,8 +250,16 @@ async function sendAlertNotifications(
 
   if (emailRecipients.length > 0) {
     try {
+      // Use tenant's email service (Gmail if enabled, otherwise Resend)
+      const emailService = await EmailService.forTenant(device.tenantId);
+      
+      if (!emailService) {
+        console.warn(`[Govee Poller] No email service available for tenant ${device.tenantId}`);
+        return;
+      }
+      
       for (const email of emailRecipients) {
-        await sendEmail({
+        await emailService.send({
           to: email,
           subject: `Temperature Alert: ${rule.name}`,
           html: `
