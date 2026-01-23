@@ -1332,7 +1332,8 @@ export default function CalendarViewPage() {
               variant="outline"
               className="w-full justify-start"
               onClick={() => {
-                const url = `${window.location.origin}${basePath}/dashboard/calendar`;
+                const calendarParam = selectedCalendars.size > 0 ? `?calendars=${Array.from(selectedCalendars).join(',')}` : '';
+                const url = `${window.location.origin}${basePath}/dashboard/calendar${calendarParam}`;
                 navigator.clipboard.writeText(url);
                 toast({
                   title: "Link Copied",
@@ -1352,8 +1353,10 @@ export default function CalendarViewPage() {
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    const url = `${window.location.origin}${basePath}/dashboard/calendar`;
-                    const text = `Check out ${calendarsData?.calendars[0]?.name || 'our'} calendar!`;
+                    const calendarParam = selectedCalendars.size > 0 ? `?calendars=${Array.from(selectedCalendars).join(',')}` : '';
+                    const url = `${window.location.origin}${basePath}/dashboard/calendar${calendarParam}`;
+                    const selectedNames = calendarsData?.calendars.filter(c => selectedCalendars.has(c.id)).map(c => c.name).join(', ') || 'our';
+                    const text = `Check out ${selectedNames} calendar!`;
                     window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}&quote=${encodeURIComponent(text)}`, '_blank');
                   }}
                   data-testid="button-share-facebook"
@@ -1365,8 +1368,10 @@ export default function CalendarViewPage() {
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    const url = `${window.location.origin}${basePath}/dashboard/calendar`;
-                    const text = `Check out ${calendarsData?.calendars[0]?.name || 'our'} calendar!`;
+                    const calendarParam = selectedCalendars.size > 0 ? `?calendars=${Array.from(selectedCalendars).join(',')}` : '';
+                    const url = `${window.location.origin}${basePath}/dashboard/calendar${calendarParam}`;
+                    const selectedNames = calendarsData?.calendars.filter(c => selectedCalendars.has(c.id)).map(c => c.name).join(', ') || 'our';
+                    const text = `Check out ${selectedNames} calendar!`;
                     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
                     if (isMobile) {
                       // On mobile, open Messenger app directly
@@ -1389,8 +1394,10 @@ export default function CalendarViewPage() {
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    const url = `${window.location.origin}${basePath}/dashboard/calendar`;
-                    const text = `Check out ${calendarsData?.calendars[0]?.name || 'our'} calendar!`;
+                    const calendarParam = selectedCalendars.size > 0 ? `?calendars=${Array.from(selectedCalendars).join(',')}` : '';
+                    const url = `${window.location.origin}${basePath}/dashboard/calendar${calendarParam}`;
+                    const selectedNames = calendarsData?.calendars.filter(c => selectedCalendars.has(c.id)).map(c => c.name).join(', ') || 'our';
+                    const text = `Check out ${selectedNames} calendar!`;
                     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
                     if (isMobile) {
                       // On mobile, use whatsapp:// protocol
@@ -1413,8 +1420,11 @@ export default function CalendarViewPage() {
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    const subject = 'Calendar Share';
-                    const body = `Check out our calendar: ${window.location.origin}${basePath}/dashboard/calendar`;
+                    const calendarParam = selectedCalendars.size > 0 ? `?calendars=${Array.from(selectedCalendars).join(',')}` : '';
+                    const url = `${window.location.origin}${basePath}/dashboard/calendar${calendarParam}`;
+                    const selectedNames = calendarsData?.calendars.filter(c => selectedCalendars.has(c.id)).map(c => c.name).join(', ') || 'our';
+                    const subject = `${selectedNames} Calendar`;
+                    const body = `Check out ${selectedNames} calendar: ${url}`;
                     window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
                   }}
                   data-testid="button-share-email"

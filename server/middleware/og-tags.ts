@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { db } from '../db';
-import { animals, tenants } from '@shared/schema';
-import { eq, and } from 'drizzle-orm';
+import { animals, tenants, calendars } from '@shared/schema';
+import { eq, and, inArray } from 'drizzle-orm';
 import fs from 'fs';
 import path from 'path';
 
@@ -33,6 +33,57 @@ function escapeHtml(text: string): string {
     .replace(/'/g, '&#039;');
 }
 
+async function serveHtmlWithOGTags(
+  req: Request, 
+  res: Response, 
+  next: NextFunction, 
+  ogTags: string, 
+  title: string, 
+  description: string
+): Promise<void> {
+  const isProduction = process.env.NODE_ENV === 'production';
+  let html: string;
+  
+  if (isProduction) {
+    const prodPath = path.resolve(import.meta.dirname, "public", "index.html");
+    console.log(`[OG-TAGS] Production mode, trying: ${prodPath}`);
+    try {
+      html = await fs.promises.readFile(prodPath, 'utf-8');
+      console.log(`[OG-TAGS] Successfully read index.html (${html.length} bytes)`);
+    } catch (err) {
+      console.error(`[OG-TAGS] Failed to read production index.html:`, err);
+      return next();
+    }
+  } else {
+    const devPath = path.resolve(import.meta.dirname, "..", "..", "client", "index.html");
+    console.log(`[OG-TAGS] Development mode, trying: ${devPath}`);
+    try {
+      html = await fs.promises.readFile(devPath, 'utf-8');
+      console.log(`[OG-TAGS] Successfully read index.html (${html.length} bytes)`);
+    } catch (err) {
+      console.error(`[OG-TAGS] Failed to read development index.html:`, err);
+      return next();
+    }
+  }
+
+  html = html.replace(
+    /<meta property="og:type" content="website" \/>[\s\S]*?<meta name="twitter:image"[^>]*>/,
+    ogTags.trim()
+  );
+
+  html = html.replace(
+    /<title>[^<]*<\/title>/,
+    `<title>${escapeHtml(title)}</title>`
+  );
+
+  html = html.replace(
+    /<meta name="description" content="[^"]*" \/>/,
+    `<meta name="description" content="${escapeHtml(description)}" />`
+  );
+
+  res.status(200).set({ 'Content-Type': 'text/html' }).end(html);
+}
+
 export async function injectOGTags(req: Request, res: Response, next: NextFunction) {
   const userAgent = req.get('User-Agent');
   
@@ -55,12 +106,76 @@ export async function injectOGTags(req: Request, res: Response, next: NextFuncti
   
   const animalMatch = url.match(/^\/animal\/([a-zA-Z0-9-]+)/);
   const campaignMatch = url.match(/^\/campaign\/([a-zA-Z0-9-]+)/);
+  const calendarMatch = url.match(/^\/dashboard\/calendar/);
   
-  const match = animalMatch || campaignMatch;
+  const match = animalMatch || campaignMatch || calendarMatch;
   
   if (!match) {
     console.log(`[OG-TAGS] No pattern match for stripped URL: ${url} (original: ${req.originalUrl})`);
     return next();
+  }
+  
+  // Handle calendar pages separately
+  if (calendarMatch) {
+    const tenant = req.tenant;
+    if (!tenant) {
+      console.log(`[OG-TAGS] No tenant available for calendar: ${url}`);
+      return next();
+    }
+    
+    console.log(`[OG-TAGS] Processing calendar page for tenant: ${tenant.subdomain}`);
+    
+    try {
+      // Get calendar IDs from query params if present
+      const calendarIds = req.query.calendars ? (req.query.calendars as string).split(',') : [];
+      
+      let calendarNames: string[] = [];
+      if (calendarIds.length > 0) {
+        const calendarData = await db.select({ name: calendars.name })
+          .from(calendars)
+          .where(and(
+            inArray(calendars.id, calendarIds),
+            eq(calendars.tenantId, tenant.id)
+          ));
+        calendarNames = calendarData.map(c => c.name);
+      }
+      
+      const title = calendarNames.length > 0
+        ? `${calendarNames.join(', ')} | ${tenant.name}`
+        : `Calendar | ${tenant.name}`;
+      const description = calendarNames.length > 0
+        ? `View ${calendarNames.join(', ')} at ${tenant.name}`
+        : `View our calendar of events at ${tenant.name}`;
+      
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      // Use tenant logo if available, otherwise default icon
+      const image = tenant.logoUrl 
+        ? (tenant.logoUrl.startsWith('http') ? tenant.logoUrl : `${baseUrl}${tenant.logoUrl}`)
+        : `${baseUrl}/icon-512.png`;
+      const canonicalUrl = `${baseUrl}/${tenant.subdomain}${url}`;
+      
+      const ogTags = `
+    <!-- Dynamic Open Graph Tags for Calendar Sharing -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="${escapeHtml(canonicalUrl)}" />
+    <meta property="og:title" content="${escapeHtml(title)}" />
+    <meta property="og:description" content="${escapeHtml(description)}" />
+    <meta property="og:image" content="${escapeHtml(image)}" />
+    <meta property="og:site_name" content="${escapeHtml(tenant.name)}" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="${escapeHtml(title)}" />
+    <meta name="twitter:description" content="${escapeHtml(description)}" />
+    <meta name="twitter:image" content="${escapeHtml(image)}" />
+    <meta name="description" content="${escapeHtml(description)}" />
+    <title>${escapeHtml(title)}</title>
+    <!-- End Dynamic Open Graph Tags -->
+`;
+
+      return await serveHtmlWithOGTags(req, res, next, ogTags, title, description);
+    } catch (error) {
+      console.error('[OG-TAGS] Error processing calendar:', error);
+      return next();
+    }
   }
 
   const tenant = req.tenant;
@@ -131,53 +246,7 @@ export async function injectOGTags(req: Request, res: Response, next: NextFuncti
     <!-- End Dynamic Open Graph Tags -->
 `;
 
-    // Determine the correct index.html path based on environment
-    // In development: server/middleware/og-tags.ts -> ../../client/index.html
-    // In production: dist/index.js -> public/index.html (built files are in dist/public)
-    const isProduction = process.env.NODE_ENV === 'production';
-    
-    let html: string;
-    
-    if (isProduction) {
-      // Production: index.html is built to the same directory as dist/index.js -> public/
-      const prodPath = path.resolve(import.meta.dirname, "public", "index.html");
-      console.log(`[OG-TAGS] Production mode, trying: ${prodPath}`);
-      try {
-        html = await fs.promises.readFile(prodPath, 'utf-8');
-        console.log(`[OG-TAGS] Successfully read index.html (${html.length} bytes)`);
-      } catch (err) {
-        console.error(`[OG-TAGS] Failed to read production index.html:`, err);
-        return next();
-      }
-    } else {
-      // Development: read from client/index.html
-      const devPath = path.resolve(import.meta.dirname, "..", "..", "client", "index.html");
-      console.log(`[OG-TAGS] Development mode, trying: ${devPath}`);
-      try {
-        html = await fs.promises.readFile(devPath, 'utf-8');
-        console.log(`[OG-TAGS] Successfully read index.html (${html.length} bytes)`);
-      } catch (err) {
-        console.error(`[OG-TAGS] Failed to read development index.html:`, err);
-        return next();
-      }
-    }
-
-    html = html.replace(
-      /<meta property="og:type" content="website" \/>[\s\S]*?<meta name="twitter:image"[^>]*>/,
-      ogTags.trim()
-    );
-
-    html = html.replace(
-      /<title>[^<]*<\/title>/,
-      `<title>${escapeHtml(title)}</title>`
-    );
-
-    html = html.replace(
-      /<meta name="description" content="[^"]*" \/>/,
-      `<meta name="description" content="${escapeHtml(description)}" />`
-    );
-
-    res.status(200).set({ 'Content-Type': 'text/html' }).end(html);
+    return await serveHtmlWithOGTags(req, res, next, ogTags, title, description);
   } catch (error) {
     console.error('Error injecting OG tags:', error);
     next();
