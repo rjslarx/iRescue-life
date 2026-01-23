@@ -20577,6 +20577,7 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
       const eventData = {
         ...validatedData,
         customPageId: validatedData.customPageId && validatedData.customPageId !== "" ? validatedData.customPageId : null,
+        volunteerContactId: validatedData.volunteerContactId && validatedData.volunteerContactId !== "" ? validatedData.volunteerContactId : null,
         tenantId: req.tenant!.id,
         createdBy: req.user!.id,
       };
