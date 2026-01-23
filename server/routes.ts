@@ -3668,6 +3668,38 @@ Crawl-delay: 1
   });
 
   /**
+   * GET /api/users/volunteers
+   * Get team members with 'volunteer' role for calendar scheduling
+   * Accessible to any authenticated user (permission check happens at calendar level)
+   */
+  app.get('/api/users/volunteers', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { users } = await import('@shared/schema');
+      const { arrayContains } = await import('drizzle-orm');
+      
+      const volunteerUsers = await db
+        .select({
+          id: users.id,
+          email: users.email,
+          fullName: users.fullName,
+          phone: users.phone,
+        })
+        .from(users)
+        .where(
+          and(
+            eq(users.tenantId, req.tenant!.id),
+            arrayContains(users.roles, ['volunteer'])
+          )
+        )
+        .orderBy(users.fullName);
+      
+      res.json({ volunteers: volunteerUsers });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * POST /api/users
    * Create new user (admin only)
    */

@@ -42,12 +42,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import type { EventFormSettings } from "@shared/schema";
 import { DEFAULT_EVENT_FORM_SETTINGS } from "@shared/schema";
 
-interface VolunteerContact {
+interface VolunteerTeamMember {
   id: string;
-  name: string;
-  email: string | null;
+  email: string;
+  fullName: string | null;
   phone: string | null;
-  tags: string[] | null;
 }
 
 interface Calendar {
@@ -126,16 +125,11 @@ export default function CalendarViewPage() {
     queryKey: ['/api/events'],
   });
 
-  // Fetch contacts with 'volunteer' tag for dropdown selection
-  const { data: volunteerContactsData } = useQuery<{ contacts: VolunteerContact[] }>({
-    queryKey: ['/api/contacts'],
-    select: (data) => ({
-      contacts: (data.contacts || []).filter((contact: VolunteerContact) => 
-        contact.tags?.some(tag => tag.toLowerCase() === 'volunteer')
-      )
-    })
+  // Fetch team members with 'volunteer' role for dropdown selection
+  const { data: volunteerTeamMembersData } = useQuery<{ volunteers: VolunteerTeamMember[] }>({
+    queryKey: ['/api/users/volunteers'],
   });
-  const volunteerContacts = volunteerContactsData?.contacts || [];
+  const volunteerTeamMembers = volunteerTeamMembersData?.volunteers || [];
 
   const createEventMutation = useMutation({
     mutationFn: async (eventData: typeof newEvent) => {
@@ -830,12 +824,12 @@ export default function CalendarViewPage() {
                               title: `${currentUser?.fullName || currentUser?.email || 'Volunteer'} - Signup`
                             });
                           } else {
-                            const selectedContact = volunteerContacts.find(c => c.id === value);
-                            if (selectedContact) {
+                            const selectedVolunteer = volunteerTeamMembers.find(v => v.id === value);
+                            if (selectedVolunteer) {
                               setNewEvent({ 
                                 ...newEvent, 
                                 volunteerContactId: value,
-                                title: `${selectedContact.name} - Signup`
+                                title: `${selectedVolunteer.fullName || selectedVolunteer.email} - Signup`
                               });
                             }
                           }
@@ -851,12 +845,12 @@ export default function CalendarViewPage() {
                               Myself ({currentUser?.fullName || currentUser?.email})
                             </div>
                           </SelectItem>
-                          {volunteerContacts.map((contact) => (
-                            <SelectItem key={contact.id} value={contact.id}>
+                          {volunteerTeamMembers.map((volunteer) => (
+                            <SelectItem key={volunteer.id} value={volunteer.id}>
                               <div className="flex flex-col">
-                                <span>{contact.name}</span>
-                                {contact.email && (
-                                  <span className="text-xs text-muted-foreground">{contact.email}</span>
+                                <span>{volunteer.fullName || volunteer.email}</span>
+                                {volunteer.email && volunteer.fullName && (
+                                  <span className="text-xs text-muted-foreground">{volunteer.email}</span>
                                 )}
                               </div>
                             </SelectItem>
@@ -864,11 +858,11 @@ export default function CalendarViewPage() {
                         </SelectContent>
                       </Select>
                       <p className="text-xs text-muted-foreground mt-1">
-                        Select yourself or choose a volunteer from your contacts list
+                        Select yourself or choose a volunteer from your team
                       </p>
-                      {volunteerContacts.length === 0 && (
+                      {volunteerTeamMembers.length === 0 && (
                         <p className="text-xs text-amber-600 mt-1">
-                          No volunteer contacts found. Add contacts with a "volunteer" tag to see them here.
+                          No team members with the volunteer role found. Add team members with the "volunteer" role to see them here.
                         </p>
                       )}
                     </div>
