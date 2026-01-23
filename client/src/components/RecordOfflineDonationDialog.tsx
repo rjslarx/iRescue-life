@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -32,19 +31,46 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, DollarSign, Banknote, CreditCard } from "lucide-react";
+import { Loader2, Gift, Banknote, CreditCard, Package, Wrench } from "lucide-react";
 
 const formSchema = z.object({
   donorName: z.string().min(1, "Donor name is required"),
   donorEmail: z.string().email("Valid email required").optional().or(z.literal("")),
-  amount: z.string().min(1, "Amount is required").refine(
-    (val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0,
-    "Amount must be a positive number"
-  ),
-  paymentMethod: z.enum(["cash", "check", "other"]),
+  donorAddress: z.string().optional(),
+  donorCity: z.string().optional(),
+  donorState: z.string().optional(),
+  donorZip: z.string().optional(),
+  donationType: z.enum(["cash", "check", "in_kind_goods", "in_kind_services"]),
+  amount: z.string().optional(),
+  description: z.string().optional(),
+  donorStatedValue: z.string().optional(),
+  estimatedValue: z.string().optional(),
   checkNumber: z.string().optional(),
   notes: z.string().optional(),
   donationDate: z.string().min(1, "Date is required"),
+}).superRefine((data, ctx) => {
+  const isCashOrCheck = data.donationType === "cash" || data.donationType === "check";
+  const isInKind = data.donationType === "in_kind_goods" || data.donationType === "in_kind_services";
+  
+  if (isCashOrCheck) {
+    if (!data.amount || parseFloat(data.amount) <= 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Amount is required for cash/check donations",
+        path: ["amount"],
+      });
+    }
+  }
+  
+  if (isInKind) {
+    if (!data.description || data.description.trim().length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Description is required for in-kind donations",
+        path: ["description"],
+      });
+    }
+  }
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -66,23 +92,39 @@ export function RecordOfflineDonationDialog({
     defaultValues: {
       donorName: "",
       donorEmail: "",
+      donorAddress: "",
+      donorCity: "",
+      donorState: "",
+      donorZip: "",
+      donationType: "cash",
       amount: "",
-      paymentMethod: "cash",
+      description: "",
+      donorStatedValue: "",
+      estimatedValue: "",
       checkNumber: "",
       notes: "",
       donationDate: new Date().toISOString().split("T")[0],
     },
   });
 
-  const paymentMethod = form.watch("paymentMethod");
+  const donationType = form.watch("donationType");
+  const isCashOrCheck = donationType === "cash" || donationType === "check";
+  const isInKind = donationType === "in_kind_goods" || donationType === "in_kind_services";
 
   const mutation = useMutation({
     mutationFn: async (data: FormData) => {
       return apiRequest("POST", "/api/donations/offline", {
         donorName: data.donorName,
         donorEmail: data.donorEmail || null,
-        amount: parseFloat(data.amount),
-        paymentMethod: data.paymentMethod,
+        donorAddress: data.donorAddress || null,
+        donorCity: data.donorCity || null,
+        donorState: data.donorState || null,
+        donorZip: data.donorZip || null,
+        donationType: data.donationType,
+        amount: data.amount ? parseFloat(data.amount) : null,
+        description: data.description || null,
+        donorStatedValue: data.donorStatedValue ? parseFloat(data.donorStatedValue) : null,
+        estimatedValue: data.estimatedValue ? parseFloat(data.estimatedValue) : null,
         checkNumber: data.checkNumber || null,
         notes: data.notes || null,
         donationDate: data.donationDate,
@@ -91,11 +133,14 @@ export function RecordOfflineDonationDialog({
     onSuccess: () => {
       toast({
         title: "Donation Recorded",
-        description: "The offline donation has been recorded successfully.",
+        description: isInKind 
+          ? "The in-kind donation has been recorded. The donor will be added to your contacts."
+          : "The donation has been recorded successfully.",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/donations"] });
       queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/activity"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
       form.reset();
       onOpenChange(false);
     },
@@ -114,19 +159,63 @@ export function RecordOfflineDonationDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <DollarSign className="h-5 w-5" />
-            Record Offline Donation
+            <Gift className="h-5 w-5" />
+            Record Donation
           </DialogTitle>
           <DialogDescription>
-            Record a cash, check, or other offline donation
+            Record a cash, check, or in-kind donation
           </DialogDescription>
         </DialogHeader>
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="donationType"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Donation Type *</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger data-testid="select-donation-type">
+                        <SelectValue placeholder="Select type" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="cash">
+                        <div className="flex items-center gap-2">
+                          <Banknote className="h-4 w-4" />
+                          Cash
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="check">
+                        <div className="flex items-center gap-2">
+                          <CreditCard className="h-4 w-4" />
+                          Check
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="in_kind_goods">
+                        <div className="flex items-center gap-2">
+                          <Package className="h-4 w-4" />
+                          In-Kind Goods
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="in_kind_services">
+                        <div className="flex items-center gap-2">
+                          <Wrench className="h-4 w-4" />
+                          In-Kind Services
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             <FormField
               control={form.control}
               name="donorName"
@@ -150,7 +239,7 @@ export function RecordOfflineDonationDialog({
               name="donorEmail"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Donor Email (Optional)</FormLabel>
+                  <FormLabel>Donor Email {isInKind ? "(Required for receipt)" : "(Optional)"}</FormLabel>
                   <FormControl>
                     <Input
                       type="email"
@@ -159,43 +248,224 @@ export function RecordOfflineDonationDialog({
                       data-testid="input-donor-email"
                     />
                   </FormControl>
-                  <FormDescription>For sending a thank you receipt</FormDescription>
+                  <FormDescription>
+                    {isInKind 
+                      ? "Required to send the IRS-compliant in-kind donation receipt"
+                      : "For sending a thank you receipt"}
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
             />
 
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="amount"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Amount *</FormLabel>
-                    <FormControl>
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg">$</span>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          placeholder="100.00"
-                          {...field}
-                          data-testid="input-amount"
-                        />
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+            {isInKind && (
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="donorAddress"
+                    render={({ field }) => (
+                      <FormItem className="col-span-2">
+                        <FormLabel>Street Address</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="123 Main St"
+                            {...field}
+                            data-testid="input-donor-address"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="donorCity"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>City</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="City"
+                            {...field}
+                            data-testid="input-donor-city"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <FormField
+                      control={form.control}
+                      name="donorState"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>State</FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder="TX"
+                              {...field}
+                              data-testid="input-donor-state"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="donorZip"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>ZIP</FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder="12345"
+                              {...field}
+                              data-testid="input-donor-zip"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
 
+                <FormField
+                  control={form.control}
+                  name="description"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Description of Donated Items/Services *</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          placeholder="e.g., Large wire dog crate, 5 bags of premium dog food, veterinary exam services"
+                          className="resize-none"
+                          rows={3}
+                          {...field}
+                          data-testid="textarea-description"
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        This description will appear on the tax receipt
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="donorStatedValue"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Donor's Stated Value</FormLabel>
+                        <FormControl>
+                          <div className="flex items-center gap-2">
+                            <span className="text-muted-foreground">$</span>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              placeholder="0.00"
+                              {...field}
+                              data-testid="input-donor-stated-value"
+                            />
+                          </div>
+                        </FormControl>
+                        <FormDescription className="text-xs">
+                          For internal records only
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="estimatedValue"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Rescue's Estimated Value</FormLabel>
+                        <FormControl>
+                          <div className="flex items-center gap-2">
+                            <span className="text-muted-foreground">$</span>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              placeholder="0.00"
+                              {...field}
+                              data-testid="input-estimated-value"
+                            />
+                          </div>
+                        </FormControl>
+                        <FormDescription className="text-xs">
+                          For internal accounting
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </>
+            )}
+
+            {isCashOrCheck && (
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="amount"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Amount *</FormLabel>
+                      <FormControl>
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">$</span>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            placeholder="100.00"
+                            {...field}
+                            data-testid="input-amount"
+                          />
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="donationDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Date *</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="date"
+                          {...field}
+                          data-testid="input-donation-date"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            )}
+
+            {isInKind && (
               <FormField
                 control={form.control}
                 name="donationDate"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Date *</FormLabel>
+                    <FormLabel>Date Received *</FormLabel>
                     <FormControl>
                       <Input
                         type="date"
@@ -207,42 +477,9 @@ export function RecordOfflineDonationDialog({
                   </FormItem>
                 )}
               />
-            </div>
+            )}
 
-            <FormField
-              control={form.control}
-              name="paymentMethod"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Payment Method *</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger data-testid="select-payment-method">
-                        <SelectValue placeholder="Select method" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="cash">
-                        <div className="flex items-center gap-2">
-                          <Banknote className="h-4 w-4" />
-                          Cash
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="check">
-                        <div className="flex items-center gap-2">
-                          <CreditCard className="h-4 w-4" />
-                          Check
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="other">Other</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            {paymentMethod === "check" && (
+            {donationType === "check" && (
               <FormField
                 control={form.control}
                 name="checkNumber"
@@ -267,10 +504,10 @@ export function RecordOfflineDonationDialog({
               name="notes"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Notes (Optional)</FormLabel>
+                  <FormLabel>Internal Notes (Optional)</FormLabel>
                   <FormControl>
                     <Textarea
-                      placeholder="Any additional notes about this donation..."
+                      placeholder="Any internal notes about this donation..."
                       className="resize-none"
                       rows={2}
                       {...field}

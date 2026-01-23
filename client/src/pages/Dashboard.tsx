@@ -4,7 +4,7 @@ import StatsCard from "@/components/StatsCard";
 import { OnboardingChecklist } from "@/components/OnboardingChecklist";
 import { FloatingActionButton } from "@/components/FloatingActionButton";
 import { RecordOfflineDonationDialog } from "@/components/RecordOfflineDonationDialog";
-import { Heart, FileText, Users, DollarSign, Package, MessageSquare, PawPrint, AlertTriangle, Calendar, Pill, Clock, Home, Loader2, AlertCircle, Mail } from "lucide-react";
+import { Heart, FileText, Users, DollarSign, Package, MessageSquare, PawPrint, AlertTriangle, Calendar, Pill, Clock, Home, Loader2, AlertCircle, Mail, Gift } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -98,6 +98,8 @@ export default function Dashboard() {
       pendingApplicationsTrend: { change: number; isPositive: boolean };
       activeVolunteers: number;
       donationsThisMonth: number;
+      cashRevenueThisMonth: number;
+      inKindRevenueThisMonth: number;
       donationsThisMonthTrend: { change: number; isPositive: boolean };
       totalKennels: number;
       occupiedKennels: number;
@@ -286,12 +288,19 @@ export default function Dashboard() {
       color: 'blue' as const,
     },
     { 
-      title: "Donations This Month", 
-      value: `$${statsData.stats.donationsThisMonth.toLocaleString()}`, 
+      title: "Cash Revenue", 
+      value: `$${((statsData.stats.cashRevenueThisMonth || statsData.stats.donationsThisMonth || 0) / 100).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`, 
       icon: DollarSign,
       trend: statsData.stats.donationsThisMonthTrend,
       color: 'amber' as const,
     },
+    // Only show In-Kind Revenue tile if there's in-kind revenue
+    ...(statsData.stats.inKindRevenueThisMonth > 0 ? [{
+      title: "In-Kind Revenue (Est.)",
+      value: `$${(statsData.stats.inKindRevenueThisMonth / 100).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`,
+      icon: Gift,
+      color: 'purple' as const,
+    }] : []),
   ] : [];
 
   // Filter upcoming events (next 3)

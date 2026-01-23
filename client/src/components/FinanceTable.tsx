@@ -16,18 +16,20 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 
+type DonationType = 'cash' | 'check' | 'in_kind' | 'in_kind_goods' | 'in_kind_services';
+
 interface Donation {
   id: string;
   donorName: string;
   donorEmail?: string;
   amount: number;
-  donationType?: 'cash' | 'in_kind';
+  donationType?: DonationType;
   description?: string;
+  estimatedValue?: number;
   date: string;
   source: string;
   receiptNumber?: string;
   receiptSentAt?: string;
-  // Recurring donation tracking
   isRecurring?: boolean;
   recurringFrequency?: 'monthly' | 'quarterly' | 'yearly';
   recurringStatus?: 'active' | 'paused' | 'cancelled';
@@ -66,7 +68,7 @@ export default function FinanceTable({ donations, expenditures, grants, onAddDon
     amount: "", 
     date: "", 
     source: "Manual Entry",
-    donationType: "cash" as 'cash' | 'in_kind',
+    donationType: "cash" as DonationType,
     description: ""
   });
   const [expenditureForm, setExpenditureForm] = useState({ vendor: "", amount: "", date: "", category: "", grantId: "" });
@@ -76,8 +78,18 @@ export default function FinanceTable({ donations, expenditures, grants, onAddDon
   const [sendingReceiptId, setSendingReceiptId] = useState<string | null>(null);
   const [downloadingReceiptId, setDownloadingReceiptId] = useState<string | null>(null);
 
+  // Helper to check if a donation is in-kind
+  const isInKindDonation = (type?: DonationType) => 
+    type === 'in_kind' || type === 'in_kind_goods' || type === 'in_kind_services';
+  
   // Donations are stored in cents, convert to dollars for display
-  const totalDonations = donations.filter(d => d.donationType !== 'in_kind').reduce((sum, d) => sum + d.amount, 0) / 100;
+  // Cash revenue = cash + check donations
+  const cashDonations = donations.filter(d => !isInKindDonation(d.donationType));
+  const inKindDonations = donations.filter(d => isInKindDonation(d.donationType));
+  
+  const totalCashDonations = cashDonations.reduce((sum, d) => sum + d.amount, 0) / 100;
+  const totalInKindDonations = inKindDonations.reduce((sum, d) => sum + (d.estimatedValue || 0), 0) / 100;
+  const totalDonations = totalCashDonations; // For backwards compatibility
   const totalExpenditures = expenditures.reduce((sum, e) => sum + e.amount, 0);
   
   // Calculate recurring donation stats (active recurring donors only for projected revenue)
@@ -160,18 +172,21 @@ export default function FinanceTable({ donations, expenditures, grants, onAddDon
 
   const handleAddDonation = () => {
     if (donationForm.donorName && donationForm.date) {
-      if (donationForm.donationType === 'cash' && !donationForm.amount) {
+      const isCashType = donationForm.donationType === 'cash' || donationForm.donationType === 'check';
+      const isInKindType = donationForm.donationType === 'in_kind_goods' || donationForm.donationType === 'in_kind_services';
+      
+      if (isCashType && !donationForm.amount) {
         toast({
           title: "Missing amount",
-          description: "Cash donations require an amount.",
+          description: "Cash and check donations require an amount.",
           variant: "destructive",
         });
         return;
       }
-      if (donationForm.donationType === 'in_kind' && !donationForm.description) {
+      if (isInKindType && !donationForm.description) {
         toast({
           title: "Missing description",
-          description: "In-kind donations require a description of items.",
+          description: "In-kind donations require a description of items or services.",
           variant: "destructive",
         });
         return;
@@ -180,7 +195,7 @@ export default function FinanceTable({ donations, expenditures, grants, onAddDon
       onAddDonation?.({
         donorName: donationForm.donorName,
         donorEmail: donationForm.donorEmail,
-        amount: donationForm.donationType === 'cash' ? Math.round(parseFloat(donationForm.amount) * 100) : 0, // Convert dollars to cents
+        amount: (donationForm.donationType === 'cash' || donationForm.donationType === 'check') ? Math.round(parseFloat(donationForm.amount) * 100) : 0, // Convert dollars to cents
         date: donationForm.date,
         source: donationForm.source,
         donationType: donationForm.donationType,
@@ -301,10 +316,22 @@ export default function FinanceTable({ donations, expenditures, grants, onAddDon
                             Cash Donation
                           </div>
                         </SelectItem>
-                        <SelectItem value="in_kind">
+                        <SelectItem value="check">
+                          <div className="flex items-center gap-2">
+                            <FileText className="h-4 w-4" />
+                            Check
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="in_kind_goods">
+                          <div className="flex items-center gap-2">
+                            <Package className="h-4 w-4" />
+                            In-Kind Goods
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="in_kind_services">
                           <div className="flex items-center gap-2">
                             <Gift className="h-4 w-4" />
-                            In-Kind Donation
+                            In-Kind Services
                           </div>
                         </SelectItem>
                       </SelectContent>
@@ -328,7 +355,7 @@ export default function FinanceTable({ donations, expenditures, grants, onAddDon
                       data-testid="input-donor-email"
                     />
                   </div>
-                  {donationForm.donationType === 'cash' ? (
+                  {(donationForm.donationType === 'cash' || donationForm.donationType === 'check') ? (
                     <div>
                       <Label>Amount</Label>
                       <Input
@@ -341,11 +368,13 @@ export default function FinanceTable({ donations, expenditures, grants, onAddDon
                     </div>
                   ) : (
                     <div>
-                      <Label>Items Donated</Label>
+                      <Label>{donationForm.donationType === 'in_kind_services' ? 'Services Provided' : 'Items Donated'}</Label>
                       <Textarea
                         value={donationForm.description}
                         onChange={(e) => setDonationForm({ ...donationForm, description: e.target.value })}
-                        placeholder="Describe the items donated (e.g., 50 lbs dog food, 10 pet blankets)"
+                        placeholder={donationForm.donationType === 'in_kind_services' 
+                          ? "Describe the services provided (e.g., 4 hours veterinary care, professional grooming)"
+                          : "Describe the items donated (e.g., 50 lbs dog food, 10 pet blankets)"}
                         data-testid="input-description"
                       />
                       <p className="text-xs text-muted-foreground mt-1">
@@ -398,9 +427,15 @@ export default function FinanceTable({ donations, expenditures, grants, onAddDon
                         </TableCell>
                         <TableCell>
                           <div className="flex flex-wrap gap-1">
-                            <Badge variant={donation.donationType === 'in_kind' ? 'secondary' : 'default'} className="text-xs">
-                              {donation.donationType === 'in_kind' ? (
+                            <Badge variant={isInKindDonation(donation.donationType) ? 'secondary' : 'default'} className="text-xs">
+                              {donation.donationType === 'in_kind_goods' ? (
+                                <><Package className="h-3 w-3 mr-1" />In-Kind Goods</>
+                              ) : donation.donationType === 'in_kind_services' ? (
+                                <><Gift className="h-3 w-3 mr-1" />In-Kind Services</>
+                              ) : donation.donationType === 'in_kind' ? (
                                 <><Gift className="h-3 w-3 mr-1" />In-Kind</>
+                              ) : donation.donationType === 'check' ? (
+                                <><FileText className="h-3 w-3 mr-1" />Check</>
                               ) : (
                                 <><DollarSign className="h-3 w-3 mr-1" />Cash</>
                               )}
@@ -420,8 +455,13 @@ export default function FinanceTable({ donations, expenditures, grants, onAddDon
                           </div>
                         </TableCell>
                         <TableCell>
-                          {donation.donationType === 'in_kind' ? (
-                            <span className="text-sm">{donation.description || 'Items donated'}</span>
+                          {isInKindDonation(donation.donationType) ? (
+                            <div className="flex flex-col">
+                              <span className="text-sm">{donation.description || 'Items donated'}</span>
+                              {donation.estimatedValue ? (
+                                <span className="text-xs text-muted-foreground">Est. value: ${(donation.estimatedValue / 100).toLocaleString()}</span>
+                              ) : null}
+                            </div>
                           ) : (
                             <span className="font-medium text-green-600">${(donation.amount / 100).toLocaleString()}</span>
                           )}

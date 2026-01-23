@@ -2523,7 +2523,8 @@ Crawl-delay: 1
       const [
         animals,
         applications,
-        currentMonthDonations,
+        currentMonthCashDonations,
+        currentMonthInKindDonations,
         previousMonthDonations,
         volunteers,
         previousMonthAnimals,
@@ -2534,23 +2535,35 @@ Crawl-delay: 1
       ] = await Promise.all([
         getAnimalsByTenant(req.tenant!.id),
         getApplicationsByTenant(req.tenant!.id),
-        // Current month donations
+        // Current month CASH donations (cash and check)
         db.select({ total: sql<number>`COALESCE(SUM(CAST(${donations.amount} AS NUMERIC)), 0)` })
           .from(donations)
           .where(
             and(
               eq(donations.tenantId, req.tenant!.id),
-              gte(donations.date, currentMonthStart)
+              gte(donations.date, currentMonthStart),
+              sql`${donations.donationType} IN ('cash', 'check')`
             )
           ),
-        // Previous month donations
+        // Current month IN-KIND donations (estimated value)
+        db.select({ total: sql<number>`COALESCE(SUM(CAST(${donations.estimatedValue} AS NUMERIC)), 0)` })
+          .from(donations)
+          .where(
+            and(
+              eq(donations.tenantId, req.tenant!.id),
+              gte(donations.date, currentMonthStart),
+              sql`${donations.donationType} IN ('in_kind', 'in_kind_goods', 'in_kind_services')`
+            )
+          ),
+        // Previous month donations (all types for trend comparison)
         db.select({ total: sql<number>`COALESCE(SUM(CAST(${donations.amount} AS NUMERIC)), 0)` })
           .from(donations)
           .where(
             and(
               eq(donations.tenantId, req.tenant!.id),
               gte(donations.date, previousMonthStart),
-              lte(donations.date, previousMonthEnd)
+              lte(donations.date, previousMonthEnd),
+              sql`${donations.donationType} IN ('cash', 'check')`
             )
           ),
         // Volunteers
@@ -2614,7 +2627,9 @@ Crawl-delay: 1
       const currentAnimalsInCare = animals.filter(a => a.status === 'available' || a.status === 'foster').length;
       const currentPendingApplications = applications.filter(a => a.stage === 'new' || a.stage === 'screening').length;
       const currentActiveVolunteers = volunteers.length;
-      const currentDonationsThisMonth = Number(currentMonthDonations[0]?.total || 0);
+      const currentCashDonationsThisMonth = Number(currentMonthCashDonations[0]?.total || 0);
+      const currentInKindDonationsThisMonth = Number(currentMonthInKindDonations[0]?.total || 0);
+      const currentDonationsThisMonth = currentCashDonationsThisMonth; // For backwards compatibility
 
       // Calculate kennel occupancy (total units from kennel_rows capacity)
       const totalKennels = kennelCapacityResult[0]?.totalCapacity || 0;
@@ -2653,7 +2668,9 @@ Crawl-delay: 1
         pendingApplications: currentPendingApplications,
         pendingApplicationsTrend: calculateTrend(currentPendingApplications, previousPendingApplications),
         activeVolunteers: currentActiveVolunteers,
-        donationsThisMonth: currentDonationsThisMonth,
+        donationsThisMonth: currentDonationsThisMonth, // For backwards compatibility (cash only)
+        cashRevenueThisMonth: currentCashDonationsThisMonth, // Cash and check donations
+        inKindRevenueThisMonth: currentInKindDonationsThisMonth, // In-kind donations (estimated value)
         donationsThisMonthTrend: calculateTrend(currentDonationsThisMonth, previousDonationsLastMonth),
         totalKennels,
         occupiedKennels,
@@ -9915,18 +9932,25 @@ View this submission in Custom Forms > ${form.name} > Submissions
 
   /**
    * POST /api/donations/offline
-   * Quick record of offline donation (cash, check, other) - email optional
+   * Record offline donation (cash, check, in-kind goods/services) with auto-contact creation
    */
   app.post('/api/donations/offline', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
     try {
-      const { donations, donors } = await import('@shared/schema');
-      const { eq, and } = await import('drizzle-orm');
+      const { donations, donors, contacts } = await import('@shared/schema');
+      const { eq, and, sql } = await import('drizzle-orm');
       
       const offlineDonationSchema = z.object({
         donorName: z.string().min(1),
         donorEmail: z.string().email().nullable().optional(),
-        amount: z.number().positive(),
-        paymentMethod: z.enum(['cash', 'check', 'other']),
+        donorAddress: z.string().nullable().optional(),
+        donorCity: z.string().nullable().optional(),
+        donorState: z.string().nullable().optional(),
+        donorZip: z.string().nullable().optional(),
+        donationType: z.enum(['cash', 'check', 'in_kind_goods', 'in_kind_services']),
+        amount: z.number().positive().nullable().optional(),
+        description: z.string().nullable().optional(),
+        donorStatedValue: z.number().nullable().optional(),
+        estimatedValue: z.number().nullable().optional(),
         checkNumber: z.string().nullable().optional(),
         notes: z.string().nullable().optional(),
         donationDate: z.string().transform(s => new Date(s)),
@@ -9934,13 +9958,28 @@ View this submission in Custom Forms > ${form.name} > Submissions
       
       const data = offlineDonationSchema.parse(req.body);
       
-      // Convert dollars to cents for storage
-      const amountInCents = Math.round(data.amount * 100);
+      const isCashOrCheck = data.donationType === 'cash' || data.donationType === 'check';
+      const isInKind = data.donationType === 'in_kind_goods' || data.donationType === 'in_kind_services';
+      
+      // Validate required fields based on type
+      if (isCashOrCheck && (!data.amount || data.amount <= 0)) {
+        return res.status(400).json({ error: 'Amount is required for cash/check donations' });
+      }
+      if (isInKind && !data.description) {
+        return res.status(400).json({ error: 'Description is required for in-kind donations' });
+      }
+      
+      // Convert dollars to cents for storage (only for cash amounts)
+      const amountInCents = data.amount ? Math.round(data.amount * 100) : null;
+      const donorStatedValueCents = data.donorStatedValue ? Math.round(data.donorStatedValue * 100) : null;
+      const estimatedValueCents = data.estimatedValue ? Math.round(data.estimatedValue * 100) : null;
       
       let donorId: string | null = null;
+      let contactId: string | null = null;
       
-      // If email provided, find or create donor
+      // If email provided, find or create donor and contact
       if (data.donorEmail) {
+        // Handle donors table
         let [existingDonor] = await db.select()
           .from(donors)
           .where(and(
@@ -9948,50 +9987,116 @@ View this submission in Custom Forms > ${form.name} > Submissions
             eq(donors.email, data.donorEmail)
           ));
         
+        const donationAmount = isCashOrCheck && amountInCents ? amountInCents : 0;
+        
         if (!existingDonor) {
           [existingDonor] = await db.insert(donors)
             .values({
               tenantId: req.tenant!.id,
               email: data.donorEmail,
               name: data.donorName,
-              totalDonated: amountInCents,
+              totalDonated: donationAmount,
               lastDonationDate: data.donationDate,
             })
             .returning();
-        } else {
+        } else if (isCashOrCheck && amountInCents) {
           await db.update(donors)
             .set({
-              totalDonated: existingDonor.totalDonated + amountInCents,
+              totalDonated: existingDonor.totalDonated + donationAmount,
               lastDonationDate: data.donationDate,
             })
             .where(eq(donors.id, existingDonor.id));
         }
         donorId = existingDonor.id;
+        
+        // Handle contacts table - auto-create/update contact
+        let [existingContact] = await db.select()
+          .from(contacts)
+          .where(and(
+            eq(contacts.tenantId, req.tenant!.id),
+            eq(contacts.email, data.donorEmail)
+          ));
+        
+        if (!existingContact) {
+          // Create new contact with donation source
+          const fullAddress = [data.donorAddress, data.donorCity, data.donorState, data.donorZip]
+            .filter(Boolean)
+            .join(', ');
+          
+          [existingContact] = await db.insert(contacts)
+            .values({
+              tenantId: req.tenant!.id,
+              name: data.donorName,
+              email: data.donorEmail,
+              address: fullAddress || null,
+              source: ['donation'],
+              totalDonated: donationAmount,
+              donationCount: 1,
+              lastDonationDate: data.donationDate,
+            })
+            .returning();
+        } else {
+          // Update existing contact - add donation source if not present, update stats
+          const currentSources = existingContact.source || [];
+          const updatedSources = currentSources.includes('donation') 
+            ? currentSources 
+            : [...currentSources, 'donation'];
+          
+          await db.update(contacts)
+            .set({
+              source: updatedSources,
+              totalDonated: (existingContact.totalDonated || 0) + donationAmount,
+              donationCount: (existingContact.donationCount || 0) + 1,
+              lastDonationDate: data.donationDate,
+              updatedAt: new Date(),
+            })
+            .where(eq(contacts.id, existingContact.id));
+        }
+        contactId = existingContact.id;
       }
       
-      // Build notes with payment method info
-      let fullNotes = data.paymentMethod === 'check' && data.checkNumber 
-        ? `Check #${data.checkNumber}` 
-        : data.paymentMethod.charAt(0).toUpperCase() + data.paymentMethod.slice(1);
-      if (data.notes) {
-        fullNotes += ` - ${data.notes}`;
+      // Build notes/message
+      let message = data.notes || '';
+      if (data.donationType === 'check' && data.checkNumber) {
+        message = `Check #${data.checkNumber}${message ? ' - ' + message : ''}`;
       }
+      
+      // Determine payment method for storage
+      const paymentMethod = isCashOrCheck ? data.donationType : null;
       
       // Create donation record
-      // Note: donorEmail is NOT NULL in schema, use empty string if not provided
       const [donation] = await db.insert(donations)
         .values({
           tenantId: req.tenant!.id,
           donorId: donorId,
+          contactId: contactId,
           donorName: data.donorName,
           donorEmail: data.donorEmail || '',
-          donationType: 'cash',
+          donorAddress: data.donorAddress || null,
+          donorCity: data.donorCity || null,
+          donorState: data.donorState || null,
+          donorZip: data.donorZip || null,
+          donationType: data.donationType,
           amount: amountInCents,
-          message: fullNotes,
-          source: 'offline',
+          description: data.description || null,
+          donorStatedValue: donorStatedValueCents,
+          estimatedValue: estimatedValueCents,
+          paymentMethod: paymentMethod,
+          checkNumber: data.checkNumber || null,
+          message: message || null,
+          source: 'manual',
           date: data.donationDate,
         })
         .returning();
+      
+      // Build activity log description
+      let activityDescription: string;
+      if (isInKind) {
+        const valueNote = estimatedValueCents ? ` (est. $${(estimatedValueCents / 100).toFixed(2)})` : '';
+        activityDescription = `recorded in-kind ${data.donationType === 'in_kind_goods' ? 'goods' : 'services'} donation from ${data.donorName}: ${data.description?.substring(0, 50)}${valueNote}`;
+      } else {
+        activityDescription = `recorded $${(amountInCents! / 100).toFixed(2)} ${data.donationType} donation from ${data.donorName}`;
+      }
       
       // Log activity
       try {
@@ -10002,15 +10107,21 @@ View this submission in Custom Forms > ${form.name} > Submissions
           entityType: 'Donation',
           entityId: donation.id,
           action: 'created',
-          description: `recorded $${data.amount.toFixed(2)} ${data.paymentMethod} donation from ${data.donorName}`,
+          description: activityDescription,
           category: 'finance',
-          metadata: { paymentMethod: data.paymentMethod, amount: amountInCents, checkNumber: data.checkNumber }
+          metadata: { 
+            donationType: data.donationType,
+            amount: amountInCents, 
+            estimatedValue: estimatedValueCents,
+            checkNumber: data.checkNumber,
+            contactCreated: !!contactId
+          }
         });
       } catch (logError) {
         console.error('Failed to log donation activity:', logError);
       }
       
-      res.json({ success: true, donation });
+      res.json({ success: true, donation, contactId });
     } catch (error) {
       next(error);
     }
