@@ -36,7 +36,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, ChevronLeft, ChevronRight, Plus, Edit2, Trash2, MapPin, Clock, Printer, Share2, Download, Copy, Mail, MessageSquare, Facebook, Video, UserCheck, MessageCircle } from "lucide-react";
+import { Loader2, ChevronLeft, ChevronRight, Plus, Edit2, Trash2, MapPin, Clock, Printer, Share2, Download, Copy, Mail, MessageSquare, Facebook, Video, UserCheck, MessageCircle, Check } from "lucide-react";
 import { SiMessenger, SiWhatsapp } from "react-icons/si";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { EventFormSettings } from "@shared/schema";
@@ -416,30 +416,41 @@ export default function CalendarViewPage() {
                   <div>
                     <h3 className="font-semibold mb-3">Calendars</h3>
                     <div className="space-y-2">
-                      {calendarsData?.calendars.map((calendar) => (
-                        <button
-                          key={calendar.id}
-                          onClick={() => toggleCalendarFilter(calendar.id)}
-                          className="w-full flex items-center gap-2 p-2 rounded-md hover-elevate active-elevate-2 text-left"
-                          data-testid={`button-toggle-calendar-${calendar.id}`}
-                        >
-                          <div
-                            className="w-4 h-4 rounded"
-                            style={{
-                              backgroundColor: calendar.color,
-                              opacity: selectedCalendars.size === 0 || selectedCalendars.has(calendar.id) ? 1 : 0.3,
-                            }}
-                          />
-                          <span className="text-sm flex-1">{calendar.name}</span>
-                          {(calendar.canAdd || calendar.canEdit || calendar.canDelete) && (
-                            <div className="flex gap-0.5">
-                              {calendar.canAdd && <Badge variant="secondary" className="text-xs px-1" title="Can add events">A</Badge>}
-                              {calendar.canEdit && <Badge variant="secondary" className="text-xs px-1" title="Can edit events">E</Badge>}
-                              {calendar.canDelete && <Badge variant="secondary" className="text-xs px-1" title="Can delete events">D</Badge>}
+                      {calendarsData?.calendars.map((calendar) => {
+                        const isSelected = selectedCalendars.size === 0 || selectedCalendars.has(calendar.id);
+                        return (
+                          <button
+                            key={calendar.id}
+                            onClick={() => toggleCalendarFilter(calendar.id)}
+                            className={`w-full flex items-center gap-2 p-2 rounded-md hover-elevate active-elevate-2 text-left transition-all ${
+                              isSelected 
+                                ? 'bg-primary/10 ring-2 ring-primary/50 ring-inset' 
+                                : 'opacity-60'
+                            }`}
+                            data-testid={`button-toggle-calendar-${calendar.id}`}
+                          >
+                            <div
+                              className="w-4 h-4 rounded flex items-center justify-center shrink-0"
+                              style={{
+                                backgroundColor: isSelected ? calendar.color : 'transparent',
+                                border: isSelected ? 'none' : `2px solid ${calendar.color}`,
+                              }}
+                            >
+                              {isSelected && (
+                                <Check className="h-3 w-3 text-white" strokeWidth={3} />
+                              )}
                             </div>
-                          )}
-                        </button>
-                      ))}
+                            <span className={`text-sm flex-1 ${isSelected ? 'font-medium' : ''}`}>{calendar.name}</span>
+                            {(calendar.canAdd || calendar.canEdit || calendar.canDelete) && (
+                              <div className="flex gap-0.5">
+                                {calendar.canAdd && <Badge variant="secondary" className="text-xs px-1" title="Can add events">A</Badge>}
+                                {calendar.canEdit && <Badge variant="secondary" className="text-xs px-1" title="Can edit events">E</Badge>}
+                                {calendar.canDelete && <Badge variant="secondary" className="text-xs px-1" title="Can delete events">D</Badge>}
+                              </div>
+                            )}
+                          </button>
+                        );
+                      })}
                       {calendarsData?.calendars.length === 0 && (
                         <p className="text-sm text-muted-foreground">No calendars available</p>
                       )}
@@ -457,6 +468,20 @@ export default function CalendarViewPage() {
 
               {/* Main calendar view */}
               <div className="lg:col-span-3 print:col-span-full">
+                {/* Print-only calendar header with name(s) */}
+                <div className="hidden print:block mb-4 text-center">
+                  <h1 className="text-2xl font-bold">
+                    {(() => {
+                      const selected = selectedCalendars.size > 0
+                        ? calendarsData?.calendars.filter(c => selectedCalendars.has(c.id))
+                        : calendarsData?.calendars;
+                      if (!selected || selected.length === 0) return 'Calendar';
+                      if (selected.length === 1) return selected[0].name;
+                      return selected.map(c => c.name).join(' & ');
+                    })()}
+                  </h1>
+                  <p className="text-muted-foreground">{format(currentMonth, "MMMM yyyy")}</p>
+                </div>
                 <Card className="overflow-hidden print:shadow-none print:border-0">
                   {/* Themed Month Header */}
                   {(() => {
@@ -1261,7 +1286,16 @@ export default function CalendarViewPage() {
       <Dialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Share Calendar</DialogTitle>
+            <DialogTitle>
+              Share: {(() => {
+                const selected = selectedCalendars.size > 0
+                  ? calendarsData?.calendars.filter(c => selectedCalendars.has(c.id))
+                  : calendarsData?.calendars;
+                if (!selected || selected.length === 0) return 'Calendar';
+                if (selected.length === 1) return selected[0].name;
+                return `${selected.length} Calendars`;
+              })()}
+            </DialogTitle>
             <DialogDescription>
               Share or export your calendar in multiple formats
             </DialogDescription>
