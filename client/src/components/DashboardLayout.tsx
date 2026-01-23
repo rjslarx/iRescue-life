@@ -85,14 +85,14 @@ export default function DashboardLayout({ children, title, description, actions,
 
   return (
     <SidebarProvider style={style as React.CSSProperties}>
-      <div className="flex h-screen w-full">
+      <div className="flex h-screen w-full overflow-x-hidden">
         <AppSidebar 
           rescueName={rescueName}
           userName={user?.fullName || "User"}
           userRole={(user?.activeRole || "staff") as "admin" | "board_member" | "staff" | "foster" | "volunteer"}
         />
-        <div className="flex flex-col flex-1">
-          <header className="flex items-center justify-between gap-4 border-b p-4">
+        <div className="flex flex-col flex-1 min-w-0 overflow-x-hidden">
+          <header className="flex flex-wrap items-center justify-between gap-4 border-b p-4">
             <div className="flex items-center gap-4 flex-1 min-w-0">
               <SidebarTrigger data-testid="button-sidebar-toggle" />
               {breadcrumbs && breadcrumbs.length > 0 ? (

@@ -385,7 +385,7 @@ function AnimalForm({
     <Form {...form}>
       <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
         {/* Basic Info Section - Using Petfinder-compliant fields */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <FormField
             control={form.control}
             name="name"
@@ -436,7 +436,7 @@ function AnimalForm({
         </div>
 
         {/* Breed Selection */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <FormField
             control={form.control}
             name="petfinderBreed"
@@ -572,7 +572,7 @@ function AnimalForm({
         </div>
 
         {/* Size & Gender */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <FormField
             control={form.control}
             name="petfinderSize"
@@ -627,7 +627,7 @@ function AnimalForm({
         </div>
 
         {/* Age Category & Specific Age */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <FormField
             control={form.control}
             name="petfinderAge"
@@ -672,7 +672,7 @@ function AnimalForm({
         {/* Medical Info Section */}
         <div className="border-t pt-4">
           <h3 className="text-sm font-medium mb-3">Medical Information</h3>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <FormField
               control={form.control}
               name="neuterStatus"
@@ -716,7 +716,7 @@ function AnimalForm({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4 mt-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
             <FormField
               control={form.control}
               name="microchipNumber"
@@ -735,7 +735,7 @@ function AnimalForm({
           {/* Cascading Kennel Location Selector */}
           <div className="mt-4">
             <Label className="text-sm font-medium">Kennel Location</Label>
-            <div className="grid grid-cols-3 gap-2 mt-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2">
               {/* Building Select */}
               <div>
                 <Label className="text-xs text-muted-foreground">Building</Label>
@@ -1025,7 +1025,7 @@ function AnimalForm({
         <div className="border-t pt-4">
           <h3 className="text-sm font-medium mb-3">Environment Compatibility</h3>
           <p className="text-sm text-muted-foreground mb-3">These fields are used by Petfinder to help match pets with families.</p>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <FormField
               control={form.control}
               name="childFriendly"
@@ -1220,7 +1220,7 @@ function AnimalForm({
         {/* Health & Training Attributes */}
         <div className="border-t pt-4">
           <h3 className="text-sm font-medium mb-3">Health & Training</h3>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
             <FormField
               control={form.control}
               name="shotsCurrent"
@@ -1928,10 +1928,10 @@ export default function AnimalsPage() {
               <div className="space-y-6">
                 {/* Filter Controls */}
                 {allActiveAnimals.length > 0 && (
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-3">
                     <label className="text-sm font-medium">Filter by Status:</label>
                     <Select value={statusFilter} onValueChange={setStatusFilter}>
-                      <SelectTrigger className="w-48" data-testid="select-status-filter">
+                      <SelectTrigger className="w-48 max-w-full" data-testid="select-status-filter">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -1995,7 +1995,7 @@ export default function AnimalsPage() {
                                     </Badge>
                                   )}
                                 </div>
-                                <CardDescription className="max-w-full overflow-x-auto whitespace-nowrap scrollbar-thin">
+                                <CardDescription className="text-sm break-words">
                                   {animal.breed} • {animal.age}
                                 </CardDescription>
                                 <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
