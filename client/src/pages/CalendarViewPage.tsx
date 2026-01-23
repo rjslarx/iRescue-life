@@ -86,6 +86,7 @@ interface CalendarEvent {
   virtualMeetingProvider?: string | null;
   syncStatus?: string | null;
   syncError?: string | null;
+  volunteerContactId?: string | null;
 }
 
 export default function CalendarViewPage() {
@@ -288,6 +289,7 @@ export default function CalendarViewPage() {
           endTime: editingEvent.endTime,
           location: editingEvent.location || undefined,
           customPageId: editingEvent.customPageId || "",
+          volunteerContactId: editingEvent.volunteerContactId || undefined,
         },
       });
     }

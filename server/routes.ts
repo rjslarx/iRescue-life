@@ -20394,6 +20394,7 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
           syncStatus: calendarEvents.syncStatus,
           syncError: calendarEvents.syncError,
           googleEventId: calendarEvents.googleEventId,
+          volunteerContactId: calendarEvents.volunteerContactId,
         })
         .from(calendarEvents)
         .innerJoin(calendars, eq(calendarEvents.calendarId, calendars.id))
@@ -20515,6 +20516,7 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
         location: z.string().optional(),
         customPageId: z.string().uuid().optional().or(z.literal("")),
         includeMeetLink: z.boolean().optional().default(false),
+        volunteerContactId: z.string().uuid().optional().nullable(),
       });
       
       const validatedData = eventSchema.parse(req.body);
@@ -20741,6 +20743,7 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
         endTime: z.string().datetime().optional(),
         location: z.string().optional(),
         customPageId: z.string().uuid().optional().or(z.literal("")),
+        volunteerContactId: z.string().uuid().optional().nullable(),
       });
 
       const validatedData = updateSchema.parse(req.body);
