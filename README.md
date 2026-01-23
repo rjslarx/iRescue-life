@@ -5,6 +5,7 @@ An open-source animal rescue management platform.
 ## Description
 
 iRescue.life is a comprehensive platform designed to help animal rescue organizations manage their operations efficiently. From intake and medical records to adoptions and volunteer coordination, this platform streamlines the entire rescue workflow.
+This project is tested with BrowserStack.
 
 ## Self-Hosting (Free)
 
