@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Donation Receipt</title>
+    <style>
+        /* BASE STYLES */
+        body {
+            font-family: "Georgia", serif; /* Professional, traditional look */
+            line-height: 1.6;
+            color: #333;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 20px;
+        }
+
+        /* THE PAPER (Letter Size) */
+        .page {
+            background: white;
+            width: 8.5in;
+            height: 11in;
+            margin: 0 auto;
+            padding: 1in; /* Standard 1-inch margins */
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            box-sizing: border-box;
+            position: relative;
+        }
+
+        /* HEADER */
+        .header {
+            text-align: center;
+            border-bottom: 2px solid #2c3e50;
+            padding-bottom: 20px;
+            margin-bottom: 40px;
+        }
+        .org-name {
+            font-size: 24pt;
+            font-weight: bold;
+            color: #2c3e50;
+            margin: 0;
+            text-transform: uppercase;
+        }
+        .org-details {
+            font-size: 10pt;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        /* CONTENT */
+        .recipient-block {
+            margin-bottom: 30px;
+        }
+        .date-block {
+            text-align: right;
+            margin-bottom: 20px;
+        }
+        
+        .donation-box {
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .donation-label {
+            font-weight: bold;
+            font-size: 0.9em;
+            color: #555;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .donation-description {
+            font-size: 1.2em;
+            margin-top: 5px;
+            font-style: italic;
+        }
+
+        /* LEGAL FOOTER */
+        .footer {
+            position: absolute;
+            bottom: 1in;
+            left: 1in;
+            right: 1in;
+            text-align: center;
+            font-size: 9pt;
+            color: #777;
+            border-top: 1px solid #eee;
+            padding-top: 10px;
+        }
+
+        /* PRINT BUTTON (Hides on print) */
+        .no-print {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .btn-print {
+            background-color: #2980b9;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-family: sans-serif;
+            font-weight: bold;
+        }
+        .btn-print:hover { background-color: #2c3e50; }
+
+        /* PRINT MEDIA QUERY */
+        @media print {
+            body { background-color: white; padding: 0; }
+            .page { box-shadow: none; margin: 0; width: 100%; height: auto; }
+            .no-print { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="no-print">
+        <button class="btn-print" onclick="window.print()">🖨️ Print Receipt / Save as PDF</button>
+    </div>
+
+    <div class="page">
+        
+        <div class="header">
+            <div class="org-name">{{organization_name}}</div> <div class="org-details">
+                EIN: {{organization_ein}}<br>
+                {{organization_address}}<br>
+                {{organization_city}}, {{organization_state}} {{organization_zip}}
+            </div>
+        </div>
+
+        <div class="date-block">
+            Date: <strong>{{receipt_date}}</strong>
+        </div>
+
+        <div class="recipient-block">
+            <strong>Donated By:</strong><br>
+            {{donor_name}}<br>
+            {{donor_address_line1}}<br>
+            {{donor_city}}, {{donor_state}} {{donor_zip}}
+        </div>
+
+        <p>Dear {{donor_first_name}},</p>
+
+        <p>On behalf of everyone at <strong>{{organization_name}}</strong>, thank you for your generous in-kind contribution. Your support helps us provide essential care, medical treatment, and love to the animals in our rescue.</p>
+
+        <p>We gratefully acknowledge the receipt of the following item(s):</p>
+
+        <div class="donation-box">
+            <div class="donation-label">Description of Donated Goods/Services</div>
+            <div class="donation-description">
+                {{donation_description}} 
+                </div>
+            </div>
+
+        <p>
+            This letter serves as your official receipt for tax deduction purposes. 
+            Please retain this document for your records.
+        </p>
+
+        <br><br>
+        <p>Sincerely,</p>
+        
+        <br>
+        <div style="border-bottom: 1px solid #000; width: 200px; margin-bottom: 5px;"></div>
+        <strong>{{signer_name}}</strong><br>
+        {{signer_title}}
+
+        <div class="footer">
+            <strong>TAX RECEIPT INFORMATION</strong><br>
+            {{organization_name}} is a 501(c)(3) non-profit organization. <br>
+            <strong>No goods or services were provided in exchange for this contribution.</strong>
+            Therefore, the full fair market value of your in-kind donation is tax-deductible to the extent allowed by law.
+        </div>
+
+    </div>
+
+</body>
+</html>
