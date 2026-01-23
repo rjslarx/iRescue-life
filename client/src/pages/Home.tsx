@@ -612,7 +612,7 @@ export default function Home() {
       <section id="donation-section" className="py-12 sm:py-20 bg-primary/5">
         <div className="w-full max-w-7xl mx-auto px-6 sm:px-8">
           {/* Two-column donation section: text left, form right on tablets and larger */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 items-center">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 items-start">
             {/* Left column: Text content */}
             <div className="space-y-4">
               <p className="text-sm font-semibold uppercase tracking-wide text-primary" data-testid="text-donation-label">
@@ -677,7 +677,7 @@ export default function Home() {
               
               {/* Section Image */}
               {(tenant as any)?.donationSection?.sectionImageUrl && (
-                <div className="mt-6" data-testid="donation-section-image-container">
+                <div className="mt-6 flex items-center justify-center" data-testid="donation-section-image-container">
                   <img 
                     src={(tenant as any).donationSection.sectionImageUrl} 
                     alt="Support our mission" 
