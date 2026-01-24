@@ -140,8 +140,10 @@ export default function DashboardLayout({ children, title, description, actions,
               {actions}
             </div>
           </header>
-          <main className="flex-1 overflow-auto p-6">
-            {children}
+          <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6">
+            <div className="w-full min-w-0">
+              {children}
+            </div>
           </main>
         </div>
       </div>

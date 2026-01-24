@@ -18,6 +18,8 @@ import {
   Eye,
   ArrowRight
 } from "lucide-react";
+import MobilePipelineView, { PipelineStage, PipelineCard } from "./MobilePipelineView";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface FosterAgreementStatus {
   status: string;
@@ -40,6 +42,7 @@ interface FosterApplication {
   acceptsMedicalNeeds?: boolean;
   maxAnimals?: number;
   agreementStatus?: FosterAgreementStatus | null;
+  createdAt?: string;
 }
 
 interface FosterKanbanBoardProps {
@@ -50,7 +53,7 @@ interface FosterKanbanBoardProps {
   sendingAgreementId?: string | null;
 }
 
-const stages = [
+const stages: PipelineStage[] = [
   { id: "new_app", label: "New App", color: "bg-blue-500", icon: Clock },
   { id: "interview", label: "Interview", color: "bg-yellow-500", icon: Phone },
   { id: "home_check", label: "Home Check", color: "bg-purple-500", icon: Home },
@@ -123,10 +126,72 @@ export default function FosterKanbanBoard({
   sendingAgreementId 
 }: FosterKanbanBoardProps) {
   const [draggedId, setDraggedId] = useState<string | null>(null);
+  const isMobile = useIsMobile();
 
   const getApplicationsByStage = (stageId: string) => {
     return applications.filter(app => normalizeStage(app.stage) === stageId);
   };
+
+  const appToCard = (app: FosterApplication): PipelineCard => {
+    const badges: Array<{ label: string; variant?: "default" | "secondary" | "outline" | "destructive" }> = [];
+    
+    if (app.agreementStatus) {
+      const statusLabels: Record<string, { label: string; variant: "default" | "secondary" | "outline" }> = {
+        initiated: { label: "Link Sent", variant: "secondary" },
+        awaiting_signature: { label: "Awaiting Signature", variant: "outline" },
+        completed: { label: "Signed", variant: "default" },
+      };
+      const statusInfo = statusLabels[app.agreementStatus.status];
+      if (statusInfo) {
+        badges.push({ label: statusInfo.label, variant: statusInfo.variant });
+      }
+    }
+
+    const stage = normalizeStage(app.stage);
+    if (stage === "active_pool") {
+      if (app.hasFencedYard) badges.push({ label: "Fenced Yard", variant: "outline" });
+      if (app.acceptsPuppies) badges.push({ label: "Puppies", variant: "outline" });
+      if (app.acceptsSeniors) badges.push({ label: "Seniors", variant: "outline" });
+    }
+
+    return {
+      id: app.id,
+      title: app.applicantName,
+      subtitle: app.email,
+      createdAt: app.createdAt,
+      badges: badges.slice(0, 3),
+    };
+  };
+
+  const getCardsByStage = (stageId: string): PipelineCard[] => {
+    return getApplicationsByStage(stageId).map(appToCard);
+  };
+
+  const handleViewCard = (card: PipelineCard) => {
+    const app = applications.find(a => a.id === card.id);
+    if (app && onViewApplication) {
+      onViewApplication(app);
+    }
+  };
+
+  const handleMoveCard = (cardId: string, newStageId: string) => {
+    if (onMoveApplication) {
+      onMoveApplication(cardId, newStageId);
+    }
+  };
+
+  if (isMobile) {
+    return (
+      <MobilePipelineView
+        stages={stages}
+        cards={applications.map(appToCard)}
+        getCardsByStage={getCardsByStage}
+        onMoveCard={onMoveApplication ? handleMoveCard : undefined}
+        onViewCard={onViewApplication ? handleViewCard : undefined}
+        emptyStateText="No applications"
+      />
+    );
+  }
 
   return (
     <div className="w-full">

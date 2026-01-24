@@ -3,8 +3,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Check, CreditCard, FileSignature, Clock, Loader2, DollarSign, X, Banknote } from "lucide-react";
+import { Check, CreditCard, FileSignature, Clock, Loader2, DollarSign, X, Banknote, Eye, ArrowRight } from "lucide-react";
 import { RecordOfflinePaymentDialog } from "./RecordOfflinePaymentDialog";
+import MobilePipelineView, { PipelineStage, PipelineCard } from "./MobilePipelineView";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface CheckoutStatus {
   status: string;
@@ -25,6 +27,7 @@ interface Application {
   checkoutStatus?: CheckoutStatus | null;
   adoptionFeeStatus?: "pending" | "paid" | "waived";
   adoptionFeeAmount?: string;
+  createdAt?: string;
 }
 
 interface KanbanBoardProps {
@@ -32,11 +35,12 @@ interface KanbanBoardProps {
   onMoveApplication?: (applicationId: string, newStage: string) => void;
   onAssignAnimal?: (application: Application) => void;
   onStartCheckout?: (applicationId: string, animalId: string, signerEmail: string, signerName: string) => void;
+  onViewApplication?: (application: Application) => void;
   sendingContractId?: string | null;
-  subscriptionTier?: "free" | "professional"; // Only Professional tier can record offline payments
+  subscriptionTier?: "free" | "professional";
 }
 
-const stages = [
+const stages: PipelineStage[] = [
   { id: "new", label: "New", color: "bg-blue-500" },
   { id: "screening", label: "Screening", color: "bg-yellow-500" },
   { id: "vet_check", label: "Vet Check", color: "bg-purple-500" },
@@ -86,16 +90,80 @@ function AdoptionFeeStatusBadge({ status, amount }: { status: string; amount?: s
   );
 }
 
-export default function KanbanBoard({ applications, onMoveApplication, onAssignAnimal, onStartCheckout, sendingContractId, subscriptionTier }: KanbanBoardProps) {
+export default function KanbanBoard({ applications, onMoveApplication, onAssignAnimal, onStartCheckout, onViewApplication, sendingContractId, subscriptionTier }: KanbanBoardProps) {
   const [offlinePaymentApp, setOfflinePaymentApp] = useState<Application | null>(null);
+  const isMobile = useIsMobile();
   
-  // Only Professional tier can record offline payments (Free tier must use Stripe for platform fee collection)
   const canRecordOfflinePayment = subscriptionTier === "professional";
   const [draggedId, setDraggedId] = useState<string | null>(null);
 
   const getApplicationsByStage = (stageId: string) => {
     return applications.filter(app => app.stage === stageId);
   };
+
+  const appToCard = (app: Application): PipelineCard => {
+    const badges: Array<{ label: string; variant?: "default" | "secondary" | "outline" | "destructive" }> = [];
+    
+    if (app.checkoutStatus) {
+      const statusLabels: Record<string, string> = {
+        created: "Link Sent",
+        awaiting_signature: "Signing",
+        awaiting_payment: "Payment",
+        completed: "Complete",
+      };
+      if (statusLabels[app.checkoutStatus.status]) {
+        badges.push({ label: statusLabels[app.checkoutStatus.status], variant: app.checkoutStatus.status === "completed" ? "default" : "outline" });
+      }
+    }
+    
+    if (app.adoptionFeeStatus && (app.stage === "approved" || app.stage === "adopted")) {
+      if (app.adoptionFeeStatus === "paid") {
+        badges.push({ label: app.adoptionFeeAmount ? `$${parseFloat(app.adoptionFeeAmount).toFixed(0)} Paid` : "Fee Paid", variant: "default" });
+      } else if (app.adoptionFeeStatus === "waived") {
+        badges.push({ label: "Fee Waived", variant: "secondary" });
+      } else if (app.adoptionFeeStatus === "pending") {
+        badges.push({ label: "Fee Pending", variant: "outline" });
+      }
+    }
+
+    return {
+      id: app.id,
+      title: app.applicantName,
+      subtitle: `For: ${app.animalName}`,
+      createdAt: app.createdAt,
+      badges,
+    };
+  };
+
+  const getCardsByStage = (stageId: string): PipelineCard[] => {
+    return getApplicationsByStage(stageId).map(appToCard);
+  };
+
+  const handleViewCard = (card: PipelineCard) => {
+    const app = applications.find(a => a.id === card.id);
+    if (app && onViewApplication) {
+      onViewApplication(app);
+    }
+  };
+
+  const handleMoveCard = (cardId: string, newStageId: string) => {
+    if (onMoveApplication) {
+      onMoveApplication(cardId, newStageId);
+    }
+  };
+
+  if (isMobile) {
+    return (
+      <MobilePipelineView
+        stages={stages}
+        cards={applications.map(appToCard)}
+        getCardsByStage={getCardsByStage}
+        onMoveCard={onMoveApplication ? handleMoveCard : undefined}
+        onViewCard={onViewApplication ? handleViewCard : undefined}
+        emptyStateText="No applications"
+      />
+    );
+  }
 
   return (
     <div className="w-full">

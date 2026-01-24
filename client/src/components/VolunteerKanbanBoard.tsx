@@ -17,6 +17,8 @@ import {
   Eye,
   ArrowRight
 } from "lucide-react";
+import MobilePipelineView, { PipelineStage, PipelineCard } from "./MobilePipelineView";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface WaiverStatus {
   formId?: string;
@@ -34,6 +36,7 @@ interface VolunteerApplication {
   skills?: string;
   holdHarmlessFormId?: string | null;
   holdHarmlessSignedAt?: string | null;
+  createdAt?: string;
 }
 
 interface VolunteerKanbanBoardProps {
@@ -44,7 +47,7 @@ interface VolunteerKanbanBoardProps {
   sendingWaiverId?: string | null;
 }
 
-const stages = [
+const stages: PipelineStage[] = [
   { id: "new_applicant", label: "New Applicant", color: "bg-blue-500", icon: Users },
   { id: "orientation_scheduled", label: "Orientation Scheduled", color: "bg-yellow-500", icon: Calendar },
   { id: "waiver_needed", label: "Waiver Needed", color: "bg-orange-500", icon: FileSignature },
@@ -98,10 +101,68 @@ export default function VolunteerKanbanBoard({
   sendingWaiverId 
 }: VolunteerKanbanBoardProps) {
   const [draggedId, setDraggedId] = useState<string | null>(null);
+  const isMobile = useIsMobile();
 
   const getApplicationsByStage = (stageId: string) => {
     return applications.filter(app => app.pipelineStatus === stageId);
   };
+
+  const appToCard = (app: VolunteerApplication): PipelineCard => {
+    const badges: Array<{ label: string; variant?: "default" | "secondary" | "outline" | "destructive" }> = [];
+    
+    if (app.holdHarmlessFormId) {
+      if (app.holdHarmlessSignedAt) {
+        badges.push({ label: "Waiver Signed", variant: "default" });
+      } else {
+        badges.push({ label: "Awaiting Waiver", variant: "outline" });
+      }
+    }
+
+    if (app.pipelineStatus === "active_pool") {
+      if (app.interests) {
+        const firstInterest = app.interests.split(',')[0]?.trim();
+        if (firstInterest) badges.push({ label: firstInterest, variant: "outline" });
+      }
+    }
+
+    return {
+      id: app.id,
+      title: app.applicantName,
+      subtitle: app.availability ? `Available: ${app.availability}` : app.applicantEmail,
+      createdAt: app.createdAt,
+      badges: badges.slice(0, 3),
+    };
+  };
+
+  const getCardsByStage = (stageId: string): PipelineCard[] => {
+    return getApplicationsByStage(stageId).map(appToCard);
+  };
+
+  const handleViewCard = (card: PipelineCard) => {
+    const app = applications.find(a => a.id === card.id);
+    if (app && onViewApplication) {
+      onViewApplication(app);
+    }
+  };
+
+  const handleMoveCard = (cardId: string, newStageId: string) => {
+    if (onMoveApplication) {
+      onMoveApplication(cardId, newStageId);
+    }
+  };
+
+  if (isMobile) {
+    return (
+      <MobilePipelineView
+        stages={stages}
+        cards={applications.map(appToCard)}
+        getCardsByStage={getCardsByStage}
+        onMoveCard={onMoveApplication ? handleMoveCard : undefined}
+        onViewCard={onViewApplication ? handleViewCard : undefined}
+        emptyStateText="No applications"
+      />
+    );
+  }
 
   return (
     <div className="w-full">
