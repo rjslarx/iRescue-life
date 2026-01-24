@@ -213,16 +213,11 @@ export default function AvailableAnimalsPage() {
       </section>
 
       {/* Adoption Dialog */}
-      <Dialog open={adoptionDialogOpen} onOpenChange={setAdoptionDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          {selectedAnimal && (
-            <PublicAdoptionDialog
-              animal={selectedAnimal}
-              onClose={() => setAdoptionDialogOpen(false)}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
+      <PublicAdoptionDialog
+        animal={selectedAnimal}
+        open={adoptionDialogOpen}
+        onOpenChange={setAdoptionDialogOpen}
+      />
 
       {/* Donation Dialog */}
       <Dialog open={donationDialogOpen} onOpenChange={setDonationDialogOpen}>
