@@ -24,7 +24,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTenant } from "@/contexts/TenantContext";
-import { Plus, Loader2, ExternalLink, Check, Stethoscope, Upload, X, ChevronLeft, ChevronRight, FileText, Pencil, ClipboardList, Calendar, ChevronDown, ChevronUp, Cat, Dog, Camera, Sparkles, Palette, ChevronsUpDown, AlertCircle, Wand2, FileUp, MapPin, Users } from "lucide-react";
+import { Plus, Loader2, ExternalLink, Check, Stethoscope, Upload, X, ChevronLeft, ChevronRight, FileText, Pencil, ClipboardList, Calendar, ChevronDown, ChevronUp, Cat, Dog, Camera, Sparkles, Palette, ChevronsUpDown, AlertCircle, Wand2, FileUp, MapPin, Users, PawPrint } from "lucide-react";
 import { z } from "zod";
 import { cn } from "@/lib/utils";
 import { ObjectUploader } from "@/components/ObjectUploader";
@@ -1894,8 +1894,8 @@ export default function AnimalsPage() {
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button data-testid="button-add-animal">
-              <Plus className="h-4 w-4 sm:mr-2" />
-              <span className="hidden sm:inline">Add Animal</span>
+              <PawPrint className="h-4 w-4 mr-2" />
+              Add Animal
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
