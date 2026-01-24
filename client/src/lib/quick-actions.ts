@@ -13,7 +13,6 @@ import {
   Inbox,
   Kanban,
   UserCheck,
-  MessageSquare,
   type LucideIcon
 } from "lucide-react";
 
@@ -148,23 +147,14 @@ export const ALL_QUICK_ACTIONS: QuickAction[] = [
     href: "/dashboard/calendar",
     actionType: "navigate",
   },
-  {
-    id: "collaboration-hub",
-    label: "Collaboration Hub",
-    description: "Communicate and collaborate with your team",
-    icon: MessageSquare,
-    href: "/dashboard/collaboration",
-    actionType: "navigate",
-  },
 ];
 
 export const DEFAULT_QUICK_ACTIONS = [
   "add-animal",
   "record-donation",
-  "check-inbox",
-  "medical-task",
-  "adoption-applications",
-  "collaboration-hub",
+  "new-application",
+  "add-event",
+  "send-email",
 ];
 
 export function getQuickActionById(id: string): QuickAction | undefined {
