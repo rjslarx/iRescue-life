@@ -7,7 +7,7 @@ import { loginUser, createTenantWithAdmin, createUser } from "./services/auth";
 import { PushNotificationService } from "./services/push-notifications";
 import { db } from "./db";
 import { tenants, users, demoRequests, insertDemoRequestSchema, smsMessageLogs, emailEvents, animals, platformIntegrations, newsletterCampaigns, newsletterSubscribers, happyTails } from "@shared/schema";
-import { eq, and, desc, sql, inArray, lt } from "drizzle-orm";
+import { eq, and, desc, sql, inArray, lt, gte } from "drizzle-orm";
 import { z } from "zod";
 import { authLimiter, signupLimiter, passwordResetLimiter, emailLimiter } from "./config/security";
 import QRCode from "qrcode";
@@ -10180,6 +10180,179 @@ Submitted: ${new Date().toLocaleString()}
       }));
       
       res.json({ fosterAnimals: transformedResults });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * FOSTER PORTAL ENDPOINTS
+   * These endpoints are specifically for the Foster Portal (FosterPortalPage)
+   * They return data in the format expected by the portal frontend
+   */
+
+  /**
+   * GET /api/foster/my-animals
+   * Get animals currently assigned to the logged-in foster user
+   * Returns in Foster Portal format
+   */
+  app.get('/api/foster/my-animals', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { fosterAnimals, animals } = await import('@shared/schema');
+      
+      // Get active foster assignments for this user
+      const myAnimals = await db
+        .select({
+          id: fosterAnimals.id,
+          animalId: animals.id,
+          name: animals.name,
+          species: animals.species,
+          breed: animals.breed,
+          photoUrls: animals.photoUrls,
+          fosterStartDate: fosterAnimals.startDate,
+          sessionId: fosterAnimals.id,
+        })
+        .from(fosterAnimals)
+        .leftJoin(animals, eq(fosterAnimals.animalId, animals.id))
+        .where(
+          and(
+            eq(fosterAnimals.tenantId, req.tenant!.id),
+            eq(fosterAnimals.fosterId, req.user!.id),
+            eq(fosterAnimals.status, 'active')
+          )
+        )
+        .orderBy(desc(fosterAnimals.startDate));
+      
+      // Transform to expected format
+      const result = myAnimals.map(a => ({
+        id: a.animalId,
+        name: a.name || 'Unknown',
+        species: a.species || 'Unknown',
+        breed: a.breed || '',
+        primaryImageUrl: a.photoUrls && a.photoUrls.length > 0 ? a.photoUrls[0] : null,
+        fosterStartDate: a.fosterStartDate?.toISOString() || new Date().toISOString(),
+        sessionId: a.sessionId,
+      }));
+      
+      res.json(result);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/foster/tasks/today
+   * Get today's tasks for the logged-in foster user
+   * Returns foster care tasks like feeding, medication, etc.
+   */
+  app.get('/api/foster/tasks/today', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { fosterAnimals, animals, medicalReminders } = await import('@shared/schema');
+      
+      // Get active foster assignments for this user
+      const myFosterAnimals = await db
+        .select({
+          animalId: animals.id,
+          animalName: animals.name,
+          animalPhoto: animals.photoUrls,
+        })
+        .from(fosterAnimals)
+        .leftJoin(animals, eq(fosterAnimals.animalId, animals.id))
+        .where(
+          and(
+            eq(fosterAnimals.tenantId, req.tenant!.id),
+            eq(fosterAnimals.fosterId, req.user!.id),
+            eq(fosterAnimals.status, 'active')
+          )
+        );
+      
+      const animalIds = myFosterAnimals.map(a => a.animalId).filter(Boolean);
+      
+      // Get medical reminders for today as tasks
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      
+      let tasks: any[] = [];
+      
+      if (animalIds.length > 0) {
+        const reminders = await db
+          .select({
+            id: medicalReminders.id,
+            animalId: medicalReminders.animalId,
+            reminderType: medicalReminders.reminderType,
+            notes: medicalReminders.notes,
+            scheduledDate: medicalReminders.scheduledDate,
+            status: medicalReminders.status,
+          })
+          .from(medicalReminders)
+          .where(
+            and(
+              eq(medicalReminders.tenantId, req.tenant!.id),
+              inArray(medicalReminders.animalId, animalIds as string[]),
+              gte(medicalReminders.scheduledDate, today),
+              lt(medicalReminders.scheduledDate, tomorrow)
+            )
+          );
+        
+        // Transform reminders to tasks
+        tasks = reminders.map(r => {
+          const animal = myFosterAnimals.find(a => a.animalId === r.animalId);
+          return {
+            id: r.id,
+            animalId: r.animalId,
+            animalName: animal?.animalName || 'Unknown',
+            animalPhoto: animal?.animalPhoto && animal.animalPhoto.length > 0 ? animal.animalPhoto[0] : null,
+            taskType: r.reminderType || 'medical',
+            title: r.reminderType || 'Medical Task',
+            description: r.notes,
+            dueDate: r.scheduledDate?.toISOString().split('T')[0] || null,
+            dueTime: r.scheduledDate?.toISOString().split('T')[1]?.slice(0, 5) || null,
+            frequency: 'once',
+            completedAt: r.status === 'completed' ? new Date().toISOString() : null,
+            isActive: r.status !== 'completed',
+          };
+        });
+      }
+      
+      res.json(tasks);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/foster/tasks/:id/complete
+   * Mark a foster task as complete
+   */
+  app.post('/api/foster/tasks/:id/complete', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { medicalReminders } = await import('@shared/schema');
+      const { id } = req.params;
+      const { notes } = req.body;
+      
+      // Update the reminder status to completed
+      const [updated] = await db
+        .update(medicalReminders)
+        .set({
+          status: 'completed',
+          notes: notes || undefined,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(medicalReminders.id, id),
+            eq(medicalReminders.tenantId, req.tenant!.id)
+          )
+        )
+        .returning();
+      
+      if (!updated) {
+        return res.status(404).json({ error: 'Task not found' });
+      }
+      
+      res.json({ success: true, task: updated });
     } catch (error) {
       next(error);
     }
