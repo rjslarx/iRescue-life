@@ -81,7 +81,7 @@ const animalFormSchema = insertAnimalSchema.omit({ tenantId: true }).extend({
   dogFriendly: friendlyStatusEnum.optional(),
   childFriendly: friendlyStatusEnum.optional(),
   photoUrls: z.array(z.string()).optional().default([]),
-  status: z.enum(["available", "pending", "adopted", "foster", "medical_hold", "deceased"]).default("available"),
+  status: z.enum(["available", "pending", "adopted", "foster", "medical_hold", "deceased", "bite_hold", "stray_hold", "transfer_pending"]).default("available"),
   postedToPetfinder: z.boolean().default(false),
   petfinderUrl: z.string().optional().refine((val) => !val || val === '' || z.string().url().safeParse(val).success, {
     message: "Must be a valid URL"
@@ -1114,6 +1114,9 @@ function AnimalForm({
                   <SelectItem value="adopted">Adopted</SelectItem>
                   <SelectItem value="foster">Foster</SelectItem>
                   <SelectItem value="medical_hold">Medical Hold</SelectItem>
+                  <SelectItem value="bite_hold">Bite Hold</SelectItem>
+                  <SelectItem value="stray_hold">Stray Hold</SelectItem>
+                  <SelectItem value="transfer_pending">Transfer Pending</SelectItem>
                 </SelectContent>
               </Select>
               <FormMessage />
@@ -1866,6 +1869,12 @@ export default function AnimalsPage() {
         return "bg-purple-500";
       case "medical_hold":
         return "bg-red-500";
+      case "bite_hold":
+        return "bg-orange-600";
+      case "stray_hold":
+        return "bg-amber-600";
+      case "transfer_pending":
+        return "bg-cyan-600";
       case "deceased":
         return "bg-gray-700";
       default:
@@ -1947,6 +1956,15 @@ export default function AnimalsPage() {
                         </SelectItem>
                         <SelectItem value="medical_hold">
                           Medical Hold ({allActiveAnimals.filter(a => a.status === "medical_hold").length})
+                        </SelectItem>
+                        <SelectItem value="bite_hold">
+                          Bite Hold ({allActiveAnimals.filter(a => a.status === "bite_hold").length})
+                        </SelectItem>
+                        <SelectItem value="stray_hold">
+                          Stray Hold ({allActiveAnimals.filter(a => a.status === "stray_hold").length})
+                        </SelectItem>
+                        <SelectItem value="transfer_pending">
+                          Transfer Pending ({allActiveAnimals.filter(a => a.status === "transfer_pending").length})
                         </SelectItem>
                       </SelectContent>
                     </Select>
