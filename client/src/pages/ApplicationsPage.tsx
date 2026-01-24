@@ -5,6 +5,8 @@ import { AdoptionDialog } from "@/components/AdoptionDialog";
 import { AssignFosterDialog } from "@/components/AssignFosterDialog";
 import { FinalizeAdoptionDialog } from "@/components/FinalizeAdoptionDialog";
 import { ApproveAndSendAgreementDialog } from "@/components/ApproveAndSendAgreementDialog";
+import { ApplicationDetailsDialog } from "@/components/ApplicationDetailsDialog";
+import type { PendingApplication } from "@/components/PendingApplicationsWidget";
 import { useAuth } from "@/contexts/AuthContext";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -32,6 +34,8 @@ export default function ApplicationsPage() {
   const [finalizeDialogOpen, setFinalizeDialogOpen] = useState(false);
   const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
   const [applicationToApprove, setApplicationToApprove] = useState<ApprovalApplicationData | null>(null);
+  const [viewDetailsOpen, setViewDetailsOpen] = useState(false);
+  const [applicationToView, setApplicationToView] = useState<PendingApplication | null>(null);
 
   const { data: tenantData } = useQuery<{ tenant: Tenant }>({
     queryKey: ['/api/tenant'],
@@ -212,6 +216,33 @@ export default function ApplicationsPage() {
     updateStageMutation.mutate({ id: applicationId, stage: newStage });
   };
 
+  const handleViewApplication = (application: any) => {
+    const fullApp = data?.applications.find(a => a.id === application.id);
+    if (fullApp) {
+      const appType = (fullApp.applicationType as 'adoption' | 'foster') || 'adoption';
+      const pendingApp: PendingApplication = {
+        id: fullApp.id,
+        type: appType,
+        applicantName: fullApp.applicantName,
+        applicantEmail: fullApp.applicantEmail,
+        applicantPhone: fullApp.applicantPhone,
+        status: fullApp.stage,
+        createdAt: fullApp.createdAt,
+        animalName: fullApp.animalName || animals.find(a => a.id === fullApp.animalId)?.name,
+        animalId: fullApp.animalId,
+        formData: fullApp.customResponses as Record<string, any> | undefined,
+      };
+      setApplicationToView(pendingApp);
+      setViewDetailsOpen(true);
+    } else {
+      toast({
+        title: "Application not found",
+        description: "Unable to load application details.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const getStatusDisplay = (stage: string) => {
     const statusMap: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
       new: { label: "New", variant: "default" },
@@ -274,6 +305,7 @@ export default function ApplicationsPage() {
                   onMoveApplication={handleMoveApplication}
                   onAssignAnimal={handleAssignAnimal}
                   onStartCheckout={handleStartCheckout}
+                  onViewApplication={handleViewApplication}
                   sendingContractId={sendingContractId}
                   subscriptionTier={tenantData?.tenant?.subscriptionTier}
                 />
@@ -429,6 +461,18 @@ export default function ApplicationsPage() {
           queryClient.invalidateQueries({ queryKey: ['/api/applications'] });
           queryClient.invalidateQueries({ queryKey: ['/api/adoptions/checkouts'] });
         }}
+      />
+
+      {/* Application Details Dialog for mobile View button */}
+      <ApplicationDetailsDialog
+        open={viewDetailsOpen}
+        onOpenChange={(open) => {
+          setViewDetailsOpen(open);
+          if (!open) {
+            setApplicationToView(null);
+          }
+        }}
+        application={applicationToView}
       />
     </DashboardLayout>
   );
