@@ -182,73 +182,61 @@ export default function PendingApplicationsWidget() {
             )}
           </div>
           
-          {counts.total > 0 && (
-            <div className="flex gap-2 flex-wrap mt-3">
-              <Button
-                variant={filter === 'all' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setFilter('all')}
-                data-testid="button-filter-all"
-              >
-                All ({counts.total})
-              </Button>
-              {counts.adoption > 0 && (
-                <Button
-                  variant={filter === 'adoption' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setFilter('adoption')}
-                  data-testid="button-filter-adoption"
-                >
-                  <Heart className="h-3 w-3 mr-1" />
-                  Adoptions ({counts.adoption})
-                </Button>
-              )}
-              {counts.foster > 0 && (
-                <Button
-                  variant={filter === 'foster' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setFilter('foster')}
-                  data-testid="button-filter-foster"
-                >
-                  <Home className="h-3 w-3 mr-1" />
-                  Fosters ({counts.foster})
-                </Button>
-              )}
-              {counts.volunteer > 0 && (
-                <Button
-                  variant={filter === 'volunteer' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setFilter('volunteer')}
-                  data-testid="button-filter-volunteer"
-                >
-                  <Users className="h-3 w-3 mr-1" />
-                  Volunteers ({counts.volunteer})
-                </Button>
-              )}
-              {counts.surrender > 0 && (
-                <Button
-                  variant={filter === 'surrender' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setFilter('surrender')}
-                  data-testid="button-filter-surrender"
-                >
-                  <HandHeart className="h-3 w-3 mr-1" />
-                  Surrenders ({counts.surrender})
-                </Button>
-              )}
-              {counts.custom > 0 && (
-                <Button
-                  variant={filter === 'custom' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setFilter('custom')}
-                  data-testid="button-filter-custom"
-                >
-                  <FileText className="h-3 w-3 mr-1" />
-                  Forms ({counts.custom})
-                </Button>
-              )}
-            </div>
-          )}
+          <div className="flex gap-2 flex-wrap mt-3">
+            <Button
+              variant={filter === 'all' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setFilter('all')}
+              data-testid="button-filter-all"
+            >
+              All ({counts.total})
+            </Button>
+            <Button
+              variant={filter === 'adoption' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setFilter('adoption')}
+              data-testid="button-filter-adoption"
+            >
+              <Heart className="h-3 w-3 mr-1" />
+              Adoptions ({counts.adoption})
+            </Button>
+            <Button
+              variant={filter === 'foster' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setFilter('foster')}
+              data-testid="button-filter-foster"
+            >
+              <Home className="h-3 w-3 mr-1" />
+              Fosters ({counts.foster})
+            </Button>
+            <Button
+              variant={filter === 'volunteer' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setFilter('volunteer')}
+              data-testid="button-filter-volunteer"
+            >
+              <Users className="h-3 w-3 mr-1" />
+              Volunteers ({counts.volunteer})
+            </Button>
+            <Button
+              variant={filter === 'surrender' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setFilter('surrender')}
+              data-testid="button-filter-surrender"
+            >
+              <HandHeart className="h-3 w-3 mr-1" />
+              Surrenders ({counts.surrender})
+            </Button>
+            <Button
+              variant={filter === 'custom' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setFilter('custom')}
+              data-testid="button-filter-custom"
+            >
+              <FileText className="h-3 w-3 mr-1" />
+              Forms ({counts.custom})
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           {filteredApplications.length === 0 ? (
