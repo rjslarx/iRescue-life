@@ -126,11 +126,11 @@ export default function Dashboard() {
   });
 
   const { data: eventsData } = useQuery<{ events: CalendarEvent[] }>({
-    queryKey: ['/api/events', user?.activeRole],
+    queryKey: ['/api/events', { role: user?.activeRole }],
   });
 
   const { data: tenantData } = useQuery<{ tenant: Tenant }>({
-    queryKey: ['/api/tenant', user?.activeRole],
+    queryKey: ['/api/tenant', { role: user?.activeRole }],
   });
 
   // Fetch wizard status for admins
