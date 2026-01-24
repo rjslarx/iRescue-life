@@ -301,7 +301,7 @@ export function ApplicationDetailsDialog({ application, open, onOpenChange }: Ap
                           <dt className="text-sm font-medium text-muted-foreground">
                             {getFieldLabel(key)}
                           </dt>
-                          <dd className="text-sm">
+                          <dd className="text-sm break-words">
                             {formatFieldValue(value)}
                           </dd>
                         </div>
