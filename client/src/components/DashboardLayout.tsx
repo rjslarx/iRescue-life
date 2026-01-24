@@ -75,8 +75,8 @@ export default function DashboardLayout({ children, title, description, actions,
           userRole={(user?.activeRole || "staff") as "admin" | "board_member" | "staff" | "foster" | "volunteer"}
         />
         <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-          <header className="flex items-center justify-between gap-4 border-b p-4">
-            <div className="flex items-center gap-4 flex-1 min-w-0">
+          <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 border-b p-4">
+            <div className="flex items-center gap-2 sm:gap-4 flex-1 min-w-0">
               <SidebarTrigger data-testid="button-sidebar-toggle" />
               {breadcrumbs && breadcrumbs.length > 0 ? (
                 <div className="flex-1 min-w-0">
@@ -91,7 +91,7 @@ export default function DashboardLayout({ children, title, description, actions,
                 </div>
               ) : null}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap justify-start sm:justify-end w-full sm:w-auto">
               {publicUrl && (
                 <Button
                   variant="outline"
