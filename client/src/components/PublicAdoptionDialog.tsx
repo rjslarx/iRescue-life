@@ -29,6 +29,7 @@ const publicAdoptionSchema = z.object({
   applicantName: z.string().min(2, "Name must be at least 2 characters"),
   applicantEmail: z.string().email("Please enter a valid email address"),
   applicantPhone: z.string().min(10, "Please enter a valid phone number"),
+  smsConsent: z.boolean().default(false),
   notes: z.string().min(100, "Please tell us a bit more about yourself (minimum 100 characters)"),
   customResponses: z.record(z.any()).optional(),
 });
@@ -66,6 +67,7 @@ export function PublicAdoptionDialog({ animal, open, onOpenChange }: PublicAdopt
       applicantName: "",
       applicantEmail: "",
       applicantPhone: "",
+      smsConsent: false,
       notes: "",
       customResponses: {},
     },
@@ -135,6 +137,7 @@ export function PublicAdoptionDialog({ animal, open, onOpenChange }: PublicAdopt
         applicantName: data.applicantName,
         applicantEmail: data.applicantEmail,
         applicantPhone: data.applicantPhone,
+        smsConsent: data.smsConsent || false,
         notes: data.notes || null,
         customResponses: data.customResponses || {},
         gclid: gclid || undefined,
@@ -241,6 +244,27 @@ export function PublicAdoptionDialog({ animal, open, onOpenChange }: PublicAdopt
                     />
                   </FormControl>
                   <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="smsConsent"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                  <FormControl>
+                    <Checkbox
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                      data-testid="checkbox-sms-consent"
+                    />
+                  </FormControl>
+                  <div className="space-y-1 leading-none">
+                    <FormLabel className="text-sm font-normal">
+                      I consent to receive text message updates regarding the status of my application and rescue operations. Reply STOP to unsubscribe.
+                    </FormLabel>
+                  </div>
                 </FormItem>
               )}
             />

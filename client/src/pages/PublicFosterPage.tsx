@@ -46,6 +46,7 @@ export default function PublicFosterPage() {
       applicantName: "",
       applicantEmail: "",
       applicantPhone: "",
+      smsConsent: false,
       address: "",
       housingType: "house",
       hasYard: false,
@@ -264,6 +265,27 @@ export default function PublicFosterPage() {
                                 <Input type="tel" placeholder="(555) 123-4567" {...field} data-testid="input-applicant-phone" />
                               </FormControl>
                               <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="smsConsent"
+                          render={({ field }) => (
+                            <FormItem className="flex flex-row items-start space-x-3 space-y-0 md:col-span-2">
+                              <FormControl>
+                                <Checkbox
+                                  checked={field.value === true}
+                                  onCheckedChange={field.onChange}
+                                  data-testid="checkbox-sms-consent"
+                                />
+                              </FormControl>
+                              <div className="space-y-1 leading-none">
+                                <FormLabel className="text-sm font-normal">
+                                  I consent to receive text message updates regarding the status of my application and rescue operations. Reply STOP to unsubscribe.
+                                </FormLabel>
+                              </div>
                             </FormItem>
                           )}
                         />

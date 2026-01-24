@@ -27,6 +27,7 @@ export default function FosterApplicationPage() {
     applicantName: "",
     applicantEmail: "",
     applicantPhone: "",
+    smsConsent: false,
     address: "",
     housingType: "house" as "house" | "apartment" | "condo" | "other",
     hasYard: false,
@@ -194,6 +195,18 @@ export default function FosterApplicationPage() {
                     required
                     data-testid="input-applicant-phone"
                   />
+                </div>
+
+                <div className="flex items-start space-x-3 md:col-span-2">
+                  <Checkbox
+                    id="smsConsent"
+                    checked={formData.smsConsent}
+                    onCheckedChange={(checked) => handleChange("smsConsent", checked === true)}
+                    data-testid="checkbox-sms-consent"
+                  />
+                  <Label htmlFor="smsConsent" className="text-sm font-normal leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                    I consent to receive text message updates regarding the status of my application and rescue operations. Reply STOP to unsubscribe.
+                  </Label>
                 </div>
               </div>
 
