@@ -16,6 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import MobilePipelineView, { PipelineStage, PipelineCard } from "@/components/MobilePipelineView";
 import { useIsMobile } from "@/hooks/use-mobile";
+import DashboardLayout from "@/components/DashboardLayout";
 import { 
   Inbox, 
   Search, 
@@ -128,40 +129,109 @@ export default function IntakeManagerPage() {
     }
   };
 
+  const breadcrumbs = [
+    { label: "Dashboard", href: "/dashboard" },
+    { label: "Intake Manager" },
+  ];
+
   if (isLoading) {
     return (
-      <div className="p-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <Skeleton className="h-8 w-48" />
+      <DashboardLayout
+        title="Intake Manager"
+        description="Manage dog surrender requests through the intake pipeline"
+        breadcrumbs={breadcrumbs}
+      >
+        <div className="p-4 md:p-6 space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <Skeleton key={i} className="h-96" />
+            ))}
+          </div>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-          {[1, 2, 3, 4, 5].map((i) => (
-            <Skeleton key={i} className="h-96" />
-          ))}
-        </div>
-      </div>
+      </DashboardLayout>
     );
   }
 
   if (isMobile) {
     return (
-      <div className="p-4 space-y-4">
-        <div className="flex items-center gap-3">
-          <Dog className="h-6 w-6 text-primary" />
-          <h1 className="text-xl font-bold">Intake Manager</h1>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          Manage dog surrender requests through the intake pipeline
-        </p>
+      <DashboardLayout
+        title="Intake Manager"
+        description="Manage dog surrender requests"
+        breadcrumbs={breadcrumbs}
+      >
+        <div className="p-4 space-y-4">
+          <MobilePipelineView
+            stages={stages}
+            cards={surrenderRequests.map(requestToCard)}
+            getCardsByStage={getCardsByStage}
+            onMoveCard={handleMoveCard}
+            onViewCard={handleViewCard}
+            emptyStateText="No requests"
+          />
 
-        <MobilePipelineView
-          stages={stages}
-          cards={surrenderRequests.map(requestToCard)}
-          getCardsByStage={getCardsByStage}
-          onMoveCard={handleMoveCard}
-          onViewCard={handleViewCard}
-          emptyStateText="No requests"
-        />
+          <SurrenderDetailsDialog
+            request={selectedRequest}
+            open={detailsDialogOpen}
+            onOpenChange={setDetailsDialogOpen}
+          />
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  return (
+    <DashboardLayout
+      title="Intake Manager"
+      description="Manage dog surrender requests through the intake pipeline"
+      breadcrumbs={breadcrumbs}
+    >
+      <div className="p-6 space-y-4">
+        <div className="grid grid-cols-5 gap-4 min-h-[calc(100vh-200px)]">
+          {stages.map((stage) => {
+            const stageRequests = getRequestsByStage(stage.id);
+            const StageIcon = stage.icon;
+
+            return (
+              <Card key={stage.id} className="flex flex-col" data-testid={`column-${stage.id}`}>
+                <CardHeader className="py-3 px-4 border-b">
+                  <CardTitle className="flex items-center justify-between text-sm font-medium">
+                    <div className="flex items-center gap-2">
+                      <div className={`h-3 w-3 rounded-full ${stage.color}`} />
+                      {StageIcon && <StageIcon className="h-4 w-4 text-muted-foreground" />}
+                      <span>{stage.label}</span>
+                    </div>
+                    <Badge variant="secondary" className="ml-2" data-testid={`badge-count-${stage.id}`}>
+                      {stageRequests.length}
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
+                <ScrollArea className="flex-1 p-2">
+                  <div className="space-y-2">
+                    {stageRequests.length === 0 ? (
+                      <div className="flex h-24 items-center justify-center text-sm text-muted-foreground border-2 border-dashed rounded-md">
+                        No requests
+                      </div>
+                    ) : (
+                      stageRequests.map((request) => (
+                        <IntakeCard
+                          key={request.id}
+                          request={request}
+                          currentStageId={stage.id}
+                          stages={stages}
+                          onView={() => {
+                            setSelectedRequest(request);
+                            setDetailsDialogOpen(true);
+                          }}
+                          onMove={(newStageId) => handleMoveCard(request.id, newStageId)}
+                        />
+                      ))
+                    )}
+                  </div>
+                </ScrollArea>
+              </Card>
+            );
+          })}
+        </div>
 
         <SurrenderDetailsDialog
           request={selectedRequest}
@@ -169,74 +239,7 @@ export default function IntakeManagerPage() {
           onOpenChange={setDetailsDialogOpen}
         />
       </div>
-    );
-  }
-
-  return (
-    <div className="p-6 space-y-4">
-      <div className="flex items-center gap-3">
-        <Dog className="h-7 w-7 text-primary" />
-        <div>
-          <h1 className="text-2xl font-bold">Intake Manager</h1>
-          <p className="text-sm text-muted-foreground">
-            Manage dog surrender requests through the intake pipeline
-          </p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-5 gap-4 min-h-[calc(100vh-200px)]">
-        {stages.map((stage) => {
-          const stageRequests = getRequestsByStage(stage.id);
-          const StageIcon = stage.icon;
-
-          return (
-            <Card key={stage.id} className="flex flex-col" data-testid={`column-${stage.id}`}>
-              <CardHeader className="py-3 px-4 border-b">
-                <CardTitle className="flex items-center justify-between text-sm font-medium">
-                  <div className="flex items-center gap-2">
-                    <div className={`h-3 w-3 rounded-full ${stage.color}`} />
-                    {StageIcon && <StageIcon className="h-4 w-4 text-muted-foreground" />}
-                    <span>{stage.label}</span>
-                  </div>
-                  <Badge variant="secondary" className="ml-2" data-testid={`badge-count-${stage.id}`}>
-                    {stageRequests.length}
-                  </Badge>
-                </CardTitle>
-              </CardHeader>
-              <ScrollArea className="flex-1 p-2">
-                <div className="space-y-2">
-                  {stageRequests.length === 0 ? (
-                    <div className="flex h-24 items-center justify-center text-sm text-muted-foreground border-2 border-dashed rounded-md">
-                      No requests
-                    </div>
-                  ) : (
-                    stageRequests.map((request) => (
-                      <IntakeCard
-                        key={request.id}
-                        request={request}
-                        currentStageId={stage.id}
-                        stages={stages}
-                        onView={() => {
-                          setSelectedRequest(request);
-                          setDetailsDialogOpen(true);
-                        }}
-                        onMove={(newStageId) => handleMoveCard(request.id, newStageId)}
-                      />
-                    ))
-                  )}
-                </div>
-              </ScrollArea>
-            </Card>
-          );
-        })}
-      </div>
-
-      <SurrenderDetailsDialog
-        request={selectedRequest}
-        open={detailsDialogOpen}
-        onOpenChange={setDetailsDialogOpen}
-      />
-    </div>
+    </DashboardLayout>
   );
 }
 
