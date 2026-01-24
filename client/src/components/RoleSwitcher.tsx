@@ -9,9 +9,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
-import { UserCog, Check } from "lucide-react";
+import { UserCog, Check, Eye } from "lucide-react";
 
 const roleLabels: Record<string, string> = {
+  owner: "Owner",
   admin: "Administrator",
   board_member: "Board Member",
   staff: "Staff",
@@ -19,14 +20,26 @@ const roleLabels: Record<string, string> = {
   volunteer: "Volunteer",
 };
 
+const ALL_PREVIEW_ROLES = ["owner", "admin", "board_member", "staff", "foster", "volunteer"];
+
 export default function RoleSwitcher() {
   const { user, switchRole } = useAuth();
   const { toast } = useToast();
 
-  if (!user || user.roles.length <= 1) {
-    // Don't show switcher if user has only one role
+  if (!user) {
     return null;
   }
+
+  // Admins and owners can preview any role
+  const isAdminOrOwner = user.roles.includes("admin") || user.roles.includes("owner");
+  
+  // If not admin/owner and only one role, don't show switcher
+  if (!isAdminOrOwner && user.roles.length <= 1) {
+    return null;
+  }
+
+  // Determine which roles to show
+  const availableRoles = isAdminOrOwner ? ALL_PREVIEW_ROLES : user.roles;
 
   const handleRoleSwitch = async (role: string) => {
     if (role === user.activeRole) return; // Already active
@@ -47,29 +60,45 @@ export default function RoleSwitcher() {
     }
   };
 
+  // Check if currently previewing a role the user doesn't actually have
+  const isPreviewingRole = isAdminOrOwner && !user.roles.includes(user.activeRole);
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="outline" size="sm" data-testid="button-role-switcher">
-          <UserCog className="h-4 w-4 mr-2" />
+          {isPreviewingRole ? (
+            <Eye className="h-4 w-4 mr-2" />
+          ) : (
+            <UserCog className="h-4 w-4 mr-2" />
+          )}
           {roleLabels[user.activeRole] || user.activeRole}
+          {isPreviewingRole && <span className="ml-1 text-xs text-muted-foreground">(preview)</span>}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuLabel>Switch Role</DropdownMenuLabel>
+        <DropdownMenuLabel>
+          {isAdminOrOwner ? "Switch / Preview Role" : "Switch Role"}
+        </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        {user.roles.map((role) => (
-          <DropdownMenuItem
-            key={role}
-            onClick={() => handleRoleSwitch(role)}
-            className="cursor-pointer"
-            data-testid={`menu-item-role-${role}`}
-          >
-            {role === user.activeRole && <Check className="h-4 w-4 mr-2" />}
-            {role !== user.activeRole && <span className="h-4 w-4 mr-2" />}
-            {roleLabels[role] || role}
-          </DropdownMenuItem>
-        ))}
+        {availableRoles.map((role) => {
+          const isOwnRole = user.roles.includes(role);
+          return (
+            <DropdownMenuItem
+              key={role}
+              onClick={() => handleRoleSwitch(role)}
+              className="cursor-pointer"
+              data-testid={`menu-item-role-${role}`}
+            >
+              {role === user.activeRole && <Check className="h-4 w-4 mr-2" />}
+              {role !== user.activeRole && <span className="h-4 w-4 mr-2" />}
+              {roleLabels[role] || role}
+              {isAdminOrOwner && !isOwnRole && (
+                <span className="ml-auto text-xs text-muted-foreground">preview</span>
+              )}
+            </DropdownMenuItem>
+          );
+        })}
       </DropdownMenuContent>
     </DropdownMenu>
   );

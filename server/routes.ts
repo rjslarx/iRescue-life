@@ -2304,6 +2304,7 @@ Crawl-delay: 1
   /**
    * POST /api/switch-role
    * Switch the user's active role
+   * Admins and owners can preview any role, others can only switch to their own roles
    */
   app.post('/api/switch-role', requireAuth, (req, res) => {
     const { role } = req.body;
@@ -2312,11 +2313,28 @@ Crawl-delay: 1
       return res.status(400).json({ error: 'Role is required' });
     }
     
-    if (!req.user!.roles.includes(role)) {
-      return res.status(403).json({ 
-        error: 'Invalid role',
-        message: `You don't have the ${role} role. Your available roles are: ${req.user!.roles.join(', ')}`
-      });
+    // Valid roles that can be previewed
+    const validRoles = ['owner', 'admin', 'board_member', 'staff', 'foster', 'volunteer'];
+    
+    // Check if user is admin or owner (can preview any role)
+    const isAdminOrOwner = req.user!.roles.includes('admin') || req.user!.roles.includes('owner');
+    
+    if (isAdminOrOwner) {
+      // Admins/owners can switch to any valid role for preview
+      if (!validRoles.includes(role)) {
+        return res.status(403).json({ 
+          error: 'Invalid role',
+          message: `"${role}" is not a valid role. Valid roles are: ${validRoles.join(', ')}`
+        });
+      }
+    } else {
+      // Non-admins can only switch to roles they actually have
+      if (!req.user!.roles.includes(role)) {
+        return res.status(403).json({ 
+          error: 'Invalid role',
+          message: `You don't have the ${role} role. Your available roles are: ${req.user!.roles.join(', ')}`
+        });
+      }
     }
     
     // Update session with new active role
