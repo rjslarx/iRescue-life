@@ -19,7 +19,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { buildTenantUrl, getTenantHeaders } from "@/lib/tenantApi";
 import { useSEO } from "@/hooks/useSEO";
 import { useTenant } from "@/contexts/TenantContext";
-import { insertAnimalSurrenderSchema, type InsertAnimalSurrender, type Tenant, type SurrenderFormField } from "@shared/schema";
+import { insertSurrenderRequestSchema, type InsertSurrenderRequest, type Tenant, type SurrenderFormField } from "@shared/schema";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export default function PublicSurrenderPage() {
@@ -48,23 +48,21 @@ export default function PublicSurrenderPage() {
     siteName: rescueName,
   });
 
-  const form = useForm<Omit<InsertAnimalSurrender, 'tenantId' | 'status' | 'notes'> & { customResponses?: Record<string, any> }>({
-    resolver: zodResolver(insertAnimalSurrenderSchema.omit({ tenantId: true, status: true, notes: true })),
+  const form = useForm<Omit<InsertSurrenderRequest, 'tenantId'> & { customResponses?: Record<string, any> }>({
+    resolver: zodResolver(insertSurrenderRequestSchema.omit({ tenantId: true })),
     defaultValues: {
-      submitterName: "",
-      submitterEmail: "",
-      submitterPhone: "",
-      address: "",
-      animalName: "",
-      species: "",
-      breed: "",
-      age: "",
-      sex: "unknown",
-      spayedNeutered: false,
-      medicalHistory: "",
-      behaviorNotes: "",
+      ownerName: "",
+      ownerEmail: "",
+      ownerPhone: "",
+      dogName: "",
+      dogBreed: "",
+      dogAge: "",
+      dogGender: "unknown",
       reasonForSurrender: "",
-      isEmergency: false,
+      medicalIssues: "",
+      behavioralIssues: "",
+      photoUrl: "",
+      smsConsent: false,
       customResponses: {},
     },
   });
@@ -125,9 +123,9 @@ export default function PublicSurrenderPage() {
   };
 
   const submitMutation = useMutation({
-    mutationFn: async (data: Omit<InsertAnimalSurrender, 'tenantId' | 'status' | 'notes'> & { customResponses?: Record<string, any> }) => {
+    mutationFn: async (data: Omit<InsertSurrenderRequest, 'tenantId'> & { customResponses?: Record<string, any> }) => {
       console.log('[Surrender Form] Submitting data:', data);
-      return await apiRequest("POST", "/api/animal-surrenders", data);
+      return await apiRequest("POST", "/api/surrender", data);
     },
     onSuccess: (data) => {
       console.log('[Surrender Form] Submission successful:', data);
@@ -152,7 +150,7 @@ export default function PublicSurrenderPage() {
     },
   });
 
-  const onSubmit = (data: Omit<InsertAnimalSurrender, 'tenantId' | 'status' | 'notes'> & { customResponses?: Record<string, any> }) => {
+  const onSubmit = (data: Omit<InsertSurrenderRequest, 'tenantId'> & { customResponses?: Record<string, any> }) => {
     submitMutation.mutate(data);
   };
 
@@ -205,16 +203,16 @@ export default function PublicSurrenderPage() {
                   <Form {...form}>
                     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
                       <div className="space-y-4">
-                        <h3 className="text-lg font-semibold">Your Information</h3>
+                        <h3 className="text-lg font-semibold">Owner Information</h3>
                         <div className="grid md:grid-cols-2 gap-6">
                           <FormField
                             control={form.control}
-                            name="submitterName"
+                            name="ownerName"
                             render={({ field }) => (
                               <FormItem>
                                 <FormLabel>Full Name *</FormLabel>
                                 <FormControl>
-                                  <Input placeholder="John Doe" {...field} data-testid="input-submitter-name" />
+                                  <Input placeholder="John Doe" {...field} data-testid="input-owner-name" />
                                 </FormControl>
                                 <FormMessage />
                               </FormItem>
@@ -223,12 +221,12 @@ export default function PublicSurrenderPage() {
 
                           <FormField
                             control={form.control}
-                            name="submitterEmail"
+                            name="ownerEmail"
                             render={({ field }) => (
                               <FormItem>
                                 <FormLabel>Email *</FormLabel>
                                 <FormControl>
-                                  <Input type="email" placeholder="john@example.com" {...field} data-testid="input-submitter-email" />
+                                  <Input type="email" placeholder="john@example.com" {...field} data-testid="input-owner-email" />
                                 </FormControl>
                                 <FormMessage />
                               </FormItem>
@@ -237,28 +235,13 @@ export default function PublicSurrenderPage() {
 
                           <FormField
                             control={form.control}
-                            name="submitterPhone"
+                            name="ownerPhone"
                             render={({ field }) => (
                               <FormItem>
                                 <FormLabel>Phone Number *</FormLabel>
                                 <FormControl>
-                                  <Input type="tel" placeholder="(555) 123-4567" {...field} data-testid="input-submitter-phone" />
+                                  <Input type="tel" placeholder="(555) 123-4567" {...field} data-testid="input-owner-phone" />
                                 </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-
-                          <FormField
-                            control={form.control}
-                            name="address"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Address *</FormLabel>
-                                <FormControl>
-                                  <Input placeholder="123 Main St, City, State" {...field} data-testid="input-address" />
-                                </FormControl>
-                                <FormDescription>Helpful if we need to arrange pickup</FormDescription>
                                 <FormMessage />
                               </FormItem>
                             )}
@@ -267,16 +250,16 @@ export default function PublicSurrenderPage() {
                       </div>
 
                       <div className="border-t pt-6 space-y-4">
-                        <h3 className="text-lg font-semibold">Animal Information</h3>
+                        <h3 className="text-lg font-semibold">Dog Information</h3>
                         <div className="grid md:grid-cols-2 gap-6">
                           <FormField
                             control={form.control}
-                            name="animalName"
+                            name="dogName"
                             render={({ field }) => (
                               <FormItem>
-                                <FormLabel>Animal's Name *</FormLabel>
+                                <FormLabel>Dog's Name *</FormLabel>
                                 <FormControl>
-                                  <Input placeholder="Buddy" {...field} data-testid="input-animal-name" />
+                                  <Input placeholder="Buddy" {...field} data-testid="input-dog-name" />
                                 </FormControl>
                                 <FormMessage />
                               </FormItem>
@@ -285,26 +268,12 @@ export default function PublicSurrenderPage() {
 
                           <FormField
                             control={form.control}
-                            name="species"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Species *</FormLabel>
-                                <FormControl>
-                                  <Input placeholder="Dog, Cat, etc." {...field} data-testid="input-species" />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-
-                          <FormField
-                            control={form.control}
-                            name="breed"
+                            name="dogBreed"
                             render={({ field }) => (
                               <FormItem>
                                 <FormLabel>Breed *</FormLabel>
                                 <FormControl>
-                                  <Input placeholder="Labrador Mix, Domestic Shorthair, etc." {...field} data-testid="input-breed" />
+                                  <Input placeholder="Labrador Mix, German Shepherd, etc." {...field} data-testid="input-dog-breed" />
                                 </FormControl>
                                 <FormMessage />
                               </FormItem>
@@ -313,12 +282,12 @@ export default function PublicSurrenderPage() {
 
                           <FormField
                             control={form.control}
-                            name="age"
+                            name="dogAge"
                             render={({ field }) => (
                               <FormItem>
                                 <FormLabel>Age *</FormLabel>
                                 <FormControl>
-                                  <Input placeholder="2 years, 6 months, etc." {...field} data-testid="input-age" />
+                                  <Input placeholder="2 years, 6 months, etc." {...field} data-testid="input-dog-age" />
                                 </FormControl>
                                 <FormMessage />
                               </FormItem>
@@ -327,14 +296,14 @@ export default function PublicSurrenderPage() {
 
                           <FormField
                             control={form.control}
-                            name="sex"
+                            name="dogGender"
                             render={({ field }) => (
                               <FormItem>
-                                <FormLabel>Sex *</FormLabel>
+                                <FormLabel>Gender *</FormLabel>
                                 <Select onValueChange={field.onChange} defaultValue={field.value}>
                                   <FormControl>
-                                    <SelectTrigger data-testid="select-sex">
-                                      <SelectValue placeholder="Select sex" />
+                                    <SelectTrigger data-testid="select-dog-gender">
+                                      <SelectValue placeholder="Select gender" />
                                     </SelectTrigger>
                                   </FormControl>
                                   <SelectContent>
@@ -347,30 +316,6 @@ export default function PublicSurrenderPage() {
                               </FormItem>
                             )}
                           />
-
-                          <FormField
-                            control={form.control}
-                            name="spayedNeutered"
-                            render={({ field }) => (
-                              <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
-                                <FormControl>
-                                  <Checkbox
-                                    checked={field.value}
-                                    onCheckedChange={field.onChange}
-                                    data-testid="checkbox-spayed-neutered"
-                                  />
-                                </FormControl>
-                                <div className="space-y-1 leading-none">
-                                  <FormLabel>
-                                    Spayed/Neutered
-                                  </FormLabel>
-                                  <FormDescription>
-                                    Check if the animal is spayed or neutered
-                                  </FormDescription>
-                                </div>
-                              </FormItem>
-                            )}
-                          />
                         </div>
                       </div>
 
@@ -379,57 +324,13 @@ export default function PublicSurrenderPage() {
                         
                         <FormField
                           control={form.control}
-                          name="medicalHistory"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Medical History *</FormLabel>
-                              <FormControl>
-                                <Textarea
-                                  placeholder="Any medical conditions, medications, vaccinations, etc."
-                                  className="min-h-24"
-                                  {...field}
-                                  data-testid="textarea-medical-history"
-                                />
-                              </FormControl>
-                              <FormDescription>
-                                Include any known medical issues, current medications, and vaccination history
-                              </FormDescription>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={form.control}
-                          name="behaviorNotes"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Behavior & Temperament *</FormLabel>
-                              <FormControl>
-                                <Textarea
-                                  placeholder="Describe their personality, behavior with people/pets, any training, etc."
-                                  className="min-h-24"
-                                  {...field}
-                                  data-testid="textarea-behavior-notes"
-                                />
-                              </FormControl>
-                              <FormDescription>
-                                Tell us about their personality, any behavioral issues, good with kids/pets, etc.
-                              </FormDescription>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={form.control}
                           name="reasonForSurrender"
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>Reason for Surrender *</FormLabel>
                               <FormControl>
                                 <Textarea
-                                  placeholder="Please explain why you need to surrender this animal"
+                                  placeholder="Please explain why you need to surrender this dog"
                                   className="min-h-24"
                                   {...field}
                                   data-testid="textarea-reason-for-surrender"
@@ -445,25 +346,46 @@ export default function PublicSurrenderPage() {
 
                         <FormField
                           control={form.control}
-                          name="isEmergency"
+                          name="medicalIssues"
                           render={({ field }) => (
-                            <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4 bg-destructive/5">
+                            <FormItem>
+                              <FormLabel>Medical Issues</FormLabel>
                               <FormControl>
-                                <Checkbox
-                                  checked={field.value}
-                                  onCheckedChange={field.onChange}
-                                  data-testid="checkbox-is-emergency"
+                                <Textarea
+                                  placeholder="Any medical conditions, medications, vaccinations, etc."
+                                  className="min-h-24"
+                                  {...field}
+                                  value={field.value || ''}
+                                  data-testid="textarea-medical-issues"
                                 />
                               </FormControl>
-                              <div className="space-y-1 leading-none">
-                                <FormLabel className="flex items-center gap-2">
-                                  <AlertCircle className="h-4 w-4 text-destructive" />
-                                  This is an emergency situation
-                                </FormLabel>
-                                <FormDescription>
-                                  Check this if the animal needs immediate placement due to safety concerns or urgent circumstances
-                                </FormDescription>
-                              </div>
+                              <FormDescription>
+                                Include any known medical issues, current medications, and vaccination history
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="behavioralIssues"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Behavioral Issues</FormLabel>
+                              <FormControl>
+                                <Textarea
+                                  placeholder="Describe any behavioral concerns, training, temperament, etc."
+                                  className="min-h-24"
+                                  {...field}
+                                  value={field.value || ''}
+                                  data-testid="textarea-behavioral-issues"
+                                />
+                              </FormControl>
+                              <FormDescription>
+                                Tell us about their personality, any behavioral issues, good with kids/pets, etc.
+                              </FormDescription>
+                              <FormMessage />
                             </FormItem>
                           )}
                         />
@@ -672,6 +594,28 @@ export default function PublicSurrenderPage() {
                           ))}
                         </div>
                       )}
+
+                      {/* SMS Consent Checkbox */}
+                      <FormField
+                        control={form.control}
+                        name="smsConsent"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                            <FormControl>
+                              <Checkbox
+                                checked={field.value}
+                                onCheckedChange={field.onChange}
+                                data-testid="checkbox-sms-consent"
+                              />
+                            </FormControl>
+                            <div className="space-y-1 leading-none">
+                              <FormLabel className="text-sm font-normal">
+                                I consent to receive text message updates regarding the status of my surrender request and rescue operations. Reply STOP to unsubscribe.
+                              </FormLabel>
+                            </div>
+                          </FormItem>
+                        )}
+                      />
 
                       <div className="flex justify-end gap-4 pt-6 border-t">
                         <Button

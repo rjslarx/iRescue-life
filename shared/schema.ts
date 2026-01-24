@@ -1005,9 +1005,9 @@ export type AnimalSurrender = typeof animalSurrenders.$inferSelect;
 
 // Surrender requests table - Phase 1 Intake Pipeline for surrender requests
 export const surrenderRequests = pgTable("surrender_requests", {
-  id: uuid("id").primaryKey().defaultRandom(),
+  id: text("id").primaryKey().default(sql`gen_random_uuid()::text`),
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
-  status: text("status").notNull().default("New").$type<"New" | "Review" | "SpaceCheck" | "Waitlist" | "Scheduled" | "Intaken">(),
+  status: text("status").notNull().default("new").$type<"new" | "review" | "spacecheck" | "waitlist" | "scheduled" | "intaken">(),
   ownerName: text("owner_name").notNull(),
   ownerEmail: text("owner_email").notNull(),
   ownerPhone: text("owner_phone").notNull(),
@@ -1020,12 +1020,19 @@ export const surrenderRequests = pgTable("surrender_requests", {
   behavioralIssues: text("behavioral_issues"),
   photoUrl: text("photo_url"),
   smsConsent: boolean("sms_consent").notNull().default(false),
+  notes: text("notes"),
+  assignedUserId: uuid("assigned_user_id").references(() => users.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
 export const insertSurrenderRequestSchema = createInsertSchema(surrenderRequests).omit({
   id: true,
+  status: true,  // Server-only, defaults to 'new'
+  notes: true,   // Server-only
+  assignedUserId: true,  // Server-only
   createdAt: true,
+  updatedAt: true,
 });
 export type InsertSurrenderRequest = z.infer<typeof insertSurrenderRequestSchema>;
 export type SurrenderRequest = typeof surrenderRequests.$inferSelect;
