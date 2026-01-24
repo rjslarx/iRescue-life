@@ -677,6 +677,7 @@ export const formSettings = pgTable("form_settings", {
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
   formType: text("form_type").notNull().$type<"adoption" | "volunteer" | "foster" | "surrender">(),
   introText: text("intro_text"), // Text displayed at the top of the form
+  smsConsentEnabled: boolean("sms_consent_enabled").notNull().default(false), // Whether to show SMS consent checkbox on form
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => ({
@@ -712,6 +713,7 @@ export const applications = pgTable("applications", {
   adoptionFeePaidAt: timestamp("adoption_fee_paid_at"), // When the fee was paid
   adoptionFeePaymentSource: text("adoption_fee_payment_source").$type<"stripe" | "cash" | "check" | "other">(), // Payment method
   adoptionFeeTransactionId: text("adoption_fee_transaction_id"), // External transaction ID from payment processor
+  smsConsent: boolean("sms_consent").notNull().default(false), // Whether applicant consented to receive SMS messages
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -917,6 +919,7 @@ export const volunteerApplications = pgTable("volunteer_applications", {
   status: text("status").notNull().default("pending").$type<"pending" | "approved" | "rejected">(),
   notes: text("notes"),
   customResponses: jsonb("custom_responses").$type<Record<string, any>>(),
+  smsConsent: boolean("sms_consent").notNull().default(false), // Whether applicant consented to receive SMS messages
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -949,6 +952,7 @@ export const fosterApplications = pgTable("foster_applications", {
   status: text("status").notNull().default("pending").$type<"pending" | "approved" | "rejected">(),
   notes: text("notes"), // Admin notes
   customResponses: jsonb("custom_responses").$type<Record<string, any>>(), // Stores answers to custom form fields
+  smsConsent: boolean("sms_consent").notNull().default(false), // Whether applicant consented to receive SMS messages
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -982,6 +986,7 @@ export const animalSurrenders = pgTable("animal_surrenders", {
   status: text("status").notNull().default("pending").$type<"pending" | "approved" | "rejected" | "completed">(),
   notes: text("notes"),
   customResponses: jsonb("custom_responses").$type<Record<string, any>>(),
+  smsConsent: boolean("sms_consent").notNull().default(false), // Whether submitter consented to receive SMS messages
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
