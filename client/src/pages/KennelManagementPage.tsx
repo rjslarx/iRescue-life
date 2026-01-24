@@ -350,9 +350,68 @@ export default function KennelManagementPage() {
       description="Kennel Layout & Occupancy Management"
       actions={headerActions}
     >
-      <div className="flex flex-1 overflow-hidden h-full">
-        {/* Sidebar: Building Navigation */}
-        <aside className="w-64 bg-card border-r flex flex-col">
+      <div className="flex flex-col md:flex-row flex-1 overflow-hidden h-full">
+        {/* Mobile Building Selector - shown only on mobile in visualize mode */}
+        {viewMode === 'visualize' && (
+          <div className="md:hidden p-4 border-b bg-card space-y-3">
+            <div>
+              <Label className="text-xs font-semibold text-muted-foreground uppercase mb-2 block">
+                Select Building
+              </Label>
+              {buildings.length > 0 ? (
+                <Select 
+                  value={activeBuildingId || ''} 
+                  onValueChange={(value) => setActiveBuildingId(value)}
+                >
+                  <SelectTrigger data-testid="mobile-building-selector">
+                    <SelectValue placeholder="Choose a building..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {buildings.map(b => (
+                      <SelectItem key={b.id} value={b.id}>
+                        <span className="flex items-center gap-2">
+                          <Building2 className="w-4 h-4" />
+                          {b.name} ({b.rows.length} rows)
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <p className="text-sm text-muted-foreground">No buildings yet. Create one to get started.</p>
+              )}
+            </div>
+            {/* Mobile building action buttons */}
+            <div className="flex gap-2">
+              <Button 
+                variant="outline"
+                size="sm"
+                onClick={() => createBuildingMutation.mutate()}
+                className="flex-1"
+                data-testid="mobile-button-add-building"
+              >
+                <Plus className="w-4 h-4 mr-1" />
+                Add Building
+              </Button>
+              {activeBuilding && (
+                <Button 
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => {
+                    setItemToDelete({ type: 'building', id: activeBuilding.id });
+                    setDeleteDialogOpen(true);
+                  }}
+                  data-testid="mobile-button-delete-building"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Sidebar: Building Navigation - hidden on mobile in visualize mode */}
+        <aside className={`w-64 bg-card border-r flex-col ${viewMode === 'visualize' ? 'hidden md:flex' : 'flex'}`}>
           <div className="p-4 border-b">
             <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
               Buildings
@@ -400,15 +459,15 @@ export default function KennelManagementPage() {
         </aside>
 
         {/* Main Content Area */}
-        <main className="flex-1 overflow-y-auto p-8">
+        <main className="flex-1 overflow-y-auto p-4 md:p-8">
           {!activeBuilding ? (
             <div className="text-center py-12">
               <p className="text-muted-foreground">Select or create a building to get started</p>
             </div>
           ) : (
             <div className="max-w-5xl mx-auto">
-              {/* Building Header */}
-              <div className="mb-8 flex items-end gap-4 border-b pb-6">
+              {/* Building Header - hidden on mobile in visualize mode since building name shows in dropdown */}
+              <div className={`mb-6 md:mb-8 flex flex-col sm:flex-row sm:items-end gap-4 border-b pb-4 md:pb-6 ${viewMode === 'visualize' ? 'hidden md:flex' : ''}`}>
                 <div className="flex-1">
                   <Label className="text-xs font-semibold text-muted-foreground uppercase mb-1">
                     Building Name
@@ -419,7 +478,7 @@ export default function KennelManagementPage() {
                       id: activeBuilding.id, 
                       name: e.target.value 
                     })}
-                    className="text-3xl font-bold bg-transparent border-none p-0 focus-visible:ring-0 h-auto"
+                    className="text-2xl md:text-3xl font-bold bg-transparent border-none p-0 focus-visible:ring-0 h-auto"
                     placeholder="e.g. Main Kennel"
                     data-testid="input-building-name"
                   />
@@ -546,28 +605,28 @@ export default function KennelManagementPage() {
                 </div>
               ) : (
                 /* --- VISUALIZE MODE --- */
-                <div className="space-y-8">
-                  <div className="bg-primary/10 text-primary p-4 rounded-lg flex items-start gap-3 border border-primary/20">
-                    <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                <div className="space-y-4 md:space-y-8">
+                  <div className="bg-primary/10 text-primary p-3 md:p-4 rounded-lg flex items-start gap-3 border border-primary/20">
+                    <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5 hidden sm:block" />
                     <div>
                       <h4 className="font-semibold text-sm">Interactive Kennel Map</h4>
                       <p className="text-xs opacity-90 mt-1">
-                        Click any kennel box to assign or remove animals. Occupied kennels show the animal's name.
+                        Tap any kennel to assign or remove animals.
                       </p>
                     </div>
                   </div>
 
                   {activeBuilding.rows.map((row) => (
                     <div key={row.id} className="bg-card rounded-xl border shadow-sm overflow-hidden">
-                      <div className="bg-muted border-b px-4 py-3 flex justify-between items-center">
-                        <h3 className="font-semibold">{row.name}</h3>
-                        <span className="text-xs font-medium px-2 py-1 bg-background border rounded-md text-muted-foreground uppercase">
+                      <div className="bg-muted border-b px-3 md:px-4 py-2 md:py-3 flex flex-wrap justify-between items-center gap-2">
+                        <h3 className="font-semibold text-sm md:text-base">{row.name}</h3>
+                        <span className="text-[10px] md:text-xs font-medium px-2 py-1 bg-background border rounded-md text-muted-foreground uppercase">
                           {row.type} • {row.capacity} Units
                         </span>
                       </div>
                       
-                      <div className="p-6">
-                        <div className="flex flex-wrap gap-3">
+                      <div className="p-3 md:p-6">
+                        <div className="flex flex-wrap gap-2 md:gap-3 justify-center sm:justify-start">
                           {Array.from({ length: row.capacity }).map((_, i) => {
                             const animal = occupancy.find(
                               a => a.buildingId === activeBuilding.id && 
