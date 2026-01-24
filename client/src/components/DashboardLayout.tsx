@@ -15,8 +15,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Plus, Heart, FileText, Calendar, Mail, ExternalLink } from "lucide-react";
-import { useState } from "react";
+import { Plus, ExternalLink } from "lucide-react";
+import { useQuickActions } from "@/hooks/useQuickActions";
 
 interface BreadcrumbItem {
   label: string;
@@ -44,6 +44,7 @@ interface Tenant {
 export default function DashboardLayout({ children, title, description, actions, breadcrumbs }: DashboardLayoutProps) {
   const { user } = useAuth();
   const [, navigate] = useLocation();
+  const { actions: quickActions, handleAction } = useQuickActions();
   
   const { data: tenantData } = useQuery<{ tenant: Tenant }>({
     queryKey: ['/api/tenant'],
@@ -58,7 +59,6 @@ export default function DashboardLayout({ children, title, description, actions,
   const showQuickActions = activeRole === "admin" || activeRole === "staff";
   const showHelpAssistant = activeRole === "admin" || activeRole === "staff";
   
-  // Calculate public site URL
   const tenant = tenantData?.tenant;
   const publicUrl = tenant?.customDomain && tenant.customDomainVerified
     ? `https://${tenant.customDomain}`
@@ -66,33 +66,16 @@ export default function DashboardLayout({ children, title, description, actions,
       ? `https://irescue.life/${tenant.subdomain}`
       : null;
 
-  const handleQuickAction = (action: string) => {
-    switch (action) {
-      case "add-animal":
-        navigate("/dashboard/animals");
-        break;
-      case "create-application":
-        navigate("/dashboard/applications");
-        break;
-      case "add-event":
-        navigate("/dashboard/calendar");
-        break;
-      case "send-email":
-        navigate("/dashboard/communications");
-        break;
-    }
-  };
-
   return (
     <SidebarProvider style={style as React.CSSProperties}>
-      <div className="flex h-screen w-full overflow-x-hidden">
+      <div className="flex h-screen w-full overflow-hidden">
         <AppSidebar 
           rescueName={rescueName}
           userName={user?.fullName || "User"}
           userRole={(user?.activeRole || "staff") as "admin" | "board_member" | "staff" | "foster" | "volunteer"}
         />
-        <div className="flex flex-col flex-1 min-w-0 overflow-x-hidden">
-          <header className="flex flex-wrap items-center justify-between gap-4 border-b p-4">
+        <div className="flex flex-col flex-1">
+          <header className="flex items-center justify-between gap-4 border-b p-4">
             <div className="flex items-center gap-4 flex-1 min-w-0">
               <SidebarTrigger data-testid="button-sidebar-toggle" />
               {breadcrumbs && breadcrumbs.length > 0 ? (
@@ -123,7 +106,7 @@ export default function DashboardLayout({ children, title, description, actions,
                   </a>
                 </Button>
               )}
-              {showQuickActions && (
+              {showQuickActions && quickActions.length > 0 && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button
@@ -139,34 +122,16 @@ export default function DashboardLayout({ children, title, description, actions,
                   <DropdownMenuContent align="end" className="w-56">
                     <DropdownMenuLabel>Quick Actions</DropdownMenuLabel>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      onClick={() => handleQuickAction("add-animal")}
-                      data-testid="menu-item-add-animal"
-                    >
-                      <Heart className="mr-2 h-4 w-4" />
-                      Add Animal
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => handleQuickAction("create-application")}
-                      data-testid="menu-item-create-application"
-                    >
-                      <FileText className="mr-2 h-4 w-4" />
-                      Create Application
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => handleQuickAction("add-event")}
-                      data-testid="menu-item-add-event"
-                    >
-                      <Calendar className="mr-2 h-4 w-4" />
-                      Add Event
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => handleQuickAction("send-email")}
-                      data-testid="menu-item-send-email"
-                    >
-                      <Mail className="mr-2 h-4 w-4" />
-                      Send Email
-                    </DropdownMenuItem>
+                    {quickActions.map((action) => (
+                      <DropdownMenuItem
+                        key={action.id}
+                        onClick={() => handleAction(action.id)}
+                        data-testid={`menu-item-${action.id}`}
+                      >
+                        <action.icon className="mr-2 h-4 w-4" />
+                        {action.label}
+                      </DropdownMenuItem>
+                    ))}
                   </DropdownMenuContent>
                 </DropdownMenu>
               )}

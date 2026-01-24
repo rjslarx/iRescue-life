@@ -48,6 +48,7 @@ import {
   ChevronDown,
   Loader2,
   FolderOpen,
+  Eye,
   ShoppingCart,
   Inbox,
   Plug2,
@@ -63,6 +64,8 @@ import {
   Radio,
   Palette,
   Video,
+  Kanban,
+  Building2,
 } from "lucide-react";
 
 interface AppSidebarProps {
@@ -86,9 +89,10 @@ interface NavGroup {
 }
 
 const roleLabels: Record<string, string> = {
-  admin: "Admin",
+  owner: "Owner",
+  admin: "Administrator",
   board_member: "Board Member",
-  staff: "Staff Member",
+  staff: "Staff",
   foster: "Foster",
   volunteer: "Volunteer",
 };
@@ -101,6 +105,7 @@ const iconMap: Record<string, any> = {
   Users,
   DollarSign,
   Calendar,
+  CalendarCog,
   Package,
   BarChart3,
   Smile,
@@ -121,6 +126,7 @@ const iconMap: Record<string, any> = {
   Smartphone,
   Truck,
   Video,
+  Kanban,
 };
 
 interface RecentPage {
@@ -284,6 +290,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
       title: "Overview",
       items: [
         { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
+        { title: "Operations Center", url: "/dashboard/operations", icon: Radio },
       ],
       defaultOpen: true,
     },
@@ -302,8 +309,11 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
       items: [
         { title: "Team", url: "/dashboard/team", icon: Users, notificationKey: "teamInvitations" },
         { title: "Foster Management", url: "/dashboard/foster-management", icon: PawPrint, notificationKey: "fosterUpdates", usesGoogleDrive: true },
+        { title: "Foster Pipeline", url: "/dashboard/foster-pipeline", icon: Kanban },
         { title: "Volunteer Management", url: "/dashboard/volunteers", icon: UserCircle },
+        { title: "Volunteer Pipeline", url: "/dashboard/volunteer-pipeline", icon: Kanban },
         { title: "Contacts", url: "/dashboard/contacts", icon: UserCircle },
+        { title: "Partner Organizations", url: "/dashboard/partner-organizations", icon: Building2 },
         { title: "Collaboration Hub", url: "/dashboard/collaboration", icon: Truck },
       ],
       defaultOpen: false,
@@ -330,6 +340,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
       title: "Administration",
       items: [
         { title: "Finance", url: "/dashboard/finance", icon: DollarSign },
+        { title: "Donation Links", url: "/dashboard/donation-links", icon: DollarSign },
         { title: "Grants", url: "/dashboard/grants", icon: Briefcase },
         { title: "Calendar", url: "/dashboard/calendar", icon: Calendar },
         { title: "Calendar Management", url: "/dashboard/calendar-management", icon: CalendarCog },
@@ -340,6 +351,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
         { title: "Compliance & Watchdog", url: "/dashboard/compliance", icon: Shield },
         { title: "Platform Integrations", url: "/dashboard/platform-integrations", icon: Plug2 },
         { title: "Analytics & Reports", url: "/dashboard/analytics", icon: BarChart3 },
+        { title: "Adopter Portal Preview", url: "/dashboard/adopter-portal-preview", icon: Eye },
         { title: "Settings", url: "/dashboard/settings", icon: Settings },
       ],
       defaultOpen: false,
@@ -359,6 +371,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
       title: "Overview",
       items: [
         { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
+        { title: "Operations Center", url: "/dashboard/operations", icon: Radio },
       ],
       defaultOpen: true,
     },
@@ -377,8 +390,11 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
       items: [
         { title: "Team", url: "/dashboard/team", icon: Users },
         { title: "Foster Management", url: "/dashboard/foster-management", icon: PawPrint, notificationKey: "fosterUpdates", usesGoogleDrive: true },
+        { title: "Foster Pipeline", url: "/dashboard/foster-pipeline", icon: Kanban },
         { title: "Volunteer Management", url: "/dashboard/volunteers", icon: UserCircle },
+        { title: "Volunteer Pipeline", url: "/dashboard/volunteer-pipeline", icon: Kanban },
         { title: "Contacts", url: "/dashboard/contacts", icon: UserCircle },
+        { title: "Partner Organizations", url: "/dashboard/partner-organizations", icon: Building2 },
         { title: "Collaboration Hub", url: "/dashboard/collaboration", icon: Truck },
       ],
       defaultOpen: false,
@@ -387,6 +403,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
       title: "Content & Reports",
       items: [
         { title: "Finance", url: "/dashboard/finance", icon: DollarSign },
+        { title: "Donation Links", url: "/dashboard/donation-links", icon: DollarSign },
         { title: "Grants", url: "/dashboard/grants", icon: Briefcase },
         { title: "Supply Registry", url: "/dashboard/supplies", icon: ShoppingCart },
         { title: "Communications", url: "/dashboard/communications", icon: Mail },
@@ -417,6 +434,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
       title: "Overview",
       items: [
         { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
+        { title: "Operations Center", url: "/dashboard/operations", icon: Radio },
       ],
       defaultOpen: true,
     },
@@ -429,6 +447,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
         { title: "Adoption Applications", url: "/dashboard/applications", icon: FileText, notificationKey: "applications" },
         { title: "Supply Registry", url: "/dashboard/supplies", icon: ShoppingCart },
         { title: "Volunteer Management", url: "/dashboard/volunteers", icon: UserCircle },
+        { title: "Volunteer Pipeline", url: "/dashboard/volunteer-pipeline", icon: Kanban },
         { title: "Collaboration Hub", url: "/dashboard/collaboration", icon: Truck },
       ],
       defaultOpen: true,
@@ -491,6 +510,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
     '/dashboard/calendar': 'calendar',
     '/dashboard/site-permissions': 'site-permissions',
     '/dashboard/contacts': 'donors',
+    '/dashboard/partner-organizations': 'donors',
     '/dashboard/documents': 'documents',
     '/dashboard/content-pages': 'custom-pages',
     '/dashboard/reports': 'analytics',
@@ -661,33 +681,60 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
                     data-testid="button-role-switcher"
                     disabled={isSwitching}
                   >
-                    <Badge variant={getRoleBadgeVariant(effectiveRole)} className="text-xs">
-                      {isSwitching ? (
-                        <><Loader2 className="h-3 w-3 mr-1 animate-spin" />switching...</>
-                      ) : (
-                        roleLabels[effectiveRole] || effectiveRole
-                      )}
-                    </Badge>
+                    {(() => {
+                      const isAdminOrOwner = user.roles.includes('admin') || user.roles.includes('owner');
+                      const isPreviewingRole = isAdminOrOwner && !user.roles.includes(effectiveRole);
+                      return (
+                        <>
+                          {isPreviewingRole && <Eye className="h-3 w-3 text-muted-foreground mr-1" />}
+                          <Badge variant={getRoleBadgeVariant(effectiveRole)} className="text-xs">
+                            {isSwitching ? (
+                              <><Loader2 className="h-3 w-3 mr-1 animate-spin" />switching...</>
+                            ) : (
+                              <>
+                                {roleLabels[effectiveRole] || effectiveRole}
+                                {isPreviewingRole && <span className="ml-1 opacity-70">(preview)</span>}
+                              </>
+                            )}
+                          </Badge>
+                        </>
+                      );
+                    })()}
                     <ChevronDown className="h-3 w-3 text-muted-foreground" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="w-48">
-                  <DropdownMenuLabel>Switch Role</DropdownMenuLabel>
+                  <DropdownMenuLabel>
+                    {(user.roles.includes('admin') || user.roles.includes('owner')) ? 'Switch / Preview Role' : 'Switch Role'}
+                  </DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  {user.roles.map((role) => (
-                    <DropdownMenuItem
-                      key={role}
-                      onClick={() => handleRoleSwitch(role)}
-                      className="cursor-pointer"
-                      disabled={isSwitching || role === effectiveRole}
-                      data-testid={`menu-item-role-${role}`}
-                    >
-                      <div className="w-4 mr-2 flex items-center justify-center" aria-hidden="true">
-                        {role === effectiveRole && <Check className="h-4 w-4" />}
-                      </div>
-                      {roleLabels[role] || role}
-                    </DropdownMenuItem>
-                  ))}
+                  {(() => {
+                    // Admins and owners can preview any role
+                    const isAdminOrOwner = user.roles.includes('admin') || user.roles.includes('owner');
+                    const allRoles = ['owner', 'admin', 'board_member', 'staff', 'foster', 'volunteer'];
+                    const rolesToShow = isAdminOrOwner ? allRoles : user.roles;
+                    
+                    return rolesToShow.map((role) => {
+                      const isOwnRole = user.roles.includes(role);
+                      return (
+                        <DropdownMenuItem
+                          key={role}
+                          onClick={() => handleRoleSwitch(role)}
+                          className="cursor-pointer"
+                          disabled={isSwitching || role === effectiveRole}
+                          data-testid={`menu-item-role-${role}`}
+                        >
+                          <div className="w-4 mr-2 flex items-center justify-center" aria-hidden="true">
+                            {role === effectiveRole && <Check className="h-4 w-4" />}
+                          </div>
+                          {roleLabels[role] || role}
+                          {isAdminOrOwner && !isOwnRole && (
+                            <span className="ml-auto text-xs text-muted-foreground">preview</span>
+                          )}
+                        </DropdownMenuItem>
+                      );
+                    });
+                  })()}
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (

@@ -11,7 +11,7 @@ interface ActionConfig {
 
 type CirclePosition = 'top-right' | 'bottom-right' | 'center';
 type CircleSize = 'sm' | 'md' | 'lg';
-type HeroLayoutType = 'none' | 'action_circle' | 'three_doors';
+type HeroLayoutType = 'none' | 'action_circle' | 'three_doors' | 'both';
 
 interface ActionCircleConfig {
   enabled?: boolean;
@@ -56,10 +56,13 @@ interface ThreeDoorsConfig {
   };
 }
 
+type FocalPoint = 'center' | 'top' | 'bottom' | 'left' | 'right' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+
 interface HeroProps {
   rescueName: string;
   tagline: string;
   backgroundImage: string;
+  mobileBackgroundImage?: string | null;
   onViewAnimals?: () => void;
   onDonate?: () => void;
   actionCircle?: ActionCircleConfig;
@@ -69,12 +72,27 @@ interface HeroProps {
   heroHeadline?: string | null;
   heroButtonText?: string | null;
   heroButton2Text?: string | null;
+  heroFocalPoint?: FocalPoint | null;
 }
+
+// Map focal point values to CSS background-position
+const FOCAL_POINT_MAP: Record<FocalPoint, string> = {
+  'center': 'center center',
+  'top': 'center top',
+  'bottom': 'center bottom',
+  'left': 'left center',
+  'right': 'right center',
+  'top-left': 'left top',
+  'top-right': 'right top',
+  'bottom-left': 'left bottom',
+  'bottom-right': 'right bottom',
+};
 
 export default function Hero({ 
   rescueName, 
   tagline, 
   backgroundImage, 
+  mobileBackgroundImage,
   onViewAnimals, 
   onDonate,
   actionCircle,
@@ -83,24 +101,38 @@ export default function Hero({
   basePath = '',
   heroHeadline,
   heroButtonText,
-  heroButton2Text
+  heroButton2Text,
+  heroFocalPoint = 'center'
 }: HeroProps) {
+  // Get the CSS background-position value for the focal point
+  const backgroundPosition = FOCAL_POINT_MAP[heroFocalPoint || 'center'] || 'center center';
+  // Use mobile image if provided, otherwise fall back to main image with focal point
+  const hasMobileImage = !!mobileBackgroundImage;
   // Check if action circle has any configured images
-  const hasActionCircle = heroLayoutType === 'action_circle' && 
+  const hasActionCircle = (heroLayoutType === 'action_circle' || heroLayoutType === 'both') && 
     actionCircle?.enabled && actionCircle?.actions && 
     Object.values(actionCircle.actions).some(action => action?.imageUrl);
   
   // Check if three doors layout is enabled
-  const hasThreeDoors = heroLayoutType === 'three_doors';
+  const hasThreeDoors = heroLayoutType === 'three_doors' || heroLayoutType === 'both';
 
   return (
+    <>
     <section className="relative min-h-[400px] sm:min-h-[450px] md:min-h-[500px] w-full overflow-visible">
       <div 
         className="absolute inset-0 overflow-hidden"
       >
+        {/* Mobile background image - shown on small screens if mobile image is provided */}
+        {hasMobileImage && (
+          <div 
+            className="absolute inset-0 sm:hidden"
+            style={{ backgroundImage: `url(${mobileBackgroundImage})`, backgroundSize: 'cover', backgroundPosition: 'center center', filter: 'brightness(1.1)' }}
+          />
+        )}
+        {/* Desktop background image - always shown on sm+ screens, or on mobile if no mobile image */}
         <div 
-          className="absolute inset-0"
-          style={{ backgroundImage: `url(${backgroundImage})`, backgroundSize: 'cover', backgroundPosition: 'center' }}
+          className={hasMobileImage ? "absolute inset-0 hidden sm:block" : "absolute inset-0"}
+          style={{ backgroundImage: `url(${backgroundImage})`, backgroundSize: 'cover', backgroundPosition, filter: 'brightness(1.1)' }}
         />
         <div className="absolute inset-0 bg-gradient-to-br from-black/70 via-black/50 to-black/30" />
       </div>
@@ -121,7 +153,7 @@ export default function Hero({
                 variant="default"
                 onClick={onViewAnimals}
                 data-testid="button-view-animals"
-                className="gap-2 w-full sm:w-auto"
+                className="hidden sm:inline-flex gap-2 w-full sm:w-auto"
               >
                 {heroButtonText || "Meet Our Pets"}
                 <ArrowRight className="h-4 w-4" />
@@ -131,7 +163,7 @@ export default function Hero({
                 variant="outline"
                 onClick={onDonate}
                 data-testid="button-hero-donate"
-                className="bg-background/20 backdrop-blur-sm border-white/30 text-white hover:bg-background/30 w-full sm:w-auto"
+                className="bg-background/20 backdrop-blur-sm border-white/30 text-white w-full sm:w-auto"
               >
                 {heroButton2Text || "Donate Now"}
               </Button>
@@ -147,13 +179,6 @@ export default function Hero({
         <>
           {/* Mobile: Normal stacked layout below hero */}
           <div className="sm:hidden relative z-10 pt-6 pb-4 bg-background" data-testid="three-doors-container-mobile">
-            <ThreeDoors basePath={basePath} config={threeDoorsConfig} />
-          </div>
-          {/* Desktop: Positioned at bottom of hero, colored headers overlap image */}
-          <div 
-            className="hidden sm:block absolute bottom-0 left-0 right-0 z-10 translate-y-[calc(60%+7px)]" 
-            data-testid="three-doors-container"
-          >
             <ThreeDoors basePath={basePath} config={threeDoorsConfig} />
           </div>
         </>
@@ -174,5 +199,19 @@ export default function Hero({
         </div>
       )}
     </section>
+    {/* Desktop: Three doors in normal flow with negative margin to overlap hero - space is naturally reserved
+        Original used translate-y-[calc(60%+7px)] pushing down 60% of height + 7px
+        To match: pull up by (40% of height - 7px) so same portion overlaps with hero
+        Three doors ~140px tall, so: -(140 * 0.4 - 7) = -(56 - 7) = -49px */}
+    {hasThreeDoors && (
+      <div 
+        className="hidden sm:block relative z-10" 
+        style={{ marginTop: '-52px' }}
+        data-testid="three-doors-container"
+      >
+        <ThreeDoors basePath={basePath} config={threeDoorsConfig} />
+      </div>
+    )}
+    </>
   );
 }

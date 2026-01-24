@@ -9,8 +9,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Menu, ChevronDown } from "lucide-react";
-import type { CustomPage } from "@shared/schema";
+import { Menu, ChevronDown, Package } from "lucide-react";
+import type { CustomPage, SupplyItem } from "@shared/schema";
 
 const DEFAULT_LOGO = "/icon-192.png";
 
@@ -28,12 +28,22 @@ export default function PublicHeader({ rescueName, logoUrl }: PublicHeaderProps)
     staleTime: 1000 * 60 * 5, // Cache for 5 minutes
   });
   
+  // Fetch supply items to check if wishlist should show
+  const { data: supplyData } = useQuery<{ items: SupplyItem[] }>({
+    queryKey: ['/api/supply-items'],
+    staleTime: 1000 * 60 * 5, // Cache for 5 minutes
+  });
+  
   const navigationPages = pagesData?.pages || [];
+  const hasWishlistItems = (supplyData?.items?.length || 0) > 0;
+  
+  // Show "More" dropdown if there are custom pages OR wishlist items
+  const showMoreDropdown = navigationPages.length > 0 || hasWishlistItems;
   
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container flex h-16 items-center justify-between gap-4 px-4 md:px-6">
-        <Link href="/" className="flex items-center gap-2 md:gap-3 hover-elevate rounded-md px-2 md:px-3 py-2 -ml-2 md:-ml-3">
+      <div className="container flex h-16 items-center gap-4 px-4 md:px-6">
+        <Link href="/" className="flex items-center gap-2 md:gap-3 hover-elevate rounded-md px-2 md:px-3 py-2 -ml-2 md:-ml-3 flex-1 min-w-0 overflow-hidden">
           <img 
             src={logoUrl || DEFAULT_LOGO} 
             alt={rescueName} 
@@ -60,8 +70,8 @@ export default function PublicHeader({ rescueName, logoUrl }: PublicHeaderProps)
             </Button>
           </Link>
           
-          {/* Custom Navigation Pages - More dropdown */}
-          {navigationPages.length > 0 && (
+          {/* Custom Navigation Pages & Wishlist - More dropdown */}
+          {showMoreDropdown && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" data-testid="button-more-pages">
@@ -70,6 +80,18 @@ export default function PublicHeader({ rescueName, logoUrl }: PublicHeaderProps)
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
+                {hasWishlistItems && (
+                  <DropdownMenuItem asChild>
+                    <Link 
+                      href="/wishlist"
+                      className="cursor-pointer w-full flex items-center gap-2"
+                      data-testid="link-nav-wishlist"
+                    >
+                      <Package className="h-4 w-4" />
+                      Supply Wishlist
+                    </Link>
+                  </DropdownMenuItem>
+                )}
                 {navigationPages.map((page) => (
                   <DropdownMenuItem key={page.id} asChild>
                     <Link 
@@ -99,7 +121,7 @@ export default function PublicHeader({ rescueName, logoUrl }: PublicHeaderProps)
 
         {/* Mobile Navigation */}
         <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-          <SheetTrigger asChild className="md:hidden">
+          <SheetTrigger asChild className="md:hidden flex-shrink-0">
             <Button variant="ghost" size="icon" data-testid="button-mobile-menu">
               <Menu className="h-5 w-5" />
             </Button>
@@ -137,10 +159,23 @@ export default function PublicHeader({ rescueName, logoUrl }: PublicHeaderProps)
                 </Button>
               </Link>
               
-              {/* Custom Navigation Pages - in mobile menu */}
-              {navigationPages.length > 0 && (
+              {/* Custom Navigation Pages & Wishlist - in mobile menu */}
+              {showMoreDropdown && (
                 <>
                   <div className="border-t my-2" />
+                  {hasWishlistItems && (
+                    <Link href="/wishlist">
+                      <Button 
+                        variant="ghost" 
+                        className="w-full justify-start"
+                        data-testid="button-wishlist-mobile"
+                        onClick={() => setMobileMenuOpen(false)}
+                      >
+                        <Package className="h-4 w-4 mr-2" />
+                        Supply Wishlist
+                      </Button>
+                    </Link>
+                  )}
                   {navigationPages.map((page) => (
                     <Link key={page.id} href={`/${page.slug}`}>
                       <Button 

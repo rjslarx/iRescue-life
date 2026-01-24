@@ -15,9 +15,11 @@ import Dashboard from "@/pages/Dashboard";
 import AnimalsPage from "@/pages/AnimalsPage";
 import ApplicationsPage from "@/pages/ApplicationsPage";
 import FinancePage from "@/pages/FinancePage";
+import DonationLinksPage from "@/pages/DonationLinksPage";
 import GrantsPage from "@/pages/GrantsPage";
 import DonorsPage from "@/pages/DonorsPage";
 import ContactsPage from "@/pages/ContactsPage";
+import PartnerOrganizationsPage from "@/pages/PartnerOrganizationsPage";
 import ForgotPasswordPage from "@/pages/ForgotPasswordPage";
 import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import AcceptInvitationPage from "@/pages/AcceptInvitationPage";
@@ -28,6 +30,7 @@ import MyFostersPage from "@/pages/MyFostersPage";
 import FosterAnimalProfilePage from "@/pages/FosterAnimalProfilePage";
 import FosterAnimalMedicalPage from "@/pages/FosterAnimalMedicalPage";
 import FosterManagementPage from "@/pages/FosterManagementPage";
+import FosterApplicationsPipelinePage from "@/pages/FosterApplicationsPipelinePage";
 import FosterMobilePortal from "@/pages/FosterMobilePortal";
 import TeamManagementPage from "@/pages/TeamManagementPage";
 import EmailCampaignPage from "@/pages/EmailCampaignPage";
@@ -71,10 +74,12 @@ import PlatformBlogPostPage from "@/pages/PlatformBlogPostPage";
 import EventDetailPage from "@/pages/EventDetailPage";
 import PublicVolunteerPage from "@/pages/PublicVolunteerPage";
 import VolunteerApplicationManagementPage from "@/pages/VolunteerApplicationManagementPage";
+import VolunteerApplicationsPipelinePage from "@/pages/VolunteerApplicationsPipelinePage";
 import PublicFosterPage from "@/pages/PublicFosterPage";
 import PublicSurrenderPage from "@/pages/PublicSurrenderPage";
 import PublicAdoptionCheckoutPage from "@/pages/PublicAdoptionCheckoutPage";
 import PublicFormSigningPage from "@/pages/PublicFormSigningPage";
+import FormPaymentPage from "@/pages/FormPaymentPage";
 import PublicContactPage from "@/pages/PublicContactPage";
 import DonatePage from "@/pages/DonatePage";
 import GivePage from "@/pages/GivePage";
@@ -90,6 +95,14 @@ import ShopManagementPage from "@/pages/ShopManagementPage";
 import CollaborationHubPage from "@/pages/CollaborationHubPage";
 import RunSheetPage from "@/pages/RunSheetPage";
 import ActiveTransportPage from "@/pages/ActiveTransportPage";
+import AdopterPortalPage from "@/pages/AdopterPortalPage";
+import AdopterPetDetailPage from "@/pages/AdopterPetDetailPage";
+import AdopterLoginPage from "@/pages/AdopterLoginPage";
+import AdopterCompliancePage from "@/pages/AdopterCompliancePage";
+import AdopterPortalPreviewPage from "@/pages/AdopterPortalPreviewPage";
+import OperationsDashboardPage from "@/pages/OperationsDashboardPage";
+import FosterPortalPage from "@/pages/FosterPortalPage";
+import FosterAnimalDetailPage from "@/pages/FosterAnimalDetailPage";
 import PlatformDashboard from "@/pages/platform/PlatformDashboard";
 import TenantsPage from "@/pages/platform/TenantsPage";
 import UsersPage from "@/pages/platform/UsersPage";
@@ -111,6 +124,7 @@ import { DemoAccessDialog } from "@/components/DemoAccessDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { usePageTracking } from "@/hooks/usePageTracking";
+import { useVisitTracking } from "@/hooks/useVisitTracking";
 
 // Component to handle root path routing
 function RootHandler() {
@@ -194,6 +208,7 @@ function RouterSwitch() {
       <Route path="/adoption-checkout/:token" component={PublicAdoptionCheckoutPage} />
       <Route path="/run-sheet/:token" component={RunSheetPage} />
       <Route path="/form/:token" component={PublicFormSigningPage} />
+      <Route path="/form/:token/payment" component={FormPaymentPage} />
       
       {/* Protected dashboard routes */}
       <ProtectedRoute path="/dashboard" pageId="dashboard" component={Dashboard} />
@@ -202,9 +217,11 @@ function RouterSwitch() {
       <ProtectedRoute path="/dashboard/team" pageId="team" component={TeamManagementPage} />
       <ProtectedRoute path="/dashboard/analytics" pageId="analytics" component={Analytics} />
       <ProtectedRoute path="/dashboard/finance" pageId="finance" component={FinancePage} />
+      <ProtectedRoute path="/dashboard/donation-links" pageId="finance" component={DonationLinksPage} />
       <ProtectedRoute path="/dashboard/grants" pageId="grants" component={GrantsPage} />
       <ProtectedRoute path="/dashboard/donors" pageId="donors" component={DonorsPage} />
       <ProtectedRoute path="/dashboard/contacts" pageId="contacts" component={ContactsPage} />
+      <ProtectedRoute path="/dashboard/partner-organizations" pageId="contacts" component={PartnerOrganizationsPage} />
       <ProtectedRoute path="/dashboard/volunteers" pageId="volunteers" component={VolunteerManagementPage} />
       <ProtectedRoute path="/dashboard/reports" pageId="analytics" component={Analytics} />
       <ProtectedRoute path="/dashboard/my-fosters" pageId="foster-management" component={MyFostersPage} />
@@ -212,7 +229,27 @@ function RouterSwitch() {
       <ProtectedRoute path="/dashboard/my-fosters/:animalId" pageId="foster-management" component={FosterAnimalProfilePage} />
       <ProtectedRoute path="/dashboard/foster-mobile" pageId="foster-management" component={FosterMobilePortal} />
       <ProtectedRoute path="/dashboard/foster-management" pageId="foster-management" component={FosterManagementPage} />
+      
+      {/* Adopter Portal routes - for adopter role users to access their pets */}
+      <Route path="/my-pets/login" component={AdopterLoginPage} />
+      <Route path="/my-pets/:animalId" component={AdopterPetDetailPage} />
+      <Route path="/my-pets" component={AdopterPortalPage} />
+      
+      {/* Foster Portal routes - for foster role users to manage their foster animals */}
+      <Route path="/my-fosters/:animalId" component={FosterAnimalDetailPage} />
+      <Route path="/my-fosters" component={FosterPortalPage} />
+      
+      {/* Operations dashboard - unified compliance and action center */}
+      <ProtectedRoute path="/dashboard/operations" pageId="analytics" component={OperationsDashboardPage} />
+      
+      {/* Staff compliance dashboard for medication tracking */}
+      <ProtectedRoute path="/dashboard/adopter-compliance" pageId="analytics" component={AdopterCompliancePage} />
+      
+      {/* Admin-only adopter portal preview */}
+      <ProtectedRoute path="/dashboard/adopter-portal-preview" pageId="analytics" component={AdopterPortalPreviewPage} />
+      <ProtectedRoute path="/dashboard/foster-pipeline" pageId="foster-management" component={FosterApplicationsPipelinePage} />
       <ProtectedRoute path="/dashboard/volunteer-applications" pageId="volunteers" component={VolunteerApplicationManagementPage} />
+      <ProtectedRoute path="/dashboard/volunteer-pipeline" pageId="volunteers" component={VolunteerApplicationsPipelinePage} />
       <ProtectedRoute path="/dashboard/communications" pageId="communications" component={CommunicationsPage} />
       <ProtectedRoute path="/dashboard/broadcasts" pageId="communications" component={BroadcastsPage} />
       <ProtectedRoute path="/dashboard/newsletter-campaigns" pageId="communications" component={NewsletterCampaignsPage} />
@@ -405,6 +442,7 @@ function DemoPage() {
 
 function AppContent() {
   usePageTracking();
+  useVisitTracking();
   usePWAManifest();
   useTenantBranding();
   const { basePath } = useTenant();

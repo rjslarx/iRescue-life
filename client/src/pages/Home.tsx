@@ -9,16 +9,21 @@ import AnnouncementBar from "@/components/AnnouncementBar";
 import { useTenant } from "@/contexts/TenantContext";
 import MascotWidget from "@/components/MascotWidget";
 import AnimalCard from "@/components/AnimalCard";
+import MobileAnimalCarousel from "@/components/MobileAnimalCarousel";
+import MobileSponsorCarousel from "@/components/MobileSponsorCarousel";
+import { useIsMobile } from "@/hooks/use-mobile";
 import EventCard from "@/components/EventCard";
 import HappyTailsCard from "@/components/HappyTailsCard";
 import DonationForm from "@/components/DonationForm";
 import NewsletterSubscribe from "@/components/NewsletterSubscribe";
+import { RecentDonationsWidget } from "@/components/RecentDonationsWidget";
 import { PublicAdoptionDialog } from "@/components/PublicAdoptionDialog";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
-import { SiFacebook, SiInstagram, SiYoutube, SiTiktok } from "react-icons/si";
+import { SiFacebook, SiInstagram, SiYoutube, SiTiktok, SiAmazon } from "react-icons/si";
+import { ExternalLink, ShoppingCart } from "lucide-react";
 import { useSEO } from "@/hooks/useSEO";
 import type { Animal, Tenant, CustomPage, HappyTail, ContentModule } from "@shared/schema";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,14 +35,14 @@ import dogPhoto from '@assets/generated_images/Golden_retriever_dog_portrait_fde
 // Sanitize color values with strict allowlist
 function sanitizeColor(value: string | undefined): string | undefined {
   if (!value) return undefined;
-  
+
   const trimmed = value.trim().toLowerCase();
-  
+
   // Allow hex colors (#RGB, #RRGGBB, #RRGGBBAA) - with end anchor
   if (/^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(trimmed)) {
     return trimmed;
   }
-  
+
   // Allow rgb/rgba colors with strict numeric range validation
   // RGB values: 0-255, Alpha: 0.0-1.0 (no scientific notation)
   // Returns CANONICAL format to prevent injection
@@ -47,7 +52,7 @@ function sanitizeColor(value: string | undefined): string | undefined {
     const rNum = parseInt(r);
     const gNum = parseInt(g);
     const bNum = parseInt(b);
-    
+
     if (rNum <= 255 && gNum <= 255 && bNum <= 255) {
       if (a) {
         const aNum = parseFloat(a);
@@ -61,7 +66,7 @@ function sanitizeColor(value: string | undefined): string | undefined {
       }
     }
   }
-  
+
   // Allow HSL colors with strict numeric range validation
   // Hue: 0-360, Saturation/Lightness: 0-100%, Alpha: 0.0-1.0
   // Returns CANONICAL format to prevent injection
@@ -71,7 +76,7 @@ function sanitizeColor(value: string | undefined): string | undefined {
     const hNum = parseInt(h);
     const sNum = parseInt(s);
     const lNum = parseInt(l);
-    
+
     if (hNum <= 360 && sNum <= 100 && lNum <= 100) {
       if (a) {
         const aNum = parseFloat(a);
@@ -85,7 +90,7 @@ function sanitizeColor(value: string | undefined): string | undefined {
       }
     }
   }
-  
+
   // Allow named colors (common safe ones) - return canonical lowercase value
   const namedColors: { [key: string]: string } = {
     'transparent': 'transparent',
@@ -112,16 +117,16 @@ function sanitizeColor(value: string | undefined): string | undefined {
     'silver': 'silver',
     'fuchsia': 'fuchsia'
   };
-  
+
   return namedColors[trimmed] || undefined;
 }
 
 // Sanitize font family with allowlist
 function sanitizeFontFamily(value: string | undefined): string | undefined {
   if (!value) return undefined;
-  
+
   const trimmed = value.trim().toLowerCase();
-  
+
   // Allow common safe font families - return ONLY the canonical safe value
   const safeFonts: { [key: string]: string } = {
     'inherit': 'inherit',
@@ -145,7 +150,7 @@ function sanitizeFontFamily(value: string | undefined): string | undefined {
     'monaco': 'Monaco',
     'lucida console': 'Lucida Console'
   };
-  
+
   // Return the canonical safe value, NOT the user's input
   // This prevents attackers from appending extra CSS directives
   return safeFonts[trimmed] || undefined;
@@ -155,9 +160,9 @@ function sanitizeFontFamily(value: string | undefined): string | undefined {
 // Returns CANONICAL format to prevent injection
 function sanitizeFontSize(value: string | undefined): string | undefined {
   if (!value) return undefined;
-  
+
   const trimmed = value.trim().toLowerCase();
-  
+
   // Allow rem, em, px with numbers - validate single decimal point
   const unitMatch = trimmed.match(/^(\d+(?:\.\d+)?)(rem|em|px)$/i);
   if (unitMatch) {
@@ -168,7 +173,7 @@ function sanitizeFontSize(value: string | undefined): string | undefined {
       return `${parseFloat(num)}${unit.toLowerCase()}`;
     }
   }
-  
+
   // Allow percentage - validate single decimal point
   const pctMatch = trimmed.match(/^(\d+(?:\.\d+)?)%$/);
   if (pctMatch) {
@@ -179,7 +184,7 @@ function sanitizeFontSize(value: string | undefined): string | undefined {
       return `${parseFloat(num)}%`;
     }
   }
-  
+
   return undefined;
 }
 
@@ -187,16 +192,16 @@ function sanitizeFontSize(value: string | undefined): string | undefined {
 // Returns CANONICAL URL (for storage) - caller wraps in url() for rendering
 function sanitizeBgImage(url: string | undefined): string | undefined {
   if (!url || url === "") return undefined;
-  
+
   // Handle already-wrapped url() format from stored data
   const urlMatch = url.match(/^url\(['"]?([^'"()]+)['"]?\)$/i);
   const trimmed = urlMatch ? urlMatch[1].trim() : url.trim();
-  
+
   // Allow relative paths from object storage (e.g., /objects/animals/uuid)
   if (trimmed.startsWith('/objects/')) {
     return trimmed;
   }
-  
+
   try {
     const parsed = new URL(trimmed, window.location.origin);
     // Only allow http/https protocols
@@ -213,6 +218,7 @@ function sanitizeBgImage(url: string | undefined): string | undefined {
 
 export default function Home() {
   const { basePath, tenantId } = useTenant();
+  const isMobile = useIsMobile();
   const [donationDialogOpen, setDonationDialogOpen] = useState(false);
   const [adoptionDialogOpen, setAdoptionDialogOpen] = useState(false);
   const [selectedAnimal, setSelectedAnimal] = useState<Animal | null>(null);
@@ -268,12 +274,12 @@ export default function Home() {
     // Sanitize background image URL
     const bgImageUrl = sanitizeBgImage(module.styling?.backgroundImage);
     const imagePosition = module.styling?.imagePosition || "background";
-    
+
     // Only use as background image when position is "background"
     const sanitizedBgImage = (bgImageUrl && imagePosition === "background")
       ? `url('${bgImageUrl.replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/\)/g, "\\)").replace(/\(/g, "\\(")}')` 
       : undefined;
-    
+
     const sanitizedStyle = {
       backgroundColor: sanitizeColor(module.styling?.backgroundColor),
       color: sanitizeColor(module.styling?.textColor),
@@ -304,14 +310,14 @@ export default function Home() {
           <img 
             src={bgImageUrl} 
             alt={module.title}
-            className="w-full h-48 object-cover rounded-md"
+            className="w-full h-72 object-cover rounded-md"
           />
         </div>
       );
     };
 
     const showBorder = module.styling?.showBorder ?? false;
-    
+
     return (
       <Card 
         className={`relative flex h-full flex-col overflow-hidden ${showBorder ? 'border-2 border-border' : ''}`}
@@ -321,13 +327,13 @@ export default function Home() {
         {imagePosition === "background" && bgImageUrl && (
           <div className="absolute inset-0 bg-black/40" />
         )}
-        
+
         {imagePosition === "above" && (
           <div className="p-4 pb-0">
             {renderImage()}
           </div>
         )}
-        
+
         <CardHeader className="relative z-10">
           <CardTitle style={textStyle}>
             {DOMPurify.sanitize(module.title, { ALLOWED_TAGS: [], KEEP_CONTENT: true })}
@@ -338,7 +344,7 @@ export default function Home() {
             {sanitizedContent}
           </p>
         </CardContent>
-        
+
         {imagePosition === "below" && (
           <div className="p-4 pt-0 mt-auto">
             {renderImage()}
@@ -348,16 +354,30 @@ export default function Home() {
     );
   };
 
-  // Randomly select and limit animals for homepage display
-  const displayedAnimals = useMemo(() => {
-    const availableAnimals = animals.filter(animal => 
+  // Fisher-Yates shuffle algorithm for proper randomization
+  const shuffleArray = <T,>(array: T[]): T[] => {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+  };
+
+  // Get all available animals and randomize their order for display
+  const allAvailableAnimals = useMemo(() => {
+    const available = animals.filter(animal => 
       animal.status === "available" || animal.status === "foster"
     );
-    // Shuffle array using Fisher-Yates algorithm
-    const shuffled = [...availableAnimals].sort(() => Math.random() - 0.5);
-    // Return first 8 animals
-    return shuffled.slice(0, 8);
+    // Shuffle for random display order in both carousel and grid
+    return shuffleArray(available);
   }, [animals]);
+
+  // Limit animals for desktop grid display (6 max = 2 rows × 3 columns)
+  // Animals are already shuffled from allAvailableAnimals
+  const displayedAnimals = useMemo(() => {
+    return allAvailableAnimals.slice(0, 6);
+  }, [allAvailableAnimals]);
 
   const handleAdopt = (animal: Animal) => {
     setSelectedAnimal(animal);
@@ -374,6 +394,7 @@ export default function Home() {
   const rescueName = tenant?.name || "";
   const rescueTagline = tenant?.tagline || "";
   const rescueHeroImage = tenant?.heroImageUrl || heroImage;
+  const rescueMobileHeroImage = (tenant as any)?.heroMobileImageUrl || null;
 
   // SEO configuration
   useSEO({
@@ -404,7 +425,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-background">
       <PublicHeader rescueName={rescueName} logoUrl={tenant?.logoUrl || undefined} />
-      
+
       {announcementBar?.enabled && announcementBar?.text && (
         <AnnouncementBar
           text={announcementBar.text}
@@ -418,6 +439,7 @@ export default function Home() {
         rescueName={rescueName}
         tagline={rescueTagline}
         backgroundImage={rescueHeroImage}
+        mobileBackgroundImage={rescueMobileHeroImage}
         onViewAnimals={() => document.getElementById('animals')?.scrollIntoView({ behavior: 'smooth' })}
         onDonate={() => setDonationDialogOpen(true)}
         actionCircle={tenant?.actionCircle as any}
@@ -427,8 +449,9 @@ export default function Home() {
         heroHeadline={tenant?.heroHeadline}
         heroButtonText={tenant?.heroButtonText}
         heroButton2Text={tenant?.heroButton2Text}
+        heroFocalPoint={(tenant as any)?.heroFocalPoint as any}
       />
-      
+
       {/* Spacer for Three Doors that extend below hero - only needed on larger screens */}
       {tenant?.heroLayoutType === 'three_doors' && (
         <div className="hidden sm:block h-32 bg-background" />
@@ -443,7 +466,7 @@ export default function Home() {
                 Join us at our upcoming adoption events and fundraisers. Meet our animals in person and support our mission!
               </p>
             </div>
-            
+
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 justify-items-center sm:justify-items-stretch">
               {isLoadingEvents ? (
                 Array.from({ length: 3 }).map((_, i) => (
@@ -482,42 +505,56 @@ export default function Home() {
               Meet our wonderful animals waiting for their forever homes. Each one has a unique personality and so much love to give.
             </p>
           </div>
-          
-          <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 w-full">
-            {isLoadingAnimals ? (
-              Array.from({ length: 4 }).map((_, i) => (
+
+          {isLoadingAnimals ? (
+            <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 w-full">
+              {Array.from({ length: 3 }).map((_, i) => (
                 <div key={i} className="space-y-3 w-full">
-                  <Skeleton className="h-48 w-full" data-testid="skeleton-animal" />
-                  <Skeleton className="h-4 w-3/4" />
+                  <Skeleton className="h-56 w-full rounded-xl" data-testid="skeleton-animal" />
+                  <Skeleton className="h-5 w-3/4" />
                   <Skeleton className="h-4 w-1/2" />
                 </div>
-              ))
-            ) : displayedAnimals.length > 0 ? (
-              displayedAnimals.map((animal) => (
-                <AnimalCard
-                  key={animal.id}
-                  id={animal.id.toString()}
-                  name={animal.name}
-                  species={animal.species}
-                  breed={animal.breed}
-                  age={`${animal.age} years`}
-                  photo={animal.photoUrls?.[0] ?? dogPhoto}
-                  photos={animal.photoUrls && animal.photoUrls.length > 0 ? animal.photoUrls : undefined}
-                  bio={animal.bio ?? undefined}
+              ))}
+            </div>
+          ) : allAvailableAnimals.length > 0 ? (
+            <>
+              {isMobile ? (
+                <MobileAnimalCarousel
+                  animals={allAvailableAnimals}
                   basePath={basePath}
-                  onAdopt={() => handleAdopt(animal)}
-                  onSponsor={() => handleSponsor(animal.name)}
+                  onAdopt={handleAdopt}
+                  onSponsor={handleSponsor}
+                  defaultPhoto={dogPhoto}
                 />
-              ))
-            ) : (
-              <div className="col-span-full text-center py-12" data-testid="no-animals">
-                <p className="text-lg text-muted-foreground">
-                  No animals available for adoption at this time. Check back soon!
-                </p>
-              </div>
-            )}
-          </div>
-          
+              ) : (
+                <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 w-full">
+                  {displayedAnimals.map((animal) => (
+                    <AnimalCard
+                      key={animal.id}
+                      id={animal.id.toString()}
+                      name={animal.name}
+                      species={animal.species}
+                      breed={animal.breed}
+                      age={`${animal.age} years`}
+                      photo={animal.photoUrls?.[0] ?? dogPhoto}
+                      photos={animal.photoUrls && animal.photoUrls.length > 0 ? animal.photoUrls : undefined}
+                      bio={animal.bio ?? undefined}
+                      basePath={basePath}
+                      onAdopt={() => handleAdopt(animal)}
+                      onSponsor={() => handleSponsor(animal.name)}
+                    />
+                  ))}
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="text-center py-12" data-testid="no-animals">
+              <p className="text-lg text-muted-foreground">
+                No animals available for adoption at this time. Check back soon!
+              </p>
+            </div>
+          )}
+
           {animals.filter(animal => animal.status === "available").length > 8 && (
             <div className="flex justify-center mt-8 sm:mt-12">
               <div className="w-full sm:w-auto">
@@ -542,7 +579,7 @@ export default function Home() {
                 See the joy our adopted animals bring to their new families. These success stories inspire us every day.
               </p>
             </div>
-            
+
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 justify-items-center sm:justify-items-stretch">
               {isLoadingHappyTails ? (
                 Array.from({ length: 3 }).map((_, i) => (
@@ -572,47 +609,103 @@ export default function Home() {
         </section>
       )}
 
-      <section className="py-12 sm:py-20 bg-primary/5">
-        <div className="max-w-6xl mx-auto px-6">
-          {contentModules.length > 0 ? (
-            <div className="flex flex-col gap-8">
-              {/* Donation section - always first/top */}
-              <div className="w-full max-w-2xl mx-auto">
-                <div className="text-center mb-8">
-                  <h2 className="font-display text-2xl sm:text-3xl md:text-4xl font-bold mb-3 sm:mb-4" data-testid="text-donation-heading">
-                    {(tenant as any)?.donationSection?.sectionHeading || "Support Our Mission"}
-                  </h2>
-                  <p className="text-base sm:text-lg text-muted-foreground" data-testid="text-donation-description">
-                    {(tenant as any)?.donationSection?.sectionDescription || "Your donation helps us rescue, care for, and find homes for animals in need."}
+      <section id="donation-section" className="py-12 sm:py-20 bg-primary/5">
+        <div className="w-full max-w-7xl mx-auto px-6 sm:px-8">
+          {/* Two-column donation section: text left, form right on tablets and larger */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 items-start">
+            {/* Left column: Text content */}
+            <div className="space-y-4">
+              <p className="text-sm font-semibold uppercase tracking-wide text-primary" data-testid="text-donation-label">
+                {(tenant as any)?.donationSection?.sectionLabel || "Support Our Mission"}
+              </p>
+              <h2 className="font-display text-2xl sm:text-3xl md:text-4xl font-bold leading-tight" data-testid="text-donation-heading">
+                {(tenant as any)?.donationSection?.sectionHeading || "We could not do what we do without your help!"}
+              </h2>
+              <div className="text-base sm:text-lg text-muted-foreground space-y-4" data-testid="text-donation-description">
+                <p>
+                  {(tenant as any)?.donationSection?.sectionDescription || "Our shelter is funded by donations, fundraisers and adoption fees."}
+                </p>
+                <p>
+                  {(tenant as any)?.donationSection?.sectionDescriptionExtended || "Your financial contribution enables us to be there for our community, taking care of unwanted, homeless and often sick or injured cats and dogs. Please consider supporting our efforts to provide shelter, food and medical attention to the animals in our care \"until they all have a home.\""}
+                </p>
+                {(tenant as any)?.donationSection?.impactStatement && (
+                  <p className="font-medium">
+                    {(tenant as any)?.donationSection?.impactStatement}
                   </p>
-                </div>
-                <DonationForm 
-                  tenant={tenant}
-                />
+                )}
               </div>
 
-              {/* Content modules - flexbox layout that centers items and adapts to count */}
-              <div className="flex flex-wrap justify-center gap-6">
+              {/* Wish List Buttons */}
+              {((tenant as any)?.donationSection?.amazonWishListUrl || (tenant as any)?.donationSection?.chewyWishListUrl) && (
+                <div className="flex flex-wrap gap-3 pt-2">
+                  {(tenant as any)?.donationSection?.amazonWishListUrl && (
+                    <Button
+                      variant="outline"
+                      asChild
+                      data-testid="button-amazon-wishlist"
+                    >
+                      <a 
+                        href={(tenant as any).donationSection.amazonWishListUrl} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                      >
+                        <SiAmazon className="mr-2 h-4 w-4" />
+                        View Amazon Wish List
+                        <ExternalLink className="ml-2 h-3 w-3" />
+                      </a>
+                    </Button>
+                  )}
+                  {(tenant as any)?.donationSection?.chewyWishListUrl && (
+                    <Button
+                      variant="outline"
+                      asChild
+                      data-testid="button-chewy-wishlist"
+                    >
+                      <a 
+                        href={(tenant as any).donationSection.chewyWishListUrl} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                      >
+                        <ShoppingCart className="mr-2 h-4 w-4" />
+                        View Chewy Wish List
+                        <ExternalLink className="ml-2 h-3 w-3" />
+                      </a>
+                    </Button>
+                  )}
+                </div>
+              )}
+
+              {/* Section Image */}
+              {(tenant as any)?.donationSection?.sectionImageUrl && (
+                <div className="mt-6 flex items-center justify-center" data-testid="donation-section-image-container">
+                  <img 
+                    src={(tenant as any).donationSection.sectionImageUrl} 
+                    alt="Support our mission" 
+                    className="w-full rounded-md object-cover max-h-80"
+                    data-testid="img-donation-section"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Right column: Donation form */}
+            <div className="md:pl-4">
+              <DonationForm 
+                tenant={tenant}
+              />
+            </div>
+          </div>
+
+          {/* Content modules section - two-column layout on tablets and larger */}
+          {contentModules.length > 0 && (
+            <div className="mt-12 md:mt-16">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
                 {contentModules.map((module, idx) => (
-                  <div key={module.id} className="w-full sm:w-[calc(50%-0.75rem)] xl:w-[calc(33.333%-1rem)] max-w-md">
+                  <div key={module.id} className="w-full">
                     <ContentModuleCard module={module} testId={`content-module-${idx}`} />
                   </div>
                 ))}
               </div>
-            </div>
-          ) : (
-            <div className="max-w-2xl mx-auto">
-              <div className="text-center mb-8 sm:mb-12">
-                <h2 className="font-display text-2xl sm:text-3xl md:text-4xl font-bold mb-3 sm:mb-4" data-testid="text-donation-heading">
-                  {(tenant as any)?.donationSection?.sectionHeading || "Support Our Mission"}
-                </h2>
-                <p className="text-base sm:text-lg text-muted-foreground" data-testid="text-donation-description">
-                  {(tenant as any)?.donationSection?.sectionDescription || "Your donation helps us rescue, care for, and find homes for animals in need."}
-                </p>
-              </div>
-              <DonationForm 
-                tenant={tenant}
-              />
             </div>
           )}
         </div>
@@ -769,43 +862,62 @@ export default function Home() {
           {((tenant?.sponsorLogos as any[]) || []).length > 0 && (
             <div className="mt-8 pt-8 border-t">
               <h4 className="text-sm font-medium text-center mb-4 text-muted-foreground">Our Sponsors & Partners</h4>
-              <div className="flex flex-wrap justify-center items-center gap-6">
-                {((tenant?.sponsorLogos as { id: string; imageUrl: string; altText: string; linkUrl?: string }[]) || []).map((sponsor) => (
-                  sponsor.linkUrl ? (
-                    <a 
-                      key={sponsor.id}
-                      href={sponsor.linkUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="grayscale hover:grayscale-0 transition-all opacity-70 hover:opacity-100"
-                      data-testid={`link-sponsor-${sponsor.id}`}
-                    >
-                      <img 
-                        src={sponsor.imageUrl} 
-                        alt={sponsor.altText}
-                        className="h-14 w-auto object-contain"
-                      />
-                    </a>
-                  ) : (
-                    <div 
-                      key={sponsor.id}
-                      className="grayscale opacity-70"
-                      data-testid={`img-sponsor-${sponsor.id}`}
-                    >
-                      <img 
-                        src={sponsor.imageUrl} 
-                        alt={sponsor.altText}
-                        className="h-14 w-auto object-contain"
-                      />
-                    </div>
-                  )
-                ))}
-              </div>
+              {isMobile ? (
+                <MobileSponsorCarousel
+                  sponsors={(tenant?.sponsorLogos as { id: string; imageUrl: string; altText: string; linkUrl?: string }[]) || []}
+                />
+              ) : (
+                <div className="flex flex-wrap justify-center items-center gap-6">
+                  {((tenant?.sponsorLogos as { id: string; imageUrl: string; altText: string; linkUrl?: string }[]) || []).map((sponsor) => (
+                    sponsor.linkUrl ? (
+                      <a 
+                        key={sponsor.id}
+                        href={sponsor.linkUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="grayscale hover:grayscale-0 transition-all opacity-70 hover:opacity-100"
+                        data-testid={`link-sponsor-${sponsor.id}`}
+                      >
+                        <img 
+                          src={sponsor.imageUrl} 
+                          alt={sponsor.altText}
+                          className="h-14 w-auto object-contain"
+                        />
+                      </a>
+                    ) : (
+                      <div 
+                        key={sponsor.id}
+                        className="grayscale opacity-70"
+                        data-testid={`img-sponsor-${sponsor.id}`}
+                      >
+                        <img 
+                          src={sponsor.imageUrl} 
+                          alt={sponsor.altText}
+                          className="h-14 w-auto object-contain"
+                        />
+                      </div>
+                    )
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
           <div className="mt-8 pt-8 border-t text-center text-sm text-muted-foreground space-y-2">
             <p>{tenant?.footerText || `© ${new Date().getFullYear()} ${tenant?.name || "Animal Rescue"}. All rights reserved.`}</p>
+            <div className="flex items-center justify-center gap-4 flex-wrap">
+              <Link href="/privacy-policy" data-testid="link-footer-privacy">
+                <span className="hover:text-foreground transition-colors cursor-pointer">
+                  Privacy Policy
+                </span>
+              </Link>
+              <span className="text-muted-foreground/50">•</span>
+              <Link href="/terms-of-use" data-testid="link-footer-terms">
+                <span className="hover:text-foreground transition-colors cursor-pointer">
+                  Terms of Use
+                </span>
+              </Link>
+            </div>
             <p>
               Powered by <a href="https://irescue.life" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline" data-testid="link-powered-by">iRescue.life</a>
             </p>
@@ -820,6 +932,11 @@ export default function Home() {
         enabled={(tenant?.mascot as { enabled?: boolean } | undefined)?.enabled}
         tenantId={tenant?.id}
       />
+
+      {/* Recent Donations Widget - Fixed in bottom-left corner */}
+      {tenant?.subdomain && (
+        <RecentDonationsWidget tenantSubdomain={tenant.subdomain} />
+      )}
     </div>
   );
 }

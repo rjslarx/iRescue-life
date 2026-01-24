@@ -633,10 +633,15 @@ function NestedBlockEditor({ block, onSave, onCancel }: { block: PageBlock; onSa
               </div>
             ) : (
               <ObjectUploader
-                onUploadComplete={(url) => updateField("src", url)}
+                onChange={(urls) => {
+                  if (urls && urls.length > 0) {
+                    updateField("src", urls[0]);
+                  }
+                }}
                 accept="image/*"
-                folder="page-builder"
-                maxSizeMB={5}
+                maxFiles={1}
+                maxFileSize={5 * 1024 * 1024}
+                data-testid="uploader-nested-image"
               />
             )}
             <div>
@@ -911,10 +916,15 @@ function BlockEditor({ block, onSave, onCancel }: { block: PageBlock; onSave: (b
                 </div>
               ) : (
                 <ObjectUploader
-                  onUploadComplete={(url) => updateField("src", url)}
+                  onChange={(urls) => {
+                    if (urls && urls.length > 0) {
+                      updateField("src", urls[0]);
+                    }
+                  }}
                   accept="image/*"
-                  folder="page-builder"
-                  maxSizeMB={5}
+                  maxFiles={1}
+                  maxFileSize={5 * 1024 * 1024}
+                  data-testid="uploader-page-image"
                 />
               )}
             </div>
@@ -1073,18 +1083,51 @@ function BlockEditor({ block, onSave, onCancel }: { block: PageBlock; onSave: (b
                 <span>Right: {columns[1]?.width || 50}%</span>
               </div>
             </div>
-            <div>
-              <Label>Gap Between Columns</Label>
-              <Select value={columnsBlock.gap || "medium"} onValueChange={(v) => updateField("gap", v)}>
-                <SelectTrigger data-testid="select-column-gap">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="small">Small</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="large">Large</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Gap Between Columns</Label>
+                <Select value={columnsBlock.gap || "medium"} onValueChange={(v) => updateField("gap", v)}>
+                  <SelectTrigger data-testid="select-column-gap">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="small">Small</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="large">Large</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Background Color</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="color"
+                    value={columnsBlock.backgroundColor || "#fafafa"}
+                    onChange={(e) => updateField("backgroundColor", e.target.value)}
+                    className="h-10 w-14 p-1 cursor-pointer"
+                    data-testid="input-columns-bgcolor"
+                  />
+                  <Input
+                    type="text"
+                    value={columnsBlock.backgroundColor || "#fafafa"}
+                    onChange={(e) => updateField("backgroundColor", e.target.value)}
+                    placeholder="#fafafa"
+                    className="flex-1"
+                    data-testid="input-columns-bgcolor-text"
+                  />
+                  {columnsBlock.backgroundColor && columnsBlock.backgroundColor !== "#fafafa" && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => updateField("backgroundColor", "")}
+                      data-testid="button-clear-bgcolor"
+                    >
+                      Clear
+                    </Button>
+                  )}
+                </div>
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -1484,7 +1527,7 @@ function RenderBlock({ block }: { block: PageBlock }) {
           <img
             src={block.src}
             alt={block.alt || ""}
-            className={`${widthClasses[block.width as keyof typeof widthClasses] || widthClasses.large} h-auto rounded-md`}
+            className={`${widthClasses[block.width as keyof typeof widthClasses] || widthClasses.large} max-w-full h-auto rounded-md`}
           />
           {block.caption && (
             <figcaption className="text-sm text-muted-foreground mt-2 text-center">
@@ -1538,21 +1581,19 @@ function RenderBlock({ block }: { block: PageBlock }) {
         large: "gap-8",
       };
       const columns = block.columns || [];
-      const leftWidth = columns[0]?.width || 50;
-      const rightWidth = columns[1]?.width || 50;
       
       return (
         <div 
-          className={`flex flex-col md:flex-row ${gapClasses[block.gap as keyof typeof gapClasses] || gapClasses.medium}`}
+          className={`flex flex-col md:flex-row ${gapClasses[block.gap as keyof typeof gapClasses] || gapClasses.medium} rounded-lg p-4`}
+          style={{ backgroundColor: block.backgroundColor || "#fafafa" }}
           data-testid={`rendered-columns-${block.id}`}
         >
           {columns.map((column, index) => (
             <div 
               key={column.id || index}
-              className="flex-shrink-0"
+              className="min-w-0 overflow-hidden"
               style={{ 
-                width: '100%',
-                flex: `0 0 ${column.width || 50}%`
+                flex: `1 1 ${column.width || 50}%`
               }}
             >
               {column.blocks && column.blocks.length > 0 ? (
