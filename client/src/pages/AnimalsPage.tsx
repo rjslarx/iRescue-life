@@ -75,6 +75,7 @@ const animalFormSchema = insertAnimalSchema.omit({ tenantId: true }).extend({
   // Physical/Intake fields
   weight: z.string().optional(),
   intakeSource: z.enum(["stray", "owner_surrender", "transfer", "born_in_care", "other"]).optional(),
+  intakeDate: z.date().optional().nullable(),
   activityLevel: z.enum(["low", "moderate", "high"]).optional(),
   dietaryRestrictions: z.string().optional(),
   catFriendly: friendlyStatusEnum.optional(),
@@ -259,6 +260,7 @@ function AnimalForm({
       behaviorRestrictionReason: initialData.behaviorRestrictionReason || "",
       weight: initialData.weight || "",
       intakeSource: initialData.intakeSource || undefined,
+      intakeDate: initialData.intakeDate ? new Date(initialData.intakeDate) : null,
       activityLevel: initialData.activityLevel || undefined,
       dietaryRestrictions: initialData.dietaryRestrictions || "",
       catFriendly: booleanToFriendlyStatus(initialData.catFriendly),
@@ -294,6 +296,7 @@ function AnimalForm({
       behaviorRestrictionReason: "",
       weight: "",
       intakeSource: undefined,
+      intakeDate: null,
       activityLevel: undefined,
       dietaryRestrictions: "",
       catFriendly: "unknown",
@@ -970,6 +973,29 @@ function AnimalForm({
                       <SelectItem value="other" data-testid="option-intake-other">Other</SelectItem>
                     </SelectContent>
                   </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            <FormField
+              control={form.control}
+              name="intakeDate"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Intake Date</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="date"
+                      data-testid="input-intake-date"
+                      value={field.value ? new Date(field.value).toISOString().split('T')[0] : ''}
+                      onChange={(e) => {
+                        const dateValue = e.target.value ? new Date(e.target.value) : null;
+                        field.onChange(dateValue);
+                      }}
+                    />
+                  </FormControl>
+                  <FormDescription>When did this animal arrive at the rescue?</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
