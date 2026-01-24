@@ -2973,6 +2973,7 @@ Crawl-delay: 1
         formSubmissions
       ] = await Promise.all([
         // Adoption applications - pending stages (new, screening, vet_check, home_visit)
+        // Note: Adoption applications store most form data in customResponses JSON field
         db.select({
           id: applications.id,
           applicantName: applications.applicantName,
@@ -2981,7 +2982,8 @@ Crawl-delay: 1
           status: applications.stage,
           createdAt: applications.createdAt,
           animalId: applications.animalId,
-          formData: applications.customResponses,
+          customResponses: applications.customResponses,
+          notes: applications.notes,
         })
           .from(applications)
           .where(
@@ -3006,7 +3008,15 @@ Crawl-delay: 1
           applicantPhone: volunteerApplications.applicantPhone,
           status: volunteerApplications.status,
           createdAt: volunteerApplications.createdAt,
-          formData: volunteerApplications.customResponses,
+          customResponses: volunteerApplications.customResponses,
+          address: volunteerApplications.address,
+          experience: volunteerApplications.experience,
+          availability: volunteerApplications.availability,
+          interests: volunteerApplications.interests,
+          skills: volunteerApplications.skills,
+          emergencyContactName: volunteerApplications.emergencyContactName,
+          emergencyContactPhone: volunteerApplications.emergencyContactPhone,
+          notes: volunteerApplications.notes,
         })
           .from(volunteerApplications)
           .where(
@@ -3026,7 +3036,18 @@ Crawl-delay: 1
           applicantPhone: fosterApplications.applicantPhone,
           status: fosterApplications.status,
           createdAt: fosterApplications.createdAt,
-          formData: fosterApplications.customResponses,
+          customResponses: fosterApplications.customResponses,
+          address: fosterApplications.address,
+          experience: fosterApplications.experience,
+          availability: fosterApplications.availability,
+          housingType: fosterApplications.housingType,
+          hasYard: fosterApplications.hasYard,
+          hasOtherPets: fosterApplications.hasOtherPets,
+          otherPetsDetails: fosterApplications.otherPetsDetails,
+          preferences: fosterApplications.preferences,
+          vetReference: fosterApplications.vetReference,
+          personalReference: fosterApplications.personalReference,
+          notes: fosterApplications.notes,
         })
           .from(fosterApplications)
           .where(
@@ -3047,7 +3068,18 @@ Crawl-delay: 1
           status: animalSurrenders.status,
           createdAt: animalSurrenders.createdAt,
           animalName: animalSurrenders.animalName,
-          formData: animalSurrenders.customResponses,
+          customResponses: animalSurrenders.customResponses,
+          address: animalSurrenders.address,
+          species: animalSurrenders.species,
+          breed: animalSurrenders.breed,
+          age: animalSurrenders.age,
+          sex: animalSurrenders.sex,
+          spayedNeutered: animalSurrenders.spayedNeutered,
+          medicalHistory: animalSurrenders.medicalHistory,
+          behaviorNotes: animalSurrenders.behaviorNotes,
+          reasonForSurrender: animalSurrenders.reasonForSurrender,
+          isEmergency: animalSurrenders.isEmergency,
+          notes: animalSurrenders.notes,
         })
           .from(animalSurrenders)
           .where(
@@ -3113,7 +3145,7 @@ Crawl-delay: 1
         formsMap = new Map(formRecords.map(f => [f.id, f.name]));
       }
 
-      // Transform and combine all applications
+      // Transform and combine all applications - merge all fields into formData
       const allApplications = [
         ...adoptionApps.map(app => ({
           id: app.id,
@@ -3125,7 +3157,10 @@ Crawl-delay: 1
           createdAt: app.createdAt?.toISOString() || new Date().toISOString(),
           animalName: app.animalId ? animalsMap.get(app.animalId) : undefined,
           animalId: app.animalId,
-          formData: app.formData,
+          formData: {
+            notes: app.notes,
+            ...(app.customResponses || {}),
+          },
           formName: undefined,
         })),
         ...volunteerApps.map(app => ({
@@ -3138,7 +3173,17 @@ Crawl-delay: 1
           createdAt: app.createdAt?.toISOString() || new Date().toISOString(),
           animalName: undefined,
           animalId: undefined,
-          formData: app.formData,
+          formData: {
+            address: app.address,
+            experience: app.experience,
+            availability: app.availability,
+            interests: app.interests,
+            skills: app.skills,
+            emergencyContactName: app.emergencyContactName,
+            emergencyContactPhone: app.emergencyContactPhone,
+            notes: app.notes,
+            ...(app.customResponses || {}),
+          },
           formName: undefined,
         })),
         ...fosterApps.map(app => ({
@@ -3151,7 +3196,20 @@ Crawl-delay: 1
           createdAt: app.createdAt?.toISOString() || new Date().toISOString(),
           animalName: undefined,
           animalId: undefined,
-          formData: app.formData,
+          formData: {
+            address: app.address,
+            experience: app.experience,
+            availability: app.availability,
+            housingType: app.housingType,
+            hasYard: app.hasYard,
+            hasOtherPets: app.hasOtherPets,
+            otherPetsDetails: app.otherPetsDetails,
+            preferences: app.preferences,
+            vetReference: app.vetReference,
+            personalReference: app.personalReference,
+            notes: app.notes,
+            ...(app.customResponses || {}),
+          },
           formName: undefined,
         })),
         ...surrenderRequests.map(app => ({
@@ -3162,9 +3220,22 @@ Crawl-delay: 1
           applicantPhone: app.applicantPhone,
           status: app.status,
           createdAt: app.createdAt?.toISOString() || new Date().toISOString(),
-          animalName: app.animalName, // Surrender includes animal name directly
+          animalName: app.animalName,
           animalId: undefined,
-          formData: app.formData,
+          formData: {
+            address: app.address,
+            species: app.species,
+            breed: app.breed,
+            age: app.age,
+            sex: app.sex,
+            spayedNeutered: app.spayedNeutered,
+            medicalHistory: app.medicalHistory,
+            behaviorNotes: app.behaviorNotes,
+            reasonForSurrender: app.reasonForSurrender,
+            isEmergency: app.isEmergency,
+            notes: app.notes,
+            ...(app.customResponses || {}),
+          },
           formName: undefined,
         })),
         ...formSubmissions.map(app => ({
