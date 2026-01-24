@@ -35,14 +35,14 @@ import dogPhoto from '@assets/generated_images/Golden_retriever_dog_portrait_fde
 // Sanitize color values with strict allowlist
 function sanitizeColor(value: string | undefined): string | undefined {
   if (!value) return undefined;
-
+  
   const trimmed = value.trim().toLowerCase();
-
+  
   // Allow hex colors (#RGB, #RRGGBB, #RRGGBBAA) - with end anchor
   if (/^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(trimmed)) {
     return trimmed;
   }
-
+  
   // Allow rgb/rgba colors with strict numeric range validation
   // RGB values: 0-255, Alpha: 0.0-1.0 (no scientific notation)
   // Returns CANONICAL format to prevent injection
@@ -52,7 +52,7 @@ function sanitizeColor(value: string | undefined): string | undefined {
     const rNum = parseInt(r);
     const gNum = parseInt(g);
     const bNum = parseInt(b);
-
+    
     if (rNum <= 255 && gNum <= 255 && bNum <= 255) {
       if (a) {
         const aNum = parseFloat(a);
@@ -66,7 +66,7 @@ function sanitizeColor(value: string | undefined): string | undefined {
       }
     }
   }
-
+  
   // Allow HSL colors with strict numeric range validation
   // Hue: 0-360, Saturation/Lightness: 0-100%, Alpha: 0.0-1.0
   // Returns CANONICAL format to prevent injection
@@ -76,7 +76,7 @@ function sanitizeColor(value: string | undefined): string | undefined {
     const hNum = parseInt(h);
     const sNum = parseInt(s);
     const lNum = parseInt(l);
-
+    
     if (hNum <= 360 && sNum <= 100 && lNum <= 100) {
       if (a) {
         const aNum = parseFloat(a);
@@ -90,7 +90,7 @@ function sanitizeColor(value: string | undefined): string | undefined {
       }
     }
   }
-
+  
   // Allow named colors (common safe ones) - return canonical lowercase value
   const namedColors: { [key: string]: string } = {
     'transparent': 'transparent',
@@ -117,16 +117,16 @@ function sanitizeColor(value: string | undefined): string | undefined {
     'silver': 'silver',
     'fuchsia': 'fuchsia'
   };
-
+  
   return namedColors[trimmed] || undefined;
 }
 
 // Sanitize font family with allowlist
 function sanitizeFontFamily(value: string | undefined): string | undefined {
   if (!value) return undefined;
-
+  
   const trimmed = value.trim().toLowerCase();
-
+  
   // Allow common safe font families - return ONLY the canonical safe value
   const safeFonts: { [key: string]: string } = {
     'inherit': 'inherit',
@@ -150,7 +150,7 @@ function sanitizeFontFamily(value: string | undefined): string | undefined {
     'monaco': 'Monaco',
     'lucida console': 'Lucida Console'
   };
-
+  
   // Return the canonical safe value, NOT the user's input
   // This prevents attackers from appending extra CSS directives
   return safeFonts[trimmed] || undefined;
@@ -160,9 +160,9 @@ function sanitizeFontFamily(value: string | undefined): string | undefined {
 // Returns CANONICAL format to prevent injection
 function sanitizeFontSize(value: string | undefined): string | undefined {
   if (!value) return undefined;
-
+  
   const trimmed = value.trim().toLowerCase();
-
+  
   // Allow rem, em, px with numbers - validate single decimal point
   const unitMatch = trimmed.match(/^(\d+(?:\.\d+)?)(rem|em|px)$/i);
   if (unitMatch) {
@@ -173,7 +173,7 @@ function sanitizeFontSize(value: string | undefined): string | undefined {
       return `${parseFloat(num)}${unit.toLowerCase()}`;
     }
   }
-
+  
   // Allow percentage - validate single decimal point
   const pctMatch = trimmed.match(/^(\d+(?:\.\d+)?)%$/);
   if (pctMatch) {
@@ -184,7 +184,7 @@ function sanitizeFontSize(value: string | undefined): string | undefined {
       return `${parseFloat(num)}%`;
     }
   }
-
+  
   return undefined;
 }
 
@@ -192,16 +192,16 @@ function sanitizeFontSize(value: string | undefined): string | undefined {
 // Returns CANONICAL URL (for storage) - caller wraps in url() for rendering
 function sanitizeBgImage(url: string | undefined): string | undefined {
   if (!url || url === "") return undefined;
-
+  
   // Handle already-wrapped url() format from stored data
   const urlMatch = url.match(/^url\(['"]?([^'"()]+)['"]?\)$/i);
   const trimmed = urlMatch ? urlMatch[1].trim() : url.trim();
-
+  
   // Allow relative paths from object storage (e.g., /objects/animals/uuid)
   if (trimmed.startsWith('/objects/')) {
     return trimmed;
   }
-
+  
   try {
     const parsed = new URL(trimmed, window.location.origin);
     // Only allow http/https protocols
@@ -274,12 +274,12 @@ export default function Home() {
     // Sanitize background image URL
     const bgImageUrl = sanitizeBgImage(module.styling?.backgroundImage);
     const imagePosition = module.styling?.imagePosition || "background";
-
+    
     // Only use as background image when position is "background"
     const sanitizedBgImage = (bgImageUrl && imagePosition === "background")
       ? `url('${bgImageUrl.replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/\)/g, "\\)").replace(/\(/g, "\\(")}')` 
       : undefined;
-
+    
     const sanitizedStyle = {
       backgroundColor: sanitizeColor(module.styling?.backgroundColor),
       color: sanitizeColor(module.styling?.textColor),
@@ -317,7 +317,7 @@ export default function Home() {
     };
 
     const showBorder = module.styling?.showBorder ?? false;
-
+    
     return (
       <Card 
         className={`relative flex h-full flex-col overflow-hidden ${showBorder ? 'border-2 border-border' : ''}`}
@@ -327,13 +327,13 @@ export default function Home() {
         {imagePosition === "background" && bgImageUrl && (
           <div className="absolute inset-0 bg-black/40" />
         )}
-
+        
         {imagePosition === "above" && (
           <div className="p-4 pb-0">
             {renderImage()}
           </div>
         )}
-
+        
         <CardHeader className="relative z-10">
           <CardTitle style={textStyle}>
             {DOMPurify.sanitize(module.title, { ALLOWED_TAGS: [], KEEP_CONTENT: true })}
@@ -344,7 +344,7 @@ export default function Home() {
             {sanitizedContent}
           </p>
         </CardContent>
-
+        
         {imagePosition === "below" && (
           <div className="p-4 pt-0 mt-auto">
             {renderImage()}
@@ -425,7 +425,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-background">
       <PublicHeader rescueName={rescueName} logoUrl={tenant?.logoUrl || undefined} />
-
+      
       {announcementBar?.enabled && announcementBar?.text && (
         <AnnouncementBar
           text={announcementBar.text}
@@ -451,7 +451,7 @@ export default function Home() {
         heroButton2Text={tenant?.heroButton2Text}
         heroFocalPoint={(tenant as any)?.heroFocalPoint as any}
       />
-
+      
       {/* Spacer for Three Doors that extend below hero - only needed on larger screens */}
       {tenant?.heroLayoutType === 'three_doors' && (
         <div className="hidden sm:block h-32 bg-background" />
@@ -466,7 +466,7 @@ export default function Home() {
                 Join us at our upcoming adoption events and fundraisers. Meet our animals in person and support our mission!
               </p>
             </div>
-
+            
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 justify-items-center sm:justify-items-stretch">
               {isLoadingEvents ? (
                 Array.from({ length: 3 }).map((_, i) => (
@@ -505,7 +505,7 @@ export default function Home() {
               Meet our wonderful animals waiting for their forever homes. Each one has a unique personality and so much love to give.
             </p>
           </div>
-
+          
           {isLoadingAnimals ? (
             <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 w-full">
               {Array.from({ length: 3 }).map((_, i) => (
@@ -554,7 +554,7 @@ export default function Home() {
               </p>
             </div>
           )}
-
+          
           {animals.filter(animal => animal.status === "available").length > 8 && (
             <div className="flex justify-center mt-8 sm:mt-12">
               <div className="w-full sm:w-auto">
@@ -579,7 +579,7 @@ export default function Home() {
                 See the joy our adopted animals bring to their new families. These success stories inspire us every day.
               </p>
             </div>
-
+            
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 justify-items-center sm:justify-items-stretch">
               {isLoadingHappyTails ? (
                 Array.from({ length: 3 }).map((_, i) => (
@@ -634,7 +634,7 @@ export default function Home() {
                   </p>
                 )}
               </div>
-
+              
               {/* Wish List Buttons */}
               {((tenant as any)?.donationSection?.amazonWishListUrl || (tenant as any)?.donationSection?.chewyWishListUrl) && (
                 <div className="flex flex-wrap gap-3 pt-2">
@@ -674,7 +674,7 @@ export default function Home() {
                   )}
                 </div>
               )}
-
+              
               {/* Section Image */}
               {(tenant as any)?.donationSection?.sectionImageUrl && (
                 <div className="mt-6 flex items-center justify-center" data-testid="donation-section-image-container">
@@ -687,7 +687,7 @@ export default function Home() {
                 </div>
               )}
             </div>
-
+            
             {/* Right column: Donation form */}
             <div className="md:pl-4">
               <DonationForm 

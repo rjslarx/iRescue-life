@@ -4,7 +4,7 @@ import StatsCard from "@/components/StatsCard";
 import { OnboardingChecklist } from "@/components/OnboardingChecklist";
 import { FloatingActionButton } from "@/components/FloatingActionButton";
 import { RecordOfflineDonationDialog } from "@/components/RecordOfflineDonationDialog";
-import { Heart, FileText, Users, DollarSign, Package, MessageSquare, PawPrint, AlertTriangle, Calendar, Pill, Clock, Home, Loader2, AlertCircle, Mail } from "lucide-react";
+import { Heart, FileText, Users, DollarSign, Package, MessageSquare, PawPrint, AlertTriangle, Calendar, Pill, Clock, Home, Loader2, AlertCircle, Mail, Gift } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -18,10 +18,14 @@ import SupplyRequestDialog from "@/components/SupplyRequestDialog";
 import FosterUpdateDialog from "@/components/FosterUpdateDialog";
 import MedicalRemindersWidget from "@/components/MedicalRemindersWidget";
 import RecentActivityWidget from "@/components/RecentActivityWidget";
+import FormSubmissionsWidget from "@/components/FormSubmissionsWidget";
+import PendingApplicationsWidget from "@/components/PendingApplicationsWidget";
 import { TemperatureWidget } from "@/components/TemperatureWidget";
+import WebsiteVisitsWidget from "@/components/WebsiteVisitsWidget";
 import { formatDistanceToNow } from "date-fns";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { useQuickActions } from "@/hooks/useQuickActions";
 
 interface Activity {
   type: 'application' | 'donation' | 'status_change' | 'volunteer_app' | 'foster_app' | 'event' | 'happy_tail' | 'animal_new';
@@ -81,6 +85,10 @@ export default function Dashboard() {
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
   const [selectedAnimal, setSelectedAnimal] = useState<{id: string, name: string} | null>(null);
   const [offlineDonationDialogOpen, setOfflineDonationDialogOpen] = useState(false);
+  
+  const { actions: quickActions, handleAction } = useQuickActions({
+    onRecordDonation: () => setOfflineDonationDialogOpen(true),
+  });
 
   const { data: statsData, isLoading: isLoadingStats } = useQuery<{
     stats: {
@@ -90,6 +98,8 @@ export default function Dashboard() {
       pendingApplicationsTrend: { change: number; isPositive: boolean };
       activeVolunteers: number;
       donationsThisMonth: number;
+      cashRevenueThisMonth: number;
+      inKindRevenueThisMonth: number;
       donationsThisMonthTrend: { change: number; isPositive: boolean };
       totalKennels: number;
       occupiedKennels: number;
@@ -278,12 +288,19 @@ export default function Dashboard() {
       color: 'blue' as const,
     },
     { 
-      title: "Donations This Month", 
-      value: `$${statsData.stats.donationsThisMonth.toLocaleString()}`, 
+      title: "Cash Revenue", 
+      value: `$${((statsData.stats.cashRevenueThisMonth || statsData.stats.donationsThisMonth || 0) / 100).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`, 
       icon: DollarSign,
       trend: statsData.stats.donationsThisMonthTrend,
       color: 'amber' as const,
     },
+    // Only show In-Kind Revenue tile if there's in-kind revenue
+    ...(statsData.stats.inKindRevenueThisMonth > 0 ? [{
+      title: "In-Kind Revenue (Est.)",
+      value: `$${(statsData.stats.inKindRevenueThisMonth / 100).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`,
+      icon: Gift,
+      color: 'purple' as const,
+    }] : []),
   ] : [];
 
   // Filter upcoming events (next 3)
@@ -500,44 +517,41 @@ export default function Dashboard() {
           <div className="space-y-4">
             <h2 className="text-xl font-semibold">Quick Actions</h2>
             <div className="grid gap-3">
-              <Link href="/dashboard/animals">
-                <Button variant="outline" className="w-full justify-start" data-testid="button-add-animal">
-                  <Heart className="mr-2 h-4 w-4" />
-                  Add New Animal
-                </Button>
-              </Link>
-              <Link href="/dashboard/applications">
-                <Button variant="outline" className="w-full justify-start" data-testid="button-review-applications">
-                  <FileText className="mr-2 h-4 w-4" />
-                  Review Applications
-                </Button>
-              </Link>
-              <Link href="/dashboard/volunteers">
-                <Button variant="outline" className="w-full justify-start" data-testid="button-post-opportunity">
-                  <Users className="mr-2 h-4 w-4" />
-                  Post Volunteer Opportunity
-                </Button>
-              </Link>
-              <Link href="/dashboard/inbox?status=unprocessed">
-                <Button variant="outline" className="w-full justify-start relative" data-testid="button-check-inbox">
-                  <Mail className="mr-2 h-4 w-4" />
-                  Check Inbox
-                  {(inboxCountData?.count ?? 0) > 0 && (
-                    <Badge 
-                      variant="destructive" 
-                      className="ml-auto h-5 min-w-5 px-1.5 text-xs"
-                      data-testid="badge-inbox-count"
+              {quickActions.map((action) => (
+                action.href ? (
+                  <Link key={action.id} href={action.href}>
+                    <Button 
+                      variant="outline" 
+                      className="w-full justify-start" 
+                      data-testid={`button-quick-action-${action.id}`}
                     >
-                      {inboxCountData!.count}
-                    </Badge>
-                  )}
-                </Button>
-              </Link>
+                      <action.icon className="mr-2 h-4 w-4" />
+                      {action.label}
+                    </Button>
+                  </Link>
+                ) : (
+                  <Button
+                    key={action.id}
+                    variant="outline"
+                    className="w-full justify-start"
+                    onClick={() => handleAction(action.id)}
+                    data-testid={`button-quick-action-${action.id}`}
+                  >
+                    <action.icon className="mr-2 h-4 w-4" />
+                    {action.label}
+                  </Button>
+                )
+              ))}
             </div>
           </div>
 
           <RecentActivityWidget />
         </div>
+
+        {/* Pending Applications Widget - Only for admin/staff */}
+        {(user?.activeRole === 'admin' || user?.activeRole === 'staff') && (
+          <PendingApplicationsWidget />
+        )}
 
         {/* Foster Management Alerts - Only for admin/staff */}
         {(user?.activeRole === 'admin' || user?.activeRole === 'staff') && (
@@ -603,14 +617,22 @@ export default function Dashboard() {
           </Card>
         )}
 
-        {/* Medical Reminders Widget - Only for admin/staff */}
+        {/* Medical Reminders & Form Submissions - Only for admin/staff */}
         {(user?.activeRole === 'admin' || user?.activeRole === 'staff') && (
-          <MedicalRemindersWidget />
+          <div className="grid gap-6 lg:grid-cols-2">
+            <MedicalRemindersWidget />
+            <FormSubmissionsWidget />
+          </div>
         )}
 
         {/* Temperature Monitoring Widget - Only for admin/staff */}
         {(user?.activeRole === 'admin' || user?.activeRole === 'staff') && (
           <TemperatureWidget />
+        )}
+
+        {/* Website Visits Widget - Only for admin */}
+        {user?.activeRole === 'admin' && (
+          <WebsiteVisitsWidget />
         )}
 
         {/* Urgent Items Alert - Only for admin/staff and only if there are urgent items */}

@@ -22,9 +22,10 @@ import NotificationSettings from "@/components/NotificationSettings";
 import MedicalReminderSettings from "@/components/MedicalReminderSettings";
 import VolunteerAlertSettings from "@/components/VolunteerAlertSettings";
 import VolunteerDigestSettings from "@/components/VolunteerDigestSettings";
+import QuickActionsSettings from "@/components/QuickActionsSettings";
 import { GoveeSettings } from "@/components/GoveeSettings";
 import { StripeConnectBanner } from "@/components/StripeConnectBanner";
-import { Save, Loader2, DollarSign, CreditCard, AlertCircle, CheckCircle2, Mail, Palette, Globe, ExternalLink, Copy, Inbox, HelpCircle, Check, Info, MessageSquare, Phone, FileSignature, Heart, Shield, Star, Users, Home, HandHeart, PawPrint, Upload, FileUp } from "lucide-react";
+import { Save, Loader2, DollarSign, CreditCard, AlertCircle, CheckCircle2, Mail, Palette, Globe, ExternalLink, Copy, Inbox, HelpCircle, Check, Info, MessageSquare, Phone, FileSignature, Heart, Shield, Star, Users, Home, HandHeart, PawPrint, Upload, FileUp, X, Plus } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { z } from "zod";
@@ -44,6 +45,118 @@ const urlOrPathSchema = z.string().refine(
   { message: "Must be a valid URL or storage path" }
 ).optional().or(z.literal(""));
 
+// Multi-email input component for notification emails
+function MultiEmailInput({ control, name }: { control: any; name: string }) {
+  const [newEmail, setNewEmail] = useState('');
+  const [emailError, setEmailError] = useState('');
+  
+  return (
+    <FormField
+      control={control}
+      name={name}
+      render={({ field }) => {
+        const emails = field.value 
+          ? field.value.split(',').map((e: string) => e.trim()).filter((e: string) => e) 
+          : [];
+        
+        const addEmail = () => {
+          const email = newEmail.trim().toLowerCase();
+          if (!email) return;
+          
+          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+          if (!emailRegex.test(email)) {
+            setEmailError('Please enter a valid email address');
+            return;
+          }
+          
+          if (emails.includes(email)) {
+            setEmailError('This email is already added');
+            return;
+          }
+          
+          setEmailError('');
+          const newEmails = [...emails, email];
+          field.onChange(newEmails.join(', '));
+          setNewEmail('');
+        };
+        
+        const removeEmail = (emailToRemove: string) => {
+          const newEmails = emails.filter((e: string) => e !== emailToRemove);
+          field.onChange(newEmails.length > 0 ? newEmails.join(', ') : '');
+        };
+        
+        return (
+          <FormItem>
+            <FormLabel>Notification Emails</FormLabel>
+            <div className="space-y-3">
+              {emails.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {emails.map((email: string) => (
+                    <Badge 
+                      key={email} 
+                      variant="secondary" 
+                      className="flex items-center gap-1 pr-0.5"
+                      data-testid={`badge-email-${email}`}
+                    >
+                      {email}
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-5 w-5 p-0 ml-1"
+                        onClick={() => removeEmail(email)}
+                        data-testid={`button-remove-email-${email}`}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </Badge>
+                  ))}
+                </div>
+              )}
+              
+              <div className="flex gap-2">
+                <Input 
+                  type="email"
+                  placeholder="Add notification email..." 
+                  value={newEmail}
+                  onChange={(e) => {
+                    setNewEmail(e.target.value);
+                    setEmailError('');
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      addEmail();
+                    }
+                  }}
+                  data-testid="input-notification-email"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={addEmail}
+                  data-testid="button-add-email"
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add
+                </Button>
+              </div>
+              
+              {emailError && (
+                <p className="text-sm text-destructive">{emailError}</p>
+              )}
+            </div>
+            <FormDescription>
+              Email addresses to receive form submission alerts. Falls back to Contact Email if none set.
+            </FormDescription>
+            <FormMessage />
+          </FormItem>
+        );
+      }}
+    />
+  );
+}
+
 const sponsorLogoSchema = z.object({
   id: z.string(),
   imageUrl: z.string(),
@@ -57,9 +170,11 @@ const brandingSettingsSchema = z.object({
   missionStatement: z.string().optional(),
   logoUrl: urlOrPathSchema,
   heroImageUrl: urlOrPathSchema,
+  heroMobileImageUrl: urlOrPathSchema,
   heroHeadline: z.string().optional(),
   heroButtonText: z.string().optional(),
   heroButton2Text: z.string().optional(),
+  heroFocalPoint: z.enum(["center", "top", "bottom", "left", "right", "top-left", "top-right", "bottom-left", "bottom-right"]).optional(),
   announcementBarEnabled: z.boolean().optional(),
   announcementBarText: z.string().optional(),
   announcementBarLinkText: z.string().optional(),
@@ -73,6 +188,8 @@ const brandingSettingsSchema = z.object({
   destructiveColor: z.string().optional(),
   contactEmail: z.string().email().optional().or(z.literal("")),
   contactPhone: z.string().optional(),
+  formNotificationsEnabled: z.boolean().optional(),
+  formNotificationEmail: z.string().optional(), // Comma-separated emails
   footerText: z.string().optional(),
   footerHours: z.string().optional(),
   footerAddress: z.string().optional(),
@@ -109,11 +226,18 @@ const twilioSettingsSchema = z.object({
 const donationSectionSchema = z.object({
   sectionHeading: z.string().max(100).optional(),
   sectionDescription: z.string().max(500).optional(),
+  sectionDescriptionExtended: z.string().max(1000).optional(),
+  sectionImageUrl: z.string().refine(
+    (val) => val === "" || val.startsWith("/") || val.startsWith("http://") || val.startsWith("https://"),
+    { message: "Must be a valid URL or storage path" }
+  ).optional().or(z.literal("")),
   monthlyGivingTitle: z.string().max(100).optional(),
   monthlyGivingDescription: z.string().max(500).optional(),
   monthlyGivingIcon: z.enum(["shield", "heart", "paw", "star", "hand-heart", "users", "home"]).optional(),
   oneTimeButtonText: z.string().max(50).optional(),
   monthlyButtonText: z.string().max(50).optional(),
+  amazonWishListUrl: z.string().url().optional().or(z.literal("")),
+  chewyWishListUrl: z.string().url().optional().or(z.literal("")),
 });
 
 type BrandingSettingsData = z.infer<typeof brandingSettingsSchema>;
@@ -127,8 +251,15 @@ export default function SettingsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
 
-  const { data, isLoading } = useQuery<{ tenant: Tenant }>({
+  // Check if the current user is the organization owner
+  const { data: ownerData, isLoading: isOwnerLoading } = useQuery<{ isOwner: boolean }>({
+    queryKey: ['/api/me/is-owner'],
+  });
+
+  const { data, isLoading, error } = useQuery<{ tenant: Tenant }>({
     queryKey: ['/api/tenant/settings'],
+    // Only fetch settings if user is owner
+    enabled: ownerData?.isOwner === true,
   });
 
   const { data: emailUsage } = useQuery<{
@@ -245,6 +376,54 @@ export default function SettingsPage() {
     },
   });
 
+  // Require spay/neuter contract toggle mutation
+  const updateRequireSpayNeuterContractMutation = useMutation({
+    mutationFn: async (requireSpayNeuterContract: boolean) => {
+      const response = await apiRequest('PATCH', '/api/tenant/settings', { requireSpayNeuterContract });
+      return response.json();
+    },
+    onSuccess: (_, requireSpayNeuterContract) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/tenant/settings'] });
+      toast({
+        title: requireSpayNeuterContract ? "Spay/neuter contract enabled" : "Spay/neuter contract disabled",
+        description: requireSpayNeuterContract 
+          ? "Adopters will sign an additional agreement for unaltered animals." 
+          : "No separate spay/neuter agreement will be required.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to update spay/neuter contract settings",
+        description: error.message || "Please try again later.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Enable transfer agreement toggle mutation
+  const updateEnableTransferAgreementMutation = useMutation({
+    mutationFn: async (enableTransferAgreement: boolean) => {
+      const response = await apiRequest('PATCH', '/api/tenant/settings', { enableTransferAgreement });
+      return response.json();
+    },
+    onSuccess: (_, enableTransferAgreement) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/tenant/settings'] });
+      toast({
+        title: enableTransferAgreement ? "Transfer agreements enabled" : "Transfer agreements disabled",
+        description: enableTransferAgreement 
+          ? "A transfer agreement can be generated for transport events." 
+          : "No transfer agreements will be generated.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to update transfer agreement settings",
+        description: error.message || "Please try again later.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const updateTwilioMutation = useMutation({
     mutationFn: async (settings: TwilioSettingsData) => {
       const response = await apiRequest('PATCH', '/api/tenant/settings/twilio', settings);
@@ -340,9 +519,11 @@ export default function SettingsPage() {
       missionStatement: data?.tenant?.missionStatement || "",
       logoUrl: data?.tenant?.logoUrl || "",
       heroImageUrl: data?.tenant?.heroImageUrl || "",
+      heroMobileImageUrl: (data?.tenant as any)?.heroMobileImageUrl || "",
       heroHeadline: data?.tenant?.heroHeadline || "",
       heroButtonText: data?.tenant?.heroButtonText || "",
       heroButton2Text: data?.tenant?.heroButton2Text || "",
+      heroFocalPoint: (data?.tenant as any)?.heroFocalPoint || "center",
       announcementBarEnabled: (data?.tenant?.announcementBar as any)?.enabled || false,
       announcementBarText: (data?.tenant?.announcementBar as any)?.text || "",
       announcementBarLinkText: (data?.tenant?.announcementBar as any)?.linkText || "",
@@ -356,6 +537,8 @@ export default function SettingsPage() {
       destructiveColor: (data?.tenant?.branding as any)?.destructiveColor || "",
       contactEmail: data?.tenant?.contactEmail || "",
       contactPhone: data?.tenant?.contactPhone || "",
+      formNotificationsEnabled: data?.tenant?.formNotificationsEnabled || false,
+      formNotificationEmail: data?.tenant?.formNotificationEmail || "",
       footerText: data?.tenant?.footerText || "",
       footerHours: data?.tenant?.footerHours || "",
       footerAddress: data?.tenant?.footerAddress || "",
@@ -371,9 +554,11 @@ export default function SettingsPage() {
       missionStatement: data.tenant.missionStatement || "",
       logoUrl: data.tenant.logoUrl || "",
       heroImageUrl: data.tenant.heroImageUrl || "",
+      heroMobileImageUrl: (data.tenant as any)?.heroMobileImageUrl || "",
       heroHeadline: data.tenant.heroHeadline || "",
       heroButtonText: data.tenant.heroButtonText || "",
       heroButton2Text: data.tenant.heroButton2Text || "",
+      heroFocalPoint: (data.tenant as any)?.heroFocalPoint || "center",
       announcementBarEnabled: (data.tenant.announcementBar as any)?.enabled || false,
       announcementBarText: (data.tenant.announcementBar as any)?.text || "",
       announcementBarLinkText: (data.tenant.announcementBar as any)?.linkText || "",
@@ -387,6 +572,8 @@ export default function SettingsPage() {
       destructiveColor: (data.tenant.branding as any)?.destructiveColor || "",
       contactEmail: data.tenant.contactEmail || "",
       contactPhone: data.tenant.contactPhone || "",
+      formNotificationsEnabled: data.tenant.formNotificationsEnabled || false,
+      formNotificationEmail: data.tenant.formNotificationEmail || "",
       footerText: data.tenant.footerText || "",
       footerHours: data.tenant.footerHours || "",
       footerAddress: data.tenant.footerAddress || "",
@@ -421,20 +608,28 @@ export default function SettingsPage() {
     defaultValues: {
       sectionHeading: (data?.tenant as any)?.donationSection?.sectionHeading || "",
       sectionDescription: (data?.tenant as any)?.donationSection?.sectionDescription || "",
+      sectionDescriptionExtended: (data?.tenant as any)?.donationSection?.sectionDescriptionExtended || "",
+      sectionImageUrl: (data?.tenant as any)?.donationSection?.sectionImageUrl || "",
       monthlyGivingTitle: (data?.tenant as any)?.donationSection?.monthlyGivingTitle || "",
       monthlyGivingDescription: (data?.tenant as any)?.donationSection?.monthlyGivingDescription || "",
       monthlyGivingIcon: (data?.tenant as any)?.donationSection?.monthlyGivingIcon || "shield",
       oneTimeButtonText: (data?.tenant as any)?.donationSection?.oneTimeButtonText || "",
       monthlyButtonText: (data?.tenant as any)?.donationSection?.monthlyButtonText || "",
+      amazonWishListUrl: (data?.tenant as any)?.donationSection?.amazonWishListUrl || "",
+      chewyWishListUrl: (data?.tenant as any)?.donationSection?.chewyWishListUrl || "",
     },
     values: data?.tenant ? {
       sectionHeading: (data.tenant as any)?.donationSection?.sectionHeading || "",
       sectionDescription: (data.tenant as any)?.donationSection?.sectionDescription || "",
+      sectionDescriptionExtended: (data.tenant as any)?.donationSection?.sectionDescriptionExtended || "",
+      sectionImageUrl: (data.tenant as any)?.donationSection?.sectionImageUrl || "",
       monthlyGivingTitle: (data.tenant as any)?.donationSection?.monthlyGivingTitle || "",
       monthlyGivingDescription: (data.tenant as any)?.donationSection?.monthlyGivingDescription || "",
       monthlyGivingIcon: (data.tenant as any)?.donationSection?.monthlyGivingIcon || "shield",
       oneTimeButtonText: (data.tenant as any)?.donationSection?.oneTimeButtonText || "",
       monthlyButtonText: (data.tenant as any)?.donationSection?.monthlyButtonText || "",
+      amazonWishListUrl: (data.tenant as any)?.donationSection?.amazonWishListUrl || "",
+      chewyWishListUrl: (data.tenant as any)?.donationSection?.chewyWishListUrl || "",
     } : undefined,
   });
 
@@ -492,6 +687,57 @@ export default function SettingsPage() {
   const onSubmitEmail = (data: EmailSettingsData) => {
     updateEmailMutation.mutate(data);
   };
+
+  // Show loading state while checking owner status
+  if (isOwnerLoading) {
+    return (
+      <DashboardLayout
+        breadcrumbs={[
+          { label: "Settings" }
+        ]}
+      >
+        <div className="flex items-center justify-center h-64" data-testid="loading-settings">
+          <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  // Show access denied message if user is not the owner
+  if (!ownerData?.isOwner) {
+    return (
+      <DashboardLayout
+        breadcrumbs={[
+          { label: "Settings" }
+        ]}
+      >
+        <div className="max-w-2xl mx-auto py-12" data-testid="settings-access-denied">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2 text-destructive">
+                <Shield className="h-6 w-6" />
+                <CardTitle>Access Restricted</CardTitle>
+              </div>
+              <CardDescription>
+                Organization settings can only be accessed by the organization owner
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  You don't have permission to view or modify organization settings. Only the organization owner can access this page. If you need to make changes, please contact your organization owner.
+                </AlertDescription>
+              </Alert>
+              <p className="text-sm text-muted-foreground">
+                This includes settings for branding, integrations (Stripe, Twilio, DocuSign), email configuration, and other sensitive organization settings.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout
@@ -760,6 +1006,29 @@ export default function SettingsPage() {
 
                         <FormField
                           control={brandingForm.control}
+                          name="heroMobileImageUrl"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Mobile Hero Image (Optional)</FormLabel>
+                              <FormControl>
+                                <ObjectUploader
+                                  value={field.value ? [field.value] : []}
+                                  onChange={(urls) => field.onChange(urls[0] || "")}
+                                  maxFiles={1}
+                                  accept="image/*"
+                                  data-testid="uploader-hero-mobile"
+                                />
+                              </FormControl>
+                              <FormDescription>
+                                Upload a separate hero image optimized for mobile devices (portrait orientation, 1080x1920px recommended). If not provided, the main hero image will be used with the focus point setting above.
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={brandingForm.control}
                           name="heroHeadline"
                           render={({ field }) => (
                             <FormItem>
@@ -815,6 +1084,41 @@ export default function SettingsPage() {
                             )}
                           />
                         </div>
+
+                        <FormField
+                          control={brandingForm.control}
+                          name="heroFocalPoint"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Hero Image Focus Point</FormLabel>
+                              <Select 
+                                value={field.value || "center"} 
+                                onValueChange={field.onChange}
+                              >
+                                <FormControl>
+                                  <SelectTrigger data-testid="select-hero-focal-point">
+                                    <SelectValue placeholder="Select focus area" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="center">Center</SelectItem>
+                                  <SelectItem value="top">Top</SelectItem>
+                                  <SelectItem value="bottom">Bottom</SelectItem>
+                                  <SelectItem value="left">Left</SelectItem>
+                                  <SelectItem value="right">Right</SelectItem>
+                                  <SelectItem value="top-left">Top Left</SelectItem>
+                                  <SelectItem value="top-right">Top Right</SelectItem>
+                                  <SelectItem value="bottom-left">Bottom Left</SelectItem>
+                                  <SelectItem value="bottom-right">Bottom Right</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <FormDescription>
+                                Choose which part of the hero image to focus on when displayed on mobile devices. If your subject (like a dog) is in the lower right of the image, select "Bottom Right".
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
 
                         <Separator />
 
@@ -1165,6 +1469,44 @@ export default function SettingsPage() {
                           )}
                         />
 
+                        <Separator />
+
+                        <div className="space-y-4">
+                          <h4 className="text-sm font-medium">Form Submission Notifications</h4>
+                          <p className="text-sm text-muted-foreground">
+                            Receive email notifications when forms are submitted (adoption, foster, volunteer, surrender applications).
+                          </p>
+
+                          <FormField
+                            control={brandingForm.control}
+                            name="formNotificationsEnabled"
+                            render={({ field }) => (
+                              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                                <div className="space-y-0.5">
+                                  <FormLabel className="text-base">Enable Form Notifications</FormLabel>
+                                  <FormDescription>
+                                    Send email alerts when applications are submitted
+                                  </FormDescription>
+                                </div>
+                                <FormControl>
+                                  <Switch
+                                    checked={field.value}
+                                    onCheckedChange={field.onChange}
+                                    data-testid="switch-form-notifications"
+                                  />
+                                </FormControl>
+                              </FormItem>
+                            )}
+                          />
+
+                          <MultiEmailInput 
+                            control={brandingForm.control}
+                            name="formNotificationEmail"
+                          />
+                        </div>
+
+                        <Separator />
+
                         <FormField
                           control={brandingForm.control}
                           name="footerText"
@@ -1444,6 +1786,9 @@ export default function SettingsPage() {
                   </CardContent>
                 </Card>
 
+                {/* Quick Actions Customization */}
+                <QuickActionsSettings />
+
                 {/* Mascot Widget Settings */}
                 <MascotSettings 
                   mascot={data?.tenant?.mascot as { enabled?: boolean; speechText?: string } | undefined}
@@ -1501,7 +1846,52 @@ export default function SettingsPage() {
                                 />
                               </FormControl>
                               <FormDescription>
-                                The description text shown below the heading
+                                The short description text shown below the heading
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={donationSectionForm.control}
+                          name="sectionDescriptionExtended"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Extended Description</FormLabel>
+                              <FormControl>
+                                <Textarea 
+                                  placeholder="Your financial contribution enables us to be there for our community, taking care of unwanted, homeless and often sick or injured cats and dogs. Please consider supporting our efforts to provide shelter, food and medical attention to the animals in our care." 
+                                  rows={4}
+                                  data-testid="input-donation-description-extended"
+                                  {...field} 
+                                />
+                              </FormControl>
+                              <FormDescription>
+                                The longer paragraph shown below the short description (optional)
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={donationSectionForm.control}
+                          name="sectionImageUrl"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Section Image</FormLabel>
+                              <FormControl>
+                                <ObjectUploader
+                                  value={field.value ? [field.value] : []}
+                                  onChange={(urls) => field.onChange(urls[0] || "")}
+                                  maxFiles={1}
+                                  accept="image/*"
+                                  data-testid="uploader-donation-section-image"
+                                />
+                              </FormControl>
+                              <FormDescription>
+                                An optional image to display below the text in the Support Our Mission section
                               </FormDescription>
                               <FormMessage />
                             </FormItem>
@@ -1667,6 +2057,59 @@ export default function SettingsPage() {
                           />
                         </div>
 
+                        <Separator />
+
+                        <div className="space-y-2">
+                          <h4 className="font-medium">External Wish Lists</h4>
+                          <p className="text-sm text-muted-foreground">
+                            Add links to your Amazon and Chewy wish lists. These will appear as buttons below your donation description.
+                          </p>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <FormField
+                            control={donationSectionForm.control}
+                            name="amazonWishListUrl"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Amazon Wish List URL</FormLabel>
+                                <FormControl>
+                                  <Input 
+                                    placeholder="https://www.amazon.com/hz/wishlist/ls/..." 
+                                    data-testid="input-amazon-wishlist"
+                                    {...field} 
+                                  />
+                                </FormControl>
+                                <FormDescription>
+                                  Paste your full Amazon Wish List share link
+                                </FormDescription>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          <FormField
+                            control={donationSectionForm.control}
+                            name="chewyWishListUrl"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Chewy Wish List URL</FormLabel>
+                                <FormControl>
+                                  <Input 
+                                    placeholder="https://www.chewy.com/g/..." 
+                                    data-testid="input-chewy-wishlist"
+                                    {...field} 
+                                  />
+                                </FormControl>
+                                <FormDescription>
+                                  Paste your full Chewy Wish List share link
+                                </FormDescription>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+
                         <div className="flex justify-end">
                           <Button 
                             type="submit" 
@@ -1720,6 +2163,68 @@ export default function SettingsPage() {
                         <Info className="h-4 w-4" />
                         <AlertDescription>
                           Adopters will see a service fee breakdown on the checkout page explaining that the fee covers payment processing and helps ensure the full adoption amount goes to your rescue.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+
+                    <Separator />
+
+                    {/* Spay/Neuter Contract Toggle */}
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="require-spay-neuter-toggle" className="text-base font-medium">
+                          Require Spay/Neuter Agreement
+                        </Label>
+                        <p className="text-sm text-muted-foreground">
+                          When enabled, adopters of unaltered animals will be required to sign an additional Spay/Neuter Agreement 
+                          during checkout. This includes a $500 breach penalty clause.
+                        </p>
+                      </div>
+                      <Switch
+                        id="require-spay-neuter-toggle"
+                        checked={data?.tenant?.requireSpayNeuterContract || false}
+                        disabled={updateRequireSpayNeuterContractMutation.isPending}
+                        onCheckedChange={(checked) => updateRequireSpayNeuterContractMutation.mutate(checked)}
+                        data-testid="switch-require-spay-neuter"
+                      />
+                    </div>
+                    {data?.tenant?.requireSpayNeuterContract && (
+                      <Alert>
+                        <Info className="h-4 w-4" />
+                        <AlertDescription>
+                          The spay/neuter agreement will only appear for animals that are not already spayed or neutered, 
+                          and only when staff sets a spay/neuter deadline during checkout.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+
+                    <Separator />
+
+                    {/* Transfer Agreement Toggle */}
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="enable-transfer-agreement-toggle" className="text-base font-medium">
+                          Enable Transfer Agreements
+                        </Label>
+                        <p className="text-sm text-muted-foreground">
+                          When enabled, you can generate transfer agreements for transport events. 
+                          These agreements document the transfer of animal ownership between organizations.
+                        </p>
+                      </div>
+                      <Switch
+                        id="enable-transfer-agreement-toggle"
+                        checked={data?.tenant?.enableTransferAgreement || false}
+                        disabled={updateEnableTransferAgreementMutation.isPending}
+                        onCheckedChange={(checked) => updateEnableTransferAgreementMutation.mutate(checked)}
+                        data-testid="switch-enable-transfer-agreement"
+                      />
+                    </div>
+                    {data?.tenant?.enableTransferAgreement && (
+                      <Alert>
+                        <Info className="h-4 w-4" />
+                        <AlertDescription>
+                          Transfer agreements can be generated from the Collaboration Hub when viewing transport details.
+                          Many organizations already have existing agreements with partners and may not need this feature.
                         </AlertDescription>
                       </Alert>
                     )}
