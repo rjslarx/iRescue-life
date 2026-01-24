@@ -2160,9 +2160,8 @@ export default function AnimalsPage() {
                                 className="col-span-2 sm:col-span-1 justify-center"
                                 data-testid={`button-view-details-${animal.id}`}
                               >
-                                <Users className="w-4 h-4 sm:mr-2" />
-                                <span className="hidden sm:inline">Foster Management</span>
-                                <span className="sm:hidden ml-2">Foster</span>
+                                <Users className="w-4 h-4 mr-2" />
+                                Foster
                               </Button>
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
@@ -2172,9 +2171,9 @@ export default function AnimalsPage() {
                                     className="justify-center"
                                     data-testid={`button-edit-${animal.id}`}
                                   >
-                                    <Pencil className="w-4 h-4 sm:mr-2" />
-                                    <span className="hidden sm:inline">Edit</span>
-                                    <ChevronDown className="w-4 h-4 sm:ml-2" />
+                                    <Pencil className="w-4 h-4 mr-2" />
+                                    Edit
+                                    <ChevronDown className="w-4 h-4 ml-1" />
                                   </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="start">
@@ -2222,8 +2221,8 @@ export default function AnimalsPage() {
                                 className="justify-center"
                                 data-testid={`button-medical-${animal.id}`}
                               >
-                                <Stethoscope className="w-4 h-4 sm:mr-2" />
-                                <span className="hidden sm:inline">Medical</span>
+                                <Stethoscope className="w-4 h-4 mr-2" />
+                                Medical
                               </Button>
                               <Button
                                 onClick={() => navigate(`/dashboard/animals/${animal.id}/applications`)}
@@ -2232,8 +2231,8 @@ export default function AnimalsPage() {
                                 className="justify-center"
                                 data-testid={`button-applications-${animal.id}`}
                               >
-                                <ClipboardList className="w-4 h-4 sm:mr-2" />
-                                <span className="hidden sm:inline">Applications</span>
+                                <ClipboardList className="w-4 h-4 mr-2" />
+                                Apps
                               </Button>
                               <Button
                                 onClick={() => {
@@ -2245,17 +2244,19 @@ export default function AnimalsPage() {
                                 className="justify-center"
                                 data-testid={`button-kennel-card-${animal.id}`}
                               >
-                                <FileText className="w-4 h-4 sm:mr-2" />
-                                <span className="hidden sm:inline">Kennel Card</span>
+                                <FileText className="w-4 h-4 mr-2" />
+                                Kennel
                               </Button>
                               <Button
                                 onClick={() => handleQuickPhoto(animal)}
                                 variant="outline"
-                                size="icon"
+                                size="sm"
+                                className="justify-center"
                                 data-testid={`button-quick-photo-${animal.id}`}
                                 title="Quick Photo"
                               >
-                                <Camera className="w-4 h-4" />
+                                <Camera className="w-4 h-4 mr-2" />
+                                Photo
                               </Button>
                             </div>
                           </CardContent>
