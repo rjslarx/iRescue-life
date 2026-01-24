@@ -220,14 +220,14 @@ export default function AvailableAnimalsPage() {
       />
 
       {/* Donation Dialog */}
-      <Dialog open={donationDialogOpen} onOpenChange={setDonationDialogOpen}>
+      <Dialog open={donationDialogOpen} onOpenChange={(open) => {
+        setDonationDialogOpen(open);
+        if (!open) setSponsorAnimalName(null);
+      }}>
         <DialogContent className="max-w-md">
           <DonationForm
-            animalToSponsor={sponsorAnimalName}
-            onClose={() => {
-              setDonationDialogOpen(false);
-              setSponsorAnimalName(null);
-            }}
+            tenant={tenant}
+            sponsoredAnimalName={sponsorAnimalName || undefined}
           />
         </DialogContent>
       </Dialog>
