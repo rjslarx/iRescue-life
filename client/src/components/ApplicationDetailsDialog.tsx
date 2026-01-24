@@ -21,7 +21,9 @@ import {
   PawPrint,
   ExternalLink,
   CheckCircle,
-  XCircle
+  XCircle,
+  HandHeart,
+  FileText
 } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import type { PendingApplication } from "./PendingApplicationsWidget";
@@ -47,6 +49,10 @@ function getTypeIcon(type: string) {
       return <Home className="h-5 w-5 text-blue-500" />;
     case 'volunteer':
       return <Users className="h-5 w-5 text-green-500" />;
+    case 'surrender':
+      return <HandHeart className="h-5 w-5 text-orange-500" />;
+    case 'custom':
+      return <FileText className="h-5 w-5 text-purple-500" />;
     default:
       return null;
   }
@@ -60,6 +66,10 @@ function getTypeLabel(type: string): string {
       return 'Foster Application';
     case 'volunteer':
       return 'Volunteer Application';
+    case 'surrender':
+      return 'Surrender Request';
+    case 'custom':
+      return 'Form Submission';
     default:
       return 'Application';
   }
@@ -95,6 +105,10 @@ function getManagementLink(type: string): string {
       return '/dashboard/foster-pipeline';
     case 'volunteer':
       return '/dashboard/volunteer-pipeline';
+    case 'surrender':
+      return '/dashboard/surrenders';
+    case 'custom':
+      return '/dashboard/form-submissions';
     default:
       return '/dashboard';
   }
@@ -108,6 +122,10 @@ function getFormFieldsEndpoint(type: string): string {
       return '/api/foster-form-fields';
     case 'volunteer':
       return '/api/volunteer-form-fields';
+    case 'surrender':
+      return '/api/surrender-form-fields';
+    case 'custom':
+      return '/api/custom-form-fields';
     default:
       return '/api/adoption-form-fields';
   }
@@ -245,10 +263,16 @@ export function ApplicationDetailsDialog({ application, open, onOpenChange }: Ap
                   <Calendar className="h-4 w-4 text-muted-foreground" />
                   <span data-testid="text-created-date">{format(new Date(application.createdAt), 'PPP')}</span>
                 </div>
-                {application.type === 'adoption' && application.animalName && (
+                {(application.type === 'adoption' || application.type === 'surrender') && application.animalName && (
                   <div className="flex items-center gap-2 text-sm">
                     <PawPrint className="h-4 w-4 text-muted-foreground" />
-                    <span>Applying for: <strong>{application.animalName}</strong></span>
+                    <span>{application.type === 'surrender' ? 'Pet: ' : 'Applying for: '}<strong>{application.animalName}</strong></span>
+                  </div>
+                )}
+                {application.type === 'custom' && application.formName && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <FileText className="h-4 w-4 text-muted-foreground" />
+                    <span>Form: <strong>{application.formName}</strong></span>
                   </div>
                 )}
               </div>
@@ -311,7 +335,13 @@ export function ApplicationDetailsDialog({ application, open, onOpenChange }: Ap
           <Link href={getManagementLink(application.type)}>
             <Button data-testid="button-manage">
               <ExternalLink className="h-4 w-4 mr-2" />
-              Manage {application.type === 'adoption' ? 'Adoptions' : application.type === 'foster' ? 'Fosters' : 'Volunteers'}
+              Manage {
+                application.type === 'adoption' ? 'Adoptions' : 
+                application.type === 'foster' ? 'Fosters' : 
+                application.type === 'volunteer' ? 'Volunteers' :
+                application.type === 'surrender' ? 'Surrenders' :
+                'Forms'
+              }
             </Button>
           </Link>
         </div>
