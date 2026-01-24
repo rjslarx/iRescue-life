@@ -116,6 +116,29 @@ export default function PlatformPrivacyPage() {
 
           <Card>
             <CardHeader>
+              <CardTitle>SMS and Mobile Communications</CardTitle>
+            </CardHeader>
+            <CardContent className="prose prose-sm max-w-none dark:prose-invert">
+              <p>
+                When you provide your mobile phone number and consent to receive SMS/text message communications from rescue organizations using our platform, the following applies:
+              </p>
+              <ul>
+                <li>Message frequency may vary based on your interactions and the services you use</li>
+                <li>Message and data rates may apply</li>
+                <li>You may opt out at any time by replying STOP to any message</li>
+                <li>For help, reply HELP or contact the rescue organization directly</li>
+              </ul>
+              <p className="font-semibold">
+                No mobile information will be shared with third parties/affiliates for marketing/promotional purposes.
+              </p>
+              <p>
+                Mobile information collected includes phone numbers provided during adoption applications, foster applications, volunteer applications, and surrender requests. This information is used solely for communication purposes related to your application or inquiry with the specific rescue organization.
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
               <CardTitle>Data Sharing and Disclosure</CardTitle>
             </CardHeader>
             <CardContent className="prose prose-sm max-w-none dark:prose-invert">
