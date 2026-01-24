@@ -14,7 +14,7 @@ interface PagePermission {
 // These provide sensible fallbacks for each role
 const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
   volunteer: ['calendar', 'volunteers', 'animals', 'tutorials'],
-  foster: ['foster-management', 'animals', 'tutorials', 'kennels'],
+  foster: ['my-fosters', 'animals', 'tutorials', 'kennels'],
   staff: ['dashboard', 'animals', 'applications', 'foster-management', 'volunteers', 'calendar', 'kennels', 'medical-tasks', 'tutorials'],
   board_member: ['dashboard', 'animals', 'applications', 'foster-management', 'volunteers', 'calendar', 'finance', 'grants', 'donors', 'analytics', 'reports', 'kennels', 'medical-tasks', 'tutorials'],
 };
