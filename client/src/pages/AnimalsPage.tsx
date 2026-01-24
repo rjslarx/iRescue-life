@@ -1925,7 +1925,7 @@ export default function AnimalsPage() {
                 <p className="text-muted-foreground">No animals yet. Add your first animal to get started!</p>
               </div>
             ) : (
-              <div className="space-y-6">
+              <div className="space-y-6 max-w-full min-w-0 overflow-x-hidden">
                 {/* Filter Controls */}
                 {allActiveAnimals.length > 0 && (
                   <div className="flex flex-wrap items-center gap-3">
@@ -1962,9 +1962,9 @@ export default function AnimalsPage() {
                         : `${statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1).replace('_', ' ')} Animals (${activeAnimals.length})`
                       }
                     </h2>
-                    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 min-w-0 max-w-full">
                       {activeAnimals.map((animal) => (
-                        <Card key={animal.id} className="hover-elevate" data-testid={`card-animal-${animal.id}`}>
+                        <Card key={animal.id} className="hover-elevate overflow-hidden min-w-0" data-testid={`card-animal-${animal.id}`}>
                           <CardHeader className="p-3 sm:p-6">
                             <div className="flex items-start justify-between flex-wrap gap-2">
                               <div className="flex-1 min-w-0">
@@ -2020,11 +2020,11 @@ export default function AnimalsPage() {
                           </CardHeader>
                           <CardContent className="space-y-4 p-3 sm:p-6 pt-0 sm:pt-0">
                             {animal.photoUrls && animal.photoUrls.length > 0 && (
-                              <div className="relative w-full aspect-[16/9] sm:aspect-[4/3] bg-muted rounded-md overflow-hidden">
+                              <div className="relative w-full max-w-full aspect-[16/9] sm:aspect-[4/3] bg-muted rounded-md overflow-hidden">
                                 <img
                                   src={animal.photoUrls[currentPhotoIndex[animal.id] || 0]}
                                   alt={`${animal.name} - Photo ${(currentPhotoIndex[animal.id] || 0) + 1}`}
-                                  className="w-full h-full object-cover object-center"
+                                  className="w-full h-full max-w-full object-cover object-center"
                                   data-testid={`img-animal-photo-${animal.id}`}
                                 />
                                 {animal.photoUrls.length > 1 && (
@@ -2283,9 +2283,9 @@ export default function AnimalsPage() {
                         </div>
                       </AccordionTrigger>
                       <AccordionContent>
-                        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 pt-4">
+                        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 pt-4 min-w-0 max-w-full">
                           {adoptedAnimals.map((animal) => (
-                  <Card key={animal.id} className="hover-elevate" data-testid={`card-animal-${animal.id}`}>
+                  <Card key={animal.id} className="hover-elevate overflow-hidden min-w-0" data-testid={`card-animal-${animal.id}`}>
                     <CardHeader>
                       <div className="flex items-start justify-between flex-wrap gap-2">
                         <div className="flex-1 min-w-0">
@@ -2341,11 +2341,11 @@ export default function AnimalsPage() {
                     </CardHeader>
                     <CardContent className="space-y-4">
                       {animal.photoUrls && animal.photoUrls.length > 0 && (
-                        <div className="relative w-full aspect-[16/9] sm:aspect-[4/3] bg-muted rounded-md overflow-hidden">
+                        <div className="relative w-full max-w-full aspect-[16/9] sm:aspect-[4/3] bg-muted rounded-md overflow-hidden">
                           <img
                             src={animal.photoUrls[currentPhotoIndex[animal.id] || 0]}
                             alt={`${animal.name} - Photo ${(currentPhotoIndex[animal.id] || 0) + 1}`}
-                            className="w-full h-full object-cover object-center"
+                            className="w-full h-full max-w-full object-cover object-center"
                             data-testid={`img-animal-photo-${animal.id}`}
                           />
                           {animal.photoUrls.length > 1 && (
@@ -2500,9 +2500,9 @@ export default function AnimalsPage() {
                         </div>
                       </AccordionTrigger>
                       <AccordionContent>
-                        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 pt-4">
+                        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 pt-4 min-w-0 max-w-full">
                           {deceasedAnimals.map((animal) => (
-                            <Card key={animal.id} className="hover-elevate opacity-75" data-testid={`card-animal-${animal.id}`}>
+                            <Card key={animal.id} className="hover-elevate overflow-hidden min-w-0 opacity-75" data-testid={`card-animal-${animal.id}`}>
                               <CardHeader>
                                 <div className="flex items-start justify-between flex-wrap gap-2">
                                   <div className="flex-1 min-w-0">
