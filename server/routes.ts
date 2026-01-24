@@ -2947,6 +2947,265 @@ Crawl-delay: 1
   });
 
   /**
+   * GET /api/dashboard/pending-applications
+   * Get all pending applications from all sources (adoption, foster, volunteer, surrender, custom forms)
+   * Consolidated view for the dashboard
+   */
+  app.get('/api/dashboard/pending-applications', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { 
+        applications, 
+        volunteerApplications, 
+        fosterApplications, 
+        animalSurrenders, 
+        customFormSubmissions,
+        customForms,
+        animals 
+      } = await import('@shared/schema');
+      const { or, desc } = await import('drizzle-orm');
+
+      // Fetch all pending applications from different sources in parallel
+      const [
+        adoptionApps,
+        volunteerApps,
+        fosterApps,
+        surrenderRequests,
+        formSubmissions
+      ] = await Promise.all([
+        // Adoption applications - pending stages (new, screening, vet_check, home_visit)
+        db.select({
+          id: applications.id,
+          applicantName: applications.applicantName,
+          applicantEmail: applications.applicantEmail,
+          applicantPhone: applications.applicantPhone,
+          status: applications.stage,
+          createdAt: applications.createdAt,
+          animalId: applications.animalId,
+          formData: applications.customResponses,
+        })
+          .from(applications)
+          .where(
+            and(
+              eq(applications.tenantId, req.tenant!.id),
+              or(
+                eq(applications.stage, 'new'),
+                eq(applications.stage, 'screening'),
+                eq(applications.stage, 'vet_check'),
+                eq(applications.stage, 'home_visit')
+              )
+            )
+          )
+          .orderBy(desc(applications.createdAt))
+          .limit(50),
+        
+        // Volunteer applications - pending status
+        db.select({
+          id: volunteerApplications.id,
+          applicantName: volunteerApplications.applicantName,
+          applicantEmail: volunteerApplications.applicantEmail,
+          applicantPhone: volunteerApplications.applicantPhone,
+          status: volunteerApplications.status,
+          createdAt: volunteerApplications.createdAt,
+          formData: volunteerApplications.customResponses,
+        })
+          .from(volunteerApplications)
+          .where(
+            and(
+              eq(volunteerApplications.tenantId, req.tenant!.id),
+              eq(volunteerApplications.status, 'pending')
+            )
+          )
+          .orderBy(desc(volunteerApplications.createdAt))
+          .limit(50),
+        
+        // Foster applications - pending status
+        db.select({
+          id: fosterApplications.id,
+          applicantName: fosterApplications.applicantName,
+          applicantEmail: fosterApplications.applicantEmail,
+          applicantPhone: fosterApplications.applicantPhone,
+          status: fosterApplications.status,
+          createdAt: fosterApplications.createdAt,
+          formData: fosterApplications.customResponses,
+        })
+          .from(fosterApplications)
+          .where(
+            and(
+              eq(fosterApplications.tenantId, req.tenant!.id),
+              eq(fosterApplications.status, 'pending')
+            )
+          )
+          .orderBy(desc(fosterApplications.createdAt))
+          .limit(50),
+        
+        // Surrender requests - pending status
+        db.select({
+          id: animalSurrenders.id,
+          applicantName: animalSurrenders.submitterName,
+          applicantEmail: animalSurrenders.submitterEmail,
+          applicantPhone: animalSurrenders.submitterPhone,
+          status: animalSurrenders.status,
+          createdAt: animalSurrenders.createdAt,
+          animalName: animalSurrenders.animalName,
+          formData: animalSurrenders.customResponses,
+        })
+          .from(animalSurrenders)
+          .where(
+            and(
+              eq(animalSurrenders.tenantId, req.tenant!.id),
+              eq(animalSurrenders.status, 'pending')
+            )
+          )
+          .orderBy(desc(animalSurrenders.createdAt))
+          .limit(50),
+        
+        // Custom form submissions - pending status
+        db.select({
+          id: customFormSubmissions.id,
+          applicantName: customFormSubmissions.signerName,
+          applicantEmail: customFormSubmissions.signerEmail,
+          applicantPhone: customFormSubmissions.signerPhone,
+          status: customFormSubmissions.status,
+          createdAt: customFormSubmissions.createdAt,
+          formId: customFormSubmissions.formId,
+          animalId: customFormSubmissions.animalId,
+          formData: customFormSubmissions.formData,
+        })
+          .from(customFormSubmissions)
+          .where(
+            and(
+              eq(customFormSubmissions.tenantId, req.tenant!.id),
+              eq(customFormSubmissions.status, 'pending')
+            )
+          )
+          .orderBy(desc(customFormSubmissions.createdAt))
+          .limit(50),
+      ]);
+
+      // Get animal names for adoption applications and custom form submissions
+      const adoptionAnimalIds = adoptionApps.map(a => a.animalId).filter(Boolean);
+      const customFormAnimalIds = formSubmissions.map(s => s.animalId).filter((id): id is string => id !== null);
+      const allAnimalIds = [...new Set([...adoptionAnimalIds, ...customFormAnimalIds])];
+      
+      let animalsMap = new Map<string, string>();
+      if (allAnimalIds.length > 0) {
+        const animalRecords = await db.select({
+          id: animals.id,
+          name: animals.name,
+        })
+          .from(animals)
+          .where(inArray(animals.id, allAnimalIds));
+        
+        animalsMap = new Map(animalRecords.map(a => [a.id, a.name]));
+      }
+
+      // Get form names for custom form submissions
+      const formIds = formSubmissions.map(s => s.formId).filter(Boolean);
+      let formsMap = new Map<string, string>();
+      if (formIds.length > 0) {
+        const formRecords = await db.select({
+          id: customForms.id,
+          name: customForms.name,
+        })
+          .from(customForms)
+          .where(inArray(customForms.id, formIds));
+        
+        formsMap = new Map(formRecords.map(f => [f.id, f.name]));
+      }
+
+      // Transform and combine all applications
+      const allApplications = [
+        ...adoptionApps.map(app => ({
+          id: app.id,
+          type: 'adoption' as const,
+          applicantName: app.applicantName,
+          applicantEmail: app.applicantEmail,
+          applicantPhone: app.applicantPhone,
+          status: app.status,
+          createdAt: app.createdAt?.toISOString() || new Date().toISOString(),
+          animalName: app.animalId ? animalsMap.get(app.animalId) : undefined,
+          animalId: app.animalId,
+          formData: app.formData,
+          formName: undefined,
+        })),
+        ...volunteerApps.map(app => ({
+          id: app.id,
+          type: 'volunteer' as const,
+          applicantName: app.applicantName,
+          applicantEmail: app.applicantEmail,
+          applicantPhone: app.applicantPhone,
+          status: app.status,
+          createdAt: app.createdAt?.toISOString() || new Date().toISOString(),
+          animalName: undefined,
+          animalId: undefined,
+          formData: app.formData,
+          formName: undefined,
+        })),
+        ...fosterApps.map(app => ({
+          id: app.id,
+          type: 'foster' as const,
+          applicantName: app.applicantName,
+          applicantEmail: app.applicantEmail,
+          applicantPhone: app.applicantPhone,
+          status: app.status,
+          createdAt: app.createdAt?.toISOString() || new Date().toISOString(),
+          animalName: undefined,
+          animalId: undefined,
+          formData: app.formData,
+          formName: undefined,
+        })),
+        ...surrenderRequests.map(app => ({
+          id: app.id,
+          type: 'surrender' as const,
+          applicantName: app.applicantName,
+          applicantEmail: app.applicantEmail,
+          applicantPhone: app.applicantPhone,
+          status: app.status,
+          createdAt: app.createdAt?.toISOString() || new Date().toISOString(),
+          animalName: app.animalName, // Surrender includes animal name directly
+          animalId: undefined,
+          formData: app.formData,
+          formName: undefined,
+        })),
+        ...formSubmissions.map(app => ({
+          id: app.id,
+          type: 'custom' as const,
+          applicantName: app.applicantName,
+          applicantEmail: app.applicantEmail,
+          applicantPhone: app.applicantPhone || '',
+          status: app.status,
+          createdAt: app.createdAt?.toISOString() || new Date().toISOString(),
+          animalName: app.animalId ? animalsMap.get(app.animalId) : undefined,
+          animalId: app.animalId || undefined,
+          formData: app.formData,
+          formName: app.formId ? formsMap.get(app.formId) : undefined,
+        })),
+      ];
+
+      // Sort all applications by date, newest first
+      allApplications.sort((a, b) => 
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+
+      const counts = {
+        adoption: adoptionApps.length,
+        foster: fosterApps.length,
+        volunteer: volunteerApps.length,
+        surrender: surrenderRequests.length,
+        custom: formSubmissions.length,
+        total: allApplications.length,
+      };
+
+      res.json({
+        applications: allApplications.slice(0, 100), // Limit to 100 total
+        counts,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * GET /api/activity-logs
    * Get recent activity timeline for tenant admin dashboard
    * Returns logged activities with user info, color-coded by category
