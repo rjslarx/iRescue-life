@@ -508,6 +508,11 @@ export default function CalendarViewPage() {
                         </div>
                       ))}
 
+                      {/* Empty padding cells for days before the 1st of the month */}
+                      {Array.from({ length: monthStart.getDay() }).map((_, idx) => (
+                        <div key={`empty-${idx}`} className="min-h-24 p-2" />
+                      ))}
+
                       {/* Calendar days */}
                       {calendarDays.map((day, idx) => {
                         const dayEvents = getEventsForDate(day);
