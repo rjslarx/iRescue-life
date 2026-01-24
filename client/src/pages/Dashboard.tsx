@@ -18,7 +18,6 @@ import SupplyRequestDialog from "@/components/SupplyRequestDialog";
 import FosterUpdateDialog from "@/components/FosterUpdateDialog";
 import MedicalRemindersWidget from "@/components/MedicalRemindersWidget";
 import RecentActivityWidget from "@/components/RecentActivityWidget";
-import FormSubmissionsWidget from "@/components/FormSubmissionsWidget";
 import PendingApplicationsWidget from "@/components/PendingApplicationsWidget";
 import { TemperatureWidget } from "@/components/TemperatureWidget";
 import WebsiteVisitsWidget from "@/components/WebsiteVisitsWidget";
@@ -617,12 +616,9 @@ export default function Dashboard() {
           </Card>
         )}
 
-        {/* Medical Reminders & Form Submissions - Only for admin/staff */}
+        {/* Medical Reminders - Only for admin/staff */}
         {(user?.activeRole === 'admin' || user?.activeRole === 'staff') && (
-          <div className="grid gap-6 lg:grid-cols-2">
-            <MedicalRemindersWidget />
-            <FormSubmissionsWidget />
-          </div>
+          <MedicalRemindersWidget />
         )}
 
         {/* Temperature Monitoring Widget - Only for admin/staff */}

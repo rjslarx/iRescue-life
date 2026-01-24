@@ -14,14 +14,16 @@ import {
   Phone,
   ChevronRight,
   Clock,
-  PawPrint
+  PawPrint,
+  HandHeart,
+  FileText
 } from "lucide-react";
 import { useState } from "react";
 import { ApplicationDetailsDialog } from "./ApplicationDetailsDialog";
 
 export interface PendingApplication {
   id: string;
-  type: 'adoption' | 'foster' | 'volunteer';
+  type: 'adoption' | 'foster' | 'volunteer' | 'surrender' | 'custom';
   applicantName: string;
   applicantEmail: string;
   applicantPhone: string;
@@ -30,6 +32,7 @@ export interface PendingApplication {
   animalName?: string;
   animalId?: string;
   formData?: Record<string, any>;
+  formName?: string;
 }
 
 interface PendingApplicationsResponse {
@@ -38,6 +41,8 @@ interface PendingApplicationsResponse {
     adoption: number;
     foster: number;
     volunteer: number;
+    surrender: number;
+    custom: number;
     total: number;
   };
 }
@@ -50,6 +55,10 @@ function getTypeIcon(type: string) {
       return <Home className="h-4 w-4 text-blue-500" />;
     case 'volunteer':
       return <Users className="h-4 w-4 text-green-500" />;
+    case 'surrender':
+      return <HandHeart className="h-4 w-4 text-orange-500" />;
+    case 'custom':
+      return <FileText className="h-4 w-4 text-purple-500" />;
     default:
       return <ClipboardList className="h-4 w-4 text-muted-foreground" />;
   }
@@ -63,6 +72,10 @@ function getTypeLabel(type: string): string {
       return 'Foster';
     case 'volunteer':
       return 'Volunteer';
+    case 'surrender':
+      return 'Surrender';
+    case 'custom':
+      return 'Form';
     default:
       return type;
   }
@@ -75,6 +88,10 @@ function getTypeBadgeVariant(type: string): "default" | "secondary" | "outline" 
     case 'foster':
       return 'secondary';
     case 'volunteer':
+      return 'outline';
+    case 'surrender':
+      return 'secondary';
+    case 'custom':
       return 'outline';
     default:
       return 'outline';
@@ -102,7 +119,7 @@ function getStatusLabel(status: string): string {
 
 export default function PendingApplicationsWidget() {
   const [selectedApplication, setSelectedApplication] = useState<PendingApplication | null>(null);
-  const [filter, setFilter] = useState<'all' | 'adoption' | 'foster' | 'volunteer'>('all');
+  const [filter, setFilter] = useState<'all' | 'adoption' | 'foster' | 'volunteer' | 'surrender' | 'custom'>('all');
 
   const { data, isLoading, error } = useQuery<PendingApplicationsResponse>({
     queryKey: ['/api/dashboard/pending-applications'],
@@ -144,7 +161,7 @@ export default function PendingApplicationsWidget() {
     );
   }
 
-  const counts = data?.counts || { adoption: 0, foster: 0, volunteer: 0, total: 0 };
+  const counts = data?.counts || { adoption: 0, foster: 0, volunteer: 0, surrender: 0, custom: 0, total: 0 };
 
   return (
     <>
@@ -165,51 +182,61 @@ export default function PendingApplicationsWidget() {
             )}
           </div>
           
-          {counts.total > 0 && (
-            <div className="flex gap-2 flex-wrap mt-3">
-              <Button
-                variant={filter === 'all' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setFilter('all')}
-                data-testid="button-filter-all"
-              >
-                All ({counts.total})
-              </Button>
-              {counts.adoption > 0 && (
-                <Button
-                  variant={filter === 'adoption' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setFilter('adoption')}
-                  data-testid="button-filter-adoption"
-                >
-                  <Heart className="h-3 w-3 mr-1" />
-                  Adoptions ({counts.adoption})
-                </Button>
-              )}
-              {counts.foster > 0 && (
-                <Button
-                  variant={filter === 'foster' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setFilter('foster')}
-                  data-testid="button-filter-foster"
-                >
-                  <Home className="h-3 w-3 mr-1" />
-                  Fosters ({counts.foster})
-                </Button>
-              )}
-              {counts.volunteer > 0 && (
-                <Button
-                  variant={filter === 'volunteer' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setFilter('volunteer')}
-                  data-testid="button-filter-volunteer"
-                >
-                  <Users className="h-3 w-3 mr-1" />
-                  Volunteers ({counts.volunteer})
-                </Button>
-              )}
-            </div>
-          )}
+          <div className="flex gap-2 flex-wrap mt-3">
+            <Button
+              variant={filter === 'all' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setFilter('all')}
+              data-testid="button-filter-all"
+            >
+              All ({counts.total})
+            </Button>
+            <Button
+              variant={filter === 'adoption' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setFilter('adoption')}
+              data-testid="button-filter-adoption"
+            >
+              <Heart className="h-3 w-3 mr-1" />
+              Adoptions ({counts.adoption})
+            </Button>
+            <Button
+              variant={filter === 'foster' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setFilter('foster')}
+              data-testid="button-filter-foster"
+            >
+              <Home className="h-3 w-3 mr-1" />
+              Fosters ({counts.foster})
+            </Button>
+            <Button
+              variant={filter === 'volunteer' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setFilter('volunteer')}
+              data-testid="button-filter-volunteer"
+            >
+              <Users className="h-3 w-3 mr-1" />
+              Volunteers ({counts.volunteer})
+            </Button>
+            <Button
+              variant={filter === 'surrender' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setFilter('surrender')}
+              data-testid="button-filter-surrender"
+            >
+              <HandHeart className="h-3 w-3 mr-1" />
+              Surrenders ({counts.surrender})
+            </Button>
+            <Button
+              variant={filter === 'custom' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setFilter('custom')}
+              data-testid="button-filter-custom"
+            >
+              <FileText className="h-3 w-3 mr-1" />
+              Forms ({counts.custom})
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           {filteredApplications.length === 0 ? (
@@ -238,10 +265,16 @@ export default function PendingApplicationsWidget() {
                           <p className="font-medium truncate" data-testid={`text-applicant-name-${app.id}`}>
                             {app.applicantName}
                           </p>
-                          {app.type === 'adoption' && app.animalName && (
+                          {(app.type === 'adoption' || app.type === 'surrender') && app.animalName && (
                             <p className="text-xs text-muted-foreground flex items-center gap-1">
                               <PawPrint className="h-3 w-3" />
-                              For: {app.animalName}
+                              {app.type === 'surrender' ? 'Pet: ' : 'For: '}{app.animalName}
+                            </p>
+                          )}
+                          {app.type === 'custom' && app.formName && (
+                            <p className="text-xs text-muted-foreground flex items-center gap-1">
+                              <FileText className="h-3 w-3" />
+                              {app.formName}
                             </p>
                           )}
                         </div>
