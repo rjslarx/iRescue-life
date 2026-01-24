@@ -183,7 +183,7 @@ function AnimalSelectorDialog({ open, onClose, buildingId, rowId, position, curr
 
 export default function KennelManagementPage() {
   const { toast } = useToast();
-  const [viewMode, setViewMode] = useState<'edit' | 'visualize'>('edit');
+  const [viewMode, setViewMode] = useState<'edit' | 'visualize'>('visualize');
   const [activeBuildingId, setActiveBuildingId] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<{ type: 'building' | 'row'; id: string } | null>(null);
