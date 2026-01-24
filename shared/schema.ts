@@ -718,12 +718,16 @@ export const applications = pgTable("applications", {
   adoptionFeePaymentSource: text("adoption_fee_payment_source").$type<"stripe" | "cash" | "check" | "other">(), // Payment method
   adoptionFeeTransactionId: text("adoption_fee_transaction_id"), // External transaction ID from payment processor
   smsConsent: boolean("sms_consent").notNull().default(false), // Whether applicant consented to receive SMS messages
+  dismissedAt: timestamp("dismissed_at"), // When the application was dismissed from pending widget
+  dismissedBy: uuid("dismissed_by").references(() => users.id), // User who dismissed the application
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
 export const insertApplicationSchema = createInsertSchema(applications).omit({
   id: true,
+  dismissedAt: true,
+  dismissedBy: true,
   createdAt: true,
   updatedAt: true,
 });
