@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,10 +16,13 @@ import {
   Clock,
   PawPrint,
   HandHeart,
-  FileText
+  FileText,
+  X
 } from "lucide-react";
 import { useState } from "react";
 import { ApplicationDetailsDialog } from "./ApplicationDetailsDialog";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 export interface PendingApplication {
   id: string;
@@ -120,10 +123,44 @@ function getStatusLabel(status: string): string {
 export default function PendingApplicationsWidget() {
   const [selectedApplication, setSelectedApplication] = useState<PendingApplication | null>(null);
   const [filter, setFilter] = useState<'all' | 'adoption' | 'foster' | 'volunteer' | 'surrender' | 'custom'>('all');
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   const { data, isLoading, error } = useQuery<PendingApplicationsResponse>({
     queryKey: ['/api/dashboard/pending-applications'],
   });
+
+  const dismissMutation = useMutation({
+    mutationFn: async (app: PendingApplication) => {
+      return apiRequest('/api/dashboard/pending-applications/dismiss', {
+        method: 'POST',
+        body: JSON.stringify({
+          applicationType: app.type,
+          applicationId: app.id,
+          applicantName: app.applicantName,
+        }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/dashboard/pending-applications'] });
+      toast({
+        title: "Application dismissed",
+        description: "The application has been removed from the pending widget.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to dismiss the application. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleDismiss = (e: React.MouseEvent, app: PendingApplication) => {
+    e.stopPropagation(); // Prevent opening the details dialog
+    dismissMutation.mutate(app);
+  };
 
   const filteredApplications = data?.applications.filter(app => 
     filter === 'all' || app.type === filter
@@ -254,7 +291,7 @@ export default function PendingApplicationsWidget() {
                 {filteredApplications.map((app) => (
                   <div
                     key={`${app.type}-${app.id}`}
-                    className="p-3 rounded-lg border hover-elevate cursor-pointer"
+                    className="p-3 rounded-lg border hover-elevate cursor-pointer relative group"
                     onClick={() => setSelectedApplication(app)}
                     data-testid={`application-row-${app.type}-${app.id}`}
                   >
@@ -283,7 +320,17 @@ export default function PendingApplicationsWidget() {
                         <Badge variant={getTypeBadgeVariant(app.type)} data-testid={`badge-type-${app.id}`}>
                           {getTypeLabel(app.type)}
                         </Badge>
-                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={(e) => handleDismiss(e, app)}
+                          disabled={dismissMutation.isPending}
+                          data-testid={`button-dismiss-${app.type}-${app.id}`}
+                          title="Dismiss from widget"
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
                       </div>
                     </div>
                     <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
@@ -291,9 +338,6 @@ export default function PendingApplicationsWidget() {
                         <Clock className="h-3 w-3" />
                         {formatDistanceToNow(new Date(app.createdAt), { addSuffix: true })}
                       </span>
-                      <Badge variant="outline" className="text-xs" data-testid={`badge-status-${app.id}`}>
-                        {getStatusLabel(app.status)}
-                      </Badge>
                     </div>
                   </div>
                 ))}

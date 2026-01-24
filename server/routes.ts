@@ -3295,10 +3295,177 @@ Crawl-delay: 1
         total: allApplications.length,
       };
 
+      // Get dismissed items for this tenant
+      const { dismissedWidgetItems } = await import('@shared/schema');
+      const dismissedItems = await db.select({
+        applicationType: dismissedWidgetItems.applicationType,
+        applicationId: dismissedWidgetItems.applicationId,
+      })
+        .from(dismissedWidgetItems)
+        .where(eq(dismissedWidgetItems.tenantId, req.tenant!.id));
+      
+      // Create a set for fast lookup
+      const dismissedSet = new Set(
+        dismissedItems.map(d => `${d.applicationType}-${d.applicationId}`)
+      );
+      
+      // Filter out dismissed applications
+      const filteredApplications = allApplications.filter(
+        app => !dismissedSet.has(`${app.type}-${app.id}`)
+      );
+      
+      // Recalculate counts after filtering
+      const filteredCounts = {
+        adoption: filteredApplications.filter(a => a.type === 'adoption').length,
+        foster: filteredApplications.filter(a => a.type === 'foster').length,
+        volunteer: filteredApplications.filter(a => a.type === 'volunteer').length,
+        surrender: filteredApplications.filter(a => a.type === 'surrender').length,
+        custom: filteredApplications.filter(a => a.type === 'custom').length,
+        total: filteredApplications.length,
+      };
+
       res.json({
-        applications: allApplications.slice(0, 100), // Limit to 100 total
-        counts,
+        applications: filteredApplications.slice(0, 100), // Limit to 100 total
+        counts: filteredCounts,
       });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/dashboard/pending-applications/dismiss
+   * Dismiss an application from the pending applications widget
+   * This doesn't change the application status - just hides it from the widget view
+   */
+  app.post('/api/dashboard/pending-applications/dismiss', requireTenant, requireAuth, requireRole('admin', 'owner', 'staff'), async (req, res, next) => {
+    try {
+      const { dismissedWidgetItems } = await import('@shared/schema');
+      const { logActivity } = await import('./lib/activity-logger');
+      const { createAuditLog } = await import('./audit');
+      
+      const { applicationType, applicationId, applicantName } = req.body;
+      
+      if (!applicationType || !applicationId) {
+        return res.status(400).json({ error: 'applicationType and applicationId are required' });
+      }
+      
+      // Validate applicationType
+      const validTypes = ['adoption', 'foster', 'volunteer', 'surrender', 'custom'];
+      if (!validTypes.includes(applicationType)) {
+        return res.status(400).json({ error: 'Invalid applicationType' });
+      }
+      
+      // Check if already dismissed
+      const existing = await db.select()
+        .from(dismissedWidgetItems)
+        .where(
+          and(
+            eq(dismissedWidgetItems.tenantId, req.tenant!.id),
+            eq(dismissedWidgetItems.applicationType, applicationType),
+            eq(dismissedWidgetItems.applicationId, applicationId)
+          )
+        )
+        .limit(1);
+      
+      if (existing.length > 0) {
+        return res.status(200).json({ message: 'Already dismissed', alreadyDismissed: true });
+      }
+      
+      // Insert the dismissal record
+      await db.insert(dismissedWidgetItems).values({
+        tenantId: req.tenant!.id,
+        applicationType,
+        applicationId,
+        dismissedBy: req.user!.id,
+      });
+      
+      // Log to activity feed
+      await logActivity({
+        tenantId: req.tenant!.id,
+        userId: req.user!.id,
+        entityType: 'Application',
+        entityId: applicationId,
+        action: 'dismissed_from_widget',
+        description: `Dismissed ${applicationType} application${applicantName ? ` from ${applicantName}` : ''} from pending widget`,
+        category: 'adoption',
+        metadata: { applicationType, applicationId, applicantName },
+      });
+      
+      // Log to audit log
+      await createAuditLog({
+        userId: req.user!.id,
+        tenantId: req.tenant!.id,
+        action: 'dismiss_widget_item',
+        entityType: 'Application',
+        entityId: applicationId,
+        metadata: { applicationType, applicationId, applicantName },
+        req,
+      });
+      
+      res.json({ success: true, message: 'Application dismissed from widget' });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * DELETE /api/dashboard/pending-applications/dismiss/:type/:id
+   * Restore a dismissed application to the pending applications widget
+   */
+  app.delete('/api/dashboard/pending-applications/dismiss/:type/:id', requireTenant, requireAuth, requireRole('admin', 'owner', 'staff'), async (req, res, next) => {
+    try {
+      const { dismissedWidgetItems } = await import('@shared/schema');
+      const { logActivity } = await import('./lib/activity-logger');
+      const { createAuditLog } = await import('./audit');
+      
+      const { type, id } = req.params;
+      
+      // Validate type parameter
+      const validTypes = ['adoption', 'foster', 'volunteer', 'surrender', 'custom'];
+      if (!validTypes.includes(type)) {
+        return res.status(400).json({ error: 'Invalid application type' });
+      }
+      
+      // Delete the dismissal record
+      const result = await db.delete(dismissedWidgetItems)
+        .where(
+          and(
+            eq(dismissedWidgetItems.tenantId, req.tenant!.id),
+            eq(dismissedWidgetItems.applicationType, type as any),
+            eq(dismissedWidgetItems.applicationId, id)
+          )
+        )
+        .returning();
+      
+      if (result.length === 0) {
+        return res.status(404).json({ error: 'Dismissal record not found' });
+      }
+      
+      // Log to activity feed
+      await logActivity({
+        tenantId: req.tenant!.id,
+        userId: req.user!.id,
+        entityType: 'Application',
+        entityId: id,
+        action: 'restored_to_widget',
+        description: `Restored ${type} application to pending widget`,
+        category: 'adoption',
+        metadata: { applicationType: type, applicationId: id },
+      });
+      
+      // Log to audit log
+      await createAuditLog({
+        userId: req.user!.id,
+        tenantId: req.tenant!.id,
+        action: 'restore_widget_item',
+        entityType: 'Application',
+        entityId: id,
+        metadata: { applicationType: type, applicationId: id },
+        req,
+      });
+      
+      res.json({ success: true, message: 'Application restored to widget' });
     } catch (error) {
       next(error);
     }

@@ -718,16 +718,12 @@ export const applications = pgTable("applications", {
   adoptionFeePaymentSource: text("adoption_fee_payment_source").$type<"stripe" | "cash" | "check" | "other">(), // Payment method
   adoptionFeeTransactionId: text("adoption_fee_transaction_id"), // External transaction ID from payment processor
   smsConsent: boolean("sms_consent").notNull().default(false), // Whether applicant consented to receive SMS messages
-  dismissedAt: timestamp("dismissed_at"), // When the application was dismissed from pending widget
-  dismissedBy: uuid("dismissed_by").references(() => users.id), // User who dismissed the application
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
 export const insertApplicationSchema = createInsertSchema(applications).omit({
   id: true,
-  dismissedAt: true,
-  dismissedBy: true,
   createdAt: true,
   updatedAt: true,
 });
@@ -3729,6 +3725,24 @@ export const insertMedicalImportItemSchema = createInsertSchema(medicalImportIte
 });
 export type InsertMedicalImportItem = z.infer<typeof insertMedicalImportItemSchema>;
 export type MedicalImportItem = typeof medicalImportItems.$inferSelect;
+
+// Dismissed Widget Items - Track applications hidden from pending applications widget
+// This doesn't affect the actual application status - just hides it from the widget view
+export const dismissedWidgetItems = pgTable("dismissed_widget_items", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  applicationType: text("application_type").notNull().$type<"adoption" | "foster" | "volunteer" | "surrender" | "custom">(), // Type of application
+  applicationId: uuid("application_id").notNull(), // ID of the application being dismissed
+  dismissedBy: uuid("dismissed_by").notNull().references(() => users.id), // User who dismissed
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertDismissedWidgetItemSchema = createInsertSchema(dismissedWidgetItems).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertDismissedWidgetItem = z.infer<typeof insertDismissedWidgetItemSchema>;
+export type DismissedWidgetItem = typeof dismissedWidgetItems.$inferSelect;
 
 // Activity Logs - Track all tenant-level user activities for admin visibility
 export const activityLogs = pgTable("activity_logs", {
