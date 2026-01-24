@@ -2020,7 +2020,7 @@ export default function AnimalsPage() {
                           </CardHeader>
                           <CardContent className="space-y-4">
                             {animal.photoUrls && animal.photoUrls.length > 0 && (
-                              <div className="relative w-full aspect-[4/3] bg-muted rounded-md overflow-hidden">
+                              <div className="relative w-full aspect-[16/9] sm:aspect-[4/3] bg-muted rounded-md overflow-hidden">
                                 <img
                                   src={animal.photoUrls[currentPhotoIndex[animal.id] || 0]}
                                   alt={`${animal.name} - Photo ${(currentPhotoIndex[animal.id] || 0) + 1}`}
@@ -2335,7 +2335,7 @@ export default function AnimalsPage() {
                     </CardHeader>
                     <CardContent className="space-y-4">
                       {animal.photoUrls && animal.photoUrls.length > 0 && (
-                        <div className="relative w-full aspect-[4/3] bg-muted rounded-md overflow-hidden">
+                        <div className="relative w-full aspect-[16/9] sm:aspect-[4/3] bg-muted rounded-md overflow-hidden">
                           <img
                             src={animal.photoUrls[currentPhotoIndex[animal.id] || 0]}
                             alt={`${animal.name} - Photo ${(currentPhotoIndex[animal.id] || 0) + 1}`}
