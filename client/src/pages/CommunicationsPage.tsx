@@ -289,15 +289,15 @@ export default function CommunicationsPage() {
       description="Send email campaigns and manage inbound emails"
     >
       <div className="flex-1 overflow-auto p-6">
-        <Tabs defaultValue="campaigns" className="w-full">
+        <Tabs defaultValue="inbox" className="w-full">
           <TabsList className="grid w-full max-w-md grid-cols-2">
-            <TabsTrigger value="campaigns" data-testid="tab-campaigns">
-              <Send className="w-4 h-4 mr-2" />
-              Email Campaigns
-            </TabsTrigger>
             <TabsTrigger value="inbox" data-testid="tab-inbox">
               <Inbox className="w-4 h-4 mr-2" />
               Inbox
+            </TabsTrigger>
+            <TabsTrigger value="campaigns" data-testid="tab-campaigns">
+              <Send className="w-4 h-4 mr-2" />
+              Email Campaigns
             </TabsTrigger>
           </TabsList>
 
