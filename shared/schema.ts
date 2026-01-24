@@ -244,6 +244,10 @@ export const tenants = pgTable("tenants", {
   donationLandingMailingAddress: text("donation_landing_mailing_address"), // e.g., "PO Box 123, City, ST 12345"
   donationLandingMailingText: text("donation_landing_mailing_text"), // e.g., "Prefer to mail a check? Send to:"
   
+  // Owner-controlled admin restrictions (allows owners to limit what admins can edit)
+  restrictAdminSettingsEdit: boolean("restrict_admin_settings_edit").notNull().default(false), // When true, admins can view but not edit Settings
+  restrictAdminIntegrationsEdit: boolean("restrict_admin_integrations_edit").notNull().default(false), // When true, admins can view but not edit Platform Integrations
+  
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
@@ -263,7 +267,7 @@ export const users = pgTable("users", {
   passwordHash: text("password_hash").notNull(),
   fullName: text("full_name").notNull(),
   phone: text("phone"), // For SMS broadcasts
-  roles: text("roles").array().notNull().$type<("admin" | "board_member" | "staff" | "foster" | "volunteer" | "platform_admin")[]>(),
+  roles: text("roles").array().notNull().$type<("owner" | "admin" | "board_member" | "staff" | "foster" | "volunteer" | "platform_admin")[]>(),
   isActive: boolean("is_active").notNull().default(true),
   // MFA fields
   mfaEnabled: boolean("mfa_enabled").notNull().default(false),

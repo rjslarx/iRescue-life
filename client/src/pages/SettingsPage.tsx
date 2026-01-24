@@ -256,11 +256,20 @@ export default function SettingsPage() {
     queryKey: ['/api/me/is-owner'],
   });
 
+  // Check if user is admin or owner (both can view the page)
+  const isOwner = ownerData?.isOwner === true;
+  const isAdmin = user?.activeRole === 'admin';
+  const canViewPage = isOwner || isAdmin;
+
   const { data, isLoading, error } = useQuery<{ tenant: Tenant }>({
     queryKey: ['/api/tenant/settings'],
-    // Only fetch settings if user is owner
-    enabled: ownerData?.isOwner === true,
+    // Allow both owners and admins to fetch settings
+    enabled: canViewPage,
   });
+
+  // Determine if editing should be restricted for admins
+  const isEditRestricted = isAdmin && !isOwner && data?.tenant?.restrictAdminSettingsEdit === true;
+  const canEdit = !isEditRestricted;
 
   const { data: emailUsage } = useQuery<{
     sent: number;
@@ -324,6 +333,28 @@ export default function SettingsPage() {
     onError: (error: any) => {
       toast({
         title: "Failed to save branding",
+        description: error.message || "Please try again later.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Mutation to update admin restrictions (owner only)
+  const updateAdminRestrictionsMutation = useMutation({
+    mutationFn: async (restrictions: { restrictAdminSettingsEdit?: boolean; restrictAdminIntegrationsEdit?: boolean }) => {
+      const response = await apiRequest('PATCH', '/api/tenant/settings/admin-restrictions', restrictions);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/tenant/settings'] });
+      toast({
+        title: "Admin restrictions updated",
+        description: "Admin editing permissions have been updated successfully.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to update restrictions",
         description: error.message || "Please try again later.",
         variant: "destructive",
       });
@@ -703,8 +734,8 @@ export default function SettingsPage() {
     );
   }
 
-  // Show access denied message if user is not the owner
-  if (!ownerData?.isOwner) {
+  // Show access denied message if user is not owner or admin
+  if (!canViewPage) {
     return (
       <DashboardLayout
         breadcrumbs={[
@@ -719,14 +750,14 @@ export default function SettingsPage() {
                 <CardTitle>Access Restricted</CardTitle>
               </div>
               <CardDescription>
-                Organization settings can only be accessed by the organization owner
+                Organization settings can only be accessed by administrators
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>
-                  You don't have permission to view or modify organization settings. Only the organization owner can access this page. If you need to make changes, please contact your organization owner.
+                  You don't have permission to view organization settings. If you need to make changes, please contact your organization owner or an administrator.
                 </AlertDescription>
               </Alert>
               <p className="text-sm text-muted-foreground">
@@ -751,6 +782,17 @@ export default function SettingsPage() {
               </div>
             ) : (
               <div className="max-w-2xl space-y-6">
+                {/* View-Only Banner for Restricted Admins */}
+                {isEditRestricted && (
+                  <Alert className="border-amber-500 bg-amber-50 dark:bg-amber-950/20" data-testid="alert-view-only">
+                    <Info className="h-4 w-4 text-amber-600" />
+                    <AlertDescription className="text-amber-800 dark:text-amber-200">
+                      <strong>View-Only Mode:</strong> Contact the organization owner for edit permissions. 
+                      You can view settings but saving changes is not enabled for your account.
+                    </AlertDescription>
+                  </Alert>
+                )}
+
                 {/* Billing & Subscription */}
                 <Card>
                   <CardHeader>
@@ -875,6 +917,64 @@ export default function SettingsPage() {
                       <p className="text-sm text-muted-foreground mt-3">
                         Share this address with veterinarians, volunteers, donors, and partners. Incoming emails will appear in your <span className="font-medium">Email Inbox</span> for staff to review and process.
                       </p>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Owner Controls - Only visible to owners */}
+                {isOwner && (
+                  <Card data-testid="card-owner-controls">
+                    <CardHeader>
+                      <div className="flex items-center gap-2">
+                        <Shield className="h-5 w-5" />
+                        <CardTitle>Owner Controls</CardTitle>
+                      </div>
+                      <CardDescription>
+                        Control what administrators can edit in your organization
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between p-4 rounded-lg border bg-muted/30">
+                          <div className="space-y-0.5">
+                            <Label htmlFor="restrict-settings" className="text-base font-medium">
+                              Restrict Settings Editing
+                            </Label>
+                            <p className="text-sm text-muted-foreground">
+                              When enabled, administrators can view settings but cannot make changes
+                            </p>
+                          </div>
+                          <Switch
+                            id="restrict-settings"
+                            checked={data?.tenant?.restrictAdminSettingsEdit === true}
+                            onCheckedChange={(checked) => {
+                              updateAdminRestrictionsMutation.mutate({ restrictAdminSettingsEdit: checked });
+                            }}
+                            disabled={updateAdminRestrictionsMutation.isPending}
+                            data-testid="switch-restrict-settings"
+                          />
+                        </div>
+
+                        <div className="flex items-center justify-between p-4 rounded-lg border bg-muted/30">
+                          <div className="space-y-0.5">
+                            <Label htmlFor="restrict-integrations" className="text-base font-medium">
+                              Restrict Platform Integrations Editing
+                            </Label>
+                            <p className="text-sm text-muted-foreground">
+                              When enabled, administrators can view but cannot modify platform integrations
+                            </p>
+                          </div>
+                          <Switch
+                            id="restrict-integrations"
+                            checked={data?.tenant?.restrictAdminIntegrationsEdit === true}
+                            onCheckedChange={(checked) => {
+                              updateAdminRestrictionsMutation.mutate({ restrictAdminIntegrationsEdit: checked });
+                            }}
+                            disabled={updateAdminRestrictionsMutation.isPending}
+                            data-testid="switch-restrict-integrations"
+                          />
+                        </div>
+                      </div>
                     </CardContent>
                   </Card>
                 )}
@@ -1750,7 +1850,7 @@ export default function SettingsPage() {
 
                         <Button 
                           type="submit" 
-                          disabled={updateBrandingMutation.isPending}
+                          disabled={updateBrandingMutation.isPending || !canEdit}
                           data-testid="button-save-branding"
                         >
                           {updateBrandingMutation.isPending ? (
@@ -2113,7 +2213,7 @@ export default function SettingsPage() {
                         <div className="flex justify-end">
                           <Button 
                             type="submit" 
-                            disabled={updateDonationSectionMutation.isPending}
+                            disabled={updateDonationSectionMutation.isPending || !canEdit}
                             data-testid="button-save-donation-section"
                           >
                             {updateDonationSectionMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
@@ -2153,7 +2253,7 @@ export default function SettingsPage() {
                       <Switch
                         id="pass-fees-toggle"
                         checked={data?.tenant?.passFeesToAdopter || false}
-                        disabled={updatePassFeesMutation.isPending}
+                        disabled={updatePassFeesMutation.isPending || !canEdit}
                         onCheckedChange={(checked) => updatePassFeesMutation.mutate(checked)}
                         data-testid="switch-pass-fees"
                       />
@@ -2183,7 +2283,7 @@ export default function SettingsPage() {
                       <Switch
                         id="require-spay-neuter-toggle"
                         checked={data?.tenant?.requireSpayNeuterContract || false}
-                        disabled={updateRequireSpayNeuterContractMutation.isPending}
+                        disabled={updateRequireSpayNeuterContractMutation.isPending || !canEdit}
                         onCheckedChange={(checked) => updateRequireSpayNeuterContractMutation.mutate(checked)}
                         data-testid="switch-require-spay-neuter"
                       />
@@ -2214,7 +2314,7 @@ export default function SettingsPage() {
                       <Switch
                         id="enable-transfer-agreement-toggle"
                         checked={data?.tenant?.enableTransferAgreement || false}
-                        disabled={updateEnableTransferAgreementMutation.isPending}
+                        disabled={updateEnableTransferAgreementMutation.isPending || !canEdit}
                         onCheckedChange={(checked) => updateEnableTransferAgreementMutation.mutate(checked)}
                         data-testid="switch-enable-transfer-agreement"
                       />
@@ -2358,7 +2458,7 @@ export default function SettingsPage() {
                         <div className="flex justify-end pt-2">
                           <Button 
                             type="submit" 
-                            disabled={updateStripeMutation.isPending}
+                            disabled={updateStripeMutation.isPending || !canEdit}
                             data-testid="button-save-stripe"
                           >
                             {updateStripeMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
@@ -2529,7 +2629,7 @@ export default function SettingsPage() {
                             <div className="flex justify-end pt-2">
                               <Button 
                                 type="submit" 
-                                disabled={updateTwilioMutation.isPending}
+                                disabled={updateTwilioMutation.isPending || !canEdit}
                                 data-testid="button-save-twilio"
                               >
                                 {updateTwilioMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
@@ -3035,7 +3135,7 @@ export default function SettingsPage() {
                         <div className="flex justify-end pt-2">
                           <Button 
                             type="submit" 
-                            disabled={updateEmailMutation.isPending}
+                            disabled={updateEmailMutation.isPending || !canEdit}
                             data-testid="button-save-email"
                           >
                             {updateEmailMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}

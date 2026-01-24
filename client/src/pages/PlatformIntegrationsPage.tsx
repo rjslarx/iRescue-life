@@ -15,7 +15,7 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import { Save, Loader2, CheckCircle2, AlertCircle, ExternalLink, RefreshCw, Mail, Calendar, HardDrive, Plus, Trash2, Star, StarOff } from "lucide-react";
+import { Save, Loader2, CheckCircle2, AlertCircle, AlertTriangle, ExternalLink, RefreshCw, Mail, Calendar, HardDrive, Plus, Trash2, Star, StarOff } from "lucide-react";
 import { z } from "zod";
 import type { Tenant } from "@shared/schema";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -108,6 +108,18 @@ export default function PlatformIntegrationsPage() {
   const { data: tenantData } = useQuery<{ tenant: Tenant }>({
     queryKey: ['/api/tenant'],
   });
+
+  // Check if user is owner for restriction controls
+  const { data: ownerData } = useQuery<{ isOwner: boolean }>({
+    queryKey: ['/api/me/is-owner'],
+    enabled: !!user,
+  });
+
+  // Determine if editing is allowed (owner always can edit, admin can only if not restricted)
+  const isOwner = ownerData?.isOwner || false;
+  const isAdmin = user?.roles?.includes('admin');
+  const isRestricted = tenantData?.tenant?.restrictAdminIntegrationsEdit || false;
+  const canEdit = isOwner || (isAdmin && !isRestricted);
 
   const { data: integrationsData, isLoading } = useQuery<{ integrations: PlatformIntegration[] }>({
     queryKey: ['/api/platform-integrations'],
@@ -319,6 +331,17 @@ export default function PlatformIntegrationsPage() {
               </div>
             ) : (
               <div className="max-w-4xl space-y-6">
+                {/* View-only banner for restricted admins */}
+                {!canEdit && isAdmin && !isOwner && (
+                  <Alert className="bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-900">
+                    <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                    <AlertDescription className="text-amber-800 dark:text-amber-300">
+                      <strong>View Only:</strong> You have been restricted from editing Platform Integrations. 
+                      Contact the organization owner if you need to make changes.
+                    </AlertDescription>
+                  </Alert>
+                )}
+
                 <Alert>
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>
@@ -380,7 +403,7 @@ export default function PlatformIntegrationsPage() {
                         </Alert>
                         <Button 
                           onClick={() => connectGoogleMutation.mutate()}
-                          disabled={connectGoogleMutation.isPending}
+                          disabled={connectGoogleMutation.isPending || !canEdit}
                           data-testid="button-connect-google"
                         >
                           {connectGoogleMutation.isPending ? (
@@ -467,7 +490,7 @@ export default function PlatformIntegrationsPage() {
                                             }));
                                             updateGoogleFeaturesMutation.mutate({ senderAddresses: updatedAddresses });
                                           }}
-                                          disabled={updateGoogleFeaturesMutation.isPending || addr.isDefault}
+                                          disabled={updateGoogleFeaturesMutation.isPending || addr.isDefault || !canEdit}
                                           title={addr.isDefault ? "This is the default address" : "Set as default"}
                                           data-testid={`button-set-default-${index}`}
                                         >
@@ -490,7 +513,7 @@ export default function PlatformIntegrationsPage() {
                                             }
                                             updateGoogleFeaturesMutation.mutate({ senderAddresses: updatedAddresses });
                                           }}
-                                          disabled={updateGoogleFeaturesMutation.isPending}
+                                          disabled={updateGoogleFeaturesMutation.isPending || !canEdit}
                                           data-testid={`button-remove-sender-${index}`}
                                         >
                                           <Trash2 className="h-4 w-4" />
@@ -565,7 +588,7 @@ export default function PlatformIntegrationsPage() {
                                             setNewSenderEmail("");
                                             setShowAddSender(false);
                                           }}
-                                          disabled={updateGoogleFeaturesMutation.isPending}
+                                          disabled={updateGoogleFeaturesMutation.isPending || !canEdit}
                                           data-testid="button-save-new-sender"
                                         >
                                           {updateGoogleFeaturesMutation.isPending ? (
@@ -640,7 +663,7 @@ export default function PlatformIntegrationsPage() {
                                     variant="outline"
                                     size="sm"
                                     onClick={() => syncCalendarsMutation.mutate()}
-                                    disabled={syncCalendarsMutation.isPending}
+                                    disabled={syncCalendarsMutation.isPending || !canEdit}
                                     data-testid="button-sync-calendars"
                                   >
                                     {syncCalendarsMutation.isPending ? (
@@ -700,7 +723,7 @@ export default function PlatformIntegrationsPage() {
                         <Button 
                           variant="outline" 
                           onClick={() => disconnectGoogleMutation.mutate()}
-                          disabled={disconnectGoogleMutation.isPending}
+                          disabled={disconnectGoogleMutation.isPending || !canEdit}
                           data-testid="button-disconnect-google"
                         >
                           {disconnectGoogleMutation.isPending ? (
@@ -798,7 +821,7 @@ export default function PlatformIntegrationsPage() {
                               <Button
                                 variant="outline"
                                 onClick={() => testMutation.mutate(platform)}
-                                disabled={testMutation.isPending}
+                                disabled={testMutation.isPending || !canEdit}
                                 data-testid={`button-test-${platform}`}
                               >
                                 {testMutation.isPending ? (
@@ -909,7 +932,7 @@ export default function PlatformIntegrationsPage() {
                               <div className="flex gap-2">
                                 <Button 
                                   type="submit" 
-                                  disabled={saveMutation.isPending}
+                                  disabled={saveMutation.isPending || !canEdit}
                                   data-testid={`button-save-${platform}`}
                                 >
                                   {saveMutation.isPending ? (

@@ -2361,6 +2361,16 @@ Crawl-delay: 1
   });
 
   /**
+   * GET /api/me/is-owner
+   * Check if current user is the organization owner
+   */
+  app.get('/api/me/is-owner', requireAuth, (req, res) => {
+    // Check if user has the 'owner' role
+    const isOwner = req.user!.roles.includes('owner' as any);
+    res.json({ isOwner });
+  });
+
+  /**
    * GET /api/tenant
    * Get current tenant info
    */
@@ -12936,6 +12946,50 @@ Submitted: ${new Date().toLocaleString()}
         .update(tenants)
         .set(updateData)
         .where(eq(tenants.id, req.tenant!.id))
+        .returning();
+
+      res.json({ success: true, tenant: updatedTenant });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * PATCH /api/tenant/settings/admin-restrictions
+   * Update admin restrictions (owner only)
+   * Allows owners to control whether admins can edit settings and integrations
+   */
+  app.patch('/api/tenant/settings/admin-restrictions', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      // Only the organization owner can update these restrictions
+      // Check if user has the 'owner' role
+      const isOwner = req.user!.roles.includes('owner' as any);
+      if (!isOwner) {
+        return res.status(403).json({ error: 'Only the organization owner can modify admin restrictions' });
+      }
+
+      const restrictionsSchema = z.object({
+        restrictAdminSettingsEdit: z.boolean().optional(),
+        restrictAdminIntegrationsEdit: z.boolean().optional(),
+      });
+
+      const parsed = restrictionsSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: 'Invalid request data', details: parsed.error.issues });
+      }
+
+      const updateData: Record<string, any> = {};
+      if (parsed.data.restrictAdminSettingsEdit !== undefined) {
+        updateData.restrictAdminSettingsEdit = parsed.data.restrictAdminSettingsEdit;
+      }
+      if (parsed.data.restrictAdminIntegrationsEdit !== undefined) {
+        updateData.restrictAdminIntegrationsEdit = parsed.data.restrictAdminIntegrationsEdit;
+      }
+
+      const [updatedTenant] = await db
+        .update(tenants)
+        .set(updateData)
+        .where(eq(tenants.id, req.tenantId!))
         .returning();
 
       res.json({ success: true, tenant: updatedTenant });
