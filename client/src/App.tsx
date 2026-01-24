@@ -224,10 +224,10 @@ function RouterSwitch() {
       <ProtectedRoute path="/dashboard/partner-organizations" pageId="contacts" component={PartnerOrganizationsPage} />
       <ProtectedRoute path="/dashboard/volunteers" pageId="volunteers" component={VolunteerManagementPage} />
       <ProtectedRoute path="/dashboard/reports" pageId="analytics" component={Analytics} />
-      <ProtectedRoute path="/dashboard/my-fosters" pageId="foster-management" component={MyFostersPage} />
-      <ProtectedRoute path="/dashboard/my-fosters/:animalId/medical" pageId="foster-management" component={FosterAnimalMedicalPage} />
-      <ProtectedRoute path="/dashboard/my-fosters/:animalId" pageId="foster-management" component={FosterAnimalProfilePage} />
-      <ProtectedRoute path="/dashboard/foster-mobile" pageId="foster-management" component={FosterMobilePortal} />
+      <ProtectedRoute path="/dashboard/my-fosters" pageId="my-fosters" component={MyFostersPage} />
+      <ProtectedRoute path="/dashboard/my-fosters/:animalId/medical" pageId="my-fosters" component={FosterAnimalMedicalPage} />
+      <ProtectedRoute path="/dashboard/my-fosters/:animalId" pageId="my-fosters" component={FosterAnimalProfilePage} />
+      <ProtectedRoute path="/dashboard/foster-mobile" pageId="my-fosters" component={FosterMobilePortal} />
       <ProtectedRoute path="/dashboard/foster-management" pageId="foster-management" component={FosterManagementPage} />
       
       {/* Adopter Portal routes - for adopter role users to access their pets */}
