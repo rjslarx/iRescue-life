@@ -74,7 +74,7 @@ export default function DashboardLayout({ children, title, description, actions,
           userName={user?.fullName || "User"}
           userRole={(user?.activeRole || "staff") as "admin" | "board_member" | "staff" | "foster" | "volunteer"}
         />
-        <div className="flex flex-col flex-1">
+        <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
           <header className="flex items-center justify-between gap-4 border-b p-4">
             <div className="flex items-center gap-4 flex-1 min-w-0">
               <SidebarTrigger data-testid="button-sidebar-toggle" />
