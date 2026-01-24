@@ -18,6 +18,7 @@ import SupplyRequestDialog from "@/components/SupplyRequestDialog";
 import FosterUpdateDialog from "@/components/FosterUpdateDialog";
 import MedicalRemindersWidget from "@/components/MedicalRemindersWidget";
 import RecentActivityWidget from "@/components/RecentActivityWidget";
+import FormSubmissionsWidget from "@/components/FormSubmissionsWidget";
 import PendingApplicationsWidget from "@/components/PendingApplicationsWidget";
 import { TemperatureWidget } from "@/components/TemperatureWidget";
 import WebsiteVisitsWidget from "@/components/WebsiteVisitsWidget";
@@ -125,11 +126,11 @@ export default function Dashboard() {
   });
 
   const { data: eventsData } = useQuery<{ events: CalendarEvent[] }>({
-    queryKey: ['/api/events', { role: user?.activeRole }],
+    queryKey: ['/api/events', user?.activeRole],
   });
 
   const { data: tenantData } = useQuery<{ tenant: Tenant }>({
-    queryKey: ['/api/tenant', { role: user?.activeRole }],
+    queryKey: ['/api/tenant', user?.activeRole],
   });
 
   // Fetch wizard status for admins
@@ -616,9 +617,12 @@ export default function Dashboard() {
           </Card>
         )}
 
-        {/* Medical Reminders - Only for admin/staff */}
+        {/* Medical Reminders & Form Submissions - Only for admin/staff */}
         {(user?.activeRole === 'admin' || user?.activeRole === 'staff') && (
-          <MedicalRemindersWidget />
+          <div className="grid gap-6 lg:grid-cols-2">
+            <MedicalRemindersWidget />
+            <FormSubmissionsWidget />
+          </div>
         )}
 
         {/* Temperature Monitoring Widget - Only for admin/staff */}
