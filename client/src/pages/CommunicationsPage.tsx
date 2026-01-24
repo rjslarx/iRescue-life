@@ -662,7 +662,7 @@ export default function CommunicationsPage() {
                 <div>
                   <Label className="text-sm font-semibold mb-2 block">Email Body</Label>
                   <div className="bg-muted p-4 rounded-md text-sm whitespace-pre-wrap">
-                    {selectedEmail.body}
+                    {selectedEmail.textBody}
                   </div>
                 </div>
                 {selectedEmail.attachments && selectedEmail.attachments.length > 0 && (
