@@ -511,8 +511,13 @@ export default function Dashboard() {
               )}
             </div>
 
-        {/* Quick Actions, Recent Activity, and Pending Applications */}
+        {/* Quick Actions, Pending Applications, and Recent Activity */}
         <div className="flex flex-col gap-6">
+          {/* Pending Applications Widget - Only for admin/staff - Shows first on mobile */}
+          {(user?.activeRole === 'admin' || user?.activeRole === 'staff') && (
+            <PendingApplicationsWidget />
+          )}
+
           {/* Quick Actions and Recent Activity */}
           <div className="grid gap-6 lg:grid-cols-2">
             <div className="space-y-4">
@@ -548,11 +553,6 @@ export default function Dashboard() {
 
             <RecentActivityWidget />
           </div>
-
-          {/* Pending Applications Widget - Only for admin/staff */}
-          {(user?.activeRole === 'admin' || user?.activeRole === 'staff') && (
-            <PendingApplicationsWidget />
-          )}
         </div>
 
         {/* Foster Management Alerts - Only for admin/staff */}
