@@ -3751,6 +3751,36 @@ Crawl-delay: 1
   });
 
   /**
+   * GET /api/users/volunteers
+   * List all users with volunteer role for calendar assignment
+   */
+  app.get('/api/users/volunteers', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { users } = await import('@shared/schema');
+      
+      const volunteerList = await db
+        .select({
+          id: users.id,
+          email: users.email,
+          fullName: users.fullName,
+          roles: users.roles,
+        })
+        .from(users)
+        .where(
+          and(
+            eq(users.tenantId, req.tenant!.id),
+            sql`'volunteer' = ANY(${users.roles})`
+          )
+        )
+        .orderBy(users.fullName);
+      
+      res.json({ volunteers: volunteerList });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * POST /api/users
    * Create new user (admin only)
    */
@@ -17348,6 +17378,7 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
         color: z.string().default('#3b82f6'),
         isActive: z.boolean().default(true),
         isPublic: z.boolean().default(false),
+        minVolunteersRequired: z.number().int().min(1).default(2),
       });
       
       const calendarData = createSchema.parse(req.body);
@@ -17439,6 +17470,7 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
           meetLink: fieldSettingSchema,
           customPage: fieldSettingSchema,
         }).nullish(),
+        minVolunteersRequired: z.number().int().min(1).optional(),
       });
 
       const data = updateSchema.parse(req.body);
@@ -18118,6 +18150,7 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
         canEdit: z.boolean().default(true),
         canAdd: z.boolean().default(true),
         canDelete: z.boolean().default(true),
+        canAssignOthers: z.boolean().default(false),
       });
 
       const data = permissionSchema.parse(req.body);
@@ -18146,6 +18179,7 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
           canEdit: data.canEdit,
           canAdd: data.canAdd,
           canDelete: data.canDelete,
+          canAssignOthers: data.canAssignOthers,
         })
         .returning();
 
@@ -18217,6 +18251,7 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
         canEdit: z.boolean().default(true),
         canAdd: z.boolean().default(true),
         canDelete: z.boolean().default(true),
+        canAssignOthers: z.boolean().default(false),
       });
 
       const data = rolePermissionSchema.parse(req.body);
@@ -18245,6 +18280,7 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
           canEdit: data.canEdit,
           canAdd: data.canAdd,
           canDelete: data.canDelete,
+          canAssignOthers: data.canAssignOthers,
         })
         .returning();
 

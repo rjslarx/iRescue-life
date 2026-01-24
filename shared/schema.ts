@@ -1315,6 +1315,7 @@ export const calendars = pgTable("calendars", {
   themeSettings: jsonb("theme_settings").$type<CalendarThemeSettings>(),
   eventFormSettings: jsonb("event_form_settings").$type<EventFormSettings>(), // Customizable event creation form fields
   googleCalendarId: text("google_calendar_id"), // ID of corresponding Google Calendar when synced to tenant's Google Workspace
+  minVolunteersRequired: integer("min_volunteers_required").default(2), // Minimum volunteers needed per day for color-coding
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -1346,6 +1347,8 @@ export const calendarEvents = pgTable("calendar_events", {
   includeMeetLink: boolean("include_meet_link").notNull().default(false), // Whether user requested Meet link
   virtualMeetingProvider: text("virtual_meeting_provider").$type<"google_meet" | "zoom" | "teams">(), // Future-proof for other providers
   virtualMeetingLink: text("virtual_meeting_link"), // The actual meeting URL
+  // Volunteer assignment
+  volunteerContactId: uuid("volunteer_contact_id").references(() => users.id, { onDelete: 'set null' }), // Assigned volunteer for this event
   // Audit fields
   createdBy: uuid("created_by").notNull().references(() => users.id, { onDelete: 'cascade' }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -1369,6 +1372,7 @@ export const calendarPermissions = pgTable("calendar_permissions", {
   canEdit: boolean("can_edit").notNull().default(true),
   canAdd: boolean("can_add").notNull().default(true),
   canDelete: boolean("can_delete").notNull().default(true),
+  canAssignOthers: boolean("can_assign_others").notNull().default(false), // Whether user can assign other volunteers to events
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (table) => ({
   uniquePermission: unique().on(table.calendarId, table.userId),
@@ -1390,6 +1394,7 @@ export const calendarRolePermissions = pgTable("calendar_role_permissions", {
   canEdit: boolean("can_edit").notNull().default(true),
   canAdd: boolean("can_add").notNull().default(true),
   canDelete: boolean("can_delete").notNull().default(true),
+  canAssignOthers: boolean("can_assign_others").notNull().default(false), // Whether role can assign other volunteers to events
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (table) => ({
   uniqueRolePermission: unique().on(table.calendarId, table.role),

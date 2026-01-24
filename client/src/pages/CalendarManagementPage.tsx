@@ -66,6 +66,7 @@ interface Calendar {
   canDelete: boolean;
   themeSettings?: CalendarThemeSettings;
   eventFormSettings?: EventFormSettings;
+  minVolunteersRequired?: number;
 }
 
 interface CalendarPermission {
@@ -75,6 +76,7 @@ interface CalendarPermission {
   canEdit: boolean;
   canAdd: boolean;
   canDelete: boolean;
+  canAssignOthers: boolean;
   userName: string;
   userEmail: string;
 }
@@ -86,6 +88,7 @@ interface CalendarRolePermission {
   canEdit: boolean;
   canAdd: boolean;
   canDelete: boolean;
+  canAssignOthers: boolean;
 }
 
 interface User {
@@ -128,8 +131,8 @@ export default function CalendarManagementPage() {
   const [managingPermissions, setManagingPermissions] = useState<Calendar | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<string>("");
   const [selectedRole, setSelectedRole] = useState<string>("");
-  const [newUserPermissions, setNewUserPermissions] = useState({ canEdit: true, canAdd: true, canDelete: true });
-  const [newRolePermissions, setNewRolePermissions] = useState({ canEdit: true, canAdd: true, canDelete: true });
+  const [newUserPermissions, setNewUserPermissions] = useState({ canEdit: true, canAdd: true, canDelete: true, canAssignOthers: false });
+  const [newRolePermissions, setNewRolePermissions] = useState({ canEdit: true, canAdd: true, canDelete: true, canAssignOthers: false });
 
   const [newCalendar, setNewCalendar] = useState({
     name: "",
@@ -137,6 +140,7 @@ export default function CalendarManagementPage() {
     type: "custom" as Calendar["type"],
     color: CALENDAR_COLORS[0],
     isPublic: false,
+    minVolunteersRequired: 2,
   });
 
   const { data: calendarsData, isLoading } = useQuery<{ calendars: Calendar[] }>({
@@ -172,6 +176,7 @@ export default function CalendarManagementPage() {
         type: "custom",
         color: CALENDAR_COLORS[0],
         isPublic: false,
+        minVolunteersRequired: 2,
       });
       toast({
         title: "Calendar Created",
@@ -233,7 +238,7 @@ export default function CalendarManagementPage() {
     mutationFn: async ({ calendarId, userId, permissions }: { 
       calendarId: string; 
       userId: string;
-      permissions: { canEdit: boolean; canAdd: boolean; canDelete: boolean };
+      permissions: { canEdit: boolean; canAdd: boolean; canDelete: boolean; canAssignOthers: boolean };
     }) => {
       return await apiRequest("POST", `/api/calendars/${calendarId}/permissions`, {
         userId,
@@ -243,7 +248,7 @@ export default function CalendarManagementPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/calendars', managingPermissions?.id, 'permissions'] });
       setSelectedUserId("");
-      setNewUserPermissions({ canEdit: true, canAdd: true, canDelete: true });
+      setNewUserPermissions({ canEdit: true, canAdd: true, canDelete: true, canAssignOthers: false });
       toast({
         title: "Permission Granted",
         description: "User permissions have been configured.",
@@ -282,7 +287,7 @@ export default function CalendarManagementPage() {
     mutationFn: async ({ calendarId, role, permissions }: { 
       calendarId: string; 
       role: string;
-      permissions: { canEdit: boolean; canAdd: boolean; canDelete: boolean };
+      permissions: { canEdit: boolean; canAdd: boolean; canDelete: boolean; canAssignOthers: boolean };
     }) => {
       return await apiRequest("POST", `/api/calendars/${calendarId}/role-permissions`, {
         role,
@@ -292,7 +297,7 @@ export default function CalendarManagementPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/calendars', managingPermissions?.id, 'role-permissions'] });
       setSelectedRole("");
-      setNewRolePermissions({ canEdit: true, canAdd: true, canDelete: true });
+      setNewRolePermissions({ canEdit: true, canAdd: true, canDelete: true, canAssignOthers: false });
       toast({
         title: "Role Permission Granted",
         description: "Role permissions have been configured.",
@@ -345,6 +350,7 @@ export default function CalendarManagementPage() {
           isPublic: editingCalendar.isPublic,
           themeSettings: editingCalendar.themeSettings,
           eventFormSettings: editingCalendar.eventFormSettings,
+          minVolunteersRequired: editingCalendar.minVolunteersRequired,
         },
       });
     }
@@ -481,6 +487,22 @@ export default function CalendarManagementPage() {
                   Show events on public home page
                 </Label>
               </div>
+              {newCalendar.type === 'volunteer' && (
+                <div className="space-y-2">
+                  <Label htmlFor="min-volunteers">Minimum Volunteers Required</Label>
+                  <Input
+                    id="min-volunteers"
+                    type="number"
+                    min="1"
+                    value={newCalendar.minVolunteersRequired}
+                    onChange={(e) => setNewCalendar({ ...newCalendar, minVolunteersRequired: parseInt(e.target.value) || 2 })}
+                    data-testid="input-min-volunteers"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Days with fewer volunteers will be highlighted yellow, days with no volunteers will be red
+                  </p>
+                </div>
+              )}
               <div className="flex gap-2">
                 <Button
                   type="button"
@@ -682,6 +704,22 @@ export default function CalendarManagementPage() {
                   Show events on public home page
                 </Label>
               </div>
+              {editingCalendar.type === 'volunteer' && (
+                <div className="space-y-2">
+                  <Label htmlFor="edit-min-volunteers">Minimum Volunteers Required</Label>
+                  <Input
+                    id="edit-min-volunteers"
+                    type="number"
+                    min="1"
+                    value={editingCalendar.minVolunteersRequired ?? 2}
+                    onChange={(e) => setEditingCalendar({ ...editingCalendar, minVolunteersRequired: parseInt(e.target.value) || 2 })}
+                    data-testid="input-edit-min-volunteers"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Days with fewer volunteers will be highlighted yellow, days with no volunteers will be red
+                  </p>
+                </div>
+              )}
 
               {/* Theme Customization Section */}
               <div className="border-t pt-4 mt-4">
@@ -1118,6 +1156,15 @@ export default function CalendarManagementPage() {
                       />
                       <Label htmlFor="user-can-delete" className="text-sm cursor-pointer">Can Delete Events</Label>
                     </div>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="user-can-assign-others"
+                        checked={newUserPermissions.canAssignOthers}
+                        onCheckedChange={(checked) => setNewUserPermissions({ ...newUserPermissions, canAssignOthers: checked as boolean })}
+                        data-testid="checkbox-user-can-assign-others"
+                      />
+                      <Label htmlFor="user-can-assign-others" className="text-sm cursor-pointer">Can Assign Other Volunteers</Label>
+                    </div>
                   </div>
                 )}
               </div>
@@ -1150,6 +1197,7 @@ export default function CalendarManagementPage() {
                               {permission.canAdd && <Badge variant="secondary">Add</Badge>}
                               {permission.canEdit && <Badge variant="secondary">Edit</Badge>}
                               {permission.canDelete && <Badge variant="secondary">Delete</Badge>}
+                              {permission.canAssignOthers && <Badge variant="secondary">Assign</Badge>}
                             </div>
                           </TableCell>
                           <TableCell className="text-right">
@@ -1230,6 +1278,15 @@ export default function CalendarManagementPage() {
                       />
                       <Label htmlFor="role-can-delete" className="text-sm cursor-pointer">Can Delete Events</Label>
                     </div>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="role-can-assign-others"
+                        checked={newRolePermissions.canAssignOthers}
+                        onCheckedChange={(checked) => setNewRolePermissions({ ...newRolePermissions, canAssignOthers: checked as boolean })}
+                        data-testid="checkbox-role-can-assign-others"
+                      />
+                      <Label htmlFor="role-can-assign-others" className="text-sm cursor-pointer">Can Assign Other Volunteers</Label>
+                    </div>
                   </div>
                 )}
               </div>
@@ -1257,6 +1314,7 @@ export default function CalendarManagementPage() {
                               {permission.canAdd && <Badge variant="secondary">Add</Badge>}
                               {permission.canEdit && <Badge variant="secondary">Edit</Badge>}
                               {permission.canDelete && <Badge variant="secondary">Delete</Badge>}
+                              {permission.canAssignOthers && <Badge variant="secondary">Assign</Badge>}
                             </div>
                           </TableCell>
                           <TableCell className="text-right">

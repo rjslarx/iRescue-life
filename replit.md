@@ -33,6 +33,14 @@ A dedicated intake pipeline for dog surrender requests with the following:
 - **API:** POST /api/surrender (public), with automatic contact creation and inbound email logging
 - **Public Form:** /demo/surrender with dog-specific intake fields
 
+**Volunteer Calendar Staffing Color-Coding:**
+Volunteer-type calendars display visual staffing indicators based on volunteer availability:
+- **Color-Coding:** Red (no volunteers), Yellow (below minimum), Green (at or above minimum volunteers)
+- **Schema Fields:** `calendars.minVolunteersRequired` (default 2), `calendarEvents.volunteerContactId`, `calendarPermissions.canAssignOthers`, `calendarRolePermissions.canAssignOthers`
+- **API:** GET /api/users/volunteers fetches team members with volunteer role
+- **Management UI:** Calendar management page allows setting minimum volunteer requirements and "can assign others" permission for both user and role-based permissions
+- **Legend Display:** Staffing levels legend shown in sidebar when viewing a single volunteer calendar
+
 **Customizable Hero Layouts:** Tenants can choose from three hero layout types: "Three Doors" (action cards), "Action Circle" (circular CTA), or "None". The Three Doors layout allows full customization of each door's title, description, link text, link URL, and icon (paw, home, heart, dollar) via the admin settings page. Communication features include newsletters, email campaigns (via Resend), and automated notifications. It provides unified site permissions, multi-calendar functionality, page-level permissions, and customizable event forms. Admin interfaces allow tenant branding, CMS, custom pages, and analytics dashboards. PWA capabilities include mobile installation, offline access, and push notifications. Integrations include external adoption platforms and Google Workspace. A platform admin interface manages tenants, users, feature flags, audit logs, and system health. Other features include an AI Help Assistant, a setup wizard, kennel management, a public animal surrender system, auto-archiving, grant budget tracking, a contract template editor with native e-signature system, a fundraising shop module, a collaboration hub, smart foster matching, medical fund campaigns, Govee temperature monitoring integration, IRS-compliant donation receipts, and social media sharing with dynamic Open Graph tags.
 
 **Native Contract Management System:**

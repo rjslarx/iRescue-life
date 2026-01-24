@@ -50,6 +50,8 @@ interface Calendar {
   canEdit: boolean;
   canAdd: boolean;
   canDelete: boolean;
+  canAssignOthers?: boolean;
+  minVolunteersRequired?: number;
   themeSettings?: {
     headerColor?: string;
     headerTextColor?: string;
@@ -76,6 +78,14 @@ interface CalendarEvent {
   virtualMeetingProvider?: string | null;
   syncStatus?: string | null;
   syncError?: string | null;
+  volunteerContactId?: string | null;
+}
+
+interface VolunteerTeamMember {
+  id: string;
+  email: string;
+  fullName: string;
+  roles: string[];
 }
 
 export default function CalendarViewPage() {
@@ -112,6 +122,11 @@ export default function CalendarViewPage() {
 
   const { data: eventsData, isLoading } = useQuery<{ events: CalendarEvent[] }>({
     queryKey: ['/api/events'],
+  });
+
+  // Fetch volunteer team members for assignment
+  const { data: volunteerTeamMembersData } = useQuery<{ volunteers: VolunteerTeamMember[] }>({
+    queryKey: ['/api/users/volunteers'],
   });
 
   const createEventMutation = useMutation({
@@ -423,6 +438,34 @@ export default function CalendarViewPage() {
                         </p>
                       </div>
                     )}
+                    {/* Volunteer staffing legend - shown when single volunteer calendar is selected */}
+                    {selectedCalendars.size === 1 && (() => {
+                      const selectedCalId = Array.from(selectedCalendars)[0];
+                      const selectedCal = calendarsData?.calendars.find(c => c.id === selectedCalId);
+                      if (selectedCal?.type === 'volunteer') {
+                        const minRequired = selectedCal.minVolunteersRequired ?? 2;
+                        return (
+                          <div className="mt-3 pt-3 border-t">
+                            <p className="text-xs font-medium mb-2">Staffing Levels</p>
+                            <div className="space-y-1.5 text-xs">
+                              <div className="flex items-center gap-2">
+                                <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(239, 68, 68, 0.4)' }} />
+                                <span className="text-muted-foreground">No volunteers</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(234, 179, 8, 0.4)' }} />
+                                <span className="text-muted-foreground">Below minimum ({minRequired})</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(34, 197, 94, 0.4)' }} />
+                                <span className="text-muted-foreground">Fully staffed ({minRequired}+)</span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
                   </div>
                 </Card>
               </div>
@@ -518,6 +561,26 @@ export default function CalendarViewPage() {
                         const dayEvents = getEventsForDate(day);
                         const isToday = isSameDay(day, new Date());
                         
+                        // Volunteer staffing color-coding: Only apply when viewing a single volunteer calendar
+                        let volunteerBgColor: string | undefined;
+                        if (selectedCalendars.size === 1) {
+                          const selectedCalId = Array.from(selectedCalendars)[0];
+                          const selectedCal = calendarsData?.calendars.find(c => c.id === selectedCalId);
+                          if (selectedCal?.type === 'volunteer') {
+                            // Count events (volunteer sign-ups) for this day on this calendar
+                            const volunteerEventsOnDay = dayEvents.filter(e => e.calendarId === selectedCalId).length;
+                            const minRequired = selectedCal.minVolunteersRequired ?? 2;
+                            
+                            if (volunteerEventsOnDay === 0) {
+                              volunteerBgColor = 'rgba(239, 68, 68, 0.15)'; // Red - no volunteers
+                            } else if (volunteerEventsOnDay < minRequired) {
+                              volunteerBgColor = 'rgba(234, 179, 8, 0.2)'; // Yellow - below minimum
+                            } else {
+                              volunteerBgColor = 'rgba(34, 197, 94, 0.15)'; // Green - at or above minimum
+                            }
+                          }
+                        }
+                        
                         return (
                           <button
                             key={idx}
@@ -529,7 +592,10 @@ export default function CalendarViewPage() {
                               calendar-day min-h-24 p-2 border rounded-md text-left hover-elevate active-elevate-2
                               ${!isSameMonth(day, currentMonth) ? 'opacity-40' : ''}
                             `}
-                            style={isToday ? { borderColor: accentColor, borderWidth: '2px' } : undefined}
+                            style={{
+                              ...(isToday ? { borderColor: accentColor, borderWidth: '2px' } : {}),
+                              ...(volunteerBgColor ? { backgroundColor: volunteerBgColor } : {}),
+                            }}
                             data-testid={`button-day-${format(day, 'yyyy-MM-dd')}`}
                           >
                             <div 
