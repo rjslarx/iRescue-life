@@ -511,46 +511,51 @@ export default function Dashboard() {
               )}
             </div>
 
-        {/* Quick Actions and Recent Activity - Moved to top */}
-        <div className="grid gap-6 lg:grid-cols-2">
-          <div className="space-y-4">
-            <h2 className="text-xl font-semibold">Quick Actions</h2>
-            <div className="grid gap-3">
-              {quickActions.map((action) => (
-                action.href ? (
-                  <Link key={action.id} href={action.href}>
-                    <Button 
-                      variant="outline" 
-                      className="w-full justify-start" 
+        {/* Quick Actions, Recent Activity, and Pending Applications */}
+        <div className="flex flex-col gap-6">
+          {/* Pending Applications Widget - Only for admin/staff, shows first on mobile */}
+          {(user?.activeRole === 'admin' || user?.activeRole === 'staff') && (
+            <div className="order-first lg:order-last">
+              <PendingApplicationsWidget />
+            </div>
+          )}
+
+          {/* Quick Actions and Recent Activity */}
+          <div className="grid gap-6 lg:grid-cols-2 order-last lg:order-first">
+            <div className="space-y-4">
+              <h2 className="text-xl font-semibold">Quick Actions</h2>
+              <div className="grid gap-3">
+                {quickActions.map((action) => (
+                  action.href ? (
+                    <Link key={action.id} href={action.href}>
+                      <Button 
+                        variant="outline" 
+                        className="w-full justify-start" 
+                        data-testid={`button-quick-action-${action.id}`}
+                      >
+                        <action.icon className="mr-2 h-4 w-4" />
+                        {action.label}
+                      </Button>
+                    </Link>
+                  ) : (
+                    <Button
+                      key={action.id}
+                      variant="outline"
+                      className="w-full justify-start"
+                      onClick={() => handleAction(action.id)}
                       data-testid={`button-quick-action-${action.id}`}
                     >
                       <action.icon className="mr-2 h-4 w-4" />
                       {action.label}
                     </Button>
-                  </Link>
-                ) : (
-                  <Button
-                    key={action.id}
-                    variant="outline"
-                    className="w-full justify-start"
-                    onClick={() => handleAction(action.id)}
-                    data-testid={`button-quick-action-${action.id}`}
-                  >
-                    <action.icon className="mr-2 h-4 w-4" />
-                    {action.label}
-                  </Button>
-                )
-              ))}
+                  )
+                ))}
+              </div>
             </div>
+
+            <RecentActivityWidget />
           </div>
-
-          <RecentActivityWidget />
         </div>
-
-        {/* Pending Applications Widget - Only for admin/staff */}
-        {(user?.activeRole === 'admin' || user?.activeRole === 'staff') && (
-          <PendingApplicationsWidget />
-        )}
 
         {/* Foster Management Alerts - Only for admin/staff */}
         {(user?.activeRole === 'admin' || user?.activeRole === 'staff') && (
