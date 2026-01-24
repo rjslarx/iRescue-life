@@ -132,13 +132,10 @@ export default function PendingApplicationsWidget() {
 
   const dismissMutation = useMutation({
     mutationFn: async (app: PendingApplication) => {
-      return apiRequest('/api/dashboard/pending-applications/dismiss', {
-        method: 'POST',
-        body: JSON.stringify({
-          applicationType: app.type,
-          applicationId: app.id,
-          applicantName: app.applicantName,
-        }),
+      return apiRequest('POST', '/api/dashboard/pending-applications/dismiss', {
+        applicationType: app.type,
+        applicationId: app.id,
+        applicantName: app.applicantName,
       });
     },
     onSuccess: () => {
