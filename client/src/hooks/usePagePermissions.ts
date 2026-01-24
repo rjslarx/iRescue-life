@@ -10,6 +10,15 @@ interface PagePermission {
   isActive: boolean;
 }
 
+// Default permissions when no database records exist
+// These provide sensible fallbacks for each role
+const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
+  volunteer: ['calendar', 'volunteers', 'animals', 'tutorials'],
+  foster: ['foster-management', 'animals', 'tutorials', 'kennels'],
+  staff: ['dashboard', 'animals', 'applications', 'foster-management', 'volunteers', 'calendar', 'kennels', 'medical-tasks', 'tutorials'],
+  board_member: ['dashboard', 'animals', 'applications', 'foster-management', 'volunteers', 'calendar', 'finance', 'grants', 'donors', 'analytics', 'reports', 'kennels', 'medical-tasks', 'tutorials'],
+};
+
 /**
  * Hook to check if the current user has permission to access pages
  * Returns functions to check access for specific pages
@@ -42,21 +51,29 @@ export function usePagePermissions() {
       return true;
     }
 
-    // Admin role always has access to all pages
-    if (userRole === 'admin') {
+    // Admin and owner roles always have access to all pages
+    if (userRole === 'admin' || userRole === 'owner') {
       return true;
     }
 
-    // Find permission for this page
-    const permission = permissions.find(p => p.pageId === pageId && p.isActive);
-    
-    // If no permission exists, default to admin-only
-    if (!permission) {
-      return userRole === 'admin';
+    // If permissions table has any records, use database permissions only
+    if (permissions.length > 0) {
+      const permission = permissions.find(p => p.pageId === pageId && p.isActive);
+      if (permission) {
+        return permission.allowedRoles.includes(userRole as any);
+      }
+      // Page not configured in database - deny by default
+      return false;
     }
 
-    // Check if user's role is in the allowed roles
-    return permission.allowedRoles.includes(userRole);
+    // No database permissions configured - use default role permissions
+    const defaultPages = DEFAULT_ROLE_PERMISSIONS[userRole];
+    if (defaultPages) {
+      return defaultPages.includes(pageId);
+    }
+
+    // Ultimate fallback: admin-only
+    return userRole === 'admin' || userRole === 'owner';
   };
 
   /**
@@ -68,15 +85,23 @@ export function usePagePermissions() {
       return [];
     }
 
-    // Platform admin and admin have access to all pages
-    if (userRole === 'platform_admin' || userRole === 'admin') {
-      return permissions.map(p => p.pageId);
+    // Platform admin, admin, and owner have access to all pages
+    if (userRole === 'platform_admin' || userRole === 'admin' || userRole === 'owner') {
+      // Return all known page IDs
+      const allPageIds = new Set(permissions.map(p => p.pageId));
+      Object.values(DEFAULT_ROLE_PERMISSIONS).flat().forEach(p => allPageIds.add(p));
+      return Array.from(allPageIds);
     }
 
-    // Filter permissions by user's role
-    return permissions
-      .filter(p => p.isActive && p.allowedRoles.includes(userRole))
-      .map(p => p.pageId);
+    // If permissions table has records, use database permissions only
+    if (permissions.length > 0) {
+      return permissions
+        .filter(p => p.isActive && p.allowedRoles.includes(userRole as any))
+        .map(p => p.pageId);
+    }
+
+    // No database permissions configured - use defaults for this role
+    return DEFAULT_ROLE_PERMISSIONS[userRole] || [];
   };
 
   return {

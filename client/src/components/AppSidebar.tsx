@@ -71,7 +71,7 @@ import {
 interface AppSidebarProps {
   rescueName: string;
   userName: string;
-  userRole: "admin" | "board_member" | "staff" | "foster" | "volunteer";
+  userRole: "owner" | "admin" | "board_member" | "staff" | "foster" | "volunteer";
 }
 
 interface NavItem {
@@ -540,7 +540,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
 
   // Get navigation groups based on role
   const navigationGroups = 
-    effectiveRole === "admin" ? adminGroups :
+    (effectiveRole === "admin" || effectiveRole === "owner") ? adminGroups :
     effectiveRole === "board_member" ? boardMemberGroups :
     effectiveRole === "staff" ? staffGroups :
     effectiveRole === "foster" ? fosterGroups :
