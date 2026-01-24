@@ -1,18 +1,21 @@
+import { useState } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Loader2, ClipboardList, Mail, Phone, Calendar } from "lucide-react";
+import { ArrowLeft, Loader2, ClipboardList, Mail, Phone, Calendar, Eye } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { ApplicationWithAnimal } from "@shared/schema";
-import { Link } from "wouter";
+import { ViewApplicationDialog } from "@/components/ViewApplicationDialog";
 
 export default function AnimalApplicationsPage() {
   const { animalId } = useParams<{ animalId: string }>();
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const [selectedApplication, setSelectedApplication] = useState<ApplicationWithAnimal | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   // Fetch animal details
   const { data: animalData, isLoading: animalLoading } = useQuery<any>({
@@ -209,17 +212,38 @@ export default function AnimalApplicationsPage() {
                       </select>
                     </div>
 
-                    <Link href={`/dashboard/animals/${animal.id}/medical`}>
-                      <Button variant="outline" size="sm" className="w-full" data-testid={`button-view-animal-${app.id}`}>
-                        View {animal.name}'s Medical Records
-                      </Button>
-                    </Link>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="w-full" 
+                      onClick={() => {
+                        setSelectedApplication(app);
+                        setDialogOpen(true);
+                      }}
+                      data-testid={`button-view-application-${app.id}`}
+                    >
+                      <Eye className="w-4 h-4 mr-2" />
+                      View Application
+                    </Button>
                   </CardContent>
                 </Card>
               );
             })}
           </div>
         )}
+
+        {/* Application Details Dialog */}
+        <ViewApplicationDialog
+          application={selectedApplication}
+          applicationType="adoption"
+          open={dialogOpen}
+          onOpenChange={(open) => {
+            setDialogOpen(open);
+            if (!open) {
+              setSelectedApplication(null);
+            }
+          }}
+        />
       </div>
     </div>
   );
