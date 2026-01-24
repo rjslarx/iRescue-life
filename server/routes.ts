@@ -10283,6 +10283,85 @@ Submitted: ${new Date().toLocaleString()}
     }
   });
 
+  /**
+   * GET /api/surrender-requests
+   * Get all surrender requests for the tenant (admin, board_member, or staff)
+   */
+  app.get('/api/surrender-requests', requireTenant, requireAuth, requireRole('admin', 'owner', 'board_member', 'staff'), async (req, res, next) => {
+    try {
+      const { surrenderRequests } = await import('@shared/schema');
+      const { eq, desc } = await import('drizzle-orm');
+      
+      const requests = await db.select()
+        .from(surrenderRequests)
+        .where(eq(surrenderRequests.tenantId, req.tenant!.id))
+        .orderBy(desc(surrenderRequests.createdAt));
+      
+      res.json(requests);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/surrender-requests/:id
+   * Get a single surrender request (admin, board_member, or staff)
+   */
+  app.get('/api/surrender-requests/:id', requireTenant, requireAuth, requireRole('admin', 'owner', 'board_member', 'staff'), async (req, res, next) => {
+    try {
+      const { surrenderRequests } = await import('@shared/schema');
+      const { eq, and } = await import('drizzle-orm');
+      
+      const [request] = await db.select()
+        .from(surrenderRequests)
+        .where(and(
+          eq(surrenderRequests.id, req.params.id),
+          eq(surrenderRequests.tenantId, req.tenant!.id)
+        ));
+      
+      if (!request) {
+        return res.status(404).json({ error: 'Surrender request not found' });
+      }
+      
+      res.json(request);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * PATCH /api/surrender-requests/:id/status
+   * Update a surrender request's status (admin, board_member, or staff)
+   */
+  app.patch('/api/surrender-requests/:id/status', requireTenant, requireAuth, requireRole('admin', 'owner', 'board_member', 'staff'), async (req, res, next) => {
+    try {
+      const { surrenderRequests } = await import('@shared/schema');
+      const { eq, and } = await import('drizzle-orm');
+      
+      const schema = z.object({
+        status: z.enum(['new', 'review', 'spacecheck', 'waitlist', 'scheduled', 'intaken']),
+      });
+      
+      const { status } = schema.parse(req.body);
+      
+      const [updated] = await db.update(surrenderRequests)
+        .set({ status, updatedAt: new Date() })
+        .where(and(
+          eq(surrenderRequests.id, req.params.id),
+          eq(surrenderRequests.tenantId, req.tenant!.id)
+        ))
+        .returning();
+      
+      if (!updated) {
+        return res.status(404).json({ error: 'Surrender request not found' });
+      }
+      
+      res.json(updated);
+    } catch (error) {
+      next(error);
+    }
+  });
+
   // ============================================================================
   // Animal Surrender Routes (Legacy)
   // ============================================================================

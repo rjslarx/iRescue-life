@@ -101,6 +101,7 @@ import AdopterLoginPage from "@/pages/AdopterLoginPage";
 import AdopterCompliancePage from "@/pages/AdopterCompliancePage";
 import AdopterPortalPreviewPage from "@/pages/AdopterPortalPreviewPage";
 import OperationsDashboardPage from "@/pages/OperationsDashboardPage";
+import IntakeManagerPage from "@/pages/IntakeManagerPage";
 import FosterPortalPage from "@/pages/FosterPortalPage";
 import FosterAnimalDetailPage from "@/pages/FosterAnimalDetailPage";
 import PlatformDashboard from "@/pages/platform/PlatformDashboard";
@@ -214,6 +215,7 @@ function RouterSwitch() {
       <ProtectedRoute path="/dashboard" pageId="dashboard" component={Dashboard} />
       <ProtectedRoute path="/dashboard/animals" pageId="animals" component={AnimalsPage} />
       <ProtectedRoute path="/dashboard/applications" pageId="applications" component={ApplicationsPage} />
+      <ProtectedRoute path="/dashboard/intake" pageId="intake" component={IntakeManagerPage} />
       <ProtectedRoute path="/dashboard/team" pageId="team" component={TeamManagementPage} />
       <ProtectedRoute path="/dashboard/analytics" pageId="analytics" component={Analytics} />
       <ProtectedRoute path="/dashboard/finance" pageId="finance" component={FinancePage} />
