@@ -460,8 +460,10 @@ export const animals = pgTable("animals", {
   dogFriendly: boolean("dog_friendly"), // Good with dogs
   needsFence: boolean("needs_fence"), // Animal requires a fenced yard for foster placement
   // Subscription limits: Only "active" statuses (available, pending, foster, medical_hold) count toward
-  // subscription tier animal limits. "adopted" and "deceased" statuses do NOT count - enables unlimited historical records.
-  status: text("status").notNull().default("available").$type<"available" | "pending" | "adopted" | "foster" | "medical_hold" | "deceased" | "bite_hold" | "stray_hold" | "transfer_pending">(),
+  // subscription tier animal limits. "adopted", "deceased", and "merged" statuses do NOT count - enables unlimited historical records.
+  status: text("status").notNull().default("available").$type<"available" | "pending" | "adopted" | "foster" | "medical_hold" | "deceased" | "bite_hold" | "stray_hold" | "transfer_pending" | "merged">(),
+  // When status is "merged", this points to the primary animal profile that this one was merged into
+  mergedWithId: uuid("merged_with_id").references(() => animals.id, { onDelete: 'set null' }),
   intakeDate: timestamp("intake_date").notNull().defaultNow(),
   intakeSource: text("intake_source").$type<"stray" | "owner_surrender" | "transfer" | "born_in_care" | "other">(), // How the animal came to the rescue
   weight: text("weight"), // Current weight (e.g., "25 lbs", "4.2 kg")
@@ -4385,3 +4387,34 @@ export const insertCustomFormSubmissionSchema = createInsertSchema(customFormSub
 });
 export type InsertCustomFormSubmission = z.infer<typeof insertCustomFormSubmissionSchema>;
 export type CustomFormSubmission = typeof customFormSubmissions.$inferSelect;
+
+// ============================================
+// ANIMAL PROFILE MERGE HISTORY
+// ============================================
+
+// Tracks when animal profiles are merged to eliminate duplicates
+export const animalMergeHistory = pgTable("animal_merge_history", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  primaryAnimalId: uuid("primary_animal_id").notNull().references(() => animals.id, { onDelete: 'cascade' }), // The surviving profile
+  secondaryAnimalId: uuid("secondary_animal_id").notNull().references(() => animals.id, { onDelete: 'set null' }), // The merged/archived profile
+  mergedBy: uuid("merged_by").notNull().references(() => users.id, { onDelete: 'set null' }),
+  mergedAt: timestamp("merged_at").notNull().defaultNow(),
+  // Stores which fields came from which profile (for audit purposes)
+  fieldChoices: jsonb("field_choices").$type<Record<string, 'primary' | 'secondary'>>(),
+  // Counts of related records that were reassigned
+  reassignedMedicalRecords: integer("reassigned_medical_records").notNull().default(0),
+  reassignedPhotos: integer("reassigned_photos").notNull().default(0),
+  reassignedApplications: integer("reassigned_applications").notNull().default(0),
+  reassignedNotes: integer("reassigned_notes").notNull().default(0),
+  // Original data snapshot for recovery if needed
+  secondaryAnimalSnapshot: jsonb("secondary_animal_snapshot").$type<Record<string, any>>(),
+  notes: text("notes"), // Optional merge notes from staff
+});
+
+export const insertAnimalMergeHistorySchema = createInsertSchema(animalMergeHistory).omit({
+  id: true,
+  mergedAt: true,
+});
+export type InsertAnimalMergeHistory = z.infer<typeof insertAnimalMergeHistorySchema>;
+export type AnimalMergeHistory = typeof animalMergeHistory.$inferSelect;

@@ -24,7 +24,8 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTenant } from "@/contexts/TenantContext";
-import { Plus, Loader2, ExternalLink, Check, Stethoscope, Upload, X, ChevronLeft, ChevronRight, FileText, Pencil, ClipboardList, Calendar, ChevronDown, ChevronUp, Cat, Dog, Camera, Sparkles, Palette, ChevronsUpDown, AlertCircle, Wand2, FileUp, MapPin, Users, PawPrint } from "lucide-react";
+import { Plus, Loader2, ExternalLink, Check, Stethoscope, Upload, X, ChevronLeft, ChevronRight, FileText, Pencil, ClipboardList, Calendar, ChevronDown, ChevronUp, Cat, Dog, Camera, Sparkles, Palette, ChevronsUpDown, AlertCircle, Wand2, FileUp, MapPin, Users, PawPrint, GitMerge } from "lucide-react";
+import { Link } from "wouter";
 import { z } from "zod";
 import { cn } from "@/lib/utils";
 import { ObjectUploader } from "@/components/ObjectUploader";
@@ -1926,28 +1927,36 @@ export default function AnimalsPage() {
       title="Animals Management"
       description="Manage your rescue's animals"
       actions={
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button data-testid="button-add-animal">
-              <PawPrint className="h-4 w-4 mr-2" />
-              Add Animal
+        <div className="flex items-center gap-2">
+          <Link href="/dashboard/animals/duplicates">
+            <Button variant="outline" data-testid="button-find-duplicates">
+              <GitMerge className="h-4 w-4 mr-2" />
+              Find Duplicates
             </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Add New Animal</DialogTitle>
-              <DialogDescription>
-                Add a new animal to your rescue's inventory
-              </DialogDescription>
-            </DialogHeader>
-            <AnimalForm
-              onSubmit={handleCreateSubmit}
-              isPending={createAnimalMutation.isPending}
-              uploadedPhotos={uploadedPhotos}
-              setUploadedPhotos={setUploadedPhotos}
-            />
-          </DialogContent>
-        </Dialog>
+          </Link>
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button data-testid="button-add-animal">
+                <PawPrint className="h-4 w-4 mr-2" />
+                Add Animal
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Add New Animal</DialogTitle>
+                <DialogDescription>
+                  Add a new animal to your rescue's inventory
+                </DialogDescription>
+              </DialogHeader>
+              <AnimalForm
+                onSubmit={handleCreateSubmit}
+                isPending={createAnimalMutation.isPending}
+                uploadedPhotos={uploadedPhotos}
+                setUploadedPhotos={setUploadedPhotos}
+              />
+            </DialogContent>
+          </Dialog>
+        </div>
       }
     >
       <div className="flex-1 overflow-auto p-6">
