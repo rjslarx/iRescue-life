@@ -94,6 +94,8 @@ export const tenants = pgTable("tenants", {
   heroHeadline: text("hero_headline"), // Custom headline (if null, uses org name)
   heroButtonText: text("hero_button_text"), // Primary CTA text (default: "Meet Our Pets")
   heroButton2Text: text("hero_button2_text"), // Secondary CTA text (default: "Donate Now")
+  heroMobileImageUrl: text("hero_mobile_image_url"), // Optional mobile-optimized hero image
+  heroFocalPoint: text("hero_focal_point").$type<"center" | "top" | "bottom" | "left" | "right" | "top-left" | "top-right" | "bottom-left" | "bottom-right">(), // Focal point for mobile cropping if no mobile image
   // Announcement bar (urgent banner above hero)
   announcementBar: jsonb("announcement_bar").$type<{
     enabled?: boolean;
