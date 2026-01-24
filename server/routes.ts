@@ -5801,7 +5801,8 @@ Crawl-delay: 1
       const stageSchema = z.object({ stage: z.enum(['new', 'screening', 'vet_check', 'home_visit', 'approved', 'denied', 'adopted']) });
       
       const { stage } = stageSchema.parse(req.body);
-      const application = await updateApplicationStage(req.tenant!.id, req.params.id, stage);
+      // Pass user ID for auto-dismiss functionality
+      const application = await updateApplicationStage(req.tenant!.id, req.params.id, stage, req.user!.id);
       
       if (!application) {
         return res.status(404).json({ error: 'Application not found' });
@@ -5860,8 +5861,8 @@ Crawl-delay: 1
         }
       }
       
-      // Update application stage to approved
-      const updatedApplication = await updateApplicationStage(req.tenant!.id, applicationId, 'approved');
+      // Update application stage to approved (auto-dismisses from pending widget)
+      const updatedApplication = await updateApplicationStage(req.tenant!.id, applicationId, 'approved', req.user!.id);
       if (!updatedApplication) {
         return res.status(500).json({ error: 'Failed to update application status' });
       }
@@ -9804,10 +9805,11 @@ Submitted: ${new Date().toLocaleString()}
   /**
    * PATCH /api/foster-applications/:id
    * Update foster application status (admin/staff only)
+   * Auto-dismisses from pending widget when status changes from 'pending' to other statuses
    */
   app.patch('/api/foster-applications/:id', requireTenant, requireAuth, requireRole('staff'), async (req, res, next) => {
     try {
-      const { fosterApplications } = await import('@shared/schema');
+      const { fosterApplications, dismissedWidgetItems } = await import('@shared/schema');
       
       const updateSchema = z.object({
         status: z.enum(['pending', 'approved', 'rejected']),
@@ -9815,6 +9817,23 @@ Submitted: ${new Date().toLocaleString()}
       });
 
       const data = updateSchema.parse(req.body);
+      
+      // Get current application to check status before update
+      const [currentApp] = await db.select({ status: fosterApplications.status })
+        .from(fosterApplications)
+        .where(
+          and(
+            eq(fosterApplications.id, req.params.id),
+            eq(fosterApplications.tenantId, req.tenant!.id)
+          )
+        )
+        .limit(1);
+      
+      if (!currentApp) {
+        return res.status(404).json({ error: 'Foster application not found' });
+      }
+      
+      const oldStatus = currentApp.status;
 
       const [updatedApplication] = await db
         .update(fosterApplications)
@@ -9831,7 +9850,37 @@ Submitted: ${new Date().toLocaleString()}
         .returning();
 
       if (!updatedApplication) {
-        return res.status(404).json({ error: 'Foster application not found' });
+        return res.status(500).json({ error: 'Failed to update foster application' });
+      }
+      
+      // Auto-dismiss from widget if moving from 'pending' to another status
+      if (oldStatus === 'pending' && data.status !== 'pending') {
+        try {
+          const existing = await db.select()
+            .from(dismissedWidgetItems)
+            .where(
+              and(
+                eq(dismissedWidgetItems.tenantId, req.tenant!.id),
+                eq(dismissedWidgetItems.applicationType, 'foster'),
+                eq(dismissedWidgetItems.applicationId, req.params.id)
+              )
+            )
+            .limit(1);
+          
+          if (existing.length === 0) {
+            await db.insert(dismissedWidgetItems).values({
+              tenantId: req.tenant!.id,
+              applicationType: 'foster',
+              applicationId: req.params.id,
+              dismissedBy: req.user!.id,
+            });
+            console.log(`[AUTO-DISMISS] Foster application ${req.params.id} auto-dismissed (${oldStatus} -> ${data.status})`);
+          } else {
+            console.log(`[AUTO-DISMISS] Foster application ${req.params.id} already dismissed`);
+          }
+        } catch (error) {
+          console.error('Failed to auto-dismiss foster application:', error);
+        }
       }
 
       res.json({ success: true, application: updatedApplication });
@@ -10058,10 +10107,11 @@ Submitted: ${new Date().toLocaleString()}
   /**
    * PATCH /api/volunteer-applications/:id
    * Update volunteer application status (admin/staff only)
+   * Auto-dismisses from pending widget when status changes from 'pending' to other statuses
    */
   app.patch('/api/volunteer-applications/:id', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) =>{
     try {
-      const { volunteerApplications } = await import('@shared/schema');
+      const { volunteerApplications, dismissedWidgetItems } = await import('@shared/schema');
       
       const updateSchema = z.object({
         status: z.enum(['pending', 'approved', 'rejected']),
@@ -10069,6 +10119,23 @@ Submitted: ${new Date().toLocaleString()}
       });
 
       const data = updateSchema.parse(req.body);
+      
+      // Get current application to check status before update
+      const [currentApp] = await db.select({ status: volunteerApplications.status })
+        .from(volunteerApplications)
+        .where(
+          and(
+            eq(volunteerApplications.id, req.params.id),
+            eq(volunteerApplications.tenantId, req.tenant!.id)
+          )
+        )
+        .limit(1);
+      
+      if (!currentApp) {
+        return res.status(404).json({ error: 'Volunteer application not found' });
+      }
+      
+      const oldStatus = currentApp.status;
 
       const [updatedApplication] = await db
         .update(volunteerApplications)
@@ -10085,7 +10152,37 @@ Submitted: ${new Date().toLocaleString()}
         .returning();
 
       if (!updatedApplication) {
-        return res.status(404).json({ error: 'Volunteer application not found' });
+        return res.status(500).json({ error: 'Failed to update volunteer application' });
+      }
+      
+      // Auto-dismiss from widget if moving from 'pending' to another status
+      if (oldStatus === 'pending' && data.status !== 'pending') {
+        try {
+          const existing = await db.select()
+            .from(dismissedWidgetItems)
+            .where(
+              and(
+                eq(dismissedWidgetItems.tenantId, req.tenant!.id),
+                eq(dismissedWidgetItems.applicationType, 'volunteer'),
+                eq(dismissedWidgetItems.applicationId, req.params.id)
+              )
+            )
+            .limit(1);
+          
+          if (existing.length === 0) {
+            await db.insert(dismissedWidgetItems).values({
+              tenantId: req.tenant!.id,
+              applicationType: 'volunteer',
+              applicationId: req.params.id,
+              dismissedBy: req.user!.id,
+            });
+            console.log(`[AUTO-DISMISS] Volunteer application ${req.params.id} auto-dismissed (${oldStatus} -> ${data.status})`);
+          } else {
+            console.log(`[AUTO-DISMISS] Volunteer application ${req.params.id} already dismissed`);
+          }
+        } catch (error) {
+          console.error('Failed to auto-dismiss volunteer application:', error);
+        }
       }
 
       res.json({ success: true, application: updatedApplication });
@@ -10211,10 +10308,11 @@ Submitted: ${new Date().toLocaleString()}
   /**
    * PATCH /api/animal-surrenders/:id
    * Update animal surrender status (admin/staff only)
+   * Auto-dismisses from pending widget when status changes from 'pending' to other statuses
    */
   app.patch('/api/animal-surrenders/:id', requireTenant, requireAuth, requireRole('staff'), async (req, res, next) => {
     try {
-      const { animalSurrenders } = await import('@shared/schema');
+      const { animalSurrenders, dismissedWidgetItems } = await import('@shared/schema');
       
       const updateSchema = z.object({
         status: z.enum(['pending', 'approved', 'rejected', 'completed']),
@@ -10222,6 +10320,23 @@ Submitted: ${new Date().toLocaleString()}
       });
 
       const data = updateSchema.parse(req.body);
+      
+      // Get current application to check status before update
+      const [currentApp] = await db.select({ status: animalSurrenders.status })
+        .from(animalSurrenders)
+        .where(
+          and(
+            eq(animalSurrenders.id, req.params.id),
+            eq(animalSurrenders.tenantId, req.tenant!.id)
+          )
+        )
+        .limit(1);
+      
+      if (!currentApp) {
+        return res.status(404).json({ error: 'Animal surrender request not found' });
+      }
+      
+      const oldStatus = currentApp.status;
 
       const [updatedSurrender] = await db
         .update(animalSurrenders)
@@ -10238,7 +10353,37 @@ Submitted: ${new Date().toLocaleString()}
         .returning();
 
       if (!updatedSurrender) {
-        return res.status(404).json({ error: 'Animal surrender request not found' });
+        return res.status(500).json({ error: 'Failed to update surrender request' });
+      }
+      
+      // Auto-dismiss from widget if moving from 'pending' to another status
+      if (oldStatus === 'pending' && data.status !== 'pending') {
+        try {
+          const existing = await db.select()
+            .from(dismissedWidgetItems)
+            .where(
+              and(
+                eq(dismissedWidgetItems.tenantId, req.tenant!.id),
+                eq(dismissedWidgetItems.applicationType, 'surrender'),
+                eq(dismissedWidgetItems.applicationId, req.params.id)
+              )
+            )
+            .limit(1);
+          
+          if (existing.length === 0) {
+            await db.insert(dismissedWidgetItems).values({
+              tenantId: req.tenant!.id,
+              applicationType: 'surrender',
+              applicationId: req.params.id,
+              dismissedBy: req.user!.id,
+            });
+            console.log(`[AUTO-DISMISS] Surrender request ${req.params.id} auto-dismissed (${oldStatus} -> ${data.status})`);
+          } else {
+            console.log(`[AUTO-DISMISS] Surrender request ${req.params.id} already dismissed`);
+          }
+        } catch (error) {
+          console.error('Failed to auto-dismiss surrender request:', error);
+        }
       }
 
       res.json({ success: true, surrender: updatedSurrender });
