@@ -85,6 +85,7 @@ export default function PublicVolunteerPage() {
       emergencyContactName: "",
       emergencyContactPhone: "",
       customResponses: {},
+      smsConsent: false,
     },
   });
 
@@ -761,6 +762,28 @@ export default function PublicVolunteerPage() {
                                 ))}
                             </div>
                           )}
+
+                          {/* SMS Consent Checkbox */}
+                          <FormField
+                            control={form.control}
+                            name="smsConsent"
+                            render={({ field }) => (
+                              <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                                <FormControl>
+                                  <Checkbox
+                                    checked={field.value}
+                                    onCheckedChange={field.onChange}
+                                    data-testid="checkbox-sms-consent"
+                                  />
+                                </FormControl>
+                                <div className="space-y-1 leading-none">
+                                  <FormLabel className="text-sm font-normal">
+                                    I consent to receive text message updates regarding the status of my application and rescue operations. Reply STOP to unsubscribe.
+                                  </FormLabel>
+                                </div>
+                              </FormItem>
+                            )}
+                          />
 
                           <div className="flex justify-end pt-4">
                             <Button
