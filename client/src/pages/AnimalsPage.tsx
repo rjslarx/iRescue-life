@@ -1965,7 +1965,7 @@ export default function AnimalsPage() {
                     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                       {activeAnimals.map((animal) => (
                         <Card key={animal.id} className="hover-elevate" data-testid={`card-animal-${animal.id}`}>
-                          <CardHeader>
+                          <CardHeader className="p-3 sm:p-6">
                             <div className="flex items-start justify-between flex-wrap gap-2">
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 mb-1 flex-wrap">
@@ -2018,7 +2018,7 @@ export default function AnimalsPage() {
                               </Badge>
                             </div>
                           </CardHeader>
-                          <CardContent className="space-y-4">
+                          <CardContent className="space-y-4 p-3 sm:p-6 pt-0 sm:pt-0">
                             {animal.photoUrls && animal.photoUrls.length > 0 && (
                               <div className="relative w-full aspect-[16/9] sm:aspect-[4/3] bg-muted rounded-md overflow-hidden">
                                 <img
@@ -2070,7 +2070,7 @@ export default function AnimalsPage() {
                               {animal.microchipNumber && <p><span className="font-medium">Microchip:</span> {animal.microchipNumber}</p>}
                               
                               {/* Cat and Dog Friendly Indicators */}
-                              <div className="flex items-center gap-3 pt-2" data-testid={`friendly-indicators-${animal.id}`}>
+                              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 pt-2" data-testid={`friendly-indicators-${animal.id}`}>
                                 <div className="flex items-center gap-1.5" data-testid={`cat-friendly-${animal.id}`}>
                                   <Cat className="h-4 w-4 text-muted-foreground" />
                                   {animal.catFriendly === true && (
@@ -2152,26 +2152,29 @@ export default function AnimalsPage() {
                                 )}
                               </div>
                             )}
-                            <div className="flex flex-wrap gap-2">
+                            <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 min-w-0">
                               <Button
                                 onClick={() => handleViewDetails(animal)}
                                 variant="default"
                                 size="sm"
+                                className="col-span-2 sm:col-span-1 justify-center"
                                 data-testid={`button-view-details-${animal.id}`}
                               >
-                                <Users className="w-4 h-4 mr-2" />
-                                Foster Management
+                                <Users className="w-4 h-4 sm:mr-2" />
+                                <span className="hidden sm:inline">Foster Management</span>
+                                <span className="sm:hidden ml-2">Foster</span>
                               </Button>
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                   <Button
                                     variant="outline"
                                     size="sm"
+                                    className="justify-center"
                                     data-testid={`button-edit-${animal.id}`}
                                   >
-                                    <Pencil className="w-4 h-4 mr-2" />
-                                    Edit
-                                    <ChevronDown className="w-4 h-4 ml-2" />
+                                    <Pencil className="w-4 h-4 sm:mr-2" />
+                                    <span className="hidden sm:inline">Edit</span>
+                                    <ChevronDown className="w-4 h-4 sm:ml-2" />
                                   </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="start">
@@ -2216,19 +2219,21 @@ export default function AnimalsPage() {
                                 onClick={() => navigate(`/dashboard/animals/${animal.id}/medical`)}
                                 variant="outline"
                                 size="sm"
+                                className="justify-center"
                                 data-testid={`button-medical-${animal.id}`}
                               >
-                                <Stethoscope className="w-4 h-4 mr-2" />
-                                Medical
+                                <Stethoscope className="w-4 h-4 sm:mr-2" />
+                                <span className="hidden sm:inline">Medical</span>
                               </Button>
                               <Button
                                 onClick={() => navigate(`/dashboard/animals/${animal.id}/applications`)}
                                 variant="outline"
                                 size="sm"
+                                className="justify-center"
                                 data-testid={`button-applications-${animal.id}`}
                               >
-                                <ClipboardList className="w-4 h-4 mr-2" />
-                                Applications
+                                <ClipboardList className="w-4 h-4 sm:mr-2" />
+                                <span className="hidden sm:inline">Applications</span>
                               </Button>
                               <Button
                                 onClick={() => {
@@ -2237,10 +2242,11 @@ export default function AnimalsPage() {
                                 }}
                                 variant="outline"
                                 size="sm"
+                                className="justify-center"
                                 data-testid={`button-kennel-card-${animal.id}`}
                               >
-                                <FileText className="w-4 h-4 mr-2" />
-                                Kennel Card
+                                <FileText className="w-4 h-4 sm:mr-2" />
+                                <span className="hidden sm:inline">Kennel Card</span>
                               </Button>
                               <Button
                                 onClick={() => handleQuickPhoto(animal)}

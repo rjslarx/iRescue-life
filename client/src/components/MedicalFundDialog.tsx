@@ -117,9 +117,9 @@ export function MedicalFundDialog({ animal, trigger }: MedicalFundDialogProps) {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         {trigger || (
-          <Button variant="outline" size="sm" className="gap-2" data-testid="button-medical-fund">
+          <Button variant="outline" size="sm" className="gap-2 justify-center" data-testid="button-medical-fund">
             <Heart className="h-4 w-4" />
-            Medical Fund
+            <span className="hidden sm:inline">Medical Fund</span>
           </Button>
         )}
       </DialogTrigger>
