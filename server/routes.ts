@@ -10192,7 +10192,99 @@ Submitted: ${new Date().toLocaleString()}
   });
 
   // ============================================================================
-  // Animal Surrender Routes
+  // Surrender Requests Routes (Phase 1 Intake Pipeline)
+  // ============================================================================
+
+  /**
+   * POST /api/surrender
+   * Submit surrender request (public route - Phase 1 Intake Pipeline)
+   */
+  app.post('/api/surrender', requireTenant, async (req, res, next) => {
+    try {
+      const { surrenderRequests, insertSurrenderRequestSchema, inboundEmails } = await import('@shared/schema');
+      
+      const data = insertSurrenderRequestSchema.parse({
+        ...req.body,
+        tenantId: req.tenant!.id,
+      });
+
+      const [surrender] = await db
+        .insert(surrenderRequests)
+        .values([data as any])
+        .returning();
+
+      // Create/update contact from this surrender request
+      try {
+        const { upsertContact } = await import('./services/contacts');
+        await upsertContact({
+          tenantId: req.tenant!.id,
+          name: data.ownerName,
+          email: data.ownerEmail,
+          phone: data.ownerPhone,
+          source: 'manual',
+          tags: ['surrender-request'],
+          smsConsent: data.smsConsent,
+        });
+      } catch (contactError) {
+        console.error('Failed to create contact from surrender request:', contactError);
+      }
+
+      // Create inbound email record for inbox
+      try {
+        const emailSubject = `Surrender Request from ${data.ownerName}`;
+        const emailBody = `
+Surrender Request - ${data.dogName}
+
+Owner Information:
+Name: ${data.ownerName}
+Email: ${data.ownerEmail}
+Phone: ${data.ownerPhone}
+SMS Consent: ${data.smsConsent ? 'Yes' : 'No'}
+
+Dog Information:
+Name: ${data.dogName}
+Breed: ${data.dogBreed}
+Age: ${data.dogAge}
+Gender: ${data.dogGender}
+
+Reason for Surrender:
+${data.reasonForSurrender}
+
+Medical Issues:
+${data.medicalIssues || 'None provided'}
+
+Behavioral Issues:
+${data.behavioralIssues || 'None provided'}
+
+${data.photoUrl ? `Photo: ${data.photoUrl}` : ''}
+
+Surrender Request ID: ${surrender.id}
+Submitted: ${new Date().toLocaleString()}
+        `.trim();
+
+        await db.insert(inboundEmails).values({
+          tenantId: req.tenant!.id,
+          messageId: `surrender-request-${surrender.id}`,
+          from: data.ownerEmail,
+          fromName: data.ownerName,
+          to: `${req.tenant!.subdomain}@mail.irescue.life`,
+          subject: emailSubject,
+          textBody: emailBody,
+          receivedAt: new Date(),
+          status: 'unread',
+        });
+      } catch (emailError) {
+        console.error('Failed to create inbound email for surrender request:', emailError);
+      }
+
+      res.status(201).json({ success: true, surrender });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // ============================================================================
+  // Animal Surrender Routes (Legacy)
   // ============================================================================
 
   /**

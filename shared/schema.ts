@@ -1003,6 +1003,33 @@ export const insertAnimalSurrenderSchema = createInsertSchema(animalSurrenders).
 export type InsertAnimalSurrender = z.infer<typeof insertAnimalSurrenderSchema>;
 export type AnimalSurrender = typeof animalSurrenders.$inferSelect;
 
+// Surrender requests table - Phase 1 Intake Pipeline for surrender requests
+export const surrenderRequests = pgTable("surrender_requests", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  status: text("status").notNull().default("New").$type<"New" | "Review" | "SpaceCheck" | "Waitlist" | "Scheduled" | "Intaken">(),
+  ownerName: text("owner_name").notNull(),
+  ownerEmail: text("owner_email").notNull(),
+  ownerPhone: text("owner_phone").notNull(),
+  dogName: text("dog_name").notNull(),
+  dogBreed: text("dog_breed").notNull(),
+  dogAge: text("dog_age").notNull(),
+  dogGender: text("dog_gender").notNull().$type<"male" | "female" | "unknown">(),
+  reasonForSurrender: text("reason_for_surrender").notNull(),
+  medicalIssues: text("medical_issues"),
+  behavioralIssues: text("behavioral_issues"),
+  photoUrl: text("photo_url"),
+  smsConsent: boolean("sms_consent").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertSurrenderRequestSchema = createInsertSchema(surrenderRequests).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertSurrenderRequest = z.infer<typeof insertSurrenderRequestSchema>;
+export type SurrenderRequest = typeof surrenderRequests.$inferSelect;
+
 // Foster animals table - animals currently in foster care
 export const fosterAnimals = pgTable("foster_animals", {
   id: uuid("id").primaryKey().defaultRandom(),
