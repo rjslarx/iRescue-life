@@ -277,11 +277,17 @@ export async function generateDonationReceipt(
     y -= 18;
 
     // IRS Compliance: Different display for Cash vs In-Kind donations
-    const donationType = (donation as any).donationType || 'cash';
+    const donationType = donation.donationType || 'cash';
+    const isMonetary = donationType === 'cash' || donationType === 'check' || donationType === 'online';
     
-    if (donationType === 'cash') {
-      // Cash donation: Show the dollar amount
-      page.drawText('Donation Type: Monetary Contribution', {
+    if (isMonetary) {
+      // Cash/Check/Online donation: Show the dollar amount
+      const typeLabels: Record<string, string> = {
+        cash: 'Cash Contribution',
+        check: 'Check Contribution',
+        online: 'Online Contribution',
+      };
+      page.drawText(`Donation Type: ${typeLabels[donationType] || 'Monetary Contribution'}`, {
         x: leftMargin,
         y,
         size: 11,
@@ -289,6 +295,18 @@ export async function generateDonationReceipt(
         color: textColor,
       });
       y -= 18;
+
+      // Show check number if applicable
+      if (donationType === 'check' && donation.checkNumber) {
+        page.drawText(`Check Number: ${donation.checkNumber}`, {
+          x: leftMargin,
+          y,
+          size: 11,
+          font: helvetica,
+          color: textColor,
+        });
+        y -= 18;
+      }
 
       page.drawText(`Amount: ${formatCurrency(donation.amount)}`, {
         x: leftMargin,

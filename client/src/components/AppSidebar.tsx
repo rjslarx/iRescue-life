@@ -29,6 +29,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { usePagePermissions } from "@/hooks/usePagePermissions";
 import { useQuickActions } from "@/hooks/useQuickActions";
+import { RecordOfflineDonationDialog } from "@/components/RecordOfflineDonationDialog";
 import { Star } from "lucide-react";
 import {
   LayoutDashboard,
@@ -138,11 +139,14 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
   const { user, switchRole, logout } = useAuth();
   const { toast } = useToast();
   const [isSwitching, setIsSwitching] = useState(false);
+  const [showDonationDialog, setShowDonationDialog] = useState(false);
   const { canAccessPage } = usePagePermissions();
-  const { actions: allFavoriteActions, handleAction: handleFavoriteAction } = useQuickActions();
+  const { actions: allFavoriteActions, handleAction: handleFavoriteAction } = useQuickActions({
+    onRecordDonation: () => setShowDonationDialog(true),
+  });
   
-  // Only show navigable actions in sidebar (filter out callback-only actions like record-donation)
-  const favoriteActions = allFavoriteActions.filter(action => action.href);
+  // Show all favorite actions including callback-only (record-donation now supported)
+  const favoriteActions = allFavoriteActions;
   
   // Use activeRole from auth context if available, otherwise fall back to prop
   const effectiveRole = user?.activeRole || userRole;
@@ -680,6 +684,11 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
           </p>
         </div>
       </SidebarFooter>
+      
+      <RecordOfflineDonationDialog 
+        open={showDonationDialog} 
+        onOpenChange={setShowDonationDialog} 
+      />
     </Sidebar>
   );
 }

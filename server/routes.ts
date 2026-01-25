@@ -2506,23 +2506,25 @@ Crawl-delay: 1
       ] = await Promise.all([
         getAnimalsByTenant(req.tenant!.id),
         getApplicationsByTenant(req.tenant!.id),
-        // Current month donations
+        // Current month cash donations (excludes in-kind, treats NULL as cash for backward compatibility)
         db.select({ total: sql<number>`COALESCE(SUM(CAST(${donations.amount} AS NUMERIC)), 0)` })
           .from(donations)
           .where(
             and(
               eq(donations.tenantId, req.tenant!.id),
-              gte(donations.date, currentMonthStart)
+              gte(donations.date, currentMonthStart),
+              sql`COALESCE(${donations.donationType}, 'cash') != 'in_kind'`
             )
           ),
-        // Previous month donations
+        // Previous month cash donations (excludes in-kind, treats NULL as cash for backward compatibility)
         db.select({ total: sql<number>`COALESCE(SUM(CAST(${donations.amount} AS NUMERIC)), 0)` })
           .from(donations)
           .where(
             and(
               eq(donations.tenantId, req.tenant!.id),
               gte(donations.date, previousMonthStart),
-              lte(donations.date, previousMonthEnd)
+              lte(donations.date, previousMonthEnd),
+              sql`COALESCE(${donations.donationType}, 'cash') != 'in_kind'`
             )
           ),
         // Volunteers
@@ -4053,8 +4055,16 @@ Crawl-delay: 1
         ? Math.round(adoptedAnimals.reduce((sum, days) => sum + days, 0) / adoptedAnimals.length)
         : 0;
       
-      const totalDonationsThisMonth = donationsThisMonth.reduce((sum, d) => sum + Number(d.amount), 0);
-      const totalDonationsYTD = donationsYTD.reduce((sum, d) => sum + Number(d.amount), 0);
+      // Separate cash/check/online donations from in-kind (treat NULL as cash for backward compatibility)
+      const cashDonationsThisMonth = donationsThisMonth.filter(d => (d.donationType || 'cash') !== 'in_kind');
+      const cashDonationsYTD = donationsYTD.filter(d => (d.donationType || 'cash') !== 'in_kind');
+      const inKindDonationsThisMonth = donationsThisMonth.filter(d => d.donationType === 'in_kind');
+      const inKindDonationsYTD = donationsYTD.filter(d => d.donationType === 'in_kind');
+      
+      const totalDonationsThisMonth = cashDonationsThisMonth.reduce((sum, d) => sum + Number(d.amount || 0), 0);
+      const totalDonationsYTD = cashDonationsYTD.reduce((sum, d) => sum + Number(d.amount || 0), 0);
+      const totalInKindValueThisMonth = inKindDonationsThisMonth.reduce((sum, d) => sum + Number(d.estimatedValue || 0), 0);
+      const totalInKindValueYTD = inKindDonationsYTD.reduce((sum, d) => sum + Number(d.estimatedValue || 0), 0);
       const totalExpendituresThisMonth = expendituresThisMonth.reduce((sum, e) => sum + Number(e.amount), 0);
       const totalExpendituresYTD = expendituresYTD.reduce((sum, e) => sum + Number(e.amount), 0);
       
@@ -4066,6 +4076,10 @@ Crawl-delay: 1
         avgLengthOfStay,
         totalDonationsThisMonth,
         totalDonationsYTD,
+        totalInKindValueThisMonth,
+        totalInKindValueYTD,
+        inKindCountThisMonth: inKindDonationsThisMonth.length,
+        inKindCountYTD: inKindDonationsYTD.length,
         totalExpendituresThisMonth,
         totalExpendituresYTD,
         activeFosters: fosters.length,
@@ -9037,7 +9051,7 @@ Crawl-delay: 1
 
   /**
    * POST /api/donations/offline
-   * Quick record of offline donation (cash, check, other) - email optional
+   * Quick record of offline donation (cash, check, online, in-kind) - email optional
    */
   app.post('/api/donations/offline', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
     try {
@@ -9047,17 +9061,32 @@ Crawl-delay: 1
       const offlineDonationSchema = z.object({
         donorName: z.string().min(1),
         donorEmail: z.string().email().nullable().optional(),
-        amount: z.number().positive(),
-        paymentMethod: z.enum(['cash', 'check', 'other']),
-        checkNumber: z.string().nullable().optional(),
+        donationType: z.enum(['cash', 'check', 'online', 'in_kind']),
+        amount: z.number().positive().optional(), // Required for cash/check/online
+        checkNumber: z.string().nullable().optional(), // For check payments
+        itemDescription: z.string().optional(), // Required for in_kind
+        estimatedValue: z.number().nullable().optional(), // Optional estimated value for in_kind
         notes: z.string().nullable().optional(),
         donationDate: z.string().transform(s => new Date(s)),
+      }).refine((data) => {
+        // Validate required fields based on donation type
+        if (data.donationType === 'in_kind') {
+          return data.itemDescription && data.itemDescription.trim().length > 0;
+        }
+        return data.amount && data.amount > 0;
+      }, {
+        message: "Amount is required for cash/check/online donations, or item description for in-kind",
       });
       
       const data = offlineDonationSchema.parse(req.body);
       
-      // Convert dollars to cents for storage
-      const amountInCents = Math.round(data.amount * 100);
+      // Convert dollars to cents for storage (only for monetary donations)
+      const amountInCents = data.donationType !== 'in_kind' && data.amount 
+        ? Math.round(data.amount * 100) 
+        : null;
+      const estimatedValueInCents = data.donationType === 'in_kind' && data.estimatedValue
+        ? Math.round(data.estimatedValue * 100)
+        : null;
       
       let donorId: string | null = null;
       
@@ -9076,41 +9105,55 @@ Crawl-delay: 1
               tenantId: req.tenant!.id,
               email: data.donorEmail,
               name: data.donorName,
-              totalDonated: amountInCents,
+              totalDonated: amountInCents || 0, // In-kind doesn't add to cash total
               lastDonationDate: data.donationDate,
             })
             .returning();
         } else {
-          await db.update(donors)
-            .set({
-              totalDonated: existingDonor.totalDonated + amountInCents,
-              lastDonationDate: data.donationDate,
-            })
-            .where(eq(donors.id, existingDonor.id));
+          // Only update total for cash donations
+          if (amountInCents) {
+            await db.update(donors)
+              .set({
+                totalDonated: existingDonor.totalDonated + amountInCents,
+                lastDonationDate: data.donationDate,
+              })
+              .where(eq(donors.id, existingDonor.id));
+          } else {
+            await db.update(donors)
+              .set({ lastDonationDate: data.donationDate })
+              .where(eq(donors.id, existingDonor.id));
+          }
         }
         donorId = existingDonor.id;
       }
       
-      // Build notes with payment method info
-      let fullNotes = data.paymentMethod === 'check' && data.checkNumber 
-        ? `Check #${data.checkNumber}` 
-        : data.paymentMethod.charAt(0).toUpperCase() + data.paymentMethod.slice(1);
+      // Build notes/message with payment info
+      let fullNotes = '';
+      if (data.donationType === 'check' && data.checkNumber) {
+        fullNotes = `Check #${data.checkNumber}`;
+      } else if (data.donationType === 'in_kind') {
+        fullNotes = data.itemDescription || '';
+      } else {
+        fullNotes = data.donationType.charAt(0).toUpperCase() + data.donationType.slice(1);
+      }
       if (data.notes) {
-        fullNotes += ` - ${data.notes}`;
+        fullNotes += data.donationType === 'in_kind' ? `\n${data.notes}` : ` - ${data.notes}`;
       }
       
       // Create donation record
-      // Note: donorEmail is NOT NULL in schema, use empty string if not provided
       const [donation] = await db.insert(donations)
         .values({
           tenantId: req.tenant!.id,
           donorId: donorId,
           donorName: data.donorName,
           donorEmail: data.donorEmail || '',
-          donationType: 'cash',
+          donationType: data.donationType,
           amount: amountInCents,
-          message: fullNotes,
-          source: 'offline',
+          description: data.donationType === 'in_kind' ? data.itemDescription : null,
+          estimatedValue: estimatedValueInCents,
+          checkNumber: data.donationType === 'check' ? data.checkNumber : null,
+          message: data.notes || null,
+          source: 'manual',
           date: data.donationDate,
         })
         .returning();
@@ -9118,15 +9161,25 @@ Crawl-delay: 1
       // Log activity
       try {
         const { logActivity } = await import('./lib/activity-logger');
+        const description = data.donationType === 'in_kind'
+          ? `recorded in-kind donation from ${data.donorName}: ${data.itemDescription?.substring(0, 50)}${(data.itemDescription?.length || 0) > 50 ? '...' : ''}`
+          : `recorded $${data.amount?.toFixed(2)} ${data.donationType} donation from ${data.donorName}`;
+        
         await logActivity({
           tenantId: req.tenant!.id,
           userId: req.user!.id,
           entityType: 'Donation',
           entityId: donation.id,
           action: 'created',
-          description: `recorded $${data.amount.toFixed(2)} ${data.paymentMethod} donation from ${data.donorName}`,
+          description,
           category: 'finance',
-          metadata: { paymentMethod: data.paymentMethod, amount: amountInCents, checkNumber: data.checkNumber }
+          metadata: { 
+            donationType: data.donationType, 
+            amount: amountInCents, 
+            estimatedValue: estimatedValueInCents,
+            checkNumber: data.checkNumber,
+            itemDescription: data.itemDescription,
+          }
         });
       } catch (logError) {
         console.error('Failed to log donation activity:', logError);

@@ -756,9 +756,11 @@ export const donations = pgTable("donations", {
   donorName: text("donor_name").notNull(),
   donorEmail: text("donor_email").notNull(),
   donorAddress: text("donor_address"), // For receipt mailing
-  donationType: text("donation_type").notNull().default("cash").$type<"cash" | "in_kind">(),
-  amount: integer("amount"), // Amount in cents (e.g., $10.00 = 1000). Required for cash, ignored for in-kind
+  donationType: text("donation_type").notNull().default("cash").$type<"cash" | "check" | "online" | "in_kind">(),
+  amount: integer("amount"), // Amount in cents (e.g., $10.00 = 1000). Required for cash/check/online, ignored for in-kind
   description: text("description"), // Required for in-kind (e.g., "5 bags of dog food")
+  estimatedValue: integer("estimated_value"), // Estimated value in cents for in-kind donations (internal tracking only)
+  checkNumber: text("check_number"), // Check number for check donations
   message: text("message"),
   sponsoredAnimalId: uuid("sponsored_animal_id").references(() => animals.id),
   source: text("source").notNull().default("manual").$type<"manual" | "online_form" | "quickbooks_import" | "stripe">(),
