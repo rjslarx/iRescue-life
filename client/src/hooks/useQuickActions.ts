@@ -18,7 +18,8 @@ export function useQuickActions(callbacks?: UseQuickActionsCallbacks) {
     staleTime: 5 * 60 * 1000,
   });
 
-  const configuredActionIds = data?.quickActions || DEFAULT_QUICK_ACTIONS;
+  // Use default actions if no configuration or empty array
+  const configuredActionIds = data?.quickActions?.length ? data.quickActions : DEFAULT_QUICK_ACTIONS;
   const actions = getQuickActionsByIds(configuredActionIds);
 
   const handleAction = (actionId: string) => {

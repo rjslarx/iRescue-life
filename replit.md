@@ -13,7 +13,10 @@ The Multi-Tenant Animal Rescue SaaS Platform is designed to centralize and strea
 The platform is built with a React, TypeScript, and Vite frontend utilizing Wouter, TanStack Query, Tailwind CSS, and shadcn/ui. The backend is an Express and Node.js application in TypeScript, interacting with PostgreSQL via Drizzle ORM.
 
 **UI/UX Decisions:**
-The design prioritizes mobile-first responsiveness, WCAG accessibility, and SEO. Key UI elements include an enhanced Command Center dashboard with real-time activity, a "Quick Actions" button, breadcrumbs, a drag-and-drop kennel layout editor, and consolidated volunteer management. Public navigation is streamlined for core activities like fostering, volunteering, and donating. The Command Center dashboard features a 3-zone grid layout (Front Door, Workforce, Animal Health) with role-based ordering and clickable KPI cards.
+The design prioritizes mobile-first responsiveness, WCAG accessibility, and SEO. Key UI elements include an enhanced Command Center dashboard with real-time activity, a "Favorites" sidebar section (configurable quick actions), breadcrumbs, a drag-and-drop kennel layout editor, and consolidated volunteer management. Public navigation is streamlined for core activities like fostering, volunteering, and donating. The Command Center dashboard features a 3-zone grid layout (Front Door, Workforce, Animal Health) with role-based ordering and clickable KPI cards.
+
+**Sidebar Favorites:**
+The management portal sidebar features a collapsible "Favorites" section at the top displaying configured quick actions. Admins can customize which actions appear via Settings → Dashboard Quick Actions. Default actions include: Add Animal, Intake Manager, Medical Pipeline, Add Volunteer, and New Application. Callback-only actions (like Record Donation) are excluded from the sidebar since they require dialog handlers.
 
 **Multi-Tenancy:**
 Data isolation is achieved within a single PostgreSQL database using `tenant_id` foreign keys. The platform supports a hybrid URL architecture including path-based URLs (`irescue.life/{subdomain}`), custom domains, and subdomain-based access (`demo.irescue.life`), with path-based routing managed by backend middleware.
