@@ -3343,7 +3343,6 @@ Crawl-delay: 1
           medicalIssues: surrenderRequestsTable.medicalIssues,
           behavioralIssues: surrenderRequestsTable.behavioralIssues,
           photoUrl: surrenderRequestsTable.photoUrl,
-          customResponses: surrenderRequestsTable.customResponses,
         })
           .from(surrenderRequestsTable)
           .where(
@@ -3527,7 +3526,6 @@ Crawl-delay: 1
             medicalIssues: app.medicalIssues,
             behavioralIssues: app.behavioralIssues,
             photoUrl: app.photoUrl,
-            ...(app.customResponses || {}),
           },
           formName: undefined,
         })),
