@@ -103,7 +103,6 @@ import AdopterPetDetailPage from "@/pages/AdopterPetDetailPage";
 import AdopterLoginPage from "@/pages/AdopterLoginPage";
 import AdopterCompliancePage from "@/pages/AdopterCompliancePage";
 import AdopterPortalPreviewPage from "@/pages/AdopterPortalPreviewPage";
-import OperationsDashboardPage from "@/pages/OperationsDashboardPage";
 import IntakeManagerPage from "@/pages/IntakeManagerPage";
 import FosterPortalPage from "@/pages/FosterPortalPage";
 import FosterAnimalDetailPage from "@/pages/FosterAnimalDetailPage";
@@ -245,8 +244,6 @@ function RouterSwitch() {
       <Route path="/my-fosters/:animalId" component={FosterAnimalDetailPage} />
       <Route path="/my-fosters" component={FosterPortalPage} />
       
-      {/* Operations dashboard - unified compliance and action center */}
-      <ProtectedRoute path="/dashboard/operations" pageId="analytics" component={OperationsDashboardPage} />
       
       {/* Staff compliance dashboard for medication tracking */}
       <ProtectedRoute path="/dashboard/adopter-compliance" pageId="analytics" component={AdopterCompliancePage} />

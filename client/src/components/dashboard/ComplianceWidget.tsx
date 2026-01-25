@@ -100,7 +100,7 @@ export default function ComplianceWidget() {
   const hasNoIssues = totalAtRisk === 0;
 
   return (
-    <Card className={hasNoIssues ? "" : "border-l-4 border-l-destructive"} data-testid="compliance-widget">
+    <Card id="compliance-widget" className={hasNoIssues ? "" : "border-l-4 border-l-destructive"} data-testid="compliance-widget">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
           <AlertTriangle className={`h-4 w-4 ${hasNoIssues ? 'text-green-500' : 'text-destructive'}`} />

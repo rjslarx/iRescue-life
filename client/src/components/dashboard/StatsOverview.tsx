@@ -3,6 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertTriangle, Shield, Clipboard, Pill } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { Link } from "wouter";
 
 interface StatsResponse {
   stats: {
@@ -55,24 +56,28 @@ export default function StatsOverview() {
       value: pendingAppsCount,
       description: 'Pending requests to process',
       icon: Clipboard,
+      href: '/dashboard/intake',
     },
     {
       label: 'Overdue Meds',
       value: overdueMedsCount,
       description: 'Animals behind on medication',
       icon: Pill,
+      href: '/dashboard/medical-pipeline',
     },
     {
       label: 'Compliance Rate',
       value: `${complianceRate}%`,
       description: 'Medical check compliance',
       icon: Shield,
+      href: '#compliance-widget',
     },
     {
       label: 'Behavior Alerts',
       value: behaviorAlerts,
       description: 'Flagged for review',
       icon: AlertTriangle,
+      href: '/dashboard/animals?filter=behavior',
     },
   ];
 
@@ -97,29 +102,60 @@ export default function StatsOverview() {
     );
   }
 
+  const handleClick = (href: string) => {
+    if (href.startsWith('#')) {
+      const element = document.getElementById(href.slice(1));
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
+  };
+
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4" data-testid="stats-overview">
-      {stats.map((stat, index) => (
-        <Card 
-          key={stat.label} 
-          className="bg-muted/30 border-0 shadow-none"
-          data-testid={`stat-${stat.label.toLowerCase().replace(/\s+/g, '-')}`}
-        >
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-foreground">{stat.label}</span>
-              <stat.icon className="h-4 w-4 text-muted-foreground" />
-            </div>
+      {stats.map((stat) => {
+        const isAnchor = stat.href.startsWith('#');
+        const cardContent = (
+          <Card 
+            className="bg-muted/30 border-0 shadow-none cursor-pointer transition-all duration-200 hover:shadow-md hover:scale-[1.02] hover:bg-muted/50"
+            data-testid={`stat-${stat.label.toLowerCase().replace(/\s+/g, '-')}`}
+          >
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-foreground">{stat.label}</span>
+                <stat.icon className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <div 
+                className="text-3xl font-bold text-foreground mb-1"
+                data-testid={`text-${stat.label.toLowerCase().replace(/\s+/g, '-')}-value`}
+              >
+                {stat.value}
+              </div>
+              <p className="text-xs text-muted-foreground">{stat.description}</p>
+            </CardContent>
+          </Card>
+        );
+
+        if (isAnchor) {
+          return (
             <div 
-              className="text-3xl font-bold text-foreground mb-1"
-              data-testid={`text-${stat.label.toLowerCase().replace(/\s+/g, '-')}-value`}
+              key={stat.label} 
+              onClick={() => handleClick(stat.href)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => e.key === 'Enter' && handleClick(stat.href)}
             >
-              {stat.value}
+              {cardContent}
             </div>
-            <p className="text-xs text-muted-foreground">{stat.description}</p>
-          </CardContent>
-        </Card>
-      ))}
+          );
+        }
+
+        return (
+          <Link key={stat.label} href={stat.href}>
+            {cardContent}
+          </Link>
+        );
+      })}
     </div>
   );
 }
