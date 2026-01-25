@@ -13,7 +13,18 @@ This project is a multi-tenant SaaS platform designed for animal rescue organiza
 The platform features a React, TypeScript, and Vite frontend with Wouter, TanStack Query, Tailwind CSS, and shadcn/ui. The backend is an Express and Node.js application in TypeScript, utilizing PostgreSQL via Drizzle ORM.
 
 **UI/UX Decisions:**
-The design is mobile-first, responsive, and adheres to WCAG accessibility standards, with SEO enhancements and consolidated navigation. It includes an enhanced dashboard with real-time activity, a "Quick Actions" button, breadcrumbs, a drag-and-drop kennel layout editor, and consolidated volunteer management. Public navigation is streamlined for fostering, volunteering, surrendering, donating, and staff login.
+The design is mobile-first, responsive, and adheres to WCAG accessibility standards, with SEO enhancements and consolidated navigation. It includes an enhanced dashboard (Command Center) with real-time activity, a "Quick Actions" button, breadcrumbs, a drag-and-drop kennel layout editor, and consolidated volunteer management. Public navigation is streamlined for fostering, volunteering, surrendering, donating, and staff login.
+
+**Command Center Dashboard:**
+The main dashboard serves as a unified Command Center with a 3-zone grid layout:
+- **Front Door Zone:** IntakeSummaryWidget, PendingApplicationsWidget, ActionCenterWidget
+- **Workforce Zone:** VolunteerSummaryWidget, FosterSummaryWidget
+- **Animal Health Zone:** MedicalSnapshotWidget, ComplianceWidget
+- **StatsOverview:** 4 KPI cards - Action Items, Overdue Meds, Compliance Rate, Behavior Alerts
+- **ComplianceWidget:** 4 tabs - Meds (overdue medications), Fosters (silent fosters), Exams (needed exams), At-Risk (at-risk adopters)
+- **ActionCenterWidget:** Inline action processing for supply requests, bio submissions, photo approvals, and happy tails
+- **API Endpoints:** GET /api/adopter/staff/compliance/at-risk, GET /api/foster-portal/staff/action-center
+- **Route:** /dashboard (main command center)
 
 **Multi-Tenancy:**
 A single PostgreSQL database enforces data isolation using `tenant_id` foreign keys. It supports a hybrid URL architecture including path-based URLs (`irescue.life/{subdomain}`), custom domains, and subdomain-based access (`demo.irescue.life`). Path-based routing is managed by backend middleware.
