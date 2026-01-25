@@ -497,6 +497,37 @@ export default function CalendarViewPage() {
                         {headerBgImage && (
                           <div className="absolute inset-0 bg-black/40" />
                         )}
+                        {/* Calendar Title - visible in normal view and print */}
+                        <h1 
+                          className="relative text-center text-lg font-semibold mb-2 truncate max-w-full px-4"
+                          style={{ color: headerTextColor }}
+                          data-testid="calendar-title"
+                          title={(() => {
+                            const selectedCalendarsList = calendarsData?.calendars.filter(c => 
+                              selectedCalendars.has(c.id)
+                            ) || [];
+                            if (selectedCalendarsList.length <= 1) return undefined;
+                            return selectedCalendarsList.map(c => c.name).join(", ");
+                          })()}
+                        >
+                          {(() => {
+                            const selectedCalendarsList = calendarsData?.calendars.filter(c => 
+                              selectedCalendars.has(c.id)
+                            ) || [];
+                            if (selectedCalendarsList.length === 0) {
+                              return calendarsData?.calendars.length === 1 
+                                ? calendarsData.calendars[0].name 
+                                : "All Calendars";
+                            }
+                            if (selectedCalendarsList.length === 1) {
+                              return selectedCalendarsList[0].name;
+                            }
+                            if (selectedCalendarsList.length <= 3) {
+                              return selectedCalendarsList.map(c => c.name).join(", ");
+                            }
+                            return `${selectedCalendarsList.length} Calendars Selected`;
+                          })()}
+                        </h1>
                         <div className="relative flex items-center justify-between">
                           <Button
                             variant="ghost"
