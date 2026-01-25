@@ -20,7 +20,11 @@ The main dashboard serves as a unified Command Center with a 3-zone grid layout:
 - **Front Door Zone:** IntakeSummaryWidget, PendingApplicationsWidget, ActionCenterWidget
 - **Workforce Zone:** VolunteerSummaryWidget, FosterSummaryWidget
 - **Animal Health Zone:** MedicalSnapshotWidget, ComplianceWidget
-- **StatsOverview:** 4 KPI cards - Action Items, Overdue Meds, Compliance Rate, Behavior Alerts
+- **StatsOverview:** 4 clickable KPI cards with drill-down navigation:
+  - Action Items → /dashboard/intake (Intake Manager)
+  - Overdue Meds → /dashboard/medical-pipeline (Medical Pipeline)
+  - Compliance Rate → #compliance-widget (scrolls to Compliance Widget)
+  - Behavior Alerts → /dashboard/animals?filter=behavior (Animals page filtered)
 - **ComplianceWidget:** 4 tabs - Meds (overdue medications), Fosters (silent fosters), Exams (needed exams), At-Risk (at-risk adopters)
 - **ActionCenterWidget:** Inline action processing for supply requests, bio submissions, photo approvals, and happy tails
 - **API Endpoints:** GET /api/adopter/staff/compliance/at-risk, GET /api/foster-portal/staff/action-center
