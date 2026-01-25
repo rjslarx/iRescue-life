@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,6 +11,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
@@ -31,7 +33,9 @@ import {
   MessageSquare,
   FileText,
   Heart,
-  AlertCircle
+  AlertCircle,
+  Stethoscope,
+  Loader2
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import type { SurrenderRequest } from "@shared/schema";
@@ -355,7 +359,37 @@ interface SurrenderDetailsDialogProps {
 }
 
 function SurrenderDetailsDialog({ request, open, onOpenChange }: SurrenderDetailsDialogProps) {
+  const { toast } = useToast();
+  const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
+  
+  const promoteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await apiRequest("POST", `/api/surrender/${id}/promote`);
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Success!",
+        description: `${data.animalName} sent to Medical.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/surrender-requests"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/medical/intake-animals"] });
+      onOpenChange(false);
+      setLocation("/dashboard/medical-pipeline");
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to promote to inventory",
+        variant: "destructive",
+      });
+    },
+  });
+  
   if (!request) return null;
+
+  const canPromote = request.status !== 'intaken';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -474,6 +508,29 @@ function SurrenderDetailsDialog({ request, open, onOpenChange }: SurrenderDetail
             </div>
           </div>
         </div>
+        
+        {canPromote && (
+          <DialogFooter className="mt-4">
+            <Button
+              onClick={() => promoteMutation.mutate(request.id)}
+              disabled={promoteMutation.isPending}
+              className="w-full sm:w-auto"
+              data-testid="button-approve-intake"
+            >
+              {promoteMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <Stethoscope className="mr-2 h-4 w-4" />
+                  Approve & Intake
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        )}
       </DialogContent>
     </Dialog>
   );

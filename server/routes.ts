@@ -10874,6 +10874,97 @@ Submitted: ${new Date().toLocaleString()}
     }
   });
 
+  /**
+   * POST /api/surrender/:id/promote
+   * Promote a surrender request to an animal in the medical intake queue
+   * Converts SurrenderRequest → Animal with medicalStatus='needs_vetting'
+   */
+  app.post('/api/surrender/:id/promote', requireTenant, requireAuth, requireRole('admin', 'owner', 'board_member', 'staff'), async (req, res, next) => {
+    try {
+      const { surrenderRequests, animals } = await import('@shared/schema');
+      const { eq, and } = await import('drizzle-orm');
+      const { createAnimal } = await import('./services/animals');
+      
+      const surrenderId = req.params.id;
+      
+      // Validate that surrenderId is a valid format (surrender requests use text IDs that look like UUIDs)
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(surrenderId)) {
+        return res.status(400).json({ error: 'Invalid surrender request ID', message: 'The provided ID is not valid.' });
+      }
+      
+      // Fetch the surrender request
+      const [surrenderRequest] = await db.select()
+        .from(surrenderRequests)
+        .where(and(
+          eq(surrenderRequests.id, surrenderId),
+          eq(surrenderRequests.tenantId, req.tenant!.id)
+        ))
+        .limit(1);
+      
+      if (!surrenderRequest) {
+        return res.status(404).json({ error: 'Surrender request not found' });
+      }
+      
+      // Check if already intaken
+      if (surrenderRequest.status === 'intaken') {
+        return res.status(400).json({ error: 'This surrender request has already been promoted to inventory' });
+      }
+      
+      // Build the animal bio from surrender details
+      const bioParts: string[] = [];
+      if (surrenderRequest.reasonForSurrender) {
+        bioParts.push(`Surrender Reason: ${surrenderRequest.reasonForSurrender}`);
+      }
+      if (surrenderRequest.medicalIssues) {
+        bioParts.push(`Medical Notes: ${surrenderRequest.medicalIssues}`);
+      }
+      if (surrenderRequest.behavioralIssues) {
+        bioParts.push(`Behavioral Notes: ${surrenderRequest.behavioralIssues}`);
+      }
+      
+      // Map gender to sex field
+      const sexMap: Record<string, 'male' | 'female' | 'unknown'> = {
+        'male': 'male',
+        'female': 'female',
+        'unknown': 'unknown'
+      };
+      
+      // Create the animal using the service (which handles ID generation)
+      const animal = await createAnimal(req.tenant!.id, {
+        name: surrenderRequest.dogName,
+        species: 'Dog',
+        breed: surrenderRequest.dogBreed,
+        age: surrenderRequest.dogAge,
+        sex: sexMap[surrenderRequest.dogGender] || 'unknown',
+        medicalStatus: 'needs_vetting',
+        status: 'intake',
+        bio: bioParts.length > 0 ? bioParts.join('\n\n') : undefined,
+        photoUrls: surrenderRequest.photoUrl ? [surrenderRequest.photoUrl] : undefined,
+      });
+      
+      // Update the surrender request status to 'intaken'
+      await db.update(surrenderRequests)
+        .set({ 
+          status: 'intaken',
+          updatedAt: new Date()
+        })
+        .where(and(
+          eq(surrenderRequests.id, surrenderId),
+          eq(surrenderRequests.tenantId, req.tenant!.id)
+        ));
+      
+      res.json({ 
+        success: true, 
+        animalId: animal.id,
+        animalName: animal.name,
+        message: `${animal.name} has been added to the medical intake queue`
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   // ============================================================================
   // Animal Surrender Routes (Legacy)
   // ============================================================================
