@@ -12,6 +12,16 @@ interface StatsResponse {
   };
 }
 
+interface ActionItemsResponse {
+  total: number;
+  breakdown: {
+    surrenders: number;
+    adoptions: number;
+    fosters: number;
+    volunteers: number;
+  };
+}
+
 interface ComplianceResponse {
   compliance: {
     complianceRate: number;
@@ -44,8 +54,13 @@ export default function StatsOverview() {
     enabled: !!user && (user.activeRole === 'admin' || user.activeRole === 'staff'),
   });
 
-  const isLoading = isLoadingStats || isLoadingCompliance || isLoadingFoster;
-  const pendingAppsCount = statsData?.stats?.pendingApplications || 0;
+  const { data: actionItemsData, isLoading: isLoadingActionItems } = useQuery<ActionItemsResponse>({
+    queryKey: ['/api/dashboard/action-items-count', user?.activeRole],
+    enabled: !!user && (user.activeRole === 'admin' || user.activeRole === 'staff' || user.activeRole === 'owner'),
+  });
+
+  const isLoading = isLoadingStats || isLoadingCompliance || isLoadingFoster || isLoadingActionItems;
+  const actionItemsCount = actionItemsData?.total || 0;
   const complianceRate = complianceData?.compliance?.complianceRate || 100;
   const overdueMedsCount = complianceData?.compliance?.overdueMedications?.count || 0;
   const behaviorAlerts = fosterStats?.flaggedNotes || 0;
@@ -53,10 +68,10 @@ export default function StatsOverview() {
   const stats = [
     {
       label: 'Action Items',
-      value: pendingAppsCount,
+      value: actionItemsCount,
       description: 'Pending requests to process',
       icon: Clipboard,
-      href: '/dashboard/intake',
+      href: '#action-items-zone',
     },
     {
       label: 'Overdue Meds',
@@ -117,7 +132,7 @@ export default function StatsOverview() {
         const isAnchor = stat.href.startsWith('#');
         const cardContent = (
           <Card 
-            className="bg-muted/30 border-0 shadow-none cursor-pointer transition-all duration-200 hover:shadow-md hover:scale-[1.02] hover:bg-muted/50"
+            className="bg-muted/30 border-0 shadow-none cursor-pointer hover-elevate"
             data-testid={`stat-${stat.label.toLowerCase().replace(/\s+/g, '-')}`}
           >
             <CardContent className="p-4">

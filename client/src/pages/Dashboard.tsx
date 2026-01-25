@@ -334,10 +334,10 @@ export default function Dashboard() {
               )}
 
               <section data-testid="section-command-center" className="w-full min-w-0">
-                {user?.activeRole === 'admin' ? (
-                  /* Admin layout: 3-zone grid */
+                {(user?.activeRole === 'admin' || user?.activeRole === 'owner') ? (
+                  /* Admin/Owner layout: 3-zone grid */
                   <div className="grid gap-6 lg:grid-cols-3 w-full min-w-0">
-                    <div className="space-y-4 w-full min-w-0" data-testid="zone-front-door">
+                    <div id="action-items-zone" className="space-y-4 w-full min-w-0" data-testid="zone-front-door">
                       <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">The Front Door</h3>
                       <IntakeSummaryWidget />
                       <PendingApplicationsWidget />
@@ -367,7 +367,7 @@ export default function Dashboard() {
 
                     {/* Staff sees more admin-related widgets */}
                     {user?.activeRole === 'staff' && (
-                      <div className="space-y-4 w-full min-w-0" data-testid="zone-front-door">
+                      <div id="action-items-zone" className="space-y-4 w-full min-w-0" data-testid="zone-front-door">
                         <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Animals & Intake</h3>
                         <IntakeSummaryWidget />
                         <PendingApplicationsWidget />

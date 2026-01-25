@@ -3181,6 +3181,100 @@ Crawl-delay: 1
   });
 
   /**
+   * GET /api/dashboard/action-items-count
+   * Returns the count of action items for the Command Center:
+   * - Surrender requests with status 'new' or 'review'
+   * - Adoption applications in pending stages (new, screening, vet_check, home_visit)
+   * - Foster applications with status 'pending'
+   * - Volunteer applications with status 'pending'
+   */
+  app.get('/api/dashboard/action-items-count', requireTenant, requireAuth, requireRole('admin', 'staff', 'owner'), async (req, res, next) => {
+    try {
+      const { 
+        applications, 
+        volunteerApplications, 
+        fosterApplications, 
+        surrenderRequests: surrenderRequestsTable,
+      } = await import('@shared/schema');
+      const { or, count } = await import('drizzle-orm');
+
+      // Get counts from all sources in parallel
+      const [
+        surrenderCount,
+        adoptionCount,
+        fosterCount,
+        volunteerCount,
+      ] = await Promise.all([
+        // Surrender requests - new or review status
+        db.select({ count: count() })
+          .from(surrenderRequestsTable)
+          .where(
+            and(
+              eq(surrenderRequestsTable.tenantId, req.tenant!.id),
+              or(
+                eq(surrenderRequestsTable.status, 'new'),
+                eq(surrenderRequestsTable.status, 'review')
+              )
+            )
+          ),
+        
+        // Adoption applications - pending stages (new, screening, vet_check, home_visit)
+        db.select({ count: count() })
+          .from(applications)
+          .where(
+            and(
+              eq(applications.tenantId, req.tenant!.id),
+              or(
+                eq(applications.stage, 'new'),
+                eq(applications.stage, 'screening'),
+                eq(applications.stage, 'vet_check'),
+                eq(applications.stage, 'home_visit')
+              )
+            )
+          ),
+        
+        // Foster applications - pending status
+        db.select({ count: count() })
+          .from(fosterApplications)
+          .where(
+            and(
+              eq(fosterApplications.tenantId, req.tenant!.id),
+              eq(fosterApplications.status, 'pending')
+            )
+          ),
+        
+        // Volunteer applications - pending status
+        db.select({ count: count() })
+          .from(volunteerApplications)
+          .where(
+            and(
+              eq(volunteerApplications.tenantId, req.tenant!.id),
+              eq(volunteerApplications.status, 'pending')
+            )
+          ),
+      ]);
+
+      const totalCount = 
+        Number(surrenderCount[0]?.count || 0) + 
+        Number(adoptionCount[0]?.count || 0) + 
+        Number(fosterCount[0]?.count || 0) + 
+        Number(volunteerCount[0]?.count || 0);
+
+      res.json({
+        total: totalCount,
+        breakdown: {
+          surrenders: Number(surrenderCount[0]?.count || 0),
+          adoptions: Number(adoptionCount[0]?.count || 0),
+          fosters: Number(fosterCount[0]?.count || 0),
+          volunteers: Number(volunteerCount[0]?.count || 0),
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * GET /api/dashboard/pending-applications
    * Get all pending applications from all sources (adoption, foster, volunteer, surrender, custom forms)
    * Consolidated view for the dashboard
