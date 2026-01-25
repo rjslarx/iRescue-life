@@ -4,11 +4,37 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
-import { Stethoscope, ChevronRight, Syringe, ClipboardCheck } from "lucide-react";
+import { Stethoscope, ChevronRight, Syringe, ClipboardCheck, Pill } from "lucide-react";
 import type { Animal } from "@shared/schema";
 
 interface AnimalsResponse {
   animals: Animal[];
+}
+
+interface DoseInfo {
+  dose: {
+    id: string;
+    prescriptionId: string;
+    dueDate: string;
+    status: string;
+  };
+  prescription: {
+    id: string;
+    medicationName: string;
+    dosage: string;
+    frequency: string;
+    animalId: string;
+  } | null;
+  animal: {
+    id: string;
+    name: string;
+    species: string;
+    photoUrls: string[] | null;
+  } | null;
+}
+
+interface DosesTodayResponse {
+  doses: DoseInfo[];
 }
 
 export default function MedicalSnapshotWidget() {
@@ -16,11 +42,16 @@ export default function MedicalSnapshotWidget() {
     queryKey: ['/api/animals'],
   });
 
+  const { data: dosesTodayData, isLoading: isLoadingDoses } = useQuery<DosesTodayResponse>({
+    queryKey: ['/api/medical/doses/today'],
+  });
+
   const animals = data?.animals || [];
   const needsVetting = animals.filter(a => a.medicalStatus === 'needs_vetting');
   const surgeryPending = animals.filter(a => a.medicalStatus === 'surgery_pending');
+  const medsDueToday = dosesTodayData?.doses?.length || 0;
 
-  if (isLoading) {
+  if (isLoading || isLoadingDoses) {
     return (
       <Card data-testid="card-medical-snapshot-widget">
         <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
@@ -28,6 +59,7 @@ export default function MedicalSnapshotWidget() {
           <Stethoscope className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
+          <Skeleton className="h-14 w-full mb-4" />
           <div className="grid grid-cols-2 gap-4 mb-4">
             <Skeleton className="h-16 w-full" />
             <Skeleton className="h-16 w-full" />
@@ -44,6 +76,35 @@ export default function MedicalSnapshotWidget() {
         <Stethoscope className="h-4 w-4 text-muted-foreground" />
       </CardHeader>
       <CardContent>
+        <Link href="/dashboard/medical-pipeline?tab=treatments">
+          <div 
+            className={`flex items-center justify-between p-3 rounded-md mb-4 cursor-pointer transition-all hover:shadow-md ${
+              medsDueToday > 0 
+                ? 'bg-primary/10 border border-primary/30 hover:bg-primary/20' 
+                : 'bg-muted/50 hover:bg-muted'
+            }`}
+            data-testid="tile-meds-due-today"
+          >
+            <div className="flex items-center gap-3">
+              <div className={`p-2 rounded-full ${medsDueToday > 0 ? 'bg-primary/20' : 'bg-muted'}`}>
+                <Pill className={`h-5 w-5 ${medsDueToday > 0 ? 'text-primary' : 'text-muted-foreground'}`} />
+              </div>
+              <div>
+                <p className={`text-sm font-semibold ${medsDueToday > 0 ? 'text-primary' : 'text-foreground'}`}>
+                  Meds Due Today
+                </p>
+                <p className="text-xs text-muted-foreground">Click to view treatments</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className={`text-2xl font-bold ${medsDueToday > 0 ? 'text-primary' : 'text-muted-foreground'}`} data-testid="text-meds-due-count">
+                {medsDueToday}
+              </span>
+              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+            </div>
+          </div>
+        </Link>
+
         <div className="grid grid-cols-2 gap-4 mb-4">
           <div className="flex flex-col items-center p-3 rounded-md bg-muted/50">
             <ClipboardCheck className="h-5 w-5 text-orange-500 mb-1" />
