@@ -53,8 +53,12 @@ export default function PublicSurrenderPage() {
     siteName: rescueName,
   });
 
+  const surrenderFormSchema = insertSurrenderRequestSchema.omit({ tenantId: true }).extend({
+    dogWeight: insertSurrenderRequestSchema.shape.dogWeight.unwrap().min(1, "Weight is required"),
+  });
+
   const form = useForm<Omit<InsertSurrenderRequest, 'tenantId'> & { customResponses?: Record<string, any> }>({
-    resolver: zodResolver(insertSurrenderRequestSchema.omit({ tenantId: true })),
+    resolver: zodResolver(surrenderFormSchema),
     defaultValues: {
       ownerName: "",
       ownerEmail: "",
@@ -369,7 +373,7 @@ export default function PublicSurrenderPage() {
                             name="dogWeight"
                             render={({ field }) => (
                               <FormItem>
-                                <FormLabel>Weight</FormLabel>
+                                <FormLabel>Weight *</FormLabel>
                                 <FormControl>
                                   <Input placeholder="e.g., 45 lbs" {...field} value={field.value || ''} data-testid="input-dog-weight" />
                                 </FormControl>
