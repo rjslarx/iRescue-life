@@ -44,6 +44,7 @@ import {
   Mail,
   PawPrint,
   Pill,
+  Stethoscope,
   Check,
   ChevronDown,
   Loader2,
@@ -299,7 +300,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
       items: [
         { title: "Animals", url: "/dashboard/animals", icon: Heart, usesGoogleDrive: true },
         { title: "Kennels", url: "/dashboard/kennels", icon: Home },
-        { title: "Medical Tasks", url: "/dashboard/medical-tasks", icon: Pill, notificationKey: "medicalTasks", usesGoogleDrive: true },
+        { title: "Medical Pipeline", url: "/dashboard/medical-pipeline", icon: Stethoscope, notificationKey: "medicalTasks", usesGoogleDrive: true },
         { title: "Adoption Applications", url: "/dashboard/applications", icon: FileText, notificationKey: "applications" },
         { title: "Intake Manager", url: "/dashboard/intake", icon: Inbox },
       ],
@@ -381,7 +382,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
       items: [
         { title: "Animals", url: "/dashboard/animals", icon: Heart, usesGoogleDrive: true },
         { title: "Kennels", url: "/dashboard/kennels", icon: Home },
-        { title: "Medical Tasks", url: "/dashboard/medical-tasks", icon: Pill, notificationKey: "medicalTasks", usesGoogleDrive: true },
+        { title: "Medical Pipeline", url: "/dashboard/medical-pipeline", icon: Stethoscope, notificationKey: "medicalTasks", usesGoogleDrive: true },
         { title: "Adoption Applications", url: "/dashboard/applications", icon: FileText, notificationKey: "applications" },
         { title: "Intake Manager", url: "/dashboard/intake", icon: Inbox },
       ],
@@ -445,7 +446,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
       items: [
         { title: "Animals", url: "/dashboard/animals", icon: Heart, usesGoogleDrive: true },
         { title: "Kennels", url: "/dashboard/kennels", icon: Home },
-        { title: "Medical Tasks", url: "/dashboard/medical-tasks", icon: Pill, notificationKey: "medicalTasks", usesGoogleDrive: true },
+        { title: "Medical Pipeline", url: "/dashboard/medical-pipeline", icon: Stethoscope, notificationKey: "medicalTasks", usesGoogleDrive: true },
         { title: "Adoption Applications", url: "/dashboard/applications", icon: FileText, notificationKey: "applications" },
         { title: "Intake Manager", url: "/dashboard/intake", icon: Inbox },
         { title: "Supply Registry", url: "/dashboard/supplies", icon: ShoppingCart },
@@ -499,7 +500,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
     '/dashboard': 'dashboard',
     '/dashboard/animals': 'animals',
     '/dashboard/kennels': 'animals',
-    '/dashboard/medical-tasks': 'medical-tasks',
+    '/dashboard/medical-pipeline': 'medical-tasks',
     '/dashboard/applications': 'applications',
     '/dashboard/foster-management': 'foster-management',
     '/dashboard/team': 'team',

@@ -85,10 +85,10 @@ export const ALL_QUICK_ACTIONS: QuickAction[] = [
   },
   {
     id: "medical-task",
-    label: "Daily Medication Tasks",
-    description: "View and manage daily medication tasks",
+    label: "Medical Pipeline",
+    description: "Manage intake vetting, surgery queue, and active treatments",
     icon: Stethoscope,
-    href: "/dashboard/medical-tasks",
+    href: "/dashboard/medical-pipeline",
     actionType: "navigate",
   },
   {

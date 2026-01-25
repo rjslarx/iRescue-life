@@ -282,7 +282,7 @@ export default function MedicalRemindersWidget() {
         )}
       </CardContent>
       <CardFooter className="pt-3 flex justify-between items-center border-t gap-2">
-        <Link href="/dashboard/medical-tasks">
+        <Link href="/dashboard/medical-pipeline">
           <Button variant="outline" size="sm" data-testid="button-view-all-reminders">
             View All
             <ChevronRight className="h-4 w-4 ml-1" />

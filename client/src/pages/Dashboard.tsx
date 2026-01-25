@@ -643,7 +643,7 @@ export default function Dashboard() {
             <AlertDescription>
               <div className="mt-3 grid gap-3 sm:grid-cols-3">
                 {urgentItemsData!.urgentItems.overdueMedicalDoses > 0 && (
-                  <Link href="/dashboard/medical-tasks">
+                  <Link href="/dashboard/medical-pipeline">
                     <div className="p-3 rounded-md bg-background hover-elevate cursor-pointer" data-testid="link-overdue-doses">
                       <div className="flex items-center gap-2 mb-1">
                         <Pill className="h-4 w-4" />
