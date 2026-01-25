@@ -92,6 +92,14 @@ export const ALL_QUICK_ACTIONS: QuickAction[] = [
     actionType: "navigate",
   },
   {
+    id: "intake-manager",
+    label: "Intake Manager",
+    description: "Review and process intake requests",
+    icon: Inbox,
+    href: "/dashboard/intake",
+    actionType: "navigate",
+  },
+  {
     id: "add-supply",
     label: "Add Supply",
     description: "Add items to supply inventory",
@@ -151,10 +159,11 @@ export const ALL_QUICK_ACTIONS: QuickAction[] = [
 
 export const DEFAULT_QUICK_ACTIONS = [
   "add-animal",
+  "intake-manager",
+  "medical-task",
+  "add-volunteer",
   "record-donation",
   "new-application",
-  "add-event",
-  "send-email",
 ];
 
 export function getQuickActionById(id: string): QuickAction | undefined {
