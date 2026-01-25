@@ -309,7 +309,7 @@ export function RecordOfflineDonationDialog({
                     name="donorAddress"
                     render={({ field }) => (
                       <FormItem className="col-span-2">
-                        <FormLabel>Street Address</FormLabel>
+                        <FormLabel>Street Address *</FormLabel>
                         <FormControl>
                           <Input
                             placeholder="123 Main St"
@@ -326,7 +326,7 @@ export function RecordOfflineDonationDialog({
                     name="donorCity"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>City</FormLabel>
+                        <FormLabel>City *</FormLabel>
                         <FormControl>
                           <Input
                             placeholder="City"
@@ -344,7 +344,7 @@ export function RecordOfflineDonationDialog({
                       name="donorState"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>State</FormLabel>
+                          <FormLabel>State *</FormLabel>
                           <FormControl>
                             <Input
                               placeholder="TX"
@@ -361,7 +361,7 @@ export function RecordOfflineDonationDialog({
                       name="donorZip"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>ZIP</FormLabel>
+                          <FormLabel>ZIP *</FormLabel>
                           <FormControl>
                             <Input
                               placeholder="12345"
@@ -405,14 +405,14 @@ export function RecordOfflineDonationDialog({
                     name="donorStatedValue"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Donor Stated Value</FormLabel>
+                        <FormLabel>Donor Stated Value *</FormLabel>
                         <FormControl>
                           <div className="flex items-center gap-2">
                             <span className="text-lg">$</span>
                             <Input
                               type="number"
                               step="0.01"
-                              min="0"
+                              min="0.01"
                               placeholder="0.00"
                               {...field}
                               data-testid="input-donor-stated-value"
@@ -420,7 +420,7 @@ export function RecordOfflineDonationDialog({
                           </div>
                         </FormControl>
                         <FormDescription className="text-xs">
-                          Value stated by donor (optional)
+                          Required for IRS-compliant receipt
                         </FormDescription>
                         <FormMessage />
                       </FormItem>

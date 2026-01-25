@@ -9067,7 +9067,7 @@ Crawl-delay: 1
         donorState: z.string().nullable().optional(), // State
         donorZip: z.string().nullable().optional(), // ZIP code
         donationType: z.enum(['cash', 'check', 'online', 'in_kind', 'in_kind_goods', 'in_kind_services']),
-        amount: z.number().positive().optional(), // Required for cash/check/online
+        amount: z.number().positive().nullable().optional(), // Required for cash/check/online
         checkNumber: z.string().nullable().optional(), // For check payments
         description: z.string().optional(), // Required for in_kind
         donorStatedValue: z.number().nullable().optional(), // Value stated by donor for in_kind
@@ -9095,7 +9095,7 @@ Crawl-delay: 1
           }
           return true;
         }
-        return data.amount && data.amount > 0;
+        return data.amount !== null && data.amount !== undefined && data.amount > 0;
       }, {
         message: "Amount is required for cash/check donations. For in-kind: description, email, full address, and donor-stated value are required for IRS compliance.",
       });

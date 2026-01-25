@@ -19,7 +19,15 @@ The design prioritizes mobile-first responsiveness, WCAG accessibility, and SEO.
 The management portal sidebar features a collapsible "Favorites" section at the top displaying configured quick actions. Admins can customize which actions appear via Settings → Dashboard Quick Actions. Default actions include: Add Animal, Intake Manager, Medical Pipeline, Add Volunteer, and New Application. "Record Donation" is now supported in sidebar favorites, opening a modal dialog for quick donation entry.
 
 **In-Kind Donation Tracking:**
-The donations system supports four types: Cash, Check, Online, and In-Kind (goods/services). Cash/Check/Online donations track monetary amounts, while In-Kind donations track item descriptions and optional estimated values for internal reporting. Dashboard stats and reports separate "Cash Revenue" (sum of monetary donations) from "In-Kind Value" (sum of estimated values). IRS-compliant receipts display different content based on donation type - monetary donations show dollar amounts while in-kind donations show item descriptions without valuations (per IRS requirements). All receipts include the required disclaimer: "No goods or services were provided in exchange for this contribution."
+The donations system supports separate types: Cash, Check, In-Kind Goods (Package icon), and In-Kind Services (Wrench icon). Cash/Check donations track monetary amounts, while In-Kind donations track item descriptions with full IRS compliance. Dashboard stats and reports separate "Cash Revenue" (sum of monetary donations) from "In-Kind Value" (sum of estimated values).
+
+*IRS Compliance for In-Kind Donations:*
+- **Required fields for in-kind:** Donor email, full mailing address (street, city, state, ZIP), description, and donor-stated value
+- **Dual value tracking:** `donorStatedValue` (shown on receipt per IRS rules) separate from `estimatedValue` (internal tracking only)
+- **Receipt content:** In-kind receipts show description and donor-stated value (not org estimate per IRS requirements)
+- **Defense-in-depth validation:** Frontend, backend API, and receipt generation all enforce required fields
+- **All receipts include disclaimer:** "No goods or services were provided in exchange for this contribution."
+- **Receipt labels:** "In-Kind Goods (Non-Cash)" or "In-Kind Services (Non-Cash)" displayed specifically
 
 **Multi-Tenancy:**
 Data isolation is achieved within a single PostgreSQL database using `tenant_id` foreign keys. The platform supports a hybrid URL architecture including path-based URLs (`irescue.life/{subdomain}`), custom domains, and subdomain-based access (`demo.irescue.life`), with path-based routing managed by backend middleware.
