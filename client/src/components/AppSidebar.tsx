@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Sidebar,
@@ -28,6 +28,8 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { usePagePermissions } from "@/hooks/usePagePermissions";
+import { useQuickActions } from "@/hooks/useQuickActions";
+import { Star } from "lucide-react";
 import {
   LayoutDashboard,
   Heart,
@@ -130,23 +132,6 @@ const iconMap: Record<string, any> = {
   Kanban,
 };
 
-interface RecentPage {
-  title: string;
-  url: string;
-  iconName: string;
-  timestamp: number;
-}
-
-const RECENT_PAGES_KEY = "recentPages";
-const MAX_RECENT_PAGES = 5;
-
-// Helper to get icon name from component
-function getIconName(icon: any): string {
-  if (!icon) return "FileText";
-  // Try to get the displayName or name of the component
-  const name = icon.displayName || icon.name || "";
-  return iconMap[name] ? name : "FileText";
-}
 
 export default function AppSidebar({ rescueName, userName, userRole }: AppSidebarProps) {
   const [location, navigate] = useLocation();
@@ -154,73 +139,14 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
   const { toast } = useToast();
   const [isSwitching, setIsSwitching] = useState(false);
   const { canAccessPage } = usePagePermissions();
-  const [recentPages, setRecentPages] = useState<RecentPage[]>([]);
+  const { actions: allFavoriteActions, handleAction: handleFavoriteAction } = useQuickActions();
+  
+  // Only show navigable actions in sidebar (filter out callback-only actions like record-donation)
+  const favoriteActions = allFavoriteActions.filter(action => action.href);
   
   // Use activeRole from auth context if available, otherwise fall back to prop
   const effectiveRole = user?.activeRole || userRole;
 
-  // Load recent pages from localStorage
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(RECENT_PAGES_KEY);
-      if (stored) {
-        setRecentPages(JSON.parse(stored));
-      }
-    } catch (error) {
-      console.error("Failed to load recent pages:", error);
-    }
-  }, []);
-
-  // Clear recent pages on logout (when user becomes null)
-  useEffect(() => {
-    if (!user) {
-      setRecentPages([]);
-      try {
-        localStorage.removeItem(RECENT_PAGES_KEY);
-      } catch (error) {
-        console.error("Failed to clear recent pages:", error);
-      }
-    }
-  }, [user]);
-
-  // Track current page visit
-  useEffect(() => {
-    if (!location || location === "/dashboard") return;
-
-    const allNavGroups = [
-      ...adminGroups,
-      ...boardMemberGroups,
-      ...staffGroups,
-      ...fosterGroups,
-      ...volunteerGroups,
-    ];
-
-    const currentPage = allNavGroups
-      .flatMap(group => group.items)
-      .find(item => item.url === location);
-
-    if (currentPage) {
-      const newPage: RecentPage = {
-        title: currentPage.title,
-        url: currentPage.url,
-        iconName: getIconName(currentPage.icon),
-        timestamp: Date.now(),
-      };
-
-      setRecentPages(prev => {
-        const filtered = prev.filter(page => page.url !== location);
-        const updated = [newPage, ...filtered].slice(0, MAX_RECENT_PAGES);
-        
-        try {
-          localStorage.setItem(RECENT_PAGES_KEY, JSON.stringify(updated));
-        } catch (error) {
-          console.error("Failed to save recent pages:", error);
-        }
-        
-        return updated;
-      });
-    }
-  }, [location]);
 
   // Fetch notification counts
   const { data: notificationData } = useQuery<{ counts: {
@@ -579,27 +505,30 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
         </div>
       </SidebarHeader>
       <SidebarContent>
-        {recentPages.length > 0 && (
+        {favoriteActions.length > 0 && (
           <Collapsible defaultOpen={false} className="group/collapsible">
             <SidebarGroup>
               <CollapsibleTrigger asChild>
                 <SidebarGroupLabel className="hover-elevate cursor-pointer">
-                  <span>Recent</span>
+                  <Star className="h-4 w-4 mr-1" />
+                  <span>Favorites</span>
                   <ChevronRight className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-90 h-4 w-4" />
                 </SidebarGroupLabel>
               </CollapsibleTrigger>
               <CollapsibleContent>
                 <SidebarGroupContent>
                   <SidebarMenu>
-                    {recentPages.map((page, index) => {
-                      const IconComponent = iconMap[page.iconName] || FileText;
+                    {favoriteActions.map((action, index) => {
+                      const IconComponent = action.icon;
                       return (
-                        <SidebarMenuItem key={`${page.url}-${index}`}>
-                          <SidebarMenuButton asChild isActive={location === page.url}>
-                            <Link href={page.url} data-testid={`link-recent-${index}`}>
-                              <IconComponent className="h-4 w-4" />
-                              <span>{page.title}</span>
-                            </Link>
+                        <SidebarMenuItem key={action.id}>
+                          <SidebarMenuButton 
+                            isActive={action.href ? location === action.href : false}
+                            onClick={() => handleFavoriteAction(action.id)}
+                            data-testid={`link-favorite-${action.id}`}
+                          >
+                            <IconComponent className="h-4 w-4" />
+                            <span>{action.label}</span>
                           </SidebarMenuButton>
                         </SidebarMenuItem>
                       );
