@@ -3,7 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { OnboardingChecklist } from "@/components/OnboardingChecklist";
 import { FloatingActionButton } from "@/components/FloatingActionButton";
 import { RecordOfflineDonationDialog } from "@/components/RecordOfflineDonationDialog";
-import { Heart, FileText, Users, Package, MessageSquare, PawPrint, AlertCircle, Pill, Loader2 } from "lucide-react";
+import { Heart, FileText, Users, Package, MessageSquare, PawPrint, AlertCircle, Pill, Loader2, Stethoscope, Inbox, ClipboardList, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -17,13 +17,13 @@ import RecentActivityWidget from "@/components/RecentActivityWidget";
 import PendingApplicationsWidget from "@/components/PendingApplicationsWidget";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { useQuickActions } from "@/hooks/useQuickActions";
 import {
   StatsOverview,
   IntakeSummaryWidget,
   VolunteerSummaryWidget,
   MedicalSnapshotWidget,
   FosterSummaryWidget,
+  ComplianceWidget,
 } from "@/components/dashboard";
 
 interface FosterAnimalWithDetails extends FosterAnimal {
@@ -35,6 +35,13 @@ interface MyFostersData {
   fosterAnimals: FosterAnimalWithDetails[];
 }
 
+const actionButtons = [
+  { id: "new-intake", label: "New Intake", icon: Inbox, href: "/dashboard/intake" },
+  { id: "log-medical", label: "Log Medical", icon: Stethoscope, href: "/dashboard/medical-pipeline" },
+  { id: "find-foster", label: "Find Foster", icon: Heart, href: "/dashboard/foster-management" },
+  { id: "process-apps", label: "Process Apps", icon: ClipboardList, href: "/dashboard/applications" },
+];
+
 export default function Dashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -43,10 +50,6 @@ export default function Dashboard() {
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
   const [selectedAnimal, setSelectedAnimal] = useState<{id: string, name: string} | null>(null);
   const [offlineDonationDialogOpen, setOfflineDonationDialogOpen] = useState(false);
-
-  const { actions: quickActions, handleAction } = useQuickActions({
-    onRecordDonation: () => setOfflineDonationDialogOpen(true),
-  });
 
   const { data: tenantData } = useQuery<{ tenant: Tenant }>({
     queryKey: ['/api/tenant', user?.activeRole],
@@ -128,6 +131,14 @@ export default function Dashboard() {
     setUpdateDialogOpen(true);
   };
 
+  const today = new Date();
+  const formattedDate = today.toLocaleDateString('en-US', { 
+    weekday: 'long', 
+    year: 'numeric', 
+    month: 'long', 
+    day: 'numeric' 
+  });
+
   return (
     <>
       {user?.activeRole === 'admin' && (
@@ -135,8 +146,8 @@ export default function Dashboard() {
       )}
 
       <DashboardLayout
-        title="Dashboard"
-        description={`Welcome back, ${user?.fullName?.split(' ')[0] || 'User'}`}
+        title="Command Center"
+        description=""
       >
         <div className="flex-1 overflow-auto p-6 space-y-6">
           {user?.activeRole === 'foster' ? (
@@ -249,6 +260,20 @@ export default function Dashboard() {
             </>
           ) : (
             <>
+              <header className="mb-2" data-testid="section-header">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                  <div>
+                    <h1 className="text-2xl font-bold">
+                      Welcome back, {user?.fullName?.split(' ')[0] || 'User'}
+                    </h1>
+                    <p className="text-sm text-muted-foreground flex items-center gap-1">
+                      <Calendar className="h-3.5 w-3.5" />
+                      {formattedDate}
+                    </p>
+                  </div>
+                </div>
+              </header>
+
               {user?.activeRole === 'admin' && tenantData?.tenant && (
                 <OnboardingChecklist
                   tenant={tenantData.tenant}
@@ -261,48 +286,43 @@ export default function Dashboard() {
                 <StatsOverview />
               </section>
 
-              <section data-testid="section-quick-actions">
-                <h2 className="text-lg font-semibold mb-3">Quick Actions</h2>
-                <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
-                  {quickActions.map((action) => (
-                    action.href ? (
-                      <Link key={action.id} href={action.href}>
-                        <Button variant="outline" className="w-full justify-start h-auto py-3" data-testid={`button-quick-action-${action.id}`}>
-                          <action.icon className="mr-2 h-4 w-4 flex-shrink-0" />
-                          <span className="truncate">{action.label}</span>
-                        </Button>
-                      </Link>
-                    ) : (
-                      <Button key={action.id} variant="outline" className="w-full justify-start h-auto py-3" onClick={() => handleAction(action.id)} data-testid={`button-quick-action-${action.id}`}>
-                        <action.icon className="mr-2 h-4 w-4 flex-shrink-0" />
-                        <span className="truncate">{action.label}</span>
+              <section data-testid="section-action-bar">
+                <div className="flex flex-wrap gap-2">
+                  {actionButtons.map((action) => (
+                    <Link key={action.id} href={action.href}>
+                      <Button 
+                        variant="outline" 
+                        className="gap-2"
+                        data-testid={`button-action-${action.id}`}
+                      >
+                        <action.icon className="h-4 w-4" />
+                        {action.label}
                       </Button>
-                    )
+                    </Link>
                   ))}
                 </div>
               </section>
 
               <section data-testid="section-command-center">
-                <h2 className="text-lg font-semibold mb-3">Command Center</h2>
                 <div className="grid gap-6 lg:grid-cols-3">
-                  <div className="space-y-4" data-testid="zone-inbound">
-                    <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Inbound</h3>
+                  <div className="space-y-4" data-testid="zone-front-door">
+                    <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">The Front Door</h3>
                     <IntakeSummaryWidget />
                     {(user?.activeRole === 'admin' || user?.activeRole === 'staff') && (
                       <PendingApplicationsWidget />
                     )}
                   </div>
 
-                  <div className="space-y-4" data-testid="zone-people">
-                    <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">People</h3>
-                    <FosterSummaryWidget />
+                  <div className="space-y-4" data-testid="zone-workforce">
+                    <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">The Workforce</h3>
                     <VolunteerSummaryWidget />
+                    <FosterSummaryWidget />
                   </div>
 
                   <div className="space-y-4" data-testid="zone-operations">
                     <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Operations</h3>
+                    <ComplianceWidget />
                     <MedicalSnapshotWidget />
-                    <RecentActivityWidget />
                   </div>
                 </div>
               </section>
@@ -350,6 +370,11 @@ export default function Dashboard() {
                   </CardContent>
                 </Card>
               )}
+
+              <section data-testid="section-recent-activity">
+                <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-4">Recent Activity</h3>
+                <RecentActivityWidget />
+              </section>
             </>
           )}
         </div>

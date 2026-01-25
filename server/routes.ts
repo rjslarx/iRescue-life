@@ -2975,6 +2975,212 @@ Crawl-delay: 1
   });
 
   /**
+   * GET /api/dashboard/compliance
+   * Get compliance/at-risk items:
+   * - Animals with no medical exam in >30 days
+   * - Active fosters with no updates in >14 days
+   * - Overdue medications
+   */
+  app.get('/api/dashboard/compliance', requireTenant, requireAuth, requireRole('admin', 'staff', 'owner'), async (req, res, next) => {
+    try {
+      const { 
+        animals, 
+        medicalExams, 
+        fosterAnimals, 
+        fosterUpdates, 
+        medicalDoses, 
+        medicalPrescriptions,
+        users 
+      } = await import('@shared/schema');
+      const { lt, max, sql, isNotNull } = await import('drizzle-orm');
+
+      const now = new Date();
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+
+      // Get all active animals with their most recent medical exam
+      const animalsWithLastExam = await db.select({
+        id: animals.id,
+        name: animals.name,
+        species: animals.species,
+        status: animals.status,
+        intakeDate: animals.intakeDate,
+        lastExamDate: max(medicalExams.examDate),
+      })
+        .from(animals)
+        .leftJoin(medicalExams, and(
+          eq(medicalExams.animalId, animals.id),
+          eq(medicalExams.tenantId, req.tenant!.id)
+        ))
+        .where(
+          and(
+            eq(animals.tenantId, req.tenant!.id),
+            inArray(animals.status, ['Shelter', 'Boarding', 'Foster'])
+          )
+        )
+        .groupBy(animals.id);
+
+      // Filter animals with no exam or exam older than 30 days
+      const animalsNeedingMedical = animalsWithLastExam.filter(a => {
+        if (!a.lastExamDate) {
+          // No exam ever - only flag if intake was more than 30 days ago
+          if (!a.intakeDate) return true;
+          return new Date(a.intakeDate) < thirtyDaysAgo;
+        }
+        return new Date(a.lastExamDate) < thirtyDaysAgo;
+      }).map(a => ({
+        id: a.id,
+        name: a.name,
+        species: a.species,
+        status: a.status,
+        daysSinceLastExam: a.lastExamDate 
+          ? Math.floor((now.getTime() - new Date(a.lastExamDate).getTime()) / (24 * 60 * 60 * 1000))
+          : null,
+        lastExamDate: a.lastExamDate,
+      }));
+
+      // Get active fosters with their most recent update
+      const activeFostersWithUpdates = await db.select({
+        fosterAnimalId: fosterAnimals.id,
+        animalId: fosterAnimals.animalId,
+        fosterId: fosterAnimals.fosterId,
+        fosterName: users.fullName,
+        fosterEmail: users.email,
+        startDate: fosterAnimals.startDate,
+        lastUpdateDate: max(fosterUpdates.createdAt),
+      })
+        .from(fosterAnimals)
+        .leftJoin(users, eq(users.id, fosterAnimals.fosterId))
+        .leftJoin(fosterUpdates, and(
+          eq(fosterUpdates.animalId, fosterAnimals.animalId),
+          eq(fosterUpdates.fosterId, fosterAnimals.fosterId),
+          eq(fosterUpdates.tenantId, req.tenant!.id)
+        ))
+        .where(
+          and(
+            eq(fosterAnimals.tenantId, req.tenant!.id),
+            eq(fosterAnimals.status, 'active')
+          )
+        )
+        .groupBy(fosterAnimals.id, users.fullName, users.email);
+
+      // Get animal names for silent fosters
+      const fosterAnimalIds = activeFostersWithUpdates.map(f => f.animalId);
+      let fosterAnimalNames: Record<string, string> = {};
+      if (fosterAnimalIds.length > 0) {
+        const fosterAnimalsList = await db.select({ id: animals.id, name: animals.name })
+          .from(animals)
+          .where(inArray(animals.id, fosterAnimalIds));
+        fosterAnimalNames = Object.fromEntries(fosterAnimalsList.map(a => [a.id, a.name]));
+      }
+
+      // Filter fosters with no update or update older than 14 days
+      const silentFosters = activeFostersWithUpdates.filter(f => {
+        if (!f.lastUpdateDate) {
+          // No updates ever - flag if fostering for more than 14 days
+          return new Date(f.startDate) < fourteenDaysAgo;
+        }
+        return new Date(f.lastUpdateDate) < fourteenDaysAgo;
+      }).map(f => ({
+        fosterAnimalId: f.fosterAnimalId,
+        animalId: f.animalId,
+        animalName: fosterAnimalNames[f.animalId] || 'Unknown',
+        fosterName: f.fosterName,
+        fosterEmail: f.fosterEmail,
+        daysSinceLastUpdate: f.lastUpdateDate 
+          ? Math.floor((now.getTime() - new Date(f.lastUpdateDate).getTime()) / (24 * 60 * 60 * 1000))
+          : Math.floor((now.getTime() - new Date(f.startDate).getTime()) / (24 * 60 * 60 * 1000)),
+        lastUpdateDate: f.lastUpdateDate,
+      }));
+
+      // Get overdue medication doses
+      const overdueDoses = await db.select({
+        id: medicalDoses.id,
+        prescriptionId: medicalDoses.prescriptionId,
+        dueDate: medicalDoses.dueDate,
+      })
+        .from(medicalDoses)
+        .where(
+          and(
+            eq(medicalDoses.tenantId, req.tenant!.id),
+            eq(medicalDoses.status, 'due'),
+            lt(medicalDoses.dueDate, now)
+          )
+        )
+        .limit(50);
+
+      // Get prescription and animal details for overdue doses
+      let overdueMedications: Array<{
+        doseId: string;
+        medicationName: string;
+        animalId: string;
+        animalName: string;
+        dueDate: Date;
+        daysOverdue: number;
+      }> = [];
+
+      if (overdueDoses.length > 0) {
+        const prescriptionIds = [...new Set(overdueDoses.map(d => d.prescriptionId))];
+        const prescriptions = await db.select({
+          id: medicalPrescriptions.id,
+          medicationName: medicalPrescriptions.medicationName,
+          animalId: medicalPrescriptions.animalId,
+        })
+          .from(medicalPrescriptions)
+          .where(inArray(medicalPrescriptions.id, prescriptionIds));
+
+        const prescriptionsMap = new Map(prescriptions.map(p => [p.id, p]));
+        const animalIdsForDoses = [...new Set(prescriptions.map(p => p.animalId))];
+
+        const animalsForDoses = await db.select({ id: animals.id, name: animals.name })
+          .from(animals)
+          .where(inArray(animals.id, animalIdsForDoses));
+        const animalsMap = new Map(animalsForDoses.map(a => [a.id, a.name]));
+
+        overdueMedications = overdueDoses.map(dose => {
+          const prescription = prescriptionsMap.get(dose.prescriptionId);
+          return {
+            doseId: dose.id,
+            medicationName: prescription?.medicationName || 'Unknown',
+            animalId: prescription?.animalId || '',
+            animalName: prescription?.animalId ? (animalsMap.get(prescription.animalId) || 'Unknown') : 'Unknown',
+            dueDate: dose.dueDate,
+            daysOverdue: Math.floor((now.getTime() - new Date(dose.dueDate).getTime()) / (24 * 60 * 60 * 1000)),
+          };
+        });
+      }
+
+      // Calculate compliance rate (animals with recent medical attention / total animals)
+      const totalActiveAnimals = animalsWithLastExam.length;
+      const compliantAnimals = totalActiveAnimals - animalsNeedingMedical.length;
+      const complianceRate = totalActiveAnimals > 0 
+        ? Math.round((compliantAnimals / totalActiveAnimals) * 100) 
+        : 100;
+
+      res.json({
+        compliance: {
+          animalsNeedingMedical: {
+            count: animalsNeedingMedical.length,
+            items: animalsNeedingMedical.slice(0, 10),
+          },
+          silentFosters: {
+            count: silentFosters.length,
+            items: silentFosters.slice(0, 10),
+          },
+          overdueMedications: {
+            count: overdueMedications.length,
+            items: overdueMedications.slice(0, 10),
+          },
+          complianceRate,
+          totalActiveAnimals,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * GET /api/dashboard/pending-applications
    * Get all pending applications from all sources (adoption, foster, volunteer, surrender, custom forms)
    * Consolidated view for the dashboard

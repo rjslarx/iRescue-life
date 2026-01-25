@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Home, Heart, FileText, Stethoscope } from "lucide-react";
+import { Home, Heart, FileText, Shield, Clipboard, Pill } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import type { Animal } from "@shared/schema";
 
@@ -13,6 +13,13 @@ interface StatsResponse {
   stats: {
     pendingApplications: number;
     animalsInCare: number;
+  };
+}
+
+interface ComplianceResponse {
+  compliance: {
+    complianceRate: number;
+    overdueMedications: { count: number };
   };
 }
 
@@ -29,44 +36,44 @@ export default function StatsOverview() {
     enabled: !!user && user.activeRole !== 'foster',
   });
 
-  const isLoading = isLoadingAnimals || isLoadingStats;
+  const { data: complianceData, isLoading: isLoadingCompliance } = useQuery<ComplianceResponse>({
+    queryKey: ['/api/dashboard/compliance', user?.activeRole],
+    enabled: !!user && user.activeRole !== 'foster',
+  });
+
+  const isLoading = isLoadingAnimals || isLoadingStats || isLoadingCompliance;
   const animals = animalsData?.animals || [];
 
   const onSiteCount = animals.filter(a => a.status === 'Shelter' || a.status === 'Boarding').length;
   const inFosterCount = animals.filter(a => a.status === 'Foster').length;
   const pendingAppsCount = statsData?.stats?.pendingApplications || 0;
-  const medicalNeedsCount = animals.filter(a => 
-    a.medicalStatus === 'needs_vetting' || a.medicalStatus === 'surgery_pending'
-  ).length;
+  const complianceRate = complianceData?.compliance?.complianceRate || 100;
+  const overdueMedsCount = complianceData?.compliance?.overdueMedications?.count || 0;
 
   const stats = [
     {
-      label: 'On Site',
-      value: onSiteCount,
-      icon: Home,
-      color: 'text-blue-500',
-      bgColor: 'bg-blue-100 dark:bg-blue-900/30',
-    },
-    {
-      label: 'In Foster',
-      value: inFosterCount,
-      icon: Heart,
-      color: 'text-pink-500',
-      bgColor: 'bg-pink-100 dark:bg-pink-900/30',
-    },
-    {
-      label: 'Pending Apps',
+      label: 'Action Items',
       value: pendingAppsCount,
-      icon: FileText,
-      color: 'text-purple-500',
-      bgColor: 'bg-purple-100 dark:bg-purple-900/30',
+      description: 'Pending requests to process',
+      icon: Clipboard,
     },
     {
-      label: 'Medical Needs',
-      value: medicalNeedsCount,
-      icon: Stethoscope,
-      color: 'text-orange-500',
-      bgColor: 'bg-orange-100 dark:bg-orange-900/30',
+      label: 'Overdue Meds',
+      value: overdueMedsCount,
+      description: 'Animals behind on medication',
+      icon: Pill,
+    },
+    {
+      label: 'Compliance Rate',
+      value: `${complianceRate}%`,
+      description: 'Medical check compliance',
+      icon: Shield,
+    },
+    {
+      label: 'In Shelter',
+      value: onSiteCount,
+      description: 'Animals on site',
+      icon: Home,
     },
   ];
 
@@ -74,14 +81,15 @@ export default function StatsOverview() {
     return (
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4" data-testid="stats-overview-skeleton">
         {Array.from({ length: 4 }).map((_, i) => (
-          <Card key={i}>
+          <Card key={i} className="bg-muted/30">
             <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <Skeleton className="h-10 w-10 rounded-lg" />
-                <div className="space-y-2">
-                  <Skeleton className="h-6 w-12" />
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
                   <Skeleton className="h-4 w-20" />
+                  <Skeleton className="h-4 w-4 rounded" />
                 </div>
+                <Skeleton className="h-8 w-16" />
+                <Skeleton className="h-3 w-28" />
               </div>
             </CardContent>
           </Card>
@@ -92,20 +100,24 @@ export default function StatsOverview() {
 
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4" data-testid="stats-overview">
-      {stats.map((stat) => (
-        <Card key={stat.label} data-testid={`stat-${stat.label.toLowerCase().replace(' ', '-')}`}>
+      {stats.map((stat, index) => (
+        <Card 
+          key={stat.label} 
+          className="bg-muted/30 border-0 shadow-none"
+          data-testid={`stat-${stat.label.toLowerCase().replace(/\s+/g, '-')}`}
+        >
           <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className={`p-2.5 rounded-lg ${stat.bgColor}`}>
-                <stat.icon className={`h-5 w-5 ${stat.color}`} />
-              </div>
-              <div>
-                <div className="text-2xl font-bold" data-testid={`text-${stat.label.toLowerCase().replace(' ', '-')}-value`}>
-                  {stat.value}
-                </div>
-                <p className="text-xs text-muted-foreground">{stat.label}</p>
-              </div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-foreground">{stat.label}</span>
+              <stat.icon className="h-4 w-4 text-muted-foreground" />
             </div>
+            <div 
+              className="text-3xl font-bold text-foreground mb-1"
+              data-testid={`text-${stat.label.toLowerCase().replace(/\s+/g, '-')}-value`}
+            >
+              {stat.value}
+            </div>
+            <p className="text-xs text-muted-foreground">{stat.description}</p>
           </CardContent>
         </Card>
       ))}
