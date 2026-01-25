@@ -46,8 +46,10 @@ const stages: PipelineStage[] = [
   { id: "vet_check", label: "Vet Check", color: "bg-purple-500" },
   { id: "home_visit", label: "Home Visit", color: "bg-orange-500" },
   { id: "approved", label: "Approved", color: "bg-green-500" },
+  { id: "trial", label: "Trial", color: "bg-cyan-500" },
   { id: "adopted", label: "Adopted", color: "bg-teal-500" },
   { id: "denied", label: "Denied", color: "bg-red-500" },
+  { id: "trial_failed", label: "Trial Failed", color: "bg-rose-500" },
 ];
 
 function CheckoutStatusBadge({ status }: { status: string }) {

@@ -246,6 +246,12 @@ export default function PublicAnimalProfilePage() {
                         <Badge variant="secondary">{animal.species}</Badge>
                         <Badge variant="outline">{animal.breed}</Badge>
                         <Badge variant="outline">{animal.age} years old</Badge>
+                        {animal.status === 'adoption_pending' && (
+                          <Badge variant="default" className="bg-amber-500">Adoption Pending</Badge>
+                        )}
+                        {animal.status === 'in_trial' && (
+                          <Badge variant="default" className="bg-blue-500">In Trial</Badge>
+                        )}
                       </div>
                     </div>
                     
@@ -292,14 +298,28 @@ export default function PublicAnimalProfilePage() {
                 </div>
 
                 <div className="space-y-3 mt-6">
-                  <Button 
-                    className="w-full" 
-                    size="lg"
-                    onClick={() => setAdoptionDialogOpen(true)}
-                    data-testid="button-adopt"
-                  >
-                    Adopt {animal.name}
-                  </Button>
+                  {animal.status === 'adoption_pending' || animal.status === 'in_trial' ? (
+                    <div className="text-center p-4 bg-muted rounded-lg">
+                      <p className="text-muted-foreground">
+                        {animal.status === 'in_trial' 
+                          ? `${animal.name} is currently in a trial adoption period.`
+                          : `${animal.name} has a pending adoption application.`
+                        }
+                      </p>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Check back soon or contact us for other available animals.
+                      </p>
+                    </div>
+                  ) : (
+                    <Button 
+                      className="w-full" 
+                      size="lg"
+                      onClick={() => setAdoptionDialogOpen(true)}
+                      data-testid="button-adopt"
+                    >
+                      Adopt {animal.name}
+                    </Button>
+                  )}
                   
                   <Button 
                     variant="outline"

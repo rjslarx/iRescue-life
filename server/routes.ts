@@ -6560,7 +6560,7 @@ Crawl-delay: 1
   app.patch('/api/applications/:id/stage', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
     try {
       const { updateApplicationStage } = await import('./services/applications');
-      const stageSchema = z.object({ stage: z.enum(['new', 'screening', 'vet_check', 'home_visit', 'approved', 'denied', 'adopted']) });
+      const stageSchema = z.object({ stage: z.enum(['new', 'screening', 'vet_check', 'home_visit', 'approved', 'trial', 'adopted', 'denied', 'trial_failed']) });
       
       const { stage } = stageSchema.parse(req.body);
       // Pass user ID for auto-dismiss functionality

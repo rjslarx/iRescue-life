@@ -1,7 +1,7 @@
 # Multi-Tenant Animal Rescue SaaS Platform
 
 ## Overview
-This project is a multi-tenant SaaS platform designed for animal rescue organizations. It provides each organization with a custom subdomain, a public-facing site for showcasing animals and accepting donations, and a secure internal portal for staff. The platform aims to centralize and streamline animal rescue operations, including adoptions, financial contributions, and overall efficiency, while enhancing outreach capabilities within the animal welfare sector. It offers a comprehensive solution to manage animals, adoptions, finances, volunteers, medical records, and communications, alongside advanced features like PWA capabilities, AI assistance, and IoT integration for shelter monitoring.
+The Multi-Tenant Animal Rescue SaaS Platform is designed to centralize and streamline operations for animal rescue organizations. It provides each organization with a custom subdomain, a public-facing site for animal showcasing and donations, and a secure internal portal for staff. The platform's core purpose is to enhance outreach, manage adoptions, track finances, coordinate volunteers, manage medical records, and facilitate communication within the animal welfare sector. It aims to improve efficiency and impact through features like PWA capabilities, AI assistance, and IoT integration for shelter monitoring, ultimately boosting an organization's reach and operational effectiveness.
 
 ## User Preferences
 - Must use PostgreSQL database (NOT Firebase)
@@ -10,103 +10,48 @@ This project is a multi-tenant SaaS platform designed for animal rescue organiza
 - Single database schema with tenant_id foreign keys (NOT separate schemas per tenant)
 
 ## System Architecture
-The platform features a React, TypeScript, and Vite frontend with Wouter, TanStack Query, Tailwind CSS, and shadcn/ui. The backend is an Express and Node.js application in TypeScript, utilizing PostgreSQL via Drizzle ORM.
+The platform is built with a React, TypeScript, and Vite frontend utilizing Wouter, TanStack Query, Tailwind CSS, and shadcn/ui. The backend is an Express and Node.js application in TypeScript, interacting with PostgreSQL via Drizzle ORM.
 
 **UI/UX Decisions:**
-The design is mobile-first, responsive, and adheres to WCAG accessibility standards, with SEO enhancements and consolidated navigation. It includes an enhanced dashboard (Command Center) with real-time activity, a "Quick Actions" button, breadcrumbs, a drag-and-drop kennel layout editor, and consolidated volunteer management. Public navigation is streamlined for fostering, volunteering, surrendering, donating, and staff login.
-
-**Command Center Dashboard:**
-The main dashboard serves as a unified Command Center with a 3-zone grid layout:
-- **Front Door Zone:** IntakeSummaryWidget, PendingApplicationsWidget, ActionCenterWidget
-- **Workforce Zone:** VolunteerSummaryWidget, FosterSummaryWidget
-- **Animal Health Zone:** MedicalSnapshotWidget, ComplianceWidget
-- **StatsOverview:** 4 clickable KPI cards with drill-down navigation:
-  - Action Items → #action-items-zone (scrolls to Front Door zone) - count formula: New Surrenders (status 'new'/'review') + Pending Adoptions + Pending Fosters + Pending Volunteers
-  - Overdue Meds → /dashboard/medical-pipeline (Medical Pipeline)
-  - Compliance Rate → #compliance-widget (scrolls to Compliance Widget)
-  - Behavior Alerts → /dashboard/animals?filter=behavior (Animals page filtered)
-- **MedicalSnapshotWidget:** Shows prominent "Meds Due Today: X" tile at top, clickable to /dashboard/medical-pipeline?tab=treatments
-- **Role-Based Dashboard Ordering:**
-  - Admin: Standard 3-zone Command Center layout (Front Door, Workforce, Operations)
-  - Staff: Medical widget shown first at top, then Quick Actions, then 2-zone grid (Workforce + Intake)
-  - Volunteer: Medical widget first, then Workforce zone only (Intake/Compliance hidden)
-- **ComplianceWidget:** 4 tabs - Meds (overdue medications), Fosters (silent fosters), Exams (needed exams), At-Risk (at-risk adopters)
-- **ActionCenterWidget:** Inline action processing for supply requests, bio submissions, photo approvals, and happy tails
-- **API Endpoints:** GET /api/adopter/staff/compliance/at-risk, GET /api/foster-portal/staff/action-center
-- **Route:** /dashboard (main command center)
+The design prioritizes mobile-first responsiveness, WCAG accessibility, and SEO. Key UI elements include an enhanced Command Center dashboard with real-time activity, a "Quick Actions" button, breadcrumbs, a drag-and-drop kennel layout editor, and consolidated volunteer management. Public navigation is streamlined for core activities like fostering, volunteering, and donating. The Command Center dashboard features a 3-zone grid layout (Front Door, Workforce, Animal Health) with role-based ordering and clickable KPI cards.
 
 **Multi-Tenancy:**
-A single PostgreSQL database enforces data isolation using `tenant_id` foreign keys. It supports a hybrid URL architecture including path-based URLs (`irescue.life/{subdomain}`), custom domains, and subdomain-based access (`demo.irescue.life`). Path-based routing is managed by backend middleware.
+Data isolation is achieved within a single PostgreSQL database using `tenant_id` foreign keys. The platform supports a hybrid URL architecture including path-based URLs (`irescue.life/{subdomain}`), custom domains, and subdomain-based access (`demo.irescue.life`), with path-based routing managed by backend middleware.
 
 **Authentication & Authorization:**
-Email/password authentication leverages bcrypt and Express sessions, featuring secure token-based password reset, a user invitation system, TOTP-based Multi-Factor Authentication (MFA) for platform admins, and JWTs for session management. Tenant-scoped Role-Based Access Control (RBAC) supports dynamic role switching and includes a `platform_admin` role for host administrators.
+Email/password authentication is implemented with bcrypt and Express sessions, featuring secure token-based password reset, a user invitation system, TOTP-based Multi-Factor Authentication (MFA) for platform admins, and JWTs for session management. Tenant-scoped Role-Based Access Control (RBAC) supports dynamic role switching and includes a `platform_admin` role.
 
 **Feature Specifications:**
-The platform offers comprehensive animal, application, and financial management (with Stripe). It includes contact management, Happy Tails, supply registry, expenditure tracking, event management, volunteer coordination, medical records, and document management.
+The platform encompasses comprehensive animal, application, and financial management (integrated with Stripe). It includes contact management, Happy Tails, supply registry, expenditure tracking, event and volunteer coordination, medical records, and document management.
+
+**Adoption Application Pipeline:**
+A complete adoption workflow is supported with stages from `new` to `adopted`, including a `trial` period for foster-to-adopt scenarios. Animal statuses automatically synchronize with application stages (e.g., `adoption_pending`, `in_trial`, `adopted`). A "hold" system prevents new applications for animals already in process, while public pages display animal status badges. Staff manage applications via a Kanban board.
 
 **Medical Pipeline Dashboard:**
-A centralized dashboard for managing all medical operations across the organization with three main sections:
-- **Intake Protocol (Tab A):** Vetting checklist for new animals - tracks fecal tests, bloodwork, vaccinations, and vet exams. Displays intake animals sorted by priority with real-time checklist status.
-- **Surgery Queue (Tab B):** Spay/neuter scheduling and tracking. Shows animals needing surgery with status badges (Not Scheduled, Scheduled, Complete). Allows scheduling surgery dates directly from the dashboard.
-- **Active Treatments (Tab C):** Daily medication management with overdue and due-today sections. Preserves all functionality from previous Medical Tasks page including administer/unable dialogs, controlled substance badges, and print functionality.
-- **Database Fields:** `animals.medicalStatus` (varchar) and `animals.scheduledSurgeryDate` (date)
-- **API Endpoints:** GET /api/medical/intake-animals, GET /api/medical/surgery-queue, PATCH /api/medical/surgery-schedule/:animalId, PATCH /api/medical/update-status/:animalId
-- **Routes:** /dashboard/medical-pipeline (new), /dashboard/medical-tasks (legacy, redirects to new)
+This centralized dashboard manages all medical operations across three sections:
+- **Intake Protocol:** A vetting checklist for new animals, tracking tests, vaccinations, and exams.
+- **Surgery Queue:** Manages spay/neuter scheduling and tracking.
+- **Active Treatments:** Daily medication management with overdue and due-today sections, including controlled substance tracking.
 
 **Phase 1 Intake Pipeline (Surrender Requests):**
-A dedicated intake pipeline for dog surrender requests with the following:
-- **surrender_requests table:** Separate from legacy animalSurrenders, tracks dog-specific surrender requests with status workflow
-- **Status Flow:** new → review → spacecheck → waitlist → scheduled → intaken
-- **Core Fields:** ownerName, ownerEmail, ownerPhone, dogName, dogBreed, dogAge, dogGender, reasonForSurrender, medicalIssues (optional), behavioralIssues (optional), photoUrl (optional), smsConsent
-- **Enhanced Fields (Jan 2026):** dogDateOfBirth (date), dogWeight (text), spayedNeutered (boolean), microchipped (boolean), microchipNumber (text), goodWithKids/Dogs/Cats (yes/no/unknown enums), preferredSurrenderDate (date)
-- **TCPA-Compliant SMS Consent:** Checkbox with explicit opt-in language for text message updates
-- **API:** POST /api/surrender (public), with automatic contact creation and inbound email logging
-- **Public Form:** /{tenant}/surrender with dog-specific intake fields including DOB picker, weight, spay/neuter status, microchip info, compatibility assessment, and preferred intake date
-- **Intake Manager:** /dashboard/intake with Kanban pipeline view, displays all enhanced fields in surrender details dialog with color-coded compatibility badges
+A dedicated pipeline for dog surrender requests, featuring a `surrender_requests` table with a `new` to `intaken` status workflow. Enhanced fields include detailed dog information and TCPA-compliant SMS consent. Public forms are available, and staff use a Kanban view for intake management.
 
 **Volunteer Calendar Staffing Color-Coding:**
-Volunteer-type calendars display visual staffing indicators based on volunteer availability:
-- **Color-Coding:** Red (no volunteers), Yellow (below minimum), Green (at or above minimum volunteers)
-- **Schema Fields:** `calendars.minVolunteersRequired` (default 2), `calendarEvents.volunteerContactId`, `calendarPermissions.canAssignOthers`, `calendarRolePermissions.canAssignOthers`
-- **API:** GET /api/users/volunteers fetches team members with volunteer role
-- **Management UI:** Calendar management page allows setting minimum volunteer requirements and "can assign others" permission for both user and role-based permissions
-- **Legend Display:** Staffing levels legend shown in sidebar when viewing a single volunteer calendar
+Volunteer calendars visually indicate staffing levels (Red, Yellow, Green) based on `minVolunteersRequired`, with management UI to set these requirements and assign permissions.
 
-**Customizable Hero Layouts:** Tenants can choose from three hero layout types: "Three Doors" (action cards), "Action Circle" (circular CTA), or "None". The Three Doors layout allows full customization of each door's title, description, link text, link URL, and icon (paw, home, heart, dollar) via the admin settings page. Communication features include newsletters, email campaigns (via Resend), and automated notifications. It provides unified site permissions, multi-calendar functionality, page-level permissions, and customizable event forms. Admin interfaces allow tenant branding, CMS, custom pages, and analytics dashboards. PWA capabilities include mobile installation, offline access, and push notifications. Integrations include external adoption platforms and Google Workspace. A platform admin interface manages tenants, users, feature flags, audit logs, and system health. Other features include an AI Help Assistant, a setup wizard, kennel management, a public animal surrender system, auto-archiving, grant budget tracking, a contract template editor with native e-signature system, a fundraising shop module, a collaboration hub, smart foster matching, medical fund campaigns, Govee temperature monitoring integration, IRS-compliant donation receipts, and social media sharing with dynamic Open Graph tags.
+**Customizable Hero Layouts:**
+Tenants can select from "Three Doors" (customizable action cards), "Action Circle," or "None" for their public site hero sections.
 
 **Native Contract Management System:**
-The platform includes a complete native e-signature system for adoption contracts (no external DocuSign integration):
-- **Contract Template Editor:** Staff can create custom contract templates using two modes:
-  - Rich Text mode: Paste existing contracts with merge field placeholders
-  - Guided Builder mode: Section-based template construction
-- **Merge Fields:** Templates support placeholders ({{adopter_name}}, {{animal_name}}, {{organization_name}}, {{contract_date}}, {{adoption_fee}}, etc.) that auto-fill during checkout
-- **Native E-Signature:** Uses signature_pad library for browser-based signature capture
-- **PDF Generation:** Puppeteer generates PDF contracts with embedded signature, IP address, and timestamp for legal verification
-- **Secure Storage:** Signed contracts stored in object storage with access controlled by session completion status
-- **Contract Download:** Adopters can download signed PDF contracts after completing the adoption process using time-limited signed URLs (15-minute expiry)
-- **Security:** Server-side HTML sanitization with DOMPurify prevents XSS in contract templates, and GCS v4 signed URLs provide secure, time-limited access to contract PDFs
-- **Access Control:** Contract downloads require session status 'completed' (signed + paid), with a 7-day download window after adoption completion to limit token exposure
+The platform includes an in-house e-signature system for adoption contracts. Staff can create custom templates using rich text or a guided builder, supporting merge fields for auto-filling data. Signatures are captured via `signature_pad`, and Puppeteer generates legally verifiable PDF contracts with embedded signatures, stored securely with controlled access.
 
 **Technical Implementations:**
-The "Paw Pay" platform fee system uses Stripe Connect with a "SaaS + 0%" two-tier model:
-
-**Subscription Tiers:**
-- **Free Tier ($0/mo):** Permanent free tier with 5% platform fee, 500 emails/month. All core features included. No payment required.
-- **Professional Tier ($39/mo):** 0% platform fee, 10,000 emails/month, custom domain support. Optional.
-
-**Pro Trial System:**
-- New organizations start on Free tier with 'active' status (no payment required)
-- Optional 14-day Pro trial available at signup or anytime later via `/api/platform/start-pro-trial`
-- Each organization can only use the Pro trial once (tracked via `pro_trial_used` column)
-- When trial expires, organizations automatically revert to Free tier (handled by daily cron job at 3 AM UTC)
-- Trial expiration sends notification email with upgrade options
-
-It utilizes Stripe Standard Connect OAuth for tenant payment processing, allowing tenants to own their Stripe accounts. A "Donor Covers Fees" feature calculates gross-up amounts to cover both Stripe and platform processing fees. ACH bank transfer support is implemented for one-time donations with asynchronous payment handling (not adoption fees). Sensitive data is protected with AES-256-GCM encryption. Unified file storage prioritizes Google Drive (if connected) and falls back to Replit object storage. Email services use a hybrid Resend integration with optional Google Workspace Gmail API. Platform admin security includes subdomain resolution, RBAC, frontend guards, authenticated sessions, and TOTP MFA. Subscription management tracks tenant tiers and trial periods. Production security features rate limiting, Helmet security headers, CORS fail-closed, environment validation, and session hardening. Google Analytics 4 is integrated for tracking. Optional Google Workspace integration provides Gmail API, Calendar sync, and Drive storage, using CASA-optimized OAuth scopes and requiring `GOOGLE_PICKER_API_KEY` for Google Picker API integration.
+The "Paw Pay" platform fee system uses Stripe Connect with a "SaaS + 0%" two-tier model (Free and Professional tiers). A Pro trial system is in place, allowing organizations a 14-day trial before reverting to the Free tier. Stripe Standard Connect OAuth enables tenant-owned Stripe accounts, and a "Donor Covers Fees" feature calculates gross-up amounts. Sensitive data is protected with AES-256-GCM encryption. Unified file storage prioritizes Google Drive, falling back to Replit object storage. Email services use Resend, with optional Google Workspace Gmail API integration. Platform admin security features subdomain resolution, RBAC, frontend guards, authenticated sessions, and TOTP MFA. Production security includes rate limiting, Helmet security headers, CORS fail-closed, and session hardening. Google Analytics 4 is integrated. Optional Google Workspace integration provides Gmail API, Calendar sync, and Drive storage, optimized for CASA OAuth scopes.
 
 ## External Dependencies
-- **Stripe:** Payment gateway for donations, adoption fees, and subscriptions.
-- **Resend:** Email delivery service.
-- **Google APIs:** OAuth 2.0, Gmail API, Calendar API, Drive API.
+- **Stripe:** Payment processing for donations, adoption fees, subscriptions, and connected accounts.
+- **Resend:** Email delivery.
+- **Google APIs:** OAuth 2.0, Gmail API, Calendar API, Drive API, Google Picker API.
 - **PostgreSQL:** Primary database.
 - **Vite:** Frontend build tool.
 - **Wouter:** React router.

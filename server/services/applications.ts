@@ -103,11 +103,11 @@ export async function updateApplicationStage(
   // Stages that appear in the pending applications widget
   const pendingStages = ['new', 'screening', 'vet_check', 'home_visit'];
   // Stages that indicate the application is no longer pending
-  const completedStages = ['approved', 'denied', 'adopted'];
+  const completedStages = ['approved', 'trial', 'adopted', 'denied', 'trial_failed'];
   
-  // Get current stage to check if we need to auto-dismiss
+  // Get current stage and animalId to check if we need to auto-dismiss and sync animal status
   const [currentApp] = await db
-    .select({ stage: applications.stage })
+    .select({ stage: applications.stage, animalId: applications.animalId })
     .from(applications)
     .where(and(
       eq(applications.tenantId, tenantId),
@@ -121,6 +121,7 @@ export async function updateApplicationStage(
   }
   
   const oldStage = currentApp.stage;
+  const animalId = currentApp.animalId;
   
   const [application] = await db
     .update(applications)
@@ -178,6 +179,9 @@ export async function updateApplicationStage(
     }
   }
   
+  // Sync animal status based on the new application stage
+  await syncAnimalStatusFromApplicationStage(tenantId, animalId, stage, applicationId);
+  
   return application;
 }
 
@@ -202,4 +206,100 @@ export async function updateApplication(
     .returning();
   
   return application || null;
+}
+
+/**
+ * Sync animal status based on application stage changes
+ * This ensures the animal's status reflects the most advanced application stage
+ * 
+ * Rules:
+ * - home_visit or approved → adoption_pending
+ * - trial → in_trial
+ * - adopted → adopted
+ * - denied or trial_failed → check for other active applications, revert to available if none
+ */
+export async function syncAnimalStatusFromApplicationStage(
+  tenantId: string,
+  animalId: string,
+  newStage: Application['stage'],
+  applicationId: string
+): Promise<void> {
+  try {
+    // Define stage to animal status mapping
+    const stageToAnimalStatus: Record<string, string> = {
+      'home_visit': 'adoption_pending',
+      'approved': 'adoption_pending',
+      'trial': 'in_trial',
+      'adopted': 'adopted',
+    };
+
+    // Stages that indicate the application is no longer progressing
+    const terminalStages = ['denied', 'trial_failed'];
+    
+    // Stages that should trigger animal status update
+    const triggerStages = ['home_visit', 'approved', 'trial', 'adopted'];
+
+    if (triggerStages.includes(newStage)) {
+      // Update animal status based on application stage
+      const newAnimalStatus = stageToAnimalStatus[newStage];
+      if (newAnimalStatus) {
+        await db
+          .update(animals)
+          .set({ 
+            status: newAnimalStatus as any,
+            updatedAt: new Date()
+          })
+          .where(and(
+            eq(animals.id, animalId),
+            eq(animals.tenantId, tenantId)
+          ));
+        console.log(`Animal ${animalId} status updated to ${newAnimalStatus} due to application stage ${newStage}`);
+      }
+    } else if (terminalStages.includes(newStage)) {
+      // Application was denied or trial failed - check if there are other active applications
+      const otherActiveApplications = await db
+        .select({ id: applications.id, stage: applications.stage })
+        .from(applications)
+        .where(and(
+          eq(applications.tenantId, tenantId),
+          eq(applications.animalId, animalId)
+        ));
+      
+      // Filter to find other applications in home_visit, approved, or trial stages
+      const hasOtherActiveApps = otherActiveApplications.some(
+        app => app.id !== applicationId && 
+               ['home_visit', 'approved', 'trial'].includes(app.stage)
+      );
+
+      if (!hasOtherActiveApps) {
+        // No other active applications, revert animal to available
+        // But only if current status is adoption_pending or in_trial
+        const [currentAnimal] = await db
+          .select({ status: animals.status })
+          .from(animals)
+          .where(and(
+            eq(animals.id, animalId),
+            eq(animals.tenantId, tenantId)
+          ))
+          .limit(1);
+
+        if (currentAnimal && ['adoption_pending', 'in_trial'].includes(currentAnimal.status)) {
+          await db
+            .update(animals)
+            .set({ 
+              status: 'available',
+              updatedAt: new Date()
+            })
+            .where(and(
+              eq(animals.id, animalId),
+              eq(animals.tenantId, tenantId)
+            ));
+          console.log(`Animal ${animalId} status reverted to available after application ${newStage}`);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Failed to sync animal status from application stage:', error);
+    // Don't throw - this is a side effect that shouldn't fail the main operation
+  }
 }

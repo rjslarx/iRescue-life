@@ -28,6 +28,7 @@ interface AnimalCardProps {
   photos?: string[];
   bio?: string;
   basePath?: string;
+  status?: string;
   onAdopt?: () => void;
   onSponsor?: () => void;
 }
@@ -42,9 +43,13 @@ export default function AnimalCard({
   photos,
   bio,
   basePath = '',
+  status,
   onAdopt,
   onSponsor 
 }: AnimalCardProps) {
+  const isAdoptionPending = status === 'adoption_pending';
+  const isInTrial = status === 'in_trial';
+  const isUnavailable = isAdoptionPending || isInTrial;
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const [isActive, setIsActive] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -193,9 +198,17 @@ export default function AnimalCard({
             <h3 className="font-display text-2xl font-semibold" data-testid={`text-animal-name-${name.toLowerCase().replace(/\s/g, '-')}`}>
               {name}
             </h3>
-            <Badge variant="secondary" className="shrink-0">
-              {species}
-            </Badge>
+            <div className="flex gap-1 shrink-0">
+              <Badge variant="secondary">
+                {species}
+              </Badge>
+              {isAdoptionPending && (
+                <Badge className="bg-amber-500 text-white">Pending</Badge>
+              )}
+              {isInTrial && (
+                <Badge className="bg-blue-500 text-white">In Trial</Badge>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <span>{breed}</span>
@@ -225,13 +238,24 @@ export default function AnimalCard({
       </CardContent>
       <CardFooter className="flex flex-col gap-2 p-6 pt-0 mt-auto">
         <div className="flex gap-2 w-full">
-          <Button 
-            className="flex-1" 
-            onClick={onAdopt}
-            data-testid="button-adopt"
-          >
-            Adopt Me
-          </Button>
+          {isUnavailable ? (
+            <Button 
+              className="flex-1" 
+              variant="secondary"
+              disabled
+              data-testid="button-adopt-disabled"
+            >
+              {isInTrial ? 'In Trial' : 'Adoption Pending'}
+            </Button>
+          ) : (
+            <Button 
+              className="flex-1" 
+              onClick={onAdopt}
+              data-testid="button-adopt"
+            >
+              Adopt Me
+            </Button>
+          )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button 

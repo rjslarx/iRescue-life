@@ -472,7 +472,7 @@ export const animals = pgTable("animals", {
   needsFence: boolean("needs_fence"), // Animal requires a fenced yard for foster placement
   // Subscription limits: Only "active" statuses (available, pending, foster, medical_hold) count toward
   // subscription tier animal limits. "adopted", "deceased", and "merged" statuses do NOT count - enables unlimited historical records.
-  status: text("status").notNull().default("available").$type<"available" | "pending" | "adopted" | "foster" | "medical_hold" | "deceased" | "bite_hold" | "stray_hold" | "transfer_pending" | "merged">(),
+  status: text("status").notNull().default("available").$type<"available" | "pending" | "adopted" | "foster" | "medical_hold" | "deceased" | "bite_hold" | "stray_hold" | "transfer_pending" | "merged" | "adoption_pending" | "in_trial">(),
   // When status is "merged", this points to the primary animal profile that this one was merged into
   mergedWithId: uuid("merged_with_id").references(() => animals.id, { onDelete: 'set null' }),
   intakeDate: timestamp("intake_date").notNull().defaultNow(),
@@ -717,7 +717,7 @@ export const applications = pgTable("applications", {
   applicantName: text("applicant_name").notNull(),
   applicantEmail: text("applicant_email").notNull(),
   applicantPhone: text("applicant_phone").notNull(),
-  stage: text("stage").notNull().default("new").$type<"new" | "screening" | "vet_check" | "home_visit" | "approved" | "denied" | "adopted">(),
+  stage: text("stage").notNull().default("new").$type<"new" | "screening" | "vet_check" | "home_visit" | "approved" | "trial" | "adopted" | "denied" | "trial_failed">(),
   notes: text("notes"),
   customResponses: jsonb("custom_responses").$type<Record<string, any>>(), // Stores answers to custom form fields
   gclid: text("gclid"), // Google Click ID for Google Ads conversion tracking

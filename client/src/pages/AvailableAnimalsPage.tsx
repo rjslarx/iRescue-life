@@ -59,9 +59,13 @@ export default function AvailableAnimalsPage() {
     setDonationDialogOpen(true);
   };
 
-  // Filter animals - include both available and foster animals since foster animals are usually available for adoption
+  // Filter animals - include available, foster, adoption_pending, and in_trial animals
+  // Animals with pending/trial status are shown but with badges indicating they're spoken for
   const availableAnimals = animals.filter(animal => 
-    animal.status === "available" || animal.status === "foster"
+    animal.status === "available" || 
+    animal.status === "foster" ||
+    animal.status === "adoption_pending" ||
+    animal.status === "in_trial"
   );
   
   const filteredAnimals = availableAnimals.filter(animal => {
@@ -182,6 +186,7 @@ export default function AvailableAnimalsPage() {
                   photos={animal.photoUrls && animal.photoUrls.length > 0 ? animal.photoUrls : undefined}
                   bio={animal.bio ?? undefined}
                   basePath={basePath}
+                  status={animal.status}
                   onAdopt={() => handleAdopt(animal)}
                   onSponsor={() => handleSponsor(animal.name)}
                 />

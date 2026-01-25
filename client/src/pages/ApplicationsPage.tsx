@@ -154,7 +154,7 @@ export default function ApplicationsPage() {
 
   (data?.applications || []).forEach(app => {
     const createdAt = new Date(app.createdAt);
-    const isTerminalStatus = app.stage === 'denied' || app.stage === 'adopted';
+    const isTerminalStatus = app.stage === 'denied' || app.stage === 'adopted' || app.stage === 'trial_failed';
     const isOldEnough = createdAt < sevenDaysAgo;
     
     // Only archive if it's denied/adopted AND older than 7 days
@@ -250,8 +250,10 @@ export default function ApplicationsPage() {
       vet_check: { label: "Vet Check", variant: "secondary" },
       home_visit: { label: "Home Visit", variant: "secondary" },
       approved: { label: "Approved", variant: "default" },
+      trial: { label: "Trial", variant: "secondary" },
       denied: { label: "Denied", variant: "destructive" },
       adopted: { label: "Adopted", variant: "default" },
+      trial_failed: { label: "Trial Failed", variant: "destructive" },
     };
     return statusMap[stage] || { label: stage, variant: "outline" as const };
   };
