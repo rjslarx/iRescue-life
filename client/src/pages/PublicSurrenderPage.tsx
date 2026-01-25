@@ -3,6 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import PublicHeader from "@/components/PublicHeader";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export default function PublicSurrenderPage() {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const { tenantId } = useTenant();
 
   // Include tenantId in queryKey to prevent stale data flash when switching between tenant sites
@@ -129,15 +131,13 @@ export default function PublicSurrenderPage() {
     },
     onSuccess: (data) => {
       console.log('[Surrender Form] Submission successful:', data);
-      console.log('[Surrender Form] Calling toast with success message');
       toast({
         title: "Surrender Request Submitted!",
         description: "Thank you for reaching out. We'll review your request and contact you within 24-48 hours.",
         duration: 5000,
       });
-      console.log('[Surrender Form] Toast called, resetting form');
       form.reset();
-      console.log('[Surrender Form] Form reset complete');
+      setLocation('/');
     },
     onError: (error: any) => {
       console.error('[Surrender Form] Submission failed:', error);

@@ -250,6 +250,10 @@ export const tenants = pgTable("tenants", {
   restrictAdminSettingsEdit: boolean("restrict_admin_settings_edit").notNull().default(false), // When true, admins can view but not edit Settings
   restrictAdminIntegrationsEdit: boolean("restrict_admin_integrations_edit").notNull().default(false), // When true, admins can view but not edit Platform Integrations
   
+  // Form notification settings (email alerts when forms are submitted)
+  formNotificationsEnabled: boolean("form_notifications_enabled").notNull().default(false), // Whether to send email notifications
+  formNotificationEmail: text("form_notification_email"), // Comma-separated emails to notify
+  
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });

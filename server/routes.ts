@@ -2985,7 +2985,8 @@ Crawl-delay: 1
         applications, 
         volunteerApplications, 
         fosterApplications, 
-        animalSurrenders, 
+        animalSurrenders,
+        surrenderRequests: surrenderRequestsTable,
         customFormSubmissions,
         customForms,
         animals 
@@ -2997,7 +2998,8 @@ Crawl-delay: 1
         adoptionApps,
         volunteerApps,
         fosterApps,
-        surrenderRequests,
+        legacySurrenderRequests,
+        phase1SurrenderRequests,
         formSubmissions
       ] = await Promise.all([
         // Adoption applications - pending stages (new, screening, vet_check, home_visit)
@@ -3087,7 +3089,7 @@ Crawl-delay: 1
           .orderBy(desc(fosterApplications.createdAt))
           .limit(50),
         
-        // Surrender requests - pending status
+        // Legacy surrender requests - pending status (old animalSurrenders table)
         db.select({
           id: animalSurrenders.id,
           applicantName: animalSurrenders.submitterName,
@@ -3117,6 +3119,40 @@ Crawl-delay: 1
             )
           )
           .orderBy(desc(animalSurrenders.createdAt))
+          .limit(50),
+        
+        // Phase 1 surrender requests - new surrenderRequests table (statuses: new, review, spacecheck, waitlist, scheduled)
+        db.select({
+          id: surrenderRequestsTable.id,
+          applicantName: surrenderRequestsTable.ownerName,
+          applicantEmail: surrenderRequestsTable.ownerEmail,
+          applicantPhone: surrenderRequestsTable.ownerPhone,
+          status: surrenderRequestsTable.status,
+          createdAt: surrenderRequestsTable.createdAt,
+          dogName: surrenderRequestsTable.dogName,
+          dogBreed: surrenderRequestsTable.dogBreed,
+          dogAge: surrenderRequestsTable.dogAge,
+          dogGender: surrenderRequestsTable.dogGender,
+          reasonForSurrender: surrenderRequestsTable.reasonForSurrender,
+          medicalIssues: surrenderRequestsTable.medicalIssues,
+          behavioralIssues: surrenderRequestsTable.behavioralIssues,
+          photoUrl: surrenderRequestsTable.photoUrl,
+          customResponses: surrenderRequestsTable.customResponses,
+        })
+          .from(surrenderRequestsTable)
+          .where(
+            and(
+              eq(surrenderRequestsTable.tenantId, req.tenant!.id),
+              or(
+                eq(surrenderRequestsTable.status, 'new'),
+                eq(surrenderRequestsTable.status, 'review'),
+                eq(surrenderRequestsTable.status, 'spacecheck'),
+                eq(surrenderRequestsTable.status, 'waitlist'),
+                eq(surrenderRequestsTable.status, 'scheduled')
+              )
+            )
+          )
+          .orderBy(desc(surrenderRequestsTable.createdAt))
           .limit(50),
         
         // Custom form submissions - pending status
@@ -3240,7 +3276,7 @@ Crawl-delay: 1
           },
           formName: undefined,
         })),
-        ...surrenderRequests.map(app => ({
+        ...legacySurrenderRequests.map(app => ({
           id: app.id,
           type: 'surrender' as const,
           applicantName: app.applicantName,
@@ -3262,6 +3298,29 @@ Crawl-delay: 1
             reasonForSurrender: app.reasonForSurrender,
             isEmergency: app.isEmergency,
             notes: app.notes,
+            ...(app.customResponses || {}),
+          },
+          formName: undefined,
+        })),
+        ...phase1SurrenderRequests.map(app => ({
+          id: app.id,
+          type: 'surrender' as const,
+          applicantName: app.applicantName,
+          applicantEmail: app.applicantEmail,
+          applicantPhone: app.applicantPhone,
+          status: app.status,
+          createdAt: app.createdAt?.toISOString() || new Date().toISOString(),
+          animalName: app.dogName,
+          animalId: undefined,
+          formData: {
+            dogName: app.dogName,
+            dogBreed: app.dogBreed,
+            dogAge: app.dogAge,
+            dogGender: app.dogGender,
+            reasonForSurrender: app.reasonForSurrender,
+            medicalIssues: app.medicalIssues,
+            behavioralIssues: app.behavioralIssues,
+            photoUrl: app.photoUrl,
             ...(app.customResponses || {}),
           },
           formName: undefined,
@@ -3290,7 +3349,7 @@ Crawl-delay: 1
         adoption: adoptionApps.length,
         foster: fosterApps.length,
         volunteer: volunteerApps.length,
-        surrender: surrenderRequests.length,
+        surrender: legacySurrenderRequests.length + phase1SurrenderRequests.length,
         custom: formSubmissions.length,
         total: allApplications.length,
       };
@@ -10601,9 +10660,8 @@ Submitted: ${new Date().toLocaleString()}
       }
 
       // Create inbound email record for inbox
-      try {
-        const emailSubject = `Surrender Request from ${data.ownerName}`;
-        const emailBody = `
+      const emailSubject = `Surrender Request from ${data.ownerName}`;
+      const emailBody = `
 Surrender Request - ${data.dogName}
 
 Owner Information:
@@ -10631,8 +10689,9 @@ ${data.photoUrl ? `Photo: ${data.photoUrl}` : ''}
 
 Surrender Request ID: ${surrender.id}
 Submitted: ${new Date().toLocaleString()}
-        `.trim();
+      `.trim();
 
+      try {
         await db.insert(inboundEmails).values({
           tenantId: req.tenant!.id,
           messageId: `surrender-request-${surrender.id}`,
@@ -10646,6 +10705,60 @@ Submitted: ${new Date().toLocaleString()}
         });
       } catch (emailError) {
         console.error('Failed to create inbound email for surrender request:', emailError);
+      }
+
+      // Send form notification email if enabled
+      if (req.tenant!.formNotificationsEnabled && req.tenant!.formNotificationEmail) {
+        try {
+          const { sendTenantEmail } = await import('./lib/email-service');
+          const recipientEmails = req.tenant!.formNotificationEmail
+            .split(',')
+            .map((e: string) => e.trim())
+            .filter((e: string) => e.length > 0);
+          
+          if (recipientEmails.length > 0) {
+            const notificationHtml = `
+              <h2>New Surrender Request Received</h2>
+              <p>A new surrender request has been submitted for your organization.</p>
+              
+              <h3>Owner Information</h3>
+              <ul>
+                <li><strong>Name:</strong> ${data.ownerName}</li>
+                <li><strong>Email:</strong> ${data.ownerEmail}</li>
+                <li><strong>Phone:</strong> ${data.ownerPhone}</li>
+                <li><strong>SMS Consent:</strong> ${data.smsConsent ? 'Yes' : 'No'}</li>
+              </ul>
+              
+              <h3>Dog Information</h3>
+              <ul>
+                <li><strong>Name:</strong> ${data.dogName}</li>
+                <li><strong>Breed:</strong> ${data.dogBreed}</li>
+                <li><strong>Age:</strong> ${data.dogAge}</li>
+                <li><strong>Gender:</strong> ${data.dogGender}</li>
+              </ul>
+              
+              <h3>Reason for Surrender</h3>
+              <p>${data.reasonForSurrender}</p>
+              
+              ${data.medicalIssues ? `<h3>Medical Issues</h3><p>${data.medicalIssues}</p>` : ''}
+              ${data.behavioralIssues ? `<h3>Behavioral Issues</h3><p>${data.behavioralIssues}</p>` : ''}
+              
+              <p><em>View and manage this request in your Intake Manager dashboard.</em></p>
+            `;
+            
+            for (const email of recipientEmails) {
+              await sendTenantEmail(
+                req.tenant!.id,
+                email,
+                `New Surrender Request: ${data.dogName} - ${data.ownerName}`,
+                notificationHtml
+              );
+            }
+            console.log(`[SURRENDER] Notification emails sent to: ${recipientEmails.join(', ')}`);
+          }
+        } catch (notificationError) {
+          console.error('Failed to send surrender notification email:', notificationError);
+        }
       }
 
       res.status(201).json({ success: true, surrender });
