@@ -155,8 +155,8 @@ export default function PublicVolunteerPage() {
         description: "Thank you for applying to volunteer. We'll review your application and contact you soon.",
       });
       form.reset();
-      // Redirect to home page after successful submission
-      setTimeout(() => setLocation('/'), 2000);
+      // Redirect to success page after submission
+      setTimeout(() => setLocation('/form-success/volunteer'), 2000);
     },
     onError: (error: any) => {
       toast({

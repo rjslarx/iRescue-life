@@ -78,6 +78,7 @@ import VolunteerApplicationManagementPage from "@/pages/VolunteerApplicationMana
 import VolunteerApplicationsPipelinePage from "@/pages/VolunteerApplicationsPipelinePage";
 import PublicFosterPage from "@/pages/PublicFosterPage";
 import PublicSurrenderPage from "@/pages/PublicSurrenderPage";
+import FormSuccessPage from "@/pages/FormSuccessPage";
 import PublicAdoptionCheckoutPage from "@/pages/PublicAdoptionCheckoutPage";
 import PublicFormSigningPage from "@/pages/PublicFormSigningPage";
 import FormPaymentPage from "@/pages/FormPaymentPage";
@@ -190,6 +191,7 @@ function RouterSwitch() {
       <Route path="/volunteer" component={PublicVolunteerPage} />
       <Route path="/become-a-foster" component={PublicFosterPage} />
       <Route path="/surrender" component={PublicSurrenderPage} />
+      <Route path="/form-success/:formType" component={FormSuccessPage} />
       <Route path="/contact" component={PublicContactPage} />
       <Route path="/donate" component={DonatePage} />
       <Route path="/give" component={GivePage} />

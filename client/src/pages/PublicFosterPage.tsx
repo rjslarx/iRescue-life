@@ -127,8 +127,8 @@ export default function PublicFosterPage() {
         description: "Thank you for your interest in fostering. We'll review your application and get back to you soon.",
       });
       form.reset();
-      // Redirect to home page after successful submission
-      setTimeout(() => setLocation('/'), 2000);
+      // Redirect to success page after submission
+      setTimeout(() => setLocation('/form-success/foster'), 2000);
     },
     onError: (error: any) => {
       toast({
