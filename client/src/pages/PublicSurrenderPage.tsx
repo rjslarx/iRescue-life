@@ -15,7 +15,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { Heart, AlertCircle, Info, Upload, X, Loader2 } from "lucide-react";
+import { Heart, AlertCircle, Info, Upload, X, Loader2, Calendar as CalendarIcon } from "lucide-react";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { format } from "date-fns";
 import { apiRequest } from "@/lib/queryClient";
 import { buildTenantUrl, getTenantHeaders } from "@/lib/tenantApi";
 import { useSEO } from "@/hooks/useSEO";
@@ -59,11 +62,20 @@ export default function PublicSurrenderPage() {
       dogName: "",
       dogBreed: "",
       dogAge: "",
+      dogDateOfBirth: undefined,
       dogGender: "unknown",
+      dogWeight: "",
+      spayedNeutered: undefined,
+      microchipped: undefined,
+      microchipNumber: "",
+      goodWithKids: undefined,
+      goodWithDogs: undefined,
+      goodWithCats: undefined,
       reasonForSurrender: "",
       medicalIssues: "",
       behavioralIssues: "",
       photoUrl: "",
+      preferredSurrenderDate: undefined,
       smsConsent: false,
       customResponses: {},
     },
@@ -282,10 +294,45 @@ export default function PublicSurrenderPage() {
 
                           <FormField
                             control={form.control}
+                            name="dogDateOfBirth"
+                            render={({ field }) => (
+                              <FormItem className="flex flex-col">
+                                <FormLabel>Date of Birth</FormLabel>
+                                <Popover>
+                                  <PopoverTrigger asChild>
+                                    <FormControl>
+                                      <Button
+                                        variant="outline"
+                                        className={`w-full pl-3 text-left font-normal ${!field.value && "text-muted-foreground"}`}
+                                        data-testid="input-dog-dob"
+                                      >
+                                        {field.value ? format(new Date(field.value), "PPP") : "Select date"}
+                                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                      </Button>
+                                    </FormControl>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-auto p-0" align="start">
+                                    <Calendar
+                                      mode="single"
+                                      selected={field.value ? new Date(field.value) : undefined}
+                                      onSelect={(date) => field.onChange(date ? format(date, "yyyy-MM-dd") : undefined)}
+                                      disabled={(date) => date > new Date()}
+                                      initialFocus
+                                    />
+                                  </PopoverContent>
+                                </Popover>
+                                <FormDescription>If unknown, enter approximate age below</FormDescription>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          <FormField
+                            control={form.control}
                             name="dogAge"
                             render={({ field }) => (
                               <FormItem>
-                                <FormLabel>Age *</FormLabel>
+                                <FormLabel>Age (if DOB unknown) *</FormLabel>
                                 <FormControl>
                                   <Input placeholder="2 years, 6 months, etc." {...field} data-testid="input-dog-age" />
                                 </FormControl>
@@ -316,12 +363,207 @@ export default function PublicSurrenderPage() {
                               </FormItem>
                             )}
                           />
+
+                          <FormField
+                            control={form.control}
+                            name="dogWeight"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Weight</FormLabel>
+                                <FormControl>
+                                  <Input placeholder="e.g., 45 lbs" {...field} value={field.value || ''} data-testid="input-dog-weight" />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+
+                        <div className="grid md:grid-cols-2 gap-6 mt-4">
+                          <FormField
+                            control={form.control}
+                            name="spayedNeutered"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Spayed/Neutered?</FormLabel>
+                                <Select 
+                                  onValueChange={(v) => field.onChange(v === "yes" ? true : v === "no" ? false : undefined)} 
+                                  value={field.value === true ? "yes" : field.value === false ? "no" : ""}
+                                >
+                                  <FormControl>
+                                    <SelectTrigger data-testid="select-spayed-neutered">
+                                      <SelectValue placeholder="Select" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    <SelectItem value="yes">Yes</SelectItem>
+                                    <SelectItem value="no">No</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          <FormField
+                            control={form.control}
+                            name="microchipped"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Microchipped?</FormLabel>
+                                <Select 
+                                  onValueChange={(v) => field.onChange(v === "yes" ? true : v === "no" ? false : undefined)} 
+                                  value={field.value === true ? "yes" : field.value === false ? "no" : ""}
+                                >
+                                  <FormControl>
+                                    <SelectTrigger data-testid="select-microchipped">
+                                      <SelectValue placeholder="Select" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    <SelectItem value="yes">Yes</SelectItem>
+                                    <SelectItem value="no">No</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          {form.watch("microchipped") === true && (
+                            <FormField
+                              control={form.control}
+                              name="microchipNumber"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Microchip Number</FormLabel>
+                                  <FormControl>
+                                    <Input placeholder="Enter microchip number" {...field} value={field.value || ''} data-testid="input-microchip-number" />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          )}
+                        </div>
+
+                        <div className="mt-4">
+                          <h4 className="text-sm font-medium mb-3">Compatibility</h4>
+                          <div className="grid md:grid-cols-3 gap-6">
+                            <FormField
+                              control={form.control}
+                              name="goodWithKids"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Good with Kids?</FormLabel>
+                                  <Select onValueChange={field.onChange} value={field.value || ""}>
+                                    <FormControl>
+                                      <SelectTrigger data-testid="select-good-with-kids">
+                                        <SelectValue placeholder="Select" />
+                                      </SelectTrigger>
+                                    </FormControl>
+                                    <SelectContent>
+                                      <SelectItem value="yes">Yes</SelectItem>
+                                      <SelectItem value="no">No</SelectItem>
+                                      <SelectItem value="unknown">Unknown</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+
+                            <FormField
+                              control={form.control}
+                              name="goodWithDogs"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Good with Dogs?</FormLabel>
+                                  <Select onValueChange={field.onChange} value={field.value || ""}>
+                                    <FormControl>
+                                      <SelectTrigger data-testid="select-good-with-dogs">
+                                        <SelectValue placeholder="Select" />
+                                      </SelectTrigger>
+                                    </FormControl>
+                                    <SelectContent>
+                                      <SelectItem value="yes">Yes</SelectItem>
+                                      <SelectItem value="no">No</SelectItem>
+                                      <SelectItem value="unknown">Unknown</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+
+                            <FormField
+                              control={form.control}
+                              name="goodWithCats"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Good with Cats?</FormLabel>
+                                  <Select onValueChange={field.onChange} value={field.value || ""}>
+                                    <FormControl>
+                                      <SelectTrigger data-testid="select-good-with-cats">
+                                        <SelectValue placeholder="Select" />
+                                      </SelectTrigger>
+                                    </FormControl>
+                                    <SelectContent>
+                                      <SelectItem value="yes">Yes</SelectItem>
+                                      <SelectItem value="no">No</SelectItem>
+                                      <SelectItem value="unknown">Unknown</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          </div>
                         </div>
                       </div>
 
                       <div className="border-t pt-6 space-y-4">
                         <h3 className="text-lg font-semibold">Additional Details</h3>
                         
+                        <FormField
+                          control={form.control}
+                          name="preferredSurrenderDate"
+                          render={({ field }) => (
+                            <FormItem className="flex flex-col">
+                              <FormLabel>Preferred Surrender Date</FormLabel>
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <FormControl>
+                                    <Button
+                                      variant="outline"
+                                      className={`w-full md:w-[280px] pl-3 text-left font-normal ${!field.value && "text-muted-foreground"}`}
+                                      data-testid="input-preferred-surrender-date"
+                                    >
+                                      {field.value ? format(new Date(field.value), "PPP") : "Select date"}
+                                      <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                    </Button>
+                                  </FormControl>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0" align="start">
+                                  <Calendar
+                                    mode="single"
+                                    selected={field.value ? new Date(field.value) : undefined}
+                                    onSelect={(date) => field.onChange(date ? format(date, "yyyy-MM-dd") : undefined)}
+                                    disabled={(date) => {
+                                      const today = new Date();
+                                      today.setHours(0, 0, 0, 0);
+                                      return date < today;
+                                    }}
+                                    initialFocus
+                                  />
+                                </PopoverContent>
+                              </Popover>
+                              <FormDescription>When would you like to bring the dog to us?</FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
                         <FormField
                           control={form.control}
                           name="reasonForSurrender"

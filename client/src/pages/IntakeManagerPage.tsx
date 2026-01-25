@@ -430,7 +430,63 @@ function SurrenderDetailsDialog({ request, open, onOpenChange }: SurrenderDetail
               <h4 className="text-sm font-medium text-muted-foreground mb-1">Gender</h4>
               <p className="text-sm capitalize">{request.dogGender}</p>
             </div>
+            {request.dogDateOfBirth && (
+              <div>
+                <h4 className="text-sm font-medium text-muted-foreground mb-1">Date of Birth</h4>
+                <p className="text-sm">{new Date(request.dogDateOfBirth).toLocaleDateString()}</p>
+              </div>
+            )}
+            {request.dogWeight && (
+              <div>
+                <h4 className="text-sm font-medium text-muted-foreground mb-1">Weight</h4>
+                <p className="text-sm">{request.dogWeight}</p>
+              </div>
+            )}
+            <div>
+              <h4 className="text-sm font-medium text-muted-foreground mb-1">Spayed/Neutered</h4>
+              <p className="text-sm">{request.spayedNeutered === true ? 'Yes' : request.spayedNeutered === false ? 'No' : 'Unknown'}</p>
+            </div>
+            <div>
+              <h4 className="text-sm font-medium text-muted-foreground mb-1">Microchipped</h4>
+              <p className="text-sm">
+                {request.microchipped === true ? 'Yes' : request.microchipped === false ? 'No' : 'Unknown'}
+                {request.microchipNumber && ` (${request.microchipNumber})`}
+              </p>
+            </div>
           </div>
+
+          {(request.goodWithKids || request.goodWithDogs || request.goodWithCats) && (
+            <div className="border-t pt-4">
+              <h3 className="font-medium mb-3">Compatibility</h3>
+              <div className="flex flex-wrap gap-2">
+                {request.goodWithKids && (
+                  <Badge variant={request.goodWithKids === 'yes' ? 'default' : request.goodWithKids === 'no' ? 'destructive' : 'secondary'}>
+                    Kids: {request.goodWithKids}
+                  </Badge>
+                )}
+                {request.goodWithDogs && (
+                  <Badge variant={request.goodWithDogs === 'yes' ? 'default' : request.goodWithDogs === 'no' ? 'destructive' : 'secondary'}>
+                    Dogs: {request.goodWithDogs}
+                  </Badge>
+                )}
+                {request.goodWithCats && (
+                  <Badge variant={request.goodWithCats === 'yes' ? 'default' : request.goodWithCats === 'no' ? 'destructive' : 'secondary'}>
+                    Cats: {request.goodWithCats}
+                  </Badge>
+                )}
+              </div>
+            </div>
+          )}
+
+          {request.preferredSurrenderDate && (
+            <div className="border-t pt-4">
+              <h3 className="font-medium mb-3 flex items-center gap-2">
+                <Calendar className="h-4 w-4" />
+                Preferred Surrender Date
+              </h3>
+              <p className="text-sm">{new Date(request.preferredSurrenderDate).toLocaleDateString()}</p>
+            </div>
+          )}
 
           <div className="border-t pt-4">
             <h3 className="font-medium mb-3 flex items-center gap-2">

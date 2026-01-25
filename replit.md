@@ -37,10 +37,12 @@ A centralized dashboard for managing all medical operations across the organizat
 A dedicated intake pipeline for dog surrender requests with the following:
 - **surrender_requests table:** Separate from legacy animalSurrenders, tracks dog-specific surrender requests with status workflow
 - **Status Flow:** new → review → spacecheck → waitlist → scheduled → intaken
-- **Fields:** ownerName, ownerEmail, ownerPhone, dogName, dogBreed, dogAge, dogGender, reasonForSurrender, medicalIssues (optional), behavioralIssues (optional), photoUrl (optional), smsConsent
+- **Core Fields:** ownerName, ownerEmail, ownerPhone, dogName, dogBreed, dogAge, dogGender, reasonForSurrender, medicalIssues (optional), behavioralIssues (optional), photoUrl (optional), smsConsent
+- **Enhanced Fields (Jan 2026):** dogDateOfBirth (date), dogWeight (text), spayedNeutered (boolean), microchipped (boolean), microchipNumber (text), goodWithKids/Dogs/Cats (yes/no/unknown enums), preferredSurrenderDate (date)
 - **TCPA-Compliant SMS Consent:** Checkbox with explicit opt-in language for text message updates
 - **API:** POST /api/surrender (public), with automatic contact creation and inbound email logging
-- **Public Form:** /demo/surrender with dog-specific intake fields
+- **Public Form:** /{tenant}/surrender with dog-specific intake fields including DOB picker, weight, spay/neuter status, microchip info, compatibility assessment, and preferred intake date
+- **Intake Manager:** /dashboard/intake with Kanban pipeline view, displays all enhanced fields in surrender details dialog with color-coded compatibility badges
 
 **Volunteer Calendar Staffing Color-Coding:**
 Volunteer-type calendars display visual staffing indicators based on volunteer availability:

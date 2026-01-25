@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, integer, boolean, jsonb, unique, numeric, serial, decimal } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, integer, boolean, jsonb, unique, numeric, serial, decimal, date } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -1027,11 +1027,20 @@ export const surrenderRequests = pgTable("surrender_requests", {
   dogName: text("dog_name").notNull(),
   dogBreed: text("dog_breed").notNull(),
   dogAge: text("dog_age").notNull(),
+  dogDateOfBirth: date("dog_date_of_birth"),
   dogGender: text("dog_gender").notNull().$type<"male" | "female" | "unknown">(),
+  dogWeight: text("dog_weight"),
+  spayedNeutered: boolean("spayed_neutered"),
+  microchipped: boolean("microchipped"),
+  microchipNumber: text("microchip_number"),
+  goodWithKids: text("good_with_kids").$type<"yes" | "no" | "unknown">(),
+  goodWithDogs: text("good_with_dogs").$type<"yes" | "no" | "unknown">(),
+  goodWithCats: text("good_with_cats").$type<"yes" | "no" | "unknown">(),
   reasonForSurrender: text("reason_for_surrender").notNull(),
   medicalIssues: text("medical_issues"),
   behavioralIssues: text("behavioral_issues"),
   photoUrl: text("photo_url"),
+  preferredSurrenderDate: date("preferred_surrender_date"),
   smsConsent: boolean("sms_consent").notNull().default(false),
   notes: text("notes"),
   assignedUserId: uuid("assigned_user_id").references(() => users.id),
