@@ -7,7 +7,7 @@ import { loginUser, createTenantWithAdmin, createUser } from "./services/auth";
 import { PushNotificationService } from "./services/push-notifications";
 import { db } from "./db";
 import { tenants, users, demoRequests, insertDemoRequestSchema, smsMessageLogs, emailEvents, animals, platformIntegrations, newsletterCampaigns, newsletterSubscribers, happyTails, animalMergeHistory, activityLogs, medicalExams, medicalPrescriptions, medicalBills, medicalFiles, animalNotes, applications, adoptionCheckoutSessions, adoptions } from "@shared/schema";
-import { eq, and, desc, sql, inArray, lt, gte, not } from "drizzle-orm";
+import { eq, and, desc, sql, inArray, lt, gte, not, notInArray, or } from "drizzle-orm";
 import { z } from "zod";
 import { authLimiter, signupLimiter, passwordResetLimiter, emailLimiter } from "./config/security";
 import QRCode from "qrcode";
@@ -19925,6 +19925,243 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
       }
 
       res.json({ dose });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/medical/intake-animals
+   * Get animals needing intake vetting (needs_vetting status or recent intakes without exams)
+   */
+  app.get('/api/medical/intake-animals', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { animals, medicalExams, vaccineRecords } = await import('@shared/schema');
+      
+      // Get animals that are needs_vetting or were recently intaken (last 30 days) and still need vetting
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+      const intakeAnimals = await db
+        .select({
+          id: animals.id,
+          animalId: animals.animalId,
+          name: animals.name,
+          species: animals.species,
+          breed: animals.breed,
+          age: animals.age,
+          sex: animals.sex,
+          neuterStatus: animals.neuterStatus,
+          photoUrls: animals.photoUrls,
+          intakeDate: animals.intakeDate,
+          intakeSource: animals.intakeSource,
+          medicalStatus: animals.medicalStatus,
+          medicalAlertMemo: animals.medicalAlertMemo,
+        })
+        .from(animals)
+        .where(and(
+          eq(animals.tenantId, req.tenant!.id),
+          or(
+            eq(animals.medicalStatus, 'needs_vetting'),
+            and(
+              gte(animals.intakeDate, thirtyDaysAgo),
+              notInArray(animals.status, ['adopted', 'deceased', 'merged'])
+            )
+          )
+        ))
+        .orderBy(desc(animals.intakeDate));
+
+      // Get medical exam and vaccine counts for these animals
+      const animalIds = intakeAnimals.map(a => a.id);
+      
+      let examCounts: { animalId: string; count: number }[] = [];
+      let vaccineCounts: { animalId: string; count: number }[] = [];
+      
+      if (animalIds.length > 0) {
+        const examCountsRaw = await db
+          .select({
+            animalId: medicalExams.animalId,
+            count: sql<number>`count(*)::int`,
+          })
+          .from(medicalExams)
+          .where(and(
+            eq(medicalExams.tenantId, req.tenant!.id),
+            inArray(medicalExams.animalId, animalIds)
+          ))
+          .groupBy(medicalExams.animalId);
+        examCounts = examCountsRaw as { animalId: string; count: number }[];
+
+        const vaccineCountsRaw = await db
+          .select({
+            animalId: vaccineRecords.animalId,
+            count: sql<number>`count(*)::int`,
+          })
+          .from(vaccineRecords)
+          .where(and(
+            eq(vaccineRecords.tenantId, req.tenant!.id),
+            inArray(vaccineRecords.animalId, animalIds)
+          ))
+          .groupBy(vaccineRecords.animalId);
+        vaccineCounts = vaccineCountsRaw as { animalId: string; count: number }[];
+      }
+
+      // Build checklist status for each animal
+      const animalsWithChecklist = intakeAnimals.map(animal => {
+        const examCount = examCounts.find(e => e.animalId === animal.id)?.count || 0;
+        const vaccineCount = vaccineCounts.find(v => v.animalId === animal.id)?.count || 0;
+        
+        return {
+          ...animal,
+          checklist: {
+            intakeExam: examCount > 0,
+            vaccines: vaccineCount > 0,
+            microchip: false, // Will check later if needed
+            fecalTest: false, // Will check later if needed
+            heartwormTest: animal.species?.toLowerCase() === 'dog' ? false : null, // Dogs only
+          },
+        };
+      });
+
+      res.json({ animals: animalsWithChecklist });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/medical/surgery-queue
+   * Get animals awaiting spay/neuter surgery
+   */
+  app.get('/api/medical/surgery-queue', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { animals } = await import('@shared/schema');
+      
+      // Get intact animals that are not adopted/deceased
+      const queueAnimals = await db
+        .select({
+          id: animals.id,
+          animalId: animals.animalId,
+          name: animals.name,
+          species: animals.species,
+          breed: animals.breed,
+          age: animals.age,
+          sex: animals.sex,
+          weight: animals.weight,
+          neuterStatus: animals.neuterStatus,
+          photoUrls: animals.photoUrls,
+          medicalStatus: animals.medicalStatus,
+          scheduledSurgeryDate: animals.scheduledSurgeryDate,
+          medicalAlertMemo: animals.medicalAlertMemo,
+          intakeDate: animals.intakeDate,
+        })
+        .from(animals)
+        .where(and(
+          eq(animals.tenantId, req.tenant!.id),
+          or(
+            eq(animals.neuterStatus, 'intact'),
+            eq(animals.medicalStatus, 'surgery_pending')
+          ),
+          notInArray(animals.status, ['adopted', 'deceased', 'merged'])
+        ))
+        .orderBy(animals.scheduledSurgeryDate, animals.intakeDate);
+
+      // Group by status
+      const scheduled = queueAnimals.filter(a => a.scheduledSurgeryDate);
+      const unscheduled = queueAnimals.filter(a => !a.scheduledSurgeryDate);
+
+      res.json({ 
+        scheduled,
+        unscheduled,
+        total: queueAnimals.length,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * PATCH /api/medical/surgery-schedule/:animalId
+   * Update surgery schedule for an animal
+   */
+  app.patch('/api/medical/surgery-schedule/:animalId', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { animals } = await import('@shared/schema');
+      
+      const updateSchema = z.object({
+        scheduledSurgeryDate: z.string().nullable(),
+        medicalStatus: z.enum(['healthy', 'needs_vetting', 'surgery_pending', 'recovering', 'palliative']).optional(),
+      });
+
+      const { scheduledSurgeryDate, medicalStatus } = updateSchema.parse(req.body);
+
+      const updateData: Record<string, unknown> = {
+        updatedAt: new Date(),
+      };
+
+      if (scheduledSurgeryDate !== undefined) {
+        updateData.scheduledSurgeryDate = scheduledSurgeryDate ? new Date(scheduledSurgeryDate) : null;
+      }
+      if (medicalStatus !== undefined) {
+        updateData.medicalStatus = medicalStatus;
+      }
+
+      const [animal] = await db
+        .update(animals)
+        .set(updateData)
+        .where(and(
+          eq(animals.id, req.params.animalId),
+          eq(animals.tenantId, req.tenant!.id)
+        ))
+        .returning();
+
+      if (!animal) {
+        return res.status(404).json({ error: 'Animal not found' });
+      }
+
+      res.json({ animal });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * PATCH /api/medical/update-status/:animalId
+   * Update medical status for an animal
+   */
+  app.patch('/api/medical/update-status/:animalId', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { animals } = await import('@shared/schema');
+      
+      const updateSchema = z.object({
+        medicalStatus: z.enum(['healthy', 'needs_vetting', 'surgery_pending', 'recovering', 'palliative']),
+        neuterStatus: z.enum(['intact', 'neutered', 'spayed', 'unknown']).optional(),
+      });
+
+      const { medicalStatus, neuterStatus } = updateSchema.parse(req.body);
+
+      const updateData: Record<string, unknown> = {
+        medicalStatus,
+        updatedAt: new Date(),
+      };
+
+      if (neuterStatus !== undefined) {
+        updateData.neuterStatus = neuterStatus;
+      }
+
+      const [animal] = await db
+        .update(animals)
+        .set(updateData)
+        .where(and(
+          eq(animals.id, req.params.animalId),
+          eq(animals.tenantId, req.tenant!.id)
+        ))
+        .returning();
+
+      if (!animal) {
+        return res.status(404).json({ error: 'Animal not found' });
+      }
+
+      res.json({ animal });
     } catch (error) {
       next(error);
     }
