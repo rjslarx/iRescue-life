@@ -3,6 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import PublicHeader from "@/components/PublicHeader";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,7 @@ import { insertFosterApplicationSchema, type InsertFosterApplication, type Tenan
 
 export default function PublicFosterPage() {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const { tenantId } = useTenant();
 
   // Include tenantId in queryKey to prevent stale data flash when switching between tenant sites
@@ -125,6 +127,8 @@ export default function PublicFosterPage() {
         description: "Thank you for your interest in fostering. We'll review your application and get back to you soon.",
       });
       form.reset();
+      // Redirect to home page after successful submission
+      setTimeout(() => setLocation('/'), 2000);
     },
     onError: (error: any) => {
       toast({

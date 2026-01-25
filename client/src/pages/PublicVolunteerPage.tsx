@@ -2,7 +2,7 @@ import { useState, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import PublicHeader from "@/components/PublicHeader";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,7 @@ import { FormDescription } from "@/components/ui/form";
 
 export default function PublicVolunteerPage() {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const { tenantId } = useTenant();
   const [signupDialog, setSignupDialog] = useState<{opportunityId: string, title: string} | null>(null);
   
@@ -154,6 +155,8 @@ export default function PublicVolunteerPage() {
         description: "Thank you for applying to volunteer. We'll review your application and contact you soon.",
       });
       form.reset();
+      // Redirect to home page after successful submission
+      setTimeout(() => setLocation('/'), 2000);
     },
     onError: (error: any) => {
       toast({

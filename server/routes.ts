@@ -6215,6 +6215,40 @@ Crawl-delay: 1
         }
       }
       
+      // Get animal name for notification
+      let animalName: string | undefined;
+      if (data.animalId) {
+        try {
+          const { animals } = await import('@shared/schema');
+          const [animal] = await db
+            .select({ name: animals.name })
+            .from(animals)
+            .where(eq(animals.id, data.animalId))
+            .limit(1);
+          if (animal) {
+            animalName = animal.name;
+          }
+        } catch (err) {
+          console.error('Failed to fetch animal name for notification:', err);
+        }
+      }
+
+      // Send email notification to staff if enabled
+      try {
+        const { sendFormSubmissionNotification } = await import('./services/form-notifications');
+        await sendFormSubmissionNotification({
+          formType: 'adoption',
+          tenantId: req.tenant!.id,
+          applicantName: data.applicantName,
+          applicantEmail: data.applicantEmail,
+          applicantPhone: data.applicantPhone,
+          applicationId: application.id,
+          animalName,
+        });
+      } catch (error) {
+        console.error('Failed to send form notification email:', error);
+      }
+      
       res.json({ success: true, application });
     } catch (error) {
       next(error);
@@ -10202,6 +10236,21 @@ Submitted: ${new Date().toLocaleString()}
         console.error('Failed to create inbound email record:', error);
       }
 
+      // Send email notification to staff if enabled
+      try {
+        const { sendFormSubmissionNotification } = await import('./services/form-notifications');
+        await sendFormSubmissionNotification({
+          formType: 'foster',
+          tenantId: req.tenant!.id,
+          applicantName: data.applicantName,
+          applicantEmail: data.applicantEmail,
+          applicantPhone: data.applicantPhone,
+          applicationId: application.id,
+        });
+      } catch (error) {
+        console.error('Failed to send form notification email:', error);
+      }
+
       res.json({ 
         success: true, 
         application,
@@ -10504,6 +10553,22 @@ Submitted: ${new Date().toLocaleString()}
         console.error('Failed to create inbound email record:', error);
       }
 
+      // Send email notification to staff if enabled
+      try {
+        const { sendFormSubmissionNotification } = await import('./services/form-notifications');
+        await sendFormSubmissionNotification({
+          formType: 'volunteer',
+          tenantId: req.tenant!.id,
+          applicantName: data.applicantName,
+          applicantEmail: data.applicantEmail,
+          applicantPhone: data.applicantPhone,
+          applicationId: application.id,
+          additionalDetails: data.interests || undefined,
+        });
+      } catch (error) {
+        console.error('Failed to send form notification email:', error);
+      }
+
       res.json({ 
         success: true, 
         application,
@@ -10707,58 +10772,21 @@ Submitted: ${new Date().toLocaleString()}
         console.error('Failed to create inbound email for surrender request:', emailError);
       }
 
-      // Send form notification email if enabled
-      if (req.tenant!.formNotificationsEnabled && req.tenant!.formNotificationEmail) {
-        try {
-          const { sendTenantEmail } = await import('./lib/email-service');
-          const recipientEmails = req.tenant!.formNotificationEmail
-            .split(',')
-            .map((e: string) => e.trim())
-            .filter((e: string) => e.length > 0);
-          
-          if (recipientEmails.length > 0) {
-            const notificationHtml = `
-              <h2>New Surrender Request Received</h2>
-              <p>A new surrender request has been submitted for your organization.</p>
-              
-              <h3>Owner Information</h3>
-              <ul>
-                <li><strong>Name:</strong> ${data.ownerName}</li>
-                <li><strong>Email:</strong> ${data.ownerEmail}</li>
-                <li><strong>Phone:</strong> ${data.ownerPhone}</li>
-                <li><strong>SMS Consent:</strong> ${data.smsConsent ? 'Yes' : 'No'}</li>
-              </ul>
-              
-              <h3>Dog Information</h3>
-              <ul>
-                <li><strong>Name:</strong> ${data.dogName}</li>
-                <li><strong>Breed:</strong> ${data.dogBreed}</li>
-                <li><strong>Age:</strong> ${data.dogAge}</li>
-                <li><strong>Gender:</strong> ${data.dogGender}</li>
-              </ul>
-              
-              <h3>Reason for Surrender</h3>
-              <p>${data.reasonForSurrender}</p>
-              
-              ${data.medicalIssues ? `<h3>Medical Issues</h3><p>${data.medicalIssues}</p>` : ''}
-              ${data.behavioralIssues ? `<h3>Behavioral Issues</h3><p>${data.behavioralIssues}</p>` : ''}
-              
-              <p><em>View and manage this request in your Intake Manager dashboard.</em></p>
-            `;
-            
-            for (const email of recipientEmails) {
-              await sendTenantEmail(
-                req.tenant!.id,
-                email,
-                `New Surrender Request: ${data.dogName} - ${data.ownerName}`,
-                notificationHtml
-              );
-            }
-            console.log(`[SURRENDER] Notification emails sent to: ${recipientEmails.join(', ')}`);
-          }
-        } catch (notificationError) {
-          console.error('Failed to send surrender notification email:', notificationError);
-        }
+      // Send email notification to staff if enabled
+      try {
+        const { sendFormSubmissionNotification } = await import('./services/form-notifications');
+        await sendFormSubmissionNotification({
+          formType: 'surrender',
+          tenantId: req.tenant!.id,
+          applicantName: data.ownerName,
+          applicantEmail: data.ownerEmail,
+          applicantPhone: data.ownerPhone,
+          applicationId: surrender.id,
+          animalName: data.dogName,
+          additionalDetails: `${data.dogBreed} - ${data.dogAge} - ${data.dogGender}`,
+        });
+      } catch (notificationError) {
+        console.error('Failed to send surrender notification email:', notificationError);
       }
 
       res.status(201).json({ success: true, surrender });
