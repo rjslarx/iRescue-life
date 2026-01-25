@@ -149,7 +149,7 @@ export default function Dashboard() {
         title="Command Center"
         description=""
       >
-        <div className="flex-1 overflow-auto space-y-6 sm:p-6">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden w-full min-w-0 space-y-6 sm:p-6">
           {user?.activeRole === 'foster' ? (
             <>
               <div className="mb-6">
@@ -303,9 +303,9 @@ export default function Dashboard() {
                 </div>
               </section>
 
-              <section data-testid="section-command-center">
-                <div className="grid gap-6 lg:grid-cols-3">
-                  <div className="space-y-4" data-testid="zone-front-door">
+              <section data-testid="section-command-center" className="w-full min-w-0">
+                <div className="grid gap-6 lg:grid-cols-3 w-full min-w-0">
+                  <div className="space-y-4 w-full min-w-0" data-testid="zone-front-door">
                     <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">The Front Door</h3>
                     <IntakeSummaryWidget />
                     {(user?.activeRole === 'admin' || user?.activeRole === 'staff') && (
@@ -313,13 +313,13 @@ export default function Dashboard() {
                     )}
                   </div>
 
-                  <div className="space-y-4" data-testid="zone-workforce">
+                  <div className="space-y-4 w-full min-w-0" data-testid="zone-workforce">
                     <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">The Workforce</h3>
                     <VolunteerSummaryWidget />
                     <FosterSummaryWidget />
                   </div>
 
-                  <div className="space-y-4" data-testid="zone-operations">
+                  <div className="space-y-4 w-full min-w-0" data-testid="zone-operations">
                     <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Operations</h3>
                     <ComplianceWidget />
                     <MedicalSnapshotWidget />
