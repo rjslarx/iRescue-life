@@ -755,11 +755,15 @@ export const donations = pgTable("donations", {
   donorId: uuid("donor_id").references(() => donors.id, { onDelete: 'set null' }),
   donorName: text("donor_name").notNull(),
   donorEmail: text("donor_email").notNull(),
-  donorAddress: text("donor_address"), // For receipt mailing
-  donationType: text("donation_type").notNull().default("cash").$type<"cash" | "check" | "online" | "in_kind">(),
+  donorAddress: text("donor_address"), // Street address for receipt mailing
+  donorCity: text("donor_city"), // City for receipt mailing
+  donorState: text("donor_state"), // State for receipt mailing
+  donorZip: text("donor_zip"), // ZIP code for receipt mailing
+  donationType: text("donation_type").notNull().default("cash").$type<"cash" | "check" | "online" | "in_kind" | "in_kind_goods" | "in_kind_services">(),
   amount: integer("amount"), // Amount in cents (e.g., $10.00 = 1000). Required for cash/check/online, ignored for in-kind
   description: text("description"), // Required for in-kind (e.g., "5 bags of dog food")
-  estimatedValue: integer("estimated_value"), // Estimated value in cents for in-kind donations (internal tracking only)
+  donorStatedValue: integer("donor_stated_value"), // Value stated by donor in cents (for in-kind, shown on receipt)
+  estimatedValue: integer("estimated_value"), // Org's estimated value in cents for in-kind donations (internal tracking only)
   checkNumber: text("check_number"), // Check number for check donations
   message: text("message"),
   sponsoredAnimalId: uuid("sponsored_animal_id").references(() => animals.id),

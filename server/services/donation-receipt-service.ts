@@ -101,6 +101,33 @@ export async function generateDonationReceipt(
       };
     }
 
+    // IRS Safety Check: In-kind donations require email, address, and donor-stated value
+    const donationTypeForCheck = donation.donationType || 'cash';
+    const inKindTypesForCheck = ['in_kind', 'in_kind_goods', 'in_kind_services'];
+    if (inKindTypesForCheck.includes(donationTypeForCheck)) {
+      if (!donation.donorEmail) {
+        return {
+          success: false,
+          message: 'In-kind donation receipts require donor email for IRS compliance. Please update the donation record.',
+          requiresManualReview: true
+        };
+      }
+      if (!donation.donorAddress || !(donation as any).donorCity || !(donation as any).donorState || !(donation as any).donorZip) {
+        return {
+          success: false,
+          message: 'In-kind donation receipts require full donor mailing address for IRS compliance. Please update the donation record.',
+          requiresManualReview: true
+        };
+      }
+      if (!(donation as any).donorStatedValue) {
+        return {
+          success: false,
+          message: 'In-kind donation receipts require donor-stated value for IRS compliance. Please update the donation record.',
+          requiresManualReview: true
+        };
+      }
+    }
+
     // Generate receipt number if not already assigned
     const receiptNumber = donation.receiptNumber || generateReceiptNumber(tenant.slug);
 
@@ -237,8 +264,31 @@ export async function generateDonationReceipt(
     });
     y -= 18;
 
-    if (donation.donorAddress) {
-      page.drawText(`Address: ${donation.donorAddress}`, {
+    // Build full address from components
+    const addressParts: string[] = [];
+    if (donation.donorAddress) addressParts.push(donation.donorAddress);
+    const cityStateZip = [
+      (donation as any).donorCity,
+      (donation as any).donorState,
+      (donation as any).donorZip
+    ].filter(Boolean).join(', ').replace(/, ([^,]+)$/, ' $1'); // Format: "City, State ZIP"
+    if (cityStateZip) addressParts.push(cityStateZip);
+    
+    if (addressParts.length > 0) {
+      for (const line of addressParts) {
+        page.drawText(`Address: ${line}`, {
+          x: leftMargin,
+          y,
+          size: 11,
+          font: helvetica,
+          color: textColor,
+        });
+        y -= 18;
+      }
+    }
+
+    if (donation.donorEmail) {
+      page.drawText(`Email: ${donation.donorEmail}`, {
         x: leftMargin,
         y,
         size: 11,
@@ -247,15 +297,7 @@ export async function generateDonationReceipt(
       });
       y -= 18;
     }
-
-    page.drawText(`Email: ${donation.donorEmail}`, {
-      x: leftMargin,
-      y,
-      size: 11,
-      font: helvetica,
-      color: textColor,
-    });
-    y -= 35;
+    y -= 17;
 
     // Donation Details Section
     page.drawText('DONATION DETAILS', {
@@ -278,7 +320,8 @@ export async function generateDonationReceipt(
 
     // IRS Compliance: Different display for Cash vs In-Kind donations
     const donationType = donation.donationType || 'cash';
-    const isMonetary = donationType === 'cash' || donationType === 'check' || donationType === 'online';
+    const inKindTypes = ['in_kind', 'in_kind_goods', 'in_kind_services'];
+    const isMonetary = !inKindTypes.includes(donationType);
     
     if (isMonetary) {
       // Cash/Check/Online donation: Show the dollar amount
@@ -318,7 +361,12 @@ export async function generateDonationReceipt(
       y -= 25;
     } else {
       // In-Kind donation: Show description only, NO dollar value (IRS requirement)
-      page.drawText('Donation Type: In-Kind Contribution (Non-Cash)', {
+      const inKindLabels: Record<string, string> = {
+        in_kind: 'In-Kind Contribution (Non-Cash)',
+        in_kind_goods: 'In-Kind Goods (Non-Cash)',
+        in_kind_services: 'In-Kind Services (Non-Cash)',
+      };
+      page.drawText(`Donation Type: ${inKindLabels[donationType] || 'In-Kind Contribution (Non-Cash)'}`, {
         x: leftMargin,
         y,
         size: 11,
@@ -367,6 +415,19 @@ export async function generateDonationReceipt(
           color: textColor,
         });
         y -= 25;
+      }
+
+      // Show donor-stated value if provided (IRS requirement - use donor's valuation, not org estimate)
+      const donorStatedValue = (donation as any).donorStatedValue;
+      if (donorStatedValue) {
+        page.drawText(`Donor-Stated Value: ${formatCurrency(donorStatedValue)}`, {
+          x: leftMargin,
+          y,
+          size: 11,
+          font: helveticaBold,
+          color: textColor,
+        });
+        y -= 18;
       }
 
       // Note about valuation (IRS requirement for in-kind)
@@ -540,21 +601,24 @@ export async function generateAndEmailReceipt(
     // Send email with PDF attachment
     const emailSubject = `Official Tax Receipt - ${formatDate(donation.date)} - ${tenant.name}`;
     const donationType = (donation as any).donationType || 'cash';
+    const inKindTypes = ['in_kind', 'in_kind_goods', 'in_kind_services'];
+    const isInKind = inKindTypes.includes(donationType);
     
     const emailBodyHtml = `
 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
   <p>Dear ${donation.donorName},</p>
   
-  <p>Thank you for your generous ${donationType === 'cash' ? 'donation' : 'in-kind contribution'} to ${tenant.name}!</p>
+  <p>Thank you for your generous ${isInKind ? 'in-kind contribution' : 'donation'} to ${tenant.name}!</p>
   
   <p>Please find attached your official tax receipt for your records. This document serves as proof of your charitable contribution for tax purposes.</p>
   
   <div style="background: #f5f5f5; padding: 15px; border-radius: 8px; margin: 20px 0;">
     <p style="margin: 5px 0;"><strong>Receipt Number:</strong> ${result.receiptNumber}</p>
     <p style="margin: 5px 0;"><strong>Donation Date:</strong> ${formatDate(donation.date)}</p>
-    ${donationType === 'cash' 
+    ${!isInKind 
       ? `<p style="margin: 5px 0;"><strong>Amount:</strong> ${formatCurrency(donation.amount)}</p>` 
-      : `<p style="margin: 5px 0;"><strong>Items:</strong> ${donation.description || 'In-kind donation'}</p>`}
+      : `<p style="margin: 5px 0;"><strong>Items:</strong> ${donation.description || 'In-kind donation'}</p>
+         ${(donation as any).donorStatedValue ? `<p style="margin: 5px 0;"><strong>Donor-Stated Value:</strong> ${formatCurrency((donation as any).donorStatedValue)}</p>` : ''}`}
   </div>
   
   <p>Your support makes a real difference in the lives of the animals we rescue and care for. Thank you for being part of our mission!</p>

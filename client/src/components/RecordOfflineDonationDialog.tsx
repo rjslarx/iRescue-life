@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -32,33 +31,86 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, DollarSign, Banknote, CreditCard, Gift, Globe } from "lucide-react";
+import { Loader2, Gift, Banknote, CreditCard, Package, Wrench } from "lucide-react";
 
 const formSchema = z.object({
   donorName: z.string().min(1, "Donor name is required"),
   donorEmail: z.string().email("Valid email required").optional().or(z.literal("")),
-  donationType: z.enum(["cash", "check", "online", "in_kind"]),
+  donorAddress: z.string().optional(),
+  donorCity: z.string().optional(),
+  donorState: z.string().optional(),
+  donorZip: z.string().optional(),
+  donationType: z.enum(["cash", "check", "in_kind_goods", "in_kind_services"]),
   amount: z.string().optional(),
-  checkNumber: z.string().optional(),
-  itemDescription: z.string().optional(),
+  description: z.string().optional(),
+  donorStatedValue: z.string().optional(),
   estimatedValue: z.string().optional(),
+  checkNumber: z.string().optional(),
   notes: z.string().optional(),
   donationDate: z.string().min(1, "Date is required"),
 }).superRefine((data, ctx) => {
-  if (data.donationType === "in_kind") {
-    if (!data.itemDescription || data.itemDescription.trim().length === 0) {
+  const isCashOrCheck = data.donationType === "cash" || data.donationType === "check";
+  const isInKind = data.donationType === "in_kind_goods" || data.donationType === "in_kind_services";
+  
+  if (isCashOrCheck) {
+    if (!data.amount || parseFloat(data.amount) <= 0) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Item description is required for in-kind donations",
-        path: ["itemDescription"],
+        message: "Amount is required for cash/check donations",
+        path: ["amount"],
       });
     }
-  } else {
-    if (!data.amount || isNaN(parseFloat(data.amount)) || parseFloat(data.amount) <= 0) {
+  }
+  
+  if (isInKind) {
+    if (!data.description || data.description.trim().length === 0) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "A valid amount is required",
-        path: ["amount"],
+        message: "Description is required for in-kind donations",
+        path: ["description"],
+      });
+    }
+    // IRS compliance: require email, full address, and donor-stated value
+    if (!data.donorEmail || data.donorEmail.trim().length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Email is required for IRS-compliant receipt",
+        path: ["donorEmail"],
+      });
+    }
+    if (!data.donorAddress || data.donorAddress.trim().length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Street address is required for IRS compliance",
+        path: ["donorAddress"],
+      });
+    }
+    if (!data.donorCity || data.donorCity.trim().length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "City is required for IRS compliance",
+        path: ["donorCity"],
+      });
+    }
+    if (!data.donorState || data.donorState.trim().length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "State is required for IRS compliance",
+        path: ["donorState"],
+      });
+    }
+    if (!data.donorZip || data.donorZip.trim().length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "ZIP code is required for IRS compliance",
+        path: ["donorZip"],
+      });
+    }
+    if (!data.donorStatedValue || parseFloat(data.donorStatedValue) <= 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Donor-stated value is required for IRS-compliant receipt",
+        path: ["donorStatedValue"],
       });
     }
   }
@@ -83,50 +135,55 @@ export function RecordOfflineDonationDialog({
     defaultValues: {
       donorName: "",
       donorEmail: "",
+      donorAddress: "",
+      donorCity: "",
+      donorState: "",
+      donorZip: "",
       donationType: "cash",
       amount: "",
-      checkNumber: "",
-      itemDescription: "",
+      description: "",
+      donorStatedValue: "",
       estimatedValue: "",
+      checkNumber: "",
       notes: "",
       donationDate: new Date().toISOString().split("T")[0],
     },
   });
 
   const donationType = form.watch("donationType");
+  const isCashOrCheck = donationType === "cash" || donationType === "check";
+  const isInKind = donationType === "in_kind_goods" || donationType === "in_kind_services";
 
   const mutation = useMutation({
     mutationFn: async (data: FormData) => {
-      const payload: Record<string, unknown> = {
+      return apiRequest("POST", "/api/donations/offline", {
         donorName: data.donorName,
         donorEmail: data.donorEmail || null,
+        donorAddress: data.donorAddress || null,
+        donorCity: data.donorCity || null,
+        donorState: data.donorState || null,
+        donorZip: data.donorZip || null,
         donationType: data.donationType,
-        donationDate: data.donationDate,
+        amount: data.amount ? parseFloat(data.amount) : null,
+        description: data.description || null,
+        donorStatedValue: data.donorStatedValue ? parseFloat(data.donorStatedValue) : null,
+        estimatedValue: data.estimatedValue ? parseFloat(data.estimatedValue) : null,
+        checkNumber: data.checkNumber || null,
         notes: data.notes || null,
-      };
-
-      if (data.donationType === "in_kind") {
-        payload.itemDescription = data.itemDescription;
-        payload.estimatedValue = data.estimatedValue ? parseFloat(data.estimatedValue) : null;
-      } else {
-        payload.amount = parseFloat(data.amount!);
-        if (data.donationType === "check" && data.checkNumber) {
-          payload.checkNumber = data.checkNumber;
-        }
-      }
-
-      return apiRequest("POST", "/api/donations/offline", payload);
+        donationDate: data.donationDate,
+      });
     },
     onSuccess: () => {
       toast({
         title: "Donation Recorded",
-        description: donationType === "in_kind" 
-          ? "The in-kind donation has been recorded successfully."
+        description: isInKind 
+          ? "The in-kind donation has been recorded. The donor will be added to your contacts."
           : "The donation has been recorded successfully.",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/donations"] });
       queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/activity"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
       form.reset();
       onOpenChange(false);
     },
@@ -145,57 +202,19 @@ export function RecordOfflineDonationDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <DollarSign className="h-5 w-5" />
+            <Gift className="h-5 w-5" />
             Record Donation
           </DialogTitle>
           <DialogDescription>
-            Record a cash, check, online, or in-kind donation
+            Record a cash, check, or in-kind donation
           </DialogDescription>
         </DialogHeader>
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="donorName"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Donor Name *</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="John Smith"
-                      {...field}
-                      data-testid="input-donor-name"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="donorEmail"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Donor Email (Optional)</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="email"
-                      placeholder="john@example.com"
-                      {...field}
-                      data-testid="input-donor-email"
-                    />
-                  </FormControl>
-                  <FormDescription>For sending a thank you receipt</FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
             <FormField
               control={form.control}
               name="donationType"
@@ -221,16 +240,16 @@ export function RecordOfflineDonationDialog({
                           Check
                         </div>
                       </SelectItem>
-                      <SelectItem value="online">
+                      <SelectItem value="in_kind_goods">
                         <div className="flex items-center gap-2">
-                          <Globe className="h-4 w-4" />
-                          Online (Non-Stripe)
+                          <Package className="h-4 w-4" />
+                          In-Kind Goods
                         </div>
                       </SelectItem>
-                      <SelectItem value="in_kind">
+                      <SelectItem value="in_kind_services">
                         <div className="flex items-center gap-2">
-                          <Gift className="h-4 w-4" />
-                          In-Kind (Goods/Services)
+                          <Wrench className="h-4 w-4" />
+                          In-Kind Services
                         </div>
                       </SelectItem>
                     </SelectContent>
@@ -240,7 +259,204 @@ export function RecordOfflineDonationDialog({
               )}
             />
 
-            {donationType !== "in_kind" && (
+            <FormField
+              control={form.control}
+              name="donorName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Donor Name *</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="John Smith"
+                      {...field}
+                      data-testid="input-donor-name"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="donorEmail"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Donor Email {isInKind ? "(Required for receipt)" : "(Optional)"}</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="email"
+                      placeholder="john@example.com"
+                      {...field}
+                      data-testid="input-donor-email"
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    {isInKind 
+                      ? "Required to send the IRS-compliant in-kind donation receipt"
+                      : "For sending a thank you receipt"}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {isInKind && (
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="donorAddress"
+                    render={({ field }) => (
+                      <FormItem className="col-span-2">
+                        <FormLabel>Street Address</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="123 Main St"
+                            {...field}
+                            data-testid="input-donor-address"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="donorCity"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>City</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="City"
+                            {...field}
+                            data-testid="input-donor-city"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <FormField
+                      control={form.control}
+                      name="donorState"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>State</FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder="TX"
+                              {...field}
+                              data-testid="input-donor-state"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="donorZip"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>ZIP</FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder="12345"
+                              {...field}
+                              data-testid="input-donor-zip"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
+
+                <FormField
+                  control={form.control}
+                  name="description"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Description of Donated Items/Services *</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          placeholder="e.g., Large wire dog crate, 5 bags of premium dog food, veterinary exam services"
+                          className="resize-none"
+                          rows={3}
+                          {...field}
+                          data-testid="textarea-description"
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        This description will appear on the IRS-compliant receipt
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="donorStatedValue"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Donor Stated Value</FormLabel>
+                        <FormControl>
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg">$</span>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              placeholder="0.00"
+                              {...field}
+                              data-testid="input-donor-stated-value"
+                            />
+                          </div>
+                        </FormControl>
+                        <FormDescription className="text-xs">
+                          Value stated by donor (optional)
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="estimatedValue"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Org Estimated Value</FormLabel>
+                        <FormControl>
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg">$</span>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              placeholder="0.00"
+                              {...field}
+                              data-testid="input-estimated-value"
+                            />
+                          </div>
+                        </FormControl>
+                        <FormDescription className="text-xs">
+                          Internal tracking only
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </>
+            )}
+
+            {isCashOrCheck && (
               <>
                 <div className="grid grid-cols-2 gap-4">
                   <FormField
@@ -267,120 +483,46 @@ export function RecordOfflineDonationDialog({
                     )}
                   />
 
-                  <FormField
-                    control={form.control}
-                    name="donationDate"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Date *</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="date"
-                            {...field}
-                            data-testid="input-donation-date"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                {donationType === "check" && (
-                  <FormField
-                    control={form.control}
-                    name="checkNumber"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Check Number</FormLabel>
-                        <FormControl>
-                          <Input
-                            placeholder="1234"
-                            {...field}
-                            data-testid="input-check-number"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                )}
-              </>
-            )}
-
-            {donationType === "in_kind" && (
-              <>
-                <FormField
-                  control={form.control}
-                  name="itemDescription"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Item Description *</FormLabel>
-                      <FormControl>
-                        <Textarea
-                          placeholder="e.g., 5 bags of dog food, 10 blankets, grooming services..."
-                          className="resize-none"
-                          rows={3}
-                          {...field}
-                          data-testid="textarea-item-description"
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        Describe the goods or services donated
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="estimatedValue"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Estimated Value (Optional)</FormLabel>
-                        <FormControl>
-                          <div className="flex items-center gap-2">
-                            <span className="text-lg">$</span>
+                  {donationType === "check" && (
+                    <FormField
+                      control={form.control}
+                      name="checkNumber"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Check Number</FormLabel>
+                          <FormControl>
                             <Input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              placeholder="0.00"
+                              placeholder="1234"
                               {...field}
-                              data-testid="input-estimated-value"
+                              data-testid="input-check-number"
                             />
-                          </div>
-                        </FormControl>
-                        <FormDescription className="text-xs">
-                          Internal tracking only
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="donationDate"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Date *</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="date"
-                            {...field}
-                            data-testid="input-donation-date"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
                 </div>
               </>
             )}
+
+            <FormField
+              control={form.control}
+              name="donationDate"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Date *</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="date"
+                      {...field}
+                      data-testid="input-donation-date"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <FormField
               control={form.control}

@@ -2513,7 +2513,7 @@ Crawl-delay: 1
             and(
               eq(donations.tenantId, req.tenant!.id),
               gte(donations.date, currentMonthStart),
-              sql`COALESCE(${donations.donationType}, 'cash') != 'in_kind'`
+              sql`COALESCE(${donations.donationType}, 'cash') NOT IN ('in_kind', 'in_kind_goods', 'in_kind_services')`
             )
           ),
         // Previous month cash donations (excludes in-kind, treats NULL as cash for backward compatibility)
@@ -2524,7 +2524,7 @@ Crawl-delay: 1
               eq(donations.tenantId, req.tenant!.id),
               gte(donations.date, previousMonthStart),
               lte(donations.date, previousMonthEnd),
-              sql`COALESCE(${donations.donationType}, 'cash') != 'in_kind'`
+              sql`COALESCE(${donations.donationType}, 'cash') NOT IN ('in_kind', 'in_kind_goods', 'in_kind_services')`
             )
           ),
         // Volunteers
@@ -4056,10 +4056,11 @@ Crawl-delay: 1
         : 0;
       
       // Separate cash/check/online donations from in-kind (treat NULL as cash for backward compatibility)
-      const cashDonationsThisMonth = donationsThisMonth.filter(d => (d.donationType || 'cash') !== 'in_kind');
-      const cashDonationsYTD = donationsYTD.filter(d => (d.donationType || 'cash') !== 'in_kind');
-      const inKindDonationsThisMonth = donationsThisMonth.filter(d => d.donationType === 'in_kind');
-      const inKindDonationsYTD = donationsYTD.filter(d => d.donationType === 'in_kind');
+      const inKindTypes = ['in_kind', 'in_kind_goods', 'in_kind_services'];
+      const cashDonationsThisMonth = donationsThisMonth.filter(d => !inKindTypes.includes(d.donationType || 'cash'));
+      const cashDonationsYTD = donationsYTD.filter(d => !inKindTypes.includes(d.donationType || 'cash'));
+      const inKindDonationsThisMonth = donationsThisMonth.filter(d => inKindTypes.includes(d.donationType || ''));
+      const inKindDonationsYTD = donationsYTD.filter(d => inKindTypes.includes(d.donationType || ''));
       
       const totalDonationsThisMonth = cashDonationsThisMonth.reduce((sum, d) => sum + Number(d.amount || 0), 0);
       const totalDonationsYTD = cashDonationsYTD.reduce((sum, d) => sum + Number(d.amount || 0), 0);
@@ -9061,30 +9062,57 @@ Crawl-delay: 1
       const offlineDonationSchema = z.object({
         donorName: z.string().min(1),
         donorEmail: z.string().email().nullable().optional(),
-        donationType: z.enum(['cash', 'check', 'online', 'in_kind']),
+        donorAddress: z.string().nullable().optional(), // Street address
+        donorCity: z.string().nullable().optional(), // City
+        donorState: z.string().nullable().optional(), // State
+        donorZip: z.string().nullable().optional(), // ZIP code
+        donationType: z.enum(['cash', 'check', 'online', 'in_kind', 'in_kind_goods', 'in_kind_services']),
         amount: z.number().positive().optional(), // Required for cash/check/online
         checkNumber: z.string().nullable().optional(), // For check payments
-        itemDescription: z.string().optional(), // Required for in_kind
-        estimatedValue: z.number().nullable().optional(), // Optional estimated value for in_kind
+        description: z.string().optional(), // Required for in_kind
+        donorStatedValue: z.number().nullable().optional(), // Value stated by donor for in_kind
+        estimatedValue: z.number().nullable().optional(), // Org's estimated value for in_kind
         notes: z.string().nullable().optional(),
         donationDate: z.string().transform(s => new Date(s)),
       }).refine((data) => {
         // Validate required fields based on donation type
-        if (data.donationType === 'in_kind') {
-          return data.itemDescription && data.itemDescription.trim().length > 0;
+        const isInKind = data.donationType === 'in_kind' || data.donationType === 'in_kind_goods' || data.donationType === 'in_kind_services';
+        if (isInKind) {
+          // In-kind requires description
+          if (!data.description || data.description.trim().length === 0) {
+            return false;
+          }
+          // IRS compliance: require email, full address, and donor-stated value for in-kind donations
+          if (!data.donorEmail) {
+            return false;
+          }
+          if (!data.donorAddress || !data.donorCity || !data.donorState || !data.donorZip) {
+            return false;
+          }
+          // Donor-stated value is required for IRS-compliant receipts
+          if (!data.donorStatedValue || data.donorStatedValue <= 0) {
+            return false;
+          }
+          return true;
         }
         return data.amount && data.amount > 0;
       }, {
-        message: "Amount is required for cash/check/online donations, or item description for in-kind",
+        message: "Amount is required for cash/check donations. For in-kind: description, email, full address, and donor-stated value are required for IRS compliance.",
       });
       
       const data = offlineDonationSchema.parse(req.body);
       
+      // Determine if this is an in-kind donation
+      const isInKind = data.donationType === 'in_kind' || data.donationType === 'in_kind_goods' || data.donationType === 'in_kind_services';
+      
       // Convert dollars to cents for storage (only for monetary donations)
-      const amountInCents = data.donationType !== 'in_kind' && data.amount 
+      const amountInCents = !isInKind && data.amount 
         ? Math.round(data.amount * 100) 
         : null;
-      const estimatedValueInCents = data.donationType === 'in_kind' && data.estimatedValue
+      const donorStatedValueInCents = isInKind && data.donorStatedValue
+        ? Math.round(data.donorStatedValue * 100)
+        : null;
+      const estimatedValueInCents = isInKind && data.estimatedValue
         ? Math.round(data.estimatedValue * 100)
         : null;
       
@@ -9131,13 +9159,13 @@ Crawl-delay: 1
       let fullNotes = '';
       if (data.donationType === 'check' && data.checkNumber) {
         fullNotes = `Check #${data.checkNumber}`;
-      } else if (data.donationType === 'in_kind') {
-        fullNotes = data.itemDescription || '';
+      } else if (isInKind) {
+        fullNotes = data.description || '';
       } else {
         fullNotes = data.donationType.charAt(0).toUpperCase() + data.donationType.slice(1);
       }
       if (data.notes) {
-        fullNotes += data.donationType === 'in_kind' ? `\n${data.notes}` : ` - ${data.notes}`;
+        fullNotes += isInKind ? `\n${data.notes}` : ` - ${data.notes}`;
       }
       
       // Create donation record
@@ -9147,9 +9175,14 @@ Crawl-delay: 1
           donorId: donorId,
           donorName: data.donorName,
           donorEmail: data.donorEmail || '',
+          donorAddress: data.donorAddress || null,
+          donorCity: data.donorCity || null,
+          donorState: data.donorState || null,
+          donorZip: data.donorZip || null,
           donationType: data.donationType,
           amount: amountInCents,
-          description: data.donationType === 'in_kind' ? data.itemDescription : null,
+          description: isInKind ? data.description : null,
+          donorStatedValue: donorStatedValueInCents,
           estimatedValue: estimatedValueInCents,
           checkNumber: data.donationType === 'check' ? data.checkNumber : null,
           message: data.notes || null,
@@ -9161,8 +9194,8 @@ Crawl-delay: 1
       // Log activity
       try {
         const { logActivity } = await import('./lib/activity-logger');
-        const description = data.donationType === 'in_kind'
-          ? `recorded in-kind donation from ${data.donorName}: ${data.itemDescription?.substring(0, 50)}${(data.itemDescription?.length || 0) > 50 ? '...' : ''}`
+        const activityDescription = isInKind
+          ? `recorded in-kind donation from ${data.donorName}: ${data.description?.substring(0, 50)}${(data.description?.length || 0) > 50 ? '...' : ''}`
           : `recorded $${data.amount?.toFixed(2)} ${data.donationType} donation from ${data.donorName}`;
         
         await logActivity({
@@ -9171,14 +9204,15 @@ Crawl-delay: 1
           entityType: 'Donation',
           entityId: donation.id,
           action: 'created',
-          description,
+          description: activityDescription,
           category: 'finance',
           metadata: { 
             donationType: data.donationType, 
             amount: amountInCents, 
+            donorStatedValue: donorStatedValueInCents,
             estimatedValue: estimatedValueInCents,
             checkNumber: data.checkNumber,
-            itemDescription: data.itemDescription,
+            description: data.description,
           }
         });
       } catch (logError) {
