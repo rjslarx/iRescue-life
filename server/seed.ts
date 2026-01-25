@@ -5,7 +5,7 @@ import bcrypt from "bcrypt";
 
 // SECURITY WARNING: This is a development-only default password
 // In production, ALWAYS set DEMO_ADMIN_PASSWORD environment variable or disable this seed script
-const DEMO_ADMIN_PASSWORD = process.env.DEMO_ADMIN_PASSWORD || "ChangeMeInProduction123!";
+const DEMO_ADMIN_PASSWORD = process.env.DEMO_ADMIN_PASSWORD || "Demo123!";
 
 async function seed() {
   console.log("Starting database seed...");

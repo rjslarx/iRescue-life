@@ -61,7 +61,7 @@ import {
 import { eq, and, ne } from "drizzle-orm";
 import bcrypt from "bcrypt";
 
-const DEMO_ADMIN_PASSWORD = process.env.DEMO_ADMIN_PASSWORD || "ChangeMeInProduction123!";
+const DEMO_ADMIN_PASSWORD = process.env.DEMO_ADMIN_PASSWORD || "Demo123!";
 
 /**
  * Reset demo tenant data to a clean state
