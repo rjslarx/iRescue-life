@@ -17826,6 +17826,15 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
       
       const eventId = req.params.id;
       
+      // Validate that eventId is a valid UUID format
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(eventId)) {
+        return res.status(400).json({ 
+          error: 'Invalid event ID',
+          message: 'The provided event ID is not valid.' 
+        });
+      }
+      
       const events = await db
         .select({
           id: calendarEvents.id,
@@ -18064,6 +18073,12 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
     try {
       const { calendarEvents, calendarPermissions, calendarRolePermissions } = await import('@shared/schema');
       
+      // Validate that id is a valid UUID format
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(req.params.id)) {
+        return res.status(400).json({ error: 'Invalid event ID', message: 'The provided event ID is not valid.' });
+      }
+      
       const updateSchema = z.object({
         title: z.string().min(1).optional(),
         description: z.string().optional(),
@@ -18170,6 +18185,12 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
   app.delete('/api/events/:id', requireTenant, requireAuth, async (req, res, next) => {
     try {
       const { calendarEvents, calendarPermissions, calendarRolePermissions } = await import('@shared/schema');
+      
+      // Validate that id is a valid UUID format
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(req.params.id)) {
+        return res.status(400).json({ error: 'Invalid event ID', message: 'The provided event ID is not valid.' });
+      }
       
       // Get the event to check calendar
       const [event] = await db
