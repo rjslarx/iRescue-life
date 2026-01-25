@@ -78,10 +78,10 @@ export default function MedicalSnapshotWidget() {
       <CardContent>
         <Link href="/dashboard/medical-pipeline?tab=treatments">
           <div 
-            className={`flex items-center justify-between p-3 rounded-md mb-4 cursor-pointer transition-all hover:shadow-md ${
+            className={`flex items-center justify-between p-3 rounded-md mb-4 cursor-pointer transition-all hover-elevate ${
               medsDueToday > 0 
-                ? 'bg-primary/10 border border-primary/30 hover:bg-primary/20' 
-                : 'bg-muted/50 hover:bg-muted'
+                ? 'bg-primary/10 border border-primary/30' 
+                : 'bg-muted/50'
             }`}
             data-testid="tile-meds-due-today"
           >

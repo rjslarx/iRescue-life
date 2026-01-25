@@ -283,52 +283,99 @@ export default function Dashboard() {
                 />
               )}
 
+              {/* Volunteer/Staff priority: Medical first */}
+              {(user?.activeRole === 'volunteer' || user?.activeRole === 'staff') && (
+                <section data-testid="section-priority-medical" className="w-full">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <MedicalSnapshotWidget />
+                    <div className="space-y-4">
+                      <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Quick Actions</h3>
+                      <div className="flex flex-wrap gap-2">
+                        {actionButtons.map((action) => (
+                          <Link key={action.id} href={action.href}>
+                            <Button 
+                              variant="outline" 
+                              className="gap-2"
+                              data-testid={`button-action-${action.id}`}
+                            >
+                              <action.icon className="h-4 w-4" />
+                              {action.label}
+                            </Button>
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              )}
+
               <section data-testid="section-stats-overview">
                 <StatsOverview />
               </section>
 
-              <section data-testid="section-action-bar">
-                <div className="flex flex-wrap gap-2">
-                  {actionButtons.map((action) => (
-                    <Link key={action.id} href={action.href}>
-                      <Button 
-                        variant="outline" 
-                        className="gap-2"
-                        data-testid={`button-action-${action.id}`}
-                      >
-                        <action.icon className="h-4 w-4" />
-                        {action.label}
-                      </Button>
-                    </Link>
-                  ))}
-                </div>
-              </section>
+              {/* Admin layout: Standard action bar */}
+              {user?.activeRole === 'admin' && (
+                <section data-testid="section-action-bar">
+                  <div className="flex flex-wrap gap-2">
+                    {actionButtons.map((action) => (
+                      <Link key={action.id} href={action.href}>
+                        <Button 
+                          variant="outline" 
+                          className="gap-2"
+                          data-testid={`button-action-${action.id}`}
+                        >
+                          <action.icon className="h-4 w-4" />
+                          {action.label}
+                        </Button>
+                      </Link>
+                    ))}
+                  </div>
+                </section>
+              )}
 
               <section data-testid="section-command-center" className="w-full min-w-0">
-                <div className="grid gap-6 lg:grid-cols-3 w-full min-w-0">
-                  <div className="space-y-4 w-full min-w-0" data-testid="zone-front-door">
-                    <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">The Front Door</h3>
-                    <IntakeSummaryWidget />
-                    {(user?.activeRole === 'admin' || user?.activeRole === 'staff') && (
-                      <>
+                {user?.activeRole === 'admin' ? (
+                  /* Admin layout: 3-zone grid */
+                  <div className="grid gap-6 lg:grid-cols-3 w-full min-w-0">
+                    <div className="space-y-4 w-full min-w-0" data-testid="zone-front-door">
+                      <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">The Front Door</h3>
+                      <IntakeSummaryWidget />
+                      <PendingApplicationsWidget />
+                      <ActionCenterWidget />
+                    </div>
+
+                    <div className="space-y-4 w-full min-w-0" data-testid="zone-workforce">
+                      <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">The Workforce</h3>
+                      <VolunteerSummaryWidget />
+                      <FosterSummaryWidget />
+                    </div>
+
+                    <div className="space-y-4 w-full min-w-0" data-testid="zone-operations">
+                      <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Operations</h3>
+                      <ComplianceWidget />
+                      <MedicalSnapshotWidget />
+                    </div>
+                  </div>
+                ) : (
+                  /* Volunteer/Staff layout: Simplified grid, Medical shown first above */
+                  <div className="grid gap-6 lg:grid-cols-2 w-full min-w-0">
+                    <div className="space-y-4 w-full min-w-0" data-testid="zone-workforce">
+                      <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">The Workforce</h3>
+                      <VolunteerSummaryWidget />
+                      <FosterSummaryWidget />
+                    </div>
+
+                    {/* Staff sees more admin-related widgets */}
+                    {user?.activeRole === 'staff' && (
+                      <div className="space-y-4 w-full min-w-0" data-testid="zone-front-door">
+                        <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Animals & Intake</h3>
+                        <IntakeSummaryWidget />
                         <PendingApplicationsWidget />
                         <ActionCenterWidget />
-                      </>
+                      </div>
                     )}
                   </div>
-
-                  <div className="space-y-4 w-full min-w-0" data-testid="zone-workforce">
-                    <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">The Workforce</h3>
-                    <VolunteerSummaryWidget />
-                    <FosterSummaryWidget />
-                  </div>
-
-                  <div className="space-y-4 w-full min-w-0" data-testid="zone-operations">
-                    <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Operations</h3>
-                    <ComplianceWidget />
-                    <MedicalSnapshotWidget />
-                  </div>
-                </div>
+                )}
               </section>
 
               {(user?.activeRole === 'admin' || user?.activeRole === 'staff') && (pendingSupplyRequests.length > 0 || unacknowledgedUpdates.length > 0) && (
