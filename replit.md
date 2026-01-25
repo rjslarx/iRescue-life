@@ -24,6 +24,15 @@ Email/password authentication leverages bcrypt and Express sessions, featuring s
 **Feature Specifications:**
 The platform offers comprehensive animal, application, and financial management (with Stripe). It includes contact management, Happy Tails, supply registry, expenditure tracking, event management, volunteer coordination, medical records, and document management.
 
+**Medical Pipeline Dashboard:**
+A centralized dashboard for managing all medical operations across the organization with three main sections:
+- **Intake Protocol (Tab A):** Vetting checklist for new animals - tracks fecal tests, bloodwork, vaccinations, and vet exams. Displays intake animals sorted by priority with real-time checklist status.
+- **Surgery Queue (Tab B):** Spay/neuter scheduling and tracking. Shows animals needing surgery with status badges (Not Scheduled, Scheduled, Complete). Allows scheduling surgery dates directly from the dashboard.
+- **Active Treatments (Tab C):** Daily medication management with overdue and due-today sections. Preserves all functionality from previous Medical Tasks page including administer/unable dialogs, controlled substance badges, and print functionality.
+- **Database Fields:** `animals.medicalStatus` (varchar) and `animals.scheduledSurgeryDate` (date)
+- **API Endpoints:** GET /api/medical/intake-animals, GET /api/medical/surgery-queue, PATCH /api/medical/surgery-schedule/:animalId, PATCH /api/medical/update-status/:animalId
+- **Routes:** /dashboard/medical-pipeline (new), /dashboard/medical-tasks (legacy, redirects to new)
+
 **Phase 1 Intake Pipeline (Surrender Requests):**
 A dedicated intake pipeline for dog surrender requests with the following:
 - **surrender_requests table:** Separate from legacy animalSurrenders, tracks dog-specific surrender requests with status workflow
