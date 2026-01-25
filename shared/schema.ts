@@ -442,6 +442,8 @@ export const animals = pgTable("animals", {
   kennelRowId: uuid("kennel_row_id").references(() => kennelRows.id, { onDelete: 'set null' }),
   kennelPosition: integer("kennel_position"), // 0-based index within the row (0, 1, 2, etc.)
   medicalAlertMemo: text("medical_alert_memo"),
+  medicalStatus: text("medical_status").$type<"healthy" | "needs_vetting" | "surgery_pending" | "recovering" | "palliative">().default("healthy"),
+  scheduledSurgeryDate: timestamp("scheduled_surgery_date"), // For spay/neuter scheduling
   photoUrls: text("photo_urls").array(),
   bio: text("bio"),
   
