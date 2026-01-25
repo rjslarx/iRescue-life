@@ -25,6 +25,11 @@ The main dashboard serves as a unified Command Center with a 3-zone grid layout:
   - Overdue Meds → /dashboard/medical-pipeline (Medical Pipeline)
   - Compliance Rate → #compliance-widget (scrolls to Compliance Widget)
   - Behavior Alerts → /dashboard/animals?filter=behavior (Animals page filtered)
+- **MedicalSnapshotWidget:** Shows prominent "Meds Due Today: X" tile at top, clickable to /dashboard/medical-pipeline?tab=treatments
+- **Role-Based Dashboard Ordering:**
+  - Admin: Standard 3-zone Command Center layout (Front Door, Workforce, Operations)
+  - Staff: Medical widget shown first at top, then Quick Actions, then 2-zone grid (Workforce + Intake)
+  - Volunteer: Medical widget first, then Workforce zone only (Intake/Compliance hidden)
 - **ComplianceWidget:** 4 tabs - Meds (overdue medications), Fosters (silent fosters), Exams (needed exams), At-Risk (at-risk adopters)
 - **ActionCenterWidget:** Inline action processing for supply requests, bio submissions, photo approvals, and happy tails
 - **API Endpoints:** GET /api/adopter/staff/compliance/at-risk, GET /api/foster-portal/staff/action-center
