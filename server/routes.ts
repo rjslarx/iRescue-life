@@ -14412,6 +14412,43 @@ Submitted: ${new Date().toLocaleString()}
   });
 
   /**
+   * GET /api/tenant/settings/quick-actions
+   * Get dashboard quick actions preferences
+   */
+  app.get('/api/tenant/settings/quick-actions', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const quickActions = req.tenant!.quickActions || [];
+      res.json({ quickActions });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * PATCH /api/tenant/settings/quick-actions
+   * Update dashboard quick actions preferences
+   */
+  app.patch('/api/tenant/settings/quick-actions', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+    try {
+      const quickActionsSchema = z.object({
+        quickActions: z.array(z.string()).min(1, "At least one quick action is required"),
+      });
+
+      const { quickActions } = quickActionsSchema.parse(req.body);
+
+      const [updatedTenant] = await db
+        .update(tenants)
+        .set({ quickActions })
+        .where(eq(tenants.id, req.tenant!.id))
+        .returning();
+
+      res.json({ success: true, quickActions: updatedTenant.quickActions });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * PATCH /api/tenant/settings/donation-section
    * Update donation section customization (admin only)
    */

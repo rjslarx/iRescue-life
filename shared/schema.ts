@@ -254,6 +254,9 @@ export const tenants = pgTable("tenants", {
   formNotificationsEnabled: boolean("form_notifications_enabled").notNull().default(false), // Whether to send email notifications
   formNotificationEmail: text("form_notification_email"), // Comma-separated emails to notify
   
+  // Dashboard quick actions preferences (ordered list of action IDs)
+  quickActions: text("quick_actions").array(), // e.g., ["add_animal", "intake_dog", "add_foster"]
+  
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
