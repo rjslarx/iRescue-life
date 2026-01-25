@@ -11079,6 +11079,73 @@ Submitted: ${new Date().toLocaleString()}
   });
 
   /**
+   * POST /api/surrender/:id/decline
+   * Decline a surrender request with a reason
+   */
+  app.post('/api/surrender/:id/decline', requireTenant, requireAuth, requireRole('admin', 'owner', 'board_member', 'staff'), async (req, res, next) => {
+    try {
+      const { surrenderRequests } = await import('@shared/schema');
+      const { eq, and } = await import('drizzle-orm');
+      
+      const schema = z.object({
+        reason: z.string().min(1, 'Decline reason is required'),
+      });
+      
+      const { reason } = schema.parse(req.body);
+      const surrenderId = req.params.id;
+      
+      // Validate UUID format
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(surrenderId)) {
+        return res.status(400).json({ error: 'Invalid surrender request ID' });
+      }
+      
+      // Fetch and verify the request exists
+      const [existing] = await db.select()
+        .from(surrenderRequests)
+        .where(and(
+          eq(surrenderRequests.id, surrenderId),
+          eq(surrenderRequests.tenantId, req.tenant!.id)
+        ))
+        .limit(1);
+      
+      if (!existing) {
+        return res.status(404).json({ error: 'Surrender request not found' });
+      }
+      
+      // Check if already declined or intaken
+      if (existing.status === 'declined') {
+        return res.status(400).json({ error: 'This request has already been declined' });
+      }
+      if (existing.status === 'intaken') {
+        return res.status(400).json({ error: 'Cannot decline a request that has already been intaken' });
+      }
+      
+      // Update to declined status
+      const [updated] = await db.update(surrenderRequests)
+        .set({ 
+          status: 'declined',
+          declinedReason: reason,
+          declinedAt: new Date(),
+          updatedAt: new Date()
+        })
+        .where(and(
+          eq(surrenderRequests.id, surrenderId),
+          eq(surrenderRequests.tenantId, req.tenant!.id)
+        ))
+        .returning();
+      
+      res.json({ 
+        success: true, 
+        message: 'Surrender request has been declined',
+        request: updated
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * POST /api/surrender/:id/promote
    * Promote a surrender request to an animal in the medical intake queue
    * Converts SurrenderRequest → Animal with medicalStatus='needs_vetting'

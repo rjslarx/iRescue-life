@@ -1020,7 +1020,7 @@ export type AnimalSurrender = typeof animalSurrenders.$inferSelect;
 export const surrenderRequests = pgTable("surrender_requests", {
   id: text("id").primaryKey().default(sql`gen_random_uuid()::text`),
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
-  status: text("status").notNull().default("new").$type<"new" | "review" | "spacecheck" | "waitlist" | "scheduled" | "intaken">(),
+  status: text("status").notNull().default("new").$type<"new" | "review" | "spacecheck" | "waitlist" | "scheduled" | "intaken" | "declined">(),
   ownerName: text("owner_name").notNull(),
   ownerEmail: text("owner_email").notNull(),
   ownerPhone: text("owner_phone").notNull(),
@@ -1044,6 +1044,8 @@ export const surrenderRequests = pgTable("surrender_requests", {
   smsConsent: boolean("sms_consent").notNull().default(false),
   notes: text("notes"),
   assignedUserId: uuid("assigned_user_id").references(() => users.id),
+  declinedReason: text("declined_reason"),
+  declinedAt: timestamp("declined_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -1053,6 +1055,8 @@ export const insertSurrenderRequestSchema = createInsertSchema(surrenderRequests
   status: true,  // Server-only, defaults to 'new'
   notes: true,   // Server-only
   assignedUserId: true,  // Server-only
+  declinedReason: true,  // Server-only
+  declinedAt: true,  // Server-only
   createdAt: true,
   updatedAt: true,
 });
