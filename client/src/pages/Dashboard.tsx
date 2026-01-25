@@ -149,7 +149,7 @@ export default function Dashboard() {
         title="Command Center"
         description=""
       >
-        <div className="flex-1 overflow-auto p-6 space-y-6">
+        <div className="flex-1 overflow-auto space-y-6 sm:p-6">
           {user?.activeRole === 'foster' ? (
             <>
               <div className="mb-6">
