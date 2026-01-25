@@ -24,6 +24,7 @@ import {
   MedicalSnapshotWidget,
   FosterSummaryWidget,
   ComplianceWidget,
+  ActionCenterWidget,
 } from "@/components/dashboard";
 
 interface FosterAnimalWithDetails extends FosterAnimal {
@@ -309,7 +310,10 @@ export default function Dashboard() {
                     <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">The Front Door</h3>
                     <IntakeSummaryWidget />
                     {(user?.activeRole === 'admin' || user?.activeRole === 'staff') && (
-                      <PendingApplicationsWidget />
+                      <>
+                        <PendingApplicationsWidget />
+                        <ActionCenterWidget />
+                      </>
                     )}
                   </div>
 

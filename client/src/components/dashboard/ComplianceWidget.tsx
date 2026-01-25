@@ -4,7 +4,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AlertTriangle, Pill, PawPrint, Users, CheckCircle, ChevronRight } from "lucide-react";
+import { AlertTriangle, Pill, PawPrint, Users, CheckCircle, ChevronRight, UserX } from "lucide-react";
 import { Link } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -36,6 +36,13 @@ interface OverdueMedication {
   daysOverdue: number;
 }
 
+interface AtRiskAdopter {
+  userId: string;
+  name: string;
+  email: string;
+  missedCount: number;
+}
+
 interface ComplianceResponse {
   compliance: {
     animalsNeedingMedical: {
@@ -63,6 +70,13 @@ export default function ComplianceWidget() {
     enabled: !!user && user.activeRole !== 'foster',
   });
 
+  const { data: atRiskData } = useQuery<AtRiskAdopter[]>({
+    queryKey: ['/api/adopter/staff/compliance/at-risk'],
+    enabled: !!user && (user.activeRole === 'admin' || user.activeRole === 'staff'),
+  });
+
+  const atRiskAdopters = atRiskData || [];
+
   if (isLoading) {
     return (
       <Card data-testid="compliance-widget-skeleton">
@@ -80,7 +94,8 @@ export default function ComplianceWidget() {
   const compliance = data?.compliance;
   const totalAtRisk = (compliance?.animalsNeedingMedical.count || 0) + 
                       (compliance?.silentFosters.count || 0) + 
-                      (compliance?.overdueMedications.count || 0);
+                      (compliance?.overdueMedications.count || 0) +
+                      atRiskAdopters.length;
 
   const hasNoIssues = totalAtRisk === 0;
 
@@ -103,36 +118,47 @@ export default function ComplianceWidget() {
           </div>
         ) : (
           <Tabs defaultValue="meds" className="w-full">
-            <TabsList className="w-full grid grid-cols-3 h-auto">
-              <TabsTrigger value="meds" className="text-xs py-1.5 px-2" data-testid="tab-overdue-meds">
-                <span className="flex items-center gap-1">
+            <TabsList className="w-full grid grid-cols-4 h-auto">
+              <TabsTrigger value="meds" className="text-xs py-1.5 px-1" data-testid="tab-overdue-meds">
+                <span className="flex items-center gap-0.5">
                   <Pill className="h-3 w-3" />
                   <span className="hidden sm:inline">Meds</span>
                   {(compliance?.overdueMedications.count || 0) > 0 && (
-                    <Badge variant="destructive" className="ml-1 h-4 min-w-4 px-1 text-xs">
+                    <Badge variant="destructive" className="ml-0.5 h-4 min-w-4 px-1 text-xs">
                       {compliance?.overdueMedications.count}
                     </Badge>
                   )}
                 </span>
               </TabsTrigger>
-              <TabsTrigger value="fosters" className="text-xs py-1.5 px-2" data-testid="tab-silent-fosters">
-                <span className="flex items-center gap-1">
+              <TabsTrigger value="fosters" className="text-xs py-1.5 px-1" data-testid="tab-silent-fosters">
+                <span className="flex items-center gap-0.5">
                   <Users className="h-3 w-3" />
                   <span className="hidden sm:inline">Fosters</span>
                   {(compliance?.silentFosters.count || 0) > 0 && (
-                    <Badge variant="destructive" className="ml-1 h-4 min-w-4 px-1 text-xs">
+                    <Badge variant="destructive" className="ml-0.5 h-4 min-w-4 px-1 text-xs">
                       {compliance?.silentFosters.count}
                     </Badge>
                   )}
                 </span>
               </TabsTrigger>
-              <TabsTrigger value="exams" className="text-xs py-1.5 px-2" data-testid="tab-medical-exams">
-                <span className="flex items-center gap-1">
+              <TabsTrigger value="exams" className="text-xs py-1.5 px-1" data-testid="tab-medical-exams">
+                <span className="flex items-center gap-0.5">
                   <PawPrint className="h-3 w-3" />
                   <span className="hidden sm:inline">Exams</span>
                   {(compliance?.animalsNeedingMedical.count || 0) > 0 && (
-                    <Badge variant="secondary" className="ml-1 h-4 min-w-4 px-1 text-xs">
+                    <Badge variant="secondary" className="ml-0.5 h-4 min-w-4 px-1 text-xs">
                       {compliance?.animalsNeedingMedical.count}
+                    </Badge>
+                  )}
+                </span>
+              </TabsTrigger>
+              <TabsTrigger value="at-risk" className="text-xs py-1.5 px-1" data-testid="tab-at-risk-adopters">
+                <span className="flex items-center gap-0.5">
+                  <UserX className="h-3 w-3" />
+                  <span className="hidden sm:inline">At-Risk</span>
+                  {atRiskAdopters.length > 0 && (
+                    <Badge variant="destructive" className="ml-0.5 h-4 min-w-4 px-1 text-xs">
+                      {atRiskAdopters.length}
                     </Badge>
                   )}
                 </span>
@@ -210,6 +236,29 @@ export default function ComplianceWidget() {
                       </div>
                     </div>
                   </Link>
+                ))
+              )}
+            </TabsContent>
+
+            <TabsContent value="at-risk" className="mt-3 space-y-2">
+              {atRiskAdopters.length === 0 ? (
+                <div className="flex items-center justify-center py-4 text-center">
+                  <CheckCircle className="h-5 w-5 text-green-500 mr-2" />
+                  <span className="text-sm text-muted-foreground">No at-risk adopters</span>
+                </div>
+              ) : (
+                atRiskAdopters.slice(0, 3).map((adopter) => (
+                  <div key={adopter.userId} className="p-2 border border-amber-300/50 bg-amber-50 dark:bg-amber-950/20 rounded-md" data-testid={`alert-at-risk-${adopter.userId}`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{adopter.name}</p>
+                        <p className="text-xs text-muted-foreground truncate">{adopter.email}</p>
+                      </div>
+                      <Badge variant="destructive" className="shrink-0">
+                        {adopter.missedCount} missed
+                      </Badge>
+                    </div>
+                  </div>
                 ))
               )}
             </TabsContent>

@@ -4,3 +4,4 @@ export { default as MedicalSnapshotWidget } from './MedicalSnapshotWidget';
 export { default as FosterSummaryWidget } from './FosterSummaryWidget';
 export { default as StatsOverview } from './StatsOverview';
 export { default as ComplianceWidget } from './ComplianceWidget';
+export { default as ActionCenterWidget } from './ActionCenterWidget';

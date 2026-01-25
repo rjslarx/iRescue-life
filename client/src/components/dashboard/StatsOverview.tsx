@@ -1,13 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Home, Heart, FileText, Shield, Clipboard, Pill } from "lucide-react";
+import { AlertTriangle, Shield, Clipboard, Pill } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import type { Animal } from "@shared/schema";
-
-interface AnimalsResponse {
-  animals: Animal[];
-}
 
 interface StatsResponse {
   stats: {
@@ -23,13 +18,15 @@ interface ComplianceResponse {
   };
 }
 
+interface FosterDashboardStats {
+  pendingSupplyRequests: number;
+  pendingBioSubmissions: number;
+  flaggedNotes: number;
+  pendingPhotoApprovals: number;
+}
+
 export default function StatsOverview() {
   const { user } = useAuth();
-
-  const { data: animalsData, isLoading: isLoadingAnimals } = useQuery<AnimalsResponse>({
-    queryKey: ['/api/animals', user?.activeRole],
-    enabled: !!user && user.activeRole !== 'foster',
-  });
 
   const { data: statsData, isLoading: isLoadingStats } = useQuery<StatsResponse>({
     queryKey: ['/api/stats', user?.activeRole],
@@ -41,14 +38,16 @@ export default function StatsOverview() {
     enabled: !!user && user.activeRole !== 'foster',
   });
 
-  const isLoading = isLoadingAnimals || isLoadingStats || isLoadingCompliance;
-  const animals = animalsData?.animals || [];
+  const { data: fosterStats, isLoading: isLoadingFoster } = useQuery<FosterDashboardStats>({
+    queryKey: ['/api/foster-portal/staff/dashboard'],
+    enabled: !!user && (user.activeRole === 'admin' || user.activeRole === 'staff'),
+  });
 
-  const onSiteCount = animals.filter(a => a.status === 'Shelter' || a.status === 'Boarding').length;
-  const inFosterCount = animals.filter(a => a.status === 'Foster').length;
+  const isLoading = isLoadingStats || isLoadingCompliance || isLoadingFoster;
   const pendingAppsCount = statsData?.stats?.pendingApplications || 0;
   const complianceRate = complianceData?.compliance?.complianceRate || 100;
   const overdueMedsCount = complianceData?.compliance?.overdueMedications?.count || 0;
+  const behaviorAlerts = fosterStats?.flaggedNotes || 0;
 
   const stats = [
     {
@@ -70,10 +69,10 @@ export default function StatsOverview() {
       icon: Shield,
     },
     {
-      label: 'In Shelter',
-      value: onSiteCount,
-      description: 'Animals on site',
-      icon: Home,
+      label: 'Behavior Alerts',
+      value: behaviorAlerts,
+      description: 'Flagged for review',
+      icon: AlertTriangle,
     },
   ];
 
