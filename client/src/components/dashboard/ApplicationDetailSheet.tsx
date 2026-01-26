@@ -293,7 +293,7 @@ export default function ApplicationDetailSheet({
         description: `${result.animalName} is now in the system and ready for vetting!`,
       });
       onClose();
-      setLocation(`/dashboard/animals/${result.animalId}`);
+      setLocation(`/dashboard/animals?highlight=${result.animalId}`);
     },
     onError: (error: any) => {
       toast({
@@ -756,7 +756,7 @@ export default function ApplicationDetailSheet({
             {type === "intake" && currentStatus === "scheduled" && (
               <Button
                 variant="default"
-                className="w-full bg-green-600 hover:bg-green-700"
+                className="w-full"
                 onClick={() => promoteMutation.mutate()}
                 disabled={promoteMutation.isPending}
                 data-testid="button-finalize-intake"
