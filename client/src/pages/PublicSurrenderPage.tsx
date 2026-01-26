@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -6,6 +6,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 import PublicHeader from "@/components/PublicHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,7 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { Heart, AlertCircle, Info, Upload, X, Loader2, Calendar as CalendarIcon } from "lucide-react";
+import { Heart, AlertCircle, Info, Upload, X, Loader2, Calendar as CalendarIcon, Dog } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
@@ -31,6 +32,16 @@ export default function PublicSurrenderPage() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const { tenantId } = useTenant();
+  const { user } = useAuth();
+  
+  // Staff mode: only admin/staff roles can intake strays without owner info
+  const isStaff = user && user.roles && (
+    user.roles.includes('admin') || 
+    user.roles.includes('owner') || 
+    user.roles.includes('staff') ||
+    user.roles.includes('intake_coordinator')
+  );
+  const [isStray, setIsStray] = useState(false);
 
   // Include tenantId in queryKey to prevent stale data flash when switching between tenant sites
   const { data: tenantData } = useQuery<{ tenant: Tenant }>({
@@ -54,9 +65,24 @@ export default function PublicSurrenderPage() {
     siteName: rescueName,
   });
 
-  const surrenderFormSchema = insertSurrenderRequestSchema.omit({ tenantId: true }).extend({
-    dogWeight: z.string().min(1, "Weight is required"),
-  });
+  // Dynamic schema: owner fields optional for staff stray intakes
+  const surrenderFormSchema = useMemo(() => {
+    const baseSchema = insertSurrenderRequestSchema.omit({ tenantId: true }).extend({
+      dogWeight: z.string().min(1, "Weight is required"),
+    });
+    
+    if (isStaff && isStray) {
+      // Make owner fields optional for stray intakes
+      return baseSchema.extend({
+        ownerName: z.string().optional(),
+        ownerEmail: z.string().optional(),
+        ownerPhone: z.string().optional(),
+        smsConsent: z.boolean().optional(),
+      });
+    }
+    
+    return baseSchema;
+  }, [isStaff, isStray]);
 
   const form = useForm<Omit<InsertSurrenderRequest, 'tenantId'> & { customResponses?: Record<string, any> }>({
     resolver: zodResolver(surrenderFormSchema),
@@ -85,6 +111,17 @@ export default function PublicSurrenderPage() {
       customResponses: {},
     },
   });
+
+  // Handle stray toggle - clear owner fields when switching to stray mode
+  const handleStrayToggle = (checked: boolean) => {
+    setIsStray(checked);
+    if (checked) {
+      form.setValue('ownerName', '');
+      form.setValue('ownerEmail', '');
+      form.setValue('ownerPhone', '');
+      form.setValue('smsConsent', false);
+    }
+  };
 
   const [photoUploads, setPhotoUploads] = useState<Record<string, { url: string; name: string; uploading: boolean }>>({});
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
@@ -168,7 +205,19 @@ export default function PublicSurrenderPage() {
   });
 
   const onSubmit = (data: Omit<InsertSurrenderRequest, 'tenantId'> & { customResponses?: Record<string, any> }) => {
-    submitMutation.mutate(data);
+    // For stray intakes, mark as stray and use placeholder owner info
+    const submissionData = isStaff && isStray
+      ? {
+          ...data,
+          ownerName: "STRAY - No Owner",
+          ownerEmail: "stray@intake.local",
+          ownerPhone: "000-000-0000",
+          smsConsent: false,
+          reasonForSurrender: `[STRAY INTAKE] ${data.reasonForSurrender || 'Stray animal intake by staff'}`,
+        }
+      : data;
+    
+    submitMutation.mutate(submissionData);
   };
 
   return (
@@ -183,10 +232,17 @@ export default function PublicSurrenderPage() {
               <h1 className="font-display text-4xl md:text-5xl font-bold mb-4">
                 Surrender an Animal
               </h1>
-              <p className="text-lg text-muted-foreground">
-                We understand that sometimes circumstances require you to find a new home for your pet.
-                Please complete this form and we'll do our best to help.
-              </p>
+              {!isStaff && (
+                <p className="text-lg text-muted-foreground">
+                  We understand that sometimes circumstances require you to find a new home for your pet.
+                  Please complete this form and we'll do our best to help.
+                </p>
+              )}
+              {isStaff && (
+                <p className="text-lg text-muted-foreground">
+                  Staff intake form - quickly add animals to the system.
+                </p>
+              )}
               {formSettingsData?.setting?.introText && (
                 <div className="mt-4 p-4 bg-muted/30 rounded-lg text-left whitespace-pre-wrap" data-testid="text-intro">
                   {formSettingsData.setting.introText}
@@ -199,14 +255,16 @@ export default function PublicSurrenderPage() {
         <section className="py-16">
           <div className="container px-6">
             <div className="max-w-4xl mx-auto space-y-8">
-              <Alert>
-                <Info className="h-4 w-4" />
-                <AlertDescription>
-                  <strong>Please note:</strong> We are a small rescue with limited space. While we try to help every animal,
-                  we may not be able to accept all surrender requests immediately. We prioritize emergency situations and
-                  animals with urgent medical needs.
-                </AlertDescription>
-              </Alert>
+              {!isStaff && (
+                <Alert>
+                  <Info className="h-4 w-4" />
+                  <AlertDescription>
+                    <strong>Please note:</strong> We are a small rescue with limited space. While we try to help every animal,
+                    we may not be able to accept all surrender requests immediately. We prioritize emergency situations and
+                    animals with urgent medical needs.
+                  </AlertDescription>
+                </Alert>
+              )}
 
               <Card>
                 <CardHeader>
@@ -219,52 +277,80 @@ export default function PublicSurrenderPage() {
                 <CardContent>
                   <Form {...form}>
                     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                      <div className="space-y-4">
-                        <h3 className="text-lg font-semibold">Owner Information</h3>
-                        <div className="grid md:grid-cols-2 gap-6">
-                          <FormField
-                            control={form.control}
-                            name="ownerName"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Full Name *</FormLabel>
-                                <FormControl>
-                                  <Input placeholder="John Doe" {...field} data-testid="input-owner-name" />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-
-                          <FormField
-                            control={form.control}
-                            name="ownerEmail"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Email *</FormLabel>
-                                <FormControl>
-                                  <Input type="email" placeholder="john@example.com" {...field} data-testid="input-owner-email" />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-
-                          <FormField
-                            control={form.control}
-                            name="ownerPhone"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Phone Number *</FormLabel>
-                                <FormControl>
-                                  <Input type="tel" placeholder="(555) 123-4567" {...field} data-testid="input-owner-phone" />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
+                      {/* Staff-only: Stray / No Owner checkbox */}
+                      {isStaff && (
+                        <div className="p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg">
+                          <div className="flex items-center space-x-3">
+                            <Checkbox
+                              id="stray-checkbox"
+                              checked={isStray}
+                              onCheckedChange={(checked) => handleStrayToggle(checked === true)}
+                              data-testid="checkbox-stray"
+                            />
+                            <div className="flex items-center gap-2">
+                              <Dog className="h-5 w-5 text-amber-600" />
+                              <Label htmlFor="stray-checkbox" className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                                Stray / No Owner (Staff Intake Mode)
+                              </Label>
+                            </div>
+                          </div>
+                          {isStray && (
+                            <p className="mt-2 text-xs text-amber-700 dark:text-amber-300 ml-7">
+                              Owner contact fields will be hidden. This intake will be marked as a stray.
+                            </p>
+                          )}
                         </div>
-                      </div>
+                      )}
+
+                      {/* Owner Information - hidden for stray intakes */}
+                      {!(isStaff && isStray) && (
+                        <div className="space-y-4">
+                          <h3 className="text-lg font-semibold">Owner Information</h3>
+                          <div className="grid md:grid-cols-2 gap-6">
+                            <FormField
+                              control={form.control}
+                              name="ownerName"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Full Name *</FormLabel>
+                                  <FormControl>
+                                    <Input placeholder="John Doe" {...field} data-testid="input-owner-name" />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+
+                            <FormField
+                              control={form.control}
+                              name="ownerEmail"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Email *</FormLabel>
+                                  <FormControl>
+                                    <Input type="email" placeholder="john@example.com" {...field} data-testid="input-owner-email" />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+
+                            <FormField
+                              control={form.control}
+                              name="ownerPhone"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Phone Number *</FormLabel>
+                                  <FormControl>
+                                    <Input type="tel" placeholder="(555) 123-4567" {...field} data-testid="input-owner-phone" />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          </div>
+                        </div>
+                      )}
 
                       <div className="border-t pt-6 space-y-4">
                         <h3 className="text-lg font-semibold">Dog Information</h3>
@@ -842,27 +928,32 @@ export default function PublicSurrenderPage() {
                         </div>
                       )}
 
-                      {/* SMS Consent Checkbox */}
-                      <FormField
-                        control={form.control}
-                        name="smsConsent"
-                        render={({ field }) => (
-                          <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                            <FormControl>
-                              <Checkbox
-                                checked={field.value}
-                                onCheckedChange={field.onChange}
-                                data-testid="checkbox-sms-consent"
-                              />
-                            </FormControl>
-                            <div className="space-y-1 leading-none">
-                              <FormLabel className="text-sm font-normal">
-                                I consent to receive text message updates regarding the status of my surrender request and rescue operations. Reply STOP to unsubscribe.
-                              </FormLabel>
-                            </div>
-                          </FormItem>
-                        )}
-                      />
+                      {/* SMS Consent Checkbox - hidden for stray intakes */}
+                      {!(isStaff && isStray) && (
+                        <FormField
+                          control={form.control}
+                          name="smsConsent"
+                          render={({ field }) => (
+                            <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                              <FormControl>
+                                <Checkbox
+                                  checked={field.value}
+                                  onCheckedChange={field.onChange}
+                                  data-testid="checkbox-sms-consent"
+                                />
+                              </FormControl>
+                              <div className="space-y-1 leading-none">
+                                <FormLabel className="text-sm font-normal">
+                                  {isStaff 
+                                    ? "Verbal Consent Obtained - Owner has verbally agreed to receive text message updates."
+                                    : "I consent to receive text message updates regarding the status of my surrender request and rescue operations. Reply STOP to unsubscribe."
+                                  }
+                                </FormLabel>
+                              </div>
+                            </FormItem>
+                          )}
+                        />
+                      )}
 
                       <div className="flex justify-end gap-4 pt-6 border-t">
                         <Button
@@ -878,13 +969,15 @@ export default function PublicSurrenderPage() {
                 </CardContent>
               </Card>
 
-              <Alert>
-                <Info className="h-4 w-4" />
-                <AlertDescription>
-                  <strong>What happens next?</strong> After you submit this form, our team will review your request
-                  and contact you within 24-48 hours. Please be patient as we work to help every animal in need.
-                </AlertDescription>
-              </Alert>
+              {!isStaff && (
+                <Alert>
+                  <Info className="h-4 w-4" />
+                  <AlertDescription>
+                    <strong>What happens next?</strong> After you submit this form, our team will review your request
+                    and contact you within 24-48 hours. Please be patient as we work to help every animal in need.
+                  </AlertDescription>
+                </Alert>
+              )}
             </div>
           </div>
         </section>
