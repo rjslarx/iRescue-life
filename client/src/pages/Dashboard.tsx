@@ -317,7 +317,7 @@ export default function Dashboard() {
 
               {/* The Workspace - 70/30 Grid Layout */}
               <section data-testid="section-workspace" className="w-full min-w-0">
-                <div className="grid gap-6 lg:grid-cols-[1fr_380px] w-full min-w-0">
+                <div className="grid gap-6 lg:grid-cols-[7fr_3fr] w-full min-w-0">
                   {/* Left: Pipeline Manager (70%) */}
                   <div id="section-pipeline-manager" className="w-full min-w-0 order-1" data-testid="workspace-pipeline">
                     <PipelineManager />
