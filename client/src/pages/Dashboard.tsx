@@ -3,7 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { OnboardingChecklist } from "@/components/OnboardingChecklist";
 import { FloatingActionButton } from "@/components/FloatingActionButton";
 import { RecordOfflineDonationDialog } from "@/components/RecordOfflineDonationDialog";
-import { Heart, Users, MessageSquare, Pill, Loader2, Stethoscope, Inbox, Calendar } from "lucide-react";
+import { Heart, Users, Pill, Loader2, Inbox, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -32,10 +32,10 @@ interface MyFostersData {
 }
 
 const actionButtons = [
-  { id: "new-intake", label: "New Intake", icon: Inbox, href: "/dashboard/intake" },
-  { id: "log-medical", label: "Log Medical", icon: Stethoscope, href: "/dashboard/medical-pipeline" },
-  { id: "find-foster", label: "Find Foster", icon: Heart, href: "/dashboard/foster-management" },
-  { id: "add-volunteer", label: "Add Volunteer", icon: Users, href: "/dashboard/volunteers/new" },
+  { id: "new-intake", label: "New Intake", icon: Inbox, href: "/dashboard/intake", color: "bg-blue-600 text-white border-blue-600" },
+  { id: "log-meds", label: "Log Meds", icon: Pill, href: "/dashboard/medical-pipeline?tab=treatments", color: "bg-red-600 text-white border-red-600" },
+  { id: "find-foster", label: "Find Foster", icon: Heart, href: "/dashboard/foster-management", color: "bg-green-600 text-white border-green-600" },
+  { id: "add-volunteer", label: "Add Volunteer", icon: Users, href: "/dashboard/volunteers/new", color: "bg-purple-600 text-white border-purple-600" },
 ];
 
 export default function Dashboard() {
@@ -295,19 +295,21 @@ export default function Dashboard() {
                 <StatsOverview />
               </section>
 
-              {/* Action bar - horizontally scrollable on mobile */}
+              {/* Quick Actions Grid - 2x2 on mobile, single row on desktop */}
               {(user?.activeRole === 'admin' || user?.activeRole === 'staff') && (
-                <section data-testid="section-action-bar">
-                  <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin">
+                <section data-testid="section-quick-actions">
+                  <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-3">Quick Actions</h3>
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                     {actionButtons.map((action) => (
                       <Link key={action.id} href={action.href}>
                         <Button 
                           variant="outline" 
-                          className="gap-2 whitespace-nowrap shrink-0"
+                          size="lg"
+                          className={`w-full gap-2 justify-center ${action.color}`}
                           data-testid={`button-action-${action.id}`}
                         >
-                          <action.icon className="h-4 w-4" />
-                          {action.label}
+                          <action.icon className="h-5 w-5" />
+                          <span className="font-medium">{action.label}</span>
                         </Button>
                       </Link>
                     ))}
@@ -315,17 +317,25 @@ export default function Dashboard() {
                 </section>
               )}
 
-              {/* The Workspace - 70/30 Grid Layout */}
+              {/* The Workspace - Split Layout: Operations (alerts) + Pipeline (work) */}
               <section data-testid="section-workspace" className="w-full min-w-0">
-                <div className="grid gap-6 lg:grid-cols-[7fr_3fr] w-full min-w-0">
-                  {/* Left: Pipeline Manager (70%) */}
-                  <div id="section-pipeline-manager" className="w-full min-w-0 order-1" data-testid="workspace-pipeline">
-                    <PipelineManager />
+                <div className="grid gap-6 lg:grid-cols-12 w-full min-w-0">
+                  {/* Operations Column (Alerts) - Right 30% on desktop, ABOVE on mobile */}
+                  <div 
+                    id="compliance-widget" 
+                    className="w-full min-w-0 order-1 lg:order-2 lg:col-span-4" 
+                    data-testid="workspace-compliance"
+                  >
+                    <ComplianceWidget />
                   </div>
 
-                  {/* Right: Compliance Widget (30%) */}
-                  <div id="compliance-widget" className="w-full min-w-0 order-2 lg:order-2" data-testid="workspace-compliance">
-                    <ComplianceWidget />
+                  {/* Pipeline Column (The Work) - Left 70% on desktop, BELOW on mobile */}
+                  <div 
+                    id="section-pipeline-manager" 
+                    className="w-full min-w-0 order-2 lg:order-1 lg:col-span-8" 
+                    data-testid="workspace-pipeline"
+                  >
+                    <PipelineManager />
                   </div>
                 </div>
               </section>

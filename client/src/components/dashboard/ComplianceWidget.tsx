@@ -266,7 +266,7 @@ export default function ComplianceWidget() {
         )}
       </CardContent>
       <CardFooter className="pt-0">
-        <Link href="/dashboard/medical-pipeline" className="w-full">
+        <Link href="/dashboard/medical-pipeline?tab=treatments" className="w-full">
           <Button variant="ghost" size="sm" className="w-full justify-between" data-testid="button-view-full-compliance">
             View Full Compliance Dashboard
             <ChevronRight className="h-4 w-4" />
