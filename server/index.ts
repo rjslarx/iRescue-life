@@ -19,6 +19,17 @@ const app = express();
 // Configure trust proxy for correct client IPs behind reverse proxy
 configureTrustProxy(app);
 
+// Handle malformed URL requests (security scanners/bots sending invalid encodings)
+app.use((req: Request, res: Response, next: NextFunction) => {
+  try {
+    decodeURIComponent(req.path);
+    next();
+  } catch (e) {
+    // Silently reject malformed URLs (common from bots/scanners)
+    res.status(400).send('Bad Request');
+  }
+});
+
 // Static asset serving is handled by serveStatic() after route registration
 // This ensures proper SPA routing with fallback to index.html
 
