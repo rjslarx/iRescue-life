@@ -241,7 +241,7 @@ export default function PipelineManager() {
 
   const { data: intakes, isLoading: intakesLoading } = useQuery<SurrenderRequest[]>({
     queryKey: ['/api/surrender-requests'],
-    enabled: !!user && (user.activeRole === 'admin' || user.activeRole === 'staff'),
+    enabled: !!user && ['admin', 'owner', 'board_member', 'staff', 'intake_coordinator'].includes(user.activeRole || ''),
   });
 
   // Extract arrays from wrapped responses

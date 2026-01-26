@@ -11242,7 +11242,7 @@ Submitted: ${new Date().toLocaleString()}
    * GET /api/surrender-requests
    * Get all surrender requests for the tenant (admin, board_member, or staff)
    */
-  app.get('/api/surrender-requests', requireTenant, requireAuth, requireRole('admin', 'owner', 'board_member', 'staff'), async (req, res, next) => {
+  app.get('/api/surrender-requests', requireTenant, requireAuth, requireRole('admin', 'owner', 'board_member', 'staff', 'intake_coordinator'), async (req, res, next) => {
     try {
       const { surrenderRequests } = await import('@shared/schema');
       const { eq, desc } = await import('drizzle-orm');
