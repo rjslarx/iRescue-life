@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import {
   Sheet,
   SheetContent,
@@ -45,7 +46,8 @@ import {
   AlertTriangle,
   Calendar,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  PawPrint
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
@@ -247,6 +249,7 @@ export default function ApplicationDetailSheet({
 }: ApplicationDetailSheetProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [, setLocation] = useLocation();
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
 
@@ -270,6 +273,32 @@ export default function ApplicationDetailSheet({
       toast({
         title: "Error",
         description: "Failed to update the application status.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const promoteMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest(`/api/surrender/${data?.id}/promote`, {
+        method: "POST",
+      });
+      return response as { success: boolean; animalId: string; animalName: string; message: string };
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/surrender-requests"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/animals"] });
+      toast({
+        title: "Animal Added to System",
+        description: `${result.animalName} is now in the system and ready for vetting!`,
+      });
+      onClose();
+      setLocation(`/dashboard/animals/${result.animalId}`);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to promote intake to animal record.",
         variant: "destructive",
       });
     },
@@ -723,27 +752,41 @@ export default function ApplicationDetailSheet({
             </div>
           </ScrollArea>
 
-          <div className="p-4 border-t flex gap-2 mt-auto">
-            <Button
-              variant="destructive"
-              className="flex-1"
-              onClick={() => setShowRejectDialog(true)}
-              disabled={updateMutation.isPending || ["denied", "rejected", "declined", "adopted", "intaken"].includes(currentStatus)}
-              data-testid="button-reject"
-            >
-              <X className="h-4 w-4 mr-1" />
-              Reject
-            </Button>
-            <Button
-              variant="default"
-              className="flex-1"
-              onClick={handleAdvance}
-              disabled={updateMutation.isPending || !nextStage}
-              data-testid="button-advance"
-            >
-              <Check className="h-4 w-4 mr-1" />
-              {nextStage ? `Advance to ${stageLabels[nextStage] || nextStage}` : "Complete"}
-            </Button>
+          <div className="p-4 border-t flex flex-col gap-2 mt-auto">
+            {type === "intake" && currentStatus === "scheduled" && (
+              <Button
+                variant="default"
+                className="w-full bg-green-600 hover:bg-green-700"
+                onClick={() => promoteMutation.mutate()}
+                disabled={promoteMutation.isPending}
+                data-testid="button-finalize-intake"
+              >
+                <PawPrint className="h-4 w-4 mr-1" />
+                {promoteMutation.isPending ? "Adding to System..." : "Finalize & Add to Database"}
+              </Button>
+            )}
+            <div className="flex gap-2">
+              <Button
+                variant="destructive"
+                className="flex-1"
+                onClick={() => setShowRejectDialog(true)}
+                disabled={updateMutation.isPending || promoteMutation.isPending || ["denied", "rejected", "declined", "adopted", "intaken"].includes(currentStatus)}
+                data-testid="button-reject"
+              >
+                <X className="h-4 w-4 mr-1" />
+                Reject
+              </Button>
+              <Button
+                variant="default"
+                className="flex-1"
+                onClick={handleAdvance}
+                disabled={updateMutation.isPending || promoteMutation.isPending || !nextStage}
+                data-testid="button-advance"
+              >
+                <Check className="h-4 w-4 mr-1" />
+                {nextStage ? `Advance to ${stageLabels[nextStage] || nextStage}` : "Complete"}
+              </Button>
+            </div>
           </div>
         </SheetContent>
       </Sheet>
