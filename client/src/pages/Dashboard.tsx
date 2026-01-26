@@ -291,10 +291,6 @@ export default function Dashboard() {
                 </section>
               )}
 
-              <section data-testid="section-stats-overview">
-                <StatsOverview />
-              </section>
-
               {/* Quick Actions Grid - 2x2 on mobile, single row on desktop */}
               {(user?.activeRole === 'admin' || user?.activeRole === 'staff') && (
                 <section data-testid="section-quick-actions">
@@ -316,6 +312,10 @@ export default function Dashboard() {
                   </div>
                 </section>
               )}
+
+              <section data-testid="section-stats-overview">
+                <StatsOverview />
+              </section>
 
               {/* The Workspace - Split Layout: Operations (alerts) + Pipeline (work) */}
               <section data-testid="section-workspace" className="w-full min-w-0">

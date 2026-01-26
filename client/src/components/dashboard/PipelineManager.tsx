@@ -380,14 +380,15 @@ export default function PipelineManager() {
     createdAt: i.createdAt,
   }));
 
-  // Count pending items for each pipeline (action-required statuses)
-  const pendingAdoptionStatuses = ['new', 'screening', 'vet_check', 'home_visit'];
-  const pendingIntakeStatuses = ['new', 'review'];
+  // Count ALL active workload items for each pipeline (excludes only completed/final statuses)
+  // These must match the KPI endpoint logic in /api/dashboard/action-items-count
+  const completedAdoptionStatuses = ['adopted', 'denied', 'trial_failed'];
+  const completedIntakeStatuses = ['intaken'];
   
-  const activeAdoptionsCount = adoptionItems.filter(a => pendingAdoptionStatuses.includes(a.status)).length;
+  const activeAdoptionsCount = adoptionItems.filter(a => !completedAdoptionStatuses.includes(a.status)).length;
   const activeFostersCount = fosterItems.filter(f => f.status === 'pending').length;
   const activeVolunteersCount = volunteerItems.filter(v => v.status === 'pending').length;
-  const activeIntakesCount = intakeItems.filter(i => pendingIntakeStatuses.includes(i.status)).length;
+  const activeIntakesCount = intakeItems.filter(i => !completedIntakeStatuses.includes(i.status)).length;
 
   if (isLoading) {
     return (

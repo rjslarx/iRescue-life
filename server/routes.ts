@@ -3185,13 +3185,13 @@ Crawl-delay: 1
 
   /**
    * GET /api/dashboard/action-items-count
-   * Returns the count of action items for the Command Center:
-   * - Surrender requests with status 'new' or 'review'
-   * - Adoption applications in pending stages (new, screening, vet_check, home_visit)
+   * Returns the count of ALL active workload items for the Command Center:
+   * - Surrender requests: all active statuses (new, review, spacecheck, waitlist, scheduled) - excludes only 'intaken'
+   * - Adoption applications: all active stages (new, screening, vet_check, home_visit, approved, trial) - excludes 'adopted', 'denied', 'trial_failed'
    * - Foster applications with status 'pending'
    * - Volunteer applications with status 'pending'
    */
-  app.get('/api/dashboard/action-items-count', requireTenant, requireAuth, requireRole('admin', 'staff', 'owner'), async (req, res, next) => {
+  app.get('/api/dashboard/action-items-count', requireTenant, requireAuth, requireRole('admin', 'staff', 'owner', 'board_member', 'intake_coordinator'), async (req, res, next) => {
     try {
       const { 
         applications, 
@@ -3199,7 +3199,7 @@ Crawl-delay: 1
         fosterApplications, 
         surrenderRequests: surrenderRequestsTable,
       } = await import('@shared/schema');
-      const { or, count } = await import('drizzle-orm');
+      const { or, count, ne, notInArray } = await import('drizzle-orm');
 
       // Get counts from all sources in parallel
       const [
@@ -3208,31 +3208,23 @@ Crawl-delay: 1
         fosterCount,
         volunteerCount,
       ] = await Promise.all([
-        // Surrender requests - new or review status
+        // Surrender requests - all active statuses (exclude only 'intaken' which is completed)
         db.select({ count: count() })
           .from(surrenderRequestsTable)
           .where(
             and(
               eq(surrenderRequestsTable.tenantId, req.tenant!.id),
-              or(
-                eq(surrenderRequestsTable.status, 'new'),
-                eq(surrenderRequestsTable.status, 'review')
-              )
+              ne(surrenderRequestsTable.status, 'intaken')
             )
           ),
         
-        // Adoption applications - pending stages (new, screening, vet_check, home_visit)
+        // Adoption applications - all active stages (exclude only final stages)
         db.select({ count: count() })
           .from(applications)
           .where(
             and(
               eq(applications.tenantId, req.tenant!.id),
-              or(
-                eq(applications.stage, 'new'),
-                eq(applications.stage, 'screening'),
-                eq(applications.stage, 'vet_check'),
-                eq(applications.stage, 'home_visit')
-              )
+              notInArray(applications.stage, ['adopted', 'denied', 'trial_failed'])
             )
           ),
         
