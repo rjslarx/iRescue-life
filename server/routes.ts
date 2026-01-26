@@ -3277,6 +3277,42 @@ Crawl-delay: 1
   });
 
   /**
+   * GET /api/dashboard/animal-counts
+   * Get counts of animals by location (in shelter vs in foster)
+   */
+  app.get('/api/dashboard/animal-counts', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { animals } = await import('@shared/schema');
+      const { or, count } = await import('drizzle-orm');
+
+      const allAnimals = await db.select()
+        .from(animals)
+        .where(
+          and(
+            eq(animals.tenantId, req.tenant!.id),
+            or(
+              eq(animals.status, 'available'),
+              eq(animals.status, 'foster'),
+              eq(animals.status, 'adoption_pending'),
+              eq(animals.status, 'in_trial')
+            )
+          )
+        );
+
+      const inShelter = allAnimals.filter(a => a.status === 'available' || a.status === 'adoption_pending').length;
+      const inFoster = allAnimals.filter(a => a.status === 'foster' || a.status === 'in_trial').length;
+
+      res.json({
+        inShelter,
+        inFoster,
+        total: inShelter + inFoster,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * GET /api/dashboard/pending-applications
    * Get all pending applications from all sources (adoption, foster, volunteer, surrender, custom forms)
    * Consolidated view for the dashboard

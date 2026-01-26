@@ -1,15 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AlertTriangle, Shield, Clipboard, Pill } from "lucide-react";
+import { Home, Heart, ClipboardList, Shield } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Link } from "wouter";
 
-interface StatsResponse {
-  stats: {
-    pendingApplications: number;
-    animalsInCare: number;
-  };
+interface AnimalCountsResponse {
+  inShelter: number;
+  inFoster: number;
+  total: number;
 }
 
 interface ActionItemsResponse {
@@ -29,18 +28,11 @@ interface ComplianceResponse {
   };
 }
 
-interface FosterDashboardStats {
-  pendingSupplyRequests: number;
-  pendingBioSubmissions: number;
-  flaggedNotes: number;
-  pendingPhotoApprovals: number;
-}
-
 export default function StatsOverview() {
   const { user } = useAuth();
 
-  const { data: statsData, isLoading: isLoadingStats } = useQuery<StatsResponse>({
-    queryKey: ['/api/stats', user?.activeRole],
+  const { data: animalCountsData, isLoading: isLoadingAnimalCounts } = useQuery<AnimalCountsResponse>({
+    queryKey: ['/api/dashboard/animal-counts', user?.activeRole],
     enabled: !!user && user.activeRole !== 'foster',
   });
 
@@ -49,50 +41,45 @@ export default function StatsOverview() {
     enabled: !!user && user.activeRole !== 'foster',
   });
 
-  const { data: fosterStats, isLoading: isLoadingFoster } = useQuery<FosterDashboardStats>({
-    queryKey: ['/api/foster-portal/staff/dashboard'],
-    enabled: !!user && (user.activeRole === 'admin' || user.activeRole === 'staff'),
-  });
-
   const { data: actionItemsData, isLoading: isLoadingActionItems } = useQuery<ActionItemsResponse>({
     queryKey: ['/api/dashboard/action-items-count', user?.activeRole],
     enabled: !!user && (user.activeRole === 'admin' || user.activeRole === 'staff' || user.activeRole === 'owner'),
   });
 
-  const isLoading = isLoadingStats || isLoadingCompliance || isLoadingFoster || isLoadingActionItems;
-  const actionItemsCount = actionItemsData?.total || 0;
+  const isLoading = isLoadingAnimalCounts || isLoadingCompliance || isLoadingActionItems;
+  const inShelter = animalCountsData?.inShelter || 0;
+  const inFoster = animalCountsData?.inFoster || 0;
+  const pendingApps = actionItemsData?.total || 0;
   const complianceRate = complianceData?.compliance?.complianceRate || 100;
-  const overdueMedsCount = complianceData?.compliance?.overdueMedications?.count || 0;
-  const behaviorAlerts = fosterStats?.flaggedNotes || 0;
 
   const stats = [
     {
-      label: 'Action Items',
-      value: actionItemsCount,
-      description: 'Pending requests to process',
-      icon: Clipboard,
-      href: '#action-items-zone',
+      label: 'In Shelter',
+      value: inShelter,
+      description: 'Animals currently on-site',
+      icon: Home,
+      href: '/dashboard/animals?status=available',
     },
     {
-      label: 'Overdue Meds',
-      value: overdueMedsCount,
-      description: 'Animals behind on medication',
-      icon: Pill,
-      href: '/dashboard/medical-pipeline',
+      label: 'In Foster',
+      value: inFoster,
+      description: 'Animals in foster homes',
+      icon: Heart,
+      href: '/dashboard/foster-management',
     },
     {
-      label: 'Compliance Rate',
+      label: 'Pending Apps',
+      value: pendingApps,
+      description: 'Applications to process',
+      icon: ClipboardList,
+      href: '#section-pipeline-manager',
+    },
+    {
+      label: 'Compliance',
       value: `${complianceRate}%`,
-      description: 'Medical check compliance',
+      description: 'Medical compliance rate',
       icon: Shield,
       href: '#compliance-widget',
-    },
-    {
-      label: 'Behavior Alerts',
-      value: behaviorAlerts,
-      description: 'Flagged for review',
-      icon: AlertTriangle,
-      href: '/dashboard/animals?filter=behavior',
     },
   ];
 
