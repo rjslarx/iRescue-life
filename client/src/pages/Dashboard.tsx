@@ -3,28 +3,22 @@ import { useAuth } from "@/contexts/AuthContext";
 import { OnboardingChecklist } from "@/components/OnboardingChecklist";
 import { FloatingActionButton } from "@/components/FloatingActionButton";
 import { RecordOfflineDonationDialog } from "@/components/RecordOfflineDonationDialog";
-import { Heart, FileText, Users, Package, MessageSquare, PawPrint, AlertCircle, Pill, Loader2, Stethoscope, Inbox, ClipboardList, Calendar } from "lucide-react";
+import { Heart, Users, MessageSquare, Pill, Loader2, Stethoscope, Inbox, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "wouter";
-import type { Tenant, SupplyRequest, FosterUpdate, FosterAnimal, Animal, User } from "@shared/schema";
+import type { Tenant, FosterAnimal, Animal, User } from "@shared/schema";
 import DashboardLayout from "@/components/DashboardLayout";
 import SetupWizard from "@/components/SetupWizard";
 import SupplyRequestDialog from "@/components/SupplyRequestDialog";
 import FosterUpdateDialog from "@/components/FosterUpdateDialog";
-import RecentActivityWidget from "@/components/RecentActivityWidget";
-import PendingApplicationsWidget from "@/components/PendingApplicationsWidget";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import {
   StatsOverview,
-  IntakeSummaryWidget,
-  VolunteerSummaryWidget,
   MedicalSnapshotWidget,
-  FosterSummaryWidget,
   ComplianceWidget,
-  ActionCenterWidget,
 } from "@/components/dashboard";
 import PipelineManager from "@/components/dashboard/PipelineManager";
 
@@ -41,7 +35,7 @@ const actionButtons = [
   { id: "new-intake", label: "New Intake", icon: Inbox, href: "/dashboard/intake" },
   { id: "log-medical", label: "Log Medical", icon: Stethoscope, href: "/dashboard/medical-pipeline" },
   { id: "find-foster", label: "Find Foster", icon: Heart, href: "/dashboard/foster-management" },
-  { id: "process-apps", label: "Process Apps", icon: ClipboardList, href: "/dashboard/applications" },
+  { id: "add-volunteer", label: "Add Volunteer", icon: Users, href: "/dashboard/volunteers/new" },
 ];
 
 export default function Dashboard() {
@@ -87,23 +81,10 @@ export default function Dashboard() {
     }
   }, [user, wizardStatus]);
 
-  const { data: supplyRequestsData } = useQuery<{ supplyRequests: SupplyRequest[] }>({
-    queryKey: ['/api/supply-requests'],
-    enabled: user?.activeRole === 'admin' || user?.activeRole === 'staff',
-  });
-
-  const { data: fosterUpdatesData } = useQuery<{ fosterUpdates: FosterUpdate[] }>({
-    queryKey: ['/api/foster-updates'],
-    enabled: user?.activeRole === 'admin' || user?.activeRole === 'staff',
-  });
-
   const { data: fosterAnimalsData, isLoading: isLoadingFosterAnimals } = useQuery<MyFostersData>({
     queryKey: ['/api/foster-animals', user?.activeRole],
     enabled: user?.activeRole === 'foster',
   });
-
-  const pendingSupplyRequests = supplyRequestsData?.supplyRequests.filter(sr => sr.status === 'pending') || [];
-  const unacknowledgedUpdates = fosterUpdatesData?.fosterUpdates.filter(fu => fu.status === 'pending') || [];
   const fosterAnimals = fosterAnimalsData?.fosterAnimals || [];
   const activeFosters = fosterAnimals.filter(fa => fa.status === 'active');
 
@@ -314,15 +295,15 @@ export default function Dashboard() {
                 <StatsOverview />
               </section>
 
-              {/* Admin layout: Standard action bar */}
-              {user?.activeRole === 'admin' && (
+              {/* Action bar - horizontally scrollable on mobile */}
+              {(user?.activeRole === 'admin' || user?.activeRole === 'staff') && (
                 <section data-testid="section-action-bar">
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin">
                     {actionButtons.map((action) => (
                       <Link key={action.id} href={action.href}>
                         <Button 
                           variant="outline" 
-                          className="gap-2"
+                          className="gap-2 whitespace-nowrap shrink-0"
                           data-testid={`button-action-${action.id}`}
                         >
                           <action.icon className="h-4 w-4" />
@@ -334,102 +315,19 @@ export default function Dashboard() {
                 </section>
               )}
 
-              {/* Pipeline Manager - Unified Applications Pipeline with Tabs */}
-              <section data-testid="section-pipeline-manager" className="w-full min-w-0">
-                <PipelineManager />
-              </section>
-
-              <section data-testid="section-command-center" className="w-full min-w-0">
-                {(user?.activeRole === 'admin' || user?.activeRole === 'owner') ? (
-                  /* Admin/Owner layout: 3-zone grid */
-                  <div className="grid gap-6 lg:grid-cols-3 w-full min-w-0">
-                    <div id="action-items-zone" className="space-y-4 w-full min-w-0" data-testid="zone-front-door">
-                      <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">The Front Door</h3>
-                      <IntakeSummaryWidget />
-                      <ActionCenterWidget />
-                    </div>
-
-                    <div className="space-y-4 w-full min-w-0" data-testid="zone-workforce">
-                      <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">The Workforce</h3>
-                      <VolunteerSummaryWidget />
-                      <FosterSummaryWidget />
-                    </div>
-
-                    <div className="space-y-4 w-full min-w-0" data-testid="zone-operations">
-                      <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Operations</h3>
-                      <ComplianceWidget />
-                      <MedicalSnapshotWidget />
-                    </div>
+              {/* The Workspace - 70/30 Grid Layout */}
+              <section data-testid="section-workspace" className="w-full min-w-0">
+                <div className="grid gap-6 lg:grid-cols-[1fr_380px] w-full min-w-0">
+                  {/* Left: Pipeline Manager (70%) */}
+                  <div id="section-pipeline-manager" className="w-full min-w-0 order-1" data-testid="workspace-pipeline">
+                    <PipelineManager />
                   </div>
-                ) : (
-                  /* Volunteer/Staff layout: Simplified grid, Medical shown first above */
-                  <div className="grid gap-6 lg:grid-cols-2 w-full min-w-0">
-                    <div className="space-y-4 w-full min-w-0" data-testid="zone-workforce">
-                      <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">The Workforce</h3>
-                      <VolunteerSummaryWidget />
-                      <FosterSummaryWidget />
-                    </div>
 
-                    {/* Staff sees more admin-related widgets */}
-                    {user?.activeRole === 'staff' && (
-                      <div id="action-items-zone" className="space-y-4 w-full min-w-0" data-testid="zone-front-door">
-                        <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Animals & Intake</h3>
-                        <IntakeSummaryWidget />
-                        <PendingApplicationsWidget />
-                        <ActionCenterWidget />
-                      </div>
-                    )}
+                  {/* Right: Compliance Widget (30%) */}
+                  <div id="compliance-widget" className="w-full min-w-0 order-2 lg:order-2" data-testid="workspace-compliance">
+                    <ComplianceWidget />
                   </div>
-                )}
-              </section>
-
-              {(user?.activeRole === 'admin' || user?.activeRole === 'staff') && (pendingSupplyRequests.length > 0 || unacknowledgedUpdates.length > 0) && (
-                <Card className="border-l-4 border-l-primary" data-testid="card-foster-alerts">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <PawPrint className="h-5 w-5" />
-                      Foster Management
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <Link href="/dashboard/foster-management?tab=supply-requests">
-                        <div className="p-4 rounded-lg border hover-elevate cursor-pointer" data-testid="tile-supply-requests">
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center gap-2">
-                              <Package className="h-5 w-5 text-muted-foreground" />
-                              <h3 className="font-medium">Supply Requests</h3>
-                            </div>
-                            <Badge variant={pendingSupplyRequests.length > 0 ? "secondary" : "outline"} data-testid="badge-supply-count">{pendingSupplyRequests.length}</Badge>
-                          </div>
-                          <p className="text-sm text-muted-foreground">
-                            {pendingSupplyRequests.length > 0 ? "Foster parents need supplies" : "No pending supply requests"}
-                          </p>
-                        </div>
-                      </Link>
-
-                      <Link href="/dashboard/foster-management?tab=foster-updates">
-                        <div className="p-4 rounded-lg border hover-elevate cursor-pointer" data-testid="tile-foster-updates">
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center gap-2">
-                              <MessageSquare className="h-5 w-5 text-muted-foreground" />
-                              <h3 className="font-medium">Foster Updates</h3>
-                            </div>
-                            <Badge variant={unacknowledgedUpdates.length > 0 ? "secondary" : "outline"} data-testid="badge-updates-count">{unacknowledgedUpdates.length}</Badge>
-                          </div>
-                          <p className="text-sm text-muted-foreground">
-                            {unacknowledgedUpdates.length > 0 ? "New updates need your attention" : "No unread foster updates"}
-                          </p>
-                        </div>
-                      </Link>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              <section data-testid="section-recent-activity">
-                <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-4">Recent Activity</h3>
-                <RecentActivityWidget />
+                </div>
               </section>
             </>
           )}

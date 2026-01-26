@@ -413,7 +413,7 @@ export default function PipelineManager() {
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="adoptions" className="w-full">
-            <TabsList className="w-full grid grid-cols-4 mb-4" data-testid="pipeline-tabs">
+            <TabsList className="w-full h-auto flex flex-wrap sm:grid sm:grid-cols-4 mb-4 gap-1" data-testid="pipeline-tabs">
               <TabsTrigger value="adoptions" className="text-xs sm:text-sm" data-testid="tab-adoptions">
                 <Heart className="h-3 w-3 mr-1 hidden sm:inline" />
                 Adoptions
