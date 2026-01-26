@@ -2196,32 +2196,30 @@ Crawl-delay: 1
         expiresAt,
       });
 
-      // Send reset email if Resend is configured
-      if (req.tenant!.resendEnabled && req.tenant!.resendApiKeyEncrypted) {
-        try {
-          const { decryptApiKey } = await import('./lib/encryption');
-          const { Resend } = await import('resend');
-          
-          const apiKey = decryptApiKey(req.tenant!.resendApiKeyEncrypted);
-          const resend = new Resend(apiKey);
-          
-          // Construct reset URL with proper domain and path-based routing
-          let resetUrl: string;
-          if (req.tenant!.customDomain) {
-            resetUrl = `https://${req.tenant!.customDomain}/reset-password?token=${token}`;
-          } else {
-            // Use path-based routing: {baseUrl}/{subdomain}/reset-password
-            const isProduction = process.env.REPLIT_DEPLOYMENT === '1';
-            const baseUrl = isProduction 
-              ? 'https://irescue.life'
-              : process.env.REPLIT_DEV_DOMAIN 
-                ? `https://${process.env.REPLIT_DEV_DOMAIN}`
-                : 'http://localhost:5000';
-            resetUrl = `${baseUrl}/${req.tenant!.subdomain}/reset-password?token=${token}`;
-          }
-          
-          await resend.emails.send({
-            from: `${req.tenant!.resendFromName || req.tenant!.name} <${req.tenant!.resendFromEmail}>`,
+      // Send reset email using EmailService (Gmail priority, platform Resend fallback)
+      try {
+        const { EmailService } = await import('./lib/email-service');
+        
+        // Construct reset URL with proper domain and path-based routing
+        let resetUrl: string;
+        if (req.tenant!.customDomain) {
+          resetUrl = `https://${req.tenant!.customDomain}/reset-password?token=${token}`;
+        } else {
+          // Use path-based routing: {baseUrl}/{subdomain}/reset-password
+          const isProduction = process.env.REPLIT_DEPLOYMENT === '1';
+          const baseUrl = isProduction 
+            ? 'https://irescue.life'
+            : process.env.REPLIT_DEV_DOMAIN 
+              ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+              : 'http://localhost:5000';
+          resetUrl = `${baseUrl}/${req.tenant!.subdomain}/reset-password?token=${token}`;
+        }
+        
+        // Use EmailService.forTenant which prioritizes Gmail, then falls back to platform Resend
+        const emailService = await EmailService.forTenant(req.tenant!.id);
+        
+        if (emailService) {
+          await emailService.send({
             to: user.email,
             subject: 'Password Reset Request',
             html: `
@@ -2234,10 +2232,13 @@ Crawl-delay: 1
               <p>Best regards,<br/>${req.tenant!.name}</p>
             `,
           });
-        } catch (emailError) {
-          console.error('Failed to send password reset email:', emailError);
-          // Don't fail the request if email fails - user can still use the token
+          console.log(`[FORGOT PASSWORD] Password reset email sent to ${user.email} for tenant ${req.tenant!.subdomain}`);
+        } else {
+          console.warn(`[FORGOT PASSWORD] No email service available for tenant ${req.tenant!.subdomain} - password reset email not sent`);
         }
+      } catch (emailError) {
+        console.error('Failed to send password reset email:', emailError);
+        // Don't fail the request if email fails - user can still use the token
       }
 
       res.json({ success: true, message: 'If an account exists with that email, a password reset link has been sent.' });
