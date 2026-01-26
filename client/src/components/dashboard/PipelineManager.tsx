@@ -224,17 +224,17 @@ export default function PipelineManager() {
   const [selectedType, setSelectedType] = useState<ApplicationType>("adoption");
   const [selectedData, setSelectedData] = useState<ApplicationData | null>(null);
 
-  const { data: adoptions, isLoading: adoptionsLoading } = useQuery<AdoptionApplication[]>({
+  const { data: adoptionsData, isLoading: adoptionsLoading } = useQuery<{ applications: AdoptionApplication[] }>({
     queryKey: ['/api/applications'],
     enabled: !!user && (user.activeRole === 'admin' || user.activeRole === 'staff'),
   });
 
-  const { data: fosters, isLoading: fostersLoading } = useQuery<FosterApplication[]>({
+  const { data: fostersData, isLoading: fostersLoading } = useQuery<{ applications: FosterApplication[] }>({
     queryKey: ['/api/foster-applications'],
     enabled: !!user && (user.activeRole === 'admin' || user.activeRole === 'staff'),
   });
 
-  const { data: volunteers, isLoading: volunteersLoading } = useQuery<VolunteerApplication[]>({
+  const { data: volunteersData, isLoading: volunteersLoading } = useQuery<{ applications: VolunteerApplication[] }>({
     queryKey: ['/api/volunteer-applications'],
     enabled: !!user && (user.activeRole === 'admin' || user.activeRole === 'staff'),
   });
@@ -243,6 +243,11 @@ export default function PipelineManager() {
     queryKey: ['/api/surrender-requests'],
     enabled: !!user && (user.activeRole === 'admin' || user.activeRole === 'staff'),
   });
+
+  // Extract arrays from wrapped responses
+  const adoptions = adoptionsData?.applications;
+  const fosters = fostersData?.applications;
+  const volunteers = volunteersData?.applications;
 
   const isLoading = adoptionsLoading || fostersLoading || volunteersLoading || intakesLoading;
 

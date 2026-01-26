@@ -10671,7 +10671,7 @@ Submitted: ${new Date().toLocaleString()}
    * GET /api/foster-applications
    * List foster applications (admin/staff only)
    */
-  app.get('/api/foster-applications', requireTenant, requireAuth, requireRole('staff'), async (req, res, next) => {
+  app.get('/api/foster-applications', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
     try {
       const { fosterApplications } = await import('@shared/schema');
       
