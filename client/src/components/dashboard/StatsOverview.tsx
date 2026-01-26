@@ -58,14 +58,14 @@ export default function StatsOverview() {
       value: inShelter,
       description: 'Animals currently on-site',
       icon: Home,
-      href: '/dashboard/animals?status=available',
+      href: '/dashboard/animals?location=shelter',
     },
     {
       label: 'In Foster',
       value: inFoster,
       description: 'Animals in foster homes',
       icon: Heart,
-      href: '/dashboard/foster-management',
+      href: '/dashboard/animals?location=foster',
     },
     {
       label: 'Pending Apps',
