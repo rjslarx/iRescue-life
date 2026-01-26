@@ -75,14 +75,12 @@ export default function StatsOverview() {
     {
       label: 'In Shelter',
       value: inShelter,
-      description: 'Animals currently on-site',
       icon: Home,
       href: '/dashboard/animals?location=shelter',
     },
     {
       label: 'In Foster Homes',
       value: inFoster,
-      description: 'Animals in foster care',
       icon: Heart,
       href: '/dashboard/animals?location=foster',
     },
@@ -90,17 +88,16 @@ export default function StatsOverview() {
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4" data-testid="stats-overview-skeleton">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3" data-testid="stats-overview-skeleton">
         {Array.from({ length: 6 }).map((_, i) => (
           <Card key={i} className="bg-muted/30">
-            <CardContent className="p-4">
-              <div className="space-y-2">
+            <CardContent className="p-3">
+              <div className="space-y-1">
                 <div className="flex items-center justify-between">
                   <Skeleton className="h-4 w-24" />
                   <Skeleton className="h-4 w-4 rounded" />
                 </div>
-                <Skeleton className="h-8 w-16" />
-                <Skeleton className="h-3 w-28" />
+                <Skeleton className="h-7 w-12" />
               </div>
             </CardContent>
           </Card>
@@ -119,7 +116,7 @@ export default function StatsOverview() {
   };
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 gap-4" data-testid="stats-overview">
+    <div className="grid grid-cols-2 md:grid-cols-3 gap-3" data-testid="stats-overview">
       {stats.map((stat) => {
         const isAnchor = stat.href.startsWith('#');
         const cardContent = (
@@ -127,18 +124,20 @@ export default function StatsOverview() {
             className="bg-muted/30 border-0 shadow-none cursor-pointer hover-elevate"
             data-testid={`stat-${stat.label.toLowerCase().replace(/\s+/g, '-')}`}
           >
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between mb-2">
+            <CardContent className="p-3">
+              <div className="flex items-center justify-between mb-1">
                 <span className="text-sm font-medium text-foreground">{stat.label}</span>
                 <stat.icon className="h-4 w-4 text-muted-foreground" />
               </div>
               <div 
-                className="text-3xl font-bold text-foreground mb-1"
+                className="text-2xl font-bold text-foreground"
                 data-testid={`text-${stat.label.toLowerCase().replace(/\s+/g, '-')}-value`}
               >
                 {stat.value}
               </div>
-              <p className="text-xs text-muted-foreground">{stat.description}</p>
+              {'description' in stat && stat.description && (
+                <p className="text-xs text-muted-foreground mt-1">{stat.description}</p>
+              )}
             </CardContent>
           </Card>
         );
