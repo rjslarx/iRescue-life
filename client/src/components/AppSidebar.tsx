@@ -30,7 +30,7 @@ import { useToast } from "@/hooks/use-toast";
 import { usePagePermissions } from "@/hooks/usePagePermissions";
 import { useQuickActions } from "@/hooks/useQuickActions";
 import { RecordOfflineDonationDialog } from "@/components/RecordOfflineDonationDialog";
-import { Star } from "lucide-react";
+import { Zap } from "lucide-react";
 import {
   LayoutDashboard,
   Heart,
@@ -514,8 +514,8 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
             <SidebarGroup>
               <CollapsibleTrigger asChild>
                 <SidebarGroupLabel className="hover-elevate cursor-pointer">
-                  <Star className="h-4 w-4 mr-1" />
-                  <span>Favorites</span>
+                  <Zap className="h-4 w-4 mr-1" />
+                  <span>Quick Actions</span>
                   <ChevronRight className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-90 h-4 w-4" />
                 </SidebarGroupLabel>
               </CollapsibleTrigger>
@@ -529,7 +529,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
                           <SidebarMenuButton 
                             isActive={action.href ? location === action.href : false}
                             onClick={() => handleFavoriteAction(action.id)}
-                            data-testid={`link-favorite-${action.id}`}
+                            data-testid={`link-quick-action-${action.id}`}
                           >
                             <IconComponent className="h-4 w-4" />
                             <span>{action.label}</span>
