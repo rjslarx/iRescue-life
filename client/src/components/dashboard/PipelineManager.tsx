@@ -226,17 +226,17 @@ export default function PipelineManager() {
 
   const { data: adoptionsData, isLoading: adoptionsLoading } = useQuery<{ applications: AdoptionApplication[] }>({
     queryKey: ['/api/applications'],
-    enabled: !!user && (user.activeRole === 'admin' || user.activeRole === 'staff'),
+    enabled: !!user && ['admin', 'owner', 'board_member', 'staff', 'intake_coordinator'].includes(user.activeRole || ''),
   });
 
   const { data: fostersData, isLoading: fostersLoading } = useQuery<{ applications: FosterApplication[] }>({
     queryKey: ['/api/foster-applications'],
-    enabled: !!user && (user.activeRole === 'admin' || user.activeRole === 'staff'),
+    enabled: !!user && ['admin', 'owner', 'board_member', 'staff', 'intake_coordinator'].includes(user.activeRole || ''),
   });
 
   const { data: volunteersData, isLoading: volunteersLoading } = useQuery<{ applications: VolunteerApplication[] }>({
     queryKey: ['/api/volunteer-applications'],
-    enabled: !!user && (user.activeRole === 'admin' || user.activeRole === 'staff'),
+    enabled: !!user && ['admin', 'owner', 'board_member', 'staff', 'intake_coordinator'].includes(user.activeRole || ''),
   });
 
   const { data: intakes, isLoading: intakesLoading } = useQuery<SurrenderRequest[]>({

@@ -6519,7 +6519,7 @@ Crawl-delay: 1
    * GET /api/applications
    * Get all applications (staff only)
    */
-  app.get('/api/applications', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+  app.get('/api/applications', requireTenant, requireAuth, requireRole('admin', 'owner', 'board_member', 'staff', 'intake_coordinator'), async (req, res, next) => {
     try {
       const { getApplicationsByTenant } = await import('./services/applications');
       const applications = await getApplicationsByTenant(req.tenant!.id);
@@ -10708,7 +10708,7 @@ Submitted: ${new Date().toLocaleString()}
    * GET /api/foster-applications
    * List foster applications (admin/staff only)
    */
-  app.get('/api/foster-applications', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+  app.get('/api/foster-applications', requireTenant, requireAuth, requireRole('admin', 'owner', 'board_member', 'staff', 'intake_coordinator'), async (req, res, next) => {
     try {
       const { fosterApplications } = await import('@shared/schema');
       
@@ -11026,7 +11026,7 @@ Submitted: ${new Date().toLocaleString()}
    * GET /api/volunteer-applications
    * List volunteer applications (admin/staff only)
    */
-  app.get('/api/volunteer-applications', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+  app.get('/api/volunteer-applications', requireTenant, requireAuth, requireRole('admin', 'owner', 'board_member', 'staff', 'intake_coordinator'), async (req, res, next) => {
     try {
       const { volunteerApplications } = await import('@shared/schema');
       
