@@ -380,10 +380,14 @@ export default function PipelineManager() {
     createdAt: i.createdAt,
   }));
 
-  const activeAdoptionsCount = adoptionItems.length;
+  // Count pending items for each pipeline (action-required statuses)
+  const pendingAdoptionStatuses = ['new', 'screening', 'vet_check', 'home_visit'];
+  const pendingIntakeStatuses = ['new', 'review'];
+  
+  const activeAdoptionsCount = adoptionItems.filter(a => pendingAdoptionStatuses.includes(a.status)).length;
   const activeFostersCount = fosterItems.filter(f => f.status === 'pending').length;
   const activeVolunteersCount = volunteerItems.filter(v => v.status === 'pending').length;
-  const activeIntakesCount = intakeItems.length;
+  const activeIntakesCount = intakeItems.filter(i => pendingIntakeStatuses.includes(i.status)).length;
 
   if (isLoading) {
     return (
@@ -417,37 +421,45 @@ export default function PipelineManager() {
               <TabsTrigger value="adoptions" className="text-xs sm:text-sm" data-testid="tab-adoptions">
                 <Heart className="h-3 w-3 mr-1 hidden sm:inline" />
                 Adoptions
-                {activeAdoptionsCount > 0 && (
-                  <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs" data-testid="badge-count-adoptions">
-                    {activeAdoptionsCount}
+                {activeAdoptionsCount > 0 ? (
+                  <Badge variant="destructive" className="ml-1 h-5 px-1.5 text-xs" data-testid="badge-count-adoptions">
+                    ({activeAdoptionsCount})
                   </Badge>
+                ) : (
+                  <span className="ml-1 text-xs text-muted-foreground" data-testid="badge-count-adoptions">(0)</span>
                 )}
               </TabsTrigger>
               <TabsTrigger value="fosters" className="text-xs sm:text-sm" data-testid="tab-fosters">
                 <Home className="h-3 w-3 mr-1 hidden sm:inline" />
                 Fosters
-                {activeFostersCount > 0 && (
-                  <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs" data-testid="badge-count-fosters">
-                    {activeFostersCount}
+                {activeFostersCount > 0 ? (
+                  <Badge variant="destructive" className="ml-1 h-5 px-1.5 text-xs" data-testid="badge-count-fosters">
+                    ({activeFostersCount})
                   </Badge>
+                ) : (
+                  <span className="ml-1 text-xs text-muted-foreground" data-testid="badge-count-fosters">(0)</span>
                 )}
               </TabsTrigger>
               <TabsTrigger value="volunteers" className="text-xs sm:text-sm" data-testid="tab-volunteers">
                 <Users className="h-3 w-3 mr-1 hidden sm:inline" />
                 Volunteers
-                {activeVolunteersCount > 0 && (
-                  <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs" data-testid="badge-count-volunteers">
-                    {activeVolunteersCount}
+                {activeVolunteersCount > 0 ? (
+                  <Badge variant="destructive" className="ml-1 h-5 px-1.5 text-xs" data-testid="badge-count-volunteers">
+                    ({activeVolunteersCount})
                   </Badge>
+                ) : (
+                  <span className="ml-1 text-xs text-muted-foreground" data-testid="badge-count-volunteers">(0)</span>
                 )}
               </TabsTrigger>
               <TabsTrigger value="intake" className="text-xs sm:text-sm" data-testid="tab-intake">
                 <Dog className="h-3 w-3 mr-1 hidden sm:inline" />
                 Intake
-                {activeIntakesCount > 0 && (
-                  <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs" data-testid="badge-count-intake">
-                    {activeIntakesCount}
+                {activeIntakesCount > 0 ? (
+                  <Badge variant="destructive" className="ml-1 h-5 px-1.5 text-xs" data-testid="badge-count-intake">
+                    ({activeIntakesCount})
                   </Badge>
+                ) : (
+                  <span className="ml-1 text-xs text-muted-foreground" data-testid="badge-count-intake">(0)</span>
                 )}
               </TabsTrigger>
             </TabsList>
