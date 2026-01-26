@@ -26,6 +26,7 @@ import {
   ComplianceWidget,
   ActionCenterWidget,
 } from "@/components/dashboard";
+import PipelineManager from "@/components/dashboard/PipelineManager";
 
 interface FosterAnimalWithDetails extends FosterAnimal {
   animal: Animal | null;
@@ -333,6 +334,11 @@ export default function Dashboard() {
                 </section>
               )}
 
+              {/* Pipeline Manager - Unified Applications Pipeline with Tabs */}
+              <section data-testid="section-pipeline-manager" className="w-full min-w-0">
+                <PipelineManager />
+              </section>
+
               <section data-testid="section-command-center" className="w-full min-w-0">
                 {(user?.activeRole === 'admin' || user?.activeRole === 'owner') ? (
                   /* Admin/Owner layout: 3-zone grid */
@@ -340,7 +346,6 @@ export default function Dashboard() {
                     <div id="action-items-zone" className="space-y-4 w-full min-w-0" data-testid="zone-front-door">
                       <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">The Front Door</h3>
                       <IntakeSummaryWidget />
-                      <PendingApplicationsWidget />
                       <ActionCenterWidget />
                     </div>
 
