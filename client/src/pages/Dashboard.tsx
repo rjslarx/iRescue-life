@@ -32,7 +32,7 @@ interface MyFostersData {
 }
 
 const actionButtons = [
-  { id: "new-intake", label: "New Intake", icon: Inbox, href: "/dashboard/intake", color: "bg-blue-600 text-white border-blue-600" },
+  { id: "new-intake", label: "New Intake", icon: Inbox, href: "/surrender", color: "bg-blue-600 text-white border-blue-600" },
   { id: "log-meds", label: "Log Meds", icon: Pill, href: "/dashboard/medical-pipeline?tab=treatments", color: "bg-red-600 text-white border-red-600" },
   { id: "find-foster", label: "Find Foster", icon: Heart, href: "/dashboard/foster-management", color: "bg-green-600 text-white border-green-600" },
   { id: "add-volunteer", label: "Add Volunteer", icon: Users, href: "/dashboard/volunteers/new", color: "bg-purple-600 text-white border-purple-600" },
