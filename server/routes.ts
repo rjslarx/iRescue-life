@@ -3184,14 +3184,15 @@ Crawl-delay: 1
   });
 
   /**
-   * GET /api/dashboard/action-items-count
+   * GET /api/dashboard/action-items-count/:role?
    * Returns the count of ALL active workload items for the Command Center:
    * - Surrender requests: all active statuses (new, review, spacecheck, waitlist, scheduled) - excludes only 'intaken'
    * - Adoption applications: all active stages (new, screening, vet_check, home_visit, approved, trial) - excludes 'adopted', 'denied', 'trial_failed'
    * - Foster applications with status 'pending'
    * - Volunteer applications with status 'pending'
+   * Note: The :role param is optional and used only for cache busting on the frontend
    */
-  app.get('/api/dashboard/action-items-count', requireTenant, requireAuth, requireRole('admin', 'staff', 'owner', 'board_member', 'intake_coordinator'), async (req, res, next) => {
+  app.get('/api/dashboard/action-items-count/:role?', requireTenant, requireAuth, requireRole('admin', 'staff', 'owner', 'board_member', 'intake_coordinator'), async (req, res, next) => {
     try {
       const { 
         applications, 
@@ -3270,10 +3271,11 @@ Crawl-delay: 1
   });
 
   /**
-   * GET /api/dashboard/animal-counts
+   * GET /api/dashboard/animal-counts/:role?
    * Get counts of animals by location (in shelter vs in foster)
+   * Note: The :role param is optional and used only for cache busting on the frontend
    */
-  app.get('/api/dashboard/animal-counts', requireTenant, requireAuth, async (req, res, next) => {
+  app.get('/api/dashboard/animal-counts/:role?', requireTenant, requireAuth, async (req, res, next) => {
     try {
       const { animals } = await import('@shared/schema');
       const { or, count } = await import('drizzle-orm');
