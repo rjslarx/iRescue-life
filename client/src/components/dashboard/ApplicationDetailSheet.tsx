@@ -27,6 +27,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { 
   Phone, 
   MessageSquare, 
@@ -38,7 +43,9 @@ import {
   Dog,
   Users,
   AlertTriangle,
-  Calendar
+  Calendar,
+  ChevronDown,
+  ChevronRight
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
@@ -241,6 +248,7 @@ export default function ApplicationDetailSheet({
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [showRejectDialog, setShowRejectDialog] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   const updateMutation = useMutation({
     mutationFn: async ({ newStatus }: { newStatus: string }) => {
@@ -311,21 +319,105 @@ export default function ApplicationDetailSheet({
     }
   };
 
-  const renderSummarySection = () => {
+  const renderDealbreakerSection = () => {
     if (type === "adoption") {
       const adoptionData = data as AdoptionData;
       const customResponses = adoptionData.customResponses || {};
       return (
-        <div className="space-y-3" data-testid="summary-section-adoption">
+        <div className="space-y-2" data-testid="dealbreaker-section-adoption">
+          <SummaryItem 
+            label="Home Type" 
+            value={customResponses.homeOwnership || customResponses.housingType || "Not specified"} 
+            warning={customResponses.homeOwnership === "rent" && !customResponses.hasLandlordApproval}
+          />
+          <SummaryItem 
+            label="Fenced Yard" 
+            value={customResponses.hasFence ? "Yes" : "No"} 
+            warning={!customResponses.hasFence}
+          />
+          <SummaryItem 
+            label="Current Pets" 
+            value={customResponses.hasOtherPets ? (customResponses.otherPetsDetails || "Yes") : "None"}
+          />
+          <SummaryItem 
+            label="Vet Contact" 
+            value={customResponses.vetName || customResponses.vetContact || "Not provided"}
+            warning={!customResponses.vetName && !customResponses.vetContact}
+          />
+        </div>
+      );
+    }
+
+    if (type === "intake") {
+      const intakeData = data as IntakeData;
+      return (
+        <div className="space-y-2" data-testid="dealbreaker-section-intake">
+          <SummaryItem 
+            label="Reason for Surrender" 
+            value={intakeData.reasonForSurrender}
+            warning
+          />
+          <SummaryItem 
+            label="Animal Age" 
+            value={intakeData.dogAge || "Not specified"}
+          />
+          <SummaryItem 
+            label="Spayed/Neutered" 
+            value={intakeData.spayedNeutered ? "Yes" : "No"}
+            warning={!intakeData.spayedNeutered}
+          />
+          <SummaryItem 
+            label="Aggression History" 
+            value={intakeData.behavioralIssues || "None reported"}
+            warning={!!intakeData.behavioralIssues}
+          />
+        </div>
+      );
+    }
+
+    if (type === "foster") {
+      const fosterData = data as FosterData;
+      return (
+        <div className="space-y-2" data-testid="dealbreaker-section-foster">
+          <SummaryItem 
+            label="Experience Level" 
+            value={fosterData.experience || "Not specified"}
+          />
+          <SummaryItem 
+            label="Home Activity Level" 
+            value={fosterData.availability || "Not specified"}
+          />
+        </div>
+      );
+    }
+
+    if (type === "volunteer") {
+      const volunteerData = data as VolunteerData;
+      return (
+        <div className="space-y-2" data-testid="dealbreaker-section-volunteer">
+          <SummaryItem 
+            label="Experience" 
+            value={volunteerData.experience || "Not specified"}
+          />
+          <SummaryItem 
+            label="Availability" 
+            value={volunteerData.availability || "Not specified"}
+          />
+        </div>
+      );
+    }
+
+    return null;
+  };
+
+  const renderFullDetailsSection = () => {
+    if (type === "adoption") {
+      const adoptionData = data as AdoptionData;
+      const customResponses = adoptionData.customResponses || {};
+      return (
+        <div className="space-y-2 pt-2" data-testid="full-details-adoption">
           {adoptionData.animal && (
             <SummaryItem label="Animal" value={adoptionData.animal.name} />
-          )}
-          {customResponses.hasFence !== undefined && (
-            <SummaryItem 
-              label="Fenced Yard" 
-              value={customResponses.hasFence ? "Yes" : "No"} 
-              warning={!customResponses.hasFence}
-            />
           )}
           {customResponses.hasLandlordApproval !== undefined && (
             <SummaryItem 
@@ -334,11 +426,11 @@ export default function ApplicationDetailSheet({
               warning={!customResponses.hasLandlordApproval}
             />
           )}
-          {customResponses.hasOtherPets !== undefined && (
-            <SummaryItem 
-              label="Other Pets" 
-              value={customResponses.hasOtherPets ? "Yes" : "No"}
-            />
+          {customResponses.hasChildren !== undefined && (
+            <SummaryItem label="Has Children" value={customResponses.hasChildren ? "Yes" : "No"} />
+          )}
+          {customResponses.livingArrangement && (
+            <SummaryItem label="Living Arrangement" value={customResponses.livingArrangement} />
           )}
           {adoptionData.notes && (
             <SummaryItem label="Notes" value={adoptionData.notes} />
@@ -347,24 +439,39 @@ export default function ApplicationDetailSheet({
       );
     }
 
+    if (type === "intake") {
+      const intakeData = data as IntakeData;
+      return (
+        <div className="space-y-2 pt-2" data-testid="full-details-intake">
+          <SummaryItem label="Dog Name" value={intakeData.dogName} />
+          <SummaryItem label="Breed" value={intakeData.dogBreed || "Not specified"} />
+          <SummaryItem label="Gender" value={intakeData.dogGender || "Not specified"} />
+          <SummaryItem label="Good with Kids" value={intakeData.goodWithKids || "Unknown"} />
+          <SummaryItem label="Good with Dogs" value={intakeData.goodWithDogs || "Unknown"} />
+          <SummaryItem label="Good with Cats" value={intakeData.goodWithCats || "Unknown"} />
+          {intakeData.medicalIssues && (
+            <SummaryItem label="Medical Issues" value={intakeData.medicalIssues} warning />
+          )}
+          {intakeData.notes && (
+            <SummaryItem label="Notes" value={intakeData.notes} />
+          )}
+        </div>
+      );
+    }
+
     if (type === "foster") {
       const fosterData = data as FosterData;
       return (
-        <div className="space-y-3" data-testid="summary-section-foster">
-          <SummaryItem label="Housing" value={fosterData.housingType || "Not specified"} />
-          <SummaryItem 
-            label="Has Yard" 
-            value={fosterData.hasYard ? "Yes" : "No"}
-          />
-          <SummaryItem 
-            label="Other Pets" 
-            value={fosterData.hasOtherPets ? "Yes" : "No"}
-          />
+        <div className="space-y-2 pt-2" data-testid="full-details-foster">
+          <SummaryItem label="Housing Type" value={fosterData.housingType || "Not specified"} />
+          <SummaryItem label="Has Yard" value={fosterData.hasYard ? "Yes" : "No"} />
+          <SummaryItem label="Other Pets" value={fosterData.hasOtherPets ? "Yes" : "No"} />
           {fosterData.otherPetsDetails && (
             <SummaryItem label="Pet Details" value={fosterData.otherPetsDetails} />
           )}
-          <SummaryItem label="Experience" value={fosterData.experience || "Not specified"} />
-          <SummaryItem label="Availability" value={fosterData.availability || "Not specified"} />
+          {fosterData.address && (
+            <SummaryItem label="Address" value={fosterData.address} />
+          )}
           {fosterData.notes && (
             <SummaryItem label="Notes" value={fosterData.notes} />
           )}
@@ -375,50 +482,18 @@ export default function ApplicationDetailSheet({
     if (type === "volunteer") {
       const volunteerData = data as VolunteerData;
       return (
-        <div className="space-y-3" data-testid="summary-section-volunteer">
-          <SummaryItem label="Experience" value={volunteerData.experience || "Not specified"} />
-          <SummaryItem label="Availability" value={volunteerData.availability || "Not specified"} />
+        <div className="space-y-2 pt-2" data-testid="full-details-volunteer">
           {volunteerData.interests && (
             <SummaryItem label="Interests" value={volunteerData.interests} />
           )}
           {volunteerData.skills && (
             <SummaryItem label="Skills" value={volunteerData.skills} />
           )}
+          {volunteerData.address && (
+            <SummaryItem label="Address" value={volunteerData.address} />
+          )}
           {volunteerData.notes && (
             <SummaryItem label="Notes" value={volunteerData.notes} />
-          )}
-        </div>
-      );
-    }
-
-    if (type === "intake") {
-      const intakeData = data as IntakeData;
-      return (
-        <div className="space-y-3" data-testid="summary-section-intake">
-          <SummaryItem label="Dog Name" value={intakeData.dogName} />
-          <SummaryItem label="Breed" value={intakeData.dogBreed || "Not specified"} />
-          <SummaryItem label="Age" value={intakeData.dogAge || "Not specified"} />
-          <SummaryItem label="Gender" value={intakeData.dogGender || "Not specified"} />
-          <SummaryItem 
-            label="Spayed/Neutered" 
-            value={intakeData.spayedNeutered ? "Yes" : "No"}
-          />
-          <SummaryItem label="Good with Kids" value={intakeData.goodWithKids || "Unknown"} />
-          <SummaryItem label="Good with Dogs" value={intakeData.goodWithDogs || "Unknown"} />
-          <SummaryItem label="Good with Cats" value={intakeData.goodWithCats || "Unknown"} />
-          <SummaryItem 
-            label="Reason for Surrender" 
-            value={intakeData.reasonForSurrender}
-            warning
-          />
-          {intakeData.medicalIssues && (
-            <SummaryItem label="Medical Issues" value={intakeData.medicalIssues} warning />
-          )}
-          {intakeData.behavioralIssues && (
-            <SummaryItem label="Behavioral Issues" value={intakeData.behavioralIssues} warning />
-          )}
-          {intakeData.notes && (
-            <SummaryItem label="Notes" value={intakeData.notes} />
           )}
         </div>
       );
@@ -551,13 +626,37 @@ export default function ApplicationDetailSheet({
 
           <ScrollArea className="flex-1 p-4">
             <div className="space-y-4">
-              <div>
+              <div 
+                className="bg-muted/50 rounded-lg p-4"
+                data-testid="dealbreaker-summary"
+              >
                 <h3 className="font-medium text-sm mb-3 flex items-center gap-2">
-                  <Calendar className="h-4 w-4" />
-                  Summary
+                  <AlertTriangle className="h-4 w-4 text-amber-500" />
+                  Key Factors
                 </h3>
-                {renderSummarySection()}
+                {renderDealbreakerSection()}
               </div>
+
+              <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
+                <CollapsibleTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full justify-between"
+                    data-testid="button-toggle-full-details"
+                  >
+                    <span className="text-sm font-medium">View Full Application Details</span>
+                    {detailsOpen ? (
+                      <ChevronDown className="h-4 w-4" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4" />
+                    )}
+                  </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent data-testid="full-details-content">
+                  {renderFullDetailsSection()}
+                </CollapsibleContent>
+              </Collapsible>
             </div>
           </ScrollArea>
 
