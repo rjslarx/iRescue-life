@@ -410,28 +410,54 @@ export default function ApplicationDetailSheet({
     return null;
   };
 
+  const formatFieldLabel = (key: string): string => {
+    return key
+      .replace(/([A-Z])/g, ' $1')
+      .replace(/^./, str => str.toUpperCase())
+      .replace(/_/g, ' ')
+      .trim();
+  };
+
+  const formatFieldValue = (value: any): string => {
+    if (value === null || value === undefined) return "Not specified";
+    if (typeof value === "boolean") return value ? "Yes" : "No";
+    if (Array.isArray(value)) return value.join(", ") || "None";
+    if (typeof value === "object") return JSON.stringify(value);
+    return String(value);
+  };
+
   const renderFullDetailsSection = () => {
     if (type === "adoption") {
       const adoptionData = data as AdoptionData;
       const customResponses = adoptionData.customResponses || {};
+      
+      // Get all custom response keys except those already shown in dealbreakers
+      const dealbreakerKeys = ['homeOwnership', 'housingType', 'hasFence', 'hasOtherPets', 'otherPetsDetails', 'vetName', 'vetContact'];
+      const otherResponseKeys = Object.keys(customResponses).filter(
+        key => !dealbreakerKeys.includes(key) && customResponses[key] !== null && customResponses[key] !== undefined && customResponses[key] !== ""
+      );
+
       return (
         <div className="space-y-2 pt-2" data-testid="full-details-adoption">
           {adoptionData.animal && (
             <SummaryItem label="Animal" value={adoptionData.animal.name} />
           )}
-          {customResponses.hasLandlordApproval !== undefined && (
+          <SummaryItem label="Email" value={adoptionData.applicantEmail} />
+          <SummaryItem label="Phone" value={adoptionData.applicantPhone} />
+          <SummaryItem 
+            label="Submitted" 
+            value={new Date(adoptionData.createdAt).toLocaleDateString()} 
+          />
+          
+          {/* Render all other custom responses */}
+          {otherResponseKeys.map((key) => (
             <SummaryItem 
-              label="Landlord Approval" 
-              value={customResponses.hasLandlordApproval ? "Yes" : "No"}
-              warning={!customResponses.hasLandlordApproval}
+              key={key}
+              label={formatFieldLabel(key)} 
+              value={formatFieldValue(customResponses[key])}
             />
-          )}
-          {customResponses.hasChildren !== undefined && (
-            <SummaryItem label="Has Children" value={customResponses.hasChildren ? "Yes" : "No"} />
-          )}
-          {customResponses.livingArrangement && (
-            <SummaryItem label="Living Arrangement" value={customResponses.livingArrangement} />
-          )}
+          ))}
+          
           {adoptionData.notes && (
             <SummaryItem label="Notes" value={adoptionData.notes} />
           )}
@@ -443,14 +469,30 @@ export default function ApplicationDetailSheet({
       const intakeData = data as IntakeData;
       return (
         <div className="space-y-2 pt-2" data-testid="full-details-intake">
+          <SummaryItem label="Owner Name" value={intakeData.ownerName} />
+          <SummaryItem label="Email" value={intakeData.ownerEmail} />
+          <SummaryItem label="Phone" value={intakeData.ownerPhone} />
+          <SummaryItem 
+            label="Submitted" 
+            value={new Date(intakeData.createdAt).toLocaleDateString()} 
+          />
+          <div className="border-t pt-2 mt-2" />
           <SummaryItem label="Dog Name" value={intakeData.dogName} />
           <SummaryItem label="Breed" value={intakeData.dogBreed || "Not specified"} />
+          <SummaryItem label="Age" value={intakeData.dogAge || "Not specified"} />
           <SummaryItem label="Gender" value={intakeData.dogGender || "Not specified"} />
+          <SummaryItem label="Spayed/Neutered" value={intakeData.spayedNeutered ? "Yes" : "No"} />
+          <div className="border-t pt-2 mt-2" />
           <SummaryItem label="Good with Kids" value={intakeData.goodWithKids || "Unknown"} />
           <SummaryItem label="Good with Dogs" value={intakeData.goodWithDogs || "Unknown"} />
           <SummaryItem label="Good with Cats" value={intakeData.goodWithCats || "Unknown"} />
+          <div className="border-t pt-2 mt-2" />
+          <SummaryItem label="Reason for Surrender" value={intakeData.reasonForSurrender} />
           {intakeData.medicalIssues && (
             <SummaryItem label="Medical Issues" value={intakeData.medicalIssues} warning />
+          )}
+          {intakeData.behavioralIssues && (
+            <SummaryItem label="Behavioral Issues" value={intakeData.behavioralIssues} warning />
           )}
           {intakeData.notes && (
             <SummaryItem label="Notes" value={intakeData.notes} />
@@ -463,15 +505,26 @@ export default function ApplicationDetailSheet({
       const fosterData = data as FosterData;
       return (
         <div className="space-y-2 pt-2" data-testid="full-details-foster">
+          <SummaryItem label="Name" value={fosterData.applicantName} />
+          <SummaryItem label="Email" value={fosterData.applicantEmail} />
+          <SummaryItem label="Phone" value={fosterData.applicantPhone} />
+          <SummaryItem 
+            label="Submitted" 
+            value={new Date(fosterData.createdAt).toLocaleDateString()} 
+          />
+          {fosterData.address && (
+            <SummaryItem label="Address" value={fosterData.address} />
+          )}
+          <div className="border-t pt-2 mt-2" />
           <SummaryItem label="Housing Type" value={fosterData.housingType || "Not specified"} />
           <SummaryItem label="Has Yard" value={fosterData.hasYard ? "Yes" : "No"} />
           <SummaryItem label="Other Pets" value={fosterData.hasOtherPets ? "Yes" : "No"} />
           {fosterData.otherPetsDetails && (
             <SummaryItem label="Pet Details" value={fosterData.otherPetsDetails} />
           )}
-          {fosterData.address && (
-            <SummaryItem label="Address" value={fosterData.address} />
-          )}
+          <div className="border-t pt-2 mt-2" />
+          <SummaryItem label="Experience" value={fosterData.experience || "Not specified"} />
+          <SummaryItem label="Availability" value={fosterData.availability || "Not specified"} />
           {fosterData.notes && (
             <SummaryItem label="Notes" value={fosterData.notes} />
           )}
@@ -483,14 +536,24 @@ export default function ApplicationDetailSheet({
       const volunteerData = data as VolunteerData;
       return (
         <div className="space-y-2 pt-2" data-testid="full-details-volunteer">
+          <SummaryItem label="Name" value={volunteerData.applicantName} />
+          <SummaryItem label="Email" value={volunteerData.applicantEmail} />
+          <SummaryItem label="Phone" value={volunteerData.applicantPhone} />
+          <SummaryItem 
+            label="Submitted" 
+            value={new Date(volunteerData.createdAt).toLocaleDateString()} 
+          />
+          {volunteerData.address && (
+            <SummaryItem label="Address" value={volunteerData.address} />
+          )}
+          <div className="border-t pt-2 mt-2" />
+          <SummaryItem label="Experience" value={volunteerData.experience || "Not specified"} />
+          <SummaryItem label="Availability" value={volunteerData.availability || "Not specified"} />
           {volunteerData.interests && (
             <SummaryItem label="Interests" value={volunteerData.interests} />
           )}
           {volunteerData.skills && (
             <SummaryItem label="Skills" value={volunteerData.skills} />
-          )}
-          {volunteerData.address && (
-            <SummaryItem label="Address" value={volunteerData.address} />
           )}
           {volunteerData.notes && (
             <SummaryItem label="Notes" value={volunteerData.notes} />
