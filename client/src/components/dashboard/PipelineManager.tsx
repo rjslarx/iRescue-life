@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -12,12 +13,20 @@ import {
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useAuth } from "@/contexts/AuthContext";
+import ApplicationDetailSheet, { 
+  ApplicationType, 
+  ApplicationData 
+} from "./ApplicationDetailSheet";
 
 interface AdoptionApplication {
   id: string;
   applicantName: string;
   applicantEmail: string;
+  applicantPhone: string;
   stage: "new" | "screening" | "vet_check" | "home_visit" | "approved" | "trial" | "adopted" | "denied" | "trial_failed";
+  notes?: string;
+  customResponses?: Record<string, any>;
+  smsConsent?: boolean;
   createdAt: string;
   animal?: {
     id: string;
@@ -29,7 +38,17 @@ interface FosterApplication {
   id: string;
   applicantName: string;
   applicantEmail: string;
+  applicantPhone: string;
+  address?: string;
+  housingType?: string;
+  hasYard?: boolean;
+  hasOtherPets?: boolean;
+  otherPetsDetails?: string;
+  experience?: string;
+  availability?: string;
   status: "pending" | "approved" | "rejected";
+  notes?: string;
+  smsConsent?: boolean;
   createdAt: string;
 }
 
@@ -37,7 +56,15 @@ interface VolunteerApplication {
   id: string;
   applicantName: string;
   applicantEmail: string;
+  applicantPhone: string;
+  address?: string;
+  experience?: string;
+  availability?: string;
+  interests?: string;
+  skills?: string;
   status: "pending" | "approved" | "rejected";
+  notes?: string;
+  smsConsent?: boolean;
   createdAt: string;
 }
 
@@ -45,8 +72,21 @@ interface SurrenderRequest {
   id: string;
   ownerName: string;
   ownerEmail: string;
+  ownerPhone: string;
   dogName: string;
+  dogBreed?: string;
+  dogAge?: string;
+  dogGender?: string;
+  spayedNeutered?: boolean;
+  goodWithKids?: string;
+  goodWithDogs?: string;
+  goodWithCats?: string;
+  reasonForSurrender: string;
+  medicalIssues?: string;
+  behavioralIssues?: string;
   status: "new" | "review" | "spacecheck" | "waitlist" | "scheduled" | "intaken" | "declined";
+  notes?: string;
+  smsConsent?: boolean;
   createdAt: string;
 }
 
@@ -106,15 +146,20 @@ interface PipelineItemData {
 
 interface PipelineItemProps extends PipelineItemData {
   pipelineType: string;
+  onClick: () => void;
 }
 
-function PipelineItem({ id, name, context, status, createdAt, pipelineType }: PipelineItemProps) {
+function PipelineItem({ id, name, context, status, createdAt, pipelineType, onClick }: PipelineItemProps) {
   const timeAgo = formatDistanceToNow(new Date(createdAt), { addSuffix: false });
   
   return (
     <div 
-      className="flex items-center justify-between p-3 rounded-lg border bg-card"
+      className="flex items-center justify-between p-3 rounded-lg border bg-card hover-elevate cursor-pointer"
       data-testid={`pipeline-item-${pipelineType}-${id}`}
+      onClick={onClick}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onClick(); }}
     >
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
@@ -141,9 +186,10 @@ interface StatusColumnProps {
   status: string;
   items: PipelineItemData[];
   pipelineType: string;
+  onItemClick: (id: string) => void;
 }
 
-function StatusColumn({ status, items, pipelineType }: StatusColumnProps) {
+function StatusColumn({ status, items, pipelineType, onItemClick }: StatusColumnProps) {
   const filteredItems = items.filter(item => item.status === status);
   
   if (filteredItems.length === 0) return null;
@@ -160,7 +206,12 @@ function StatusColumn({ status, items, pipelineType }: StatusColumnProps) {
       </div>
       <div className="space-y-2">
         {filteredItems.map((item) => (
-          <PipelineItem key={item.id} {...item} pipelineType={pipelineType} />
+          <PipelineItem 
+            key={item.id} 
+            {...item} 
+            pipelineType={pipelineType} 
+            onClick={() => onItemClick(item.id)}
+          />
         ))}
       </div>
     </div>
@@ -169,6 +220,9 @@ function StatusColumn({ status, items, pipelineType }: StatusColumnProps) {
 
 export default function PipelineManager() {
   const { user } = useAuth();
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [selectedType, setSelectedType] = useState<ApplicationType>("adoption");
+  const [selectedData, setSelectedData] = useState<ApplicationData | null>(null);
 
   const { data: adoptions, isLoading: adoptionsLoading } = useQuery<AdoptionApplication[]>({
     queryKey: ['/api/applications'],
@@ -192,15 +246,109 @@ export default function PipelineManager() {
 
   const isLoading = adoptionsLoading || fostersLoading || volunteersLoading || intakesLoading;
 
-  const adoptionItems: PipelineItemData[] = (adoptions || [])
-    .filter(a => !['adopted', 'denied', 'trial_failed'].includes(a.stage))
-    .map(a => ({
-      id: a.id,
-      name: a.applicantName,
-      context: a.animal?.name ? `for ${a.animal.name}` : undefined,
-      status: a.stage,
-      createdAt: a.createdAt,
-    }));
+  const handleItemClick = (type: ApplicationType, id: string) => {
+    let data: ApplicationData | null = null;
+    
+    if (type === "adoption") {
+      const app = adoptions?.find(a => a.id === id);
+      if (app) {
+        data = {
+          id: app.id,
+          applicantName: app.applicantName,
+          applicantEmail: app.applicantEmail,
+          applicantPhone: app.applicantPhone,
+          stage: app.stage,
+          notes: app.notes,
+          customResponses: app.customResponses,
+          smsConsent: app.smsConsent,
+          createdAt: app.createdAt,
+          animal: app.animal,
+        };
+      }
+    } else if (type === "foster") {
+      const app = fosters?.find(f => f.id === id);
+      if (app) {
+        data = {
+          id: app.id,
+          applicantName: app.applicantName,
+          applicantEmail: app.applicantEmail,
+          applicantPhone: app.applicantPhone,
+          address: app.address,
+          housingType: app.housingType,
+          hasYard: app.hasYard,
+          hasOtherPets: app.hasOtherPets,
+          otherPetsDetails: app.otherPetsDetails,
+          experience: app.experience,
+          availability: app.availability,
+          status: app.status,
+          notes: app.notes,
+          smsConsent: app.smsConsent,
+          createdAt: app.createdAt,
+        };
+      }
+    } else if (type === "volunteer") {
+      const app = volunteers?.find(v => v.id === id);
+      if (app) {
+        data = {
+          id: app.id,
+          applicantName: app.applicantName,
+          applicantEmail: app.applicantEmail,
+          applicantPhone: app.applicantPhone,
+          address: app.address,
+          experience: app.experience,
+          availability: app.availability,
+          interests: app.interests,
+          skills: app.skills,
+          status: app.status,
+          notes: app.notes,
+          smsConsent: app.smsConsent,
+          createdAt: app.createdAt,
+        };
+      }
+    } else if (type === "intake") {
+      const app = intakes?.find(i => i.id === id);
+      if (app) {
+        data = {
+          id: app.id,
+          ownerName: app.ownerName,
+          ownerEmail: app.ownerEmail,
+          ownerPhone: app.ownerPhone,
+          dogName: app.dogName,
+          dogBreed: app.dogBreed,
+          dogAge: app.dogAge,
+          dogGender: app.dogGender,
+          spayedNeutered: app.spayedNeutered,
+          goodWithKids: app.goodWithKids,
+          goodWithDogs: app.goodWithDogs,
+          goodWithCats: app.goodWithCats,
+          reasonForSurrender: app.reasonForSurrender,
+          medicalIssues: app.medicalIssues,
+          behavioralIssues: app.behavioralIssues,
+          status: app.status,
+          notes: app.notes,
+          smsConsent: app.smsConsent,
+          createdAt: app.createdAt,
+        };
+      }
+    }
+
+    if (data) {
+      setSelectedType(type);
+      setSelectedData(data);
+      setSheetOpen(true);
+    }
+  };
+
+  const activeAdoptions = (adoptions || [])
+    .filter(a => !['adopted', 'denied', 'trial_failed'].includes(a.stage));
+
+  const adoptionItems: PipelineItemData[] = activeAdoptions.map(a => ({
+    id: a.id,
+    name: a.applicantName,
+    context: a.animal?.name ? `for ${a.animal.name}` : undefined,
+    status: a.stage,
+    createdAt: a.createdAt,
+  }));
 
   const fosterItems: PipelineItemData[] = (fosters || []).map(f => ({
     id: f.id,
@@ -216,20 +364,21 @@ export default function PipelineManager() {
     createdAt: v.createdAt,
   }));
 
-  const intakeItems: PipelineItemData[] = (intakes || [])
-    .filter(i => !['intaken', 'declined'].includes(i.status))
-    .map(i => ({
-      id: i.id,
-      name: i.ownerName,
-      context: i.dogName,
-      status: i.status,
-      createdAt: i.createdAt,
-    }));
+  const activeIntakes = (intakes || [])
+    .filter(i => !['intaken', 'declined'].includes(i.status));
 
-  const activeAdoptions = adoptionItems.length;
-  const activeFosters = fosterItems.filter(f => f.status === 'pending').length;
-  const activeVolunteers = volunteerItems.filter(v => v.status === 'pending').length;
-  const activeIntakes = intakeItems.length;
+  const intakeItems: PipelineItemData[] = activeIntakes.map(i => ({
+    id: i.id,
+    name: i.ownerName,
+    context: i.dogName,
+    status: i.status,
+    createdAt: i.createdAt,
+  }));
+
+  const activeAdoptionsCount = adoptionItems.length;
+  const activeFostersCount = fosterItems.filter(f => f.status === 'pending').length;
+  const activeVolunteersCount = volunteerItems.filter(v => v.status === 'pending').length;
+  const activeIntakesCount = intakeItems.length;
 
   if (isLoading) {
     return (
@@ -250,154 +399,205 @@ export default function PipelineManager() {
   }
 
   return (
-    <Card data-testid="pipeline-manager">
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-base">
-          Pipeline Manager
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <Tabs defaultValue="adoptions" className="w-full">
-          <TabsList className="w-full grid grid-cols-4 mb-4" data-testid="pipeline-tabs">
-            <TabsTrigger value="adoptions" className="text-xs sm:text-sm" data-testid="tab-adoptions">
-              <Heart className="h-3 w-3 mr-1 hidden sm:inline" />
-              Adoptions
-              {activeAdoptions > 0 && (
-                <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs" data-testid="badge-count-adoptions">
-                  {activeAdoptions}
-                </Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="fosters" className="text-xs sm:text-sm" data-testid="tab-fosters">
-              <Home className="h-3 w-3 mr-1 hidden sm:inline" />
-              Fosters
-              {activeFosters > 0 && (
-                <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs" data-testid="badge-count-fosters">
-                  {activeFosters}
-                </Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="volunteers" className="text-xs sm:text-sm" data-testid="tab-volunteers">
-              <Users className="h-3 w-3 mr-1 hidden sm:inline" />
-              Volunteers
-              {activeVolunteers > 0 && (
-                <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs" data-testid="badge-count-volunteers">
-                  {activeVolunteers}
-                </Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="intake" className="text-xs sm:text-sm" data-testid="tab-intake">
-              <Dog className="h-3 w-3 mr-1 hidden sm:inline" />
-              Intake
-              {activeIntakes > 0 && (
-                <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs" data-testid="badge-count-intake">
-                  {activeIntakes}
-                </Badge>
-              )}
-            </TabsTrigger>
-          </TabsList>
+    <>
+      <Card data-testid="pipeline-manager">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            Pipeline Manager
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Tabs defaultValue="adoptions" className="w-full">
+            <TabsList className="w-full grid grid-cols-4 mb-4" data-testid="pipeline-tabs">
+              <TabsTrigger value="adoptions" className="text-xs sm:text-sm" data-testid="tab-adoptions">
+                <Heart className="h-3 w-3 mr-1 hidden sm:inline" />
+                Adoptions
+                {activeAdoptionsCount > 0 && (
+                  <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs" data-testid="badge-count-adoptions">
+                    {activeAdoptionsCount}
+                  </Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="fosters" className="text-xs sm:text-sm" data-testid="tab-fosters">
+                <Home className="h-3 w-3 mr-1 hidden sm:inline" />
+                Fosters
+                {activeFostersCount > 0 && (
+                  <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs" data-testid="badge-count-fosters">
+                    {activeFostersCount}
+                  </Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="volunteers" className="text-xs sm:text-sm" data-testid="tab-volunteers">
+                <Users className="h-3 w-3 mr-1 hidden sm:inline" />
+                Volunteers
+                {activeVolunteersCount > 0 && (
+                  <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs" data-testid="badge-count-volunteers">
+                    {activeVolunteersCount}
+                  </Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="intake" className="text-xs sm:text-sm" data-testid="tab-intake">
+                <Dog className="h-3 w-3 mr-1 hidden sm:inline" />
+                Intake
+                {activeIntakesCount > 0 && (
+                  <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs" data-testid="badge-count-intake">
+                    {activeIntakesCount}
+                  </Badge>
+                )}
+              </TabsTrigger>
+            </TabsList>
 
-          <TabsContent value="adoptions" data-testid="content-adoptions">
-            <ScrollArea className="h-[300px]">
-              {adoptionItems.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-8 text-center" data-testid="empty-state-adoptions">
-                  <Heart className="h-8 w-8 text-muted-foreground mb-2" />
-                  <p className="text-sm text-muted-foreground" data-testid="text-empty-adoptions">No active adoption applications</p>
-                </div>
-              ) : (
-                <>
-                  <div className="space-y-2 lg:hidden">
-                    {adoptionItems.map((item) => (
-                      <PipelineItem key={item.id} {...item} pipelineType="adoption" />
-                    ))}
+            <TabsContent value="adoptions" data-testid="content-adoptions">
+              <ScrollArea className="h-[300px]">
+                {adoptionItems.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-8 text-center" data-testid="empty-state-adoptions">
+                    <Heart className="h-8 w-8 text-muted-foreground mb-2" />
+                    <p className="text-sm text-muted-foreground" data-testid="text-empty-adoptions">No active adoption applications</p>
                   </div>
-                  <div className="hidden lg:flex lg:flex-wrap lg:gap-4">
-                    {adoptionStages.map(stage => (
-                      <div key={stage} className="min-w-[200px] flex-1">
-                        <StatusColumn status={stage} items={adoptionItems} pipelineType="adoption" />
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-            </ScrollArea>
-          </TabsContent>
+                ) : (
+                  <>
+                    <div className="space-y-2 lg:hidden">
+                      {adoptionItems.map((item) => (
+                        <PipelineItem 
+                          key={item.id} 
+                          {...item} 
+                          pipelineType="adoption" 
+                          onClick={() => handleItemClick("adoption", item.id)}
+                        />
+                      ))}
+                    </div>
+                    <div className="hidden lg:flex lg:flex-wrap lg:gap-4">
+                      {adoptionStages.map(stage => (
+                        <div key={stage} className="min-w-[200px] flex-1">
+                          <StatusColumn 
+                            status={stage} 
+                            items={adoptionItems} 
+                            pipelineType="adoption"
+                            onItemClick={(id) => handleItemClick("adoption", id)}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </ScrollArea>
+            </TabsContent>
 
-          <TabsContent value="fosters" data-testid="content-fosters">
-            <ScrollArea className="h-[300px]">
-              {fosterItems.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-8 text-center" data-testid="empty-state-fosters">
-                  <Home className="h-8 w-8 text-muted-foreground mb-2" />
-                  <p className="text-sm text-muted-foreground" data-testid="text-empty-fosters">No foster applications</p>
-                </div>
-              ) : (
-                <>
-                  <div className="space-y-2 lg:hidden">
-                    {fosterItems.map((item) => (
-                      <PipelineItem key={item.id} {...item} pipelineType="foster" />
-                    ))}
+            <TabsContent value="fosters" data-testid="content-fosters">
+              <ScrollArea className="h-[300px]">
+                {fosterItems.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-8 text-center" data-testid="empty-state-fosters">
+                    <Home className="h-8 w-8 text-muted-foreground mb-2" />
+                    <p className="text-sm text-muted-foreground" data-testid="text-empty-fosters">No foster applications</p>
                   </div>
-                  <div className="hidden lg:grid lg:grid-cols-3 lg:gap-4">
-                    {fosterVolunteerStatuses.map(status => (
-                      <StatusColumn key={status} status={status} items={fosterItems} pipelineType="foster" />
-                    ))}
-                  </div>
-                </>
-              )}
-            </ScrollArea>
-          </TabsContent>
+                ) : (
+                  <>
+                    <div className="space-y-2 lg:hidden">
+                      {fosterItems.map((item) => (
+                        <PipelineItem 
+                          key={item.id} 
+                          {...item} 
+                          pipelineType="foster"
+                          onClick={() => handleItemClick("foster", item.id)}
+                        />
+                      ))}
+                    </div>
+                    <div className="hidden lg:grid lg:grid-cols-3 lg:gap-4">
+                      {fosterVolunteerStatuses.map(status => (
+                        <StatusColumn 
+                          key={status} 
+                          status={status} 
+                          items={fosterItems} 
+                          pipelineType="foster"
+                          onItemClick={(id) => handleItemClick("foster", id)}
+                        />
+                      ))}
+                    </div>
+                  </>
+                )}
+              </ScrollArea>
+            </TabsContent>
 
-          <TabsContent value="volunteers" data-testid="content-volunteers">
-            <ScrollArea className="h-[300px]">
-              {volunteerItems.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-8 text-center" data-testid="empty-state-volunteers">
-                  <Users className="h-8 w-8 text-muted-foreground mb-2" />
-                  <p className="text-sm text-muted-foreground" data-testid="text-empty-volunteers">No volunteer applications</p>
-                </div>
-              ) : (
-                <>
-                  <div className="space-y-2 lg:hidden">
-                    {volunteerItems.map((item) => (
-                      <PipelineItem key={item.id} {...item} pipelineType="volunteer" />
-                    ))}
+            <TabsContent value="volunteers" data-testid="content-volunteers">
+              <ScrollArea className="h-[300px]">
+                {volunteerItems.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-8 text-center" data-testid="empty-state-volunteers">
+                    <Users className="h-8 w-8 text-muted-foreground mb-2" />
+                    <p className="text-sm text-muted-foreground" data-testid="text-empty-volunteers">No volunteer applications</p>
                   </div>
-                  <div className="hidden lg:grid lg:grid-cols-3 lg:gap-4">
-                    {fosterVolunteerStatuses.map(status => (
-                      <StatusColumn key={status} status={status} items={volunteerItems} pipelineType="volunteer" />
-                    ))}
-                  </div>
-                </>
-              )}
-            </ScrollArea>
-          </TabsContent>
+                ) : (
+                  <>
+                    <div className="space-y-2 lg:hidden">
+                      {volunteerItems.map((item) => (
+                        <PipelineItem 
+                          key={item.id} 
+                          {...item} 
+                          pipelineType="volunteer"
+                          onClick={() => handleItemClick("volunteer", item.id)}
+                        />
+                      ))}
+                    </div>
+                    <div className="hidden lg:grid lg:grid-cols-3 lg:gap-4">
+                      {fosterVolunteerStatuses.map(status => (
+                        <StatusColumn 
+                          key={status} 
+                          status={status} 
+                          items={volunteerItems} 
+                          pipelineType="volunteer"
+                          onItemClick={(id) => handleItemClick("volunteer", id)}
+                        />
+                      ))}
+                    </div>
+                  </>
+                )}
+              </ScrollArea>
+            </TabsContent>
 
-          <TabsContent value="intake" data-testid="content-intake">
-            <ScrollArea className="h-[300px]">
-              {intakeItems.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-8 text-center" data-testid="empty-state-intake">
-                  <Dog className="h-8 w-8 text-muted-foreground mb-2" />
-                  <p className="text-sm text-muted-foreground" data-testid="text-empty-intake">No active intake requests</p>
-                </div>
-              ) : (
-                <>
-                  <div className="space-y-2 lg:hidden">
-                    {intakeItems.map((item) => (
-                      <PipelineItem key={item.id} {...item} pipelineType="intake" />
-                    ))}
+            <TabsContent value="intake" data-testid="content-intake">
+              <ScrollArea className="h-[300px]">
+                {intakeItems.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-8 text-center" data-testid="empty-state-intake">
+                    <Dog className="h-8 w-8 text-muted-foreground mb-2" />
+                    <p className="text-sm text-muted-foreground" data-testid="text-empty-intake">No active intake requests</p>
                   </div>
-                  <div className="hidden lg:flex lg:flex-wrap lg:gap-4">
-                    {surrenderStatuses.map(status => (
-                      <div key={status} className="min-w-[180px] flex-1">
-                        <StatusColumn status={status} items={intakeItems} pipelineType="intake" />
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-            </ScrollArea>
-          </TabsContent>
-        </Tabs>
-      </CardContent>
-    </Card>
+                ) : (
+                  <>
+                    <div className="space-y-2 lg:hidden">
+                      {intakeItems.map((item) => (
+                        <PipelineItem 
+                          key={item.id} 
+                          {...item} 
+                          pipelineType="intake"
+                          onClick={() => handleItemClick("intake", item.id)}
+                        />
+                      ))}
+                    </div>
+                    <div className="hidden lg:flex lg:flex-wrap lg:gap-4">
+                      {surrenderStatuses.map(status => (
+                        <div key={status} className="min-w-[180px] flex-1">
+                          <StatusColumn 
+                            status={status} 
+                            items={intakeItems} 
+                            pipelineType="intake"
+                            onItemClick={(id) => handleItemClick("intake", id)}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </ScrollArea>
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
+
+      <ApplicationDetailSheet
+        isOpen={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+        type={selectedType}
+        data={selectedData}
+      />
+    </>
   );
 }
