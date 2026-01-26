@@ -3,6 +3,7 @@ import { db } from '../db';
 import { donations, tenants } from '@shared/schema';
 import { eq, and } from 'drizzle-orm';
 import { EmailService } from '../lib/email-service';
+import { TenantFileStorage } from '../lib/tenantFileStorage';
 
 // IRS compliance: Vehicle-related keywords that require Form 1098-C
 const VEHICLE_KEYWORDS = ['car', 'boat', 'vehicle', 'trailer', 'automobile', 'truck', 'motorcycle', 'aircraft', 'airplane'];
@@ -23,10 +24,16 @@ export interface ReceiptGenerationResult {
 /**
  * Generates a unique receipt number for IRS tracking
  */
-function generateReceiptNumber(tenantSlug: string): string {
+function generateReceiptNumber(tenantIdentifier?: string | null): string {
   const timestamp = Date.now().toString(36).toUpperCase();
   const random = Math.random().toString(36).substring(2, 6).toUpperCase();
-  return `${tenantSlug.substring(0, 4).toUpperCase()}-${timestamp}-${random}`;
+  // Use tenant identifier prefix, or 'RCPT' as fallback
+  const prefix = tenantIdentifier && tenantIdentifier.length >= 4 
+    ? tenantIdentifier.substring(0, 4).toUpperCase()
+    : tenantIdentifier && tenantIdentifier.length > 0
+      ? tenantIdentifier.toUpperCase().padEnd(4, 'X')
+      : 'RCPT';
+  return `${prefix}-${timestamp}-${random}`;
 }
 
 /**
@@ -129,7 +136,7 @@ export async function generateDonationReceipt(
     }
 
     // Generate receipt number if not already assigned
-    const receiptNumber = donation.receiptNumber || generateReceiptNumber(tenant.slug);
+    const receiptNumber = donation.receiptNumber || generateReceiptNumber(tenant.subdomain);
 
     // Create PDF document
     const pdfDoc = await PDFDocument.create();
@@ -553,6 +560,32 @@ export async function generateDonationReceipt(
       .update(donations)
       .set({ receiptNumber })
       .where(eq(donations.id, data.donationId));
+
+    // Backup receipt to Google Drive if tenant has it configured
+    try {
+      const fileStorage = new TenantFileStorage(data.tenantId);
+      const donationDate = formatDate(donation.date).replace(/ /g, '_');
+      const fileName = `Receipt_${receiptNumber}_${donationDate}.pdf`;
+      
+      const uploadResult = await fileStorage.uploadFile({
+        tenantId: data.tenantId,
+        userId: 'system', // System-generated receipt
+        category: 'donation-receipts',
+        visibility: 'private',
+        fileName,
+        mimeType: 'application/pdf',
+        content: pdfBuffer,
+      });
+      
+      if (uploadResult.success) {
+        console.log(`[RECEIPT] Backed up receipt ${receiptNumber} to ${uploadResult.storageType}: ${uploadResult.fileUrl}`);
+      } else {
+        console.log(`[RECEIPT] Could not backup receipt ${receiptNumber} to storage:`, uploadResult.error);
+      }
+    } catch (backupErr) {
+      // Don't fail the receipt generation if backup fails
+      console.error(`[RECEIPT] Error backing up receipt ${receiptNumber}:`, backupErr);
+    }
 
     return {
       success: true,

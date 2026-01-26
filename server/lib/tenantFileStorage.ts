@@ -2,7 +2,7 @@ import { DriveService } from './googleWorkspace';
 import { ObjectStorageService } from '../objectStorage';
 import { ObjectAclPolicy } from '../objectAcl';
 
-export type FileCategory = 'animal-photos' | 'animal-medical' | 'animal-contracts' | 'foster-updates' | 'website-assets' | 'general-docs';
+export type FileCategory = 'animal-photos' | 'animal-medical' | 'animal-contracts' | 'foster-updates' | 'website-assets' | 'general-docs' | 'donation-receipts';
 export type LegacyCategory = 'animals' | 'documents' | 'custom-pages';
 export type AnyCategory = FileCategory | LegacyCategory;
 export type FileVisibility = 'public' | 'private';
@@ -53,6 +53,7 @@ const ROOT_FOLDERS = {
   ADOPTED_ARCHIVE: '02_Adopted_Archive',
   WEBSITE_ASSETS: '03_Website_Assets',
   GENERAL_DOCS: '04_General_Docs',
+  FINANCE: '05_Finance',
 };
 
 const ANIMAL_SUBFOLDERS: Record<string, string> = {
@@ -204,6 +205,15 @@ export class TenantFileStorage {
 
     if (category === 'general-docs') {
       return this.getOrCreateFolder(driveService, ROOT_FOLDERS.GENERAL_DOCS);
+    }
+
+    if (category === 'donation-receipts') {
+      // Create receipts subfolder under Finance
+      const financeFolder = await this.getOrCreateFolder(driveService, ROOT_FOLDERS.FINANCE);
+      if (!financeFolder.success || !financeFolder.folderId) {
+        return financeFolder;
+      }
+      return this.getOrCreateFolder(driveService, 'Donation_Receipts', financeFolder.folderId);
     }
 
     return { success: false, error: `Unknown category: ${category}` };

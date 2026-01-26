@@ -9069,7 +9069,7 @@ Crawl-delay: 1
         donationType: z.enum(['cash', 'check', 'online', 'in_kind', 'in_kind_goods', 'in_kind_services']),
         amount: z.number().positive().nullable().optional(), // Required for cash/check/online
         checkNumber: z.string().nullable().optional(), // For check payments
-        description: z.string().optional(), // Required for in_kind
+        description: z.string().nullable().optional(), // Required for in_kind
         donorStatedValue: z.number().nullable().optional(), // Value stated by donor for in_kind
         estimatedValue: z.number().nullable().optional(), // Org's estimated value for in_kind
         notes: z.string().nullable().optional(),
@@ -9219,7 +9219,28 @@ Crawl-delay: 1
         console.error('Failed to log donation activity:', logError);
       }
       
-      res.json({ success: true, donation });
+      // Auto-send receipt if donor email is provided
+      let receiptSent = false;
+      let receiptError: string | null = null;
+      if (data.donorEmail) {
+        try {
+          const { generateAndEmailReceipt } = await import('./services/donation-receipt-service');
+          const receiptResult = await generateAndEmailReceipt({
+            donationId: donation.id,
+            tenantId: req.tenant!.id,
+          });
+          receiptSent = receiptResult.success;
+          if (!receiptResult.success) {
+            receiptError = receiptResult.message;
+            console.log('Auto-receipt not sent:', receiptResult.message);
+          }
+        } catch (receiptErr) {
+          console.error('Failed to auto-send donation receipt:', receiptErr);
+          receiptError = receiptErr instanceof Error ? receiptErr.message : 'Unknown error';
+        }
+      }
+      
+      res.json({ success: true, donation, receiptSent, receiptError });
     } catch (error) {
       next(error);
     }

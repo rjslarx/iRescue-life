@@ -173,12 +173,23 @@ export function RecordOfflineDonationDialog({
         donationDate: data.donationDate,
       });
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
+      const receiptSent = data?.receiptSent;
+      const hasEmail = form.getValues('donorEmail');
+      
+      let description = isInKind 
+        ? "The in-kind donation has been recorded. The donor will be added to your contacts."
+        : "The donation has been recorded successfully.";
+      
+      if (hasEmail) {
+        description += receiptSent 
+          ? " A tax receipt has been emailed to the donor."
+          : " Receipt could not be emailed (email service may not be configured).";
+      }
+      
       toast({
         title: "Donation Recorded",
-        description: isInKind 
-          ? "The in-kind donation has been recorded. The donor will be added to your contacts."
-          : "The donation has been recorded successfully.",
+        description,
       });
       queryClient.invalidateQueries({ queryKey: ["/api/donations"] });
       queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
