@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { useMutation } from "@tanstack/react-query";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
@@ -54,7 +55,7 @@ export default function PublicSurrenderPage() {
   });
 
   const surrenderFormSchema = insertSurrenderRequestSchema.omit({ tenantId: true }).extend({
-    dogWeight: insertSurrenderRequestSchema.shape.dogWeight.unwrap().min(1, "Weight is required"),
+    dogWeight: z.string().min(1, "Weight is required"),
   });
 
   const form = useForm<Omit<InsertSurrenderRequest, 'tenantId'> & { customResponses?: Record<string, any> }>({
