@@ -4723,6 +4723,58 @@ Crawl-delay: 1
     try {
       const tenantId = req.tenant!.id;
       
+      // Levenshtein distance algorithm for fuzzy string matching
+      function levenshteinDistance(str1: string, str2: string): number {
+        const m = str1.length;
+        const n = str2.length;
+        
+        // Create a matrix of distances
+        const dp: number[][] = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
+        
+        // Initialize first row and column
+        for (let i = 0; i <= m; i++) dp[i][0] = i;
+        for (let j = 0; j <= n; j++) dp[0][j] = j;
+        
+        // Fill in the rest of the matrix
+        for (let i = 1; i <= m; i++) {
+          for (let j = 1; j <= n; j++) {
+            if (str1[i - 1] === str2[j - 1]) {
+              dp[i][j] = dp[i - 1][j - 1];
+            } else {
+              dp[i][j] = 1 + Math.min(
+                dp[i - 1][j],     // deletion
+                dp[i][j - 1],     // insertion
+                dp[i - 1][j - 1]  // substitution
+              );
+            }
+          }
+        }
+        
+        return dp[m][n];
+      }
+      
+      // Calculate name similarity score (0-1, higher is more similar)
+      function nameSimilarityScore(name1: string, name2: string): number {
+        const s1 = name1.toLowerCase().trim();
+        const s2 = name2.toLowerCase().trim();
+        
+        // Exact match
+        if (s1 === s2) return 1.0;
+        
+        // One contains the other (e.g., "Max" vs "Maxy")
+        if (s1.includes(s2) || s2.includes(s1)) {
+          return 0.9;
+        }
+        
+        // Levenshtein-based similarity
+        const distance = levenshteinDistance(s1, s2);
+        const maxLen = Math.max(s1.length, s2.length);
+        if (maxLen === 0) return 1.0;
+        
+        const similarity = 1 - (distance / maxLen);
+        return similarity;
+      }
+      
       // Get all active animals (not merged, not deceased)
       const allAnimals = await db.select().from(animals)
         .where(and(
@@ -4737,15 +4789,22 @@ Crawl-delay: 1
         animals: typeof allAnimals;
         matchReason: string;
         confidence: 'high' | 'medium' | 'low';
+        nameSimilarity: number;
       }> = [];
       
       const usedIds = new Set<string>();
+      
+      // Threshold for name similarity (0.7 = 70% similar)
+      const NAME_SIMILARITY_THRESHOLD = 0.65;
       
       for (let i = 0; i < allAnimals.length; i++) {
         if (usedIds.has(allAnimals[i].id)) continue;
         
         const matches: typeof allAnimals = [];
-        let matchReasons: string[] = [];
+        const allReasons = new Set<string>();
+        let highestNameSimilarity = 0;
+        let hasAnyBreedMatch = false;
+        let hasAnyDateMatch = false;
         
         for (let j = i + 1; j < allAnimals.length; j++) {
           if (usedIds.has(allAnimals[j].id)) continue;
@@ -4753,17 +4812,23 @@ Crawl-delay: 1
           const a = allAnimals[i];
           const b = allAnimals[j];
           
-          // Calculate name similarity (Levenshtein-like comparison)
-          const nameA = a.name.toLowerCase().trim();
-          const nameB = b.name.toLowerCase().trim();
-          const nameSimilar = nameA === nameB || 
-            nameA.includes(nameB) || 
-            nameB.includes(nameA) ||
-            (Math.abs(nameA.length - nameB.length) <= 2 && 
-              nameA.split('').filter((c, idx) => nameB[idx] === c).length >= Math.min(nameA.length, nameB.length) - 2);
+          // Skip very short names (3 chars or less) to avoid false positives
+          if (a.name.length <= 3 || b.name.length <= 3) {
+            // For short names, require exact match or one being a substring
+            const nameA = a.name.toLowerCase().trim();
+            const nameB = b.name.toLowerCase().trim();
+            if (nameA !== nameB && !nameA.includes(nameB) && !nameB.includes(nameA)) {
+              continue;
+            }
+          }
+          
+          // Calculate name similarity using Levenshtein distance
+          const similarity = nameSimilarityScore(a.name, b.name);
+          const nameSimilar = similarity >= NAME_SIMILARITY_THRESHOLD;
           
           // Check breed match
-          const breedMatch = a.breed.toLowerCase() === b.breed.toLowerCase();
+          const breedMatch = a.breed && b.breed && 
+            a.breed.toLowerCase() === b.breed.toLowerCase();
           
           // Check species match
           const speciesMatch = a.species.toLowerCase() === b.species.toLowerCase();
@@ -4773,13 +4838,29 @@ Crawl-delay: 1
             Math.abs(new Date(a.intakeDate).getTime() - new Date(b.intakeDate).getTime()) < 7 * 24 * 60 * 60 * 1000;
           
           // Determine if this is a potential duplicate
+          // Name similarity is now the PRIMARY factor
           if (nameSimilar && speciesMatch) {
-            const reasons: string[] = ['Similar names', 'Same species'];
-            if (breedMatch) reasons.push('Same breed');
-            if (intakeDateProximity) reasons.push('Similar intake dates');
+            // Track the best name match quality across all pairs
+            if (similarity >= 0.95) {
+              allReasons.add('Nearly identical names');
+            } else if (similarity >= 0.85) {
+              allReasons.add('Very similar names');
+            } else {
+              allReasons.add('Similar names');
+            }
+            
+            allReasons.add('Same species');
+            if (breedMatch) {
+              allReasons.add('Same breed');
+              hasAnyBreedMatch = true;
+            }
+            if (intakeDateProximity) {
+              allReasons.add('Similar intake dates');
+              hasAnyDateMatch = true;
+            }
             
             matches.push(b);
-            matchReasons = reasons;
+            highestNameSimilarity = Math.max(highestNameSimilarity, similarity);
             usedIds.add(b.id);
           }
         }
@@ -4788,26 +4869,38 @@ Crawl-delay: 1
           usedIds.add(allAnimals[i].id);
           const allMatches = [allAnimals[i], ...matches];
           
-          // Determine confidence level
-          const hasBreedMatch = matchReasons.includes('Same breed');
-          const hasDateMatch = matchReasons.includes('Similar intake dates');
+          // Convert reasons set to array and determine confidence
+          const matchReasons = Array.from(allReasons);
+          const hasNearlyIdenticalNames = allReasons.has('Nearly identical names');
+          const hasVerySimilarNames = allReasons.has('Very similar names');
           
           let confidence: 'high' | 'medium' | 'low' = 'low';
-          if (hasBreedMatch && hasDateMatch) confidence = 'high';
-          else if (hasBreedMatch || hasDateMatch) confidence = 'medium';
+          
+          // High confidence: Nearly identical names, or very similar + breed/date match
+          if (hasNearlyIdenticalNames) {
+            confidence = 'high';
+          } else if (hasVerySimilarNames && (hasAnyBreedMatch || hasAnyDateMatch)) {
+            confidence = 'high';
+          } else if (hasVerySimilarNames || (hasAnyBreedMatch && hasAnyDateMatch)) {
+            confidence = 'medium';
+          }
           
           duplicateGroups.push({
             animals: allMatches,
             matchReason: matchReasons.join(', '),
             confidence,
+            nameSimilarity: Math.round(highestNameSimilarity * 100),
           });
         }
       }
       
-      // Sort by confidence (high first)
+      // Sort by confidence (high first), then by name similarity
       duplicateGroups.sort((a, b) => {
         const order = { high: 0, medium: 1, low: 2 };
-        return order[a.confidence] - order[b.confidence];
+        if (order[a.confidence] !== order[b.confidence]) {
+          return order[a.confidence] - order[b.confidence];
+        }
+        return b.nameSimilarity - a.nameSimilarity;
       });
       
       res.json({ duplicateGroups });
@@ -4860,11 +4953,22 @@ Crawl-delay: 1
         }
       }
       
-      // Fetch both animals before transaction
-      const [primaryAnimal] = await db.select().from(animals)
-        .where(and(eq(animals.id, primaryAnimalId), eq(animals.tenantId, tenantId)));
-      const [secondaryAnimal] = await db.select().from(animals)
-        .where(and(eq(animals.id, secondaryAnimalId), eq(animals.tenantId, tenantId)));
+      // Fetch both animals before transaction with error handling
+      let primaryAnimal, secondaryAnimal;
+      try {
+        const [primary] = await db.select().from(animals)
+          .where(and(eq(animals.id, primaryAnimalId), eq(animals.tenantId, tenantId)));
+        const [secondary] = await db.select().from(animals)
+          .where(and(eq(animals.id, secondaryAnimalId), eq(animals.tenantId, tenantId)));
+        primaryAnimal = primary;
+        secondaryAnimal = secondary;
+      } catch (fetchError) {
+        console.error('Error fetching animals for merge:', fetchError);
+        return res.status(503).json({ 
+          error: 'Database temporarily unavailable. Please try again in a moment.',
+          details: 'Failed to fetch animal records'
+        });
+      }
       
       if (!primaryAnimal || !secondaryAnimal) {
         return res.status(404).json({ error: 'One or both animals not found' });
@@ -5018,8 +5122,25 @@ Crawl-delay: 1
           reassignedNotes,
         },
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Merge failed:', error);
+      
+      // Handle specific database errors
+      if (error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT' || 
+          error.message?.includes('timeout') || error.message?.includes('connection')) {
+        return res.status(503).json({ 
+          error: 'Database temporarily unavailable. Please try again in a moment.',
+          details: 'The merge operation timed out. This can happen with large records.'
+        });
+      }
+      
+      if (error.code === '23505') { // Unique constraint violation
+        return res.status(409).json({ 
+          error: 'Merge conflict detected. Some records may have already been modified.',
+          details: error.detail || error.message
+        });
+      }
+      
       next(error);
     }
   });
