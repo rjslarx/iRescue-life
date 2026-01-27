@@ -1684,14 +1684,24 @@ export default function AnimalsPage() {
 
   const animals = data?.animals || [];
 
-  // Check for ?action=add query parameter to auto-open add dialog
+  // Check for URL query parameters to handle navigation from KPI cards
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
+    
+    // Handle ?action=add to auto-open add dialog
     if (urlParams.get('action') === 'add') {
       setDialogOpen(true);
       // Clean up the URL after opening the dialog
       const newUrl = window.location.pathname;
       window.history.replaceState({}, '', newUrl);
+    }
+    
+    // Handle ?location=foster or ?location=shelter to set status filter
+    const location = urlParams.get('location');
+    if (location === 'foster') {
+      setStatusFilter('in_foster');
+    } else if (location === 'shelter') {
+      setStatusFilter('in_shelter');
     }
   }, []);
   
@@ -1701,9 +1711,18 @@ export default function AnimalsPage() {
   const deceasedAnimals = animals.filter(animal => animal.status === "deceased");
   
   // Filter active animals based on status filter
-  const activeAnimals = statusFilter === "all" 
-    ? allActiveAnimals 
-    : allActiveAnimals.filter(animal => animal.status === statusFilter);
+  // Special filters: 'in_foster' (foster + in_trial), 'in_shelter' (available + adoption_pending)
+  const activeAnimals = useMemo(() => {
+    if (statusFilter === "all") {
+      return allActiveAnimals;
+    } else if (statusFilter === "in_foster") {
+      return allActiveAnimals.filter(animal => animal.status === 'foster' || animal.status === 'in_trial');
+    } else if (statusFilter === "in_shelter") {
+      return allActiveAnimals.filter(animal => animal.status === 'available' || animal.status === 'adoption_pending');
+    } else {
+      return allActiveAnimals.filter(animal => animal.status === statusFilter);
+    }
+  }, [allActiveAnimals, statusFilter]);
 
   const createAnimalMutation = useMutation({
     mutationFn: async (animalData: AnimalFormData) => {
@@ -1975,16 +1994,28 @@ export default function AnimalsPage() {
                   <div className="flex flex-wrap items-center gap-3">
                     <label className="text-sm font-medium">Filter by Status:</label>
                     <Select value={statusFilter} onValueChange={setStatusFilter}>
-                      <SelectTrigger className="w-48 max-w-full" data-testid="select-status-filter">
+                      <SelectTrigger className="w-56 max-w-full" data-testid="select-status-filter">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">All Active ({allActiveAnimals.length})</SelectItem>
+                        <SelectItem value="in_shelter">
+                          In Shelter ({allActiveAnimals.filter(a => a.status === "available" || a.status === "adoption_pending").length})
+                        </SelectItem>
+                        <SelectItem value="in_foster">
+                          In Foster Homes ({allActiveAnimals.filter(a => a.status === "foster" || a.status === "in_trial").length})
+                        </SelectItem>
                         <SelectItem value="available">
                           Available ({allActiveAnimals.filter(a => a.status === "available").length})
                         </SelectItem>
                         <SelectItem value="foster">
                           Foster ({allActiveAnimals.filter(a => a.status === "foster").length})
+                        </SelectItem>
+                        <SelectItem value="in_trial">
+                          In Trial ({allActiveAnimals.filter(a => a.status === "in_trial").length})
+                        </SelectItem>
+                        <SelectItem value="adoption_pending">
+                          Adoption Pending ({allActiveAnimals.filter(a => a.status === "adoption_pending").length})
                         </SelectItem>
                         <SelectItem value="pending">
                           Pending ({allActiveAnimals.filter(a => a.status === "pending").length})
@@ -2012,6 +2043,10 @@ export default function AnimalsPage() {
                     <h2 className="text-lg font-semibold mb-4" data-testid="heading-active-animals">
                       {statusFilter === "all" 
                         ? `Animals in Care (${activeAnimals.length})`
+                        : statusFilter === "in_foster"
+                        ? `In Foster Homes (${activeAnimals.length})`
+                        : statusFilter === "in_shelter"
+                        ? `In Shelter (${activeAnimals.length})`
                         : `${statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1).replace('_', ' ')} Animals (${activeAnimals.length})`
                       }
                     </h2>
