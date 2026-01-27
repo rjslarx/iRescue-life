@@ -14953,7 +14953,7 @@ Submitted: ${new Date().toLocaleString()}
       const [updatedTenant] = await db
         .update(tenants)
         .set(updateData)
-        .where(eq(tenants.id, req.tenantId!))
+        .where(eq(tenants.id, req.tenant!.id))
         .returning();
 
       res.json({ success: true, tenant: updatedTenant });
