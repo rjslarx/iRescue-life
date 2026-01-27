@@ -63,6 +63,7 @@ function createSessionStore() {
     // Use PostgreSQL session store in production for persistence across restarts
     const pool = new pg.Pool({
       connectionString: process.env.DATABASE_URL,
+      connectionTimeoutMillis: 30000, // Increased for Neon cold start
     });
     
     return new PgSession({
