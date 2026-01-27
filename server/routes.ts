@@ -5173,6 +5173,9 @@ Crawl-delay: 1
       if (payload.petfinderSyncedAt && typeof payload.petfinderSyncedAt === 'string') {
         payload.petfinderSyncedAt = new Date(payload.petfinderSyncedAt);
       }
+      if (payload.intakeDate && typeof payload.intakeDate === 'string') {
+        payload.intakeDate = new Date(payload.intakeDate);
+      }
       
       const data = insertAnimalSchema.omit({ tenantId: true }).parse(payload);
       
@@ -19478,9 +19481,13 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
       
       const data = insertVaccineRecordSchema.parse(req.body);
 
+      // Sanitize numeric fields - convert empty strings to null
+      const sanitizedBillAmount = data.billAmount && data.billAmount.toString().trim() ? data.billAmount : null;
+      const sanitizedPaidAmount = data.billPaidAmount && data.billPaidAmount.toString().trim() ? data.billPaidAmount : null;
+
       // If billing information is provided, create a medical bill
       let billId = data.billId || null;
-      if (data.billVendor && data.billAmount) {
+      if (data.billVendor && sanitizedBillAmount) {
         const [bill] = await db
           .insert(medicalBills)
           .values({
@@ -19488,11 +19495,11 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
             animalId: req.params.animalId,
             billDate: data.dateGiven,
             vendor: data.billVendor,
-            amount: data.billAmount.toString(),
+            amount: sanitizedBillAmount.toString(),
             description: `Vaccine: ${data.itemName}`,
             invoiceNumber: data.billInvoiceNumber || null,
             paymentStatus: (data.billPaymentStatus as any) || 'unpaid',
-            paidAmount: (data.billPaidAmount && data.billPaidAmount.toString().trim()) || '0',
+            paidAmount: sanitizedPaidAmount ? sanitizedPaidAmount.toString() : '0',
             notes: data.billNotes || null,
             createdBy: req.user!.id,
           })
@@ -19504,6 +19511,8 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
         .insert(vaccineRecords)
         .values({
           ...data,
+          billAmount: sanitizedBillAmount,
+          billPaidAmount: sanitizedPaidAmount,
           billId,
           animalId: req.params.animalId,
           tenantId: req.tenant!.id,
@@ -19688,9 +19697,13 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
       
       const data = insertDiagnosticTestSchema.parse(req.body);
 
+      // Sanitize numeric fields - convert empty strings to null
+      const sanitizedBillAmount = data.billAmount && data.billAmount.toString().trim() ? data.billAmount : null;
+      const sanitizedPaidAmount = data.billPaidAmount && data.billPaidAmount.toString().trim() ? data.billPaidAmount : null;
+
       // If billing information is provided, create a medical bill
       let billId = data.billId || null;
-      if (data.billVendor && data.billAmount) {
+      if (data.billVendor && sanitizedBillAmount) {
         const [bill] = await db
           .insert(medicalBills)
           .values({
@@ -19698,11 +19711,11 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
             animalId: req.params.animalId,
             billDate: data.testDate,
             vendor: data.billVendor,
-            amount: data.billAmount.toString(),
+            amount: sanitizedBillAmount.toString(),
             description: `Diagnostic Test: ${data.testName}`,
             invoiceNumber: data.billInvoiceNumber || null,
             paymentStatus: (data.billPaymentStatus as any) || 'unpaid',
-            paidAmount: (data.billPaidAmount && data.billPaidAmount.toString().trim()) || '0',
+            paidAmount: sanitizedPaidAmount ? sanitizedPaidAmount.toString() : '0',
             notes: data.billNotes || null,
             createdBy: req.user!.id,
           })
@@ -19714,6 +19727,8 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
         .insert(diagnosticTests)
         .values({
           ...data,
+          billAmount: sanitizedBillAmount,
+          billPaidAmount: sanitizedPaidAmount,
           billId,
           animalId: req.params.animalId,
           tenantId: req.tenant!.id,
@@ -19898,9 +19913,13 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
       
       const data = insertProcedureLogSchema.parse(req.body);
 
+      // Sanitize numeric fields - convert empty strings to null
+      const sanitizedBillAmount = data.billAmount && data.billAmount.toString().trim() ? data.billAmount : null;
+      const sanitizedPaidAmount = data.billPaidAmount && data.billPaidAmount.toString().trim() ? data.billPaidAmount : null;
+
       // If billing information is provided, create a medical bill
       let billId = data.billId || null;
-      if (data.billVendor && data.billAmount) {
+      if (data.billVendor && sanitizedBillAmount) {
         const [bill] = await db
           .insert(medicalBills)
           .values({
@@ -19908,11 +19927,11 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
             animalId: req.params.animalId,
             billDate: data.procedureDate,
             vendor: data.billVendor,
-            amount: data.billAmount.toString(),
+            amount: sanitizedBillAmount.toString(),
             description: `Procedure: ${data.procedureName}`,
             invoiceNumber: data.billInvoiceNumber || null,
             paymentStatus: (data.billPaymentStatus as any) || 'unpaid',
-            paidAmount: (data.billPaidAmount && data.billPaidAmount.toString().trim()) || '0',
+            paidAmount: sanitizedPaidAmount ? sanitizedPaidAmount.toString() : '0',
             notes: data.billNotes || null,
             createdBy: req.user!.id,
           })
@@ -19924,6 +19943,8 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
         .insert(procedureLogs)
         .values({
           ...data,
+          billAmount: sanitizedBillAmount,
+          billPaidAmount: sanitizedPaidAmount,
           billId,
           animalId: req.params.animalId,
           tenantId: req.tenant!.id,
