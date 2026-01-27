@@ -221,10 +221,12 @@ const twilioSettingsSchema = z.object({
   twilioAccountSid: z.string().min(1, "Account SID is required").startsWith("AC", "Account SID must start with AC"),
   twilioAuthToken: z.string().min(1, "Auth Token is required"),
   twilioPhoneNumber: z.string().min(1, "Phone number is required").regex(/^\+[1-9]\d{1,14}$/, "Phone number must be in E.164 format (e.g., +15551234567)"),
-  twilioMessagingServiceSid: z.string().optional().refine(
-    (val) => !val || val.startsWith("MG"),
-    { message: "Messaging Service SID must start with MG" }
-  ),
+  twilioMessagingServiceSid: z.string().optional()
+    .transform((val) => val?.trim() || undefined)
+    .refine(
+      (val) => !val || val.startsWith("MG"),
+      { message: "Messaging Service SID must start with MG" }
+    ),
 });
 
 const donationSectionSchema = z.object({

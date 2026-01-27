@@ -82,4 +82,4 @@ The "Paw Pay" platform fee system uses Stripe Connect with a "SaaS + 0%" two-tie
 - **cors:** CORS middleware.
 - **express-rate-limit:** Rate-limiting middleware.
 - **node-cron:** Scheduled tasks.
-- **Twilio (optional):** SMS notifications.
+- **Twilio (optional):** SMS notifications. Supports both direct phone number sending and Messaging Service SID for A2P 10DLC registered campaigns (improved deliverability).
