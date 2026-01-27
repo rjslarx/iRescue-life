@@ -221,6 +221,10 @@ const twilioSettingsSchema = z.object({
   twilioAccountSid: z.string().min(1, "Account SID is required").startsWith("AC", "Account SID must start with AC"),
   twilioAuthToken: z.string().min(1, "Auth Token is required"),
   twilioPhoneNumber: z.string().min(1, "Phone number is required").regex(/^\+[1-9]\d{1,14}$/, "Phone number must be in E.164 format (e.g., +15551234567)"),
+  twilioMessagingServiceSid: z.string().optional().refine(
+    (val) => !val || val.startsWith("MG"),
+    { message: "Messaging Service SID must start with MG" }
+  ),
 });
 
 const donationSectionSchema = z.object({
@@ -631,6 +635,7 @@ export default function SettingsPage() {
       twilioAccountSid: "",
       twilioAuthToken: "",
       twilioPhoneNumber: "",
+      twilioMessagingServiceSid: "",
     },
   });
 
@@ -2620,6 +2625,28 @@ export default function SettingsPage() {
                                   </FormControl>
                                   <FormDescription>
                                     Your Twilio phone number in E.164 format
+                                  </FormDescription>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+
+                            <FormField
+                              control={twilioForm.control}
+                              name="twilioMessagingServiceSid"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Messaging Service SID (Optional)</FormLabel>
+                                  <FormControl>
+                                    <Input 
+                                      placeholder="MGxxxxxxxxxxxxxx" 
+                                      className="font-mono"
+                                      data-testid="input-twilio-messaging-service-sid"
+                                      {...field} 
+                                    />
+                                  </FormControl>
+                                  <FormDescription>
+                                    If you have a registered A2P 10DLC campaign, enter your Messaging Service SID (starts with MG) for better deliverability
                                   </FormDescription>
                                   <FormMessage />
                                 </FormItem>
