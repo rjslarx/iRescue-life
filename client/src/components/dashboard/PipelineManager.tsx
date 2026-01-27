@@ -5,6 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { 
   Heart, 
   Home, 
@@ -14,6 +15,32 @@ import {
 } from "lucide-react";
 import { Link } from "wouter";
 import { formatDistanceToNow } from "date-fns";
+
+// Helper to get initials from a name
+function getInitials(name: string): string {
+  return name
+    .split(' ')
+    .map(part => part.charAt(0))
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
+}
+
+// Tab-specific badge colors (no hover - Badges have built-in elevation)
+const pipelineBadgeColors: Record<string, string> = {
+  adoption: "bg-blue-600 dark:bg-blue-500 text-white",
+  foster: "bg-amber-600 dark:bg-amber-500 text-white",
+  volunteer: "bg-emerald-600 dark:bg-emerald-500 text-white",
+  intake: "bg-red-600 dark:bg-red-500 text-white",
+};
+
+// Avatar background colors matching pipeline types
+const pipelineAvatarColors: Record<string, string> = {
+  adoption: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200",
+  foster: "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-200",
+  volunteer: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-200",
+  intake: "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-200",
+};
 import { useAuth } from "@/contexts/AuthContext";
 import ApplicationDetailSheet, { 
   ApplicationType, 
@@ -153,16 +180,22 @@ interface PipelineItemProps extends PipelineItemData {
 
 function PipelineItem({ id, name, context, status, createdAt, pipelineType, onClick }: PipelineItemProps) {
   const timeAgo = formatDistanceToNow(new Date(createdAt), { addSuffix: false });
+  const avatarColor = pipelineAvatarColors[pipelineType] || "bg-muted text-muted-foreground";
   
   return (
     <div 
-      className="flex items-center justify-between p-3 rounded-lg border bg-card hover-elevate cursor-pointer"
+      className="flex items-center gap-3 p-3 rounded-lg border bg-card shadow-sm hover-elevate cursor-pointer"
       data-testid={`pipeline-item-${pipelineType}-${id}`}
       onClick={onClick}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onClick(); }}
     >
+      <Avatar className={`h-8 w-8 flex-shrink-0 ${avatarColor}`} data-testid={`avatar-${pipelineType}-${id}`}>
+        <AvatarFallback className={avatarColor}>
+          {getInitials(name)}
+        </AvatarFallback>
+      </Avatar>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="font-medium text-sm" data-testid={`text-name-${pipelineType}-${id}`}>{name}</span>
@@ -171,7 +204,7 @@ function PipelineItem({ id, name, context, status, createdAt, pipelineType, onCl
           )}
         </div>
       </div>
-      <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+      <div className="flex items-center gap-2 flex-shrink-0">
         <span className="text-xs text-muted-foreground whitespace-nowrap" data-testid={`text-time-${pipelineType}-${id}`}>{timeAgo}</span>
         <Badge 
           variant={stageVariants[status] || "outline"} 
@@ -193,13 +226,17 @@ interface StatusColumnProps {
 
 function StatusColumn({ status, items, pipelineType, onItemClick }: StatusColumnProps) {
   const filteredItems = items.filter(item => item.status === status);
+  const badgeColor = pipelineBadgeColors[pipelineType] || "";
   
   if (filteredItems.length === 0) return null;
   
   return (
-    <div className="space-y-2" data-testid={`status-column-${pipelineType}-${status}`}>
+    <div 
+      className="bg-muted/30 rounded-lg p-3 space-y-2" 
+      data-testid={`status-column-${pipelineType}-${status}`}
+    >
       <div className="flex items-center gap-2 mb-2">
-        <Badge variant={stageVariants[status] || "outline"}>
+        <Badge className={badgeColor}>
           {stageLabels[status] || status}
         </Badge>
         <span className="text-xs text-muted-foreground" data-testid={`text-count-${pipelineType}-${status}`}>
@@ -425,7 +462,7 @@ export default function PipelineManager() {
                 <Heart className="h-3 w-3 mr-1 hidden sm:inline" />
                 Adoptions
                 {activeAdoptionsCount > 0 ? (
-                  <Badge variant="destructive" className="ml-1 h-5 px-1.5 text-xs" data-testid="badge-count-adoptions">
+                  <Badge className={`ml-1 h-5 px-1.5 text-xs ${pipelineBadgeColors.adoption}`} data-testid="badge-count-adoptions">
                     ({activeAdoptionsCount})
                   </Badge>
                 ) : (
@@ -436,7 +473,7 @@ export default function PipelineManager() {
                 <Home className="h-3 w-3 mr-1 hidden sm:inline" />
                 Fosters
                 {activeFostersCount > 0 ? (
-                  <Badge variant="destructive" className="ml-1 h-5 px-1.5 text-xs" data-testid="badge-count-fosters">
+                  <Badge className={`ml-1 h-5 px-1.5 text-xs ${pipelineBadgeColors.foster}`} data-testid="badge-count-fosters">
                     ({activeFostersCount})
                   </Badge>
                 ) : (
@@ -447,7 +484,7 @@ export default function PipelineManager() {
                 <Users className="h-3 w-3 mr-1 hidden sm:inline" />
                 Volunteers
                 {activeVolunteersCount > 0 ? (
-                  <Badge variant="destructive" className="ml-1 h-5 px-1.5 text-xs" data-testid="badge-count-volunteers">
+                  <Badge className={`ml-1 h-5 px-1.5 text-xs ${pipelineBadgeColors.volunteer}`} data-testid="badge-count-volunteers">
                     ({activeVolunteersCount})
                   </Badge>
                 ) : (
@@ -458,7 +495,7 @@ export default function PipelineManager() {
                 <Dog className="h-3 w-3 mr-1 hidden sm:inline" />
                 Intake
                 {activeIntakesCount > 0 ? (
-                  <Badge variant="destructive" className="ml-1 h-5 px-1.5 text-xs" data-testid="badge-count-intake">
+                  <Badge className={`ml-1 h-5 px-1.5 text-xs ${pipelineBadgeColors.intake}`} data-testid="badge-count-intake">
                     ({activeIntakesCount})
                   </Badge>
                 ) : (
@@ -534,15 +571,16 @@ export default function PipelineManager() {
                         />
                       ))}
                     </div>
-                    <div className="hidden lg:grid lg:grid-cols-3 lg:gap-4">
+                    <div className="hidden lg:flex lg:flex-wrap lg:gap-4">
                       {fosterVolunteerStatuses.map(status => (
-                        <StatusColumn 
-                          key={status} 
-                          status={status} 
-                          items={fosterItems} 
-                          pipelineType="foster"
-                          onItemClick={(id) => handleItemClick("foster", id)}
-                        />
+                        <div key={status} className="min-w-[180px] flex-1">
+                          <StatusColumn 
+                            status={status} 
+                            items={fosterItems} 
+                            pipelineType="foster"
+                            onItemClick={(id) => handleItemClick("foster", id)}
+                          />
+                        </div>
                       ))}
                     </div>
                   </>
@@ -575,15 +613,16 @@ export default function PipelineManager() {
                         />
                       ))}
                     </div>
-                    <div className="hidden lg:grid lg:grid-cols-3 lg:gap-4">
+                    <div className="hidden lg:flex lg:flex-wrap lg:gap-4">
                       {fosterVolunteerStatuses.map(status => (
-                        <StatusColumn 
-                          key={status} 
-                          status={status} 
-                          items={volunteerItems} 
-                          pipelineType="volunteer"
-                          onItemClick={(id) => handleItemClick("volunteer", id)}
-                        />
+                        <div key={status} className="min-w-[180px] flex-1">
+                          <StatusColumn 
+                            status={status} 
+                            items={volunteerItems} 
+                            pipelineType="volunteer"
+                            onItemClick={(id) => handleItemClick("volunteer", id)}
+                          />
+                        </div>
                       ))}
                     </div>
                   </>
