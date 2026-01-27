@@ -4715,6 +4715,346 @@ Crawl-delay: 1
   });
 
   /**
+   * GET /api/animals/duplicates
+   * Find potential duplicate animal profiles based on name similarity, breed, and intake date
+   * NOTE: This route MUST be defined before /api/animals/:id to prevent "duplicates" from being matched as an animal ID
+   */
+  app.get('/api/animals/duplicates', requireTenant, requireAuth, requireRole('admin', 'owner', 'staff'), async (req, res, next) => {
+    try {
+      const tenantId = req.tenant!.id;
+      
+      // Get all active animals (not merged, not deceased)
+      const allAnimals = await db.select().from(animals)
+        .where(and(
+          eq(animals.tenantId, tenantId),
+          not(eq(animals.status, 'merged')),
+          not(eq(animals.status, 'deceased'))
+        ))
+        .orderBy(animals.name);
+      
+      // Find potential duplicates based on name similarity + breed + intake date proximity
+      const duplicateGroups: Array<{
+        animals: typeof allAnimals;
+        matchReason: string;
+        confidence: 'high' | 'medium' | 'low';
+      }> = [];
+      
+      const usedIds = new Set<string>();
+      
+      for (let i = 0; i < allAnimals.length; i++) {
+        if (usedIds.has(allAnimals[i].id)) continue;
+        
+        const matches: typeof allAnimals = [];
+        let matchReasons: string[] = [];
+        
+        for (let j = i + 1; j < allAnimals.length; j++) {
+          if (usedIds.has(allAnimals[j].id)) continue;
+          
+          const a = allAnimals[i];
+          const b = allAnimals[j];
+          
+          // Calculate name similarity (Levenshtein-like comparison)
+          const nameA = a.name.toLowerCase().trim();
+          const nameB = b.name.toLowerCase().trim();
+          const nameSimilar = nameA === nameB || 
+            nameA.includes(nameB) || 
+            nameB.includes(nameA) ||
+            (Math.abs(nameA.length - nameB.length) <= 2 && 
+              nameA.split('').filter((c, idx) => nameB[idx] === c).length >= Math.min(nameA.length, nameB.length) - 2);
+          
+          // Check breed match
+          const breedMatch = a.breed.toLowerCase() === b.breed.toLowerCase();
+          
+          // Check species match
+          const speciesMatch = a.species.toLowerCase() === b.species.toLowerCase();
+          
+          // Check intake date proximity (within 7 days)
+          const intakeDateProximity = a.intakeDate && b.intakeDate &&
+            Math.abs(new Date(a.intakeDate).getTime() - new Date(b.intakeDate).getTime()) < 7 * 24 * 60 * 60 * 1000;
+          
+          // Determine if this is a potential duplicate
+          if (nameSimilar && speciesMatch) {
+            const reasons: string[] = ['Similar names', 'Same species'];
+            if (breedMatch) reasons.push('Same breed');
+            if (intakeDateProximity) reasons.push('Similar intake dates');
+            
+            matches.push(b);
+            matchReasons = reasons;
+            usedIds.add(b.id);
+          }
+        }
+        
+        if (matches.length > 0) {
+          usedIds.add(allAnimals[i].id);
+          const allMatches = [allAnimals[i], ...matches];
+          
+          // Determine confidence level
+          const hasBreedMatch = matchReasons.includes('Same breed');
+          const hasDateMatch = matchReasons.includes('Similar intake dates');
+          
+          let confidence: 'high' | 'medium' | 'low' = 'low';
+          if (hasBreedMatch && hasDateMatch) confidence = 'high';
+          else if (hasBreedMatch || hasDateMatch) confidence = 'medium';
+          
+          duplicateGroups.push({
+            animals: allMatches,
+            matchReason: matchReasons.join(', '),
+            confidence,
+          });
+        }
+      }
+      
+      // Sort by confidence (high first)
+      duplicateGroups.sort((a, b) => {
+        const order = { high: 0, medium: 1, low: 2 };
+        return order[a.confidence] - order[b.confidence];
+      });
+      
+      res.json({ duplicateGroups });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/animals/merge
+   * Merge two animal profiles - keeps primary, archives secondary, reassigns related records
+   * Uses a database transaction to ensure atomicity
+   * NOTE: This route MUST be defined before /api/animals/:id
+   */
+  app.post('/api/animals/merge', requireTenant, requireAuth, requireRole('admin', 'owner', 'staff'), async (req, res, next) => {
+    try {
+      const tenantId = req.tenant!.id;
+      const userId = req.user!.id;
+      const { primaryAnimalId, secondaryAnimalId, fieldChoices, notes } = req.body;
+      
+      if (!primaryAnimalId || !secondaryAnimalId) {
+        return res.status(400).json({ error: 'Both primaryAnimalId and secondaryAnimalId are required' });
+      }
+      
+      if (primaryAnimalId === secondaryAnimalId) {
+        return res.status(400).json({ error: 'Cannot merge an animal with itself' });
+      }
+      
+      // Whitelist of allowed fields that can be merged
+      const allowedMergeFields = new Set([
+        'name', 'species', 'breed', 'secondaryBreed', 'age', 'ageUnit', 'gender',
+        'weight', 'weightUnit', 'color', 'description', 'internalNotes',
+        'microchipNumber', 'intakeDate', 'intakeType', 'location',
+        'adoptionFee', 'goodWithDogs', 'goodWithCats', 'goodWithKids',
+        'houseTrained', 'spayedNeutered', 'specialNeeds', 'specialNeedsDescription',
+        'vaccinated', 'vaccinationDetails', 'medicalHistory', 'behaviorNotes',
+        'fosterName', 'fosterPhone', 'fosterEmail', 'petfinderType',
+        'petfinderAge', 'petfinderSize', 'petfinderGender', 'primaryPhotoIndex'
+      ]);
+      
+      // Validate fieldChoices if provided
+      if (fieldChoices && typeof fieldChoices === 'object') {
+        for (const [field, choice] of Object.entries(fieldChoices)) {
+          if (!allowedMergeFields.has(field)) {
+            return res.status(400).json({ error: `Field '${field}' is not allowed to be merged` });
+          }
+          if (choice !== 'primary' && choice !== 'secondary') {
+            return res.status(400).json({ error: `Invalid choice '${choice}' for field '${field}'. Must be 'primary' or 'secondary'` });
+          }
+        }
+      }
+      
+      // Fetch both animals before transaction
+      const [primaryAnimal] = await db.select().from(animals)
+        .where(and(eq(animals.id, primaryAnimalId), eq(animals.tenantId, tenantId)));
+      const [secondaryAnimal] = await db.select().from(animals)
+        .where(and(eq(animals.id, secondaryAnimalId), eq(animals.tenantId, tenantId)));
+      
+      if (!primaryAnimal || !secondaryAnimal) {
+        return res.status(404).json({ error: 'One or both animals not found' });
+      }
+      
+      if (primaryAnimal.status === 'merged' || secondaryAnimal.status === 'merged') {
+        return res.status(400).json({ error: 'Cannot merge an already merged animal' });
+      }
+      
+      // Create snapshot of secondary animal before merge
+      const secondaryAnimalSnapshot = { ...secondaryAnimal };
+      
+      // Track reassignment counts
+      let reassignedMedicalRecords = 0;
+      let reassignedPhotos = 0;
+      let reassignedApplications = 0;
+      let reassignedNotes = 0;
+      let updatedPrimary: typeof primaryAnimal | undefined;
+      
+      // Use a transaction to ensure atomicity - all operations succeed or all fail
+      await db.transaction(async (tx) => {
+        // Apply field choices - update primary animal with selected fields from secondary
+        if (fieldChoices && typeof fieldChoices === 'object') {
+          const updateData: Record<string, any> = {};
+          
+          for (const [field, choice] of Object.entries(fieldChoices)) {
+            if (choice === 'secondary' && allowedMergeFields.has(field)) {
+              const secondaryValue = (secondaryAnimal as any)[field];
+              // Don't overwrite with null/undefined/empty unless field explicitly allows it
+              if (secondaryValue !== null && secondaryValue !== undefined && secondaryValue !== '') {
+                updateData[field] = secondaryValue;
+              }
+            }
+          }
+          
+          // Also merge photo arrays - always combine unique photos
+          if (secondaryAnimal.photoUrls && secondaryAnimal.photoUrls.length > 0) {
+            const existingPhotos = primaryAnimal.photoUrls || [];
+            const newPhotos = secondaryAnimal.photoUrls.filter(p => !existingPhotos.includes(p));
+            if (newPhotos.length > 0) {
+              updateData.photoUrls = [...existingPhotos, ...newPhotos];
+              reassignedPhotos = newPhotos.length;
+            }
+          }
+          
+          if (Object.keys(updateData).length > 0) {
+            await tx.update(animals)
+              .set(updateData)
+              .where(eq(animals.id, primaryAnimalId));
+          }
+        }
+        
+        // Reassign related records using typed Drizzle operations
+        // Medical exams
+        const examResult = await tx.update(medicalExams)
+          .set({ animalId: primaryAnimalId })
+          .where(eq(medicalExams.animalId, secondaryAnimalId));
+        reassignedMedicalRecords += Number(examResult.rowCount) || 0;
+        
+        // Medical prescriptions
+        const prescriptionResult = await tx.update(medicalPrescriptions)
+          .set({ animalId: primaryAnimalId })
+          .where(eq(medicalPrescriptions.animalId, secondaryAnimalId));
+        reassignedMedicalRecords += Number(prescriptionResult.rowCount) || 0;
+        
+        // Medical bills
+        const billsResult = await tx.update(medicalBills)
+          .set({ animalId: primaryAnimalId })
+          .where(eq(medicalBills.animalId, secondaryAnimalId));
+        reassignedMedicalRecords += Number(billsResult.rowCount) || 0;
+        
+        // Medical files
+        const filesResult = await tx.update(medicalFiles)
+          .set({ animalId: primaryAnimalId })
+          .where(eq(medicalFiles.animalId, secondaryAnimalId));
+        reassignedMedicalRecords += Number(filesResult.rowCount) || 0;
+        
+        // Animal notes
+        const notesResult = await tx.update(animalNotes)
+          .set({ animalId: primaryAnimalId })
+          .where(eq(animalNotes.animalId, secondaryAnimalId));
+        reassignedNotes = Number(notesResult.rowCount) || 0;
+        
+        // Adoption applications
+        const appsResult = await tx.update(applications)
+          .set({ animalId: primaryAnimalId })
+          .where(eq(applications.animalId, secondaryAnimalId));
+        reassignedApplications = Number(appsResult.rowCount) || 0;
+        
+        // Adoption checkout sessions
+        await tx.update(adoptionCheckoutSessions)
+          .set({ animalId: primaryAnimalId })
+          .where(eq(adoptionCheckoutSessions.animalId, secondaryAnimalId));
+        
+        // Adoptions table
+        await tx.update(adoptions)
+          .set({ animalId: primaryAnimalId })
+          .where(eq(adoptions.animalId, secondaryAnimalId));
+        
+        // Mark secondary animal as merged
+        await tx.update(animals)
+          .set({
+            status: 'merged',
+            mergedWithId: primaryAnimalId,
+          })
+          .where(eq(animals.id, secondaryAnimalId));
+        
+        // Create merge history record
+        await tx.insert(animalMergeHistory).values({
+          tenantId,
+          primaryAnimalId,
+          secondaryAnimalId,
+          mergedBy: userId,
+          fieldChoices: fieldChoices || {},
+          reassignedMedicalRecords,
+          reassignedPhotos,
+          reassignedApplications,
+          reassignedNotes,
+          secondaryAnimalSnapshot,
+          notes: notes || null,
+        });
+        
+        // Log the activity
+        await tx.insert(activityLogs).values({
+          tenantId,
+          userId,
+          type: 'animal_merged',
+          description: `Merged animal profile "${secondaryAnimal.name}" into "${primaryAnimal.name}"`,
+          metadata: {
+            primaryAnimalId,
+            secondaryAnimalId,
+            primaryAnimalName: primaryAnimal.name,
+            secondaryAnimalName: secondaryAnimal.name,
+          },
+        });
+        
+        // Fetch updated primary animal within transaction
+        const [result] = await tx.select().from(animals)
+          .where(eq(animals.id, primaryAnimalId));
+        updatedPrimary = result;
+      });
+      
+      res.json({
+        success: true,
+        message: `Successfully merged "${secondaryAnimal.name}" into "${primaryAnimal.name}"`,
+        primaryAnimal: updatedPrimary,
+        stats: {
+          reassignedMedicalRecords,
+          reassignedPhotos,
+          reassignedApplications,
+          reassignedNotes,
+        },
+      });
+    } catch (error) {
+      console.error('Merge failed:', error);
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/animals/merge-history
+   * Get merge history for this tenant
+   * NOTE: This route MUST be defined before /api/animals/:id
+   */
+  app.get('/api/animals/merge-history', requireTenant, requireAuth, requireRole('admin', 'owner'), async (req, res, next) => {
+    try {
+      const tenantId = req.tenant!.id;
+      
+      const history = await db.select({
+        id: animalMergeHistory.id,
+        primaryAnimalId: animalMergeHistory.primaryAnimalId,
+        secondaryAnimalId: animalMergeHistory.secondaryAnimalId,
+        mergedBy: animalMergeHistory.mergedBy,
+        mergedAt: animalMergeHistory.mergedAt,
+        reassignedMedicalRecords: animalMergeHistory.reassignedMedicalRecords,
+        reassignedApplications: animalMergeHistory.reassignedApplications,
+        reassignedNotes: animalMergeHistory.reassignedNotes,
+        notes: animalMergeHistory.notes,
+      })
+        .from(animalMergeHistory)
+        .where(eq(animalMergeHistory.tenantId, tenantId))
+        .orderBy(desc(animalMergeHistory.mergedAt));
+      
+      res.json({ history });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * GET /api/animals/:id
    * Get specific animal
    */
@@ -4998,347 +5338,6 @@ Crawl-delay: 1
         .orderBy(desc(fosterUpdates.createdAt));
       
       res.json({ fosterUpdates: updates });
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  // ============================================
-  // ANIMAL DUPLICATE DETECTION & MERGE
-  // ============================================
-
-  /**
-   * GET /api/animals/duplicates
-   * Find potential duplicate animal profiles based on name similarity, breed, and intake date
-   */
-  app.get('/api/animals/duplicates', requireTenant, requireAuth, requireRole('admin', 'owner', 'staff'), async (req, res, next) => {
-    try {
-      const tenantId = req.tenant!.id;
-      
-      // Get all active animals (not merged, not deceased)
-      const allAnimals = await db.select().from(animals)
-        .where(and(
-          eq(animals.tenantId, tenantId),
-          not(eq(animals.status, 'merged')),
-          not(eq(animals.status, 'deceased'))
-        ))
-        .orderBy(animals.name);
-      
-      // Find potential duplicates based on name similarity + breed + intake date proximity
-      const duplicateGroups: Array<{
-        animals: typeof allAnimals;
-        matchReason: string;
-        confidence: 'high' | 'medium' | 'low';
-      }> = [];
-      
-      const usedIds = new Set<string>();
-      
-      for (let i = 0; i < allAnimals.length; i++) {
-        if (usedIds.has(allAnimals[i].id)) continue;
-        
-        const matches: typeof allAnimals = [];
-        let matchReasons: string[] = [];
-        
-        for (let j = i + 1; j < allAnimals.length; j++) {
-          if (usedIds.has(allAnimals[j].id)) continue;
-          
-          const a = allAnimals[i];
-          const b = allAnimals[j];
-          
-          // Calculate name similarity (Levenshtein-like comparison)
-          const nameA = a.name.toLowerCase().trim();
-          const nameB = b.name.toLowerCase().trim();
-          const nameSimilar = nameA === nameB || 
-            nameA.includes(nameB) || 
-            nameB.includes(nameA) ||
-            (Math.abs(nameA.length - nameB.length) <= 2 && 
-              nameA.split('').filter((c, idx) => nameB[idx] === c).length >= Math.min(nameA.length, nameB.length) - 2);
-          
-          // Check breed match
-          const breedMatch = a.breed.toLowerCase() === b.breed.toLowerCase();
-          
-          // Check species match
-          const speciesMatch = a.species.toLowerCase() === b.species.toLowerCase();
-          
-          // Check intake date proximity (within 7 days)
-          const intakeDateProximity = a.intakeDate && b.intakeDate &&
-            Math.abs(new Date(a.intakeDate).getTime() - new Date(b.intakeDate).getTime()) < 7 * 24 * 60 * 60 * 1000;
-          
-          // Determine if this is a potential duplicate
-          if (nameSimilar && speciesMatch) {
-            const reasons: string[] = ['Similar names', 'Same species'];
-            if (breedMatch) reasons.push('Same breed');
-            if (intakeDateProximity) reasons.push('Similar intake dates');
-            
-            matches.push(b);
-            matchReasons = reasons;
-            usedIds.add(b.id);
-          }
-        }
-        
-        if (matches.length > 0) {
-          usedIds.add(allAnimals[i].id);
-          const allMatches = [allAnimals[i], ...matches];
-          
-          // Determine confidence level
-          const hasBreedMatch = matchReasons.includes('Same breed');
-          const hasDateMatch = matchReasons.includes('Similar intake dates');
-          
-          let confidence: 'high' | 'medium' | 'low' = 'low';
-          if (hasBreedMatch && hasDateMatch) confidence = 'high';
-          else if (hasBreedMatch || hasDateMatch) confidence = 'medium';
-          
-          duplicateGroups.push({
-            animals: allMatches,
-            matchReason: matchReasons.join(', '),
-            confidence,
-          });
-        }
-      }
-      
-      // Sort by confidence (high first)
-      duplicateGroups.sort((a, b) => {
-        const order = { high: 0, medium: 1, low: 2 };
-        return order[a.confidence] - order[b.confidence];
-      });
-      
-      res.json({ duplicateGroups });
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  /**
-   * POST /api/animals/merge
-   * Merge two animal profiles - keeps primary, archives secondary, reassigns related records
-   * Uses a database transaction to ensure atomicity
-   */
-  app.post('/api/animals/merge', requireTenant, requireAuth, requireRole('admin', 'owner', 'staff'), async (req, res, next) => {
-    try {
-      const tenantId = req.tenant!.id;
-      const userId = req.user!.id;
-      const { primaryAnimalId, secondaryAnimalId, fieldChoices, notes } = req.body;
-      
-      if (!primaryAnimalId || !secondaryAnimalId) {
-        return res.status(400).json({ error: 'Both primaryAnimalId and secondaryAnimalId are required' });
-      }
-      
-      if (primaryAnimalId === secondaryAnimalId) {
-        return res.status(400).json({ error: 'Cannot merge an animal with itself' });
-      }
-      
-      // Whitelist of allowed fields that can be merged
-      const allowedMergeFields = new Set([
-        'name', 'species', 'breed', 'secondaryBreed', 'age', 'ageUnit', 'gender',
-        'weight', 'weightUnit', 'color', 'description', 'internalNotes',
-        'microchipNumber', 'intakeDate', 'intakeType', 'location',
-        'adoptionFee', 'goodWithDogs', 'goodWithCats', 'goodWithKids',
-        'houseTrained', 'spayedNeutered', 'specialNeeds', 'specialNeedsDescription',
-        'vaccinated', 'vaccinationDetails', 'medicalHistory', 'behaviorNotes',
-        'fosterName', 'fosterPhone', 'fosterEmail', 'petfinderType',
-        'petfinderAge', 'petfinderSize', 'petfinderGender', 'primaryPhotoIndex'
-      ]);
-      
-      // Validate fieldChoices if provided
-      if (fieldChoices && typeof fieldChoices === 'object') {
-        for (const [field, choice] of Object.entries(fieldChoices)) {
-          if (!allowedMergeFields.has(field)) {
-            return res.status(400).json({ error: `Field '${field}' is not allowed to be merged` });
-          }
-          if (choice !== 'primary' && choice !== 'secondary') {
-            return res.status(400).json({ error: `Invalid choice '${choice}' for field '${field}'. Must be 'primary' or 'secondary'` });
-          }
-        }
-      }
-      
-      // Fetch both animals before transaction
-      const [primaryAnimal] = await db.select().from(animals)
-        .where(and(eq(animals.id, primaryAnimalId), eq(animals.tenantId, tenantId)));
-      const [secondaryAnimal] = await db.select().from(animals)
-        .where(and(eq(animals.id, secondaryAnimalId), eq(animals.tenantId, tenantId)));
-      
-      if (!primaryAnimal || !secondaryAnimal) {
-        return res.status(404).json({ error: 'One or both animals not found' });
-      }
-      
-      if (primaryAnimal.status === 'merged' || secondaryAnimal.status === 'merged') {
-        return res.status(400).json({ error: 'Cannot merge an already merged animal' });
-      }
-      
-      // Create snapshot of secondary animal before merge
-      const secondaryAnimalSnapshot = { ...secondaryAnimal };
-      
-      // Track reassignment counts
-      let reassignedMedicalRecords = 0;
-      let reassignedPhotos = 0;
-      let reassignedApplications = 0;
-      let reassignedNotes = 0;
-      let updatedPrimary: typeof primaryAnimal | undefined;
-      
-      // Use a transaction to ensure atomicity - all operations succeed or all fail
-      await db.transaction(async (tx) => {
-        // Apply field choices - update primary animal with selected fields from secondary
-        if (fieldChoices && typeof fieldChoices === 'object') {
-          const updateData: Record<string, any> = {};
-          
-          for (const [field, choice] of Object.entries(fieldChoices)) {
-            if (choice === 'secondary' && allowedMergeFields.has(field)) {
-              const secondaryValue = (secondaryAnimal as any)[field];
-              // Don't overwrite with null/undefined/empty unless field explicitly allows it
-              if (secondaryValue !== null && secondaryValue !== undefined && secondaryValue !== '') {
-                updateData[field] = secondaryValue;
-              }
-            }
-          }
-          
-          // Also merge photo arrays - always combine unique photos
-          if (secondaryAnimal.photoUrls && secondaryAnimal.photoUrls.length > 0) {
-            const existingPhotos = primaryAnimal.photoUrls || [];
-            const newPhotos = secondaryAnimal.photoUrls.filter(p => !existingPhotos.includes(p));
-            if (newPhotos.length > 0) {
-              updateData.photoUrls = [...existingPhotos, ...newPhotos];
-              reassignedPhotos = newPhotos.length;
-            }
-          }
-          
-          if (Object.keys(updateData).length > 0) {
-            await tx.update(animals)
-              .set(updateData)
-              .where(eq(animals.id, primaryAnimalId));
-          }
-        }
-        
-        // Reassign related records using typed Drizzle operations
-        // Medical exams
-        const examResult = await tx.update(medicalExams)
-          .set({ animalId: primaryAnimalId })
-          .where(eq(medicalExams.animalId, secondaryAnimalId));
-        reassignedMedicalRecords += Number(examResult.rowCount) || 0;
-        
-        // Medical prescriptions
-        const prescriptionResult = await tx.update(medicalPrescriptions)
-          .set({ animalId: primaryAnimalId })
-          .where(eq(medicalPrescriptions.animalId, secondaryAnimalId));
-        reassignedMedicalRecords += Number(prescriptionResult.rowCount) || 0;
-        
-        // Medical bills
-        const billsResult = await tx.update(medicalBills)
-          .set({ animalId: primaryAnimalId })
-          .where(eq(medicalBills.animalId, secondaryAnimalId));
-        reassignedMedicalRecords += Number(billsResult.rowCount) || 0;
-        
-        // Medical files
-        const filesResult = await tx.update(medicalFiles)
-          .set({ animalId: primaryAnimalId })
-          .where(eq(medicalFiles.animalId, secondaryAnimalId));
-        reassignedMedicalRecords += Number(filesResult.rowCount) || 0;
-        
-        // Animal notes
-        const notesResult = await tx.update(animalNotes)
-          .set({ animalId: primaryAnimalId })
-          .where(eq(animalNotes.animalId, secondaryAnimalId));
-        reassignedNotes = Number(notesResult.rowCount) || 0;
-        
-        // Adoption applications
-        const appsResult = await tx.update(applications)
-          .set({ animalId: primaryAnimalId })
-          .where(eq(applications.animalId, secondaryAnimalId));
-        reassignedApplications = Number(appsResult.rowCount) || 0;
-        
-        // Adoption checkout sessions
-        await tx.update(adoptionCheckoutSessions)
-          .set({ animalId: primaryAnimalId })
-          .where(eq(adoptionCheckoutSessions.animalId, secondaryAnimalId));
-        
-        // Adoptions table
-        await tx.update(adoptions)
-          .set({ animalId: primaryAnimalId })
-          .where(eq(adoptions.animalId, secondaryAnimalId));
-        
-        // Mark secondary animal as merged
-        await tx.update(animals)
-          .set({
-            status: 'merged',
-            mergedWithId: primaryAnimalId,
-          })
-          .where(eq(animals.id, secondaryAnimalId));
-        
-        // Create merge history record
-        await tx.insert(animalMergeHistory).values({
-          tenantId,
-          primaryAnimalId,
-          secondaryAnimalId,
-          mergedBy: userId,
-          fieldChoices: fieldChoices || {},
-          reassignedMedicalRecords,
-          reassignedPhotos,
-          reassignedApplications,
-          reassignedNotes,
-          secondaryAnimalSnapshot,
-          notes: notes || null,
-        });
-        
-        // Log the activity
-        await tx.insert(activityLogs).values({
-          tenantId,
-          userId,
-          type: 'animal_merged',
-          description: `Merged animal profile "${secondaryAnimal.name}" into "${primaryAnimal.name}"`,
-          metadata: {
-            primaryAnimalId,
-            secondaryAnimalId,
-            primaryAnimalName: primaryAnimal.name,
-            secondaryAnimalName: secondaryAnimal.name,
-          },
-        });
-        
-        // Fetch updated primary animal within transaction
-        const [result] = await tx.select().from(animals)
-          .where(eq(animals.id, primaryAnimalId));
-        updatedPrimary = result;
-      });
-      
-      res.json({
-        success: true,
-        message: `Successfully merged "${secondaryAnimal.name}" into "${primaryAnimal.name}"`,
-        primaryAnimal: updatedPrimary,
-        stats: {
-          reassignedMedicalRecords,
-          reassignedPhotos,
-          reassignedApplications,
-          reassignedNotes,
-        },
-      });
-    } catch (error) {
-      console.error('Merge failed:', error);
-      next(error);
-    }
-  });
-
-  /**
-   * GET /api/animals/merge-history
-   * Get merge history for this tenant
-   */
-  app.get('/api/animals/merge-history', requireTenant, requireAuth, requireRole('admin', 'owner'), async (req, res, next) => {
-    try {
-      const tenantId = req.tenant!.id;
-      
-      const history = await db.select({
-        id: animalMergeHistory.id,
-        primaryAnimalId: animalMergeHistory.primaryAnimalId,
-        secondaryAnimalId: animalMergeHistory.secondaryAnimalId,
-        mergedBy: animalMergeHistory.mergedBy,
-        mergedAt: animalMergeHistory.mergedAt,
-        reassignedMedicalRecords: animalMergeHistory.reassignedMedicalRecords,
-        reassignedApplications: animalMergeHistory.reassignedApplications,
-        reassignedNotes: animalMergeHistory.reassignedNotes,
-        notes: animalMergeHistory.notes,
-      })
-        .from(animalMergeHistory)
-        .where(eq(animalMergeHistory.tenantId, tenantId))
-        .orderBy(desc(animalMergeHistory.mergedAt));
-      
-      res.json({ history });
     } catch (error) {
       next(error);
     }
