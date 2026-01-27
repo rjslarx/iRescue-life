@@ -816,7 +816,7 @@ export default function ApplicationDetailSheet({
                 data-testid="button-reject"
               >
                 <X className="h-4 w-4 mr-1" />
-                Reject
+                {type === "intake" ? "Decline" : "Reject"}
               </Button>
               <Button
                 variant="default"
