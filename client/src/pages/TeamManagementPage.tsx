@@ -37,13 +37,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Loader2, UserPlus, Shield, Users as UsersIcon, Trash2, Mail, Clock, Send, Pencil } from "lucide-react";
+import { Loader2, UserPlus, Shield, Users as UsersIcon, Trash2, Mail, Clock, Send, Pencil, UserCheck } from "lucide-react";
 
 interface User {
   id: string;
   email: string;
   fullName: string;
-  roles: Array<"admin" | "board_member" | "staff" | "foster" | "volunteer">;
+  roles: Array<"owner" | "admin" | "board_member" | "staff" | "foster" | "volunteer">;
   createdAt: Date;
 }
 
@@ -93,14 +93,18 @@ export default function TeamManagementPage() {
     roles: ["volunteer"] as Array<"admin" | "board_member" | "staff" | "foster" | "volunteer">,
   });
 
+  const canAccessTeamData = currentUser?.activeRole === 'admin' || 
+    currentUser?.roles?.includes('owner') || 
+    currentUser?.roles?.includes('admin');
+
   const { data: usersData, isLoading: isLoadingUsers } = useQuery<UsersData>({
     queryKey: ['/api/users'],
-    enabled: currentUser?.activeRole === 'admin',
+    enabled: canAccessTeamData,
   });
 
   const { data: invitationsData, isLoading: isLoadingInvitations } = useQuery<InvitationsData>({
     queryKey: ['/api/invitations'],
-    enabled: currentUser?.activeRole === 'admin',
+    enabled: canAccessTeamData,
   });
 
   const sendInvitationMutation = useMutation({
@@ -216,6 +220,37 @@ export default function TeamManagementPage() {
     },
   });
 
+  const impersonateMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      const response = await apiRequest("POST", "/api/impersonation/start", { userId });
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/impersonation/status'] });
+      toast({
+        title: "Impersonation Started",
+        description: `You are now viewing as ${data.impersonating?.userName || 'the selected user'}.`,
+      });
+      window.location.reload();
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Impersonation Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const isOwner = currentUser?.roles?.includes('owner');
+  
+  const canImpersonate = (user: User) => {
+    if (!isOwner) return false;
+    if (user.id === currentUser?.id) return false;
+    if (user.roles.includes('owner')) return false;
+    return true;
+  };
+
   const users = usersData?.users || [];
   const invitations = invitationsData?.invitations || [];
 
@@ -237,6 +272,8 @@ export default function TeamManagementPage() {
 
   const getRoleBadgeVariant = (role: string) => {
     switch (role) {
+      case "owner":
+        return "default";
       case "admin":
         return "destructive";
       case "board_member":
@@ -250,6 +287,7 @@ export default function TeamManagementPage() {
 
   const getRoleLabel = (role: string) => {
     const labels: Record<string, string> = {
+      owner: "Owner",
       admin: "Admin",
       board_member: "Board Member",
       staff: "Staff",
@@ -330,14 +368,20 @@ export default function TeamManagementPage() {
     handleUpdateRoles(user.id, newRoles);
   };
 
-  if (currentUser && currentUser.activeRole !== 'admin') {
+  const canAccessTeamManagement = currentUser && (
+    currentUser.activeRole === 'admin' || 
+    currentUser.roles?.includes('owner') ||
+    currentUser.roles?.includes('admin')
+  );
+
+  if (currentUser && !canAccessTeamManagement) {
     return (
       <div className="min-h-screen flex items-center justify-center p-6">
         <Card className="max-w-md p-8 text-center">
           <Shield className="h-16 w-16 mx-auto mb-4 text-destructive" />
           <h1 className="text-2xl font-bold mb-2">Access Denied</h1>
           <p className="text-muted-foreground">
-            Only administrators can access team management. Please contact your admin if you need access.
+            Only administrators and owners can access team management. Please contact your admin if you need access.
           </p>
         </Card>
       </div>
@@ -690,6 +734,18 @@ export default function TeamManagementPage() {
                                 </div>
                               </DialogContent>
                             </Dialog>
+                            {canImpersonate(user) && (
+                              <Button
+                                size="icon"
+                                variant="outline"
+                                onClick={() => impersonateMutation.mutate(user.id)}
+                                disabled={impersonateMutation.isPending}
+                                data-testid={`button-impersonate-mobile-${user.id}`}
+                                title={`View as ${user.fullName}`}
+                              >
+                                <UserCheck className="h-4 w-4" />
+                              </Button>
+                            )}
                             {user.id !== currentUser?.id && (
                               <Button
                                 size="icon"
@@ -829,6 +885,19 @@ export default function TeamManagementPage() {
                                       </div>
                                     </DialogContent>
                                   </Dialog>
+                                  {canImpersonate(user) && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => impersonateMutation.mutate(user.id)}
+                                      disabled={impersonateMutation.isPending}
+                                      data-testid={`button-impersonate-${user.id}`}
+                                      title={`View as ${user.fullName}`}
+                                    >
+                                      <UserCheck className="h-4 w-4 mr-1" />
+                                      View As
+                                    </Button>
+                                  )}
                                   {user.id !== currentUser?.id && (
                                     <Button
                                       size="sm"

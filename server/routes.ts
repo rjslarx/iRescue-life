@@ -4131,7 +4131,7 @@ Crawl-delay: 1
    * GET /api/users
    * List all users in tenant (admin/staff only)
    */
-  app.get('/api/users', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+  app.get('/api/users', requireTenant, requireAuth, requireRole('owner', 'admin', 'staff'), async (req, res, next) => {
     try {
       const { users } = await import('@shared/schema');
       
@@ -4187,7 +4187,7 @@ Crawl-delay: 1
    * POST /api/users
    * Create new user (admin only)
    */
-  app.post('/api/users', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+  app.post('/api/users', requireTenant, requireAuth, requireRole('owner', 'admin'), async (req, res, next) => {
     try {
       const userSchema = z.object({
         email: z.string().email(),
@@ -4212,7 +4212,7 @@ Crawl-delay: 1
    * PATCH /api/users/:id
    * Update user role (admin only)
    */
-  app.patch('/api/users/:id', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+  app.patch('/api/users/:id', requireTenant, requireAuth, requireRole('owner', 'admin'), async (req, res, next) => {
     try {
       const { users } = await import('@shared/schema');
       
@@ -4269,7 +4269,7 @@ Crawl-delay: 1
    * DELETE /api/users/:id
    * Delete user (admin only)
    */
-  app.delete('/api/users/:id', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+  app.delete('/api/users/:id', requireTenant, requireAuth, requireRole('owner', 'admin'), async (req, res, next) => {
     try {
       const { users } = await import('@shared/schema');
       
@@ -4299,6 +4299,195 @@ Crawl-delay: 1
   });
 
   // ============================================================================
+  // User Impersonation Routes (Owner only)
+  // ============================================================================
+
+  /**
+   * GET /api/impersonation/status
+   * Get current impersonation status
+   */
+  app.get('/api/impersonation/status', requireTenant, requireAuth, async (req, res) => {
+    if (req.impersonation?.active) {
+      res.json({
+        impersonating: true,
+        impersonatedUserId: req.impersonation.impersonatedUserId,
+        impersonatedUserName: req.impersonation.impersonatedUserName,
+        realUserId: req.impersonation.realUserId,
+        realUserName: req.impersonation.realUserName,
+        startedAt: req.impersonation.startedAt,
+      });
+    } else {
+      res.json({ impersonating: false });
+    }
+  });
+
+  /**
+   * POST /api/impersonation/start
+   * Start impersonating a user (owner only)
+   */
+  app.post('/api/impersonation/start', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { auditLogs } = await import('@shared/schema');
+      
+      // Can't start user impersonation while platform impersonation is active
+      if (req.session.impersonating) {
+        return res.status(400).json({
+          error: 'Platform impersonation active',
+          message: 'Cannot start user impersonation while viewing as another tenant. Exit platform view first.'
+        });
+      }
+      
+      // Only owners can impersonate
+      if (!req.user!.roles.includes('owner')) {
+        return res.status(403).json({ 
+          error: 'Forbidden',
+          message: 'Only organization owners can impersonate other users'
+        });
+      }
+      
+      // Can't start impersonation if already impersonating a user
+      if (req.session.impersonatingUserId) {
+        return res.status(400).json({
+          error: 'Already impersonating',
+          message: 'You must stop current impersonation before starting a new one'
+        });
+      }
+      
+      const schema = z.object({
+        userId: z.string().uuid(),
+      });
+      
+      const { userId } = schema.parse(req.body);
+      
+      // Can't impersonate yourself
+      if (userId === req.user!.id) {
+        return res.status(400).json({
+          error: 'Invalid target',
+          message: 'You cannot impersonate yourself'
+        });
+      }
+      
+      // Load target user
+      const [targetUser] = await db
+        .select({
+          id: users.id,
+          email: users.email,
+          fullName: users.fullName,
+          roles: users.roles,
+          tenantId: users.tenantId,
+        })
+        .from(users)
+        .where(and(
+          eq(users.id, userId),
+          eq(users.tenantId, req.tenant!.id),
+          eq(users.isActive, true)
+        ))
+        .limit(1);
+      
+      if (!targetUser) {
+        return res.status(404).json({
+          error: 'User not found',
+          message: 'The user you are trying to impersonate does not exist'
+        });
+      }
+      
+      // Can't impersonate another owner
+      if (targetUser.roles.includes('owner')) {
+        return res.status(403).json({
+          error: 'Cannot impersonate owner',
+          message: 'You cannot impersonate another organization owner'
+        });
+      }
+      
+      // Set impersonation session data
+      req.session.impersonatingUserId = targetUser.id;
+      req.session.impersonatingUserName = targetUser.fullName;
+      req.session.realUserId = req.user!.id;
+      req.session.realUserName = req.user!.fullName;
+      req.session.impersonationStartedAt = Date.now();
+      
+      // Log the impersonation for audit
+      await db.insert(auditLogs).values({
+        userId: req.user!.id,
+        tenantId: req.tenant!.id,
+        action: 'user.impersonation.start',
+        entityType: 'user',
+        entityId: targetUser.id,
+        metadata: {
+          impersonatedUserEmail: targetUser.email,
+          impersonatedUserName: targetUser.fullName,
+          impersonatedUserRoles: targetUser.roles,
+        },
+        ipAddress: req.ip || req.socket.remoteAddress || null,
+        userAgent: req.headers['user-agent'] || null,
+      });
+      
+      res.json({
+        success: true,
+        impersonating: {
+          userId: targetUser.id,
+          userName: targetUser.fullName,
+          email: targetUser.email,
+          roles: targetUser.roles,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/impersonation/stop
+   * Stop impersonating and return to own account
+   */
+  app.post('/api/impersonation/stop', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { auditLogs } = await import('@shared/schema');
+      
+      if (!req.session.impersonatingUserId || !req.session.realUserId) {
+        return res.status(400).json({
+          error: 'Not impersonating',
+          message: 'You are not currently impersonating anyone'
+        });
+      }
+      
+      const impersonatedUserId = req.session.impersonatingUserId;
+      const impersonatedUserName = req.session.impersonatingUserName;
+      const realUserId = req.session.realUserId;
+      const startedAt = req.session.impersonationStartedAt;
+      
+      // Clear impersonation session data
+      delete req.session.impersonatingUserId;
+      delete req.session.impersonatingUserName;
+      delete req.session.realUserId;
+      delete req.session.realUserName;
+      delete req.session.impersonationStartedAt;
+      
+      // Log the end of impersonation
+      await db.insert(auditLogs).values({
+        userId: realUserId,
+        tenantId: req.tenant!.id,
+        action: 'user.impersonation.stop',
+        entityType: 'user',
+        entityId: impersonatedUserId,
+        metadata: {
+          impersonatedUserName,
+          duration: startedAt ? Date.now() - startedAt : null,
+        },
+        ipAddress: req.ip || req.socket.remoteAddress || null,
+        userAgent: req.headers['user-agent'] || null,
+      });
+      
+      res.json({
+        success: true,
+        message: 'Impersonation ended successfully',
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // ============================================================================
   // User Invitations Routes
   // ============================================================================
 
@@ -4306,7 +4495,7 @@ Crawl-delay: 1
    * POST /api/invitations
    * Create and send an invitation (admin only)
    */
-  app.post('/api/invitations', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+  app.post('/api/invitations', requireTenant, requireAuth, requireRole('owner', 'admin'), async (req, res, next) => {
     try {
       const { createInvitation, sendInvitationEmail } = await import('./services/invitations');
       const { users } = await import('@shared/schema');
@@ -4353,7 +4542,7 @@ Crawl-delay: 1
    * GET /api/invitations
    * Get all pending invitations (admin only)
    */
-  app.get('/api/invitations', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+  app.get('/api/invitations', requireTenant, requireAuth, requireRole('owner', 'admin'), async (req, res, next) => {
     try {
       const { getPendingInvitations } = await import('./services/invitations');
       
@@ -4383,7 +4572,7 @@ Crawl-delay: 1
    * DELETE /api/invitations/:id
    * Cancel an invitation (admin only)
    */
-  app.delete('/api/invitations/:id', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+  app.delete('/api/invitations/:id', requireTenant, requireAuth, requireRole('owner', 'admin'), async (req, res, next) => {
     try {
       const { cancelInvitation } = await import('./services/invitations');
       
@@ -4399,7 +4588,7 @@ Crawl-delay: 1
    * POST /api/invitations/:id/resend
    * Resend an invitation (admin only)
    */
-  app.post('/api/invitations/:id/resend', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+  app.post('/api/invitations/:id/resend', requireTenant, requireAuth, requireRole('owner', 'admin'), async (req, res, next) => {
     try {
       const { resendInvitation, sendInvitationEmail } = await import('./services/invitations');
       const { users } = await import('@shared/schema');

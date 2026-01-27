@@ -16,11 +16,17 @@ declare module 'express-session' {
     userId?: string;
     tenantId?: string;
     activeRole?: string; // The role the user is currently acting as
-    // Impersonation fields
+    // Platform admin impersonation fields (for accessing other tenants)
     impersonating?: boolean;
     impersonatedTenantId?: string;
     originalUserId?: string;
     originalTenantId?: string;
+    // Tenant-level user impersonation fields (owner impersonating team members)
+    impersonatingUserId?: string; // The user being impersonated
+    impersonatingUserName?: string; // Name of impersonated user (for display)
+    realUserId?: string; // The owner's actual userId
+    realUserName?: string; // The owner's name (for display)
+    impersonationStartedAt?: number; // Timestamp when impersonation started
   }
 }
 
@@ -35,6 +41,15 @@ declare global {
         roles: string[]; // All roles the user has
         activeRole: string; // The role they're currently using
         tenantId: string;
+      };
+      // Impersonation context for UI
+      impersonation?: {
+        active: boolean;
+        impersonatedUserId: string;
+        impersonatedUserName: string;
+        realUserId: string;
+        realUserName: string;
+        startedAt: number;
       };
     }
   }
@@ -153,6 +168,57 @@ export async function authenticateUser(req: Request, res: Response, next: NextFu
           return res.status(401).json({ error: 'Invalid tenant access' });
         }
 
+        // Handle tenant-level user impersonation (owner impersonating team member)
+        if (req.session.impersonatingUserId && req.session.realUserId) {
+          // Load the impersonated user
+          const [impersonatedUser] = await db
+            .select({
+              id: users.id,
+              email: users.email,
+              fullName: users.fullName,
+              roles: users.roles,
+              tenantId: users.tenantId,
+            })
+            .from(users)
+            .where(and(
+              eq(users.id, req.session.impersonatingUserId),
+              eq(users.tenantId, req.session.tenantId!),
+              eq(users.isActive, true)
+            ))
+            .limit(1);
+          
+          if (impersonatedUser) {
+            // Use the impersonated user's data
+            const activeRole = impersonatedUser.roles[0] || 'volunteer';
+            req.user = {
+              id: impersonatedUser.id,
+              email: impersonatedUser.email,
+              fullName: impersonatedUser.fullName,
+              roles: impersonatedUser.roles,
+              activeRole,
+              tenantId: impersonatedUser.tenantId,
+            };
+            
+            // Set impersonation context for UI
+            req.impersonation = {
+              active: true,
+              impersonatedUserId: req.session.impersonatingUserId,
+              impersonatedUserName: req.session.impersonatingUserName || impersonatedUser.fullName,
+              realUserId: req.session.realUserId,
+              realUserName: req.session.realUserName || '',
+              startedAt: req.session.impersonationStartedAt || Date.now(),
+            };
+            return next();
+          } else {
+            // Impersonated user not found, end impersonation
+            delete req.session.impersonatingUserId;
+            delete req.session.impersonatingUserName;
+            delete req.session.realUserId;
+            delete req.session.realUserName;
+            delete req.session.impersonationStartedAt;
+          }
+        }
+
         // Determine active role: use session's activeRole if valid, otherwise default to first role
         let activeRole = req.session.activeRole;
         if (!activeRole || !user.roles.includes(activeRole)) {
@@ -199,13 +265,20 @@ export function requireRole(...roles: string[]) {
       return res.status(401).json({ error: 'Authentication required' });
     }
     
-    if (!roles.includes(req.user.activeRole)) {
-      return res.status(403).json({ 
-        error: 'Forbidden',
-        message: `This action requires one of the following roles: ${roles.join(', ')}. Your active role is: ${req.user.activeRole}`
-      });
+    // Check activeRole first (standard check)
+    if (roles.includes(req.user.activeRole)) {
+      return next();
     }
     
-    next();
+    // Special case: 'owner' role has elevated access - check roles array regardless of activeRole
+    // This allows owners to access owner-protected routes even when their activeRole is set to admin/staff
+    if (roles.includes('owner') && req.user.roles.includes('owner')) {
+      return next();
+    }
+    
+    return res.status(403).json({ 
+      error: 'Forbidden',
+      message: `This action requires one of the following roles: ${roles.join(', ')}. Your active role is: ${req.user.activeRole}`
+    });
   };
 }
