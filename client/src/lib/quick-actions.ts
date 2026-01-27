@@ -160,9 +160,9 @@ export const ALL_QUICK_ACTIONS: QuickAction[] = [
   {
     id: "add-volunteer",
     label: "Add Volunteer",
-    description: "Manually register a new volunteer",
+    description: "Manually add a volunteer via the contacts form",
     icon: UserPlus,
-    href: "/dashboard/volunteers?action=add",
+    href: "/dashboard/contacts?action=add",
     actionType: "navigate",
   },
   {

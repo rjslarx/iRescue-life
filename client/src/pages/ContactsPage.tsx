@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import DashboardLayout from "@/components/DashboardLayout";
 import {
   Dialog,
@@ -64,6 +66,13 @@ interface Contact {
   userIsActive: boolean | null;
 }
 
+const AVAILABLE_ROLES = [
+  { id: "volunteer", label: "Volunteer" },
+  { id: "foster", label: "Foster" },
+  { id: "board_member", label: "Board Member" },
+  { id: "staff", label: "Staff" },
+] as const;
+
 const contactFormSchema = z.object({
   name: z.string().min(1, "Name is required"),
   email: z.string().email("Invalid email address"),
@@ -71,6 +80,7 @@ const contactFormSchema = z.object({
   address: z.string().optional(),
   tags: z.string().optional(),
   notes: z.string().optional(),
+  roles: z.array(z.string()).optional(),
 });
 
 type ContactFormData = z.infer<typeof contactFormSchema>;
@@ -86,11 +96,22 @@ interface ImportSummary {
 export default function ContactsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [donorFilter, setDonorFilter] = useState<string>("all");
   const [dialogOpen, setDialogOpen] = useState(false);
+  
+  // Open dialog when ?action=add is in URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('action') === 'add') {
+      setDialogOpen(true);
+      // Clean up URL
+      setLocation('/dashboard/contacts', { replace: true });
+    }
+  }, [setLocation]);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importMode, setImportMode] = useState<'skip' | 'update'>('skip');
@@ -189,15 +210,17 @@ export default function ContactsPage() {
       address: "",
       tags: "",
       notes: "",
+      roles: [],
     },
   });
 
   const createContactMutation = useMutation({
     mutationFn: async (data: ContactFormData) => {
       const tags = data.tags ? data.tags.split(',').map(t => t.trim()).filter(Boolean) : [];
+      const roles = data.roles && data.roles.length > 0 ? data.roles : undefined;
       return apiRequest('/api/contacts', {
         method: 'POST',
-        body: JSON.stringify({ ...data, tags }),
+        body: JSON.stringify({ ...data, tags, role: roles }),
       });
     },
     onSuccess: () => {
@@ -502,6 +525,35 @@ export default function ContactsPage() {
                         </FormItem>
                       )}
                     />
+
+                    <div className="space-y-3">
+                      <Label className="text-sm font-medium">Assign Roles (optional)</Label>
+                      <div className="grid grid-cols-2 gap-3">
+                        {AVAILABLE_ROLES.map((role) => (
+                          <div key={role.id} className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`role-${role.id}`}
+                              checked={form.watch("roles")?.includes(role.id) || false}
+                              onCheckedChange={(checked) => {
+                                const currentRoles = form.getValues("roles") || [];
+                                if (checked) {
+                                  form.setValue("roles", [...currentRoles, role.id]);
+                                } else {
+                                  form.setValue("roles", currentRoles.filter(r => r !== role.id));
+                                }
+                              }}
+                              data-testid={`checkbox-role-${role.id}`}
+                            />
+                            <Label htmlFor={`role-${role.id}`} className="text-sm font-normal cursor-pointer">
+                              {role.label}
+                            </Label>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Select roles to integrate this contact into your volunteer, foster, or staff systems
+                      </p>
+                    </div>
 
                     <FormField
                       control={form.control}
