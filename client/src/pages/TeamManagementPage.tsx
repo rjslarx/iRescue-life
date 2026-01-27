@@ -38,7 +38,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Loader2, UserPlus, Shield, Users as UsersIcon, Trash2, Mail, Clock, Send, Pencil, UserCheck } from "lucide-react";
+import { Loader2, UserPlus, Shield, Users as UsersIcon, Trash2, Mail, Clock, Send, Pencil, UserCheck, Copy } from "lucide-react";
 
 interface User {
   id: string;
@@ -53,6 +53,7 @@ interface Invitation {
   email: string;
   fullName: string | null;
   roles: Array<"admin" | "board_member" | "staff" | "foster" | "volunteer">;
+  invitationUrl: string;
   expiresAt: Date;
   createdAt: Date;
   invitedBy: {
@@ -476,6 +477,28 @@ export default function TeamManagementPage() {
                         </TableCell>
                         <TableCell>
                           <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                navigator.clipboard.writeText(invitation.invitationUrl).then(() => {
+                                  toast({
+                                    title: "Link Copied",
+                                    description: "Invitation link copied to clipboard. Share it directly with the invitee.",
+                                  });
+                                }).catch(() => {
+                                  toast({
+                                    title: "Copy Failed",
+                                    description: "Could not copy to clipboard. Please try again.",
+                                    variant: "destructive",
+                                  });
+                                });
+                              }}
+                              data-testid={`button-copy-link-${invitation.id}`}
+                            >
+                              <Copy className="h-4 w-4 mr-1" />
+                              Copy Link
+                            </Button>
                             <Button
                               size="sm"
                               variant="outline"

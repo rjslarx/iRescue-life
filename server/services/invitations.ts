@@ -26,9 +26,18 @@ function getAppBaseUrl(): string {
 
 /**
  * Generate a secure random token for invitation
+ * Uses 12 bytes (96 bits) encoded as base64url for a 16-character token
+ * This is much shorter than the previous 64-character hex token,
+ * reducing issues with email clients truncating long URLs
  */
 function generateInvitationToken(): string {
-  return crypto.randomBytes(32).toString('hex');
+  // Generate 12 random bytes and encode as base64url (URL-safe base64)
+  const bytes = crypto.randomBytes(12);
+  // Convert to base64 and make URL-safe: replace + with -, / with _, remove =
+  return bytes.toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
 }
 
 /**
@@ -191,6 +200,19 @@ export async function sendInvitationEmail(
   }
 
   return result;
+}
+
+/**
+ * Construct the invitation accept URL based on tenant configuration
+ * Uses custom domain if available, otherwise path-based routing
+ */
+export function buildInvitationUrl(token: string, tenant: { subdomain: string | null; customDomain: string | null }): string {
+  if (tenant.customDomain) {
+    return `https://${tenant.customDomain}/accept-invitation?token=${token}`;
+  }
+  const baseUrl = getAppBaseUrl();
+  const tenantPath = tenant.subdomain ? `/${tenant.subdomain}` : '';
+  return `${baseUrl}${tenantPath}/accept-invitation?token=${token}`;
 }
 
 /**

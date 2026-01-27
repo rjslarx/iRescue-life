@@ -4544,7 +4544,7 @@ Crawl-delay: 1
    */
   app.get('/api/invitations', requireTenant, requireAuth, requireRole('owner', 'admin'), async (req, res, next) => {
     try {
-      const { getPendingInvitations } = await import('./services/invitations');
+      const { getPendingInvitations, buildInvitationUrl } = await import('./services/invitations');
       
       const invitations = await getPendingInvitations(req.tenant!.id);
 
@@ -4554,6 +4554,9 @@ Crawl-delay: 1
           email: invitation.email,
           fullName: invitation.fullName,
           roles: invitation.roles,
+          // Include full invitation URL for "Copy Link" feature, constructed server-side
+          // to properly handle custom domains and path-based tenant routing
+          invitationUrl: buildInvitationUrl(invitation.token, req.tenant!),
           expiresAt: invitation.expiresAt,
           createdAt: invitation.createdAt,
           invitedBy: {
