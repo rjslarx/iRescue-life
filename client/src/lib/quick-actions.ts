@@ -13,6 +13,8 @@ import {
   Inbox,
   Kanban,
   UserCheck,
+  UserPlus,
+  MessageSquare,
   type LucideIcon
 } from "lucide-react";
 
@@ -153,6 +155,22 @@ export const ALL_QUICK_ACTIONS: QuickAction[] = [
     description: "View upcoming events and schedule",
     icon: Calendar,
     href: "/dashboard/calendar",
+    actionType: "navigate",
+  },
+  {
+    id: "add-volunteer",
+    label: "Add Volunteer",
+    description: "Manually register a new volunteer",
+    icon: UserPlus,
+    href: "/dashboard/volunteers?action=add",
+    actionType: "navigate",
+  },
+  {
+    id: "collaboration-hub",
+    label: "Collaboration Hub",
+    description: "Team communication and collaboration",
+    icon: MessageSquare,
+    href: "/dashboard/collaboration",
     actionType: "navigate",
   },
 ];
