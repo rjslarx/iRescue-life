@@ -9,8 +9,10 @@ import {
   Heart, 
   Home, 
   Users, 
-  Dog
+  Dog,
+  ArrowRight
 } from "lucide-react";
+import { Link } from "wouter";
 import { formatDistanceToNow } from "date-fns";
 import { useAuth } from "@/contexts/AuthContext";
 import ApplicationDetailSheet, { 
@@ -466,7 +468,13 @@ export default function PipelineManager() {
             </TabsList>
 
             <TabsContent value="adoptions" data-testid="content-adoptions">
-              <ScrollArea className="h-[300px]">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <span className="text-sm font-medium text-muted-foreground">Adoption Applications</span>
+                <Link href="/dashboard/applications" className="text-xs text-muted-foreground hover-elevate flex items-center gap-1" data-testid="link-view-all-adoptions">
+                  View All <ArrowRight className="h-3 w-3" />
+                </Link>
+              </div>
+              <ScrollArea className="h-[280px]">
                 {adoptionItems.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-8 text-center" data-testid="empty-state-adoptions">
                     <Heart className="h-8 w-8 text-muted-foreground mb-2" />
@@ -502,7 +510,13 @@ export default function PipelineManager() {
             </TabsContent>
 
             <TabsContent value="fosters" data-testid="content-fosters">
-              <ScrollArea className="h-[300px]">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <span className="text-sm font-medium text-muted-foreground">Foster Applications</span>
+                <Link href="/dashboard/foster-pipeline" className="text-xs text-muted-foreground hover-elevate flex items-center gap-1" data-testid="link-view-all-fosters">
+                  View All <ArrowRight className="h-3 w-3" />
+                </Link>
+              </div>
+              <ScrollArea className="h-[280px]">
                 {fosterItems.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-8 text-center" data-testid="empty-state-fosters">
                     <Home className="h-8 w-8 text-muted-foreground mb-2" />
@@ -537,7 +551,13 @@ export default function PipelineManager() {
             </TabsContent>
 
             <TabsContent value="volunteers" data-testid="content-volunteers">
-              <ScrollArea className="h-[300px]">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <span className="text-sm font-medium text-muted-foreground">Volunteer Applications</span>
+                <Link href="/dashboard/volunteer-pipeline" className="text-xs text-muted-foreground hover-elevate flex items-center gap-1" data-testid="link-view-all-volunteers">
+                  View All <ArrowRight className="h-3 w-3" />
+                </Link>
+              </div>
+              <ScrollArea className="h-[280px]">
                 {volunteerItems.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-8 text-center" data-testid="empty-state-volunteers">
                     <Users className="h-8 w-8 text-muted-foreground mb-2" />
@@ -572,7 +592,13 @@ export default function PipelineManager() {
             </TabsContent>
 
             <TabsContent value="intake" data-testid="content-intake">
-              <ScrollArea className="h-[300px]">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <span className="text-sm font-medium text-muted-foreground">Intake Requests</span>
+                <Link href="/dashboard/intake" className="text-xs text-muted-foreground hover-elevate flex items-center gap-1" data-testid="link-view-all-intake">
+                  View All <ArrowRight className="h-3 w-3" />
+                </Link>
+              </div>
+              <ScrollArea className="h-[280px]">
                 {intakeItems.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-8 text-center" data-testid="empty-state-intake">
                     <Dog className="h-8 w-8 text-muted-foreground mb-2" />
