@@ -3,11 +3,12 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, CheckCircle, XCircle, Clock, Users, Heart, Package, MessageSquare, AlertCircle } from "lucide-react";
+import { Loader2, CheckCircle, XCircle, Clock, Users, Heart, Package, MessageSquare, AlertCircle, History } from "lucide-react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { useLocation } from "wouter";
 import {
@@ -62,6 +63,7 @@ export default function FosterManagementPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [location] = useLocation();
+  const isMobile = useIsMobile();
   const [selectedApplication, setSelectedApplication] = useState<FosterApplication | null>(null);
   const [selectedUpdate, setSelectedUpdate] = useState<FosterUpdateWithDetails | null>(null);
   
@@ -202,32 +204,44 @@ export default function FosterManagementPage() {
       title="Foster Management"
       description={`${pendingApplications.length} pending application${pendingApplications.length !== 1 ? 's' : ''} • ${pendingSupplyRequests.length} pending supply request${pendingSupplyRequests.length !== 1 ? 's' : ''} • ${unacknowledgedUpdates.length} new update${unacknowledgedUpdates.length !== 1 ? 's' : ''}`}
     >
-      <div className="flex-1 overflow-auto p-6">
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-              <TabsList className="grid grid-cols-3 sm:grid-cols-6 w-full">
-                <TabsTrigger value="applications" data-testid="tab-applications">
-                  <Users className="h-4 w-4 mr-2" />
-                  Applications ({pendingApplications.length})
+      <div className="flex-1 overflow-auto p-4 md:p-6">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 md:space-y-6">
+              <TabsList className="grid grid-cols-6 w-full h-auto gap-1">
+                <TabsTrigger value="applications" data-testid="tab-applications" className="flex flex-col md:flex-row items-center gap-1 px-2 py-2 md:py-1.5">
+                  <Users className="h-4 w-4 flex-shrink-0" />
+                  <span className="text-xs md:text-sm">
+                    {isMobile ? pendingApplications.length : `Applications (${pendingApplications.length})`}
+                  </span>
                 </TabsTrigger>
-                <TabsTrigger value="fosters" data-testid="tab-fosters">
-                  <Heart className="h-4 w-4 mr-2" />
-                  Active Fosters ({activeFosters.length})
+                <TabsTrigger value="fosters" data-testid="tab-fosters" className="flex flex-col md:flex-row items-center gap-1 px-2 py-2 md:py-1.5">
+                  <Heart className="h-4 w-4 flex-shrink-0" />
+                  <span className="text-xs md:text-sm">
+                    {isMobile ? activeFosters.length : `Fosters (${activeFosters.length})`}
+                  </span>
                 </TabsTrigger>
-                <TabsTrigger value="supply-requests" data-testid="tab-supply-requests">
-                  <Package className="h-4 w-4 mr-2" />
-                  Supply Requests ({pendingSupplyRequests.length})
+                <TabsTrigger value="supply-requests" data-testid="tab-supply-requests" className="flex flex-col md:flex-row items-center gap-1 px-2 py-2 md:py-1.5">
+                  <Package className="h-4 w-4 flex-shrink-0" />
+                  <span className="text-xs md:text-sm">
+                    {isMobile ? pendingSupplyRequests.length : `Supplies (${pendingSupplyRequests.length})`}
+                  </span>
                 </TabsTrigger>
-                <TabsTrigger value="foster-updates" data-testid="tab-foster-updates">
-                  <MessageSquare className="h-4 w-4 mr-2" />
-                  Foster Updates ({unacknowledgedUpdates.length})
+                <TabsTrigger value="foster-updates" data-testid="tab-foster-updates" className="flex flex-col md:flex-row items-center gap-1 px-2 py-2 md:py-1.5">
+                  <MessageSquare className="h-4 w-4 flex-shrink-0" />
+                  <span className="text-xs md:text-sm">
+                    {isMobile ? unacknowledgedUpdates.length : `Updates (${unacknowledgedUpdates.length})`}
+                  </span>
                 </TabsTrigger>
-                <TabsTrigger value="supply-history" data-testid="tab-supply-history">
-                  <Package className="h-4 w-4 mr-2 opacity-60" />
-                  Supply History ({archivedSupplyRequests.length})
+                <TabsTrigger value="supply-history" data-testid="tab-supply-history" className="flex flex-col md:flex-row items-center gap-1 px-2 py-2 md:py-1.5">
+                  <History className="h-4 w-4 flex-shrink-0 opacity-60" />
+                  <span className="text-xs md:text-sm opacity-60">
+                    {isMobile ? archivedSupplyRequests.length : `Supply Hist (${archivedSupplyRequests.length})`}
+                  </span>
                 </TabsTrigger>
-                <TabsTrigger value="update-history" data-testid="tab-update-history">
-                  <MessageSquare className="h-4 w-4 mr-2 opacity-60" />
-                  Update History ({archivedFosterUpdates.length})
+                <TabsTrigger value="update-history" data-testid="tab-update-history" className="flex flex-col md:flex-row items-center gap-1 px-2 py-2 md:py-1.5">
+                  <History className="h-4 w-4 flex-shrink-0 opacity-60" />
+                  <span className="text-xs md:text-sm opacity-60">
+                    {isMobile ? archivedFosterUpdates.length : `Update Hist (${archivedFosterUpdates.length})`}
+                  </span>
                 </TabsTrigger>
               </TabsList>
 
@@ -244,6 +258,69 @@ export default function FosterManagementPage() {
                       Foster applications will appear here when people apply.
                     </p>
                   </Card>
+                ) : isMobile ? (
+                  <div className="space-y-3">
+                    {applications.map((app) => (
+                      <Card key={app.id} data-testid={`card-application-${app.id}`} className="overflow-hidden">
+                        <CardHeader className="pb-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <CardTitle className="text-base">{app.applicantName}</CardTitle>
+                              <p className="text-sm text-muted-foreground">{app.applicantEmail}</p>
+                            </div>
+                            {getStatusBadge(app.status)}
+                          </div>
+                        </CardHeader>
+                        <CardContent className="pt-0 space-y-3">
+                          <div className="grid grid-cols-2 gap-2 text-sm">
+                            <div>
+                              <span className="text-muted-foreground">Phone:</span>
+                              <p>{app.applicantPhone}</p>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Housing:</span>
+                              <p className="capitalize">{app.housingType}</p>
+                            </div>
+                            <div className="col-span-2">
+                              <span className="text-muted-foreground">Applied:</span>
+                              <p>{formatDate(app.createdAt)}</p>
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setSelectedApplication(app)}
+                              data-testid={`button-view-${app.id}`}
+                            >
+                              View Details
+                            </Button>
+                            {app.status === 'pending' && (
+                              <>
+                                <Button
+                                  size="sm"
+                                  onClick={() => updateApplicationMutation.mutate({ id: app.id, status: 'approved' })}
+                                  disabled={updateApplicationMutation.isPending}
+                                  data-testid={`button-approve-${app.id}`}
+                                >
+                                  Approve
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  onClick={() => updateApplicationMutation.mutate({ id: app.id, status: 'rejected' })}
+                                  disabled={updateApplicationMutation.isPending}
+                                  data-testid={`button-reject-${app.id}`}
+                                >
+                                  Reject
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
                 ) : (
                   <Card>
                     <Table>
@@ -326,6 +403,40 @@ export default function FosterManagementPage() {
                       Assign animals to approved fosters to get started.
                     </p>
                   </Card>
+                ) : isMobile ? (
+                  <div className="space-y-3">
+                    {fosterAnimals.map((fa) => (
+                      <Card key={fa.id} data-testid={`card-foster-${fa.id}`}>
+                        <CardHeader className="pb-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <CardTitle className="text-base">{fa.animal?.name || 'Unknown'}</CardTitle>
+                              <p className="text-sm text-muted-foreground">{fa.animal?.species} • {fa.animal?.breed}</p>
+                            </div>
+                            <Badge variant={fa.status === 'active' ? 'default' : 'secondary'}>
+                              {fa.status}
+                            </Badge>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="pt-0">
+                          <div className="grid grid-cols-2 gap-2 text-sm">
+                            <div>
+                              <span className="text-muted-foreground">Foster Parent:</span>
+                              <p className="font-medium">{fa.foster?.fullName || 'Unknown'}</p>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Started:</span>
+                              <p>{formatDate(fa.startDate)}</p>
+                            </div>
+                            <div className="col-span-2">
+                              <span className="text-muted-foreground">Expected Return:</span>
+                              <p>{formatDate(fa.expectedReturnDate)}</p>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
                 ) : (
                   <Card>
                     <Table>
@@ -365,7 +476,7 @@ export default function FosterManagementPage() {
                   <div className="flex items-center justify-center h-64">
                     <Loader2 className="h-8 w-8 animate-spin" />
                   </div>
-                ) : supplyRequests.length === 0 ? (
+                ) : activeSupplyRequests.length === 0 ? (
                   <Card className="p-12 text-center">
                     <Package className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
                     <h3 className="text-xl font-semibold mb-2">No Supply Requests</h3>
@@ -373,6 +484,63 @@ export default function FosterManagementPage() {
                       Supply requests from foster parents will appear here.
                     </p>
                   </Card>
+                ) : isMobile ? (
+                  <div className="space-y-3">
+                    {activeSupplyRequests.map((request) => (
+                      <Card key={request.id} data-testid={`card-supply-request-${request.id}`}>
+                        <CardHeader className="pb-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <CardTitle className="text-base">{request.item}</CardTitle>
+                              <p className="text-sm text-muted-foreground">
+                                {request.foster?.fullName || 'Unknown'} • {request.animal?.name || 'No animal'}
+                              </p>
+                            </div>
+                            <Badge 
+                              variant={
+                                request.status === 'fulfilled' ? 'default' :
+                                request.status === 'pending' ? 'secondary' :
+                                request.status === 'denied' ? 'destructive' : 'outline'
+                              }
+                            >
+                              {request.status === 'fulfilled' && <CheckCircle className="h-3 w-3 mr-1" />}
+                              {request.status === 'pending' && <Clock className="h-3 w-3 mr-1" />}
+                              {request.status === 'denied' && <XCircle className="h-3 w-3 mr-1" />}
+                              {request.status}
+                            </Badge>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="pt-0 space-y-3">
+                          <div className="grid grid-cols-2 gap-2 text-sm">
+                            <div>
+                              <span className="text-muted-foreground">Category:</span>
+                              <p className="capitalize">{request.category}</p>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Quantity:</span>
+                              <p>{request.quantity}</p>
+                            </div>
+                            <div className="col-span-2">
+                              <span className="text-muted-foreground">Requested:</span>
+                              <p>{formatDate(request.createdAt)}</p>
+                            </div>
+                          </div>
+                          {request.status === 'pending' && (
+                            <Button
+                              size="sm"
+                              onClick={() => updateSupplyRequestMutation.mutate({ id: request.id, status: 'fulfilled' })}
+                              disabled={updateSupplyRequestMutation.isPending}
+                              data-testid={`button-fulfill-${request.id}`}
+                              className="w-full"
+                            >
+                              <CheckCircle className="h-3 w-3 mr-1" />
+                              Mark Fulfilled
+                            </Button>
+                          )}
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
                 ) : (
                   <Card>
                     <Table>
@@ -389,7 +557,7 @@ export default function FosterManagementPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {supplyRequests.map((request) => (
+                        {activeSupplyRequests.map((request) => (
                           <TableRow key={request.id} data-testid={`row-supply-request-${request.id}`}>
                             <TableCell className="font-medium">{request.foster?.fullName || 'Unknown'}</TableCell>
                             <TableCell>{request.animal?.name || '—'}</TableCell>
@@ -441,7 +609,7 @@ export default function FosterManagementPage() {
                   <div className="flex items-center justify-center h-64">
                     <Loader2 className="h-8 w-8 animate-spin" />
                   </div>
-                ) : fosterUpdates.length === 0 ? (
+                ) : activeFosterUpdates.length === 0 ? (
                   <Card className="p-12 text-center">
                     <MessageSquare className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
                     <h3 className="text-xl font-semibold mb-2">No Foster Updates</h3>
@@ -449,6 +617,93 @@ export default function FosterManagementPage() {
                       Updates from foster parents will appear here.
                     </p>
                   </Card>
+                ) : isMobile ? (
+                  <div className="space-y-3">
+                    {activeFosterUpdates.map((update) => (
+                      <Card key={update.id} data-testid={`card-foster-update-${update.id}`}>
+                        <CardHeader className="pb-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <CardTitle className="text-base">{update.animal?.name || 'Unknown'}</CardTitle>
+                              <p className="text-sm text-muted-foreground">{update.foster?.fullName || 'Unknown'}</p>
+                            </div>
+                            <div className="flex flex-col gap-1 items-end">
+                              {update.updateType === 'medical_concern' && (
+                                <Badge variant="destructive">
+                                  <AlertCircle className="h-3 w-3 mr-1" />
+                                  Medical
+                                </Badge>
+                              )}
+                              {update.updateType === 'behavioral_note' && (
+                                <Badge variant="secondary">Behavioral</Badge>
+                              )}
+                              {update.updateType === 'general_update' && (
+                                <Badge variant="outline">General</Badge>
+                              )}
+                              {update.updateType === 'photo_update' && (
+                                <Badge variant="outline">Photo</Badge>
+                              )}
+                            </div>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="pt-0 space-y-3">
+                          <div className="flex flex-wrap gap-2">
+                            <Badge 
+                              variant={
+                                update.priority === 'urgent' || update.priority === 'high' ? 'destructive' :
+                                update.priority === 'normal' ? 'secondary' : 'outline'
+                              }
+                            >
+                              {update.priority}
+                            </Badge>
+                            <Badge 
+                              variant={
+                                update.status === 'resolved' ? 'default' :
+                                update.status === 'acknowledged' ? 'secondary' : 'outline'
+                              }
+                            >
+                              {update.status === 'resolved' && <CheckCircle className="h-3 w-3 mr-1" />}
+                              {update.status}
+                            </Badge>
+                            <span className="text-xs text-muted-foreground self-center ml-auto">
+                              {formatDate(update.createdAt)}
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setSelectedUpdate(update)}
+                              data-testid={`button-view-update-${update.id}`}
+                            >
+                              View Details
+                            </Button>
+                            {update.status === 'pending' && (
+                              <Button
+                                size="sm"
+                                onClick={() => updateFosterUpdateMutation.mutate({ id: update.id, status: 'acknowledged' })}
+                                disabled={updateFosterUpdateMutation.isPending}
+                                data-testid={`button-acknowledge-${update.id}`}
+                              >
+                                <CheckCircle className="h-3 w-3 mr-1" />
+                                Acknowledge
+                              </Button>
+                            )}
+                            {update.status === 'acknowledged' && (
+                              <Button
+                                size="sm"
+                                onClick={() => updateFosterUpdateMutation.mutate({ id: update.id, status: 'resolved' })}
+                                disabled={updateFosterUpdateMutation.isPending}
+                                data-testid={`button-resolve-${update.id}`}
+                              >
+                                Mark Resolved
+                              </Button>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
                 ) : (
                   <Card>
                     <Table>
@@ -464,7 +719,7 @@ export default function FosterManagementPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {fosterUpdates.map((update) => (
+                        {activeFosterUpdates.map((update) => (
                           <TableRow key={update.id} data-testid={`row-foster-update-${update.id}`}>
                             <TableCell className="font-medium">{update.foster?.fullName || 'Unknown'}</TableCell>
                             <TableCell>{update.animal?.name || 'Unknown'}</TableCell>
@@ -561,6 +816,53 @@ export default function FosterManagementPage() {
                       Fulfilled or denied supply requests are automatically archived after 7 days.
                     </p>
                   </Card>
+                ) : isMobile ? (
+                  <div className="space-y-3">
+                    {archivedSupplyRequests.map((request) => (
+                      <Card key={request.id} data-testid={`card-supply-request-archived-${request.id}`} className="opacity-80">
+                        <CardHeader className="pb-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <CardTitle className="text-base">{request.item}</CardTitle>
+                              <p className="text-sm text-muted-foreground">
+                                {request.foster?.fullName || 'Unknown'} • {request.animal?.name || 'No animal'}
+                              </p>
+                            </div>
+                            <Badge 
+                              variant={
+                                request.status === 'fulfilled' ? 'default' :
+                                request.status === 'denied' ? 'destructive' : 'outline'
+                              }
+                            >
+                              {request.status === 'fulfilled' && <CheckCircle className="h-3 w-3 mr-1" />}
+                              {request.status === 'denied' && <XCircle className="h-3 w-3 mr-1" />}
+                              {request.status}
+                            </Badge>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="pt-0">
+                          <div className="grid grid-cols-2 gap-2 text-sm text-muted-foreground">
+                            <div>
+                              <span>Category:</span>
+                              <p className="capitalize">{request.category}</p>
+                            </div>
+                            <div>
+                              <span>Qty:</span>
+                              <p>{request.quantity}</p>
+                            </div>
+                            <div>
+                              <span>Requested:</span>
+                              <p>{formatDate(request.createdAt)}</p>
+                            </div>
+                            <div>
+                              <span>Archived:</span>
+                              <p>{formatDate(request.archivedAt)}</p>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
                 ) : (
                   <Card>
                     <Table>
@@ -619,6 +921,73 @@ export default function FosterManagementPage() {
                       Resolved foster updates are automatically archived after 7 days.
                     </p>
                   </Card>
+                ) : isMobile ? (
+                  <div className="space-y-3">
+                    {archivedFosterUpdates.map((update) => (
+                      <Card key={update.id} data-testid={`card-foster-update-archived-${update.id}`} className="opacity-80">
+                        <CardHeader className="pb-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <CardTitle className="text-base">{update.animal?.name || 'Unknown'}</CardTitle>
+                              <p className="text-sm text-muted-foreground">{update.foster?.fullName || 'Unknown'}</p>
+                            </div>
+                            <div className="flex flex-col gap-1 items-end">
+                              {update.updateType === 'medical_concern' && (
+                                <Badge variant="destructive">
+                                  <AlertCircle className="h-3 w-3 mr-1" />
+                                  Medical
+                                </Badge>
+                              )}
+                              {update.updateType === 'behavioral_note' && (
+                                <Badge variant="secondary">Behavioral</Badge>
+                              )}
+                              {update.updateType === 'general_update' && (
+                                <Badge variant="outline">General</Badge>
+                              )}
+                              {update.updateType === 'photo_update' && (
+                                <Badge variant="outline">Photo</Badge>
+                              )}
+                            </div>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="pt-0 space-y-3">
+                          <div className="flex flex-wrap gap-2 text-muted-foreground">
+                            <Badge 
+                              variant={
+                                update.priority === 'urgent' ? 'destructive' :
+                                update.priority === 'high' ? 'secondary' : 'outline'
+                              }
+                            >
+                              {update.priority}
+                            </Badge>
+                            <Badge variant="default">
+                              {update.status === 'resolved' && <CheckCircle className="h-3 w-3 mr-1" />}
+                              {update.status}
+                            </Badge>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-sm text-muted-foreground">
+                            <div>
+                              <span>Submitted:</span>
+                              <p>{formatDate(update.createdAt)}</p>
+                            </div>
+                            <div>
+                              <span>Archived:</span>
+                              <p>{formatDate(update.archivedAt)}</p>
+                            </div>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setSelectedUpdate(update)}
+                            data-testid={`button-view-archived-update-${update.id}`}
+                            className="w-full"
+                          >
+                            View Details
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
                 ) : (
                   <Card>
                     <Table>
