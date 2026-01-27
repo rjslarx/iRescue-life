@@ -68,11 +68,11 @@ export const ALL_QUICK_ACTIONS: QuickAction[] = [
     actionType: "navigate",
   },
   {
-    id: "add-volunteer",
-    label: "Add Volunteer",
-    description: "Register a new volunteer",
-    icon: Users,
-    href: "/dashboard/volunteers",
+    id: "invite-team-member",
+    label: "Invite Team Member",
+    description: "Send an invitation to join your team",
+    icon: Mail,
+    href: "/dashboard/team?action=invite",
     actionType: "navigate",
   },
   {
@@ -161,7 +161,7 @@ export const DEFAULT_QUICK_ACTIONS = [
   "add-animal",
   "intake-manager",
   "medical-task",
-  "add-volunteer",
+  "invite-team-member",
   "record-donation",
   "new-application",
 ];

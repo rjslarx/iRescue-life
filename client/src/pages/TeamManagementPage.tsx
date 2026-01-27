@@ -1,4 +1,5 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useLocation, useSearch } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -80,6 +81,8 @@ const AVAILABLE_ROLES = [
 export default function TeamManagementPage() {
   const { user: currentUser } = useAuth();
   const { toast } = useToast();
+  const [, navigate] = useLocation();
+  const searchString = useSearch();
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
   const [invitationsDialogOpen, setInvitationsDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -92,6 +95,16 @@ export default function TeamManagementPage() {
     fullName: "",
     roles: ["volunteer"] as Array<"admin" | "board_member" | "staff" | "foster" | "volunteer">,
   });
+
+  // Open invite dialog if action=invite in URL
+  useEffect(() => {
+    const params = new URLSearchParams(searchString);
+    if (params.get("action") === "invite") {
+      setInviteDialogOpen(true);
+      // Clear the action from URL to prevent re-opening on refresh
+      navigate("/dashboard/team", { replace: true });
+    }
+  }, [searchString, navigate]);
 
   const canAccessTeamData = currentUser?.activeRole === 'admin' || 
     currentUser?.roles?.includes('owner') || 

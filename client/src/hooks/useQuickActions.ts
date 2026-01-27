@@ -8,6 +8,7 @@ interface QuickActionsResponse {
 
 interface UseQuickActionsCallbacks {
   onRecordDonation?: () => void;
+  onInviteTeamMember?: () => void;
 }
 
 export function useQuickActions(callbacks?: UseQuickActionsCallbacks) {
@@ -26,8 +27,12 @@ export function useQuickActions(callbacks?: UseQuickActionsCallbacks) {
     const action = ALL_QUICK_ACTIONS.find((a) => a.id === actionId);
     if (!action) return;
 
-    if (action.actionType === 'callback' && action.callbackName === 'onRecordDonation') {
-      callbacks?.onRecordDonation?.();
+    if (action.actionType === 'callback') {
+      if (action.callbackName === 'onRecordDonation') {
+        callbacks?.onRecordDonation?.();
+      } else if (action.callbackName === 'onInviteTeamMember') {
+        callbacks?.onInviteTeamMember?.();
+      }
     } else if (action.href) {
       navigate(action.href);
     }
