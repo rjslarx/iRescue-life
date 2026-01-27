@@ -11480,10 +11480,18 @@ Submitted: ${new Date().toLocaleString()}
       const { eq, and } = await import('drizzle-orm');
       
       const schema = z.object({
-        status: z.enum(['new', 'review', 'spacecheck', 'waitlist', 'scheduled', 'intaken']),
+        status: z.enum(['new', 'review', 'spacecheck', 'waitlist', 'scheduled', 'intaken', 'declined']),
       });
       
       const { status } = schema.parse(req.body);
+      
+      // For 'declined' status, require using the dedicated decline endpoint
+      if (status === 'declined') {
+        return res.status(400).json({ 
+          error: 'Use the decline endpoint to reject a request',
+          message: 'Please use the Decline button to reject this request with a reason.'
+        });
+      }
       
       const [updated] = await db.update(surrenderRequests)
         .set({ status, updatedAt: new Date() })
