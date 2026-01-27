@@ -101,8 +101,10 @@ export default function TeamManagementPage() {
     const params = new URLSearchParams(searchString);
     if (params.get("action") === "invite") {
       setInviteDialogOpen(true);
-      // Clear the action from URL to prevent re-opening on refresh
-      navigate("/dashboard/team", { replace: true });
+      // Clear the action from URL after a short delay to ensure dialog opens first
+      setTimeout(() => {
+        navigate("/dashboard/team", { replace: true });
+      }, 100);
     }
   }, [searchString, navigate]);
 
