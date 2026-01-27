@@ -4917,6 +4917,10 @@ Crawl-delay: 1
    */
   app.post('/api/animals/merge', requireTenant, requireAuth, requireRole('admin', 'owner', 'staff'), async (req, res, next) => {
     try {
+      // PRE-WARM: Wake up Neon connection before doing any work
+      // This absorbs cold-start latency before the timeout-sensitive operations
+      await db.execute(sql`SELECT 1`);
+      
       const tenantId = req.tenant!.id;
       const userId = req.user!.id;
       const { primaryAnimalId, secondaryAnimalId, fieldChoices, notes } = req.body;
@@ -5024,80 +5028,85 @@ Crawl-delay: 1
       console.log(`[MERGE] Core transaction completed in ${Date.now() - mergeStartTime}ms`);
       
       // STEP 2: Reassign related records with compensating rollback on failure
+      // Run all reassignments in PARALLEL to reduce total time
       try {
-        const examResult = await db.update(medicalExams)
-          .set({ animalId: primaryAnimalId })
-          .where(eq(medicalExams.animalId, secondaryAnimalId));
-        reassignedMedicalRecords += Number(examResult.rowCount) || 0;
+        const results = await Promise.all([
+          db.update(medicalExams)
+            .set({ animalId: primaryAnimalId })
+            .where(eq(medicalExams.animalId, secondaryAnimalId)),
+          db.update(medicalPrescriptions)
+            .set({ animalId: primaryAnimalId })
+            .where(eq(medicalPrescriptions.animalId, secondaryAnimalId)),
+          db.update(medicalBills)
+            .set({ animalId: primaryAnimalId })
+            .where(eq(medicalBills.animalId, secondaryAnimalId)),
+          db.update(medicalFiles)
+            .set({ animalId: primaryAnimalId })
+            .where(eq(medicalFiles.animalId, secondaryAnimalId)),
+          db.update(animalNotes)
+            .set({ animalId: primaryAnimalId })
+            .where(eq(animalNotes.animalId, secondaryAnimalId)),
+          db.update(applications)
+            .set({ animalId: primaryAnimalId })
+            .where(eq(applications.animalId, secondaryAnimalId)),
+          // Non-critical: adoption records reassignment (no row count needed)
+          db.update(adoptionCheckoutSessions)
+            .set({ animalId: primaryAnimalId })
+            .where(eq(adoptionCheckoutSessions.animalId, secondaryAnimalId)),
+          db.update(adoptions)
+            .set({ animalId: primaryAnimalId })
+            .where(eq(adoptions.animalId, secondaryAnimalId)),
+        ]);
         
-        const prescriptionResult = await db.update(medicalPrescriptions)
-          .set({ animalId: primaryAnimalId })
-          .where(eq(medicalPrescriptions.animalId, secondaryAnimalId));
-        reassignedMedicalRecords += Number(prescriptionResult.rowCount) || 0;
+        // Extract results by index (0-5 have row counts we care about)
+        const [examResult, prescriptionResult, billsResult, filesResult, notesResult, appsResult] = results;
         
-        const billsResult = await db.update(medicalBills)
-          .set({ animalId: primaryAnimalId })
-          .where(eq(medicalBills.animalId, secondaryAnimalId));
-        reassignedMedicalRecords += Number(billsResult.rowCount) || 0;
-        
-        const filesResult = await db.update(medicalFiles)
-          .set({ animalId: primaryAnimalId })
-          .where(eq(medicalFiles.animalId, secondaryAnimalId));
-        reassignedMedicalRecords += Number(filesResult.rowCount) || 0;
-        
-        const notesResult = await db.update(animalNotes)
-          .set({ animalId: primaryAnimalId })
-          .where(eq(animalNotes.animalId, secondaryAnimalId));
+        reassignedMedicalRecords = (Number(examResult.rowCount) || 0) + 
+          (Number(prescriptionResult.rowCount) || 0) + 
+          (Number(billsResult.rowCount) || 0) + 
+          (Number(filesResult.rowCount) || 0);
         reassignedNotes = Number(notesResult.rowCount) || 0;
-        
-        const appsResult = await db.update(applications)
-          .set({ animalId: primaryAnimalId })
-          .where(eq(applications.animalId, secondaryAnimalId));
         reassignedApplications = Number(appsResult.rowCount) || 0;
-        
-        await db.update(adoptionCheckoutSessions)
-          .set({ animalId: primaryAnimalId })
-          .where(eq(adoptionCheckoutSessions.animalId, secondaryAnimalId));
-        
-        await db.update(adoptions)
-          .set({ animalId: primaryAnimalId })
-          .where(eq(adoptions.animalId, secondaryAnimalId));
           
         console.log(`[MERGE] Related records reassigned in ${Date.now() - mergeStartTime}ms`);
         
-        // STEP 3: Create audit trail
-        await db.insert(animalMergeHistory).values({
-          tenantId,
-          primaryAnimalId,
-          secondaryAnimalId,
-          mergedBy: userId,
-          fieldChoices: fieldChoices || {},
-          reassignedMedicalRecords,
-          reassignedPhotos,
-          reassignedApplications,
-          reassignedNotes,
-          secondaryAnimalSnapshot,
-          notes: notes || null,
-        });
-        
-        await db.insert(activityLogs).values({
-          tenantId,
-          userId,
-          type: 'animal_merged',
-          description: `Merged animal profile "${secondaryAnimal.name}" into "${primaryAnimal.name}"`,
-          metadata: {
-            primaryAnimalId,
-            secondaryAnimalId,
-            primaryAnimalName: primaryAnimal.name,
-            secondaryAnimalName: secondaryAnimal.name,
-          },
-        });
-        
-        // Fetch updated primary animal
+        // Fetch updated primary animal BEFORE audit trail (critical for response)
         const [result] = await db.select().from(animals).where(eq(animals.id, primaryAnimalId));
         updatedPrimary = result;
         
         console.log(`[MERGE] Complete in ${Date.now() - mergeStartTime}ms`);
+        
+        // STEP 3: Create audit trail - FIRE AND FORGET (non-blocking)
+        // These are important but not critical for the merge operation
+        Promise.all([
+          db.insert(animalMergeHistory).values({
+            tenantId,
+            primaryAnimalId,
+            secondaryAnimalId,
+            mergedBy: userId,
+            fieldChoices: fieldChoices || {},
+            reassignedMedicalRecords,
+            reassignedPhotos,
+            reassignedApplications,
+            reassignedNotes,
+            secondaryAnimalSnapshot,
+            notes: notes || null,
+          }),
+          db.insert(activityLogs).values({
+            tenantId,
+            userId,
+            type: 'animal_merged',
+            description: `Merged animal profile "${secondaryAnimal.name}" into "${primaryAnimal.name}"`,
+            metadata: {
+              primaryAnimalId,
+              secondaryAnimalId,
+              primaryAnimalName: primaryAnimal.name,
+              secondaryAnimalName: secondaryAnimal.name,
+            },
+          })
+        ]).catch(auditError => {
+          console.error('[MERGE] Audit trail creation failed (non-critical):', auditError);
+        });
         
       } catch (postMergeError) {
         // COMPENSATING ROLLBACK: Restore secondary animal status if post-merge steps fail
