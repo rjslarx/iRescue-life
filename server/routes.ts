@@ -4988,96 +4988,92 @@ Crawl-delay: 1
       let reassignedNotes = 0;
       let updatedPrimary: typeof primaryAnimal | undefined;
       
-      // Use a transaction to ensure atomicity - all operations succeed or all fail
-      await db.transaction(async (tx) => {
-        // Apply field choices - update primary animal with selected fields from secondary
-        if (fieldChoices && typeof fieldChoices === 'object') {
-          const updateData: Record<string, any> = {};
-          
-          for (const [field, choice] of Object.entries(fieldChoices)) {
-            if (choice === 'secondary' && allowedMergeFields.has(field)) {
-              const secondaryValue = (secondaryAnimal as any)[field];
-              // Don't overwrite with null/undefined/empty unless field explicitly allows it
-              if (secondaryValue !== null && secondaryValue !== undefined && secondaryValue !== '') {
-                updateData[field] = secondaryValue;
-              }
+      console.log(`[MERGE] Starting merge: ${secondaryAnimal.name} -> ${primaryAnimal.name}`);
+      const mergeStartTime = Date.now();
+      
+      // Prepare field updates outside transaction
+      const updateData: Record<string, any> = {};
+      if (fieldChoices && typeof fieldChoices === 'object') {
+        for (const [field, choice] of Object.entries(fieldChoices)) {
+          if (choice === 'secondary' && allowedMergeFields.has(field)) {
+            const secondaryValue = (secondaryAnimal as any)[field];
+            if (secondaryValue !== null && secondaryValue !== undefined && secondaryValue !== '') {
+              updateData[field] = secondaryValue;
             }
-          }
-          
-          // Also merge photo arrays - always combine unique photos
-          if (secondaryAnimal.photoUrls && secondaryAnimal.photoUrls.length > 0) {
-            const existingPhotos = primaryAnimal.photoUrls || [];
-            const newPhotos = secondaryAnimal.photoUrls.filter(p => !existingPhotos.includes(p));
-            if (newPhotos.length > 0) {
-              updateData.photoUrls = [...existingPhotos, ...newPhotos];
-              reassignedPhotos = newPhotos.length;
-            }
-          }
-          
-          if (Object.keys(updateData).length > 0) {
-            await tx.update(animals)
-              .set(updateData)
-              .where(eq(animals.id, primaryAnimalId));
           }
         }
+      }
+      
+      // Merge photo arrays
+      if (secondaryAnimal.photoUrls && secondaryAnimal.photoUrls.length > 0) {
+        const existingPhotos = primaryAnimal.photoUrls || [];
+        const newPhotos = secondaryAnimal.photoUrls.filter(p => !existingPhotos.includes(p));
+        if (newPhotos.length > 0) {
+          updateData.photoUrls = [...existingPhotos, ...newPhotos];
+          reassignedPhotos = newPhotos.length;
+        }
+      }
+      
+      // MINIMAL TRANSACTION: Only the critical animal status changes
+      // This reduces transaction duration and lock time significantly
+      await db.transaction(async (tx) => {
+        // Update primary animal fields (if any)
+        if (Object.keys(updateData).length > 0) {
+          await tx.update(animals).set(updateData).where(eq(animals.id, primaryAnimalId));
+        }
         
-        // Reassign related records using typed Drizzle operations
-        // Medical exams
-        const examResult = await tx.update(medicalExams)
+        // Mark secondary as merged - CRITICAL: must be atomic with primary update
+        await tx.update(animals)
+          .set({ status: 'merged', mergedWithId: primaryAnimalId })
+          .where(eq(animals.id, secondaryAnimalId));
+      });
+      
+      console.log(`[MERGE] Core transaction completed in ${Date.now() - mergeStartTime}ms`);
+      
+      // STEP 2: Reassign related records with compensating rollback on failure
+      try {
+        const examResult = await db.update(medicalExams)
           .set({ animalId: primaryAnimalId })
           .where(eq(medicalExams.animalId, secondaryAnimalId));
         reassignedMedicalRecords += Number(examResult.rowCount) || 0;
         
-        // Medical prescriptions
-        const prescriptionResult = await tx.update(medicalPrescriptions)
+        const prescriptionResult = await db.update(medicalPrescriptions)
           .set({ animalId: primaryAnimalId })
           .where(eq(medicalPrescriptions.animalId, secondaryAnimalId));
         reassignedMedicalRecords += Number(prescriptionResult.rowCount) || 0;
         
-        // Medical bills
-        const billsResult = await tx.update(medicalBills)
+        const billsResult = await db.update(medicalBills)
           .set({ animalId: primaryAnimalId })
           .where(eq(medicalBills.animalId, secondaryAnimalId));
         reassignedMedicalRecords += Number(billsResult.rowCount) || 0;
         
-        // Medical files
-        const filesResult = await tx.update(medicalFiles)
+        const filesResult = await db.update(medicalFiles)
           .set({ animalId: primaryAnimalId })
           .where(eq(medicalFiles.animalId, secondaryAnimalId));
         reassignedMedicalRecords += Number(filesResult.rowCount) || 0;
         
-        // Animal notes
-        const notesResult = await tx.update(animalNotes)
+        const notesResult = await db.update(animalNotes)
           .set({ animalId: primaryAnimalId })
           .where(eq(animalNotes.animalId, secondaryAnimalId));
         reassignedNotes = Number(notesResult.rowCount) || 0;
         
-        // Adoption applications
-        const appsResult = await tx.update(applications)
+        const appsResult = await db.update(applications)
           .set({ animalId: primaryAnimalId })
           .where(eq(applications.animalId, secondaryAnimalId));
         reassignedApplications = Number(appsResult.rowCount) || 0;
         
-        // Adoption checkout sessions
-        await tx.update(adoptionCheckoutSessions)
+        await db.update(adoptionCheckoutSessions)
           .set({ animalId: primaryAnimalId })
           .where(eq(adoptionCheckoutSessions.animalId, secondaryAnimalId));
         
-        // Adoptions table
-        await tx.update(adoptions)
+        await db.update(adoptions)
           .set({ animalId: primaryAnimalId })
           .where(eq(adoptions.animalId, secondaryAnimalId));
+          
+        console.log(`[MERGE] Related records reassigned in ${Date.now() - mergeStartTime}ms`);
         
-        // Mark secondary animal as merged
-        await tx.update(animals)
-          .set({
-            status: 'merged',
-            mergedWithId: primaryAnimalId,
-          })
-          .where(eq(animals.id, secondaryAnimalId));
-        
-        // Create merge history record
-        await tx.insert(animalMergeHistory).values({
+        // STEP 3: Create audit trail
+        await db.insert(animalMergeHistory).values({
           tenantId,
           primaryAnimalId,
           secondaryAnimalId,
@@ -5091,8 +5087,7 @@ Crawl-delay: 1
           notes: notes || null,
         });
         
-        // Log the activity
-        await tx.insert(activityLogs).values({
+        await db.insert(activityLogs).values({
           tenantId,
           userId,
           type: 'animal_merged',
@@ -5105,11 +5100,25 @@ Crawl-delay: 1
           },
         });
         
-        // Fetch updated primary animal within transaction
-        const [result] = await tx.select().from(animals)
-          .where(eq(animals.id, primaryAnimalId));
+        // Fetch updated primary animal
+        const [result] = await db.select().from(animals).where(eq(animals.id, primaryAnimalId));
         updatedPrimary = result;
-      });
+        
+        console.log(`[MERGE] Complete in ${Date.now() - mergeStartTime}ms`);
+        
+      } catch (postMergeError) {
+        // COMPENSATING ROLLBACK: Restore secondary animal status if post-merge steps fail
+        console.error('[MERGE] Post-merge steps failed, attempting rollback:', postMergeError);
+        try {
+          await db.update(animals)
+            .set({ status: secondaryAnimal.status, mergedWithId: null })
+            .where(eq(animals.id, secondaryAnimalId));
+          console.log('[MERGE] Rollback successful - secondary animal status restored');
+        } catch (rollbackError) {
+          console.error('[MERGE] Rollback also failed:', rollbackError);
+        }
+        throw postMergeError; // Re-throw to trigger error response
+      }
       
       res.json({
         success: true,
