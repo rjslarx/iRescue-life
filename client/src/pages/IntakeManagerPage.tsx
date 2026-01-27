@@ -1,10 +1,15 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -33,6 +38,14 @@ import {
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import MobilePipelineView, { PipelineStage, PipelineCard } from "@/components/MobilePipelineView";
@@ -55,10 +68,53 @@ import {
   AlertCircle,
   Stethoscope,
   Loader2,
-  XCircle
+  XCircle,
+  Plus
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import type { SurrenderRequest } from "@shared/schema";
+
+const staffIntakeSchema = z.object({
+  isStray: z.boolean().default(false),
+  ownerName: z.string().optional(),
+  ownerEmail: z.string().optional(),
+  ownerPhone: z.string().optional(),
+  smsConsent: z.boolean().default(false),
+  dogName: z.string().min(1, "Dog name is required"),
+  dogBreed: z.string().min(1, "Breed is required"),
+  dogAge: z.string().min(1, "Age is required"),
+  dogGender: z.enum(["male", "female", "unknown"]),
+  dogWeight: z.string().optional(),
+  reasonForSurrender: z.string().min(1, "Reason is required"),
+  medicalIssues: z.string().optional(),
+  behavioralIssues: z.string().optional(),
+}).superRefine((data, ctx) => {
+  if (!data.isStray) {
+    if (!data.ownerName || data.ownerName.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Owner name is required",
+        path: ["ownerName"],
+      });
+    }
+    if (!data.ownerEmail || data.ownerEmail.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Email is required",
+        path: ["ownerEmail"],
+      });
+    }
+    if (!data.ownerPhone || data.ownerPhone.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Phone is required",
+        path: ["ownerPhone"],
+      });
+    }
+  }
+});
+
+type StaffIntakeFormData = z.infer<typeof staffIntakeSchema>;
 
 const stages: PipelineStage[] = [
   { id: "new", label: "New Request", color: "bg-blue-500", icon: Inbox },
@@ -75,6 +131,79 @@ export default function IntakeManagerPage() {
   const [selectedRequest, setSelectedRequest] = useState<SurrenderRequest | null>(null);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [showDeclined, setShowDeclined] = useState(false);
+  const [newIntakeDialogOpen, setNewIntakeDialogOpen] = useState(false);
+
+  const newIntakeForm = useForm<StaffIntakeFormData>({
+    resolver: zodResolver(staffIntakeSchema),
+    defaultValues: {
+      isStray: false,
+      ownerName: "",
+      ownerEmail: "",
+      ownerPhone: "",
+      smsConsent: false,
+      dogName: "",
+      dogBreed: "",
+      dogAge: "",
+      dogGender: "unknown",
+      dogWeight: "",
+      reasonForSurrender: "",
+      medicalIssues: "",
+      behavioralIssues: "",
+    },
+  });
+
+  const isStray = newIntakeForm.watch("isStray");
+
+  const createIntakeMutation = useMutation({
+    mutationFn: async (data: StaffIntakeFormData) => {
+      const submissionData = data.isStray
+        ? {
+            ownerName: "STRAY - No Owner",
+            ownerEmail: "stray@intake.local",
+            ownerPhone: "000-000-0000",
+            smsConsent: false,
+            dogName: data.dogName,
+            dogBreed: data.dogBreed,
+            dogAge: data.dogAge,
+            dogGender: data.dogGender,
+            dogWeight: data.dogWeight || "",
+            reasonForSurrender: `[STRAY INTAKE] ${data.reasonForSurrender}`,
+            medicalIssues: data.medicalIssues || "",
+            behavioralIssues: data.behavioralIssues || "",
+          }
+        : {
+            ownerName: data.ownerName!,
+            ownerEmail: data.ownerEmail!,
+            ownerPhone: data.ownerPhone!,
+            smsConsent: data.smsConsent,
+            dogName: data.dogName,
+            dogBreed: data.dogBreed,
+            dogAge: data.dogAge,
+            dogGender: data.dogGender,
+            dogWeight: data.dogWeight || "",
+            reasonForSurrender: data.reasonForSurrender,
+            medicalIssues: data.medicalIssues || "",
+            behavioralIssues: data.behavioralIssues || "",
+          };
+      return apiRequest("POST", "/api/surrender", submissionData);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/surrender-requests"] });
+      toast({
+        title: "Intake created",
+        description: "The new intake request has been added to the pipeline.",
+      });
+      setNewIntakeDialogOpen(false);
+      newIntakeForm.reset();
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create intake",
+        variant: "destructive",
+      });
+    },
+  });
 
   const { data: surrenderRequests = [], isLoading } = useQuery<SurrenderRequest[]>({
     queryKey: ["/api/surrender-requests"],
@@ -195,16 +324,25 @@ export default function IntakeManagerPage() {
         breadcrumbs={breadcrumbs}
       >
         <div className="p-4 space-y-4">
-          <div className="flex items-center justify-end space-x-2">
-            <Checkbox
-              id="show-declined-mobile"
-              checked={showDeclined}
-              onCheckedChange={(checked) => setShowDeclined(checked === true)}
-              data-testid="checkbox-show-declined"
-            />
-            <Label htmlFor="show-declined-mobile" className="text-sm text-muted-foreground cursor-pointer">
-              Show Declined ({declinedRequests.length})
-            </Label>
+          <div className="flex items-center justify-between gap-2">
+            <Button
+              onClick={() => setNewIntakeDialogOpen(true)}
+              data-testid="button-new-intake-mobile"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              New Intake
+            </Button>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="show-declined-mobile"
+                checked={showDeclined}
+                onCheckedChange={(checked) => setShowDeclined(checked === true)}
+                data-testid="checkbox-show-declined"
+              />
+              <Label htmlFor="show-declined-mobile" className="text-sm text-muted-foreground cursor-pointer">
+                Show Declined ({declinedRequests.length})
+              </Label>
+            </div>
           </div>
 
           <MobilePipelineView
@@ -245,6 +383,15 @@ export default function IntakeManagerPage() {
             open={detailsDialogOpen}
             onOpenChange={setDetailsDialogOpen}
           />
+
+          <NewIntakeDialog
+            open={newIntakeDialogOpen}
+            onOpenChange={setNewIntakeDialogOpen}
+            form={newIntakeForm}
+            isStray={isStray}
+            onSubmit={(data) => createIntakeMutation.mutate(data)}
+            isPending={createIntakeMutation.isPending}
+          />
         </div>
       </DashboardLayout>
     );
@@ -257,16 +404,25 @@ export default function IntakeManagerPage() {
       breadcrumbs={breadcrumbs}
     >
       <div className="p-6 space-y-4">
-        <div className="flex items-center justify-end space-x-2">
-          <Checkbox
-            id="show-declined"
-            checked={showDeclined}
-            onCheckedChange={(checked) => setShowDeclined(checked === true)}
-            data-testid="checkbox-show-declined"
-          />
-          <Label htmlFor="show-declined" className="text-sm text-muted-foreground cursor-pointer">
-            Show Declined ({declinedRequests.length})
-          </Label>
+        <div className="flex items-center justify-between gap-4">
+          <Button
+            onClick={() => setNewIntakeDialogOpen(true)}
+            data-testid="button-new-intake"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            New Intake
+          </Button>
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="show-declined"
+              checked={showDeclined}
+              onCheckedChange={(checked) => setShowDeclined(checked === true)}
+              data-testid="checkbox-show-declined"
+            />
+            <Label htmlFor="show-declined" className="text-sm text-muted-foreground cursor-pointer">
+              Show Declined ({declinedRequests.length})
+            </Label>
+          </div>
         </div>
 
         <div className="grid grid-cols-5 gap-4 min-h-[calc(100vh-200px)]">
@@ -346,6 +502,15 @@ export default function IntakeManagerPage() {
           request={selectedRequest}
           open={detailsDialogOpen}
           onOpenChange={setDetailsDialogOpen}
+        />
+
+        <NewIntakeDialog
+          open={newIntakeDialogOpen}
+          onOpenChange={setNewIntakeDialogOpen}
+          form={newIntakeForm}
+          isStray={isStray}
+          onSubmit={(data) => createIntakeMutation.mutate(data)}
+          isPending={createIntakeMutation.isPending}
         />
       </div>
     </DashboardLayout>
@@ -858,6 +1023,317 @@ function SurrenderDetailsDialog({ request, open, onOpenChange }: SurrenderDetail
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </Dialog>
+  );
+}
+
+interface NewIntakeDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  form: ReturnType<typeof useForm<StaffIntakeFormData>>;
+  isStray: boolean;
+  onSubmit: (data: StaffIntakeFormData) => void;
+  isPending: boolean;
+}
+
+function NewIntakeDialog({ open, onOpenChange, form, isStray, onSubmit, isPending }: NewIntakeDialogProps) {
+  const handleOpenChange = (newOpen: boolean) => {
+    if (!newOpen) {
+      form.reset({
+        isStray: false,
+        ownerName: "",
+        ownerEmail: "",
+        ownerPhone: "",
+        smsConsent: false,
+        dogName: "",
+        dogBreed: "",
+        dogAge: "",
+        dogGender: "unknown",
+        dogWeight: "",
+        reasonForSurrender: "",
+        medicalIssues: "",
+        behavioralIssues: "",
+      });
+    }
+    onOpenChange(newOpen);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Dog className="h-5 w-5" />
+            New Intake Request
+          </DialogTitle>
+          <DialogDescription>
+            Create a new intake request for the pipeline. For strays or field pickups, check the "Stray" option.
+          </DialogDescription>
+        </DialogHeader>
+
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <FormField
+              control={form.control}
+              name="isStray"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-start space-x-3 space-y-0 p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg">
+                  <FormControl>
+                    <Checkbox
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                      data-testid="checkbox-is-stray"
+                    />
+                  </FormControl>
+                  <div className="space-y-1 leading-none">
+                    <FormLabel className="text-amber-800 dark:text-amber-200 font-medium">
+                      Stray / No Owner
+                    </FormLabel>
+                    <p className="text-xs text-amber-700 dark:text-amber-300">
+                      Check this for field pickups, strays, or animals without owner contact information
+                    </p>
+                  </div>
+                </FormItem>
+              )}
+            />
+
+            {!isStray && (
+              <div className="space-y-4">
+                <h3 className="text-sm font-semibold text-muted-foreground">Owner Information</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="ownerName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Owner Name *</FormLabel>
+                        <FormControl>
+                          <Input placeholder="John Doe" {...field} data-testid="input-owner-name" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="ownerEmail"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Email *</FormLabel>
+                        <FormControl>
+                          <Input type="email" placeholder="john@example.com" {...field} data-testid="input-owner-email" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="ownerPhone"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Phone *</FormLabel>
+                        <FormControl>
+                          <Input type="tel" placeholder="(555) 123-4567" {...field} data-testid="input-owner-phone" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="smsConsent"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-start space-x-3 space-y-0 pt-6">
+                        <FormControl>
+                          <Checkbox
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                            data-testid="checkbox-sms-consent"
+                          />
+                        </FormControl>
+                        <div className="space-y-1 leading-none">
+                          <FormLabel className="text-sm font-normal">
+                            Owner consents to SMS updates
+                          </FormLabel>
+                        </div>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <h3 className="text-sm font-semibold text-muted-foreground">Dog Information</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="dogName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Dog Name *</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Buddy" {...field} data-testid="input-dog-name" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="dogBreed"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Breed *</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Labrador Mix" {...field} data-testid="input-dog-breed" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="dogAge"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Age *</FormLabel>
+                      <FormControl>
+                        <Input placeholder="2 years" {...field} data-testid="input-dog-age" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="dogGender"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Gender *</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-dog-gender">
+                            <SelectValue placeholder="Select gender" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="male">Male</SelectItem>
+                          <SelectItem value="female">Female</SelectItem>
+                          <SelectItem value="unknown">Unknown</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="dogWeight"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Weight (lbs)</FormLabel>
+                      <FormControl>
+                        <Input placeholder="45" {...field} data-testid="input-dog-weight" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <h3 className="text-sm font-semibold text-muted-foreground">Details</h3>
+              <FormField
+                control={form.control}
+                name="reasonForSurrender"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Reason for Surrender / Intake Notes *</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        placeholder={isStray ? "Found location, circumstances, etc." : "Why is the owner surrendering this dog?"}
+                        {...field}
+                        rows={3}
+                        data-testid="input-reason"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="medicalIssues"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Known Medical Issues</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          placeholder="Any known health conditions..."
+                          {...field}
+                          rows={2}
+                          data-testid="input-medical"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="behavioralIssues"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Known Behavioral Issues</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          placeholder="Any known behavioral concerns..."
+                          {...field}
+                          rows={2}
+                          data-testid="input-behavioral"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
+
+            <DialogFooter className="gap-2">
+              <Button type="button" variant="outline" onClick={() => handleOpenChange(false)} data-testid="button-cancel-intake">
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isPending} data-testid="button-submit-intake">
+                {isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create Intake
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
+      </DialogContent>
     </Dialog>
   );
 }
