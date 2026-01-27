@@ -56,11 +56,12 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
 const DECLINE_REASONS = [
-  { value: 'capacity', label: 'No capacity at this time' },
-  { value: 'location', label: 'Outside of service area' },
-  { value: 'behavior', label: 'Behavioral issues beyond our resources' },
-  { value: 'medical', label: 'Medical needs beyond our capabilities' },
-  { value: 'other', label: 'Other reason' }
+  { value: "no_space", label: "No Space Available" },
+  { value: "behavioral", label: "Behavioral Issues Beyond Our Capacity" },
+  { value: "out_of_area", label: "Out of Service Area" },
+  { value: "medical", label: "Medical Needs Beyond Our Capacity" },
+  { value: "breed_restriction", label: "Breed Restriction" },
+  { value: "other", label: "Other" }
 ];
 
 export type ApplicationType = "adoption" | "foster" | "volunteer" | "intake";
