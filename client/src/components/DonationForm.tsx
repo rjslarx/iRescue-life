@@ -9,6 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DollarSign, ExternalLink, Loader2, Lock, Shield, Heart, Star, Users, Home, HandHeart, PawPrint, HeartHandshake } from "lucide-react";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { Tenant } from "@shared/schema";
 
 interface DonationFormProps {
@@ -42,7 +43,8 @@ export default function DonationForm({ sponsoredAnimalName, tenant }: DonationFo
   const mailingAddressLabel = donationSection.mailingAddressLabel || "Prefer to mail a check? Send to:";
   const donateMailingAddress = donationSection.donateMailingAddress || (tenant as any)?.footerAddress;
   
-  // One-time donations only (no monthly option)
+  // Donation frequency: monthly is default for general donations, one-time only for sponsorships
+  const [isRecurring, setIsRecurring] = useState(!sponsoredAnimalName); // Monthly by default, one-time for sponsors
   const [amount, setAmount] = useState<number | null>(sponsoredAnimalName ? 25 : 30);
   const [customAmount, setCustomAmount] = useState("");
   const [donorCoversFees, setDonorCoversFees] = useState(true); // Default checked
@@ -122,7 +124,7 @@ export default function DonationForm({ sponsoredAnimalName, tenant }: DonationFo
 
     stripeCheckoutMutation.mutate({
       amount: donationAmount,
-      isRecurring: false,
+      isRecurring: sponsoredAnimalName ? false : isRecurring,
       donorCoversFees,
     });
   };
@@ -175,6 +177,36 @@ export default function DonationForm({ sponsoredAnimalName, tenant }: DonationFo
             <p className="text-center text-sm font-medium text-foreground">
               Be Their Hero
             </p>
+
+            {/* Donation Frequency Toggle - Only show for general donations, not for sponsorships */}
+            {!sponsoredAnimalName && (
+              <div className="flex justify-center" data-testid="donation-frequency-toggle">
+                <ToggleGroup 
+                  type="single" 
+                  value={isRecurring ? "monthly" : "one-time"}
+                  onValueChange={(value) => {
+                    if (value) setIsRecurring(value === "monthly");
+                  }}
+                  size="sm"
+                  className="border border-border rounded-lg p-1 bg-muted/30"
+                >
+                  <ToggleGroupItem 
+                    value="one-time" 
+                    className="data-[state=on]:bg-background data-[state=on]:shadow-sm"
+                    data-testid="button-one-time"
+                  >
+                    One-Time
+                  </ToggleGroupItem>
+                  <ToggleGroupItem 
+                    value="monthly" 
+                    className="data-[state=on]:bg-background data-[state=on]:shadow-sm"
+                    data-testid="button-monthly"
+                  >
+                    Monthly
+                  </ToggleGroupItem>
+                </ToggleGroup>
+              </div>
+            )}
 
             {/* Preset amount buttons - 3x2 grid */}
             <div className="grid grid-cols-3 gap-2">
@@ -277,12 +309,15 @@ export default function DonationForm({ sponsoredAnimalName, tenant }: DonationFo
               ) : (
                 <>
                   <Lock className="h-4 w-4 mr-2" />
-                  Donate ${donorCoversFees && feeData ? totalWithFeesDisplay : (amount || customAmount || '50')} Now
+                  {sponsoredAnimalName || !isRecurring 
+                    ? `Donate $${donorCoversFees && feeData ? totalWithFeesDisplay : (amount || customAmount || '50')} Now`
+                    : `Give $${donorCoversFees && feeData ? totalWithFeesDisplay : (amount || customAmount || '50')}/month`
+                  }
                 </>
               )}
             </Button>
             <p className="text-xs text-muted-foreground text-center">
-              Secure one-time payment
+              {sponsoredAnimalName || !isRecurring ? "Secure one-time payment" : "Secure monthly recurring payment"}
             </p>
           </div>
         )}
