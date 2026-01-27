@@ -5004,15 +5004,8 @@ Crawl-delay: 1
         }
       }
       
-      // Merge photo arrays
-      if (secondaryAnimal.photoUrls && secondaryAnimal.photoUrls.length > 0) {
-        const existingPhotos = primaryAnimal.photoUrls || [];
-        const newPhotos = secondaryAnimal.photoUrls.filter(p => !existingPhotos.includes(p));
-        if (newPhotos.length > 0) {
-          updateData.photoUrls = [...existingPhotos, ...newPhotos];
-          reassignedPhotos = newPhotos.length;
-        }
-      }
+      // Note: Secondary animal photos are NOT merged - only primary photos are kept
+      // This simplifies the merge and reduces timeout risk
       
       // MINIMAL TRANSACTION: Only the critical animal status changes
       // This reduces transaction duration and lock time significantly
