@@ -8,6 +8,7 @@ interface TwilioConfig {
   accountSid: string;
   authToken: string;
   phoneNumber: string;
+  messagingServiceSid?: string | null;
 }
 
 interface SendResult {
@@ -23,6 +24,7 @@ async function getTwilioConfig(tenantId: string): Promise<TwilioConfig | null> {
       twilioAccountSidEncrypted: tenants.twilioAccountSidEncrypted,
       twilioAuthTokenEncrypted: tenants.twilioAuthTokenEncrypted,
       twilioPhoneNumber: tenants.twilioPhoneNumber,
+      twilioMessagingServiceSid: tenants.twilioMessagingServiceSid,
       twilioEnabled: tenants.twilioEnabled,
     })
     .from(tenants)
@@ -44,6 +46,7 @@ async function getTwilioConfig(tenantId: string): Promise<TwilioConfig | null> {
       accountSid,
       authToken,
       phoneNumber: tenant.twilioPhoneNumber,
+      messagingServiceSid: tenant.twilioMessagingServiceSid,
     };
   } catch (error) {
     console.error('Failed to decrypt Twilio credentials:', error);
@@ -53,6 +56,24 @@ async function getTwilioConfig(tenantId: string): Promise<TwilioConfig | null> {
 
 function createTwilioClient(config: TwilioConfig) {
   return twilio(config.accountSid, config.authToken);
+}
+
+// Helper to build message create options - uses Messaging Service SID when available for better deliverability
+function buildMessageOptions(config: TwilioConfig, to: string, body: string) {
+  if (config.messagingServiceSid) {
+    // Use Messaging Service SID for registered campaigns (recommended by Twilio)
+    return {
+      body,
+      messagingServiceSid: config.messagingServiceSid,
+      to,
+    };
+  }
+  // Fallback to phone number if no Messaging Service SID configured
+  return {
+    body,
+    from: config.phoneNumber,
+    to,
+  };
 }
 
 export async function broadcastTransportUpdate(
@@ -78,11 +99,9 @@ export async function broadcastTransportUpdate(
 
   const promises = phoneNumbers.map(async (number) => {
     try {
-      const twilioMessage = await client.messages.create({
-        body: formattedMessage,
-        from: config.phoneNumber,
-        to: number,
-      });
+      const twilioMessage = await client.messages.create(
+        buildMessageOptions(config, number, formattedMessage)
+      );
 
       await db.insert(smsMessageLogs).values({
         tenantId,
@@ -144,17 +163,15 @@ export async function sendSms(
   const client = createTwilioClient(config);
 
   try {
-    const twilioMessage = await client.messages.create({
-      body: message,
-      from: config.phoneNumber,
-      to: toNumber,
-    });
+    const twilioMessage = await client.messages.create(
+      buildMessageOptions(config, toNumber, message)
+    );
 
     await db.insert(smsMessageLogs).values({
       tenantId,
       twilioMessageSid: twilioMessage.sid,
       direction: 'outbound',
-      fromNumber: config.phoneNumber,
+      fromNumber: config.messagingServiceSid || config.phoneNumber,
       toNumber,
       body: message,
       messageType,
@@ -261,17 +278,15 @@ export async function handleIncomingSms(
     const forwardMessage = `(From ${sessionAsPartyB.partyBAlias}): ${body}`;
 
     try {
-      const twilioMessage = await client.messages.create({
-        body: forwardMessage,
-        from: config.phoneNumber,
-        to: sessionAsPartyB.partyAPhone,
-      });
+      const twilioMessage = await client.messages.create(
+        buildMessageOptions(config, sessionAsPartyB.partyAPhone, forwardMessage)
+      );
 
       await db.insert(smsMessageLogs).values({
         tenantId: sessionAsPartyB.tenantId,
         twilioMessageSid: twilioMessage.sid,
         direction: 'outbound',
-        fromNumber: config.phoneNumber,
+        fromNumber: config.messagingServiceSid || config.phoneNumber,
         toNumber: sessionAsPartyB.partyAPhone,
         body: forwardMessage,
         messageType: 'proxy_message',
@@ -305,17 +320,15 @@ export async function handleIncomingSms(
   const forwardMessage = `(From ${activeSession.partyAAlias}): ${body}`;
 
   try {
-    const twilioMessage = await client.messages.create({
-      body: forwardMessage,
-      from: config.phoneNumber,
-      to: activeSession.partyBPhone,
-    });
+    const twilioMessage = await client.messages.create(
+      buildMessageOptions(config, activeSession.partyBPhone, forwardMessage)
+    );
 
     await db.insert(smsMessageLogs).values({
       tenantId: activeSession.tenantId,
       twilioMessageSid: twilioMessage.sid,
       direction: 'outbound',
-      fromNumber: config.phoneNumber,
+      fromNumber: config.messagingServiceSid || config.phoneNumber,
       toNumber: activeSession.partyBPhone,
       body: forwardMessage,
       messageType: 'proxy_message',
