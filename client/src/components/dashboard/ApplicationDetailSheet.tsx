@@ -33,6 +33,8 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
 import { 
   Phone, 
   MessageSquare, 
@@ -47,10 +49,19 @@ import {
   Calendar,
   ChevronDown,
   ChevronRight,
-  PawPrint
+  PawPrint,
+  Loader2
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+
+const DECLINE_REASONS = [
+  { value: 'capacity', label: 'No capacity at this time' },
+  { value: 'location', label: 'Outside of service area' },
+  { value: 'behavior', label: 'Behavioral issues beyond our resources' },
+  { value: 'medical', label: 'Medical needs beyond our capabilities' },
+  { value: 'other', label: 'Other reason' }
+];
 
 export type ApplicationType = "adoption" | "foster" | "volunteer" | "intake";
 
@@ -252,6 +263,31 @@ export default function ApplicationDetailSheet({
   const [, setLocation] = useLocation();
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [declineReason, setDeclineReason] = useState<string>("");
+
+  const declineMutation = useMutation({
+    mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
+      const response = await apiRequest("POST", `/api/surrender/${id}/decline`, { reason });
+      return response;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/surrender-requests"] });
+      toast({
+        title: "Request Declined",
+        description: "The intake request has been declined.",
+      });
+      setShowRejectDialog(false);
+      setDeclineReason("");
+      onClose();
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to decline the request.",
+        variant: "destructive",
+      });
+    },
+  });
 
   const updateMutation = useMutation({
     mutationFn: async ({ newStatus }: { newStatus: string }) => {
@@ -324,10 +360,15 @@ export default function ApplicationDetailSheet({
   };
 
   const handleReject = () => {
-    const rejectStatus = type === "adoption" ? "denied" : type === "intake" ? "declined" : "rejected";
-    updateMutation.mutate({ newStatus: rejectStatus });
-    setShowRejectDialog(false);
-    onClose();
+    if (type === "intake" && data?.id) {
+      const reasonLabel = DECLINE_REASONS.find(r => r.value === declineReason)?.label || declineReason;
+      declineMutation.mutate({ id: data.id, reason: reasonLabel });
+    } else {
+      const rejectStatus = type === "adoption" ? "denied" : "rejected";
+      updateMutation.mutate({ newStatus: rejectStatus });
+      setShowRejectDialog(false);
+      onClose();
+    }
   };
 
   const getStatusOptions = () => {
@@ -791,22 +832,60 @@ export default function ApplicationDetailSheet({
         </SheetContent>
       </Sheet>
 
-      <AlertDialog open={showRejectDialog} onOpenChange={setShowRejectDialog}>
+      <AlertDialog open={showRejectDialog} onOpenChange={(open) => {
+        setShowRejectDialog(open);
+        if (!open) setDeclineReason("");
+      }}>
         <AlertDialogContent data-testid="reject-dialog">
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirm Rejection</AlertDialogTitle>
+            <AlertDialogTitle>{type === "intake" ? "Decline Intake Request" : "Confirm Rejection"}</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to reject this application from {name}? This action can be undone by changing the status manually.
+              {type === "intake" 
+                ? "Please select a reason for declining this intake request."
+                : `Are you sure you want to reject this application from ${name}? This action can be undone by changing the status manually.`
+              }
             </AlertDialogDescription>
           </AlertDialogHeader>
+          
+          {type === "intake" && (
+            <div className="py-4">
+              <Label className="text-sm font-medium mb-3 block">Reason for Decline</Label>
+              <RadioGroup value={declineReason} onValueChange={setDeclineReason} className="space-y-2">
+                {DECLINE_REASONS.map((reason) => (
+                  <div key={reason.value} className="flex items-center space-x-2">
+                    <RadioGroupItem 
+                      value={reason.value} 
+                      id={`decline-reason-${reason.value}`}
+                      data-testid={`radio-decline-${reason.value}`}
+                    />
+                    <Label 
+                      htmlFor={`decline-reason-${reason.value}`}
+                      className="text-sm cursor-pointer"
+                    >
+                      {reason.label}
+                    </Label>
+                  </div>
+                ))}
+              </RadioGroup>
+            </div>
+          )}
+
           <AlertDialogFooter>
             <AlertDialogCancel data-testid="button-cancel-reject">Cancel</AlertDialogCancel>
             <AlertDialogAction 
               onClick={handleReject}
+              disabled={type === "intake" && !declineReason || declineMutation.isPending}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               data-testid="button-confirm-reject"
             >
-              Reject Application
+              {declineMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Declining...
+                </>
+              ) : (
+                type === "intake" ? "Decline Request" : "Reject Application"
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
