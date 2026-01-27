@@ -14018,6 +14018,10 @@ Submitted: ${new Date().toLocaleString()}
         twilioAccountSid: z.string().min(1, "Account SID is required").startsWith("AC"),
         twilioAuthToken: z.string().min(1, "Auth Token is required"),
         twilioPhoneNumber: z.string().min(1, "Phone number is required").regex(/^\+[1-9]\d{1,14}$/, "Phone number must be in E.164 format (e.g., +15551234567)"),
+        twilioMessagingServiceSid: z.string().optional().refine(
+          (val) => !val || val.startsWith("MG"),
+          { message: "Messaging Service SID must start with MG" }
+        ),
       });
 
       const settings = twilioSettingsSchema.parse(req.body);
@@ -14033,6 +14037,7 @@ Submitted: ${new Date().toLocaleString()}
           twilioAccountSidEncrypted: encryptedAccountSid,
           twilioAuthTokenEncrypted: encryptedAuthToken,
           twilioPhoneNumber: settings.twilioPhoneNumber,
+          twilioMessagingServiceSid: settings.twilioMessagingServiceSid || null,
           twilioEnabled: true,
         })
         .where(eq(tenants.id, req.tenant!.id))
@@ -14056,6 +14061,7 @@ Submitted: ${new Date().toLocaleString()}
           twilioAccountSidEncrypted: null,
           twilioAuthTokenEncrypted: null,
           twilioPhoneNumber: null,
+          twilioMessagingServiceSid: null,
           twilioEnabled: false,
         })
         .where(eq(tenants.id, req.tenant!.id))
@@ -14079,6 +14085,7 @@ Submitted: ${new Date().toLocaleString()}
       res.json({ 
         enabled,
         phoneNumber: req.tenant!.twilioPhoneNumber || null,
+        messagingServiceSid: req.tenant!.twilioMessagingServiceSid || null,
       });
     } catch (error) {
       next(error);

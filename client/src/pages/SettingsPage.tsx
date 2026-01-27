@@ -2499,9 +2499,16 @@ export default function SettingsPage() {
                       <Alert>
                         <CheckCircle2 className="h-4 w-4" />
                         <AlertDescription className="flex items-center justify-between">
-                          <span>
-                            Twilio is configured with number {data.tenant.twilioPhoneNumber}
-                          </span>
+                          <div className="flex flex-col gap-1">
+                            <span>
+                              Twilio is configured with number {data.tenant.twilioPhoneNumber}
+                            </span>
+                            {data.tenant.twilioMessagingServiceSid && (
+                              <span className="text-xs text-muted-foreground">
+                                Using Messaging Service: {data.tenant.twilioMessagingServiceSid}
+                              </span>
+                            )}
+                          </div>
                           <Button
                             variant="outline"
                             size="sm"
