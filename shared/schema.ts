@@ -979,6 +979,7 @@ export const fosterApplications = pgTable("foster_applications", {
   vetReference: text("vet_reference"),
   personalReference: text("personal_reference"),
   status: text("status").notNull().default("pending").$type<"pending" | "approved" | "rejected">(),
+  pipelineStatus: text("pipeline_status").notNull().default("new_app").$type<"new_app" | "interview" | "home_check" | "orientation" | "agreement" | "active_pool" | "rejected">(),
   notes: text("notes"), // Admin notes
   customResponses: jsonb("custom_responses").$type<Record<string, any>>(), // Stores answers to custom form fields
   smsConsent: boolean("sms_consent").notNull().default(false), // Whether applicant consented to receive SMS messages

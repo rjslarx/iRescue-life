@@ -11294,15 +11294,17 @@ Submitted: ${new Date().toLocaleString()}
     try {
       const { fosterApplications, dismissedWidgetItems } = await import('@shared/schema');
       
+      // Support both legacy status field and new pipelineStatus field
       const updateSchema = z.object({
-        status: z.enum(['pending', 'approved', 'rejected']),
+        status: z.enum(['pending', 'approved', 'rejected']).optional(),
+        pipelineStatus: z.enum(['new_app', 'interview', 'home_check', 'orientation', 'agreement', 'active_pool', 'rejected']).optional(),
         notes: z.string().optional(),
       });
 
       const data = updateSchema.parse(req.body);
       
       // Get current application to check status before update
-      const [currentApp] = await db.select({ status: fosterApplications.status })
+      const [currentApp] = await db.select({ status: fosterApplications.status, pipelineStatus: fosterApplications.pipelineStatus })
         .from(fosterApplications)
         .where(
           and(
@@ -11317,13 +11319,36 @@ Submitted: ${new Date().toLocaleString()}
       }
       
       const oldStatus = currentApp.status;
+      const oldPipelineStatus = currentApp.pipelineStatus;
+      
+      // Build update object
+      const updateData: Record<string, any> = {
+        updatedAt: new Date(),
+      };
+      
+      if (data.status !== undefined) {
+        updateData.status = data.status;
+      }
+      
+      if (data.pipelineStatus !== undefined) {
+        updateData.pipelineStatus = data.pipelineStatus;
+        // Sync legacy status field based on pipelineStatus
+        if (data.pipelineStatus === 'active_pool') {
+          updateData.status = 'approved';
+        } else if (data.pipelineStatus === 'rejected') {
+          updateData.status = 'rejected';
+        } else if (['new_app', 'interview', 'home_check', 'orientation', 'agreement'].includes(data.pipelineStatus)) {
+          updateData.status = 'pending';
+        }
+      }
+      
+      if (data.notes !== undefined) {
+        updateData.notes = data.notes;
+      }
 
       const [updatedApplication] = await db
         .update(fosterApplications)
-        .set({
-          ...data,
-          updatedAt: new Date(),
-        })
+        .set(updateData)
         .where(
           and(
             eq(fosterApplications.id, req.params.id),
@@ -11336,8 +11361,10 @@ Submitted: ${new Date().toLocaleString()}
         return res.status(500).json({ error: 'Failed to update foster application' });
       }
       
-      // Auto-dismiss from widget if moving from 'pending' to another status
-      if (oldStatus === 'pending' && data.status !== 'pending') {
+      // Auto-dismiss from widget if moving from 'new_app' to another pipeline status
+      const shouldAutoDismiss = (oldPipelineStatus === 'new_app' && data.pipelineStatus && data.pipelineStatus !== 'new_app') ||
+                                 (oldStatus === 'pending' && data.status && data.status !== 'pending');
+      if (shouldAutoDismiss) {
         try {
           const existing = await db.select()
             .from(dismissedWidgetItems)

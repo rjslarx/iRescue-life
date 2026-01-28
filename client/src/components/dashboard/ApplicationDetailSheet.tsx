@@ -103,6 +103,7 @@ interface FosterData {
   personalReference?: string;
   customResponses?: Record<string, any>;
   status: string;
+  pipelineStatus?: string;
   notes?: string;
   smsConsent?: boolean;
   createdAt: string;
@@ -293,7 +294,17 @@ function getStatus(type: ApplicationType, data: ApplicationData): string {
   if (type === "adoption") {
     return (data as AdoptionData).stage;
   }
-  return (data as FosterData | VolunteerData | IntakeData).status;
+  if (type === "foster") {
+    // Use pipelineStatus if available, otherwise fall back to status
+    const fosterData = data as FosterData;
+    return fosterData.pipelineStatus || fosterData.status;
+  }
+  if (type === "volunteer") {
+    // Use pipelineStatus for volunteers too
+    const volunteerData = data as VolunteerData;
+    return (volunteerData as any).pipelineStatus || volunteerData.status;
+  }
+  return (data as IntakeData).status;
 }
 
 function getSmsConsent(data: ApplicationData): boolean {
@@ -340,7 +351,17 @@ export default function ApplicationDetailSheet({
   const updateMutation = useMutation({
     mutationFn: async ({ newStatus }: { newStatus: string }) => {
       const endpoint = getApiEndpoint(type);
-      const statusField = type === "adoption" ? "stage" : "status";
+      // Use appropriate field name for each application type
+      let statusField: string;
+      if (type === "adoption") {
+        statusField = "stage";
+      } else if (type === "foster") {
+        statusField = "pipelineStatus";
+      } else if (type === "volunteer") {
+        statusField = "pipelineStatus";
+      } else {
+        statusField = "status";
+      }
       return apiRequest("PATCH", `${endpoint}/${data?.id}`, { [statusField]: newStatus });
     },
     onSuccess: () => {

@@ -83,6 +83,7 @@ interface FosterApplication {
   experience?: string;
   availability?: string;
   status: "pending" | "approved" | "rejected";
+  pipelineStatus?: "new_app" | "interview" | "home_check" | "orientation" | "agreement" | "active_pool" | "rejected";
   notes?: string;
   smsConsent?: boolean;
   createdAt: string;
@@ -127,7 +128,8 @@ interface SurrenderRequest {
 }
 
 const adoptionStages = ["new", "screening", "vet_check", "home_visit", "approved", "trial"] as const;
-const fosterVolunteerStatuses = ["pending", "approved", "rejected"] as const;
+const fosterPipelineStatuses = ["new_app", "interview", "home_check", "orientation", "agreement", "active_pool"] as const;
+const volunteerPipelineStatuses = ["new_applicant", "orientation_scheduled", "waiver_needed", "active_pool"] as const;
 const surrenderStatuses = ["new", "review", "spacecheck", "waitlist", "scheduled"] as const;
 
 const stageLabels: Record<string, string> = {
@@ -148,6 +150,17 @@ const stageLabels: Record<string, string> = {
   scheduled: "Scheduled",
   intaken: "Intaken",
   declined: "Declined",
+  // Foster pipeline stages
+  new_app: "New App",
+  interview: "Interview",
+  home_check: "Home Check",
+  orientation: "Orientation",
+  agreement: "Agreement",
+  active_pool: "Active Pool",
+  // Volunteer pipeline stages
+  new_applicant: "New Applicant",
+  orientation_scheduled: "Orientation Scheduled",
+  waiver_needed: "Waiver Needed",
 };
 
 type BadgeVariant = "default" | "secondary" | "destructive" | "outline";
@@ -170,6 +183,17 @@ const stageVariants: Record<string, BadgeVariant> = {
   scheduled: "default",
   intaken: "default",
   declined: "destructive",
+  // Foster pipeline stages
+  new_app: "default",
+  interview: "secondary",
+  home_check: "secondary",
+  orientation: "secondary",
+  agreement: "secondary",
+  active_pool: "default",
+  // Volunteer pipeline stages
+  new_applicant: "default",
+  orientation_scheduled: "secondary",
+  waiver_needed: "secondary",
 };
 
 interface PipelineItemData {
@@ -418,14 +442,14 @@ export default function PipelineManager({ activeTab, onTabChange }: PipelineMana
   const fosterItems: PipelineItemData[] = (fosters || []).map(f => ({
     id: f.id,
     name: f.applicantName,
-    status: f.status,
+    status: f.pipelineStatus || (f.status === 'pending' ? 'new_app' : f.status === 'approved' ? 'active_pool' : f.status),
     createdAt: f.createdAt,
   }));
 
   const volunteerItems: PipelineItemData[] = (volunteers || []).map(v => ({
     id: v.id,
     name: v.applicantName,
-    status: v.status,
+    status: (v as any).pipelineStatus || (v.status === 'pending' ? 'new_applicant' : v.status === 'approved' ? 'active_pool' : v.status),
     createdAt: v.createdAt,
   }));
 
@@ -446,8 +470,8 @@ export default function PipelineManager({ activeTab, onTabChange }: PipelineMana
   const completedIntakeStatuses = ['intaken'];
   
   const activeAdoptionsCount = adoptionItems.filter(a => !completedAdoptionStatuses.includes(a.status)).length;
-  const activeFostersCount = fosterItems.filter(f => f.status === 'pending').length;
-  const activeVolunteersCount = volunteerItems.filter(v => v.status === 'pending').length;
+  const activeFostersCount = fosterItems.filter(f => f.status !== 'rejected' && f.status !== 'active_pool').length;
+  const activeVolunteersCount = volunteerItems.filter(v => v.status !== 'rejected' && v.status !== 'active_pool').length;
   const activeIntakesCount = intakeItems.filter(i => !completedIntakeStatuses.includes(i.status)).length;
 
   if (isLoading) {
@@ -593,8 +617,8 @@ export default function PipelineManager({ activeTab, onTabChange }: PipelineMana
                       ))}
                     </div>
                     <div className="hidden lg:flex lg:flex-wrap lg:gap-4">
-                      {fosterVolunteerStatuses.map(status => (
-                        <div key={status} className="min-w-[180px] flex-1">
+                      {fosterPipelineStatuses.map(status => (
+                        <div key={status} className="min-w-[160px] flex-1">
                           <StatusColumn 
                             status={status} 
                             items={fosterItems} 
@@ -635,8 +659,8 @@ export default function PipelineManager({ activeTab, onTabChange }: PipelineMana
                       ))}
                     </div>
                     <div className="hidden lg:flex lg:flex-wrap lg:gap-4">
-                      {fosterVolunteerStatuses.map(status => (
-                        <div key={status} className="min-w-[180px] flex-1">
+                      {volunteerPipelineStatuses.map(status => (
+                        <div key={status} className="min-w-[160px] flex-1">
                           <StatusColumn 
                             status={status} 
                             items={volunteerItems} 
