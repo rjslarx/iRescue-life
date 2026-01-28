@@ -19820,7 +19820,7 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
         });
       }
       
-      const vaccines = await db
+      const rawVaccines = await db
         .select()
         .from(vaccineRecords)
         .where(and(
@@ -19828,6 +19828,14 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
           eq(vaccineRecords.tenantId, req.tenant!.id)
         ))
         .orderBy(desc(vaccineRecords.dateGiven));
+
+      // Transform field names for frontend consistency
+      const vaccines = rawVaccines.map(v => ({
+        ...v,
+        vaccineName: v.itemName,
+        dueDate: v.dateDue,
+        veterinarian: v.administeredBy,
+      }));
 
       res.json({ vaccines });
     } catch (error) {

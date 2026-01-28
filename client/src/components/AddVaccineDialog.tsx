@@ -15,10 +15,13 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 const vaccineSchema = z.object({
   itemName: z.string().min(1, "Vaccine name is required"),
   dateGiven: z.string().min(1, "Date given is required"),
+  validDurationMonths: z.string().optional(), // "12", "36", or custom number
   dateDue: z.string().optional(),
   administeredBy: z.string().optional(),
   lotNumber: z.string().optional(),
   manufacturer: z.string().optional(),
+  clinicName: z.string().optional(),
+  anatomicalSite: z.string().optional(),
   billVendor: z.string().optional(),
   billAmount: z.string().optional(),
   billInvoiceNumber: z.string().optional(),
@@ -34,9 +37,12 @@ interface Vaccine {
   vaccineName: string;
   dateGiven: string;
   dueDate?: string | null;
+  validDurationMonths?: number | null;
   veterinarian?: string | null;
   lotNumber?: string | null;
   manufacturer?: string | null;
+  clinicName?: string | null;
+  anatomicalSite?: string | null;
   billVendor?: string | null;
   billAmount?: string | null;
   billInvoiceNumber?: string | null;
@@ -61,10 +67,13 @@ export function AddVaccineDialog({ animalId, open, onOpenChange, vaccine }: AddV
     defaultValues: {
       itemName: "",
       dateGiven: new Date().toISOString().split('T')[0],
+      validDurationMonths: "",
       dateDue: "",
       administeredBy: "",
       lotNumber: "",
       manufacturer: "",
+      clinicName: "In-House",
+      anatomicalSite: "",
       billVendor: "",
       billAmount: "",
       billInvoiceNumber: "",
@@ -74,16 +83,34 @@ export function AddVaccineDialog({ animalId, open, onOpenChange, vaccine }: AddV
     },
   });
 
+  // Auto-calculate due date when date given or duration changes
+  const dateGiven = form.watch("dateGiven");
+  const validDurationMonths = form.watch("validDurationMonths");
+  
+  useEffect(() => {
+    if (dateGiven && validDurationMonths && validDurationMonths !== "custom") {
+      const months = parseInt(validDurationMonths, 10);
+      if (!isNaN(months) && months > 0) {
+        const givenDate = new Date(dateGiven);
+        givenDate.setMonth(givenDate.getMonth() + months);
+        form.setValue("dateDue", givenDate.toISOString().split('T')[0]);
+      }
+    }
+  }, [dateGiven, validDurationMonths, form]);
+
   const { reset } = form;
   useEffect(() => {
     if (vaccine && open) {
       reset({
         itemName: vaccine.vaccineName || "",
         dateGiven: vaccine.dateGiven ? new Date(vaccine.dateGiven).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+        validDurationMonths: vaccine.validDurationMonths ? String(vaccine.validDurationMonths) : "",
         dateDue: vaccine.dueDate ? new Date(vaccine.dueDate).toISOString().split('T')[0] : "",
         administeredBy: vaccine.veterinarian || "",
         lotNumber: vaccine.lotNumber || "",
         manufacturer: vaccine.manufacturer || "",
+        clinicName: vaccine.clinicName || "In-House",
+        anatomicalSite: vaccine.anatomicalSite || "",
         billVendor: vaccine.billVendor || "",
         billAmount: vaccine.billAmount || "",
         billInvoiceNumber: vaccine.billInvoiceNumber || "",
@@ -95,10 +122,13 @@ export function AddVaccineDialog({ animalId, open, onOpenChange, vaccine }: AddV
       reset({
         itemName: "",
         dateGiven: new Date().toISOString().split('T')[0],
+        validDurationMonths: "",
         dateDue: "",
         administeredBy: "",
         lotNumber: "",
         manufacturer: "",
+        clinicName: "In-House",
+        anatomicalSite: "",
         billVendor: "",
         billAmount: "",
         billInvoiceNumber: "",
@@ -160,10 +190,17 @@ export function AddVaccineDialog({ animalId, open, onOpenChange, vaccine }: AddV
   });
 
   const onSubmit = (data: VaccineFormData) => {
+    // Transform validDurationMonths to a number for API
+    const transformedData = {
+      ...data,
+      validDurationMonths: data.validDurationMonths && data.validDurationMonths !== "custom" 
+        ? parseInt(data.validDurationMonths, 10) 
+        : null,
+    };
     if (isEditing) {
-      updateMutation.mutate(data);
+      updateMutation.mutate(transformedData as any);
     } else {
-      createMutation.mutate(data);
+      createMutation.mutate(transformedData as any);
     }
   };
 
@@ -209,12 +246,66 @@ export function AddVaccineDialog({ animalId, open, onOpenChange, vaccine }: AddV
 
               <FormField
                 control={form.control}
-                name="dateDue"
+                name="validDurationMonths"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Due Date (Next Dose)</FormLabel>
+                    <FormLabel>Duration</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-duration">
+                          <SelectValue placeholder="Select duration" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="12">1 Year</SelectItem>
+                        <SelectItem value="36">3 Years</SelectItem>
+                        <SelectItem value="6">6 Months</SelectItem>
+                        <SelectItem value="custom">Custom (enter below)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <FormField
+              control={form.control}
+              name="dateDue"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Due Date (Next Dose) {validDurationMonths && validDurationMonths !== "custom" && <span className="text-xs text-muted-foreground">(auto-calculated)</span>}</FormLabel>
+                  <FormControl>
+                    <Input type="date" {...field} data-testid="input-due-date" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="lotNumber"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Lot Number</FormLabel>
                     <FormControl>
-                      <Input type="date" {...field} data-testid="input-due-date" />
+                      <Input placeholder="LOT123456" {...field} data-testid="input-lot-number" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="manufacturer"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Manufacturer</FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g., Zoetis, Merck" {...field} data-testid="input-manufacturer" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -239,12 +330,12 @@ export function AddVaccineDialog({ animalId, open, onOpenChange, vaccine }: AddV
 
               <FormField
                 control={form.control}
-                name="lotNumber"
+                name="clinicName"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Lot Number</FormLabel>
+                    <FormLabel>Clinic/Location</FormLabel>
                     <FormControl>
-                      <Input placeholder="LOT123" {...field} data-testid="input-lot-number" />
+                      <Input placeholder="In-House" {...field} data-testid="input-clinic-name" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -254,13 +345,27 @@ export function AddVaccineDialog({ animalId, open, onOpenChange, vaccine }: AddV
 
             <FormField
               control={form.control}
-              name="manufacturer"
+              name="anatomicalSite"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Manufacturer</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Vaccine manufacturer" {...field} data-testid="input-manufacturer" />
-                  </FormControl>
+                  <FormLabel>Anatomical Site (Injection Location)</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger data-testid="select-anatomical-site">
+                        <SelectValue placeholder="Select injection site" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="Right Rear">Right Rear Leg</SelectItem>
+                      <SelectItem value="Right Front">Right Front Leg</SelectItem>
+                      <SelectItem value="Left Rear">Left Rear Leg</SelectItem>
+                      <SelectItem value="Left Front">Left Front Leg</SelectItem>
+                      <SelectItem value="Scruff">Scruff (Back of Neck)</SelectItem>
+                      <SelectItem value="Subcutaneous">Subcutaneous (Between Shoulders)</SelectItem>
+                      <SelectItem value="Intranasal">Intranasal</SelectItem>
+                      <SelectItem value="Other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )}

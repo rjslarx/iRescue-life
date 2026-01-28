@@ -734,12 +734,19 @@ export default function AnimalMedicalPage() {
               </Button>
             </div>
             <div className="grid gap-4">
-              {vaccines.map((vaccine: any) => (
-                <Card key={vaccine.id}>
+              {vaccines.map((vaccine: any) => {
+                const isExpired = vaccine.dueDate && new Date(vaccine.dueDate) < new Date();
+                return (
+                <Card key={vaccine.id} className={isExpired ? "border-destructive bg-destructive/5" : ""}>
                   <CardHeader>
                     <div className="flex justify-between items-start">
                       <div>
-                        <CardTitle className="text-lg">{vaccine.vaccineName}</CardTitle>
+                        <div className="flex items-center gap-2">
+                          <CardTitle className="text-lg">{vaccine.vaccineName}</CardTitle>
+                          {isExpired && (
+                            <Badge variant="destructive" className="text-xs">Expired</Badge>
+                          )}
+                        </div>
                         <p className="text-sm text-muted-foreground mt-1">
                           Given: {format(new Date(vaccine.dateGiven), 'MMM d, yyyy')}
                         </p>
@@ -766,7 +773,9 @@ export default function AnimalMedicalPage() {
                     {vaccine.dueDate && (
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">Due Date:</span>
-                        <span className="font-medium">{format(new Date(vaccine.dueDate), 'MMM d, yyyy')}</span>
+                        <span className={`font-medium ${isExpired ? "text-destructive" : ""}`}>
+                          {format(new Date(vaccine.dueDate), 'MMM d, yyyy')}
+                        </span>
                       </div>
                     )}
                     {vaccine.lotNumber && (
@@ -775,15 +784,34 @@ export default function AnimalMedicalPage() {
                         <span className="font-medium">{vaccine.lotNumber}</span>
                       </div>
                     )}
+                    {vaccine.manufacturer && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Manufacturer:</span>
+                        <span className="font-medium">{vaccine.manufacturer}</span>
+                      </div>
+                    )}
                     {vaccine.veterinarian && (
                       <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Veterinarian:</span>
+                        <span className="text-muted-foreground">Administered By:</span>
                         <span className="font-medium">{vaccine.veterinarian}</span>
+                      </div>
+                    )}
+                    {vaccine.clinicName && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Clinic:</span>
+                        <span className="font-medium">{vaccine.clinicName}</span>
+                      </div>
+                    )}
+                    {vaccine.anatomicalSite && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Injection Site:</span>
+                        <span className="font-medium">{vaccine.anatomicalSite}</span>
                       </div>
                     )}
                   </CardContent>
                 </Card>
-              ))}
+              );
+              })}
               {vaccines.length === 0 && (
                 <Card>
                   <CardContent className="py-8 text-center text-muted-foreground">

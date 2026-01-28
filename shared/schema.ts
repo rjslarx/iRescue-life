@@ -1500,9 +1500,12 @@ export const vaccineRecords = pgTable("vaccine_records", {
   itemName: text("item_name").notNull(),
   dateGiven: timestamp("date_given").notNull(),
   dateDue: timestamp("date_due"),
+  validDurationMonths: integer("valid_duration_months"), // 12 for 1-year, 36 for 3-year vaccines
   manufacturer: text("manufacturer"),
   lotNumber: text("lot_number"),
   administeredBy: text("administered_by"),
+  clinicName: text("clinic_name").default("In-House"), // Where vaccine was administered
+  anatomicalSite: text("anatomical_site"), // Injection site: Right Rear, Right Front, etc.
   createdBy: uuid("created_by").references(() => users.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   billId: uuid("bill_id").references(() => medicalBills.id, { onDelete: 'set null' }),
@@ -1523,6 +1526,9 @@ export const insertVaccineRecordSchema = createInsertSchema(vaccineRecords).omit
 }).extend({
   dateGiven: z.coerce.date(),
   dateDue: z.union([z.coerce.date(), z.literal(""), z.null(), z.undefined()]).optional().transform((val) => (val === "" || val === null || val === undefined) ? null : val),
+  validDurationMonths: z.number().int().positive().optional().nullable(),
+  clinicName: z.string().optional(),
+  anatomicalSite: z.string().optional(),
   billVendor: z.string().optional(),
   billAmount: z.string().optional(),
   billInvoiceNumber: z.string().optional(),
