@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
+import EmailComposerDialog from "@/components/EmailComposerDialog";
 import {
   Sheet,
   SheetContent,
@@ -323,6 +324,7 @@ export default function ApplicationDetailSheet({
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [declineReason, setDeclineReason] = useState<string>("");
+  const [showEmailComposer, setShowEmailComposer] = useState(false);
 
   // Get the appropriate form fields endpoint based on application type
   const formFieldsEndpoint = type === "adoption" 
@@ -995,15 +997,11 @@ export default function ApplicationDetailSheet({
                 variant="outline" 
                 size="sm"
                 className="flex-1"
-                asChild
+                onClick={() => setShowEmailComposer(true)}
+                data-testid="button-email"
               >
-                <a 
-                  href={`mailto:${email}`}
-                  data-testid="link-email"
-                >
-                  <Mail className="h-4 w-4 mr-1" />
-                  Email
-                </a>
+                <Mail className="h-4 w-4 mr-1" />
+                Email
               </Button>
             </div>
             {!hasSmsConsent && (
@@ -1146,6 +1144,33 @@ export default function ApplicationDetailSheet({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <EmailComposerDialog
+        isOpen={showEmailComposer}
+        onClose={() => setShowEmailComposer(false)}
+        recipientEmail={email}
+        recipientName={name}
+        defaultSubject={
+          type === "adoption" && (data as AdoptionData)?.animal?.name 
+            ? `Regarding your adoption application for ${(data as AdoptionData).animal.name}`
+            : type === "foster" && (data as FosterData)?.animal?.name
+              ? `Regarding your foster application for ${(data as FosterData).animal.name}`
+              : type === "intake" && (data as IntakeData)?.dogName
+                ? `Regarding your surrender request for ${(data as IntakeData).dogName}`
+                : `Your ${type} application`
+        }
+        context={{
+          type: type === "adoption" ? "adoption_application" 
+              : type === "foster" ? "foster_application"
+              : type === "volunteer" ? "volunteer_application"
+              : "intake_request",
+          id: data.id,
+          animalName: type === "adoption" ? (data as AdoptionData)?.animal?.name
+                    : type === "foster" ? (data as FosterData)?.animal?.name
+                    : type === "intake" ? (data as IntakeData)?.dogName
+                    : undefined,
+        }}
+      />
     </>
   );
 }

@@ -17619,6 +17619,115 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
   });
 
   /**
+   * POST /api/send-email
+   * Send a single email to a recipient (for staff communication)
+   * Uses Gmail if configured, otherwise falls back to Resend
+   * Logs the email as an activity if context is provided
+   */
+  app.post('/api/send-email', requireTenant, requireAuth, emailLimiter, async (req, res, next) => {
+    try {
+      const { EmailService } = await import('./lib/email-service');
+      const { logActivity } = await import('./lib/activity-logger');
+      
+      const sendSchema = z.object({
+        to: z.string().email(),
+        subject: z.string().min(1, "Subject is required"),
+        message: z.string().min(1, "Message is required"),
+        context: z.object({
+          type: z.enum(['adoption_application', 'foster_application', 'volunteer_application', 'intake_request', 'general']).optional(),
+          id: z.string().optional(),
+          animalName: z.string().optional(),
+        }).optional(),
+      });
+
+      const data = sendSchema.parse(req.body);
+      
+      // Get email service for this tenant
+      const emailService = await EmailService.forTenant(req.tenant!.id);
+      if (!emailService) {
+        return res.status(400).json({ 
+          error: 'Email service not configured. Please configure Gmail or Resend in Settings.' 
+        });
+      }
+
+      // Get sender info for the email
+      const [tenant] = await db
+        .select({
+          name: tenants.name,
+          resendFromName: tenants.resendFromName,
+        })
+        .from(tenants)
+        .where(eq(tenants.id, req.tenant!.id))
+        .limit(1);
+
+      // Get staff user info for signature
+      const staffUser = req.user;
+      const senderName = `${staffUser?.firstName || ''} ${staffUser?.lastName || ''}`.trim() || tenant?.name || 'Staff';
+
+      // Convert plain text message to HTML with proper formatting
+      const htmlMessage = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="white-space: pre-wrap; line-height: 1.6;">${escapeHtml(data.message)}</div>
+          <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0 20px;">
+          <p style="color: #666; font-size: 14px;">
+            Sent by ${escapeHtml(senderName)}<br>
+            ${escapeHtml(tenant?.name || '')}
+          </p>
+        </div>
+      `;
+
+      // Send the email
+      const result = await emailService.send({
+        to: data.to,
+        subject: data.subject,
+        html: htmlMessage,
+        replyTo: staffUser?.email,
+      });
+
+      if (!result.success) {
+        console.error(`[send-email] Failed to send email:`, result.error);
+        return res.status(500).json({ 
+          error: result.error || 'Failed to send email' 
+        });
+      }
+
+      // Log activity if context is provided
+      if (data.context?.type && data.context?.id) {
+        try {
+          const contextLabel = data.context.type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+          const animalContext = data.context.animalName ? ` regarding ${data.context.animalName}` : '';
+          
+          await logActivity({
+            tenantId: req.tenant!.id,
+            userId: staffUser?.id,
+            action: 'email_sent',
+            entityType: data.context.type.includes('application') ? 'application' : 
+                       data.context.type === 'intake_request' ? 'intake' : 'communication',
+            entityId: data.context.id,
+            description: `Email sent to applicant${animalContext}: "${data.subject}"`,
+            metadata: {
+              recipient: data.to,
+              subject: data.subject,
+              contextType: data.context.type,
+              provider: emailService.isUsingGmail() ? 'gmail' : 'resend',
+            },
+          });
+        } catch (logError) {
+          console.error('[send-email] Failed to log activity:', logError);
+        }
+      }
+
+      res.json({ 
+        success: true, 
+        messageId: result.messageId,
+        provider: emailService.isUsingGmail() ? 'gmail' : 'resend',
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * POST /api/emails/send
    * Send email campaign to selected audiences (admin only)
    * Supports both template-based and custom HTML emails
