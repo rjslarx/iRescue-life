@@ -28,7 +28,11 @@ import {
   Loader2,
   Eye,
   HardDrive,
-  ExternalLink
+  ExternalLink,
+  Cpu,
+  Copy,
+  Check,
+  Edit
 } from "lucide-react";
 import { useGooglePicker, PickerDocument } from "@/hooks/useGooglePicker";
 import { format } from "date-fns";
@@ -39,6 +43,7 @@ import { AddPrescriptionDialog } from "@/components/AddPrescriptionDialog";
 import { AddMedicalBillDialog } from "@/components/AddMedicalBillDialog";
 import { AddExamDialog } from "@/components/AddExamDialog";
 import { MedicalFileUploadDialog } from "@/components/MedicalFileUploadDialog";
+import { AddMicrochipDialog } from "@/components/AddMicrochipDialog";
 import DashboardLayout from "@/components/DashboardLayout";
 import { useTenant } from "@/contexts/TenantContext";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -97,6 +102,9 @@ export default function AnimalMedicalPage() {
   const [billDialogOpen, setBillDialogOpen] = useState(false);
   const [editingBill, setEditingBill] = useState<any>(null);
   const [documentDialogOpen, setDocumentDialogOpen] = useState(false);
+  const [microchipDialogOpen, setMicrochipDialogOpen] = useState(false);
+  const [editingMicrochip, setEditingMicrochip] = useState<any>(null);
+  const [copiedAdopterInfo, setCopiedAdopterInfo] = useState(false);
 
   // Fetch animal details
   const { data: animalData, isLoading: animalLoading } = useQuery<any>({
@@ -121,6 +129,12 @@ export default function AnimalMedicalPage() {
   // Fetch vaccines
   const { data: vaccinesData } = useQuery<any>({
     queryKey: [`/api/animals/${animalId}/medical/vaccines`],
+    enabled: !!animalId,
+  });
+
+  // Fetch microchips
+  const { data: microchipsData } = useQuery<any>({
+    queryKey: [`/api/animals/${animalId}/microchips`],
     enabled: !!animalId,
   });
 
@@ -276,10 +290,47 @@ export default function AnimalMedicalPage() {
   const history = historyData?.history || [];
   const exams = examsData?.exams || [];
   const vaccines = vaccinesData?.vaccines || [];
+  const microchips = microchipsData?.microchips || [];
   const diagnostics = diagnosticsData?.diagnostics || [];
   const procedures = proceduresData?.procedures || [];
   const prescriptions = prescriptionsData?.prescriptions || [];
   const bills = billsData?.bills || [];
+
+  // Copy adopter info to clipboard
+  const copyAdopterInfo = async () => {
+    try {
+      const response = await apiRequest(`/api/animals/${animalId}/microchips/adopter-info`);
+      if (response.adopterInfo?.formatted) {
+        await navigator.clipboard.writeText(response.adopterInfo.formatted);
+        setCopiedAdopterInfo(true);
+        setTimeout(() => setCopiedAdopterInfo(false), 2000);
+        toast({
+          title: "Copied!",
+          description: "Adopter info copied to clipboard for microchip registration",
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: "No Adopter Found",
+        description: "No approved adoption application found for this animal",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Get microchip status badge color
+  const getMicrochipStatusBadge = (status: string) => {
+    switch (status) {
+      case 'transferred':
+        return <Badge className="bg-green-500">Transferred</Badge>;
+      case 'registered_rescue':
+        return <Badge className="bg-blue-500">Registered to Rescue</Badge>;
+      case 'found_unknown':
+        return <Badge variant="secondary">Found - Unknown</Badge>;
+      default:
+        return <Badge variant="outline">Unregistered</Badge>;
+    }
+  };
 
   const breadcrumbs = [
     { label: "Animals", href: "/dashboard/animals" },
@@ -488,6 +539,83 @@ export default function AnimalMedicalPage() {
                     </div>
                   ) : (
                     <p className="text-sm text-muted-foreground">No vaccines recorded</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Microchip Status */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Cpu className="w-4 h-4" />
+                      Microchip
+                    </CardTitle>
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      onClick={() => { setEditingMicrochip(null); setMicrochipDialogOpen(true); }}
+                      data-testid="button-add-microchip"
+                    >
+                      {microchips.length > 0 ? <Edit className="w-3 h-3" /> : 'Add'}
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {microchips.length > 0 ? (
+                    <div className="space-y-3">
+                      {microchips.slice(0, 1).map((chip: any) => (
+                        <div key={chip.id} className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="font-mono text-sm">{chip.microchipNumber}</span>
+                            {getMicrochipStatusBadge(chip.registrationStatus)}
+                          </div>
+                          <div className="text-xs text-muted-foreground space-y-1">
+                            <p>Manufacturer: {chip.manufacturer || 'Unknown'}</p>
+                            {chip.implantDate && (
+                              <p>Implanted: {format(new Date(chip.implantDate), 'MMM d, yyyy')}</p>
+                            )}
+                          </div>
+                          {animal?.status === 'adopted' && chip.registrationStatus !== 'transferred' && (
+                            <div className="pt-2 border-t">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="w-full text-xs"
+                                onClick={copyAdopterInfo}
+                                data-testid="button-copy-adopter-info"
+                              >
+                                {copiedAdopterInfo ? (
+                                  <><Check className="w-3 h-3 mr-1" /> Copied!</>
+                                ) : (
+                                  <><Copy className="w-3 h-3 mr-1" /> Copy Reg Info for Transfer</>
+                                )}
+                              </Button>
+                            </div>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="w-full text-xs"
+                            onClick={() => { setEditingMicrochip(chip); setMicrochipDialogOpen(true); }}
+                            data-testid={`button-edit-microchip-${chip.id}`}
+                          >
+                            <Edit className="w-3 h-3 mr-1" /> Edit Details
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-2">
+                      <p className="text-sm text-muted-foreground mb-2">No microchip recorded</p>
+                      <Button 
+                        size="sm" 
+                        onClick={() => { setEditingMicrochip(null); setMicrochipDialogOpen(true); }}
+                        data-testid="button-add-microchip-empty"
+                      >
+                        <Cpu className="w-3 h-3 mr-1" /> Add Microchip
+                      </Button>
+                    </div>
                   )}
                 </CardContent>
               </Card>
@@ -1360,6 +1488,15 @@ export default function AnimalMedicalPage() {
               if (!open) setEditingVaccine(null);
             }}
             vaccine={editingVaccine}
+          />
+          <AddMicrochipDialog
+            animalId={animalId}
+            open={microchipDialogOpen}
+            onOpenChange={(open) => {
+              setMicrochipDialogOpen(open);
+              if (!open) setEditingMicrochip(null);
+            }}
+            microchip={editingMicrochip}
           />
           <AddDiagnosticDialog
             animalId={animalId}

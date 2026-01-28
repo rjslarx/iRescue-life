@@ -85,6 +85,8 @@ const staffIntakeSchema = z.object({
   dogAge: z.string().min(1, "Age is required"),
   dogGender: z.enum(["male", "female", "unknown"]),
   dogWeight: z.string().optional(),
+  microchipped: z.boolean().default(false),
+  microchipNumber: z.string().optional(),
   reasonForSurrender: z.string().min(1, "Reason is required"),
   medicalIssues: z.string().optional(),
   behavioralIssues: z.string().optional(),
@@ -146,6 +148,8 @@ export default function IntakeManagerPage() {
       dogAge: "",
       dogGender: "unknown",
       dogWeight: "",
+      microchipped: false,
+      microchipNumber: "",
       reasonForSurrender: "",
       medicalIssues: "",
       behavioralIssues: "",
@@ -167,6 +171,8 @@ export default function IntakeManagerPage() {
             dogAge: data.dogAge,
             dogGender: data.dogGender,
             dogWeight: data.dogWeight || "",
+            microchipped: data.microchipped,
+            microchipNumber: data.microchipped ? data.microchipNumber : "",
             reasonForSurrender: `[STRAY INTAKE] ${data.reasonForSurrender}`,
             medicalIssues: data.medicalIssues || "",
             behavioralIssues: data.behavioralIssues || "",
@@ -181,6 +187,8 @@ export default function IntakeManagerPage() {
             dogAge: data.dogAge,
             dogGender: data.dogGender,
             dogWeight: data.dogWeight || "",
+            microchipped: data.microchipped,
+            microchipNumber: data.microchipped ? data.microchipNumber : "",
             reasonForSurrender: data.reasonForSurrender,
             medicalIssues: data.medicalIssues || "",
             behavioralIssues: data.behavioralIssues || "",
@@ -1050,6 +1058,8 @@ function NewIntakeDialog({ open, onOpenChange, form, isStray, onSubmit, isPendin
         dogAge: "",
         dogGender: "unknown",
         dogWeight: "",
+        microchipped: false,
+        microchipNumber: "",
         reasonForSurrender: "",
         medicalIssues: "",
         behavioralIssues: "",
@@ -1248,6 +1258,50 @@ function NewIntakeDialog({ open, onOpenChange, form, isStray, onSubmit, isPendin
                     </FormItem>
                   )}
                 />
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="microchipped"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                          data-testid="checkbox-microchipped"
+                        />
+                      </FormControl>
+                      <div className="space-y-1 leading-none">
+                        <FormLabel>Microchipped</FormLabel>
+                        <p className="text-sm text-muted-foreground">
+                          Does this dog have a microchip?
+                        </p>
+                      </div>
+                    </FormItem>
+                  )}
+                />
+
+                {form.watch("microchipped") && (
+                  <FormField
+                    control={form.control}
+                    name="microchipNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Microchip Number</FormLabel>
+                        <FormControl>
+                          <Input 
+                            placeholder="Enter 9-15 digit number" 
+                            {...field} 
+                            data-testid="input-microchip-number"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
               </div>
             </div>
 

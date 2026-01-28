@@ -11779,7 +11779,21 @@ Submitted: ${new Date().toLocaleString()}
         status: 'intake',
         bio: bioParts.length > 0 ? bioParts.join('\n\n') : undefined,
         photoUrls: surrenderRequest.photoUrl ? [surrenderRequest.photoUrl] : undefined,
+        microchipNumber: surrenderRequest.microchipNumber || undefined,
       });
+      
+      // If microchip number provided, create a microchip record
+      if (surrenderRequest.microchipNumber) {
+        const { microchipRecords } = await import('@shared/schema');
+        await db.insert(microchipRecords).values({
+          animalId: animal.id,
+          tenantId: req.tenant!.id,
+          microchipNumber: surrenderRequest.microchipNumber,
+          chipOrigin: 'intake_with_chip',
+          registrationStatus: 'found_unknown',
+          createdBy: req.user!.id,
+        });
+      }
       
       // Update the surrender request status to 'intaken'
       await db.update(surrenderRequests)
@@ -13515,13 +13529,42 @@ Submitted: ${new Date().toLocaleString()}
     }
     
     try {
-      const { adoptions, animals, applications, insertAdoptionSchema } = await import('@shared/schema');
+      const { adoptions, animals, applications, insertAdoptionSchema, microchipRecords } = await import('@shared/schema');
       
       // Validate request body
       const validatedData = insertAdoptionSchema.parse({
         ...req.body,
         tenantId: req.tenant!.id,
       });
+
+      // Microchip compliance gate - check for pending transfers unless explicitly confirmed
+      const confirmMicrochipPending = req.body.confirmMicrochipPending === true;
+      
+      if (!confirmMicrochipPending) {
+        // Check if animal has microchips pending transfer
+        const pendingMicrochips = await db
+          .select()
+          .from(microchipRecords)
+          .where(and(
+            eq(microchipRecords.animalId, validatedData.animalId),
+            eq(microchipRecords.tenantId, req.tenant!.id),
+            ne(microchipRecords.registrationStatus, 'transferred')
+          ));
+
+        if (pendingMicrochips.length > 0) {
+          return res.status(409).json({
+            error: 'Microchip transfer pending',
+            code: 'MICROCHIP_TRANSFER_PENDING',
+            message: `This animal has ${pendingMicrochips.length} microchip(s) with pending registration transfer. Please verify transfer or confirm to proceed.`,
+            pendingMicrochips: pendingMicrochips.map(m => ({
+              id: m.id,
+              microchipNumber: m.microchipNumber,
+              registrationStatus: m.registrationStatus,
+            })),
+            requiresConfirmation: true,
+          });
+        }
+      }
 
       // Create adoption record
       const [adoption] = await db
@@ -13553,6 +13596,23 @@ Submitted: ${new Date().toLocaleString()}
           ));
       }
       
+      // Flag any microchip records as needing transfer (non-blocking)
+      try {
+        const { microchipRecords } = await import('@shared/schema');
+        await db.update(microchipRecords)
+          .set({
+            registrationStatus: sql`CASE WHEN ${microchipRecords.registrationStatus} != 'transferred' THEN 'registered_rescue' ELSE ${microchipRecords.registrationStatus} END`,
+            updatedAt: new Date(),
+          })
+          .where(and(
+            eq(microchipRecords.animalId, validatedData.animalId),
+            eq(microchipRecords.tenantId, req.tenant!.id),
+            ne(microchipRecords.registrationStatus, 'transferred')
+          ));
+      } catch (microchipError) {
+        console.error('Failed to update microchip records for adoption:', microchipError);
+      }
+
       // Log activity for adoption (non-blocking - failures won't affect response)
       try {
         const { logActivity } = await import('./lib/activity-logger');
@@ -20270,6 +20330,38 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
   });
 
   /**
+   * GET /api/microchips/:microchipId/transfer-pdf
+   * Generate and download microchip transfer confirmation PDF
+   */
+  app.get('/api/microchips/:microchipId/transfer-pdf', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { microchipRecords } = await import('@shared/schema');
+
+      const [existingRecord] = await db
+        .select()
+        .from(microchipRecords)
+        .where(and(
+          eq(microchipRecords.id, req.params.microchipId),
+          eq(microchipRecords.tenantId, req.tenant!.id)
+        ))
+        .limit(1);
+
+      if (!existingRecord) {
+        return res.status(404).json({ error: 'Microchip record not found' });
+      }
+
+      const { generateMicrochipTransferPdf } = await import('./services/microchip-transfer-pdf');
+      const pdfBuffer = await generateMicrochipTransferPdf(req.params.microchipId, req.tenant!.id);
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="microchip-transfer-${existingRecord.microchipNumber}.pdf"`);
+      res.send(pdfBuffer);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * GET /api/microchips/pending-transfers
    * Get all microchips pending transfer verification
    */
@@ -20360,6 +20452,82 @@ Email: ${application.applicantEmail || ''}`
       };
 
       res.json({ adopterInfo });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/animals/:animalId/microchips/compliance
+   * Check microchip transfer compliance for adoption
+   */
+  app.get('/api/animals/:animalId/microchips/compliance', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { microchipRecords, animals } = await import('@shared/schema');
+
+      // Check if animal exists
+      const [animal] = await db
+        .select()
+        .from(animals)
+        .where(and(
+          eq(animals.id, req.params.animalId),
+          eq(animals.tenantId, req.tenant!.id)
+        ))
+        .limit(1);
+
+      if (!animal) {
+        return res.status(404).json({ error: 'Animal not found' });
+      }
+
+      // Get microchip records for this animal
+      const microchips = await db
+        .select()
+        .from(microchipRecords)
+        .where(and(
+          eq(microchipRecords.animalId, req.params.animalId),
+          eq(microchipRecords.tenantId, req.tenant!.id)
+        ));
+
+      // Compliance logic
+      const hasMicrochip = microchips.length > 0;
+      const allTransferred = microchips.every(m => m.registrationStatus === 'transferred');
+      const pendingTransfers = microchips.filter(m => m.registrationStatus !== 'transferred');
+
+      // Determine compliance status
+      let status: 'compliant' | 'pending' | 'no_microchip' = 'compliant';
+      let message = '';
+
+      if (!hasMicrochip) {
+        status = 'no_microchip';
+        message = 'No microchip on file for this animal.';
+      } else if (!allTransferred) {
+        status = 'pending';
+        message = `${pendingTransfers.length} microchip(s) pending transfer verification.`;
+      } else {
+        message = 'All microchip registrations have been transferred.';
+      }
+
+      res.json({
+        animalId: req.params.animalId,
+        animalName: animal.name,
+        animalStatus: animal.status,
+        compliance: {
+          status,
+          message,
+          hasMicrochip,
+          totalMicrochips: microchips.length,
+          transferredCount: microchips.filter(m => m.registrationStatus === 'transferred').length,
+          pendingCount: pendingTransfers.length,
+        },
+        microchips: microchips.map(m => ({
+          id: m.id,
+          microchipNumber: m.microchipNumber,
+          manufacturer: m.manufacturer,
+          registrationStatus: m.registrationStatus,
+          transferVerified: m.transferVerified,
+          transferredAt: m.transferredAt,
+        })),
+      });
     } catch (error) {
       next(error);
     }
