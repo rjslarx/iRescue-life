@@ -1,6 +1,6 @@
 import puppeteer from 'puppeteer';
 import { db } from '../db';
-import { animals, microchipRecords, adoptionApplications, tenants } from '@shared/schema';
+import { animals, microchipRecords, applications, tenants } from '@shared/schema';
 import { eq, and, or, desc } from 'drizzle-orm';
 
 interface MicrochipTransferData {
@@ -282,16 +282,16 @@ export async function generateMicrochipTransferPdf(
 
   const [application] = await db
     .select()
-    .from(adoptionApplications)
+    .from(applications)
     .where(and(
-      eq(adoptionApplications.animalId, microchip.animalId),
-      eq(adoptionApplications.tenantId, tenantId),
+      eq(applications.animalId, microchip.animalId),
+      eq(applications.tenantId, tenantId),
       or(
-        eq(adoptionApplications.status, 'adopted'),
-        eq(adoptionApplications.status, 'approved')
+        eq(applications.status, 'adopted'),
+        eq(applications.status, 'approved')
       )
     ))
-    .orderBy(desc(adoptionApplications.updatedAt))
+    .orderBy(desc(applications.updatedAt))
     .limit(1);
 
   const transferData: MicrochipTransferData = {
