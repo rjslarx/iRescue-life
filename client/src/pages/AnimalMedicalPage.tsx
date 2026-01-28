@@ -769,45 +769,35 @@ export default function AnimalMedicalPage() {
                       </div>
                     </div>
                   </CardHeader>
-                  <CardContent className="space-y-2">
-                    {vaccine.dueDate && (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Due Date:</span>
+                  <CardContent className="space-y-3">
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                      <div>
+                        <span className="text-muted-foreground block">Due Date</span>
                         <span className={`font-medium ${isExpired ? "text-destructive" : ""}`}>
-                          {format(new Date(vaccine.dueDate), 'MMM d, yyyy')}
+                          {vaccine.dueDate ? format(new Date(vaccine.dueDate), 'MMM d, yyyy') : "—"}
                         </span>
                       </div>
-                    )}
-                    {vaccine.lotNumber && (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Lot Number:</span>
-                        <span className="font-medium">{vaccine.lotNumber}</span>
+                      <div>
+                        <span className="text-muted-foreground block">Lot Number</span>
+                        <span className="font-medium">{vaccine.lotNumber || "—"}</span>
                       </div>
-                    )}
-                    {vaccine.manufacturer && (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Manufacturer:</span>
-                        <span className="font-medium">{vaccine.manufacturer}</span>
+                      <div>
+                        <span className="text-muted-foreground block">Manufacturer</span>
+                        <span className="font-medium">{vaccine.manufacturer || "—"}</span>
                       </div>
-                    )}
-                    {vaccine.veterinarian && (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Administered By:</span>
-                        <span className="font-medium">{vaccine.veterinarian}</span>
+                      <div>
+                        <span className="text-muted-foreground block">Administered By</span>
+                        <span className="font-medium">{vaccine.veterinarian || "—"}</span>
                       </div>
-                    )}
-                    {vaccine.clinicName && (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Clinic:</span>
-                        <span className="font-medium">{vaccine.clinicName}</span>
+                      <div>
+                        <span className="text-muted-foreground block">Clinic</span>
+                        <span className="font-medium">{vaccine.clinicName || "In-House"}</span>
                       </div>
-                    )}
-                    {vaccine.anatomicalSite && (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Injection Site:</span>
-                        <span className="font-medium">{vaccine.anatomicalSite}</span>
+                      <div>
+                        <span className="text-muted-foreground block">Injection Site</span>
+                        <span className="font-medium">{vaccine.anatomicalSite || "—"}</span>
                       </div>
-                    )}
+                    </div>
                   </CardContent>
                 </Card>
               );
