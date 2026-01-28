@@ -41,8 +41,16 @@ export default function PublicVolunteerApplicationPage() {
     queryKey: ['/api/form-settings', 'volunteer'],
   });
 
+  // Extend schema to make emergency contact fields required
+  const volunteerFormSchema = insertVolunteerApplicationSchema
+    .omit({ tenantId: true, status: true, notes: true })
+    .extend({
+      emergencyContactName: insertVolunteerApplicationSchema.shape.emergencyContactName.unwrap().min(1, "Emergency contact name is required"),
+      emergencyContactPhone: insertVolunteerApplicationSchema.shape.emergencyContactPhone.unwrap().min(1, "Emergency contact phone is required"),
+    });
+
   const form = useForm<InsertVolunteerApplication & { customResponses?: Record<string, any> }>({
-    resolver: zodResolver(insertVolunteerApplicationSchema.omit({ tenantId: true, status: true, notes: true })),
+    resolver: zodResolver(volunteerFormSchema),
     defaultValues: {
       applicantName: "",
       applicantEmail: "",
@@ -329,7 +337,7 @@ export default function PublicVolunteerApplicationPage() {
                             name="emergencyContactName"
                             render={({ field }) => (
                               <FormItem>
-                                <FormLabel>Emergency Contact Name</FormLabel>
+                                <FormLabel>Emergency Contact Name *</FormLabel>
                                 <FormControl>
                                   <Input placeholder="Jane Doe" {...field} value={field.value || ''} data-testid="input-emergency-contact-name" />
                                 </FormControl>
@@ -343,7 +351,7 @@ export default function PublicVolunteerApplicationPage() {
                             name="emergencyContactPhone"
                             render={({ field }) => (
                               <FormItem>
-                                <FormLabel>Emergency Contact Phone</FormLabel>
+                                <FormLabel>Emergency Contact Phone *</FormLabel>
                                 <FormControl>
                                   <Input type="tel" placeholder="(555) 987-6543" {...field} value={field.value || ''} data-testid="input-emergency-contact-phone" />
                                 </FormControl>
