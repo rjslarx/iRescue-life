@@ -312,10 +312,7 @@ export default function ApplicationDetailSheet({
     mutationFn: async ({ newStatus }: { newStatus: string }) => {
       const endpoint = getApiEndpoint(type);
       const statusField = type === "adoption" ? "stage" : "status";
-      return apiRequest(`${endpoint}/${data?.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ [statusField]: newStatus }),
-      });
+      return apiRequest("PATCH", `${endpoint}/${data?.id}`, { [statusField]: newStatus });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [getQueryKey(type)] });
@@ -335,10 +332,8 @@ export default function ApplicationDetailSheet({
 
   const promoteMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest(`/api/surrender/${data?.id}/promote`, {
-        method: "POST",
-      });
-      return response as { success: boolean; animalId: string; animalName: string; message: string };
+      const response = await apiRequest("POST", `/api/surrender/${data?.id}/promote`);
+      return response.json() as Promise<{ success: boolean; animalId: string; animalName: string; message: string }>;
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["/api/surrender-requests"] });
