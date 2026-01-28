@@ -350,6 +350,19 @@ export default function ApplicationDetailSheet({
     return map;
   }, [formFieldsData]);
 
+  // Create a reverse lookup from label to field ID for finding values by label
+  // IMPORTANT: This must be before the early return to maintain hook order
+  const labelToIdMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    if (formFieldsData?.fields) {
+      formFieldsData.fields.forEach((field) => {
+        // Normalize label to lowercase for case-insensitive matching
+        map[field.label.toLowerCase()] = field.id;
+      });
+    }
+    return map;
+  }, [formFieldsData]);
+
   const declineMutation = useMutation({
     mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
       const response = await apiRequest("POST", `/api/surrender/${id}/decline`, { reason });
@@ -480,18 +493,6 @@ export default function ApplicationDetailSheet({
       case "intake": return <Dog className="h-4 w-4" />;
     }
   };
-
-  // Create a reverse lookup from label to field ID for finding values by label
-  const labelToIdMap = useMemo(() => {
-    const map: Record<string, string> = {};
-    if (formFieldsData?.fields) {
-      formFieldsData.fields.forEach((field) => {
-        // Normalize label to lowercase for case-insensitive matching
-        map[field.label.toLowerCase()] = field.id;
-      });
-    }
-    return map;
-  }, [formFieldsData]);
 
   // Helper to find a response value by label pattern (case-insensitive)
   // Uses more specific patterns to avoid false matches
