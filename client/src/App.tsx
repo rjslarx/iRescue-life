@@ -228,6 +228,7 @@ function RouterSwitch() {
       <ProtectedRoute path="/dashboard/contacts" pageId="contacts" component={ContactsPage} />
       <ProtectedRoute path="/dashboard/partner-organizations" pageId="contacts" component={PartnerOrganizationsPage} />
       <ProtectedRoute path="/dashboard/volunteers" pageId="volunteers" component={VolunteerManagementPage} />
+      <ProtectedRoute path="/dashboard/opportunities" pageId="volunteers" component={VolunteerManagementPage} />
       <ProtectedRoute path="/dashboard/reports" pageId="analytics" component={Analytics} />
       <ProtectedRoute path="/dashboard/my-fosters" pageId="my-fosters" component={MyFostersPage} />
       <ProtectedRoute path="/dashboard/my-fosters/:animalId/medical" pageId="my-fosters" component={FosterAnimalMedicalPage} />
