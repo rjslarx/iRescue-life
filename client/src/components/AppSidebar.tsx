@@ -415,6 +415,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
       items: [
         { title: "Calendar", url: "/dashboard/calendar", icon: Calendar },
         { title: "Opportunities", url: "/dashboard/opportunities", icon: UserCircle },
+        { title: "Today's Medications", url: "/dashboard/volunteer-medications", icon: Pill },
         { title: "Animals", url: "/dashboard/animals", icon: Heart, usesGoogleDrive: true },
         { title: "Video Tutorials", url: "/dashboard/tutorials", icon: Video },
       ],
@@ -453,6 +454,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
     '/dashboard/my-fosters': 'my-fosters',
     '/dashboard/foster-mobile': 'my-fosters',
     '/dashboard/opportunities': 'volunteers',
+    '/dashboard/volunteer-medications': 'volunteers',
     '/dashboard/website-builder': 'custom-pages',
     '/dashboard/collaboration': 'collaboration',
     '/dashboard/tutorials': 'tutorials',

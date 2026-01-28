@@ -282,6 +282,7 @@ function RouterSwitch() {
       <ProtectedRoute path="/dashboard/animals/:animalId/kennel-card" pageId="animals" component={KennelCardPage} />
       <ProtectedRoute path="/dashboard/medical-pipeline" pageId="medical-tasks" component={MedicalPipelinePage} />
       <ProtectedRoute path="/dashboard/medical-tasks" pageId="medical-tasks" component={MedicalPipelinePage} />
+      <ProtectedRoute path="/dashboard/volunteer-medications" pageId="volunteers" component={MedicalTasksPage} />
       <ProtectedRoute path="/dashboard/supplies" pageId="supply-registry" component={SupplyManagementPage} />
       <ProtectedRoute path="/dashboard/happy-tails" pageId="happy-tails" component={HappyTailsPage} />
       <ProtectedRoute path="/dashboard/tutorials" pageId="tutorials" component={TutorialsPage} />
