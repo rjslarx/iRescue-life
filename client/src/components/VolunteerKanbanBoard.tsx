@@ -58,16 +58,16 @@ const stages: PipelineStage[] = [
 function WaiverStatusBadge({ signedAt }: { signedAt?: string | null }) {
   if (signedAt) {
     return (
-      <Badge variant="default" className="text-xs gap-1 shrink-0" data-testid="badge-waiver-signed">
-        <CheckCircle2 className="h-3 w-3" />
-        Waiver Signed
+      <Badge variant="default" className="text-xs gap-1" data-testid="badge-waiver-signed">
+        <CheckCircle2 className="h-3 w-3 shrink-0" />
+        <span className="truncate">Signed</span>
       </Badge>
     );
   }
   return (
-    <Badge variant="outline" className="text-xs gap-1 shrink-0" data-testid="badge-waiver-pending">
-      <FileSignature className="h-3 w-3" />
-      Awaiting Waiver
+    <Badge variant="outline" className="text-xs gap-1" data-testid="badge-waiver-pending">
+      <FileSignature className="h-3 w-3 shrink-0" />
+      <span className="truncate">Pending</span>
     </Badge>
   );
 }
@@ -166,7 +166,12 @@ export default function VolunteerKanbanBoard({
 
   return (
     <div className="w-full overflow-x-auto">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 min-w-fit">
+      <div 
+        className="grid gap-3"
+        style={{ 
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))',
+        }}
+      >
         {stages.map((stage) => {
           const stageApps = getApplicationsByStage(stage.id);
           const StageIcon = stage.icon;
@@ -184,14 +189,14 @@ export default function VolunteerKanbanBoard({
               }}
             >
               <Card>
-                <CardHeader className="pb-3">
+                <CardHeader className="pb-3 px-3">
                   <div className="flex items-center justify-between gap-2">
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <div className={`h-2 w-2 rounded-full ${stage.color}`} />
-                      <StageIcon className="h-4 w-4 text-muted-foreground" />
-                      {stage.label}
+                    <CardTitle className="text-sm flex items-center gap-1.5 min-w-0 flex-1">
+                      <div className={`h-2 w-2 rounded-full shrink-0 ${stage.color}`} />
+                      <StageIcon className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <span className="truncate">{stage.label}</span>
                     </CardTitle>
-                    <Badge variant="secondary">{stageApps.length}</Badge>
+                    <Badge variant="secondary" className="shrink-0">{stageApps.length}</Badge>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-3">
@@ -211,20 +216,20 @@ export default function VolunteerKanbanBoard({
                             className="cursor-move hover-elevate"
                             data-testid={`card-volunteer-application-${app.id}`}
                           >
-                            <CardContent className="p-4 space-y-2">
+                            <CardContent className="p-3 space-y-2">
                               <div className="flex items-start justify-between gap-2">
-                                <div>
-                                  <p className="font-medium">{app.applicantName}</p>
+                                <div className="min-w-0 flex-1">
+                                  <p className="font-medium truncate">{app.applicantName}</p>
                                 </div>
-                                <div className="flex flex-col gap-1 items-end">
+                                <div className="flex flex-col gap-1 items-end shrink-0">
                                   {(stage.id === "waiver_needed" || stage.id === "active_pool") && app.holdHarmlessFormId && (
                                     <WaiverStatusBadge signedAt={app.holdHarmlessSignedAt} />
                                   )}
                                 </div>
                               </div>
                               <div className="space-y-1 text-xs text-muted-foreground">
-                                <p>{app.applicantEmail}</p>
-                                <p>{app.applicantPhone}</p>
+                                <p className="truncate">{app.applicantEmail}</p>
+                                <p className="truncate">{app.applicantPhone}</p>
                                 {app.availability && (
                                   <p className="truncate">Available: {app.availability}</p>
                                 )}
@@ -234,54 +239,52 @@ export default function VolunteerKanbanBoard({
                                 <VolunteerSkillsBadges app={app} />
                               )}
 
-                              {/* Stage selector and view button - stacked vertically for better fit */}
-                              <div className="flex flex-col gap-2 mt-3 pt-2 border-t">
-                                <div className="flex gap-2">
-                                  {onViewApplication && (
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className="shrink-0"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        onViewApplication(app);
-                                      }}
-                                      data-testid={`button-view-volunteer-application-${app.id}`}
+                              {/* Stacked action buttons for reliable fit in narrow columns */}
+                              <div className="flex flex-col gap-1.5 mt-3 pt-2 border-t">
+                                {onViewApplication && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="w-full justify-center"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onViewApplication(app);
+                                    }}
+                                    data-testid={`button-view-volunteer-application-${app.id}`}
+                                  >
+                                    <Eye className="h-4 w-4 mr-1" />
+                                    View
+                                  </Button>
+                                )}
+                                {onMoveApplication && (
+                                  <Select
+                                    value={app.pipelineStatus}
+                                    onValueChange={(newStage) => {
+                                      if (newStage !== app.pipelineStatus) {
+                                        onMoveApplication(app.id, newStage);
+                                      }
+                                    }}
+                                  >
+                                    <SelectTrigger 
+                                      className="h-8 text-xs w-full"
+                                      onClick={(e) => e.stopPropagation()}
+                                      data-testid={`select-volunteer-stage-${app.id}`}
                                     >
-                                      <Eye className="h-4 w-4 mr-1" />
-                                      View
-                                    </Button>
-                                  )}
-                                  {onMoveApplication && (
-                                    <Select
-                                      value={app.pipelineStatus}
-                                      onValueChange={(newStage) => {
-                                        if (newStage !== app.pipelineStatus) {
-                                          onMoveApplication(app.id, newStage);
-                                        }
-                                      }}
-                                    >
-                                      <SelectTrigger 
-                                        className="flex-1 h-8 text-xs min-w-0"
-                                        onClick={(e) => e.stopPropagation()}
-                                        data-testid={`select-volunteer-stage-${app.id}`}
-                                      >
-                                        <ArrowRight className="h-3 w-3 mr-1 shrink-0" />
-                                        <span className="truncate">Move</span>
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        {stages.filter(s => s.id !== app.pipelineStatus).map((s) => (
-                                          <SelectItem key={s.id} value={s.id} data-testid={`option-volunteer-stage-${s.id}-${app.id}`}>
-                                            <div className="flex items-center gap-2">
-                                              <div className={`h-2 w-2 rounded-full ${s.color}`} />
-                                              {s.label}
-                                            </div>
-                                          </SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
-                                  )}
-                                </div>
+                                      <ArrowRight className="h-3 w-3 mr-1" />
+                                      <span className="truncate">Move to...</span>
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {stages.filter(s => s.id !== app.pipelineStatus).map((s) => (
+                                        <SelectItem key={s.id} value={s.id} data-testid={`option-volunteer-stage-${s.id}-${app.id}`}>
+                                          <div className="flex items-center gap-2">
+                                            <div className={`h-2 w-2 rounded-full ${s.color}`} />
+                                            {s.label}
+                                          </div>
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                )}
                               </div>
 
                               {stage.id === "waiver_needed" && onSendWaiver && !app.holdHarmlessFormId && (
