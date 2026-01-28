@@ -187,6 +187,7 @@ function RouterSwitch() {
       {/* Public tenant routes - RootHandler redirects to /platform if on platform subdomain */}
       <Route path="/" component={RootHandler} />
       <Route path="/animals" component={AvailableAnimalsPage} />
+      <Route path="/adopt" component={AvailableAnimalsPage} />
       <Route path="/animal/:animalId" component={PublicAnimalProfilePage} />
       <Route path="/volunteer" component={PublicVolunteerPage} />
       <Route path="/become-a-foster" component={PublicFosterPage} />
