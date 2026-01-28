@@ -49,34 +49,34 @@ export default function StatsOverview() {
       value: pendingAdoptions,
       description: 'Adoption applications',
       icon: ClipboardList,
-      href: '#section-pipeline-manager',
+      href: '/dashboard/applications',
     },
     {
       label: 'Pending Fosters',
       value: pendingFosters,
       description: 'Foster applications',
       icon: HandHeart,
-      href: '#section-pipeline-manager',
+      href: '/dashboard/foster-pipeline',
     },
     {
       label: 'Pending Volunteers',
       value: pendingVolunteers,
       description: 'Volunteer applications',
       icon: Users,
-      href: '#section-pipeline-manager',
+      href: '/dashboard/volunteer-applications',
     },
     {
       label: 'Pending Intakes',
       value: pendingIntakes,
       description: 'Surrender requests',
       icon: Inbox,
-      href: '#section-pipeline-manager',
+      href: '/dashboard/intake',
     },
     {
       label: 'In Shelter',
       value: inShelter,
       icon: Home,
-      href: '/dashboard/animals?location=shelter',
+      href: '/dashboard/animals',
     },
     {
       label: 'In Foster Homes',
@@ -106,20 +106,10 @@ export default function StatsOverview() {
     );
   }
 
-  const handleClick = (href: string) => {
-    if (href.startsWith('#')) {
-      const element = document.getElementById(href.slice(1));
-      if (element) {
-        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-    }
-  };
-
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 gap-3" data-testid="stats-overview">
-      {stats.map((stat) => {
-        const isAnchor = stat.href.startsWith('#');
-        const cardContent = (
+      {stats.map((stat) => (
+        <Link key={stat.label} href={stat.href}>
           <Card 
             className="bg-muted/30 border-0 shadow-none cursor-pointer hover-elevate"
             data-testid={`stat-${stat.label.toLowerCase().replace(/\s+/g, '-')}`}
@@ -140,28 +130,8 @@ export default function StatsOverview() {
               )}
             </CardContent>
           </Card>
-        );
-
-        if (isAnchor) {
-          return (
-            <div 
-              key={stat.label} 
-              onClick={() => handleClick(stat.href)}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => e.key === 'Enter' && handleClick(stat.href)}
-            >
-              {cardContent}
-            </div>
-          );
-        }
-
-        return (
-          <Link key={stat.label} href={stat.href}>
-            {cardContent}
-          </Link>
-        );
-      })}
+        </Link>
+      ))}
     </div>
   );
 }
