@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -35,13 +35,18 @@ export default function EmailComposerDialog({
   
   const [subject, setSubject] = useState(defaultSubject);
   const [message, setMessage] = useState("");
+  
+  // Track previous open state to detect open transition
+  const wasOpenRef = useRef(false);
 
-  // Sync subject when dialog opens or defaultSubject changes
+  // Only sync subject when dialog transitions from closed to open
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !wasOpenRef.current) {
+      // Dialog just opened - set initial values
       setSubject(defaultSubject);
       setMessage("");
     }
+    wasOpenRef.current = isOpen;
   }, [isOpen, defaultSubject]);
 
   const sendEmailMutation = useMutation({

@@ -1145,32 +1145,34 @@ export default function ApplicationDetailSheet({
         </AlertDialogContent>
       </AlertDialog>
 
-      <EmailComposerDialog
-        isOpen={showEmailComposer}
-        onClose={() => setShowEmailComposer(false)}
-        recipientEmail={email}
-        recipientName={name}
-        defaultSubject={
-          type === "adoption" && (data as AdoptionData)?.animal?.name 
-            ? `Regarding your adoption application for ${(data as AdoptionData).animal.name}`
-            : type === "foster" && (data as FosterData)?.animal?.name
-              ? `Regarding your foster application for ${(data as FosterData).animal.name}`
-              : type === "intake" && (data as IntakeData)?.dogName
-                ? `Regarding your surrender request for ${(data as IntakeData).dogName}`
-                : `Your ${type} application`
-        }
-        context={{
-          type: type === "adoption" ? "adoption_application" 
-              : type === "foster" ? "foster_application"
-              : type === "volunteer" ? "volunteer_application"
-              : "intake_request",
-          id: data.id,
-          animalName: type === "adoption" ? (data as AdoptionData)?.animal?.name
-                    : type === "foster" ? (data as FosterData)?.animal?.name
-                    : type === "intake" ? (data as IntakeData)?.dogName
-                    : undefined,
-        }}
-      />
+      {showEmailComposer && (
+        <EmailComposerDialog
+          isOpen={showEmailComposer}
+          onClose={() => setShowEmailComposer(false)}
+          recipientEmail={email}
+          recipientName={name}
+          defaultSubject={
+            type === "adoption" && (data as AdoptionData)?.animal?.name 
+              ? `Regarding your adoption application for ${(data as AdoptionData).animal.name}`
+              : type === "foster" && (data as FosterData)?.animal?.name
+                ? `Regarding your foster application for ${(data as FosterData).animal.name}`
+                : type === "intake" && (data as IntakeData)?.dogName
+                  ? `Regarding your surrender request for ${(data as IntakeData).dogName}`
+                  : `Your ${type} application`
+          }
+          context={{
+            type: type === "adoption" ? "adoption_application" 
+                : type === "foster" ? "foster_application"
+                : type === "volunteer" ? "volunteer_application"
+                : "intake_request",
+            id: data.id,
+            animalName: type === "adoption" ? (data as AdoptionData)?.animal?.name
+                      : type === "foster" ? (data as FosterData)?.animal?.name
+                      : type === "intake" ? (data as IntakeData)?.dogName
+                      : undefined,
+          }}
+        />
+      )}
     </>
   );
 }
