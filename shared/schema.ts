@@ -4525,3 +4525,53 @@ export const insertAnimalMergeHistorySchema = createInsertSchema(animalMergeHist
 });
 export type InsertAnimalMergeHistory = z.infer<typeof insertAnimalMergeHistorySchema>;
 export type AnimalMergeHistory = typeof animalMergeHistory.$inferSelect;
+
+// ============================================
+// HEARTWORM TREATMENT PLANS
+// ============================================
+
+// Appointment types for heartworm treatment schedule
+export type HeartwormAppointmentType = 
+  | 'start_doxy' 
+  | 'first_injection' 
+  | 'second_third_injection' 
+  | 'recheck' 
+  | 'proheart';
+
+// Heartworm treatment plans for positive dogs during adoption
+export const heartwormTreatmentPlans = pgTable("heartworm_treatment_plans", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  animalId: uuid("animal_id").notNull().references(() => animals.id, { onDelete: 'cascade' }),
+  adoptionId: uuid("adoption_id").references(() => adoptions.id, { onDelete: 'set null' }),
+  adopterName: text("adopter_name").notNull(),
+  adopterEmail: text("adopter_email").notNull(),
+  adopterPhone: text("adopter_phone"),
+  // Treatment location (defaults to Rice City Animal Hospital)
+  locationName: text("location_name").notNull().default('Rice City Animal Hospital'),
+  locationAddress: text("location_address").notNull().default('2604 N. Main Street, Pearland, TX 77581'),
+  locationPhone: text("location_phone").notNull().default('281-993-0300'),
+  // Appointment schedule (stored as JSON array for flexibility)
+  appointments: jsonb("appointments").notNull().$type<Array<{
+    type: HeartwormAppointmentType;
+    label: string;
+    scheduledDate: string; // ISO date string
+    completedDate?: string | null;
+    notes?: string | null;
+  }>>(),
+  // Contract and communication tracking
+  contractSentAt: timestamp("contract_sent_at"),
+  contractViewedAt: timestamp("contract_viewed_at"),
+  adopterConfirmedAt: timestamp("adopter_confirmed_at"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertHeartwormTreatmentPlanSchema = createInsertSchema(heartwormTreatmentPlans).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertHeartwormTreatmentPlan = z.infer<typeof insertHeartwormTreatmentPlanSchema>;
+export type HeartwormTreatmentPlan = typeof heartwormTreatmentPlans.$inferSelect;

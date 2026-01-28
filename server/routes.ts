@@ -24999,6 +24999,10 @@ The user asking is a tenant administrator or staff member.`;
   const volunteerAlertRoutes = await import('./routes/volunteerAlerts');
   app.use('/api/volunteer-alerts', requireTenant, volunteerAlertRoutes.default);
 
+  // Register heartworm treatment plan routes
+  const heartwormTreatmentRoutes = await import('./routes/heartwormTreatment');
+  app.use(heartwormTreatmentRoutes.default);
+
   // Volunteer schedule digest settings
   app.get('/api/tenant/settings/volunteer-digest', requireTenant, requireRole(['admin']), async (req, res, next) => {
     try {

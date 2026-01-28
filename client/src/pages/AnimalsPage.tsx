@@ -24,7 +24,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTenant } from "@/contexts/TenantContext";
-import { Plus, Loader2, ExternalLink, Check, Stethoscope, Upload, X, ChevronLeft, ChevronRight, FileText, Pencil, ClipboardList, Calendar, ChevronDown, ChevronUp, Cat, Dog, Camera, Sparkles, Palette, ChevronsUpDown, AlertCircle, Wand2, FileUp, MapPin, Users, PawPrint, GitMerge } from "lucide-react";
+import { Plus, Loader2, ExternalLink, Check, Stethoscope, Upload, X, ChevronLeft, ChevronRight, FileText, Pencil, ClipboardList, Calendar, ChevronDown, ChevronUp, Cat, Dog, Camera, Sparkles, Palette, ChevronsUpDown, AlertCircle, Wand2, FileUp, MapPin, Users, PawPrint, GitMerge, Heart } from "lucide-react";
 import { Link } from "wouter";
 import { z } from "zod";
 import { cn } from "@/lib/utils";
@@ -40,6 +40,7 @@ import { AdCopyGeneratorDialog } from "@/components/AdCopyGeneratorDialog";
 import { AiBioGeneratorDialog } from "@/components/AiBioGeneratorDialog";
 import { MedicalImportDialog } from "@/components/MedicalImportDialog";
 import { MedicalFundDialog } from "@/components/MedicalFundDialog";
+import { HeartwormTreatmentModal } from "@/components/HeartwormTreatmentModal";
 
 const MAX_PHOTOS = 6;
 const MAX_PHOTO_SIZE_MB = 25;
@@ -1677,6 +1678,8 @@ export default function AnimalsPage() {
   const [animalForBioGenerator, setAnimalForBioGenerator] = useState<Animal | null>(null);
   const [medicalImportDialogOpen, setMedicalImportDialogOpen] = useState(false);
   const [animalForMedicalImport, setAnimalForMedicalImport] = useState<Animal | null>(null);
+  const [heartwormTreatmentModalOpen, setHeartwormTreatmentModalOpen] = useState(false);
+  const [animalForHeartwormTreatment, setAnimalForHeartwormTreatment] = useState<Animal | null>(null);
 
   const { data, isLoading } = useQuery<{ animals: AnimalWithKennel[] }>({
     queryKey: ['/api/animals'],
@@ -1901,6 +1904,11 @@ export default function AnimalsPage() {
   const handleMedicalImport = (animal: Animal) => {
     setAnimalForMedicalImport(animal);
     setMedicalImportDialogOpen(true);
+  };
+
+  const handleHeartwormTreatment = (animal: Animal) => {
+    setAnimalForHeartwormTreatment(animal);
+    setHeartwormTreatmentModalOpen(true);
   };
 
   const getStatusColor = (status: string) => {
@@ -2299,6 +2307,15 @@ export default function AnimalsPage() {
                                     <FileUp className="w-4 h-4 mr-2" />
                                     Import Vet Records
                                   </DropdownMenuItem>
+                                  {animal.heartwormPositive && ['adoption_pending', 'in_trial', 'adopted'].includes(animal.status) && (
+                                    <DropdownMenuItem
+                                      onClick={() => handleHeartwormTreatment(animal)}
+                                      data-testid={`menu-heartworm-treatment-${animal.id}`}
+                                    >
+                                      <Heart className="w-4 h-4 mr-2" />
+                                      Heartworm Treatment Plan
+                                    </DropdownMenuItem>
+                                  )}
                                 </DropdownMenuContent>
                               </DropdownMenu>
                               <MedicalFundDialog animal={animal} />
@@ -2883,6 +2900,21 @@ export default function AnimalsPage() {
             }
           }}
           animal={animalForMedicalImport}
+        />
+      )}
+
+      {/* Heartworm Treatment Modal */}
+      {animalForHeartwormTreatment && (
+        <HeartwormTreatmentModal
+          open={heartwormTreatmentModalOpen}
+          onOpenChange={(open) => {
+            setHeartwormTreatmentModalOpen(open);
+            if (!open) {
+              setAnimalForHeartwormTreatment(null);
+            }
+          }}
+          animalId={animalForHeartwormTreatment.id}
+          animalName={animalForHeartwormTreatment.name}
         />
       )}
     </DashboardLayout>
