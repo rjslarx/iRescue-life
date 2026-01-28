@@ -165,9 +165,9 @@ interface ApplicationDetailSheetProps {
   data: ApplicationData | null;
 }
 
-const adoptionStages = ["new", "screening", "vet_check", "home_visit", "approved", "trial", "adopted", "denied"];
+const adoptionStages = ["new", "screening", "vet_check", "home_visit", "approved", "trial", "adopted", "denied", "trial_failed"];
 const fosterStatuses = ["new_app", "interview", "home_check", "orientation", "agreement", "active_pool", "rejected"];
-const volunteerStatuses = ["pending", "approved", "rejected"];
+const volunteerStatuses = ["new_applicant", "orientation_scheduled", "waiver_needed", "active_pool", "rejected"];
 const intakeStatuses = ["new", "review", "spacecheck", "waitlist", "scheduled", "intaken", "declined"];
 
 const stageLabels: Record<string, string> = {
@@ -193,6 +193,10 @@ const stageLabels: Record<string, string> = {
   orientation: "Orientation",
   agreement: "Agreement",
   active_pool: "Active Pool",
+  new_applicant: "New Applicant",
+  orientation_scheduled: "Orientation Scheduled",
+  waiver_needed: "Waiver Needed",
+  trial_failed: "Trial Failed",
 };
 
 type BadgeVariant = "default" | "secondary" | "destructive" | "outline";
@@ -220,12 +224,16 @@ const stageVariants: Record<string, BadgeVariant> = {
   orientation: "secondary",
   agreement: "secondary",
   active_pool: "default",
+  new_applicant: "default",
+  orientation_scheduled: "secondary",
+  waiver_needed: "secondary",
+  trial_failed: "destructive",
 };
 
 function getNextStage(type: ApplicationType, currentStage: string): string | null {
   if (type === "adoption") {
     const idx = adoptionStages.indexOf(currentStage);
-    if (idx >= 0 && idx < adoptionStages.length - 1 && currentStage !== "denied") {
+    if (idx >= 0 && idx < adoptionStages.length - 1 && currentStage !== "denied" && currentStage !== "trial_failed") {
       return adoptionStages[idx + 1];
     }
   } else if (type === "foster") {
@@ -234,7 +242,10 @@ function getNextStage(type: ApplicationType, currentStage: string): string | nul
       return fosterStatuses[idx + 1];
     }
   } else if (type === "volunteer") {
-    if (currentStage === "pending") return "approved";
+    const idx = volunteerStatuses.indexOf(currentStage);
+    if (idx >= 0 && idx < volunteerStatuses.length - 1 && currentStage !== "rejected") {
+      return volunteerStatuses[idx + 1];
+    }
   } else if (type === "intake") {
     const idx = intakeStatuses.indexOf(currentStage);
     if (idx >= 0 && idx < intakeStatuses.length - 1 && currentStage !== "declined") {
