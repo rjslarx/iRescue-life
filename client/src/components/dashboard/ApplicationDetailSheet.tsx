@@ -166,7 +166,8 @@ interface ApplicationDetailSheetProps {
 }
 
 const adoptionStages = ["new", "screening", "vet_check", "home_visit", "approved", "trial", "adopted", "denied"];
-const fosterVolunteerStatuses = ["pending", "approved", "rejected"];
+const fosterStatuses = ["new_app", "interview", "home_check", "orientation", "agreement", "active_pool", "rejected"];
+const volunteerStatuses = ["pending", "approved", "rejected"];
 const intakeStatuses = ["new", "review", "spacecheck", "waitlist", "scheduled", "intaken", "declined"];
 
 const stageLabels: Record<string, string> = {
@@ -186,6 +187,12 @@ const stageLabels: Record<string, string> = {
   scheduled: "Scheduled",
   intaken: "Intaken",
   declined: "Declined",
+  new_app: "New App",
+  interview: "Interview",
+  home_check: "Home Check",
+  orientation: "Orientation",
+  agreement: "Agreement",
+  active_pool: "Active Pool",
 };
 
 type BadgeVariant = "default" | "secondary" | "destructive" | "outline";
@@ -207,6 +214,12 @@ const stageVariants: Record<string, BadgeVariant> = {
   scheduled: "default",
   intaken: "default",
   declined: "destructive",
+  new_app: "default",
+  interview: "secondary",
+  home_check: "secondary",
+  orientation: "secondary",
+  agreement: "secondary",
+  active_pool: "default",
 };
 
 function getNextStage(type: ApplicationType, currentStage: string): string | null {
@@ -215,7 +228,12 @@ function getNextStage(type: ApplicationType, currentStage: string): string | nul
     if (idx >= 0 && idx < adoptionStages.length - 1 && currentStage !== "denied") {
       return adoptionStages[idx + 1];
     }
-  } else if (type === "foster" || type === "volunteer") {
+  } else if (type === "foster") {
+    const idx = fosterStatuses.indexOf(currentStage);
+    if (idx >= 0 && idx < fosterStatuses.length - 1 && currentStage !== "rejected") {
+      return fosterStatuses[idx + 1];
+    }
+  } else if (type === "volunteer") {
     if (currentStage === "pending") return "approved";
   } else if (type === "intake") {
     const idx = intakeStatuses.indexOf(currentStage);
@@ -388,8 +406,8 @@ export default function ApplicationDetailSheet({
   const getStatusOptions = () => {
     switch (type) {
       case "adoption": return adoptionStages;
-      case "foster":
-      case "volunteer": return fosterVolunteerStatuses;
+      case "foster": return fosterStatuses;
+      case "volunteer": return volunteerStatuses;
       case "intake": return intakeStatuses;
     }
   };
