@@ -74,6 +74,10 @@ interface AdoptionData {
   stage: string;
   notes?: string;
   customResponses?: Record<string, any>;
+  adoptionFeeStatus?: string;
+  adoptionFeeAmount?: string;
+  adoptionFeePaidAt?: string;
+  adoptionFeePaymentSource?: string;
   smsConsent?: boolean;
   createdAt: string;
   animal?: {
@@ -94,6 +98,10 @@ interface FosterData {
   otherPetsDetails?: string;
   experience?: string;
   availability?: string;
+  preferences?: string;
+  vetReference?: string;
+  personalReference?: string;
+  customResponses?: Record<string, any>;
   status: string;
   notes?: string;
   smsConsent?: boolean;
@@ -126,14 +134,22 @@ interface IntakeData {
   dogName: string;
   dogBreed?: string;
   dogAge?: string;
+  dogDateOfBirth?: string;
   dogGender?: string;
+  dogWeight?: string;
   spayedNeutered?: boolean;
+  microchipped?: boolean;
+  microchipNumber?: string;
   goodWithKids?: string;
   goodWithDogs?: string;
   goodWithCats?: string;
   reasonForSurrender: string;
   medicalIssues?: string;
   behavioralIssues?: string;
+  photoUrl?: string;
+  preferredSurrenderDate?: string;
+  declinedReason?: string;
+  declinedAt?: string;
   status: string;
   notes?: string;
   smsConsent?: boolean;
@@ -522,17 +538,61 @@ export default function ApplicationDetailSheet({
             value={new Date(adoptionData.createdAt).toLocaleDateString()} 
           />
           
+          {/* Dealbreaker questions section */}
+          {dealbreakerKeys.some(key => customResponses[key] !== undefined && customResponses[key] !== null && customResponses[key] !== "") && (
+            <>
+              <div className="border-t pt-2 mt-2" />
+              <p className="text-sm font-medium text-muted-foreground">Housing & Pet Info</p>
+              {dealbreakerKeys.map((key) => (
+                customResponses[key] !== undefined && customResponses[key] !== null && customResponses[key] !== "" && (
+                  <SummaryItem 
+                    key={key}
+                    label={formatFieldLabel(key)} 
+                    value={formatFieldValue(customResponses[key])}
+                  />
+                )
+              ))}
+            </>
+          )}
+          
           {/* Render all other custom responses */}
-          {otherResponseKeys.map((key) => (
-            <SummaryItem 
-              key={key}
-              label={formatFieldLabel(key)} 
-              value={formatFieldValue(customResponses[key])}
-            />
-          ))}
+          {otherResponseKeys.length > 0 && (
+            <>
+              <div className="border-t pt-2 mt-2" />
+              <p className="text-sm font-medium text-muted-foreground">Additional Questions</p>
+              {otherResponseKeys.map((key) => (
+                <SummaryItem 
+                  key={key}
+                  label={formatFieldLabel(key)} 
+                  value={formatFieldValue(customResponses[key])}
+                />
+              ))}
+            </>
+          )}
+          
+          {/* Adoption fee information */}
+          {(adoptionData.adoptionFeeStatus || adoptionData.adoptionFeeAmount) && (
+            <>
+              <div className="border-t pt-2 mt-2" />
+              <p className="text-sm font-medium text-muted-foreground">Adoption Fee</p>
+              <SummaryItem label="Status" value={adoptionData.adoptionFeeStatus === "paid" ? "Paid" : adoptionData.adoptionFeeStatus === "waived" ? "Waived" : "Pending"} />
+              {adoptionData.adoptionFeeAmount && (
+                <SummaryItem label="Amount" value={`$${(parseFloat(adoptionData.adoptionFeeAmount) / 100).toFixed(2)}`} />
+              )}
+              {adoptionData.adoptionFeePaidAt && (
+                <SummaryItem label="Paid On" value={new Date(adoptionData.adoptionFeePaidAt).toLocaleDateString()} />
+              )}
+              {adoptionData.adoptionFeePaymentSource && (
+                <SummaryItem label="Payment Method" value={adoptionData.adoptionFeePaymentSource.charAt(0).toUpperCase() + adoptionData.adoptionFeePaymentSource.slice(1)} />
+              )}
+            </>
+          )}
           
           {adoptionData.notes && (
-            <SummaryItem label="Notes" value={adoptionData.notes} />
+            <>
+              <div className="border-t pt-2 mt-2" />
+              <SummaryItem label="Notes" value={adoptionData.notes} />
+            </>
           )}
         </div>
       );
@@ -549,12 +609,25 @@ export default function ApplicationDetailSheet({
             label="Submitted" 
             value={new Date(intakeData.createdAt).toLocaleDateString()} 
           />
+          {intakeData.preferredSurrenderDate && (
+            <SummaryItem label="Preferred Surrender Date" value={new Date(intakeData.preferredSurrenderDate).toLocaleDateString()} />
+          )}
           <div className="border-t pt-2 mt-2" />
           <SummaryItem label="Dog Name" value={intakeData.dogName} />
           <SummaryItem label="Breed" value={intakeData.dogBreed || "Not specified"} />
           <SummaryItem label="Age" value={intakeData.dogAge || "Not specified"} />
+          {intakeData.dogDateOfBirth && (
+            <SummaryItem label="Date of Birth" value={new Date(intakeData.dogDateOfBirth).toLocaleDateString()} />
+          )}
           <SummaryItem label="Gender" value={intakeData.dogGender || "Not specified"} />
+          {intakeData.dogWeight && (
+            <SummaryItem label="Weight" value={intakeData.dogWeight} />
+          )}
           <SummaryItem label="Spayed/Neutered" value={intakeData.spayedNeutered ? "Yes" : "No"} />
+          <SummaryItem label="Microchipped" value={intakeData.microchipped ? "Yes" : "No"} />
+          {intakeData.microchipped && intakeData.microchipNumber && (
+            <SummaryItem label="Microchip Number" value={intakeData.microchipNumber} />
+          )}
           <div className="border-t pt-2 mt-2" />
           <SummaryItem label="Good with Kids" value={intakeData.goodWithKids || "Unknown"} />
           <SummaryItem label="Good with Dogs" value={intakeData.goodWithDogs || "Unknown"} />
@@ -567,8 +640,32 @@ export default function ApplicationDetailSheet({
           {intakeData.behavioralIssues && (
             <SummaryItem label="Behavioral Issues" value={intakeData.behavioralIssues} warning />
           )}
+          {intakeData.photoUrl && (
+            <>
+              <div className="border-t pt-2 mt-2" />
+              <p className="text-sm font-medium text-muted-foreground">Photo</p>
+              <img 
+                src={intakeData.photoUrl} 
+                alt={`${intakeData.dogName}`} 
+                className="w-full max-w-xs rounded-md object-cover"
+                data-testid="intake-dog-photo"
+              />
+            </>
+          )}
+          {intakeData.status === "declined" && intakeData.declinedReason && (
+            <>
+              <div className="border-t pt-2 mt-2" />
+              <SummaryItem label="Decline Reason" value={intakeData.declinedReason} warning />
+              {intakeData.declinedAt && (
+                <SummaryItem label="Declined On" value={new Date(intakeData.declinedAt).toLocaleDateString()} />
+              )}
+            </>
+          )}
           {intakeData.notes && (
-            <SummaryItem label="Notes" value={intakeData.notes} />
+            <>
+              <div className="border-t pt-2 mt-2" />
+              <SummaryItem label="Notes" value={intakeData.notes} />
+            </>
           )}
         </div>
       );
@@ -598,8 +695,26 @@ export default function ApplicationDetailSheet({
           <div className="border-t pt-2 mt-2" />
           <SummaryItem label="Experience" value={fosterData.experience || "Not specified"} />
           <SummaryItem label="Availability" value={fosterData.availability || "Not specified"} />
+          {fosterData.preferences && (
+            <SummaryItem label="Animal Preferences" value={fosterData.preferences} />
+          )}
+          <div className="border-t pt-2 mt-2" />
+          <SummaryItem label="Vet Reference" value={fosterData.vetReference || "Not provided"} />
+          <SummaryItem label="Personal Reference" value={fosterData.personalReference || "Not provided"} />
+          {fosterData.customResponses && Object.keys(fosterData.customResponses).length > 0 && (
+            <>
+              <div className="border-t pt-2 mt-2" />
+              <p className="text-sm font-medium text-muted-foreground">Additional Questions</p>
+              {Object.entries(fosterData.customResponses).map(([question, answer]) => (
+                <SummaryItem key={question} label={question} value={String(answer) || "No answer"} />
+              ))}
+            </>
+          )}
           {fosterData.notes && (
-            <SummaryItem label="Notes" value={fosterData.notes} />
+            <>
+              <div className="border-t pt-2 mt-2" />
+              <SummaryItem label="Notes" value={fosterData.notes} />
+            </>
           )}
         </div>
       );
