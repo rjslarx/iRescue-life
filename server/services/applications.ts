@@ -17,6 +17,7 @@ export async function getApplicationsByTenant(tenantId: string) {
       applicantPhone: applications.applicantPhone,
       stage: applications.stage,
       notes: applications.notes,
+      customResponses: applications.customResponses,
       createdAt: applications.createdAt,
       updatedAt: applications.updatedAt,
     })
