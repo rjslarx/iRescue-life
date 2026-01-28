@@ -296,6 +296,24 @@ export default function KanbanBoard({ applications, onMoveApplication, onAssignA
                                   )}
                                 </div>
                               )}
+                              {/* View Application Button */}
+                              {onViewApplication && (
+                                <div className="mt-3 pt-2 border-t">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="w-full"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onViewApplication(app);
+                                    }}
+                                    data-testid={`button-view-application-${app.id}`}
+                                  >
+                                    <Eye className="h-4 w-4 mr-2" />
+                                    View Application
+                                  </Button>
+                                </div>
+                              )}
                             </CardContent>
                           </Card>
                         ))}

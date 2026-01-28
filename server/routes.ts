@@ -11257,6 +11257,35 @@ Submitted: ${new Date().toLocaleString()}
   });
 
   /**
+   * GET /api/foster-applications/:id
+   * Get a single foster application by ID with full details (admin/staff only)
+   */
+  app.get('/api/foster-applications/:id', requireTenant, requireAuth, requireRole('admin', 'owner', 'board_member', 'staff', 'intake_coordinator'), async (req, res, next) => {
+    try {
+      const { fosterApplications } = await import('@shared/schema');
+      
+      const [application] = await db
+        .select()
+        .from(fosterApplications)
+        .where(
+          and(
+            eq(fosterApplications.id, req.params.id),
+            eq(fosterApplications.tenantId, req.tenant!.id)
+          )
+        )
+        .limit(1);
+      
+      if (!application) {
+        return res.status(404).json({ error: 'Foster application not found' });
+      }
+      
+      res.json({ application });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * PATCH /api/foster-applications/:id
    * Update foster application status (admin/staff only)
    * Auto-dismisses from pending widget when status changes from 'pending' to other statuses
@@ -11569,6 +11598,35 @@ Submitted: ${new Date().toLocaleString()}
         .orderBy(desc(volunteerApplications.createdAt));
       
       res.json({ applications });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/volunteer-applications/:id
+   * Get a single volunteer application by ID with full details (admin/staff only)
+   */
+  app.get('/api/volunteer-applications/:id', requireTenant, requireAuth, requireRole('admin', 'owner', 'board_member', 'staff', 'intake_coordinator'), async (req, res, next) => {
+    try {
+      const { volunteerApplications } = await import('@shared/schema');
+      
+      const [application] = await db
+        .select()
+        .from(volunteerApplications)
+        .where(
+          and(
+            eq(volunteerApplications.id, req.params.id),
+            eq(volunteerApplications.tenantId, req.tenant!.id)
+          )
+        )
+        .limit(1);
+      
+      if (!application) {
+        return res.status(404).json({ error: 'Volunteer application not found' });
+      }
+      
+      res.json({ application });
     } catch (error) {
       next(error);
     }
