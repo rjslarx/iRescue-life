@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -6,13 +6,28 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDes
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2 } from "lucide-react";
+import { Loader2, AlertTriangle, Cpu } from "lucide-react";
 import type { Animal } from "@shared/schema";
+
+interface PendingMicrochip {
+  id: string;
+  microchipNumber: string;
+  registrationStatus: string;
+}
+
+interface MicrochipWarning {
+  message: string;
+  pendingMicrochips: PendingMicrochip[];
+}
 
 const adoptionSchema = z.object({
   applicationId: z.string().optional(),
@@ -50,6 +65,8 @@ interface AdoptionDialogProps {
 
 export function AdoptionDialog({ animal, open, onOpenChange, onSuccess, pendingEdits, prefilledData }: AdoptionDialogProps) {
   const { toast } = useToast();
+  const [microchipWarning, setMicrochipWarning] = useState<MicrochipWarning | null>(null);
+  const [confirmMicrochipPending, setConfirmMicrochipPending] = useState(false);
 
   const form = useForm<AdoptionFormData>({
     resolver: zodResolver(adoptionSchema),
@@ -77,6 +94,9 @@ export function AdoptionDialog({ animal, open, onOpenChange, onSuccess, pendingE
         adoptionFee: '',
         notes: '',
       });
+      // Reset microchip warning state
+      setMicrochipWarning(null);
+      setConfirmMicrochipPending(false);
     }
   }, [open, prefilledData, form]);
 
@@ -89,7 +109,7 @@ export function AdoptionDialog({ animal, open, onOpenChange, onSuccess, pendingE
   const applications = applicationsData?.applications || [];
 
   const adoptionMutation = useMutation({
-    mutationFn: async (data: AdoptionFormData) => {
+    mutationFn: async (data: AdoptionFormData & { confirmMicrochipPending?: boolean }) => {
       if (!animal) throw new Error("No animal selected");
       
       const response = await apiRequest('POST', '/api/adoptions', {
@@ -101,7 +121,9 @@ export function AdoptionDialog({ animal, open, onOpenChange, onSuccess, pendingE
         adoptionDate: data.adoptionDate ? new Date(data.adoptionDate) : new Date(),
         adoptionFee: data.adoptionFee || null,
         notes: data.notes || null,
+        confirmMicrochipPending: data.confirmMicrochipPending || false,
       });
+      
       return response.json();
     },
     onSuccess: async () => {
@@ -124,11 +146,36 @@ export function AdoptionDialog({ animal, open, onOpenChange, onSuccess, pendingE
         description: `${animal?.name} has been marked as adopted.`,
       });
       
+      // Reset microchip warning state
+      setMicrochipWarning(null);
+      setConfirmMicrochipPending(false);
+      
       form.reset();
       onSuccess(animal?.id);
       onOpenChange(false);
     },
     onError: (error: any) => {
+      // apiRequest throws errors in format "STATUS: JSON_BODY"
+      // Check if this is a 409 microchip warning
+      const errorMessage = error.message || '';
+      if (errorMessage.startsWith('409:')) {
+        try {
+          // Parse the JSON body from the error message
+          const jsonStr = errorMessage.substring(4).trim();
+          const errorData = JSON.parse(jsonStr);
+          
+          if (errorData.code === 'MICROCHIP_TRANSFER_PENDING') {
+            setMicrochipWarning({
+              message: errorData.message || 'Microchip transfer pending',
+              pendingMicrochips: errorData.pendingMicrochips || [],
+            });
+            return; // Don't show error toast for warnings
+          }
+        } catch {
+          // If JSON parsing fails, fall through to generic error handling
+        }
+      }
+      
       toast({
         title: "Failed to record adoption",
         description: error.message || "Please try again later.",
@@ -138,7 +185,12 @@ export function AdoptionDialog({ animal, open, onOpenChange, onSuccess, pendingE
   });
 
   const handleSubmit = (data: AdoptionFormData) => {
-    adoptionMutation.mutate(data);
+    // If we have a microchip warning and user confirmed, include the confirmation flag
+    if (microchipWarning && confirmMicrochipPending) {
+      adoptionMutation.mutate({ ...data, confirmMicrochipPending: true });
+    } else {
+      adoptionMutation.mutate(data);
+    }
   };
 
   // When an application is selected, auto-fill the adopter info
@@ -321,6 +373,48 @@ export function AdoptionDialog({ animal, open, onOpenChange, onSuccess, pendingE
               )}
             />
 
+            {/* Microchip Transfer Warning */}
+            {microchipWarning && (
+              <Alert variant="destructive" className="border-amber-500 bg-amber-50 dark:bg-amber-950" data-testid="alert-microchip-warning">
+                <AlertTriangle className="h-4 w-4 text-amber-600" />
+                <AlertTitle className="text-amber-800 dark:text-amber-200">Microchip Transfer Pending</AlertTitle>
+                <AlertDescription className="text-amber-700 dark:text-amber-300">
+                  <p className="mb-3">{microchipWarning.message}</p>
+                  
+                  <div className="space-y-2 mb-4">
+                    {microchipWarning.pendingMicrochips.map((chip) => (
+                      <Card key={chip.id} className="bg-white/50 dark:bg-black/20">
+                        <CardContent className="py-2 px-3">
+                          <div className="flex items-center gap-2">
+                            <Cpu className="h-4 w-4 text-amber-600" />
+                            <span className="font-mono text-sm">{chip.microchipNumber}</span>
+                            <Badge variant="outline" className="ml-auto text-xs">
+                              {chip.registrationStatus.replace(/_/g, ' ')}
+                            </Badge>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+
+                  <div className="flex items-start gap-2">
+                    <Checkbox
+                      id="confirm-microchip"
+                      checked={confirmMicrochipPending}
+                      onCheckedChange={(checked) => setConfirmMicrochipPending(checked === true)}
+                      data-testid="checkbox-confirm-microchip"
+                    />
+                    <label 
+                      htmlFor="confirm-microchip" 
+                      className="text-sm cursor-pointer leading-tight"
+                    >
+                      I confirm that the microchip registration transfer is in progress or will be completed after adoption
+                    </label>
+                  </div>
+                </AlertDescription>
+              </Alert>
+            )}
+
             <DialogFooter>
               <Button
                 type="button"
@@ -333,11 +427,11 @@ export function AdoptionDialog({ animal, open, onOpenChange, onSuccess, pendingE
               </Button>
               <Button
                 type="submit"
-                disabled={adoptionMutation.isPending}
+                disabled={adoptionMutation.isPending || (microchipWarning !== null && !confirmMicrochipPending)}
                 data-testid="button-record-adoption"
               >
                 {adoptionMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                Record Adoption
+                {microchipWarning ? 'Confirm & Record Adoption' : 'Record Adoption'}
               </Button>
             </DialogFooter>
           </form>
