@@ -7,7 +7,7 @@ import { loginUser, createTenantWithAdmin, createUser } from "./services/auth";
 import { PushNotificationService } from "./services/push-notifications";
 import { db } from "./db";
 import { tenants, users, demoRequests, insertDemoRequestSchema, smsMessageLogs, emailEvents, animals, platformIntegrations, newsletterCampaigns, newsletterSubscribers, happyTails, animalMergeHistory, activityLogs, medicalExams, medicalPrescriptions, medicalBills, medicalFiles, animalNotes, applications, adoptionCheckoutSessions, adoptions } from "@shared/schema";
-import { eq, and, desc, sql, inArray, lt, gte, not, notInArray, or } from "drizzle-orm";
+import { eq, and, desc, sql, inArray, lt, gte, not, notInArray, or, ne } from "drizzle-orm";
 import { z } from "zod";
 import { authLimiter, signupLimiter, passwordResetLimiter, emailLimiter } from "./config/security";
 import QRCode from "qrcode";
@@ -20016,6 +20016,350 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
         .returning();
 
       res.json({ success: true });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // ============================================================================
+  // MICROCHIP RECORDS ROUTES
+  // ============================================================================
+
+  /**
+   * GET /api/animals/:animalId/microchips
+   * Get all microchip records for an animal
+   */
+  app.get('/api/animals/:animalId/microchips', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { microchipRecords } = await import('@shared/schema');
+      
+      const permissions = await checkMedicalRecordPermissions(
+        req.user!.id,
+        req.params.animalId,
+        req.tenant!.id,
+        req.user!.roles
+      );
+
+      if (!permissions.canView) {
+        return res.status(403).json({ 
+          error: 'Access denied',
+          message: 'You do not have permission to view records for this animal'
+        });
+      }
+      
+      const microchips = await db
+        .select()
+        .from(microchipRecords)
+        .where(and(
+          eq(microchipRecords.animalId, req.params.animalId),
+          eq(microchipRecords.tenantId, req.tenant!.id)
+        ))
+        .orderBy(desc(microchipRecords.createdAt));
+
+      res.json({ microchips });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/animals/:animalId/microchips
+   * Create a microchip record
+   */
+  app.post('/api/animals/:animalId/microchips', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { microchipRecords, insertMicrochipRecordSchema } = await import('@shared/schema');
+      
+      const permissions = await checkMedicalRecordPermissions(
+        req.user!.id,
+        req.params.animalId,
+        req.tenant!.id,
+        req.user!.roles
+      );
+
+      if (!permissions.canEdit) {
+        return res.status(403).json({ 
+          error: 'Access denied',
+          message: 'You do not have permission to edit records for this animal'
+        });
+      }
+      
+      const data = insertMicrochipRecordSchema.parse(req.body);
+
+      // Set default registration status based on chip origin
+      let registrationStatus = data.registrationStatus || 'unregistered';
+      if (data.chipOrigin === 'implanted_by_rescue' && !data.registrationStatus) {
+        registrationStatus = 'registered_rescue';
+      } else if (data.chipOrigin === 'found' && !data.registrationStatus) {
+        registrationStatus = 'found_unknown';
+      }
+
+      const [microchip] = await db
+        .insert(microchipRecords)
+        .values({
+          ...data,
+          registrationStatus,
+          animalId: req.params.animalId,
+          tenantId: req.tenant!.id,
+          createdBy: req.user!.id,
+        })
+        .returning();
+
+      res.json({ microchip });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * PATCH /api/microchips/:microchipId
+   * Update a microchip record
+   */
+  app.patch('/api/microchips/:microchipId', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { microchipRecords, insertMicrochipRecordSchema } = await import('@shared/schema');
+      
+      // Fetch existing record for permission check
+      const [existingRecord] = await db
+        .select()
+        .from(microchipRecords)
+        .where(and(
+          eq(microchipRecords.id, req.params.microchipId),
+          eq(microchipRecords.tenantId, req.tenant!.id)
+        ))
+        .limit(1);
+
+      if (!existingRecord) {
+        return res.status(404).json({ error: 'Microchip record not found' });
+      }
+
+      const permissions = await checkMedicalRecordPermissions(
+        req.user!.id,
+        existingRecord.animalId,
+        req.tenant!.id,
+        req.user!.roles
+      );
+
+      if (!permissions.canEdit) {
+        return res.status(403).json({ 
+          error: 'Access denied',
+          message: 'You do not have permission to edit records for this animal'
+        });
+      }
+      
+      const data = insertMicrochipRecordSchema.partial().parse(req.body);
+
+      const [microchip] = await db
+        .update(microchipRecords)
+        .set({
+          ...data,
+          updatedAt: new Date(),
+        })
+        .where(and(
+          eq(microchipRecords.id, req.params.microchipId),
+          eq(microchipRecords.tenantId, req.tenant!.id)
+        ))
+        .returning();
+
+      res.json({ microchip });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * DELETE /api/microchips/:microchipId
+   * Delete a microchip record
+   */
+  app.delete('/api/microchips/:microchipId', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { microchipRecords } = await import('@shared/schema');
+
+      const [existingRecord] = await db
+        .select()
+        .from(microchipRecords)
+        .where(and(
+          eq(microchipRecords.id, req.params.microchipId),
+          eq(microchipRecords.tenantId, req.tenant!.id)
+        ))
+        .limit(1);
+
+      if (!existingRecord) {
+        return res.status(404).json({ error: 'Microchip record not found' });
+      }
+
+      const permissions = await checkMedicalRecordPermissions(
+        req.user!.id,
+        existingRecord.animalId,
+        req.tenant!.id,
+        req.user!.roles
+      );
+
+      if (!permissions.canEdit) {
+        return res.status(403).json({ 
+          error: 'Access denied',
+          message: 'You do not have permission to edit records for this animal'
+        });
+      }
+
+      await db
+        .delete(microchipRecords)
+        .where(and(
+          eq(microchipRecords.id, req.params.microchipId),
+          eq(microchipRecords.tenantId, req.tenant!.id)
+        ));
+
+      res.json({ success: true });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/microchips/:microchipId/verify-transfer
+   * Mark microchip transfer as verified
+   */
+  app.post('/api/microchips/:microchipId/verify-transfer', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { microchipRecords } = await import('@shared/schema');
+
+      const [existingRecord] = await db
+        .select()
+        .from(microchipRecords)
+        .where(and(
+          eq(microchipRecords.id, req.params.microchipId),
+          eq(microchipRecords.tenantId, req.tenant!.id)
+        ))
+        .limit(1);
+
+      if (!existingRecord) {
+        return res.status(404).json({ error: 'Microchip record not found' });
+      }
+
+      // Only admin/owner can verify transfers
+      const userRoles = req.user!.roles || [];
+      if (!userRoles.includes('admin') && !userRoles.includes('owner')) {
+        return res.status(403).json({ 
+          error: 'Access denied',
+          message: 'Only admins can verify microchip transfers'
+        });
+      }
+
+      const { transferNotes } = req.body;
+
+      const [microchip] = await db
+        .update(microchipRecords)
+        .set({
+          registrationStatus: 'transferred',
+          transferVerified: true,
+          transferredAt: new Date(),
+          transferredBy: req.user!.id,
+          transferNotes: transferNotes || null,
+          updatedAt: new Date(),
+        })
+        .where(and(
+          eq(microchipRecords.id, req.params.microchipId),
+          eq(microchipRecords.tenantId, req.tenant!.id)
+        ))
+        .returning();
+
+      res.json({ microchip });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/microchips/pending-transfers
+   * Get all microchips pending transfer verification
+   */
+  app.get('/api/microchips/pending-transfers', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { microchipRecords, animals } = await import('@shared/schema');
+
+      // Only admin/owner can view pending transfers
+      const userRoles = req.user!.roles || [];
+      if (!userRoles.includes('admin') && !userRoles.includes('owner')) {
+        return res.status(403).json({ 
+          error: 'Access denied',
+          message: 'Only admins can view pending transfers'
+        });
+      }
+
+      const pendingTransfers = await db
+        .select({
+          microchip: microchipRecords,
+          animal: animals,
+        })
+        .from(microchipRecords)
+        .innerJoin(animals, eq(microchipRecords.animalId, animals.id))
+        .where(and(
+          eq(microchipRecords.tenantId, req.tenant!.id),
+          eq(animals.status, 'adopted'),
+          eq(microchipRecords.transferVerified, false),
+          ne(microchipRecords.registrationStatus, 'transferred')
+        ))
+        .orderBy(desc(microchipRecords.createdAt));
+
+      res.json({ pendingTransfers });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/animals/:animalId/microchips/adopter-info
+   * Get adopter info formatted for clipboard copy
+   */
+  app.get('/api/animals/:animalId/microchips/adopter-info', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { adoptionApplications, animals } = await import('@shared/schema');
+
+      // Get the most recent approved/adopted application for this animal
+      const [application] = await db
+        .select()
+        .from(adoptionApplications)
+        .where(and(
+          eq(adoptionApplications.animalId, req.params.animalId),
+          eq(adoptionApplications.tenantId, req.tenant!.id),
+          or(
+            eq(adoptionApplications.status, 'adopted'),
+            eq(adoptionApplications.status, 'approved')
+          )
+        ))
+        .orderBy(desc(adoptionApplications.updatedAt))
+        .limit(1);
+
+      if (!application) {
+        return res.status(404).json({ error: 'No adoption application found for this animal' });
+      }
+
+      // Get animal info
+      const [animal] = await db
+        .select()
+        .from(animals)
+        .where(eq(animals.id, req.params.animalId))
+        .limit(1);
+
+      // Format adopter info for clipboard
+      const adopterInfo = {
+        name: `${application.applicantFirstName || ''} ${application.applicantLastName || ''}`.trim(),
+        address: [
+          application.applicantAddress,
+          application.applicantCity,
+          application.applicantState,
+          application.applicantZip
+        ].filter(Boolean).join(', '),
+        phone: application.applicantPhone || '',
+        email: application.applicantEmail || '',
+        animalName: animal?.name || '',
+        formatted: `Name: ${application.applicantFirstName || ''} ${application.applicantLastName || ''}
+Address: ${[application.applicantAddress, application.applicantCity, application.applicantState, application.applicantZip].filter(Boolean).join(', ')}
+Phone: ${application.applicantPhone || ''}
+Email: ${application.applicantEmail || ''}`
+      };
+
+      res.json({ adopterInfo });
     } catch (error) {
       next(error);
     }
