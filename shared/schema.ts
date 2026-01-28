@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, integer, boolean, jsonb, unique, numeric, serial, decimal, date } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, integer, boolean, jsonb, unique, numeric, serial, decimal, date, varchar } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -1538,6 +1538,66 @@ export const insertVaccineRecordSchema = createInsertSchema(vaccineRecords).omit
 });
 export type InsertVaccineRecord = z.infer<typeof insertVaccineRecordSchema>;
 export type VaccineRecord = typeof vaccineRecords.$inferSelect;
+
+// Microchip Records
+export const microchipRecords = pgTable("microchip_records", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  animalId: uuid("animal_id").notNull().references(() => animals.id, { onDelete: 'cascade' }),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  
+  // Core Microchip Data
+  microchipNumber: varchar("microchip_number", { length: 50 }).notNull(),
+  manufacturer: text("manufacturer").notNull().$type<"homeagain" | "24petwatch" | "fi" | "akc" | "avid" | "foundanimals" | "petlink" | "other">(),
+  
+  // Implant Information
+  implantDate: date("implant_date"),
+  implantLocation: text("implant_location").default("Between Shoulder Blades"),
+  implantedBy: uuid("implanted_by").references(() => users.id),
+  
+  // Registration Status
+  registrationStatus: text("registration_status")
+    .notNull()
+    .default("unregistered")
+    .$type<"unregistered" | "registered_rescue" | "found_unknown" | "transferred">(),
+  isRescueBackup: boolean("is_rescue_backup").default(false),
+  
+  // Origin Tracking
+  chipOrigin: text("chip_origin")
+    .notNull()
+    .default("found")
+    .$type<"implanted_by_rescue" | "found" | "transferred_in">(),
+  
+  // Transfer Tracking
+  transferredAt: timestamp("transferred_at"),
+  transferredBy: uuid("transferred_by").references(() => users.id),
+  transferVerified: boolean("transfer_verified").default(false),
+  transferNotes: text("transfer_notes"),
+  
+  // Audit Fields
+  createdBy: uuid("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertMicrochipRecordSchema = createInsertSchema(microchipRecords).omit({
+  id: true,
+  animalId: true,
+  tenantId: true,
+  createdBy: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  microchipNumber: z.string().min(9, "Microchip number must be at least 9 characters").max(50),
+  manufacturer: z.enum(["homeagain", "24petwatch", "fi", "akc", "avid", "foundanimals", "petlink", "other"]),
+  implantDate: z.union([z.coerce.date(), z.string(), z.null()]).optional().nullable(),
+  implantLocation: z.string().optional(),
+  registrationStatus: z.enum(["unregistered", "registered_rescue", "found_unknown", "transferred"]).optional(),
+  chipOrigin: z.enum(["implanted_by_rescue", "found", "transferred_in"]).optional(),
+  isRescueBackup: z.boolean().optional(),
+  transferNotes: z.string().optional(),
+});
+export type InsertMicrochipRecord = z.infer<typeof insertMicrochipRecordSchema>;
+export type MicrochipRecord = typeof microchipRecords.$inferSelect;
 
 // Diagnostic Tests
 export const diagnosticTests = pgTable("diagnostic_tests", {
