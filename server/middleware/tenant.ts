@@ -97,6 +97,7 @@ export interface TenantContext {
       icon?: 'paw' | 'home' | 'heart' | 'dollar';
     };
   };
+  quickActions?: string[] | null;
 }
 
 // Extend Express Request type to include tenant and platform admin flag
@@ -366,6 +367,7 @@ export async function resolveTenant(req: Request, res: Response, next: NextFunct
           donationSection: tenants.donationSection,
           heroLayoutType: tenants.heroLayoutType,
           threeDoorsConfig: tenants.threeDoorsConfig,
+          quickActions: tenants.quickActions,
         })
         .from(tenants)
         .where(whereClause!)
@@ -432,6 +434,7 @@ export async function resolveTenant(req: Request, res: Response, next: NextFunct
         donationSection: tenant.donationSection as TenantContext['donationSection'],
         heroLayoutType: tenant.heroLayoutType as TenantContext['heroLayoutType'],
         threeDoorsConfig: tenant.threeDoorsConfig as TenantContext['threeDoorsConfig'],
+        quickActions: tenant.quickActions,
       };
       
       // Set cookie for PWA manifest resolution on path-based tenants
