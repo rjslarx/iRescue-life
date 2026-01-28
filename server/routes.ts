@@ -4913,6 +4913,136 @@ Crawl-delay: 1
   });
 
   /**
+   * GET /api/animals/search-duplicates
+   * Search for potential duplicate animals by microchip number and/or name
+   * Used during intake to prevent creating duplicate records
+   * Searches across ALL statuses including archived animals
+   * NOTE: This route MUST be defined before /api/animals/:id
+   */
+  app.get('/api/animals/search-duplicates', requireTenant, requireAuth, requireRole('admin', 'owner', 'staff'), async (req, res, next) => {
+    try {
+      const tenantId = req.tenant!.id;
+      const { microchip, name } = req.query;
+      
+      if (!microchip && !name) {
+        return res.status(400).json({ error: 'At least one search parameter (microchip or name) is required' });
+      }
+
+      const results: {
+        microchipMatches: any[];
+        nameMatches: any[];
+      } = {
+        microchipMatches: [],
+        nameMatches: []
+      };
+
+      // Microchip exact match search (strict - returns exact match only)
+      if (microchip && typeof microchip === 'string' && microchip.trim()) {
+        const microchipValue = microchip.trim();
+        const microchipResults = await db.select({
+          id: animals.id,
+          name: animals.name,
+          status: animals.status,
+          species: animals.species,
+          breed: animals.breed,
+          primaryPhotoUrl: animals.primaryPhotoUrl,
+          microchipNumber: animals.microchipNumber,
+          intakeDate: animals.intakeDate,
+        }).from(animals)
+          .where(and(
+            eq(animals.tenantId, tenantId),
+            eq(animals.microchipNumber, microchipValue)
+          ));
+        
+        results.microchipMatches = microchipResults.map(a => ({
+          ...a,
+          matchType: 'microchip_exact' as const
+        }));
+      }
+
+      // Name fuzzy search (case-insensitive prefix/contains)
+      if (name && typeof name === 'string' && name.trim().length >= 2) {
+        const nameValue = name.trim().toLowerCase();
+        
+        // Get all animals for fuzzy matching
+        const allAnimals = await db.select({
+          id: animals.id,
+          name: animals.name,
+          status: animals.status,
+          species: animals.species,
+          breed: animals.breed,
+          primaryPhotoUrl: animals.primaryPhotoUrl,
+          microchipNumber: animals.microchipNumber,
+          intakeDate: animals.intakeDate,
+        }).from(animals)
+          .where(eq(animals.tenantId, tenantId));
+
+        // Simple Levenshtein distance for fuzzy matching
+        function levenshteinDistance(str1: string, str2: string): number {
+          const m = str1.length;
+          const n = str2.length;
+          const dp: number[][] = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
+          for (let i = 0; i <= m; i++) dp[i][0] = i;
+          for (let j = 0; j <= n; j++) dp[0][j] = j;
+          for (let i = 1; i <= m; i++) {
+            for (let j = 1; j <= n; j++) {
+              if (str1[i - 1] === str2[j - 1]) {
+                dp[i][j] = dp[i - 1][j - 1];
+              } else {
+                dp[i][j] = 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+              }
+            }
+          }
+          return dp[m][n];
+        }
+
+        // Find matches
+        const nameMatches = allAnimals
+          .map(animal => {
+            const animalName = (animal.name || '').toLowerCase();
+            
+            // Exact match
+            if (animalName === nameValue) {
+              return { ...animal, matchType: 'name_exact' as const, similarity: 1.0 };
+            }
+            
+            // Prefix match (e.g., "Max" matches "Maxy")
+            if (animalName.startsWith(nameValue) || nameValue.startsWith(animalName)) {
+              return { ...animal, matchType: 'name_prefix' as const, similarity: 0.9 };
+            }
+            
+            // Contains match
+            if (animalName.includes(nameValue) || nameValue.includes(animalName)) {
+              return { ...animal, matchType: 'name_contains' as const, similarity: 0.85 };
+            }
+            
+            // Levenshtein similarity (for typos)
+            const distance = levenshteinDistance(animalName, nameValue);
+            const maxLen = Math.max(animalName.length, nameValue.length);
+            const similarity = maxLen > 0 ? 1 - (distance / maxLen) : 0;
+            
+            if (similarity >= 0.7) {
+              return { ...animal, matchType: 'name_similar' as const, similarity };
+            }
+            
+            return null;
+          })
+          .filter((m): m is NonNullable<typeof m> => m !== null)
+          .sort((a, b) => b.similarity - a.similarity)
+          .slice(0, 10); // Limit to top 10 matches
+
+        // Exclude animals already in microchip matches
+        const microchipIds = new Set(results.microchipMatches.map(m => m.id));
+        results.nameMatches = nameMatches.filter(m => !microchipIds.has(m.id));
+      }
+
+      res.json(results);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * POST /api/animals/merge
    * Merge two animal profiles - keeps primary, archives secondary, reassigns related records
    * Uses a database transaction to ensure atomicity
@@ -5675,6 +5805,88 @@ Crawl-delay: 1
         );
 
       res.json({ success: true, animal });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/animals/:id/re-intake
+   * Re-intake a previously adopted or deceased animal that has returned to the rescue
+   * Resets status to intake and creates a new intake record
+   */
+  app.post('/api/animals/:id/re-intake', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      const { animals, animalNotes } = await import('@shared/schema');
+      const { z } = await import('zod');
+      
+      const reintakeSchema = z.object({
+        reason: z.string().min(1, "Re-intake reason is required"),
+        notes: z.string().optional(),
+      });
+
+      const data = reintakeSchema.parse(req.body);
+      const animalId = req.params.id;
+      const tenantId = req.tenant!.id;
+
+      // Get current animal
+      const [existingAnimal] = await db.select().from(animals)
+        .where(and(
+          eq(animals.id, animalId),
+          eq(animals.tenantId, tenantId)
+        ));
+
+      if (!existingAnimal) {
+        return res.status(404).json({ error: 'Animal not found' });
+      }
+
+      // Only allow re-intake for animals with certain statuses
+      const reintakeableStatuses = ['adopted', 'deceased', 'transfer_pending'];
+      if (!reintakeableStatuses.includes(existingAnimal.status)) {
+        return res.status(400).json({ 
+          error: 'Invalid status for re-intake',
+          message: `Cannot re-intake an animal with status "${existingAnimal.status}". Only adopted, deceased, or transfer_pending animals can be re-intaken.`
+        });
+      }
+
+      const previousStatus = existingAnimal.status;
+
+      // Update animal status to available (for returning animals)
+      const [updatedAnimal] = await db
+        .update(animals)
+        .set({
+          status: 'available',
+          intakeDate: new Date(),
+          updatedAt: new Date(),
+          // Clear previous outcome data
+          deceasedDate: null,
+          causeOfDeath: null,
+          deceasedNotes: null,
+        })
+        .where(
+          and(
+            eq(animals.id, animalId),
+            eq(animals.tenantId, tenantId)
+          )
+        )
+        .returning();
+
+      // Add a note documenting the re-intake
+      await db.insert(animalNotes).values({
+        animalId,
+        tenantId,
+        userId: req.user!.id,
+        content: `**Re-Intake**: ${data.reason}${data.notes ? `\n\n${data.notes}` : ''}\n\n_Previous status: ${previousStatus}_`,
+        isInternal: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      res.json({ 
+        success: true, 
+        animal: updatedAnimal,
+        message: `${existingAnimal.name} has been re-intaken successfully.`
+      });
     } catch (error) {
       next(error);
     }

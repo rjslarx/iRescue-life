@@ -73,6 +73,7 @@ import {
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import type { SurrenderRequest } from "@shared/schema";
+import IntakeInterceptorDialog from "@/components/IntakeInterceptorDialog";
 
 const staffIntakeSchema = z.object({
   isStray: z.boolean().default(false),
@@ -134,6 +135,12 @@ export default function IntakeManagerPage() {
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [showDeclined, setShowDeclined] = useState(false);
   const [newIntakeDialogOpen, setNewIntakeDialogOpen] = useState(false);
+  const [interceptorDialogOpen, setInterceptorDialogOpen] = useState(false);
+  const [reIntakeDialogOpen, setReIntakeDialogOpen] = useState(false);
+  const [reIntakeAnimalId, setReIntakeAnimalId] = useState<string | null>(null);
+  const [reIntakeReason, setReIntakeReason] = useState("");
+  const [reIntakeNotes, setReIntakeNotes] = useState("");
+  const [, navigate] = useLocation();
 
   const newIntakeForm = useForm<StaffIntakeFormData>({
     resolver: zodResolver(staffIntakeSchema),
@@ -212,6 +219,39 @@ export default function IntakeManagerPage() {
       });
     },
   });
+
+  const reIntakeMutation = useMutation({
+    mutationFn: async ({ animalId, reason, notes }: { animalId: string; reason: string; notes?: string }) => {
+      return apiRequest("POST", `/api/animals/${animalId}/re-intake`, { reason, notes });
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/animals"] });
+      toast({
+        title: "Re-intake successful",
+        description: data.message || "The animal has been re-intaken successfully.",
+      });
+      setReIntakeDialogOpen(false);
+      setReIntakeAnimalId(null);
+      setReIntakeReason("");
+      setReIntakeNotes("");
+      // Navigate to the animal's profile
+      if (data.animal?.id) {
+        navigate(`/manage/animals/${data.animal.id}`);
+      }
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Re-intake failed",
+        description: error.message || "Failed to re-intake the animal",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleReIntake = (animalId: string) => {
+    setReIntakeAnimalId(animalId);
+    setReIntakeDialogOpen(true);
+  };
 
   const { data: surrenderRequests = [], isLoading } = useQuery<SurrenderRequest[]>({
     queryKey: ["/api/surrender-requests"],
@@ -334,7 +374,7 @@ export default function IntakeManagerPage() {
         <div className="p-4 space-y-4">
           <div className="flex items-center justify-between gap-2">
             <Button
-              onClick={() => setNewIntakeDialogOpen(true)}
+              onClick={() => setInterceptorDialogOpen(true)}
               data-testid="button-new-intake-mobile"
             >
               <Plus className="h-4 w-4 mr-2" />
@@ -400,6 +440,32 @@ export default function IntakeManagerPage() {
             onSubmit={(data) => createIntakeMutation.mutate(data)}
             isPending={createIntakeMutation.isPending}
           />
+
+          <IntakeInterceptorDialog
+            open={interceptorDialogOpen}
+            onOpenChange={setInterceptorDialogOpen}
+            onContinueToIntake={() => setNewIntakeDialogOpen(true)}
+            onReactivate={handleReIntake}
+          />
+
+          <ReIntakeDialog
+            open={reIntakeDialogOpen}
+            onOpenChange={setReIntakeDialogOpen}
+            reason={reIntakeReason}
+            onReasonChange={setReIntakeReason}
+            notes={reIntakeNotes}
+            onNotesChange={setReIntakeNotes}
+            onSubmit={() => {
+              if (reIntakeAnimalId && reIntakeReason.trim()) {
+                reIntakeMutation.mutate({ 
+                  animalId: reIntakeAnimalId, 
+                  reason: reIntakeReason,
+                  notes: reIntakeNotes || undefined 
+                });
+              }
+            }}
+            isPending={reIntakeMutation.isPending}
+          />
         </div>
       </DashboardLayout>
     );
@@ -414,7 +480,7 @@ export default function IntakeManagerPage() {
       <div className="p-6 space-y-4">
         <div className="flex items-center justify-between gap-4">
           <Button
-            onClick={() => setNewIntakeDialogOpen(true)}
+            onClick={() => setInterceptorDialogOpen(true)}
             data-testid="button-new-intake"
           >
             <Plus className="h-4 w-4 mr-2" />
@@ -520,8 +586,130 @@ export default function IntakeManagerPage() {
           onSubmit={(data) => createIntakeMutation.mutate(data)}
           isPending={createIntakeMutation.isPending}
         />
+
+        <IntakeInterceptorDialog
+          open={interceptorDialogOpen}
+          onOpenChange={setInterceptorDialogOpen}
+          onContinueToIntake={() => setNewIntakeDialogOpen(true)}
+          onReactivate={handleReIntake}
+        />
+
+        <ReIntakeDialog
+          open={reIntakeDialogOpen}
+          onOpenChange={setReIntakeDialogOpen}
+          reason={reIntakeReason}
+          onReasonChange={setReIntakeReason}
+          notes={reIntakeNotes}
+          onNotesChange={setReIntakeNotes}
+          onSubmit={() => {
+            if (reIntakeAnimalId && reIntakeReason.trim()) {
+              reIntakeMutation.mutate({ 
+                animalId: reIntakeAnimalId, 
+                reason: reIntakeReason,
+                notes: reIntakeNotes || undefined 
+              });
+            }
+          }}
+          isPending={reIntakeMutation.isPending}
+        />
       </div>
     </DashboardLayout>
+  );
+}
+
+interface ReIntakeDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  reason: string;
+  onReasonChange: (value: string) => void;
+  notes: string;
+  onNotesChange: (value: string) => void;
+  onSubmit: () => void;
+  isPending: boolean;
+}
+
+function ReIntakeDialog({ 
+  open, 
+  onOpenChange, 
+  reason, 
+  onReasonChange, 
+  notes, 
+  onNotesChange, 
+  onSubmit, 
+  isPending 
+}: ReIntakeDialogProps) {
+  const handleOpenChange = (newOpen: boolean) => {
+    if (!newOpen) {
+      onReasonChange("");
+      onNotesChange("");
+    }
+    onOpenChange(newOpen);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Heart className="h-5 w-5" />
+            Re-Intake Animal
+          </DialogTitle>
+          <DialogDescription>
+            This animal has returned to the rescue. Provide details about the re-intake.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="reintake-reason">Reason for Return *</Label>
+            <Input
+              id="reintake-reason"
+              placeholder="e.g., Owner could no longer care for animal, allergies in new home..."
+              value={reason}
+              onChange={(e) => onReasonChange(e.target.value)}
+              data-testid="input-reintake-reason"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="reintake-notes">Additional Notes</Label>
+            <Textarea
+              id="reintake-notes"
+              placeholder="Any other relevant information about the return..."
+              value={notes}
+              onChange={(e) => onNotesChange(e.target.value)}
+              className="min-h-[80px]"
+              data-testid="input-reintake-notes"
+            />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => handleOpenChange(false)}
+            disabled={isPending}
+            data-testid="button-cancel-reintake"
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={onSubmit}
+            disabled={isPending || !reason.trim()}
+            data-testid="button-submit-reintake"
+          >
+            {isPending ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Processing...
+              </>
+            ) : (
+              "Confirm Re-Intake"
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
