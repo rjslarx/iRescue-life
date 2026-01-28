@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState, useMemo } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import {
   Sheet,
@@ -324,6 +324,30 @@ export default function ApplicationDetailSheet({
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [declineReason, setDeclineReason] = useState<string>("");
 
+  // Get the appropriate form fields endpoint based on application type
+  const formFieldsEndpoint = type === "adoption" 
+    ? "/api/adoption-form-fields" 
+    : type === "foster" 
+      ? "/api/foster-form-fields" 
+      : "";
+
+  // Fetch form field definitions to get proper labels for UUID keys
+  const { data: formFieldsData } = useQuery<{ fields: Array<{ id: string; label: string; fieldType: string }> }>({
+    queryKey: ["form-fields", formFieldsEndpoint],
+    enabled: !!formFieldsEndpoint && isOpen,
+  });
+
+  // Create a map from field ID (UUID) to label for display
+  const fieldLabelMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    if (formFieldsData?.fields) {
+      formFieldsData.fields.forEach((field) => {
+        map[field.id] = field.label;
+      });
+    }
+    return map;
+  }, [formFieldsData]);
+
   const declineMutation = useMutation({
     mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
       const response = await apiRequest("POST", `/api/surrender/${id}/decline`, { reason });
@@ -370,6 +394,8 @@ export default function ApplicationDetailSheet({
         title: "Status updated",
         description: "The application status has been updated successfully.",
       });
+      // Close the sheet after successful status update so user sees the updated status in the list
+      onClose();
     },
     onError: () => {
       toast({
@@ -453,30 +479,107 @@ export default function ApplicationDetailSheet({
     }
   };
 
+  // Create a reverse lookup from label to field ID for finding values by label
+  const labelToIdMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    if (formFieldsData?.fields) {
+      formFieldsData.fields.forEach((field) => {
+        // Normalize label to lowercase for case-insensitive matching
+        map[field.label.toLowerCase()] = field.id;
+      });
+    }
+    return map;
+  }, [formFieldsData]);
+
+  // Helper to find a response value by label pattern (case-insensitive)
+  // Uses more specific patterns to avoid false matches
+  const getResponseByLabel = (responses: Record<string, any>, labelPattern: string | RegExp): any => {
+    // First try exact match by label (for UUID keys stored with form field labels)
+    if (typeof labelPattern === 'string') {
+      const normalizedPattern = labelPattern.toLowerCase();
+      const fieldId = labelToIdMap[normalizedPattern];
+      if (fieldId && responses[fieldId] !== undefined) {
+        return responses[fieldId];
+      }
+      // Also try looking for legacy field names directly
+      if (responses[labelPattern] !== undefined) return responses[labelPattern];
+    }
+    
+    // Try regex pattern matching against form field labels
+    for (const [key, value] of Object.entries(responses)) {
+      const label = fieldLabelMap[key] || key;
+      if (typeof labelPattern === 'string') {
+        if (label.toLowerCase().includes(labelPattern.toLowerCase())) {
+          return value;
+        }
+      } else if (labelPattern.test(label)) {
+        return value;
+      }
+    }
+    return undefined;
+  };
+
+  const formatFieldLabel = (key: string): string => {
+    // First check if we have a label from form field definitions (for UUID keys)
+    if (fieldLabelMap[key]) {
+      return fieldLabelMap[key];
+    }
+    // Fall back to formatting the key itself (for legacy field names like homeOwnership)
+    return key
+      .replace(/([A-Z])/g, ' $1')
+      .replace(/^./, str => str.toUpperCase())
+      .replace(/_/g, ' ')
+      .trim();
+  };
+
+  const formatFieldValue = (value: any): string => {
+    if (value === null || value === undefined) return "Not specified";
+    if (typeof value === "boolean") return value ? "Yes" : "No";
+    if (Array.isArray(value)) return value.join(", ") || "None";
+    if (typeof value === "object") return JSON.stringify(value);
+    return String(value);
+  };
+
   const renderDealbreakerSection = () => {
     if (type === "adoption") {
       const adoptionData = data as AdoptionData;
       const customResponses = adoptionData.customResponses || {};
+      
+      // Use more specific regex patterns to avoid false matches
+      const homeType = getResponseByLabel(customResponses, /home\s*type|housing\s*type|own\s*or\s*rent|homeownership/i)
+        || getResponseByLabel(customResponses, "homeOwnership")
+        || getResponseByLabel(customResponses, "housingType");
+      const hasFence = getResponseByLabel(customResponses, /fenced?\s*yard|have.*fence|has\s*fence/i)
+        || getResponseByLabel(customResponses, "hasFence");
+      const hasLandlordApproval = getResponseByLabel(customResponses, /landlord\s*approval|landlord\s*permission/i)
+        || getResponseByLabel(customResponses, "hasLandlordApproval");
+      const otherPets = getResponseByLabel(customResponses, /other\s*pets|current\s*pets|have.*pets/i)
+        || getResponseByLabel(customResponses, "hasOtherPets")
+        || getResponseByLabel(customResponses, "otherPetsDetails");
+      const vetInfo = getResponseByLabel(customResponses, /veterinarian|vet\s*name|vet\s*contact|vet\s*info/i)
+        || getResponseByLabel(customResponses, "vetName")
+        || getResponseByLabel(customResponses, "vetContact");
+      
       return (
         <div className="space-y-2" data-testid="dealbreaker-section-adoption">
           <SummaryItem 
             label="Home Type" 
-            value={customResponses.homeOwnership || customResponses.housingType || "Not specified"} 
-            warning={customResponses.homeOwnership === "rent" && !customResponses.hasLandlordApproval}
+            value={formatFieldValue(homeType)} 
+            warning={homeType != null && String(homeType).toLowerCase().includes("rent") && !hasLandlordApproval}
           />
           <SummaryItem 
             label="Fenced Yard" 
-            value={customResponses.hasFence ? "Yes" : "No"} 
-            warning={!customResponses.hasFence}
+            value={formatFieldValue(hasFence)} 
+            warning={hasFence === false || (hasFence != null && String(hasFence).toLowerCase() === "no")}
           />
           <SummaryItem 
             label="Current Pets" 
-            value={customResponses.hasOtherPets ? (customResponses.otherPetsDetails || "Yes") : "None"}
+            value={formatFieldValue(otherPets)}
           />
           <SummaryItem 
             label="Vet Contact" 
-            value={customResponses.vetName || customResponses.vetContact || "Not provided"}
-            warning={!customResponses.vetName && !customResponses.vetContact}
+            value={formatFieldValue(vetInfo)}
+            warning={vetInfo == null}
           />
         </div>
       );
@@ -542,22 +645,6 @@ export default function ApplicationDetailSheet({
     }
 
     return null;
-  };
-
-  const formatFieldLabel = (key: string): string => {
-    return key
-      .replace(/([A-Z])/g, ' $1')
-      .replace(/^./, str => str.toUpperCase())
-      .replace(/_/g, ' ')
-      .trim();
-  };
-
-  const formatFieldValue = (value: any): string => {
-    if (value === null || value === undefined) return "Not specified";
-    if (typeof value === "boolean") return value ? "Yes" : "No";
-    if (Array.isArray(value)) return value.join(", ") || "None";
-    if (typeof value === "object") return JSON.stringify(value);
-    return String(value);
   };
 
   const renderFullDetailsSection = () => {
@@ -750,8 +837,8 @@ export default function ApplicationDetailSheet({
             <>
               <div className="border-t pt-2 mt-2" />
               <p className="text-sm font-medium text-muted-foreground">Additional Questions</p>
-              {Object.entries(fosterData.customResponses).map(([question, answer]) => (
-                <SummaryItem key={question} label={question} value={String(answer) || "No answer"} />
+              {Object.entries(fosterData.customResponses).map(([key, answer]) => (
+                <SummaryItem key={key} label={formatFieldLabel(key)} value={formatFieldValue(answer)} />
               ))}
             </>
           )}
