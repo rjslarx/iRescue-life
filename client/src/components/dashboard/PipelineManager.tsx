@@ -1,7 +1,14 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
+export type PipelineTab = "adoptions" | "fosters" | "volunteers" | "intake";
+
+interface PipelineManagerProps {
+  activeTab?: PipelineTab;
+  onTabChange?: (tab: PipelineTab) => void;
+}
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -257,11 +264,25 @@ function StatusColumn({ status, items, pipelineType, onItemClick }: StatusColumn
   );
 }
 
-export default function PipelineManager() {
+export default function PipelineManager({ activeTab, onTabChange }: PipelineManagerProps) {
   const { user } = useAuth();
+  const [currentTab, setCurrentTab] = useState<PipelineTab>(activeTab || "adoptions");
   const [sheetOpen, setSheetOpen] = useState(false);
   const [selectedType, setSelectedType] = useState<ApplicationType>("adoption");
   const [selectedData, setSelectedData] = useState<ApplicationData | null>(null);
+
+  // Sync internal state with prop when it changes
+  useEffect(() => {
+    if (activeTab && activeTab !== currentTab) {
+      setCurrentTab(activeTab);
+    }
+  }, [activeTab]);
+
+  const handleTabChange = (value: string) => {
+    const tab = value as PipelineTab;
+    setCurrentTab(tab);
+    onTabChange?.(tab);
+  };
 
   const { data: adoptionsData, isLoading: adoptionsLoading } = useQuery<{ applications: AdoptionApplication[] }>({
     queryKey: ['/api/applications'],
@@ -456,7 +477,7 @@ export default function PipelineManager() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="adoptions" className="w-full">
+          <Tabs value={currentTab} onValueChange={handleTabChange} className="w-full">
             <TabsList className="w-full h-auto flex flex-wrap sm:grid sm:grid-cols-4 mb-4 gap-1" data-testid="pipeline-tabs">
               <TabsTrigger value="adoptions" className="text-xs sm:text-sm" data-testid="tab-adoptions">
                 <Heart className="h-3 w-3 mr-1 hidden sm:inline" />

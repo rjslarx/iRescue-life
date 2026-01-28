@@ -20,7 +20,7 @@ import {
   MedicalSnapshotWidget,
   ComplianceWidget,
 } from "@/components/dashboard";
-import PipelineManager from "@/components/dashboard/PipelineManager";
+import PipelineManager, { PipelineTab } from "@/components/dashboard/PipelineManager";
 
 interface FosterAnimalWithDetails extends FosterAnimal {
   animal: Animal | null;
@@ -38,6 +38,17 @@ const actionButtons = [
   { id: "invite-team-member", label: "Invite Team Member", icon: Users, href: "/dashboard/team?action=invite", color: "bg-purple-600 text-white border-purple-600" },
 ];
 
+// Valid pipeline tabs that can be set via URL hash
+const validPipelineTabs: PipelineTab[] = ["adoptions", "fosters", "volunteers", "intake"];
+
+function getInitialPipelineTab(): PipelineTab | undefined {
+  const hash = window.location.hash.slice(1); // Remove the # prefix
+  if (validPipelineTabs.includes(hash as PipelineTab)) {
+    return hash as PipelineTab;
+  }
+  return undefined;
+}
+
 export default function Dashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -46,6 +57,34 @@ export default function Dashboard() {
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
   const [selectedAnimal, setSelectedAnimal] = useState<{id: string, name: string} | null>(null);
   const [offlineDonationDialogOpen, setOfflineDonationDialogOpen] = useState(false);
+  const [pipelineTab, setPipelineTab] = useState<PipelineTab | undefined>(getInitialPipelineTab);
+
+  // Listen for hash changes and update pipeline tab
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash.slice(1);
+      if (validPipelineTabs.includes(hash as PipelineTab)) {
+        setPipelineTab(hash as PipelineTab);
+        // Scroll the Pipeline Manager into view
+        const pipelineElement = document.querySelector('[data-testid="pipeline-manager"]');
+        if (pipelineElement) {
+          pipelineElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }
+    };
+
+    // Handle initial hash on mount
+    handleHashChange();
+
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  // Update URL hash when tab changes
+  const handlePipelineTabChange = (tab: PipelineTab) => {
+    setPipelineTab(tab);
+    window.history.replaceState(null, '', `#${tab}`);
+  };
 
   const { data: tenantData } = useQuery<{ tenant: Tenant }>({
     queryKey: ['/api/tenant', user?.activeRole],
@@ -335,7 +374,7 @@ export default function Dashboard() {
                     className="w-full min-w-0 order-2 lg:order-1 lg:col-span-8" 
                     data-testid="workspace-pipeline"
                   >
-                    <PipelineManager />
+                    <PipelineManager activeTab={pipelineTab} onTabChange={handlePipelineTabChange} />
                   </div>
                 </div>
               </section>

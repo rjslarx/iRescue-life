@@ -49,28 +49,28 @@ export default function StatsOverview() {
       value: pendingAdoptions,
       description: 'Adoption applications',
       icon: ClipboardList,
-      href: '/dashboard/applications',
+      href: '/dashboard#adoptions',
     },
     {
       label: 'Pending Fosters',
       value: pendingFosters,
       description: 'Foster applications',
       icon: HandHeart,
-      href: '/dashboard/foster-pipeline',
+      href: '/dashboard#fosters',
     },
     {
       label: 'Pending Volunteers',
       value: pendingVolunteers,
       description: 'Volunteer applications',
       icon: Users,
-      href: '/dashboard/volunteer-applications',
+      href: '/dashboard#volunteers',
     },
     {
       label: 'Pending Intakes',
       value: pendingIntakes,
       description: 'Surrender requests',
       icon: Inbox,
-      href: '/dashboard/intake',
+      href: '/dashboard#intake',
     },
     {
       label: 'In Shelter',
@@ -106,10 +106,18 @@ export default function StatsOverview() {
     );
   }
 
+  const handleHashLinkClick = (href: string) => {
+    if (href.includes('#')) {
+      setTimeout(() => {
+        window.dispatchEvent(new HashChangeEvent('hashchange'));
+      }, 0);
+    }
+  };
+
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 gap-3" data-testid="stats-overview">
       {stats.map((stat) => (
-        <Link key={stat.label} href={stat.href}>
+        <Link key={stat.label} href={stat.href} onClick={() => handleHashLinkClick(stat.href)}>
           <Card 
             className="bg-muted/30 border-0 shadow-none cursor-pointer hover-elevate"
             data-testid={`stat-${stat.label.toLowerCase().replace(/\s+/g, '-')}`}
