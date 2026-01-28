@@ -165,8 +165,8 @@ export default function VolunteerKanbanBoard({
   }
 
   return (
-    <div className="w-full">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+    <div className="w-full overflow-x-auto">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 min-w-fit">
         {stages.map((stage) => {
           const stageApps = getApplicationsByStage(stage.id);
           const StageIcon = stage.icon;
@@ -234,52 +234,54 @@ export default function VolunteerKanbanBoard({
                                 <VolunteerSkillsBadges app={app} />
                               )}
 
-                              {/* Mobile-friendly stage selector and view button */}
-                              <div className="flex gap-2 mt-3 pt-2 border-t">
-                                {onViewApplication && (
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="flex-1"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      onViewApplication(app);
-                                    }}
-                                    data-testid={`button-view-volunteer-application-${app.id}`}
-                                  >
-                                    <Eye className="h-4 w-4 mr-1" />
-                                    View
-                                  </Button>
-                                )}
-                                {onMoveApplication && (
-                                  <Select
-                                    value={app.pipelineStatus}
-                                    onValueChange={(newStage) => {
-                                      if (newStage !== app.pipelineStatus) {
-                                        onMoveApplication(app.id, newStage);
-                                      }
-                                    }}
-                                  >
-                                    <SelectTrigger 
-                                      className="flex-1 h-8 text-xs"
-                                      onClick={(e) => e.stopPropagation()}
-                                      data-testid={`select-volunteer-stage-${app.id}`}
+                              {/* Stage selector and view button - stacked vertically for better fit */}
+                              <div className="flex flex-col gap-2 mt-3 pt-2 border-t">
+                                <div className="flex gap-2">
+                                  {onViewApplication && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="shrink-0"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        onViewApplication(app);
+                                      }}
+                                      data-testid={`button-view-volunteer-application-${app.id}`}
                                     >
-                                      <ArrowRight className="h-3 w-3 mr-1" />
-                                      <SelectValue placeholder="Move to..." />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {stages.filter(s => s.id !== app.pipelineStatus).map((s) => (
-                                        <SelectItem key={s.id} value={s.id} data-testid={`option-volunteer-stage-${s.id}-${app.id}`}>
-                                          <div className="flex items-center gap-2">
-                                            <div className={`h-2 w-2 rounded-full ${s.color}`} />
-                                            {s.label}
-                                          </div>
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                )}
+                                      <Eye className="h-4 w-4 mr-1" />
+                                      View
+                                    </Button>
+                                  )}
+                                  {onMoveApplication && (
+                                    <Select
+                                      value={app.pipelineStatus}
+                                      onValueChange={(newStage) => {
+                                        if (newStage !== app.pipelineStatus) {
+                                          onMoveApplication(app.id, newStage);
+                                        }
+                                      }}
+                                    >
+                                      <SelectTrigger 
+                                        className="flex-1 h-8 text-xs min-w-0"
+                                        onClick={(e) => e.stopPropagation()}
+                                        data-testid={`select-volunteer-stage-${app.id}`}
+                                      >
+                                        <ArrowRight className="h-3 w-3 mr-1 shrink-0" />
+                                        <span className="truncate">Move</span>
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {stages.filter(s => s.id !== app.pipelineStatus).map((s) => (
+                                          <SelectItem key={s.id} value={s.id} data-testid={`option-volunteer-stage-${s.id}-${app.id}`}>
+                                            <div className="flex items-center gap-2">
+                                              <div className={`h-2 w-2 rounded-full ${s.color}`} />
+                                              {s.label}
+                                            </div>
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  )}
+                                </div>
                               </div>
 
                               {stage.id === "waiver_needed" && onSendWaiver && !app.holdHarmlessFormId && (
