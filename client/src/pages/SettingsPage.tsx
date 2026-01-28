@@ -20,6 +20,7 @@ import { HeroLayoutSettings } from "@/components/HeroLayoutSettings";
 import MascotSettings from "@/components/MascotSettings";
 import NotificationSettings from "@/components/NotificationSettings";
 import MedicalReminderSettings from "@/components/MedicalReminderSettings";
+import MedicalProtocolSettings from "@/components/MedicalProtocolSettings";
 import VolunteerAlertSettings from "@/components/VolunteerAlertSettings";
 import VolunteerDigestSettings from "@/components/VolunteerDigestSettings";
 import QuickActionsSettings from "@/components/QuickActionsSettings";
@@ -3205,6 +3206,9 @@ export default function SettingsPage() {
 
                 {/* Medical Reminder Settings - Admin Only */}
                 <MedicalReminderSettings />
+
+                {/* Medical Protocol Settings - Default medication rounds times */}
+                <MedicalProtocolSettings />
 
                 {/* Volunteer Threshold Alerts */}
                 <Card>

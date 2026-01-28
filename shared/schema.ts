@@ -258,6 +258,11 @@ export const tenants = pgTable("tenants", {
   // Dashboard quick actions preferences (ordered list of action IDs)
   quickActions: text("quick_actions").array(), // e.g., ["add_animal", "intake_dog", "add_foster"]
   
+  // Medical protocol settings - default medication rounds times (HH:mm format)
+  defaultMorningRounds: text("default_morning_rounds").notNull().default("08:00"), // Default: 8:00 AM
+  defaultMiddayRounds: text("default_midday_rounds").notNull().default("13:00"), // Default: 1:00 PM
+  defaultEveningRounds: text("default_evening_rounds").notNull().default("17:00"), // Default: 5:00 PM
+  
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });

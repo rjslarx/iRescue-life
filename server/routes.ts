@@ -15300,6 +15300,41 @@ Submitted: ${new Date().toLocaleString()}
   });
 
   /**
+   * PATCH /api/tenant/medical-protocols
+   * Update default medication rounds times (admin only)
+   */
+  app.patch('/api/tenant/medical-protocols', requireTenant, requireAuth, requireRole(['admin', 'owner']), async (req, res, next) => {
+    try {
+      const medicalProtocolsSchema = z.object({
+        defaultMorningRounds: z.string().regex(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/, "Invalid time format (HH:mm)"),
+        defaultMiddayRounds: z.string().regex(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/, "Invalid time format (HH:mm)"),
+        defaultEveningRounds: z.string().regex(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/, "Invalid time format (HH:mm)"),
+      });
+
+      const { defaultMorningRounds, defaultMiddayRounds, defaultEveningRounds } = medicalProtocolsSchema.parse(req.body);
+
+      const [updatedTenant] = await db
+        .update(tenants)
+        .set({ 
+          defaultMorningRounds, 
+          defaultMiddayRounds, 
+          defaultEveningRounds 
+        })
+        .where(eq(tenants.id, req.tenant!.id))
+        .returning();
+
+      res.json({ 
+        success: true, 
+        defaultMorningRounds: updatedTenant.defaultMorningRounds,
+        defaultMiddayRounds: updatedTenant.defaultMiddayRounds,
+        defaultEveningRounds: updatedTenant.defaultEveningRounds,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * PATCH /api/tenant/settings/donation-section
    * Update donation section customization (admin only)
    */
@@ -20545,23 +20580,35 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
       const maxEndDate = new Date(start.getTime() + 90 * 24 * 60 * 60 * 1000);
       const effectiveEnd = end > maxEndDate ? maxEndDate : end;
       
-      // Parse frequency and determine dose times
-      // SID (daily): 0900, or current time if after 0900 on first day
-      // BID (twice daily): 0900 and 2100
-      // TID (three times daily): 0600, 1400, and 2200
-      // QID (four times daily): 0600, 1200, 1800, and 2200
-      // HS (at bedtime): 2100
-      let doseHours: number[] = [9]; // Default: once daily at 9 AM
+      // Get tenant's configured medication rounds times (or use defaults)
+      const parseTime = (timeStr: string): { hour: number; minute: number } => {
+        const [hours, minutes] = timeStr.split(':').map(Number);
+        return { hour: hours, minute: minutes || 0 };
+      };
+      const morningTime = parseTime(req.tenant!.defaultMorningRounds || '08:00');
+      const middayTime = parseTime(req.tenant!.defaultMiddayRounds || '13:00');
+      const eveningTime = parseTime(req.tenant!.defaultEveningRounds || '17:00');
+      
+      // Parse frequency and determine dose times using tenant-configured rounds
+      // SID (daily): Morning rounds
+      // BID (twice daily): Morning + Evening rounds
+      // TID (three times daily): Morning + Midday + Evening rounds
+      // QID (four times daily): Morning, Midday, Evening, and late (evening + 4 hours)
+      // HS (at bedtime): 21:00 (9 PM)
+      type DoseTimeSlot = { hour: number; minute: number };
+      let doseTimes: DoseTimeSlot[] = [morningTime]; // Default: once daily at morning rounds
       const freq = data.frequency.toUpperCase();
       
       if (freq.includes('HS') || freq.includes('BEDTIME')) {
-        doseHours = [21]; // 9 PM (bedtime)
+        doseTimes = [{ hour: 21, minute: 0 }]; // 9 PM (bedtime) - fixed time
       } else if (freq.includes('BID') || freq.includes('TWICE') || freq.includes('2X')) {
-        doseHours = [9, 21]; // 9 AM and 9 PM
+        doseTimes = [morningTime, eveningTime]; // Morning + Evening
       } else if (freq.includes('TID') || freq.includes('THREE') || freq.includes('3X')) {
-        doseHours = [6, 14, 22]; // 6 AM, 2 PM, 10 PM
+        doseTimes = [morningTime, middayTime, eveningTime]; // Morning + Midday + Evening
       } else if (freq.includes('QID') || freq.includes('FOUR') || freq.includes('4X')) {
-        doseHours = [6, 12, 18, 22]; // 6 AM, 12 PM, 6 PM, 10 PM
+        // Four times daily: Morning, Midday, Evening, and late night (evening + 4 hours, max 22:00)
+        const lateHour = Math.min(eveningTime.hour + 4, 22);
+        doseTimes = [morningTime, middayTime, eveningTime, { hour: lateHour, minute: 0 }];
       }
 
       // Safety limit: max 500 doses to prevent timeout
@@ -20578,18 +20625,20 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
       const isHistorical = prescription.endDate && new Date(prescription.endDate) < now;
       
       for (let d = new Date(start); d <= effectiveEnd && doses.length < MAX_DOSES; d.setDate(d.getDate() + 1)) {
-        for (let i = 0; i < doseHours.length && doses.length < MAX_DOSES; i++) {
+        for (let i = 0; i < doseTimes.length && doses.length < MAX_DOSES; i++) {
           const doseTime = new Date(d);
-          let hour = doseHours[i];
+          let { hour, minute } = doseTimes[i];
           
-          // For first day with daily (single dose), use current time if after 9 AM
+          // For first day with daily (single dose), use current time if after morning rounds
           // Only for non-historical prescriptions
-          if (!isHistorical && isFirstDay(d) && doseHours.length === 1 && now.getHours() >= 9) {
+          const nowMinutes = now.getHours() * 60 + now.getMinutes();
+          const morningMinutes = morningTime.hour * 60 + morningTime.minute;
+          if (!isHistorical && isFirstDay(d) && doseTimes.length === 1 && nowMinutes >= morningMinutes) {
             hour = now.getHours();
-            doseTime.setMinutes(now.getMinutes());
+            minute = now.getMinutes();
           }
           
-          doseTime.setHours(hour, doseTime.getMinutes() || 0, 0, 0);
+          doseTime.setHours(hour, minute, 0, 0);
           
           // For historical prescriptions, auto-complete all doses
           // For current prescriptions, doses in the past are 'due' (shown as overdue), future doses are 'due'
