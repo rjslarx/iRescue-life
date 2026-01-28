@@ -110,6 +110,8 @@ interface VolunteerData {
   availability?: string;
   interests?: string;
   skills?: string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
   status: string;
   notes?: string;
   smsConsent?: boolean;
@@ -626,8 +628,14 @@ export default function ApplicationDetailSheet({
           {volunteerData.skills && (
             <SummaryItem label="Skills" value={volunteerData.skills} />
           )}
+          <div className="border-t pt-2 mt-2" />
+          <SummaryItem label="Emergency Contact" value={volunteerData.emergencyContactName || "Not specified"} />
+          <SummaryItem label="Emergency Phone" value={volunteerData.emergencyContactPhone || "Not specified"} />
           {volunteerData.notes && (
-            <SummaryItem label="Notes" value={volunteerData.notes} />
+            <>
+              <div className="border-t pt-2 mt-2" />
+              <SummaryItem label="Notes" value={volunteerData.notes} />
+            </>
           )}
         </div>
       );
