@@ -20572,23 +20572,36 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
         d.getMonth() === start.getMonth() && 
         d.getDate() === start.getDate();
       
+      // Determine if this is a historical prescription (end date in the past)
+      // If so, mark all doses as 'given' instead of 'due' for backloading records
+      // This prevents historical medications from appearing as overdue in the Medical Pipeline
+      const isHistorical = prescription.endDate && new Date(prescription.endDate) < now;
+      
       for (let d = new Date(start); d <= effectiveEnd && doses.length < MAX_DOSES; d.setDate(d.getDate() + 1)) {
         for (let i = 0; i < doseHours.length && doses.length < MAX_DOSES; i++) {
           const doseTime = new Date(d);
           let hour = doseHours[i];
           
           // For first day with daily (single dose), use current time if after 9 AM
-          if (isFirstDay(d) && doseHours.length === 1 && now.getHours() >= 9) {
+          // Only for non-historical prescriptions
+          if (!isHistorical && isFirstDay(d) && doseHours.length === 1 && now.getHours() >= 9) {
             hour = now.getHours();
             doseTime.setMinutes(now.getMinutes());
           }
           
           doseTime.setHours(hour, doseTime.getMinutes() || 0, 0, 0);
+          
+          // For historical prescriptions, auto-complete all doses
+          // For current prescriptions, doses in the past are 'due' (shown as overdue), future doses are 'due'
+          const doseStatus = isHistorical ? 'given' as const : 'due' as const;
+          
           doses.push({
             prescriptionId: prescription.id,
             tenantId: req.tenant!.id,
             dueDate: doseTime,
-            status: 'due' as const,
+            status: doseStatus,
+            // For historical doses, mark them as given at the scheduled time
+            ...(isHistorical ? { givenAt: doseTime } : {}),
           });
         }
       }
@@ -20597,7 +20610,7 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
         await db.insert(medicalDoses).values(doses);
       }
 
-      res.json({ prescription, dosesCreated: doses.length });
+      res.json({ prescription, dosesCreated: doses.length, isHistorical });
     } catch (error) {
       next(error);
     }
