@@ -69,6 +69,7 @@ const statusConfig: Record<string, { label: string; variant: "default" | "second
   archived: { label: "Archived", variant: "secondary" },
   deceased: { label: "Deceased", variant: "secondary" },
   merged: { label: "Merged", variant: "secondary" },
+  transfer_pending: { label: "Transfer Pending", variant: "outline" },
 };
 
 function getMatchLabel(matchType: MatchType, similarity?: number): string {
@@ -171,8 +172,8 @@ export default function IntakeInterceptorDialog({
   const [hasSearched, setHasSearched] = useState(false);
   const [selectedAnimal, setSelectedAnimal] = useState<AnimalMatch | null>(null);
 
-  const debouncedMicrochip = useDebounce(microchipSearch, 300);
-  const debouncedName = useDebounce(nameSearch, 300);
+  const debouncedMicrochip = useDebounce(microchipSearch, 500);
+  const debouncedName = useDebounce(nameSearch, 500);
 
   const shouldSearch = (debouncedMicrochip.trim().length > 0) || (debouncedName.trim().length >= 2);
 
@@ -208,7 +209,7 @@ export default function IntakeInterceptorDialog({
   };
 
   const handleAnimalSelect = (animal: AnimalMatch) => {
-    const isReactivatable = ['archived', 'deceased', 'adopted'].includes(animal.status);
+    const isReactivatable = ['archived', 'deceased', 'adopted', 'transfer_pending'].includes(animal.status);
     
     if (isReactivatable && onReactivate) {
       onReactivate(animal.id);
@@ -294,7 +295,7 @@ export default function IntakeInterceptorDialog({
                   key={animal.id}
                   animal={animal}
                   onSelect={() => handleAnimalSelect(animal)}
-                  isReactivatable={['archived', 'deceased', 'adopted'].includes(animal.status)}
+                  isReactivatable={['archived', 'deceased', 'adopted', 'transfer_pending'].includes(animal.status)}
                 />
               ))}
 
@@ -310,7 +311,7 @@ export default function IntakeInterceptorDialog({
                       key={animal.id}
                       animal={animal}
                       onSelect={() => handleAnimalSelect(animal)}
-                      isReactivatable={['archived', 'deceased', 'adopted'].includes(animal.status)}
+                      isReactivatable={['archived', 'deceased', 'adopted', 'transfer_pending'].includes(animal.status)}
                     />
                   ))}
                 </>
