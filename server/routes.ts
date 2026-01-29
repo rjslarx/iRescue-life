@@ -5704,13 +5704,20 @@ Crawl-delay: 1
       const { updateAnimal } = await import('./services/animals');
       const { ObjectStorageService } = await import('./objectStorage');
       
-      // Convert ISO date strings to Date objects
+      // Convert ISO date strings to Date objects for all timestamp fields
       const data = { ...req.body };
-      if (data.dateOfBirth && typeof data.dateOfBirth === 'string') {
-        data.dateOfBirth = new Date(data.dateOfBirth);
-      }
-      if (data.petfinderSyncedAt && typeof data.petfinderSyncedAt === 'string') {
-        data.petfinderSyncedAt = new Date(data.petfinderSyncedAt);
+      const timestampFields = [
+        'dateOfBirth', 
+        'petfinderSyncedAt', 
+        'scheduledSurgeryDate', 
+        'intakeDate', 
+        'adoptionDate', 
+        'deceasedDate'
+      ];
+      for (const field of timestampFields) {
+        if (data[field] && typeof data[field] === 'string') {
+          data[field] = new Date(data[field]);
+        }
       }
       
       // Normalize photo URLs if provided
