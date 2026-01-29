@@ -8667,8 +8667,155 @@ Crawl-delay: 1
         status: 'completed',
       });
 
-      // TODO: Generate PDF and upload to storage
-      // TODO: Send confirmation email to signer
+      // ========================================================================
+      // AUTOMATION: Auto-advance volunteer pipeline when Hold Harmless waiver is signed
+      // ========================================================================
+      const formNameLower = form.name.toLowerCase();
+      // More specific detection: must include "hold harmless" OR ("volunteer" AND ("waiver" OR "liability"))
+      const isVolunteerWaiver = formNameLower.includes('hold harmless') || 
+                                (formNameLower.includes('volunteer') && 
+                                 (formNameLower.includes('waiver') || formNameLower.includes('liability')));
+      
+      if (isVolunteerWaiver && submission.signerEmail) {
+        try {
+          const { volunteerApplications } = await import('@shared/schema');
+          
+          // Normalize email for case-insensitive matching
+          const normalizedSignerEmail = submission.signerEmail.toLowerCase().trim();
+          
+          // Find volunteer application matching signer email with waiver_needed status
+          // Use case-insensitive email comparison
+          const [volunteerApp] = await db
+            .select()
+            .from(volunteerApplications)
+            .where(
+              and(
+                eq(volunteerApplications.tenantId, submission.tenantId),
+                sql`LOWER(TRIM(${volunteerApplications.applicantEmail})) = ${normalizedSignerEmail}`,
+                eq(volunteerApplications.pipelineStatus, 'waiver_needed')
+              )
+            )
+            .limit(1);
+          
+          if (volunteerApp) {
+            // Auto-advance to active_pool
+            await db
+              .update(volunteerApplications)
+              .set({
+                pipelineStatus: 'active_pool',
+                status: 'approved',
+                updatedAt: new Date(),
+              })
+              .where(eq(volunteerApplications.id, volunteerApp.id));
+            
+            // Log activity for the auto-advancement
+            const { logActivity } = await import('./lib/activity-logger');
+            await logActivity({
+              tenantId: submission.tenantId,
+              userId: null, // System action
+              action: 'volunteer_auto_advanced',
+              category: 'user',
+              entityType: 'volunteer_application',
+              entityId: volunteerApp.id.toString(),
+              description: `Volunteer ${volunteerApp.applicantName} automatically advanced to Active Pool after signing "${form.name}"`,
+              metadata: {
+                formName: form.name,
+                formId: form.id,
+                submissionId: updated?.id,
+                previousStatus: 'waiver_needed',
+                newStatus: 'active_pool',
+              },
+            });
+            
+            console.log(`[Volunteer Automation] Auto-advanced ${volunteerApp.applicantEmail} from waiver_needed to active_pool`);
+          }
+        } catch (automationError) {
+          // Log error but don't fail the form submission
+          console.error('[Volunteer Automation] Error auto-advancing volunteer:', automationError);
+        }
+      }
+
+      // ========================================================================
+      // EMAIL: Send copy of submitted form to tenant's contact email
+      // ========================================================================
+      if (tenant?.contactEmail && renderedHtml) {
+        try {
+          const { sendEmail } = await import('./lib/email');
+          
+          // Helper to escape HTML entities for safe display
+          const escapeHtml = (str: string) => str
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+          
+          // Escape user-provided text fields
+          const safeFormName = escapeHtml(form.name);
+          const safeSignerName = escapeHtml(submission.signerName);
+          const safeSignerEmail = escapeHtml(submission.signerEmail);
+          const safeSignerPhone = submission.signerPhone ? escapeHtml(submission.signerPhone) : null;
+          const safeAnimalName = animal?.name ? escapeHtml(animal.name) : null;
+          
+          const emailSubject = `Form Submitted: ${form.name} - ${submission.signerName}`;
+          const emailHtml = `
+            <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto;">
+              <h2 style="color: #333; border-bottom: 2px solid #4f46e5; padding-bottom: 10px;">
+                Form Submission Received
+              </h2>
+              <table style="width: 100%; margin-bottom: 20px; border-collapse: collapse;">
+                <tr>
+                  <td style="padding: 8px 0; color: #666; width: 140px;"><strong>Form Name:</strong></td>
+                  <td style="padding: 8px 0;">${safeFormName}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 0; color: #666;"><strong>Signed By:</strong></td>
+                  <td style="padding: 8px 0;">${safeSignerName}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 0; color: #666;"><strong>Email:</strong></td>
+                  <td style="padding: 8px 0;">${safeSignerEmail}</td>
+                </tr>
+                ${safeSignerPhone ? `
+                <tr>
+                  <td style="padding: 8px 0; color: #666;"><strong>Phone:</strong></td>
+                  <td style="padding: 8px 0;">${safeSignerPhone}</td>
+                </tr>
+                ` : ''}
+                <tr>
+                  <td style="padding: 8px 0; color: #666;"><strong>Submitted:</strong></td>
+                  <td style="padding: 8px 0;">${new Date().toLocaleString()}</td>
+                </tr>
+                ${safeAnimalName ? `
+                <tr>
+                  <td style="padding: 8px 0; color: #666;"><strong>Animal:</strong></td>
+                  <td style="padding: 8px 0;">${safeAnimalName}</td>
+                </tr>
+                ` : ''}
+              </table>
+              <div style="border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; background: #fafafa;">
+                <h3 style="margin-top: 0; color: #333;">Completed Form Document</h3>
+                ${renderedHtml}
+              </div>
+              <p style="color: #888; font-size: 12px; margin-top: 20px; text-align: center;">
+                This is an automated notification from your iRescue platform.
+              </p>
+            </div>
+          `;
+          
+          await sendEmail({
+            to: tenant.contactEmail,
+            subject: emailSubject,
+            html: emailHtml,
+            tenantId: submission.tenantId,
+          });
+          
+          console.log(`[Form Submission] Emailed copy of "${form.name}" to ${tenant.contactEmail}`);
+        } catch (emailError) {
+          // Log error but don't fail the form submission
+          console.error('[Form Submission] Error sending form copy email:', emailError);
+        }
+      }
 
       res.json({ 
         success: true, 
