@@ -214,6 +214,8 @@ function RouterSwitch() {
       <Route path="/run-sheet/:token" component={RunSheetPage} />
       <Route path="/form/:token" component={PublicFormSigningPage} />
       <Route path="/form/:token/payment" component={FormPaymentPage} />
+      <Route path="/forms/sign/:token" component={PublicFormSigningPage} />
+      <Route path="/forms/sign/:token/payment" component={FormPaymentPage} />
       
       {/* Protected dashboard routes */}
       <ProtectedRoute path="/dashboard" pageId="dashboard" component={Dashboard} />
