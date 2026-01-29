@@ -364,6 +364,16 @@ export default function KennelCardPage() {
       'BID': 'Twice daily',
       'TID': 'Three times daily',
       'QID': 'Four times daily',
+      'HS': 'At bedtime',
+      'EOD': 'Every other day',
+      'WEEKLY': 'Weekly',
+      'MONTHLY': 'Monthly',
+      'Q3M': 'Every 3 months',
+      'Q6M': 'Every 6 months',
+      'Q8M': 'Every 8 months',
+      'ANNUALLY': 'Annually',
+      'ONCE': 'One time',
+      'PRN': 'As needed',
     };
     return map[frequency] || frequency;
   };

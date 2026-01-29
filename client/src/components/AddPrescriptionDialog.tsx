@@ -273,6 +273,13 @@ export function AddPrescriptionDialog({ animalId, open, onOpenChange, prescripti
                         <SelectItem value="QID">QID (Four Times Daily)</SelectItem>
                         <SelectItem value="HS">HS (At Bedtime)</SelectItem>
                         <SelectItem value="EOD">EOD (Every Other Day)</SelectItem>
+                        <SelectItem value="WEEKLY">Weekly (Every 7 Days)</SelectItem>
+                        <SelectItem value="MONTHLY">Monthly (Every 30 Days)</SelectItem>
+                        <SelectItem value="Q3M">Every 3 Months (Bravecto)</SelectItem>
+                        <SelectItem value="Q6M">Every 6 Months (ProHeart 6)</SelectItem>
+                        <SelectItem value="Q8M">Every 8 Months (Seresto)</SelectItem>
+                        <SelectItem value="ANNUALLY">Annually (Every 365 Days)</SelectItem>
+                        <SelectItem value="ONCE">One Time (No Repeat)</SelectItem>
                         <SelectItem value="PRN">PRN (As Needed)</SelectItem>
                       </SelectContent>
                     </Select>

@@ -23217,17 +23217,34 @@ Email: ${application.applicantEmail || ''}`
       const middayTime = parseTime(req.tenant!.defaultMiddayRounds || '13:00');
       const eveningTime = parseTime(req.tenant!.defaultEveningRounds || '17:00');
       
-      // Parse frequency and determine dose times using tenant-configured rounds
-      // SID (daily): Morning rounds
-      // BID (twice daily): Morning + Evening rounds
-      // TID (three times daily): Morning + Midday + Evening rounds
-      // QID (four times daily): Morning, Midday, Evening, and late (evening + 4 hours)
-      // HS (at bedtime): 21:00 (9 PM)
+      // Parse frequency and determine dose generation strategy
+      // Daily frequencies: SID, BID, TID, QID, HS, EOD
+      // Interval frequencies: WEEKLY, MONTHLY, Q3M, Q6M, Q8M, ANNUALLY
+      // One-time: ONCE (single dose, no repeat)
       type DoseTimeSlot = { hour: number; minute: number };
       let doseTimes: DoseTimeSlot[] = [morningTime]; // Default: once daily at morning rounds
       const freq = data.frequency.toUpperCase();
       
-      if (freq.includes('HS') || freq.includes('BEDTIME')) {
+      // Determine if this is an interval-based frequency (days between doses)
+      let intervalDays: number | null = null; // null means daily dosing with doseTimes array
+      
+      if (freq === 'ONCE' || freq.includes('ONE TIME')) {
+        intervalDays = 0; // Special: single dose only
+      } else if (freq === 'ANNUALLY' || freq.includes('ANNUAL') || freq.includes('YEARLY')) {
+        intervalDays = 365;
+      } else if (freq === 'Q8M' || freq.includes('8 MONTH') || freq.includes('SERESTO')) {
+        intervalDays = 240;
+      } else if (freq === 'Q6M' || freq.includes('6 MONTH') || freq.includes('PROHEART')) {
+        intervalDays = 180;
+      } else if (freq === 'Q3M' || freq.includes('3 MONTH') || freq.includes('BRAVECTO')) {
+        intervalDays = 90;
+      } else if (freq === 'MONTHLY' || freq.includes('MONTH')) {
+        intervalDays = 30;
+      } else if (freq === 'WEEKLY' || freq.includes('WEEK')) {
+        intervalDays = 7;
+      } else if (freq.includes('EOD') || freq.includes('EVERY OTHER')) {
+        intervalDays = 2;
+      } else if (freq.includes('HS') || freq.includes('BEDTIME')) {
         doseTimes = [{ hour: 21, minute: 0 }]; // 9 PM (bedtime) - fixed time
       } else if (freq.includes('BID') || freq.includes('TWICE') || freq.includes('2X')) {
         doseTimes = [morningTime, eveningTime]; // Morning + Evening
@@ -23238,6 +23255,7 @@ Email: ${application.applicantEmail || ''}`
         const lateHour = Math.min(eveningTime.hour + 4, 22);
         doseTimes = [morningTime, middayTime, eveningTime, { hour: lateHour, minute: 0 }];
       }
+      // Default: SID (once daily at morning) - already set
 
       // Safety limit: max 500 doses to prevent timeout
       const MAX_DOSES = 500;
@@ -23252,34 +23270,85 @@ Email: ${application.applicantEmail || ''}`
       // This prevents historical medications from appearing as overdue in the Medical Pipeline
       const isHistorical = prescription.endDate && new Date(prescription.endDate) < now;
       
-      for (let d = new Date(start); d <= effectiveEnd && doses.length < MAX_DOSES; d.setDate(d.getDate() + 1)) {
-        for (let i = 0; i < doseTimes.length && doses.length < MAX_DOSES; i++) {
+      // Helper to get first-day adjusted time (avoid immediate overdue for same-day prescriptions)
+      const getFirstDayAdjustedTime = (d: Date): { hour: number; minute: number } => {
+        const nowMinutes = now.getHours() * 60 + now.getMinutes();
+        const morningMinutes = morningTime.hour * 60 + morningTime.minute;
+        
+        // If start date is today and current time is past morning rounds, use current time
+        if (!isHistorical && isFirstDay(d) && nowMinutes >= morningMinutes) {
+          return { hour: now.getHours(), minute: now.getMinutes() };
+        }
+        return morningTime;
+      };
+      
+      // Generate doses based on frequency type
+      if (intervalDays === 0) {
+        // ONE TIME: Single dose only
+        const doseTime = new Date(start);
+        const adjustedTime = getFirstDayAdjustedTime(start);
+        doseTime.setHours(adjustedTime.hour, adjustedTime.minute, 0, 0);
+        const doseStatus = isHistorical ? 'given' as const : 'due' as const;
+        doses.push({
+          prescriptionId: prescription.id,
+          tenantId: req.tenant!.id,
+          dueDate: doseTime,
+          status: doseStatus,
+          ...(isHistorical ? { givenAt: doseTime } : {}),
+        });
+      } else if (intervalDays !== null && intervalDays > 1) {
+        // INTERVAL-BASED: Generate doses at specified day intervals (weekly, monthly, etc.)
+        let isFirst = true;
+        for (let d = new Date(start); d <= effectiveEnd && doses.length < MAX_DOSES; d.setDate(d.getDate() + intervalDays)) {
           const doseTime = new Date(d);
-          let { hour, minute } = doseTimes[i];
-          
-          // For first day with daily (single dose), use current time if after morning rounds
-          // Only for non-historical prescriptions
-          const nowMinutes = now.getHours() * 60 + now.getMinutes();
-          const morningMinutes = morningTime.hour * 60 + morningTime.minute;
-          if (!isHistorical && isFirstDay(d) && doseTimes.length === 1 && nowMinutes >= morningMinutes) {
-            hour = now.getHours();
-            minute = now.getMinutes();
+          // Apply first-day time adjustment for the first dose only
+          if (isFirst && isFirstDay(d)) {
+            const adjustedTime = getFirstDayAdjustedTime(d);
+            doseTime.setHours(adjustedTime.hour, adjustedTime.minute, 0, 0);
+          } else {
+            doseTime.setHours(morningTime.hour, morningTime.minute, 0, 0);
           }
-          
-          doseTime.setHours(hour, minute, 0, 0);
-          
-          // For historical prescriptions, auto-complete all doses
-          // For current prescriptions, doses in the past are 'due' (shown as overdue), future doses are 'due'
+          isFirst = false;
           const doseStatus = isHistorical ? 'given' as const : 'due' as const;
-          
           doses.push({
             prescriptionId: prescription.id,
             tenantId: req.tenant!.id,
             dueDate: doseTime,
             status: doseStatus,
-            // For historical doses, mark them as given at the scheduled time
             ...(isHistorical ? { givenAt: doseTime } : {}),
           });
+        }
+      } else {
+        // DAILY-BASED: Generate doses each day with multiple times per day if needed
+        for (let d = new Date(start); d <= effectiveEnd && doses.length < MAX_DOSES; d.setDate(d.getDate() + 1)) {
+          for (let i = 0; i < doseTimes.length && doses.length < MAX_DOSES; i++) {
+            const doseTime = new Date(d);
+            let { hour, minute } = doseTimes[i];
+            
+            // For first day with daily (single dose), use current time if after morning rounds
+            // Only for non-historical prescriptions
+            const nowMinutes = now.getHours() * 60 + now.getMinutes();
+            const morningMinutes = morningTime.hour * 60 + morningTime.minute;
+            if (!isHistorical && isFirstDay(d) && doseTimes.length === 1 && nowMinutes >= morningMinutes) {
+              hour = now.getHours();
+              minute = now.getMinutes();
+            }
+            
+            doseTime.setHours(hour, minute, 0, 0);
+            
+            // For historical prescriptions, auto-complete all doses
+            // For current prescriptions, doses in the past are 'due' (shown as overdue), future doses are 'due'
+            const doseStatus = isHistorical ? 'given' as const : 'due' as const;
+            
+            doses.push({
+              prescriptionId: prescription.id,
+              tenantId: req.tenant!.id,
+              dueDate: doseTime,
+              status: doseStatus,
+              // For historical doses, mark them as given at the scheduled time
+              ...(isHistorical ? { givenAt: doseTime } : {}),
+            });
+          }
         }
       }
 
