@@ -78,6 +78,23 @@ A dedicated pipeline for dog surrender requests, featuring a `surrender_requests
 **Volunteer Calendar Staffing Color-Coding:**
 Volunteer calendars visually indicate staffing levels (Red, Yellow, Green) based on `minVolunteersRequired`, with management UI to set these requirements and assign permissions.
 
+**Dashboard Permission-Based Filtering:**
+The Command Center dashboard uses the `usePagePermissions` hook to conditionally render widgets based on user permissions:
+- **MedicalSnapshotWidget:** Visible only if user has 'medical-tasks' permission
+- **Quick Actions:** Visible only if user has 'dashboard' permission AND at least one permitted action
+- **StatsOverview:** Visible only if user has explicit 'dashboard' permission
+- **PipelineManager:** Visible only if user has access to any pipeline (applications, fosters, or volunteers)
+- **ComplianceWidget:** Visible only if user has 'analytics' OR 'reports' permission
+- **FloatingActionButton (Record Donation):** Visible only if user has 'finance' permission
+
+*Role-Based Exceptions (Intentional):*
+- **Foster Dashboard:** Users with foster role see a dedicated "My Foster Animals" view instead of Command Center widgets
+- **OnboardingChecklist:** Admin-only setup wizard for initial platform configuration
+- **SetupWizard:** Admin-only first-run configuration dialog
+
+*Limited Access View:*
+Users with minimal permissions (e.g., calendar-only) see a simplified view with a "Go to Calendar" button instead of the full Command Center.
+
 **Customizable Hero Layouts:**
 Tenants can select from "Three Doors" (customizable action cards), "Action Circle," or "None" for their public site hero sections.
 
