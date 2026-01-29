@@ -8827,6 +8827,47 @@ Crawl-delay: 1
     }
   });
 
+  /**
+   * POST /api/adoption-form-fields/lookup
+   * Look up form field labels by their IDs (for cross-tenant display)
+   * Used when viewing applications that may have been submitted under different tenant contexts
+   * Restricted to platform admins OR users looking up fields within their own tenant
+   */
+  app.post('/api/adoption-form-fields/lookup', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { adoptionFormFields } = await import('@shared/schema');
+      const { inArray, eq, and } = await import('drizzle-orm');
+      
+      const schema = z.object({
+        fieldIds: z.array(z.string()),
+      });
+      
+      const { fieldIds } = schema.parse(req.body);
+      
+      if (fieldIds.length === 0) {
+        return res.json({ fields: [] });
+      }
+      
+      const isPlatformAdmin = req.user?.roles?.includes('platform_admin');
+      
+      // Platform admins can look up any field; regular users only their tenant's fields
+      const fields = await db.select({
+        id: adoptionFormFields.id,
+        label: adoptionFormFields.label,
+        fieldType: adoptionFormFields.fieldType,
+      })
+        .from(adoptionFormFields)
+        .where(isPlatformAdmin 
+          ? inArray(adoptionFormFields.id, fieldIds)
+          : and(inArray(adoptionFormFields.id, fieldIds), eq(adoptionFormFields.tenantId, req.tenant!.id))
+        );
+      
+      res.json({ fields });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   // ============================================================================
   // VOLUNTEER FORM FIELDS
   // ============================================================================
@@ -9114,6 +9155,46 @@ Crawl-delay: 1
       ));
       
       res.json({ success: true });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/foster-form-fields/lookup
+   * Look up form field labels by their IDs (for cross-tenant display)
+   * Restricted to platform admins OR users looking up fields within their own tenant
+   */
+  app.post('/api/foster-form-fields/lookup', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { fosterFormFields } = await import('@shared/schema');
+      const { inArray, eq, and } = await import('drizzle-orm');
+      
+      const schema = z.object({
+        fieldIds: z.array(z.string()),
+      });
+      
+      const { fieldIds } = schema.parse(req.body);
+      
+      if (fieldIds.length === 0) {
+        return res.json({ fields: [] });
+      }
+      
+      const isPlatformAdmin = req.user?.roles?.includes('platform_admin');
+      
+      // Platform admins can look up any field; regular users only their tenant's fields
+      const fields = await db.select({
+        id: fosterFormFields.id,
+        label: fosterFormFields.label,
+        fieldType: fosterFormFields.fieldType,
+      })
+        .from(fosterFormFields)
+        .where(isPlatformAdmin
+          ? inArray(fosterFormFields.id, fieldIds)
+          : and(inArray(fosterFormFields.id, fieldIds), eq(fosterFormFields.tenantId, req.tenant!.id))
+        );
+      
+      res.json({ fields });
     } catch (error) {
       next(error);
     }

@@ -333,35 +333,74 @@ export default function ApplicationDetailSheet({
       ? "/api/foster-form-fields" 
       : "";
 
+  // Lookup endpoint for cross-tenant form field resolution
+  const formFieldsLookupEndpoint = type === "adoption"
+    ? "/api/adoption-form-fields/lookup"
+    : type === "foster"
+      ? "/api/foster-form-fields/lookup"
+      : "";
+
+  // Extract UUID keys from custom responses that need label lookup
+  const customResponseKeys = useMemo(() => {
+    if (!data) return [];
+    const customResponses = (data as any).customResponses || {};
+    // Filter for UUID-like keys (form field IDs)
+    return Object.keys(customResponses).filter(key => 
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(key)
+    );
+  }, [data]);
+
   // Fetch form field definitions to get proper labels for UUID keys
   const { data: formFieldsData } = useQuery<{ fields: Array<{ id: string; label: string; fieldType: string }> }>({
     queryKey: ["form-fields", formFieldsEndpoint],
     enabled: !!formFieldsEndpoint && isOpen,
   });
 
+  // Fallback: Use lookup endpoint if tenant-based endpoint returns no fields but we have UUID keys
+  const { data: lookupFieldsData } = useQuery<{ fields: Array<{ id: string; label: string; fieldType: string }> }>({
+    queryKey: ["form-fields-lookup", formFieldsLookupEndpoint, customResponseKeys],
+    queryFn: async () => {
+      if (!formFieldsLookupEndpoint || customResponseKeys.length === 0) {
+        return { fields: [] };
+      }
+      const response = await apiRequest("POST", formFieldsLookupEndpoint, { fieldIds: customResponseKeys });
+      return response.json();
+    },
+    enabled: !!formFieldsLookupEndpoint && isOpen && customResponseKeys.length > 0 && 
+             (formFieldsData?.fields?.length === 0 || !formFieldsData),
+  });
+
+  // Combine fields from both sources, preferring lookup results for cross-tenant scenarios
+  const allFields = useMemo(() => {
+    const tenantFields = formFieldsData?.fields || [];
+    const lookupFields = lookupFieldsData?.fields || [];
+    
+    // Merge: use lookup fields for any IDs not found in tenant fields
+    const tenantFieldIds = new Set(tenantFields.map(f => f.id));
+    const additionalFields = lookupFields.filter(f => !tenantFieldIds.has(f.id));
+    
+    return [...tenantFields, ...additionalFields];
+  }, [formFieldsData, lookupFieldsData]);
+
   // Create a map from field ID (UUID) to label for display
   const fieldLabelMap = useMemo(() => {
     const map: Record<string, string> = {};
-    if (formFieldsData?.fields) {
-      formFieldsData.fields.forEach((field) => {
-        map[field.id] = field.label;
-      });
-    }
+    allFields.forEach((field) => {
+      map[field.id] = field.label;
+    });
     return map;
-  }, [formFieldsData]);
+  }, [allFields]);
 
   // Create a reverse lookup from label to field ID for finding values by label
   // IMPORTANT: This must be before the early return to maintain hook order
   const labelToIdMap = useMemo(() => {
     const map: Record<string, string> = {};
-    if (formFieldsData?.fields) {
-      formFieldsData.fields.forEach((field) => {
-        // Normalize label to lowercase for case-insensitive matching
-        map[field.label.toLowerCase()] = field.id;
-      });
-    }
+    allFields.forEach((field) => {
+      // Normalize label to lowercase for case-insensitive matching
+      map[field.label.toLowerCase()] = field.id;
+    });
     return map;
-  }, [formFieldsData]);
+  }, [allFields]);
 
   const declineMutation = useMutation({
     mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
