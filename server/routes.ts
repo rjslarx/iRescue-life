@@ -9014,6 +9014,45 @@ Crawl-delay: 1
     }
   });
 
+  /**
+   * POST /api/volunteer-form-fields/lookup
+   * Look up form field labels by their IDs (for cross-tenant display)
+   * Restricted to platform admins OR users looking up fields within their own tenant
+   */
+  app.post('/api/volunteer-form-fields/lookup', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { volunteerFormFields } = await import('@shared/schema');
+      const { inArray, eq, and } = await import('drizzle-orm');
+      
+      const schema = z.object({
+        fieldIds: z.array(z.string()),
+      });
+      
+      const { fieldIds } = schema.parse(req.body);
+      
+      if (fieldIds.length === 0) {
+        return res.json({ fields: [] });
+      }
+      
+      const isPlatformAdmin = req.user?.roles?.includes('platform_admin');
+      
+      const fields = await db.select({
+        id: volunteerFormFields.id,
+        label: volunteerFormFields.label,
+        fieldType: volunteerFormFields.fieldType,
+      })
+        .from(volunteerFormFields)
+        .where(isPlatformAdmin
+          ? inArray(volunteerFormFields.id, fieldIds)
+          : and(inArray(volunteerFormFields.id, fieldIds), eq(volunteerFormFields.tenantId, req.tenant!.id))
+        );
+      
+      res.json({ fields });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   // ============================================================================
   // FOSTER FORM FIELDS
   // ============================================================================
@@ -9344,6 +9383,45 @@ Crawl-delay: 1
       ));
       
       res.json({ success: true });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/surrender-form-fields/lookup
+   * Look up form field labels by their IDs (for cross-tenant display)
+   * Restricted to platform admins OR users looking up fields within their own tenant
+   */
+  app.post('/api/surrender-form-fields/lookup', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { surrenderFormFields } = await import('@shared/schema');
+      const { inArray, eq, and } = await import('drizzle-orm');
+      
+      const schema = z.object({
+        fieldIds: z.array(z.string()),
+      });
+      
+      const { fieldIds } = schema.parse(req.body);
+      
+      if (fieldIds.length === 0) {
+        return res.json({ fields: [] });
+      }
+      
+      const isPlatformAdmin = req.user?.roles?.includes('platform_admin');
+      
+      const fields = await db.select({
+        id: surrenderFormFields.id,
+        label: surrenderFormFields.label,
+        fieldType: surrenderFormFields.fieldType,
+      })
+        .from(surrenderFormFields)
+        .where(isPlatformAdmin
+          ? inArray(surrenderFormFields.id, fieldIds)
+          : and(inArray(surrenderFormFields.id, fieldIds), eq(surrenderFormFields.tenantId, req.tenant!.id))
+        );
+      
+      res.json({ fields });
     } catch (error) {
       next(error);
     }

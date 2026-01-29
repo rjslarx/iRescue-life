@@ -122,7 +122,9 @@ interface VolunteerData {
   skills?: string;
   emergencyContactName?: string;
   emergencyContactPhone?: string;
+  customResponses?: Record<string, any>;
   status: string;
+  pipelineStatus?: string;
   notes?: string;
   smsConsent?: boolean;
   createdAt: string;
@@ -152,7 +154,9 @@ interface IntakeData {
   preferredSurrenderDate?: string;
   declinedReason?: string;
   declinedAt?: string;
+  customResponses?: Record<string, any>;
   status: string;
+  pipelineStatus?: string;
   notes?: string;
   smsConsent?: boolean;
   createdAt: string;
@@ -331,14 +335,22 @@ export default function ApplicationDetailSheet({
     ? "/api/adoption-form-fields" 
     : type === "foster" 
       ? "/api/foster-form-fields" 
-      : "";
+      : type === "volunteer"
+        ? "/api/volunteer-form-fields"
+        : type === "intake"
+          ? "/api/surrender-form-fields"
+          : "";
 
   // Lookup endpoint for cross-tenant form field resolution
   const formFieldsLookupEndpoint = type === "adoption"
     ? "/api/adoption-form-fields/lookup"
     : type === "foster"
       ? "/api/foster-form-fields/lookup"
-      : "";
+      : type === "volunteer"
+        ? "/api/volunteer-form-fields/lookup"
+        : type === "intake"
+          ? "/api/surrender-form-fields/lookup"
+          : "";
 
   // Extract UUID keys from custom responses that need label lookup
   const customResponseKeys = useMemo(() => {
@@ -834,6 +846,24 @@ export default function ApplicationDetailSheet({
               )}
             </>
           )}
+          {intakeData.customResponses && Object.keys(intakeData.customResponses).length > 0 && (
+            <>
+              <div className="border-t pt-2 mt-2" />
+              <p className="text-sm font-medium text-muted-foreground mb-2">Additional Responses</p>
+              {Object.entries(intakeData.customResponses).map(([fieldId, value]) => {
+                const field = formFields.find(f => f.id === fieldId);
+                const label = field?.label || fieldId;
+                const displayValue = Array.isArray(value) 
+                  ? value.join(', ') 
+                  : typeof value === 'boolean' 
+                    ? (value ? 'Yes' : 'No')
+                    : String(value || 'Not provided');
+                return (
+                  <SummaryItem key={fieldId} label={label} value={displayValue} />
+                );
+              })}
+            </>
+          )}
           {intakeData.notes && (
             <>
               <div className="border-t pt-2 mt-2" />
@@ -919,6 +949,24 @@ export default function ApplicationDetailSheet({
           <div className="border-t pt-2 mt-2" />
           <SummaryItem label="Emergency Contact" value={volunteerData.emergencyContactName || "Not specified"} />
           <SummaryItem label="Emergency Phone" value={volunteerData.emergencyContactPhone || "Not specified"} />
+          {volunteerData.customResponses && Object.keys(volunteerData.customResponses).length > 0 && (
+            <>
+              <div className="border-t pt-2 mt-2" />
+              <p className="text-sm font-medium text-muted-foreground mb-2">Additional Responses</p>
+              {Object.entries(volunteerData.customResponses).map(([fieldId, value]) => {
+                const field = formFields.find(f => f.id === fieldId);
+                const label = field?.label || fieldId;
+                const displayValue = Array.isArray(value) 
+                  ? value.join(', ') 
+                  : typeof value === 'boolean' 
+                    ? (value ? 'Yes' : 'No')
+                    : String(value || 'Not provided');
+                return (
+                  <SummaryItem key={fieldId} label={label} value={displayValue} />
+                );
+              })}
+            </>
+          )}
           {volunteerData.notes && (
             <>
               <div className="border-t pt-2 mt-2" />
