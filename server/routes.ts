@@ -12484,39 +12484,22 @@ If you have any questions, please contact us.
       }
       
       // Send email to volunteer applicant
+      // Build HTML with shorter lines to avoid encoding issues
+      const buttonStyle = 'display:inline-block;padding:12px 24px;background-color:#22c55e;color:white;text-decoration:none;border-radius:6px;';
+      
       await emailService.send({
         to: application.applicantEmail,
-        subject: `Action Required: Please Sign the Hold Harmless Agreement - ${req.tenant!.name}`,
+        subject: `Action Required: Sign Hold Harmless Agreement - ${req.tenant!.name}`,
         html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #333;">Hold Harmless Agreement Ready for Signature</h2>
-            <p>Hello ${application.applicantName},</p>
-            <p>Great news! Your volunteer application with <strong>${req.tenant!.name}</strong> has advanced to the waiver stage.</p>
-            <p>Please review and sign the Hold Harmless Agreement to complete your onboarding as a volunteer.</p>
-            <div style="margin: 30px 0; text-align: center;">
-              <a href="${formUrl}" style="background-color: #22c55e; color: white; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Sign Hold Harmless Agreement</a>
-            </div>
-            <p style="color: #666; font-size: 14px;">Or copy and paste this link into your browser:</p>
-            <p style="font-size: 14px; word-break: break-all;"><a href="${formUrl}" style="color: #2563eb; text-decoration: underline;">${formUrl}</a></p>
-            <p style="color: #666; font-size: 14px;">This link will expire in 14 days.</p>
-            <p style="color: #666; font-size: 14px;">If you have any questions, please contact us at ${req.tenant!.contactEmail || 'our contact email'}.</p>
-            <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
-            <p style="color: #999; font-size: 12px;">You're receiving this email because you applied to volunteer with ${req.tenant!.name}.</p>
-          </div>
-        `,
-        text: `
-Hello ${application.applicantName},
-
-Your volunteer application with ${req.tenant!.name} has advanced to the waiver stage.
-
-Please sign the Hold Harmless Agreement to complete your onboarding:
-${formUrl}
-
-This link will expire in 14 days.
-
-If you have any questions, please contact us.
-
-- ${req.tenant!.name}
+<h2>Hold Harmless Agreement Ready for Signature</h2>
+<p>Hello ${application.applicantName},</p>
+<p>Your volunteer application with <strong>${req.tenant!.name}</strong> has advanced to the waiver stage.</p>
+<p>Please review and sign the Hold Harmless Agreement to complete your onboarding.</p>
+<p><a href="${formUrl}" style="${buttonStyle}">Sign Hold Harmless Agreement</a></p>
+<p style="color:#666;font-size:14px;">Or copy and paste this link into your browser:</p>
+<p><a href="${formUrl}" style="color:#22c55e;">${formUrl}</a></p>
+<p style="color:#666;font-size:14px;">This link will expire in 14 days.</p>
+<p style="color:#666;font-size:14px;">Questions? Contact us at ${req.tenant!.contactEmail || 'our contact email'}.</p>
         `.trim(),
       });
       
