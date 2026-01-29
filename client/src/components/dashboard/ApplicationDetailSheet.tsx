@@ -1018,10 +1018,16 @@ export default function ApplicationDetailSheet({
                 disabled={updateMutation.isPending}
               >
                 <SelectTrigger 
-                  className="w-[160px] h-8"
+                  className="w-[180px] h-8"
                   data-testid="select-status"
                 >
-                  <SelectValue />
+                  <SelectValue placeholder={stageLabels[currentStatus] || currentStatus}>
+                    {currentStatus && (
+                      <Badge variant={stageVariants[currentStatus] || "outline"}>
+                        {stageLabels[currentStatus] || currentStatus}
+                      </Badge>
+                    )}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {getStatusOptions().map((status) => (
