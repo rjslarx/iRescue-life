@@ -293,19 +293,75 @@ export class GmailService {
   
   /**
    * Encode content as quoted-printable for proper email transmission
+   * RFC 2045 compliant: lines max 76 chars, soft line breaks with =\r\n
    */
   private encodeQuotedPrintable(str: string): string {
-    return str
-      .replace(/[^\x20-\x7E\r\n\t]/g, (char) => {
-        const code = char.charCodeAt(0);
-        if (code < 256) {
-          return '=' + code.toString(16).toUpperCase().padStart(2, '0');
-        }
-        // For multi-byte UTF-8 characters
+    // First, encode special characters
+    let encoded = '';
+    for (let i = 0; i < str.length; i++) {
+      const char = str[i];
+      const code = char.charCodeAt(0);
+      
+      // Keep CR LF as-is for line breaks
+      if (char === '\r' || char === '\n') {
+        encoded += char;
+      }
+      // Encode = as =3D (must be encoded in quoted-printable)
+      else if (char === '=') {
+        encoded += '=3D';
+      }
+      // Keep printable ASCII except = and trailing/leading spaces
+      else if (code >= 33 && code <= 126) {
+        encoded += char;
+      }
+      // Encode spaces and tabs (but not at end of line)
+      else if (char === ' ' || char === '\t') {
+        encoded += char;
+      }
+      // Encode everything else
+      else if (code < 256) {
+        encoded += '=' + code.toString(16).toUpperCase().padStart(2, '0');
+      }
+      // Multi-byte UTF-8
+      else {
         const bytes = Buffer.from(char, 'utf-8');
-        return Array.from(bytes).map(b => '=' + b.toString(16).toUpperCase().padStart(2, '0')).join('');
-      })
-      .replace(/=$/gm, '=3D'); // Escape trailing equals
+        encoded += Array.from(bytes).map(b => '=' + b.toString(16).toUpperCase().padStart(2, '0')).join('');
+      }
+    }
+    
+    // Now wrap lines at 76 characters with soft line breaks (=\r\n)
+    const lines = encoded.split(/\r?\n/);
+    const wrappedLines: string[] = [];
+    
+    for (const line of lines) {
+      if (line.length <= 76) {
+        wrappedLines.push(line);
+      } else {
+        // Wrap long lines
+        let remaining = line;
+        while (remaining.length > 0) {
+          if (remaining.length <= 76) {
+            wrappedLines.push(remaining);
+            break;
+          }
+          
+          // Find a safe break point (not in middle of =XX sequence)
+          let breakPoint = 75; // Leave room for = soft break
+          
+          // Don't break in middle of =XX encoded sequence
+          if (remaining[breakPoint - 1] === '=') {
+            breakPoint -= 1;
+          } else if (remaining[breakPoint - 2] === '=') {
+            breakPoint -= 2;
+          }
+          
+          wrappedLines.push(remaining.substring(0, breakPoint) + '=');
+          remaining = remaining.substring(breakPoint);
+        }
+      }
+    }
+    
+    return wrappedLines.join('\r\n');
   }
   
   /**
