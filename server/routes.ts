@@ -11661,7 +11661,7 @@ Submitted: ${new Date().toLocaleString()}
    * Update foster application status (admin/staff only)
    * Auto-dismisses from pending widget when status changes from 'pending' to other statuses
    */
-  app.patch('/api/foster-applications/:id', requireTenant, requireAuth, requireRole('staff'), async (req, res, next) => {
+  app.patch('/api/foster-applications/:id', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
     try {
       const { fosterApplications, dismissedWidgetItems } = await import('@shared/schema');
       
@@ -12742,7 +12742,7 @@ Submitted: ${new Date().toLocaleString()}
    * Update animal surrender status (admin/staff only)
    * Auto-dismisses from pending widget when status changes from 'pending' to other statuses
    */
-  app.patch('/api/animal-surrenders/:id', requireTenant, requireAuth, requireRole('staff'), async (req, res, next) => {
+  app.patch('/api/animal-surrenders/:id', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
     try {
       const { animalSurrenders, dismissedWidgetItems } = await import('@shared/schema');
       
