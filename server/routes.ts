@@ -12100,9 +12100,9 @@ Submitted: ${new Date().toLocaleString()}
             .limit(1))[0];
           
           if (template) {
-            // Generate secure token
+            // Generate secure token - use SHA256 for consistent lookup
             const token = crypto.randomBytes(32).toString('hex');
-            const tokenHash = await bcrypt.hash(token, 10);
+            const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
             const expiresAt = new Date();
             expiresAt.setDate(expiresAt.getDate() + 14); // 14 day expiration
             
