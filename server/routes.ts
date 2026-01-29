@@ -12402,6 +12402,152 @@ If you have any questions, please contact us.
     }
   });
 
+  /**
+   * POST /api/volunteer-applications/:id/send-waiver
+   * Manually send/resend hold harmless waiver email to volunteer applicant
+   */
+  app.post('/api/volunteer-applications/:id/send-waiver', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      const { volunteerApplications, customForms, customFormSubmissions } = await import('@shared/schema');
+      const { generateSecureToken, hashToken } = await import('./services/custom-form');
+      const { EmailService } = await import('./lib/email-service');
+      
+      // Get the volunteer application
+      const [application] = await db
+        .select()
+        .from(volunteerApplications)
+        .where(and(
+          eq(volunteerApplications.id, req.params.id),
+          eq(volunteerApplications.tenantId, req.tenant!.id)
+        ))
+        .limit(1);
+      
+      if (!application) {
+        return res.status(404).json({ error: 'Volunteer application not found' });
+      }
+      
+      if (!application.applicantEmail) {
+        return res.status(400).json({ error: 'Application has no email address' });
+      }
+      
+      // Find a hold harmless waiver form for this tenant
+      const [volunteerWaiverForm] = await db
+        .select()
+        .from(customForms)
+        .where(and(
+          eq(customForms.tenantId, req.tenant!.id),
+          eq(customForms.isActive, true),
+          sql`(LOWER(${customForms.name}) LIKE '%hold harmless%' OR (LOWER(${customForms.name}) LIKE '%volunteer%' AND (LOWER(${customForms.name}) LIKE '%waiver%' OR LOWER(${customForms.name}) LIKE '%liability%')))`
+        ))
+        .limit(1);
+      
+      if (!volunteerWaiverForm) {
+        return res.status(400).json({ 
+          error: 'No hold harmless waiver form found. Please create a form with "Hold Harmless" or "Volunteer Waiver/Liability" in the name.' 
+        });
+      }
+      
+      // Generate secure token and create submission
+      const { token, hash: tokenHash } = generateSecureToken();
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 14); // 14 days expiry
+      
+      await db.insert(customFormSubmissions).values({
+        tenantId: req.tenant!.id,
+        formId: volunteerWaiverForm.id,
+        signerName: application.applicantName,
+        signerEmail: application.applicantEmail,
+        signerPhone: application.applicantPhone || null,
+        status: 'pending',
+        secureTokenHash: tokenHash,
+        expiresAt,
+      });
+      
+      // Build the form signing URL - use custom domain if available
+      let formUrl: string;
+      if (req.tenant!.customDomain) {
+        formUrl = `https://${req.tenant!.customDomain}/forms/sign/${token}`;
+      } else {
+        const isProduction = process.env.REPLIT_DEPLOYMENT === '1';
+        const baseUrl = isProduction 
+          ? 'https://irescue.life'
+          : process.env.REPLIT_DEV_DOMAIN 
+            ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+            : 'http://localhost:5000';
+        formUrl = `${baseUrl}/${req.tenant!.subdomain}/forms/sign/${token}`;
+      }
+      
+      // Get email service for tenant
+      const emailService = await EmailService.forTenant(req.tenant!.id);
+      if (!emailService) {
+        return res.status(400).json({ error: 'Email service not configured for this organization' });
+      }
+      
+      // Send email to volunteer applicant
+      await emailService.send({
+        to: application.applicantEmail,
+        subject: `Action Required: Please Sign the Hold Harmless Agreement - ${req.tenant!.name}`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #333;">Hold Harmless Agreement Ready for Signature</h2>
+            <p>Hello ${application.applicantName},</p>
+            <p>Great news! Your volunteer application with <strong>${req.tenant!.name}</strong> has advanced to the waiver stage.</p>
+            <p>Please review and sign the Hold Harmless Agreement to complete your onboarding as a volunteer.</p>
+            <div style="margin: 30px 0; text-align: center;">
+              <a href="${formUrl}" style="background-color: #22c55e; color: white; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Sign Hold Harmless Agreement</a>
+            </div>
+            <p style="color: #666; font-size: 14px;">Or copy and paste this link into your browser:</p>
+            <p style="font-size: 14px; word-break: break-all;"><a href="${formUrl}" style="color: #2563eb; text-decoration: underline;">${formUrl}</a></p>
+            <p style="color: #666; font-size: 14px;">This link will expire in 14 days.</p>
+            <p style="color: #666; font-size: 14px;">If you have any questions, please contact us at ${req.tenant!.contactEmail || 'our contact email'}.</p>
+            <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+            <p style="color: #999; font-size: 12px;">You're receiving this email because you applied to volunteer with ${req.tenant!.name}.</p>
+          </div>
+        `,
+        text: `
+Hello ${application.applicantName},
+
+Your volunteer application with ${req.tenant!.name} has advanced to the waiver stage.
+
+Please sign the Hold Harmless Agreement to complete your onboarding:
+${formUrl}
+
+This link will expire in 14 days.
+
+If you have any questions, please contact us.
+
+- ${req.tenant!.name}
+        `.trim(),
+      });
+      
+      // Log activity
+      const { logActivity } = await import('./lib/activity-logger');
+      await logActivity({
+        tenantId: req.tenant!.id,
+        userId: req.user!.id,
+        action: 'volunteer_waiver_sent',
+        category: 'user',
+        entityType: 'volunteer_application',
+        entityId: application.id,
+        description: `Hold harmless waiver email manually sent to ${application.applicantName} (${application.applicantEmail})`,
+        metadata: {
+          formId: volunteerWaiverForm.id,
+          formName: volunteerWaiverForm.name,
+        },
+      });
+      
+      console.log(`[Volunteer Waiver] Manually sent hold harmless waiver to ${application.applicantEmail}`);
+      
+      res.json({ 
+        success: true, 
+        message: `Waiver email sent to ${application.applicantEmail}`,
+        formUrl 
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   // ============================================================================
   // Surrender Requests Routes (Phase 1 Intake Pipeline)
   // ============================================================================
