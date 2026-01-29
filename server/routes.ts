@@ -8825,77 +8825,48 @@ Crawl-delay: 1
       // ========================================================================
       if (tenant?.contactEmail && renderedHtml) {
         try {
-          const { sendEmail } = await import('./lib/email');
+          const { EmailService } = await import('./lib/email-service');
+          const emailService = await EmailService.forTenant(submission.tenantId);
           
-          // Helper to escape HTML entities for safe display
-          const escapeHtml = (str: string) => str
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#039;');
-          
-          // Escape user-provided text fields
-          const safeFormName = escapeHtml(form.name);
-          const safeSignerName = escapeHtml(submission.signerName);
-          const safeSignerEmail = escapeHtml(submission.signerEmail);
-          const safeSignerPhone = submission.signerPhone ? escapeHtml(submission.signerPhone) : null;
-          const safeAnimalName = animal?.name ? escapeHtml(animal.name) : null;
-          
-          const emailSubject = `Form Submitted: ${form.name} - ${submission.signerName}`;
-          const emailHtml = `
-            <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto;">
-              <h2 style="color: #333; border-bottom: 2px solid #4f46e5; padding-bottom: 10px;">
-                Form Submission Received
-              </h2>
-              <table style="width: 100%; margin-bottom: 20px; border-collapse: collapse;">
-                <tr>
-                  <td style="padding: 8px 0; color: #666; width: 140px;"><strong>Form Name:</strong></td>
-                  <td style="padding: 8px 0;">${safeFormName}</td>
-                </tr>
-                <tr>
-                  <td style="padding: 8px 0; color: #666;"><strong>Signed By:</strong></td>
-                  <td style="padding: 8px 0;">${safeSignerName}</td>
-                </tr>
-                <tr>
-                  <td style="padding: 8px 0; color: #666;"><strong>Email:</strong></td>
-                  <td style="padding: 8px 0;">${safeSignerEmail}</td>
-                </tr>
-                ${safeSignerPhone ? `
-                <tr>
-                  <td style="padding: 8px 0; color: #666;"><strong>Phone:</strong></td>
-                  <td style="padding: 8px 0;">${safeSignerPhone}</td>
-                </tr>
-                ` : ''}
-                <tr>
-                  <td style="padding: 8px 0; color: #666;"><strong>Submitted:</strong></td>
-                  <td style="padding: 8px 0;">${new Date().toLocaleString()}</td>
-                </tr>
-                ${safeAnimalName ? `
-                <tr>
-                  <td style="padding: 8px 0; color: #666;"><strong>Animal:</strong></td>
-                  <td style="padding: 8px 0;">${safeAnimalName}</td>
-                </tr>
-                ` : ''}
-              </table>
-              <div style="border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; background: #fafafa;">
-                <h3 style="margin-top: 0; color: #333;">Completed Form Document</h3>
-                ${renderedHtml}
-              </div>
-              <p style="color: #888; font-size: 12px; margin-top: 20px; text-align: center;">
-                This is an automated notification from your iRescue platform.
-              </p>
-            </div>
-          `;
-          
-          await sendEmail({
-            to: tenant.contactEmail,
-            subject: emailSubject,
-            html: emailHtml,
-            tenantId: submission.tenantId,
-          });
-          
-          console.log(`[Form Submission] Emailed copy of "${form.name}" to ${tenant.contactEmail}`);
+          if (emailService) {
+            // Helper to escape HTML entities for safe display
+            const escapeHtml = (str: string) => str
+              .replace(/&/g, '&amp;')
+              .replace(/</g, '&lt;')
+              .replace(/>/g, '&gt;')
+              .replace(/"/g, '&quot;')
+              .replace(/'/g, '&#039;');
+            
+            // Escape user-provided text fields
+            const safeFormName = escapeHtml(form.name);
+            const safeSignerName = escapeHtml(submission.signerName);
+            const safeSignerEmail = escapeHtml(submission.signerEmail);
+            const safeSignerPhone = submission.signerPhone ? escapeHtml(submission.signerPhone) : null;
+            const safeAnimalName = animal?.name ? escapeHtml(animal.name) : null;
+            
+            const emailSubject = `Form Submitted: ${form.name} - ${submission.signerName}`;
+            const emailHtml = `
+<h2>Form Submission Received</h2>
+<p><strong>Form Name:</strong> ${safeFormName}</p>
+<p><strong>Signed By:</strong> ${safeSignerName}</p>
+<p><strong>Email:</strong> ${safeSignerEmail}</p>
+${safeSignerPhone ? `<p><strong>Phone:</strong> ${safeSignerPhone}</p>` : ''}
+<p><strong>Submitted:</strong> ${new Date().toLocaleString()}</p>
+${safeAnimalName ? `<p><strong>Animal:</strong> ${safeAnimalName}</p>` : ''}
+<hr>
+<h3>Completed Form Document</h3>
+${renderedHtml}
+<p style="color:#888;font-size:12px;">This is an automated notification from your iRescue platform.</p>
+            `.trim();
+            
+            await emailService.send({
+              to: tenant.contactEmail,
+              subject: emailSubject,
+              html: emailHtml,
+            });
+            
+            console.log(`[Form Submission] Emailed copy of "${form.name}" to ${tenant.contactEmail}`);
+          }
         } catch (emailError) {
           // Log error but don't fail the form submission
           console.error('[Form Submission] Error sending form copy email:', emailError);
