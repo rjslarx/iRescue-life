@@ -11853,7 +11853,7 @@ Submitted: ${new Date().toLocaleString()}
                     <a href="${formUrl}" style="background-color: #f59e0b; color: white; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Sign Foster Agreement</a>
                   </div>
                   <p style="color: #666; font-size: 14px;">Or copy and paste this link into your browser:</p>
-                  <p style="color: #2563eb; font-size: 14px; word-break: break-all;"><a href="${formUrl}">${formUrl}</a></p>
+                  <p style="font-size: 14px; word-break: break-all;"><a href="${formUrl}" style="color: #2563eb; text-decoration: underline;">${formUrl}</a></p>
                   <p style="color: #666; font-size: 14px;">This link will expire in 14 days.</p>
                   <p style="color: #666; font-size: 14px;">If you have any questions, please contact us at ${req.tenant!.contactEmail || 'our contact email'}.</p>
                   <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
@@ -12347,7 +12347,7 @@ Submitted: ${new Date().toLocaleString()}
                     <a href="${formUrl}" style="background-color: #22c55e; color: white; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Sign Hold Harmless Agreement</a>
                   </div>
                   <p style="color: #666; font-size: 14px;">Or copy and paste this link into your browser:</p>
-                  <p style="color: #2563eb; font-size: 14px; word-break: break-all;"><a href="${formUrl}">${formUrl}</a></p>
+                  <p style="font-size: 14px; word-break: break-all;"><a href="${formUrl}" style="color: #2563eb; text-decoration: underline;">${formUrl}</a></p>
                   <p style="color: #666; font-size: 14px;">This link will expire in 14 days.</p>
                   <p style="color: #666; font-size: 14px;">If you have any questions, please contact us at ${req.tenant!.contactEmail || 'our contact email'}.</p>
                   <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
