@@ -147,13 +147,16 @@ export async function sendInvitationEmail(
 
   // Construct the accept URL with tenant path for path-based routing
   // If tenant has a custom domain, use it directly, otherwise use path-based routing
+  // URL-encode the token to prevent email quoted-printable encoding from misinterpreting
+  // patterns like =04 as encoded characters (which breaks the link)
+  const encodedToken = encodeURIComponent(invitation.token);
   let acceptUrl: string;
   if (tenant?.customDomain) {
-    acceptUrl = `https://${tenant.customDomain}/accept-invitation?token=${invitation.token}`;
+    acceptUrl = `https://${tenant.customDomain}/accept-invitation?token=${encodedToken}`;
   } else {
     const baseUrl = getAppBaseUrl();
     const tenantPath = tenant?.subdomain ? `/${tenant.subdomain}` : '';
-    acceptUrl = `${baseUrl}${tenantPath}/accept-invitation?token=${invitation.token}`;
+    acceptUrl = `${baseUrl}${tenantPath}/accept-invitation?token=${encodedToken}`;
   }
 
   const html = `
@@ -205,14 +208,16 @@ export async function sendInvitationEmail(
 /**
  * Construct the invitation accept URL based on tenant configuration
  * Uses custom domain if available, otherwise path-based routing
+ * URL-encodes the token to prevent email quoted-printable encoding issues
  */
 export function buildInvitationUrl(token: string, tenant: { subdomain: string | null; customDomain: string | null }): string {
+  const encodedToken = encodeURIComponent(token);
   if (tenant.customDomain) {
-    return `https://${tenant.customDomain}/accept-invitation?token=${token}`;
+    return `https://${tenant.customDomain}/accept-invitation?token=${encodedToken}`;
   }
   const baseUrl = getAppBaseUrl();
   const tenantPath = tenant.subdomain ? `/${tenant.subdomain}` : '';
-  return `${baseUrl}${tenantPath}/accept-invitation?token=${token}`;
+  return `${baseUrl}${tenantPath}/accept-invitation?token=${encodedToken}`;
 }
 
 /**
