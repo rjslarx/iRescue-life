@@ -13451,10 +13451,14 @@ Submitted: ${new Date().toLocaleString()}
       const { surrenderRequests } = await import('@shared/schema');
       const { eq, desc } = await import('drizzle-orm');
       
+      console.log('[SURRENDER DEBUG] Fetching for tenant:', req.tenant!.id, 'subdomain:', req.tenant!.subdomain);
+      
       const requests = await db.select()
         .from(surrenderRequests)
         .where(eq(surrenderRequests.tenantId, req.tenant!.id))
         .orderBy(desc(surrenderRequests.createdAt));
+      
+      console.log('[SURRENDER DEBUG] Found', requests.length, 'requests:', requests.map(r => ({ id: r.id, dog: r.dogName, status: r.status })));
       
       res.json(requests);
     } catch (error) {
