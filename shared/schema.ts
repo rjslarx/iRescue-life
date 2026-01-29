@@ -4577,3 +4577,37 @@ export const insertHeartwormTreatmentPlanSchema = createInsertSchema(heartwormTr
 });
 export type InsertHeartwormTreatmentPlan = z.infer<typeof insertHeartwormTreatmentPlanSchema>;
 export type HeartwormTreatmentPlan = typeof heartwormTreatmentPlans.$inferSelect;
+
+// Partner Organizations - for collaboration hub and transfers
+export const partnerOrganizations = pgTable("partner_organizations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  name: text("name").notNull(),
+  organizationType: text("organization_type").$type<"rescue" | "sanctuary" | "shelter" | "foster_network" | "other">(),
+  contactName: text("contact_name"),
+  contactEmail: text("contact_email"),
+  contactPhone: text("contact_phone"),
+  address: text("address"),
+  city: text("city"),
+  state: text("state"),
+  zipCode: text("zip_code"),
+  website: text("website"),
+  notes: text("notes"),
+  totalTransfersTo: integer("total_transfers_to").notNull().default(0),
+  totalTransfersFrom: integer("total_transfers_from").notNull().default(0),
+  lastTransferDate: timestamp("last_transfer_date"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertPartnerOrganizationSchema = createInsertSchema(partnerOrganizations).omit({
+  id: true,
+  totalTransfersTo: true,
+  totalTransfersFrom: true,
+  lastTransferDate: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertPartnerOrganization = z.infer<typeof insertPartnerOrganizationSchema>;
+export type PartnerOrganization = typeof partnerOrganizations.$inferSelect;

@@ -6,7 +6,7 @@ import { requireAuth, requireRole } from "./middleware/auth";
 import { loginUser, createTenantWithAdmin, createUser } from "./services/auth";
 import { PushNotificationService } from "./services/push-notifications";
 import { db } from "./db";
-import { tenants, users, demoRequests, insertDemoRequestSchema, smsMessageLogs, emailEvents, animals, platformIntegrations, newsletterCampaigns, newsletterSubscribers, happyTails, animalMergeHistory, activityLogs, medicalExams, medicalPrescriptions, medicalBills, medicalFiles, animalNotes, applications, adoptionCheckoutSessions, adoptions } from "@shared/schema";
+import { tenants, users, demoRequests, insertDemoRequestSchema, smsMessageLogs, emailEvents, animals, platformIntegrations, newsletterCampaigns, newsletterSubscribers, happyTails, animalMergeHistory, activityLogs, medicalExams, medicalPrescriptions, medicalBills, medicalFiles, animalNotes, applications, adoptionCheckoutSessions, adoptions, partnerOrganizations } from "@shared/schema";
 import { eq, and, desc, sql, inArray, lt, gte, not, notInArray, or, ne } from "drizzle-orm";
 import { z } from "zod";
 import { authLimiter, signupLimiter, passwordResetLimiter, emailLimiter } from "./config/security";
@@ -25451,6 +25451,123 @@ The user asking is a tenant administrator or staff member.`;
           errors: result.errors,
         }
       });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * PARTNER ORGANIZATIONS API
+   * CRUD operations for collaboration hub partner organizations
+   */
+  
+  // Get all partner organizations
+  app.get('/api/partner-organizations', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const tenantId = req.session.tenantId!;
+      const includeArchived = req.query.includeArchived === 'true';
+      
+      const whereConditions = [eq(partnerOrganizations.tenantId, tenantId)];
+      if (!includeArchived) {
+        whereConditions.push(eq(partnerOrganizations.isActive, true));
+      }
+      
+      const organizations = await db
+        .select()
+        .from(partnerOrganizations)
+        .where(and(...whereConditions))
+        .orderBy(desc(partnerOrganizations.createdAt));
+      
+      res.json({ organizations });
+    } catch (error) {
+      next(error);
+    }
+  });
+  
+  // Create a partner organization
+  app.post('/api/partner-organizations', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const tenantId = req.session.tenantId!;
+      const { name, organizationType, contactName, contactEmail, contactPhone, address, city, state, zipCode, website, notes } = req.body;
+      
+      if (!name) {
+        return res.status(400).json({ error: 'Organization name is required' });
+      }
+      
+      const [org] = await db.insert(partnerOrganizations).values({
+        tenantId,
+        name,
+        organizationType: organizationType || null,
+        contactName: contactName || null,
+        contactEmail: contactEmail || null,
+        contactPhone: contactPhone || null,
+        address: address || null,
+        city: city || null,
+        state: state || null,
+        zipCode: zipCode || null,
+        website: website || null,
+        notes: notes || null,
+      }).returning();
+      
+      res.json({ organization: org });
+    } catch (error) {
+      next(error);
+    }
+  });
+  
+  // Update a partner organization
+  app.patch('/api/partner-organizations/:id', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const tenantId = req.session.tenantId!;
+      const { id } = req.params;
+      const updates = req.body;
+      
+      // Verify ownership
+      const [existing] = await db
+        .select()
+        .from(partnerOrganizations)
+        .where(and(eq(partnerOrganizations.id, id), eq(partnerOrganizations.tenantId, tenantId)));
+      
+      if (!existing) {
+        return res.status(404).json({ error: 'Organization not found' });
+      }
+      
+      const [updated] = await db
+        .update(partnerOrganizations)
+        .set({ ...updates, updatedAt: new Date() })
+        .where(and(eq(partnerOrganizations.id, id), eq(partnerOrganizations.tenantId, tenantId)))
+        .returning();
+      
+      res.json({ organization: updated });
+    } catch (error) {
+      next(error);
+    }
+  });
+  
+  // Delete (archive) a partner organization
+  app.delete('/api/partner-organizations/:id', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const tenantId = req.session.tenantId!;
+      const { id } = req.params;
+      
+      // Verify ownership
+      const [existing] = await db
+        .select()
+        .from(partnerOrganizations)
+        .where(and(eq(partnerOrganizations.id, id), eq(partnerOrganizations.tenantId, tenantId)));
+      
+      if (!existing) {
+        return res.status(404).json({ error: 'Organization not found' });
+      }
+      
+      // Soft delete by setting isActive to false
+      const [updated] = await db
+        .update(partnerOrganizations)
+        .set({ isActive: false, updatedAt: new Date() })
+        .where(and(eq(partnerOrganizations.id, id), eq(partnerOrganizations.tenantId, tenantId)))
+        .returning();
+      
+      res.json({ success: true, organization: updated });
     } catch (error) {
       next(error);
     }
