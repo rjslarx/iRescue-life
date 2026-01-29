@@ -11770,7 +11770,7 @@ Submitted: ${new Date().toLocaleString()}
       const statusChangedToAgreement = data.pipelineStatus === 'agreement' && oldPipelineStatus !== 'agreement';
       if (statusChangedToAgreement && updatedApplication.applicantEmail) {
         try {
-          const { emailService } = await import('./lib/email');
+          const { emailService } = await import('./lib/email-service');
           const { customForms, customFormSubmissions } = await import('@shared/schema');
           const { generateToken, hashToken } = await import('./services/custom-form');
           
