@@ -38,6 +38,14 @@ Email/password authentication is implemented with bcrypt and Express sessions, f
 **Feature Specifications:**
 The platform encompasses comprehensive animal, application, and financial management (integrated with Stripe). It includes contact management, Happy Tails, supply registry, expenditure tracking, event and volunteer coordination, medical records, and document management.
 
+**Partner Organizations:**
+A collaboration hub for managing relationships with rescue partners, veterinary clinics, shelters, and other organizations. Each partner record includes:
+- Organization details (name, type, address, website, notes)
+- Primary contact with job title (name, title, email, phone)
+- Secondary contact (optional) with full details (name, title, email, phone)
+- Transfer history tracking for animal movements between organizations
+- Active/archived status management
+
 **Adoption Application Pipeline:**
 A complete adoption workflow is supported with stages from `new` to `adopted`, including a `trial` period for foster-to-adopt scenarios. Animal statuses automatically synchronize with application stages (e.g., `adoption_pending`, `in_trial`, `adopted`). A "hold" system prevents new applications for animals already in process, while public pages display animal status badges. Staff manage applications via a Kanban board.
 
