@@ -50,6 +50,15 @@ This centralized dashboard manages all medical operations across three sections:
 **Phase 1 Intake Pipeline (Surrender Requests):**
 A dedicated pipeline for dog surrender requests, featuring a `surrender_requests` table with a `new` to `intaken` status workflow. Enhanced fields include detailed dog information and TCPA-compliant SMS consent. Public forms are available, and staff use a Kanban view for intake management.
 
+*Custom Form Responses:*
+- The `customResponses` JSON column stores all Q&A responses from dynamic form fields
+- Photo-type fields are stored as URLs and rendered as embedded images in:
+  - Staff email notifications (inline `<img>` tags)
+  - Inbound email inbox records (HTML with embedded photos)
+  - Pipeline UI detail sheets (clickable thumbnail images)
+- All user-provided data is HTML-escaped in email templates to prevent XSS
+- Form field labels are fetched and passed through for proper display formatting
+
 **Volunteer Calendar Staffing Color-Coding:**
 Volunteer calendars visually indicate staffing levels (Red, Yellow, Green) based on `minVolunteersRequired`, with management UI to set these requirements and assign permissions.
 
