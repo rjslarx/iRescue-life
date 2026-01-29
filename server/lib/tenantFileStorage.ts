@@ -61,6 +61,7 @@ const ANIMAL_SUBFOLDERS: Record<string, string> = {
   'animal-medical': 'Medical',
   'animal-contracts': 'Contracts',
   'foster-updates': 'Foster Updates',
+  'happy-tails': 'Happy Tails',
 };
 
 const WEBSITE_SUBFOLDERS: Record<string, string> = {

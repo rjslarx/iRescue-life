@@ -9,7 +9,7 @@ const ROOT_FOLDERS = {
   ADOPTED_ARCHIVE: '02_Adopted_Archive',
 };
 
-const ANIMAL_SUBFOLDERS = ['Photos', 'Medical', 'Contracts', 'Foster Updates'];
+const ANIMAL_SUBFOLDERS = ['Photos', 'Medical', 'Contracts', 'Foster Updates', 'Happy Tails'];
 
 export interface AnimalBackupResult {
   success: boolean;
