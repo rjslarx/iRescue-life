@@ -57,8 +57,15 @@ interface GoogleWorkspaceStatus {
     senderName?: string;
     senderEmail?: string;
     senderAddresses?: SenderAddress[];
+    sharedDriveId?: string;
+    sharedDriveName?: string;
   } | null;
   connectedEmail?: string;
+}
+
+interface SharedDrive {
+  id: string;
+  name: string;
 }
 
 const platformInfo = {
@@ -138,6 +145,16 @@ export default function PlatformIntegrationsPage() {
     isError: isGoogleError,
     error: googleWorkspaceError,
   });
+
+  // Fetch available Shared Drives when Drive is enabled
+  const { data: sharedDrivesData, isLoading: isLoadingSharedDrives, refetch: refetchSharedDrives } = useQuery<{ drives: SharedDrive[] }>({
+    queryKey: ['/api/google-workspace/shared-drives'],
+    enabled: googleWorkspaceData?.connected && googleWorkspaceData?.features?.useDrive,
+    retry: 1,
+    staleTime: 60000,
+  });
+
+  const sharedDrives = sharedDrivesData?.drives || [];
 
   const integrations = integrationsData?.integrations || [];
   const googleWorkspace = googleWorkspaceData || { connected: false, features: null };
@@ -252,6 +269,29 @@ export default function PlatformIntegrationsPage() {
     onError: (error: any) => {
       toast({
         title: "Failed to update",
+        description: error.message || "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const saveSharedDriveMutation = useMutation({
+    mutationFn: async (data: { sharedDriveId: string | null; sharedDriveName: string | null }) => {
+      const response = await apiRequest('PATCH', '/api/google-workspace/shared-drive', data);
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/google-workspace/status'] });
+      toast({
+        title: data.sharedDriveId ? "Shared Drive configured" : "Shared Drive removed",
+        description: data.sharedDriveId 
+          ? `Documents will now be stored in "${data.sharedDriveName || 'Selected Drive'}".`
+          : "Documents will be stored in internal storage.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to configure Shared Drive",
         description: error.message || "Please try again.",
         variant: "destructive",
       });
@@ -706,13 +746,89 @@ export default function PlatformIntegrationsPage() {
                           </div>
 
                           {googleWorkspace.features?.useDrive && (
-                            <div className="ml-8 pl-3 border-l-2 border-muted">
-                              <div className="flex items-center gap-2">
-                                <CheckCircle2 className="h-4 w-4 text-green-600" />
-                                <p className="text-sm text-muted-foreground">
-                                  Ready to select files from animal profiles
+                            <div className="ml-8 pl-3 border-l-2 border-muted space-y-3">
+                              {/* Shared Drive Selector */}
+                              <div className="space-y-2">
+                                <Label className="text-sm font-medium">Select Shared Drive</Label>
+                                <p className="text-xs text-muted-foreground">
+                                  Choose a Shared Drive to store animal documents. Using a Shared Drive ensures files belong to your organization, not individual users.
                                 </p>
+                                <div className="flex items-center gap-2">
+                                  <Select
+                                    value={googleWorkspace.features?.sharedDriveId || "none"}
+                                    onValueChange={(value) => {
+                                      if (value === "none") {
+                                        saveSharedDriveMutation.mutate({
+                                          sharedDriveId: null,
+                                          sharedDriveName: null,
+                                        });
+                                      } else {
+                                        const selectedDrive = sharedDrives.find(d => d.id === value);
+                                        saveSharedDriveMutation.mutate({
+                                          sharedDriveId: value,
+                                          sharedDriveName: selectedDrive?.name || null,
+                                        });
+                                      }
+                                    }}
+                                    disabled={!canEdit || saveSharedDriveMutation.isPending}
+                                  >
+                                    <SelectTrigger className="w-full" data-testid="select-shared-drive">
+                                      <SelectValue placeholder={isLoadingSharedDrives ? "Loading drives..." : "Select a Shared Drive"} />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="none" data-testid="option-drive-none">
+                                        No Shared Drive (store internally)
+                                      </SelectItem>
+                                      {sharedDrives.length === 0 && !isLoadingSharedDrives && (
+                                        <div className="p-2 text-sm text-muted-foreground text-center" data-testid="text-no-drives-found">
+                                          No Shared Drives found. Create one in Google Drive first.
+                                        </div>
+                                      )}
+                                      {sharedDrives.map((drive) => (
+                                        <SelectItem key={drive.id} value={drive.id} data-testid={`option-drive-${drive.id}`}>
+                                          {drive.name}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={() => refetchSharedDrives()}
+                                    disabled={isLoadingSharedDrives}
+                                    data-testid="button-refresh-drives"
+                                  >
+                                    <RefreshCw className={`h-4 w-4 ${isLoadingSharedDrives ? 'animate-spin' : ''}`} />
+                                  </Button>
+                                </div>
                               </div>
+
+                              {/* Status indicator */}
+                              {googleWorkspace.features?.sharedDriveId ? (
+                                // Check if configured drive is still in the available list
+                                sharedDrives.length > 0 && !sharedDrives.find(d => d.id === googleWorkspace.features?.sharedDriveId) ? (
+                                  <div className="flex items-center gap-2" data-testid="status-drive-access-revoked">
+                                    <AlertCircle className="h-4 w-4 text-red-500" />
+                                    <p className="text-sm text-red-600 dark:text-red-400">
+                                      Access to "{googleWorkspace.features?.sharedDriveName}" has been revoked. Please select a different drive.
+                                    </p>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-2" data-testid="status-drive-configured">
+                                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                                    <p className="text-sm text-muted-foreground">
+                                      Storing files in: <strong data-testid="text-configured-drive-name">{googleWorkspace.features?.sharedDriveName || 'Selected Drive'}</strong>
+                                    </p>
+                                  </div>
+                                )
+                              ) : (
+                                <div className="flex items-center gap-2" data-testid="status-no-drive-selected">
+                                  <AlertTriangle className="h-4 w-4 text-amber-500" />
+                                  <p className="text-sm text-amber-600 dark:text-amber-400">
+                                    No Shared Drive selected. Files will be stored in internal storage.
+                                  </p>
+                                </div>
+                              )}
                             </div>
                           )}
 
