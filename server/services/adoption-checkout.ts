@@ -546,7 +546,7 @@ export async function sendCheckoutLink(
       <p>If you have any questions, please don't hesitate to contact us.</p>
     `;
 
-    await emailService.sendEmail({
+    await emailService.send({
       to: email,
       subject: `Complete Your Adoption of ${animal.name}`,
       html,
@@ -661,7 +661,7 @@ export async function sendPaymentLinkEmail(
   `;
 
   try {
-    await emailService.sendEmail({
+    await emailService.send({
       to: email,
       subject: `Complete Payment for ${animal.name}'s Adoption`,
       html,

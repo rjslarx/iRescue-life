@@ -233,7 +233,7 @@ router.post('/api/heartworm-treatment-plans/:id/send-email', requireTenant, requ
       return res.status(400).json({ error: 'Email service not configured for this organization' });
     }
 
-    await emailService.sendEmail({
+    await emailService.send({
       to: plan.adopterEmail,
       subject: `Heartworm Treatment Schedule for ${animalName}`,
       html: emailHtml,

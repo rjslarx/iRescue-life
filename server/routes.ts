@@ -11782,7 +11782,7 @@ Submitted: ${new Date().toLocaleString()}
       const statusChangedToAgreement = data.pipelineStatus === 'agreement' && oldPipelineStatus !== 'agreement';
       if (statusChangedToAgreement && updatedApplication.applicantEmail) {
         try {
-          const { emailService } = await import('./lib/email-service');
+          const { EmailService } = await import('./lib/email-service');
           const { customForms, customFormSubmissions } = await import('@shared/schema');
           const { generateSecureToken } = await import('./services/custom-form');
           
@@ -11824,9 +11824,15 @@ Submitted: ${new Date().toLocaleString()}
             const baseUrl = `${protocol}://${host}`;
             const formUrl = `${baseUrl}/forms/sign/${token}`;
             
+            // Get email service for tenant
+            const emailService = await EmailService.forTenant(req.tenant!.id);
+            if (!emailService) {
+              console.error('[Foster Automation] No email service configured for tenant');
+              throw new Error('Email service not configured');
+            }
+            
             // Send email to foster applicant
-            await emailService.sendEmail({
-              tenantId: req.tenant!.id,
+            await emailService.send({
               to: updatedApplication.applicantEmail,
               subject: `Action Required: Please Sign Your Foster Agreement - ${req.tenant!.name}`,
               html: `
@@ -11906,7 +11912,7 @@ If you have any questions, please contact us.
   app.post('/api/public/contact', requireTenant, emailLimiter, async (req, res, next) => {
     try {
       const { inboundEmails } = await import('@shared/schema');
-      const { emailService } = await import('./lib/email');
+      const { EmailService } = await import('./lib/email-service');
       
       const contactSchema = z.object({
         name: z.string().min(1),
@@ -11921,8 +11927,12 @@ If you have any questions, please contact us.
       // Send email notification to tenant contact email
       try {
         if (req.tenant!.contactEmail) {
-          await emailService.sendEmail({
-            tenantId: req.tenant!.id,
+          const emailService = await EmailService.forTenant(req.tenant!.id);
+          if (!emailService) {
+            console.warn(`[Contact Form] No email service configured for tenant ${req.tenant!.id}`);
+            throw new Error('Email service not configured');
+          }
+          await emailService.send({
             to: req.tenant!.contactEmail,
             subject: `Contact Form: ${data.subject}`,
             html: `
@@ -12266,7 +12276,7 @@ Submitted: ${new Date().toLocaleString()}
       const statusChangedToWaiverNeeded = data.pipelineStatus === 'waiver_needed' && oldPipelineStatus !== 'waiver_needed';
       if (statusChangedToWaiverNeeded && updatedApplication.applicantEmail) {
         try {
-          const { emailService } = await import('./lib/email-service');
+          const { EmailService } = await import('./lib/email-service');
           const { customForms, customFormSubmissions } = await import('@shared/schema');
           const { generateSecureToken } = await import('./services/custom-form');
           
@@ -12308,9 +12318,15 @@ Submitted: ${new Date().toLocaleString()}
             const baseUrl = `${protocol}://${host}`;
             const formUrl = `${baseUrl}/forms/sign/${token}`;
             
+            // Get email service for tenant
+            const emailService = await EmailService.forTenant(req.tenant!.id);
+            if (!emailService) {
+              console.error('[Volunteer Automation] No email service configured for tenant');
+              throw new Error('Email service not configured');
+            }
+            
             // Send email to volunteer applicant
-            await emailService.sendEmail({
-              tenantId: req.tenant!.id,
+            await emailService.send({
               to: updatedApplication.applicantEmail,
               subject: `Action Required: Please Sign the Hold Harmless Agreement - ${req.tenant!.name}`,
               html: `
@@ -13498,8 +13514,12 @@ Submitted: ${new Date().toLocaleString()}
         .limit(1);
 
       // Send foster request email
-      const { EmailService } = await import('./lib/email');
-      const emailService = new EmailService(req.tenant!.id);
+      const { EmailService } = await import('./lib/email-service');
+      const emailService = await EmailService.forTenant(req.tenant!.id);
+      
+      if (!emailService) {
+        return res.status(500).json({ error: 'Email service not configured' });
+      }
       
       // Build animal profile link
       const baseUrl = tenant?.customDomain && tenant?.customDomainVerified
@@ -13509,7 +13529,7 @@ Submitted: ${new Date().toLocaleString()}
       
       const photoUrl = animal.photoUrls && animal.photoUrls.length > 0 ? animal.photoUrls[0] : null;
       
-      await emailService.sendEmail({
+      await emailService.send({
         to: foster.email,
         subject: `Foster Match: We have a match for you! Meet ${animal.name}`,
         html: `
