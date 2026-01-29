@@ -12185,6 +12185,29 @@ Submitted: ${new Date().toLocaleString()}
         }
       }
 
+      // ========================================================================
+      // AUTOMATION: Create Google Drive folder when foster moves to active_pool
+      // ========================================================================
+      const statusChangedToActivePool = data.pipelineStatus === 'active_pool' && oldPipelineStatus !== 'active_pool';
+      if (statusChangedToActivePool && !updatedApplication.driveFolderId) {
+        try {
+          const { VolunteerFosterBackupService } = await import('./lib/volunteerFosterBackupService');
+          const backupService = new VolunteerFosterBackupService(req.tenant!.id);
+          
+          const result = await backupService.createFosterFolder({
+            id: updatedApplication.id,
+            applicantName: updatedApplication.applicantName,
+            applicantEmail: updatedApplication.applicantEmail,
+          });
+          
+          if (result.success) {
+            console.log(`[Foster Automation] Created ${result.storageType} folder for ${updatedApplication.applicantName}`);
+          }
+        } catch (folderError) {
+          console.error('[Foster Automation] Error creating folder:', folderError);
+        }
+      }
+
       res.json({ success: true, application: updatedApplication });
     } catch (error) {
       next(error);
@@ -12679,6 +12702,29 @@ If you have any questions, please contact us.
         }
       }
 
+      // ========================================================================
+      // AUTOMATION: Create Google Drive folder when volunteer moves to active_pool
+      // ========================================================================
+      const statusChangedToActivePool = data.pipelineStatus === 'active_pool' && oldPipelineStatus !== 'active_pool';
+      if (statusChangedToActivePool && !updatedApplication.driveFolderId) {
+        try {
+          const { VolunteerFosterBackupService } = await import('./lib/volunteerFosterBackupService');
+          const backupService = new VolunteerFosterBackupService(req.tenant!.id);
+          
+          const result = await backupService.createVolunteerFolder({
+            id: updatedApplication.id,
+            applicantName: updatedApplication.applicantName,
+            applicantEmail: updatedApplication.applicantEmail,
+          });
+          
+          if (result.success) {
+            console.log(`[Volunteer Automation] Created ${result.storageType} folder for ${updatedApplication.applicantName}`);
+          }
+        } catch (folderError) {
+          console.error('[Volunteer Automation] Error creating folder:', folderError);
+        }
+      }
+
       res.json({ success: true, application: updatedApplication });
     } catch (error) {
       next(error);
@@ -12809,6 +12855,210 @@ If you have any questions, please contact us.
         message: `Waiver email sent to ${application.applicantEmail}`,
         formUrl 
       });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // ============================================================================
+  // Signed Documents Routes (for Volunteers/Fosters)
+  // ============================================================================
+
+  /**
+   * GET /api/signed-documents/by-email/:email
+   * Get all signed documents for a person by their email (admin/staff only)
+   * Used by Volunteer and Foster profile pages to show "Documents" tab
+   */
+  app.get('/api/signed-documents/by-email/:email', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      const { customFormSubmissions, customForms } = await import('@shared/schema');
+      
+      const email = decodeURIComponent(req.params.email).toLowerCase().trim();
+      
+      // Fetch all completed form submissions for this email
+      const submissions = await db
+        .select({
+          id: customFormSubmissions.id,
+          formId: customFormSubmissions.formId,
+          formName: customForms.name,
+          signerName: customFormSubmissions.signerName,
+          signerEmail: customFormSubmissions.signerEmail,
+          signedAt: customFormSubmissions.signedAt,
+          status: customFormSubmissions.status,
+          renderedHtml: customFormSubmissions.renderedHtml,
+          createdAt: customFormSubmissions.createdAt,
+        })
+        .from(customFormSubmissions)
+        .innerJoin(customForms, eq(customFormSubmissions.formId, customForms.id))
+        .where(
+          and(
+            eq(customFormSubmissions.tenantId, req.tenant!.id),
+            sql`LOWER(TRIM(${customFormSubmissions.signerEmail})) = ${email}`,
+            eq(customFormSubmissions.status, 'completed')
+          )
+        )
+        .orderBy(desc(customFormSubmissions.signedAt));
+      
+      res.json({ documents: submissions });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/signed-documents/:id/download
+   * Download a signed document as PDF (admin/staff only)
+   */
+  app.get('/api/signed-documents/:id/download', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      const { customFormSubmissions, customForms } = await import('@shared/schema');
+      
+      // Fetch the submission with form name
+      const [submission] = await db
+        .select({
+          id: customFormSubmissions.id,
+          formName: customForms.name,
+          signerName: customFormSubmissions.signerName,
+          renderedHtml: customFormSubmissions.renderedHtml,
+          signedAt: customFormSubmissions.signedAt,
+          status: customFormSubmissions.status,
+        })
+        .from(customFormSubmissions)
+        .innerJoin(customForms, eq(customFormSubmissions.formId, customForms.id))
+        .where(
+          and(
+            eq(customFormSubmissions.id, req.params.id),
+            eq(customFormSubmissions.tenantId, req.tenant!.id)
+          )
+        )
+        .limit(1);
+      
+      if (!submission) {
+        return res.status(404).json({ error: 'Document not found' });
+      }
+      
+      if (!submission.renderedHtml) {
+        return res.status(400).json({ error: 'No document content available' });
+      }
+      
+      // Generate PDF using puppeteer
+      const puppeteer = await import('puppeteer');
+      const browser = await puppeteer.default.launch({
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      });
+      
+      const page = await browser.newPage();
+      
+      // Create full HTML document with styling
+      const signedDate = submission.signedAt 
+        ? new Date(submission.signedAt).toLocaleDateString('en-US', { 
+            year: 'numeric', month: 'long', day: 'numeric' 
+          })
+        : 'Unknown date';
+      
+      const fullHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>${submission.formName} - ${submission.signerName}</title>
+  <style>
+    body { 
+      font-family: Arial, sans-serif; 
+      padding: 40px; 
+      max-width: 800px; 
+      margin: 0 auto;
+      line-height: 1.6;
+    }
+    h1, h2, h3 { color: #333; }
+    .header { 
+      border-bottom: 2px solid #333; 
+      padding-bottom: 20px; 
+      margin-bottom: 30px; 
+    }
+    .footer { 
+      border-top: 1px solid #ccc; 
+      padding-top: 20px; 
+      margin-top: 30px; 
+      font-size: 12px; 
+      color: #666; 
+    }
+    img { max-width: 300px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h2>${submission.formName}</h2>
+    <p>Signed by: <strong>${submission.signerName}</strong></p>
+    <p>Date: ${signedDate}</p>
+  </div>
+  
+  ${submission.renderedHtml}
+  
+  <div class="footer">
+    <p>This document was electronically signed on ${signedDate}.</p>
+    <p>Document ID: ${submission.id}</p>
+  </div>
+</body>
+</html>`;
+      
+      await page.setContent(fullHtml, { waitUntil: 'networkidle0' });
+      
+      const pdfBuffer = await page.pdf({
+        format: 'A4',
+        printBackground: true,
+        margin: { top: '20px', right: '20px', bottom: '20px', left: '20px' },
+      });
+      
+      await browser.close();
+      
+      // Sanitize filename
+      const sanitizedFormName = submission.formName.replace(/[^a-zA-Z0-9\s-]/g, '').substring(0, 50);
+      const sanitizedSignerName = submission.signerName.replace(/[^a-zA-Z0-9\s-]/g, '').substring(0, 30);
+      const filename = `${sanitizedFormName}_${sanitizedSignerName}.pdf`;
+      
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.send(pdfBuffer);
+    } catch (error) {
+      console.error('[PDF Download] Error generating PDF:', error);
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/signed-documents/:id/view
+   * View a signed document as HTML (admin/staff only)
+   */
+  app.get('/api/signed-documents/:id/view', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      const { customFormSubmissions, customForms } = await import('@shared/schema');
+      
+      const [submission] = await db
+        .select({
+          id: customFormSubmissions.id,
+          formName: customForms.name,
+          signerName: customFormSubmissions.signerName,
+          signerEmail: customFormSubmissions.signerEmail,
+          renderedHtml: customFormSubmissions.renderedHtml,
+          signedAt: customFormSubmissions.signedAt,
+        })
+        .from(customFormSubmissions)
+        .innerJoin(customForms, eq(customFormSubmissions.formId, customForms.id))
+        .where(
+          and(
+            eq(customFormSubmissions.id, req.params.id),
+            eq(customFormSubmissions.tenantId, req.tenant!.id)
+          )
+        )
+        .limit(1);
+      
+      if (!submission) {
+        return res.status(404).json({ error: 'Document not found' });
+      }
+      
+      res.json({ document: submission });
     } catch (error) {
       next(error);
     }

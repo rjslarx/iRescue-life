@@ -59,6 +59,16 @@ Tenants can select from "Three Doors" (customizable action cards), "Action Circl
 **Native Contract Management System:**
 The platform includes an in-house e-signature system for adoption contracts. Staff can create custom templates using rich text or a guided builder, supporting merge fields for auto-filling data. Signatures are captured via `signature_pad`, and Puppeteer generates legally verifiable PDF contracts with embedded signatures, stored securely with controlled access.
 
+**Volunteer & Foster Document Management:**
+When volunteers or fosters are moved to `active_pool` status, the system automatically creates organized storage folders:
+- **Google Drive (if configured):** Creates `03_Volunteers/{Name} (ID_xxx)` or `04_Fosters/{Name} (ID_xxx)` with subfolders
+  - Volunteer subfolders: Waivers, Training, Certifications, Notes
+  - Foster subfolders: Agreements, Updates, Notes
+- **Fallback to Replit Object Storage** if Google Drive is not configured
+- `driveFolderId` column on `volunteer_applications` and `foster_applications` tracks the folder location
+- Signed waivers/agreements are accessible via "Documents" tab in the application detail dialog
+- PDF download endpoint (`/api/signed-documents/:id/download`) generates legal-grade documents using Puppeteer
+
 **Technical Implementations:**
 The "Paw Pay" platform fee system uses Stripe Connect with a "SaaS + 0%" two-tier model (Free and Professional tiers). A Pro trial system is in place, allowing organizations a 14-day trial before reverting to the Free tier. Stripe Standard Connect OAuth enables tenant-owned Stripe accounts, and a "Donor Covers Fees" feature calculates gross-up amounts. Sensitive data is protected with AES-256-GCM encryption. Unified file storage prioritizes Google Drive, falling back to Replit object storage. Email services use Resend, with optional Google Workspace Gmail API integration. Platform admin security features subdomain resolution, RBAC, frontend guards, authenticated sessions, and TOTP MFA. Production security includes rate limiting, Helmet security headers, CORS fail-closed, and session hardening. Google Analytics 4 is integrated. Optional Google Workspace integration provides Gmail API, Calendar sync, and Drive storage, optimized for CASA OAuth scopes.
 

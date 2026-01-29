@@ -21,9 +21,33 @@ import {
   Loader2,
   CheckCircle,
   XCircle,
-  X
+  X,
+  FileText,
+  Download,
+  Eye,
+  FolderOpen
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { useState } from "react";
+
+interface SignedDocument {
+  id: string;
+  formName: string;
+  signerName: string;
+  signerEmail: string;
+  signedAt: string | null;
+  status: string;
+  createdAt: string;
+}
 
 type ApplicationType = 'adoption' | 'foster' | 'volunteer';
 
@@ -175,11 +199,16 @@ export function ViewApplicationDialog({
   open,
   onOpenChange,
 }: ViewApplicationDialogProps) {
+  const [activeTab, setActiveTab] = useState<"details" | "documents">("details");
+  const [viewingDocumentId, setViewingDocumentId] = useState<string | null>(null);
+  
   const apiEndpoint = applicationType === 'adoption' 
     ? `/api/applications/${application?.id}`
     : applicationType === 'foster'
     ? `/api/foster-applications/${application?.id}`
     : `/api/volunteer-applications/${application?.id}`;
+
+  const email = application?.email || application?.applicantEmail;
 
   const { data: fullData, isLoading } = useQuery<{ application: Record<string, unknown> }>({
     queryKey: [apiEndpoint],
@@ -191,12 +220,55 @@ export function ViewApplicationDialog({
     enabled: open && !!application,
   });
 
+  // Fetch signed documents for volunteers and fosters
+  const showDocumentsTab = applicationType === 'volunteer' || applicationType === 'foster';
+  const { data: documentsData, isLoading: isLoadingDocuments } = useQuery<{ documents: SignedDocument[] }>({
+    queryKey: ['/api/signed-documents/by-email', email],
+    queryFn: async () => {
+      if (!email) return { documents: [] };
+      const encodedEmail = encodeURIComponent(email);
+      const response = await fetch(`/api/signed-documents/by-email/${encodedEmail}`);
+      if (!response.ok) throw new Error('Failed to fetch documents');
+      return response.json();
+    },
+    enabled: open && showDocumentsTab && !!email,
+  });
+
+  // Fetch document content when viewing
+  const { data: viewDocumentData, isLoading: isLoadingDocument } = useQuery<{ document: { renderedHtml: string; formName: string; signerName: string; signedAt: string } }>({
+    queryKey: ['/api/signed-documents', viewingDocumentId, 'view'],
+    queryFn: async () => {
+      const response = await fetch(`/api/signed-documents/${viewingDocumentId}/view`);
+      if (!response.ok) throw new Error('Failed to fetch document');
+      return response.json();
+    },
+    enabled: !!viewingDocumentId,
+  });
+
   if (!application) return null;
 
-  const email = application.email || application.applicantEmail;
   const phone = application.phone || application.applicantPhone;
   const name = application.applicantName;
   const status = application.stage || application.pipelineStatus || 'new';
+  const documents = documentsData?.documents || [];
+
+  const handleDownloadPdf = async (docId: string) => {
+    try {
+      const response = await fetch(`/api/signed-documents/${docId}/download`);
+      if (!response.ok) throw new Error('Download failed');
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `signed-document-${docId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Failed to download PDF:', error);
+    }
+  };
 
   const fullApplication = fullData?.application || application;
   // Support formData, formResponses, and customResponses naming conventions
@@ -255,105 +327,295 @@ export function ViewApplicationDialog({
         </DialogHeader>
 
         <div className="overflow-y-auto pr-4 min-h-0">
-          <div className="space-y-6">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <h3 className="text-lg font-semibold" data-testid="text-applicant-name">{name}</h3>
-                <Badge variant="secondary" data-testid="badge-status">
-                  {getStatusLabel(status)}
-                </Badge>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="flex items-center gap-2 text-sm">
-                  <Mail className="h-4 w-4 text-muted-foreground" />
-                  <a 
-                    href={`mailto:${email}`} 
-                    className="hover:underline"
-                    data-testid="link-email"
-                  >
-                    {email}
-                  </a>
-                </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <Phone className="h-4 w-4 text-muted-foreground" />
-                  <a 
-                    href={`tel:${phone}`}
-                    className="hover:underline"
-                    data-testid="link-phone"
-                  >
-                    {phone}
-                  </a>
-                </div>
-                {application.createdAt && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <Calendar className="h-4 w-4 text-muted-foreground" />
-                    <span data-testid="text-created-date">
-                      {format(new Date(application.createdAt), 'PPP')}
-                    </span>
-                  </div>
-                )}
-                {applicationType === 'adoption' && application.animalName && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <PawPrint className="h-4 w-4 text-muted-foreground" />
-                    <span>Applying for: <strong>{application.animalName}</strong></span>
-                  </div>
-                )}
-              </div>
+          {/* Header with name and status - always shown */}
+          <div className="space-y-4 mb-4">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <h3 className="text-lg font-semibold" data-testid="text-applicant-name">{name}</h3>
+              <Badge variant="secondary" data-testid="badge-status">
+                {getStatusLabel(status)}
+              </Badge>
             </div>
 
-            {(sortedFormResponses.length > 0 || isLoading || isLoadingFields) && (
-              <>
-                <Separator />
-                <div className="space-y-4">
-                  <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">
-                    Application Responses
-                  </h4>
-                  {(isLoading || isLoadingFields) ? (
-                    <div className="space-y-4">
-                      {[1, 2, 3].map((i) => (
-                        <div key={i} className="space-y-2">
-                          <Skeleton className="h-4 w-48" />
-                          <Skeleton className="h-4 w-64" />
-                        </div>
-                      ))}
-                    </div>
-                  ) : sortedFormResponses.length > 0 ? (
-                    <div className="space-y-4">
-                      {sortedFormResponses.map(([key, value]) => (
-                        <div key={key} className="space-y-1" data-testid={`field-${key}`}>
-                          <dt className="text-sm font-medium text-muted-foreground">
-                            {getFieldLabel(key)}
-                          </dt>
-                          <dd className="text-sm">
-                            {formatFieldValue(value)}
-                          </dd>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground py-4 text-center">
-                      No application responses available.
-                    </p>
-                  )}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="flex items-center gap-2 text-sm">
+                <Mail className="h-4 w-4 text-muted-foreground" />
+                <a 
+                  href={`mailto:${email}`} 
+                  className="hover:underline"
+                  data-testid="link-email"
+                >
+                  {email}
+                </a>
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                <Phone className="h-4 w-4 text-muted-foreground" />
+                <a 
+                  href={`tel:${phone}`}
+                  className="hover:underline"
+                  data-testid="link-phone"
+                >
+                  {phone}
+                </a>
+              </div>
+              {application.createdAt && (
+                <div className="flex items-center gap-2 text-sm">
+                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                  <span data-testid="text-created-date">
+                    {format(new Date(application.createdAt), 'PPP')}
+                  </span>
                 </div>
-              </>
-            )}
-
-            {notes && (
-              <>
-                <Separator />
-                <div className="space-y-2">
-                  <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">
-                    Staff Notes
-                  </h4>
-                  <p className="text-sm whitespace-pre-wrap bg-muted/50 p-3 rounded-md" data-testid="text-notes">
-                    {String(notes)}
-                  </p>
+              )}
+              {applicationType === 'adoption' && application.animalName && (
+                <div className="flex items-center gap-2 text-sm">
+                  <PawPrint className="h-4 w-4 text-muted-foreground" />
+                  <span>Applying for: <strong>{application.animalName}</strong></span>
                 </div>
-              </>
-            )}
+              )}
+            </div>
           </div>
+
+          {/* Tabs for volunteers/fosters, regular content for adoption */}
+          {showDocumentsTab ? (
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "details" | "documents")}>
+              <TabsList className="grid w-full grid-cols-2 mb-4">
+                <TabsTrigger value="details" data-testid="tab-details">
+                  <Users className="h-4 w-4 mr-2" />
+                  Details
+                </TabsTrigger>
+                <TabsTrigger value="documents" data-testid="tab-documents">
+                  <FolderOpen className="h-4 w-4 mr-2" />
+                  Documents
+                  {documents.length > 0 && (
+                    <Badge variant="secondary" className="ml-2 h-5 px-1.5">{documents.length}</Badge>
+                  )}
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="details" className="space-y-6 mt-0">
+                {(sortedFormResponses.length > 0 || isLoading || isLoadingFields) && (
+                  <>
+                    <Separator />
+                    <div className="space-y-4">
+                      <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">
+                        Application Responses
+                      </h4>
+                      {(isLoading || isLoadingFields) ? (
+                        <div className="space-y-4">
+                          {[1, 2, 3].map((i) => (
+                            <div key={i} className="space-y-2">
+                              <Skeleton className="h-4 w-48" />
+                              <Skeleton className="h-4 w-64" />
+                            </div>
+                          ))}
+                        </div>
+                      ) : sortedFormResponses.length > 0 ? (
+                        <div className="space-y-4">
+                          {sortedFormResponses.map(([key, value]) => (
+                            <div key={key} className="space-y-1" data-testid={`field-${key}`}>
+                              <dt className="text-sm font-medium text-muted-foreground">
+                                {getFieldLabel(key)}
+                              </dt>
+                              <dd className="text-sm">
+                                {formatFieldValue(value)}
+                              </dd>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground py-4 text-center">
+                          No application responses available.
+                        </p>
+                      )}
+                    </div>
+                  </>
+                )}
+
+                {notes && (
+                  <>
+                    <Separator />
+                    <div className="space-y-2">
+                      <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">
+                        Staff Notes
+                      </h4>
+                      <p className="text-sm whitespace-pre-wrap bg-muted/50 p-3 rounded-md" data-testid="text-notes">
+                        {String(notes)}
+                      </p>
+                    </div>
+                  </>
+                )}
+              </TabsContent>
+
+              <TabsContent value="documents" className="mt-0">
+                {viewingDocumentId ? (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => setViewingDocumentId(null)}
+                        data-testid="button-back-to-list"
+                      >
+                        <X className="h-4 w-4 mr-2" />
+                        Back to Documents
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => handleDownloadPdf(viewingDocumentId)}
+                        data-testid="button-download-current"
+                      >
+                        <Download className="h-4 w-4 mr-2" />
+                        Download PDF
+                      </Button>
+                    </div>
+                    {isLoadingDocument ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="h-6 w-6 animate-spin" />
+                      </div>
+                    ) : viewDocumentData?.document ? (
+                      <div className="border rounded-md p-4 bg-white dark:bg-background">
+                        <div className="mb-4 pb-4 border-b">
+                          <h4 className="font-semibold">{viewDocumentData.document.formName}</h4>
+                          <p className="text-sm text-muted-foreground">
+                            Signed by {viewDocumentData.document.signerName} on{' '}
+                            {viewDocumentData.document.signedAt 
+                              ? format(new Date(viewDocumentData.document.signedAt), 'PPP')
+                              : 'Unknown date'}
+                          </p>
+                        </div>
+                        <div 
+                          className="prose prose-sm max-w-none dark:prose-invert"
+                          dangerouslySetInnerHTML={{ __html: viewDocumentData.document.renderedHtml }}
+                        />
+                      </div>
+                    ) : (
+                      <p className="text-center text-muted-foreground py-8">
+                        Unable to load document.
+                      </p>
+                    )}
+                  </div>
+                ) : isLoadingDocuments ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                  </div>
+                ) : documents.length === 0 ? (
+                  <div className="text-center py-8">
+                    <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                    <h4 className="font-medium mb-2">No Signed Documents</h4>
+                    <p className="text-sm text-muted-foreground">
+                      {applicationType === 'volunteer' 
+                        ? 'Waivers and forms signed by this volunteer will appear here.'
+                        : 'Agreements signed by this foster will appear here.'}
+                    </p>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Document</TableHead>
+                        <TableHead>Signed</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {documents.map((doc) => (
+                        <TableRow key={doc.id} data-testid={`row-document-${doc.id}`}>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <FileText className="h-4 w-4 text-muted-foreground" />
+                              <span className="font-medium">{doc.formName}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {doc.signedAt 
+                              ? format(new Date(doc.signedAt), 'MMM d, yyyy')
+                              : 'Pending'}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setViewingDocumentId(doc.id)}
+                                title="View document"
+                                data-testid={`button-view-${doc.id}`}
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleDownloadPdf(doc.id)}
+                                title="Download PDF"
+                                data-testid={`button-download-${doc.id}`}
+                              >
+                                <Download className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </TabsContent>
+            </Tabs>
+          ) : (
+            /* Original content for adoption applications */
+            <div className="space-y-6">
+              {(sortedFormResponses.length > 0 || isLoading || isLoadingFields) && (
+                <>
+                  <Separator />
+                  <div className="space-y-4">
+                    <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">
+                      Application Responses
+                    </h4>
+                    {(isLoading || isLoadingFields) ? (
+                      <div className="space-y-4">
+                        {[1, 2, 3].map((i) => (
+                          <div key={i} className="space-y-2">
+                            <Skeleton className="h-4 w-48" />
+                            <Skeleton className="h-4 w-64" />
+                          </div>
+                        ))}
+                      </div>
+                    ) : sortedFormResponses.length > 0 ? (
+                      <div className="space-y-4">
+                        {sortedFormResponses.map(([key, value]) => (
+                          <div key={key} className="space-y-1" data-testid={`field-${key}`}>
+                            <dt className="text-sm font-medium text-muted-foreground">
+                              {getFieldLabel(key)}
+                            </dt>
+                            <dd className="text-sm">
+                              {formatFieldValue(value)}
+                            </dd>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground py-4 text-center">
+                        No application responses available.
+                      </p>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {notes && (
+                <>
+                  <Separator />
+                  <div className="space-y-2">
+                    <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">
+                      Staff Notes
+                    </h4>
+                    <p className="text-sm whitespace-pre-wrap bg-muted/50 p-3 rounded-md" data-testid="text-notes">
+                      {String(notes)}
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="flex justify-end pt-4 border-t">

@@ -951,7 +951,8 @@ export const volunteerApplications = pgTable("volunteer_applications", {
   pipelineStatus: text("pipeline_status").notNull().default("new_applicant").$type<"new_applicant" | "orientation_scheduled" | "waiver_needed" | "active_pool" | "rejected">(),
   notes: text("notes"),
   customResponses: jsonb("custom_responses").$type<Record<string, any>>(),
-  smsConsent: boolean("sms_consent").notNull().default(false), // Whether applicant consented to receive SMS messages
+  smsConsent: boolean("sms_consent").notNull().default(false),
+  driveFolderId: text("drive_folder_id"), // Google Drive or Object Storage folder ID for documents
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -983,9 +984,10 @@ export const fosterApplications = pgTable("foster_applications", {
   personalReference: text("personal_reference"),
   status: text("status").notNull().default("pending").$type<"pending" | "approved" | "rejected">(),
   pipelineStatus: text("pipeline_status").notNull().default("new_app").$type<"new_app" | "interview" | "home_check" | "orientation" | "agreement" | "active_pool" | "rejected">(),
-  notes: text("notes"), // Admin notes
-  customResponses: jsonb("custom_responses").$type<Record<string, any>>(), // Stores answers to custom form fields
-  smsConsent: boolean("sms_consent").notNull().default(false), // Whether applicant consented to receive SMS messages
+  notes: text("notes"),
+  customResponses: jsonb("custom_responses").$type<Record<string, any>>(),
+  smsConsent: boolean("sms_consent").notNull().default(false),
+  driveFolderId: text("drive_folder_id"), // Google Drive or Object Storage folder ID for documents
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
