@@ -606,7 +606,7 @@ export default function KennelCardPage() {
       </div>
       
       <CardContent className="p-6 space-y-4 kennel-card-content">
-        {/* Header: Name/ID (Left) and Barcode (Right) */}
+        {/* Header: Name/ID (Left) and QR Code/Barcode/Print Date (Right) */}
         <div className="flex items-start justify-between gap-4 border-b-2 border-primary pb-4">
           <div>
             <h1 className={`${getHeadingSizeClass()} font-bold mb-1`} data-testid="text-kennel-card-name">
@@ -617,12 +617,34 @@ export default function KennelCardPage() {
             </h3>
           </div>
           
-          {/* Barcode for Microchip */}
-          {animal.microchipNumber && (
-            <div className="flex-shrink-0 bg-white p-2 rounded border">
-              <svg ref={barcodeRef} data-testid="barcode-microchip"></svg>
+          {/* Right side: Barcode, QR Code and Print Date */}
+          <div className="flex-shrink-0 flex flex-col items-end gap-2">
+            <div className="flex items-center gap-3">
+              {/* Barcode for Microchip */}
+              {animal.microchipNumber && (
+                <div className="flex-shrink-0 bg-white p-1 rounded border">
+                  <svg ref={barcodeRef} data-testid="barcode-microchip"></svg>
+                </div>
+              )}
+              {staffQrCode && (
+                <div className="flex items-center gap-2">
+                  <div className="text-right">
+                    <p className={`${fontSize === 'small' ? 'text-xs' : 'text-sm'} font-medium`}>Staff Portal</p>
+                    <p className="text-xs text-muted-foreground">Scan to edit</p>
+                  </div>
+                  <img
+                    src={staffQrCode}
+                    alt="Scan to edit animal"
+                    className="w-16 h-16 border rounded"
+                    data-testid="img-staff-qr-code"
+                  />
+                </div>
+              )}
             </div>
-          )}
+            <p className="text-xs text-muted-foreground">
+              Printed: {format(new Date(), 'MMM d, yyyy h:mm a')}
+            </p>
+          </div>
         </div>
 
         {/* Kennel Location and Photo Row */}
@@ -711,13 +733,66 @@ export default function KennelCardPage() {
           </Card>
         )}
 
-        {/* Logistics Section */}
+        {/* Good With Icons and Logistics Section */}
         <Card className="border-2 border-border">
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-3">
-              <Truck className="w-5 h-5 text-muted-foreground" />
-              <h2 className={`${fontSize === 'small' ? 'text-lg' : 'text-xl'} font-bold`}>Logistics</h2>
+              <Info className="w-5 h-5 text-muted-foreground" />
+              <h2 className={`${fontSize === 'small' ? 'text-lg' : 'text-xl'} font-bold`}>Animal Info</h2>
             </div>
+            
+            {/* Good With Icons Row */}
+            <div className="flex flex-wrap gap-2 mb-4">
+              {/* Kids */}
+              <div className="flex items-center gap-1 border rounded-md px-2 py-1" data-testid="staff-indicator-child-friendly">
+                <Baby className="w-4 h-4 text-muted-foreground" />
+                <span className={`${fontSize === 'small' ? 'text-xs' : 'text-sm'} font-medium`}>Kids</span>
+                {animal.childFriendly === true && <Check className="w-3 h-3 text-green-600" />}
+                {animal.childFriendly === false && <XIcon className="w-3 h-3 text-red-600" />}
+                {animal.childFriendly == null && <span className="text-xs text-muted-foreground">?</span>}
+              </div>
+              
+              {/* Cats */}
+              <div className="flex items-center gap-1 border rounded-md px-2 py-1" data-testid="staff-indicator-cat-friendly">
+                <Cat className="w-4 h-4 text-muted-foreground" />
+                <span className={`${fontSize === 'small' ? 'text-xs' : 'text-sm'} font-medium`}>Cats</span>
+                {animal.catFriendly === true && <Check className="w-3 h-3 text-green-600" />}
+                {animal.catFriendly === false && <XIcon className="w-3 h-3 text-red-600" />}
+                {animal.catFriendly == null && <span className="text-xs text-muted-foreground">?</span>}
+              </div>
+              
+              {/* Dogs */}
+              <div className="flex items-center gap-1 border rounded-md px-2 py-1" data-testid="staff-indicator-dog-friendly">
+                <Dog className="w-4 h-4 text-muted-foreground" />
+                <span className={`${fontSize === 'small' ? 'text-xs' : 'text-sm'} font-medium`}>Dogs</span>
+                {animal.dogFriendly === true && <Check className="w-3 h-3 text-green-600" />}
+                {animal.dogFriendly === false && <XIcon className="w-3 h-3 text-red-600" />}
+                {animal.dogFriendly == null && <span className="text-xs text-muted-foreground">?</span>}
+              </div>
+
+              {/* Heartworm Status */}
+              <div className="flex items-center gap-1 border rounded-md px-2 py-1" data-testid="staff-indicator-heartworm">
+                <Heart className="w-4 h-4 text-muted-foreground" />
+                <span className={`${fontSize === 'small' ? 'text-xs' : 'text-sm'} font-medium`}>HW</span>
+                {animal.heartwormPositive === true && <span className="text-xs font-bold text-red-600">+</span>}
+                {animal.heartwormPositive === false && <span className="text-xs font-bold text-green-600">-</span>}
+                {animal.heartwormPositive == null && <span className="text-xs text-muted-foreground">?</span>}
+              </div>
+
+              {/* Spay/Neuter Status */}
+              <div className="flex items-center gap-1 border rounded-md px-2 py-1" data-testid="staff-indicator-altered">
+                <Activity className="w-4 h-4 text-muted-foreground" />
+                <span className={`${fontSize === 'small' ? 'text-xs' : 'text-sm'} font-medium`}>
+                  {animal.neuterStatus === 'spayed' ? 'Spayed' : 
+                   animal.neuterStatus === 'neutered' ? 'Neutered' : 
+                   animal.neuterStatus === 'intact' ? 'Intact' : 'Unknown'}
+                </span>
+                {(animal.neuterStatus === 'spayed' || animal.neuterStatus === 'neutered') && <Check className="w-3 h-3 text-green-600" />}
+                {animal.neuterStatus === 'intact' && <XIcon className="w-3 h-3 text-orange-500" />}
+              </div>
+            </div>
+
+            {/* Logistics Grid */}
             <div className={`grid grid-cols-2 gap-3 ${getFontSizeClass()}`}>
               <div>
                 <p className="text-muted-foreground text-sm">Intake Date</p>
@@ -752,28 +827,6 @@ export default function KennelCardPage() {
             </CardContent>
           </Card>
         )}
-
-        {/* Footer with Internal QR Code */}
-        <div className="flex items-center justify-between pt-4 border-t-2 border-primary">
-          <div className={`${getFontSizeClass()} text-muted-foreground`}>
-            <p>Printed: {format(new Date(), 'MMM d, yyyy h:mm a')}</p>
-          </div>
-          
-          {staffQrCode && (
-            <div className="flex items-center gap-3">
-              <div className="text-right">
-                <p className={`${fontSize === 'small' ? 'text-xs' : 'text-sm'} font-medium`}>Staff Portal</p>
-                <p className="text-xs text-muted-foreground">Scan to edit</p>
-              </div>
-              <img
-                src={staffQrCode}
-                alt="Scan to edit animal"
-                className="w-20 h-20 border rounded"
-                data-testid="img-staff-qr-code"
-              />
-            </div>
-          )}
-        </div>
       </CardContent>
     </Card>
   );
