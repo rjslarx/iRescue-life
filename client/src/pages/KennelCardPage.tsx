@@ -196,44 +196,54 @@ export default function KennelCardPage() {
         
         @page {
           size: letter portrait;
-          margin: 8mm;
+          margin: 5mm;
         }
         
-        /* Main container - scale to fit single page */
+        /* Main container */
         .kennel-card-container {
           width: 100% !important;
           max-width: 100% !important;
           height: auto !important;
           overflow: visible !important;
-          padding-top: 0 !important;
+          padding: 0 !important;
           margin: 0 !important;
         }
         
-        /* The actual card */
-        .kennel-card-container > div:last-child {
-          transform-origin: top center;
-          transform: scale(0.85);
+        /* The print page wrapper - critical for single page printing */
+        .print-page-wrapper {
+          display: block !important;
+          page-break-inside: avoid !important;
+          break-inside: avoid !important;
           page-break-after: avoid !important;
           page-break-before: avoid !important;
+        }
+        
+        /* Force the Card element itself to not break */
+        .kennel-card-print-wrapper {
+          display: block !important;
+          overflow: visible !important;
           page-break-inside: avoid !important;
+          break-inside: avoid !important;
+          page-break-after: avoid !important;
+          page-break-before: avoid !important;
         }
         
         .kennel-card-content {
-          padding: 0.5rem !important;
+          padding: 0.35rem !important;
         }
         
         .kennel-card-content > * {
-          margin-bottom: 0.35rem !important;
+          margin-bottom: 0.25rem !important;
         }
         
         .kennel-card-content .space-y-4 > * {
-          margin-top: 0.35rem !important;
-          margin-bottom: 0.35rem !important;
+          margin-top: 0.25rem !important;
+          margin-bottom: 0.25rem !important;
         }
         
         .kennel-card-content img {
-          max-width: 140px !important;
-          max-height: 140px !important;
+          max-width: 120px !important;
+          max-height: 120px !important;
         }
         
         .kennel-card-content * {
@@ -243,41 +253,53 @@ export default function KennelCardPage() {
         
         /* Reduce card padding inside nested cards */
         .kennel-card-content .p-4 {
-          padding: 0.5rem !important;
+          padding: 0.35rem !important;
         }
         
         .kennel-card-content .p-6 {
-          padding: 0.75rem !important;
+          padding: 0.5rem !important;
         }
         
         /* Reduce gaps */
         .kennel-card-content .gap-4 {
-          gap: 0.5rem !important;
+          gap: 0.35rem !important;
         }
         
         .kennel-card-content .gap-3 {
-          gap: 0.35rem !important;
+          gap: 0.25rem !important;
         }
         
         /* Reduce spacing in grid */
         .kennel-card-content .grid {
-          gap: 0.5rem !important;
+          gap: 0.35rem !important;
         }
         
         /* Smaller text for print */
         .kennel-card-content h1 {
-          font-size: 1.75rem !important;
-          line-height: 1.2 !important;
+          font-size: 1.5rem !important;
+          line-height: 1.1 !important;
         }
         
         .kennel-card-content h2 {
-          font-size: 0.9rem !important;
-          line-height: 1.2 !important;
+          font-size: 0.8rem !important;
+          line-height: 1.1 !important;
         }
         
         .kennel-card-content h3 {
-          font-size: 1rem !important;
+          font-size: 0.9rem !important;
+          line-height: 1.1 !important;
+        }
+        
+        /* Smaller base text */
+        .kennel-card-content p,
+        .kennel-card-content span {
+          font-size: 0.8rem !important;
           line-height: 1.2 !important;
+        }
+        
+        /* Compact safety banner */
+        .kennel-card-content .text-2xl {
+          font-size: 1rem !important;
         }
         
         /* Safety banner colors */
@@ -443,7 +465,7 @@ export default function KennelCardPage() {
 
   // ==================== PUBLIC VIEW TEMPLATE ====================
   const PublicViewCard = () => (
-    <Card className="border-4 border-primary overflow-hidden">
+    <Card className="border-4 border-primary overflow-hidden kennel-card-print-wrapper">
       <CardContent className="p-0 kennel-card-content">
         {/* Header: Name/ID (Left) and Photo (Right) */}
         <div className="flex items-start gap-4 p-6 pb-4">
@@ -592,7 +614,7 @@ export default function KennelCardPage() {
 
   // ==================== STAFF/INTERNAL VIEW TEMPLATE ====================
   const StaffViewCard = () => (
-    <Card className="border-4 border-primary overflow-hidden">
+    <Card className="border-4 border-primary overflow-hidden kennel-card-print-wrapper">
       {/* Safety Banner - Full Width at Top */}
       <div className={`${safetyConfig.bg} ${safetyConfig.text} ${safetyConfig.className} py-3 px-6 text-center`}>
         <p className={`font-bold ${fontSize === 'small' ? 'text-lg' : fontSize === 'medium' ? 'text-xl' : fontSize === 'large' ? 'text-2xl' : 'text-3xl'}`}>
@@ -978,8 +1000,10 @@ export default function KennelCardPage() {
           </Card>
         )}
 
-        {/* Render Selected Template */}
-        {cardTemplate === 'public' ? <PublicViewCard /> : <StaffViewCard />}
+        {/* Render Selected Template - wrapped for print page control */}
+        <div className="print-page-wrapper">
+          {cardTemplate === 'public' ? <PublicViewCard /> : <StaffViewCard />}
+        </div>
       </div>
       
       {/* iPad/iOS Print Help Modal */}
