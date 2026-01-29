@@ -11784,7 +11784,7 @@ Submitted: ${new Date().toLocaleString()}
         try {
           const { emailService } = await import('./lib/email-service');
           const { customForms, customFormSubmissions } = await import('@shared/schema');
-          const { generateToken, hashToken } = await import('./services/custom-form');
+          const { generateSecureToken } = await import('./services/custom-form');
           
           // Find a foster agreement form for this tenant
           // Look for forms with "foster" AND ("agreement" OR "contract") in the name
@@ -11802,8 +11802,7 @@ Submitted: ${new Date().toLocaleString()}
           
           if (fosterAgreementForm) {
             // Generate a form submission token for the foster applicant
-            const token = generateToken();
-            const tokenHash = hashToken(token);
+            const { token, hash: tokenHash } = generateSecureToken();
             const expiresAt = new Date();
             expiresAt.setDate(expiresAt.getDate() + 14); // 14 day expiration
             
@@ -11815,7 +11814,7 @@ Submitted: ${new Date().toLocaleString()}
               signerEmail: updatedApplication.applicantEmail,
               signerPhone: updatedApplication.applicantPhone || null,
               status: 'pending',
-              tokenHash,
+              secureTokenHash: tokenHash,
               expiresAt,
             });
             
