@@ -449,6 +449,9 @@ export default function ApplicationDetailSheet({
         return apiRequest("PATCH", `${endpoint}/${data?.id}`, { pipelineStatus: newStatus });
       } else if (type === "volunteer") {
         return apiRequest("PATCH", `${endpoint}/${data?.id}`, { pipelineStatus: newStatus });
+      } else if (type === "intake") {
+        // Intake/surrender requests use a separate /status endpoint
+        return apiRequest("PATCH", `${endpoint}/${data?.id}/status`, { status: newStatus });
       } else {
         return apiRequest("PATCH", `${endpoint}/${data?.id}`, { status: newStatus });
       }
