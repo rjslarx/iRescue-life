@@ -1,0 +1,88 @@
+2026-01-29 05:35:23.20
+b363553b
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/sql/sql.js:131:73
+2026-01-29 05:35:23.20
+b363553b
+User
+TypeError: value.toISOString is not a function
+2026-01-29 05:35:23.20
+b363553b
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/sql/sql.js:95:21
+2026-01-29 05:35:23.20
+b363553b
+User
+at SQL.buildQueryFromSourceParams (file:///home/runner/workspace/node_modules/drizzle-orm/sql/sql.js:73:32)
+2026-01-29 05:35:23.20
+b363553b
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/sql/sql.js:95:21
+2026-01-29 05:35:23.20
+b363553b
+User
+at PgTimestamp.mapToDriverValue (file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/columns/timestamp.js:34:18)
+2026-01-29 05:35:23.20
+b363553b
+User
+at SQL.buildQueryFromSourceParams (file:///home/runner/workspace/node_modules/drizzle-orm/sql/sql.js:73:32)
+2026-01-29 05:35:23.20
+b363553b
+User
+at Array.map ()
+2026-01-29 05:35:23.20
+b363553b
+User
+at SQL.buildQueryFromSourceParams (file:///home/runner/workspace/node_modules/drizzle-orm/sql/sql.js:73:32)
+2026-01-29 05:35:23.20
+b363553b
+User
+at Array.map ()
+2026-01-29 05:35:23.20
+b363553b
+User
+at Array.map ()
+2026-01-29 05:35:43.96
+b363553b
+User
+at Array.map ()
+2026-01-29 05:35:43.96
+b363553b
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/sql/sql.js:131:73
+2026-01-29 05:35:43.96
+b363553b
+User
+at Array.map ()
+2026-01-29 05:35:43.96
+b363553b
+User
+at SQL.buildQueryFromSourceParams (file:///home/runner/workspace/node_modules/drizzle-orm/sql/sql.js:73:32)
+2026-01-29 05:35:43.96
+b363553b
+User
+TypeError: value.toISOString is not a function
+2026-01-29 05:35:43.96
+b363553b
+User
+at SQL.buildQueryFromSourceParams (file:///home/runner/workspace/node_modules/drizzle-orm/sql/sql.js:73:32)
+2026-01-29 05:35:43.96
+b363553b
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/sql/sql.js:95:21
+2026-01-29 05:35:43.96
+b363553b
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/sql/sql.js:95:21
+2026-01-29 05:35:43.96
+b363553b
+User
+at PgTimestamp.mapToDriverValue (file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/columns/timestamp.js:34:18)
+2026-01-29 05:35:43.96
+b363553b
+User
+at Array.map ()
+2026-01-29 05:35:43.96
+b363553b
+User
+at SQL.buildQueryFromSourceParams (file:///home/runner/workspace/node_modules/drizzle-orm/sql/sql.js:73:32)
