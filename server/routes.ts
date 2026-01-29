@@ -11827,15 +11827,17 @@ Submitted: ${new Date().toLocaleString()}
     try {
       const { volunteerApplications, dismissedWidgetItems } = await import('@shared/schema');
       
+      // Support both legacy status field and new pipelineStatus field
       const updateSchema = z.object({
-        status: z.enum(['pending', 'approved', 'rejected']),
+        status: z.enum(['pending', 'approved', 'rejected']).optional(),
+        pipelineStatus: z.enum(['new_applicant', 'orientation_scheduled', 'waiver_needed', 'active_pool', 'rejected']).optional(),
         notes: z.string().optional(),
       });
 
       const data = updateSchema.parse(req.body);
       
       // Get current application to check status before update
-      const [currentApp] = await db.select({ status: volunteerApplications.status })
+      const [currentApp] = await db.select({ status: volunteerApplications.status, pipelineStatus: volunteerApplications.pipelineStatus })
         .from(volunteerApplications)
         .where(
           and(
@@ -11850,13 +11852,36 @@ Submitted: ${new Date().toLocaleString()}
       }
       
       const oldStatus = currentApp.status;
+      const oldPipelineStatus = currentApp.pipelineStatus;
+      
+      // Build update object
+      const updateData: Record<string, any> = {
+        updatedAt: new Date(),
+      };
+      
+      if (data.status !== undefined) {
+        updateData.status = data.status;
+      }
+      
+      if (data.pipelineStatus !== undefined) {
+        updateData.pipelineStatus = data.pipelineStatus;
+        // Sync legacy status field based on pipelineStatus
+        if (data.pipelineStatus === 'active_pool') {
+          updateData.status = 'approved';
+        } else if (data.pipelineStatus === 'rejected') {
+          updateData.status = 'rejected';
+        } else if (['new_applicant', 'orientation_scheduled', 'waiver_needed'].includes(data.pipelineStatus)) {
+          updateData.status = 'pending';
+        }
+      }
+      
+      if (data.notes !== undefined) {
+        updateData.notes = data.notes;
+      }
 
       const [updatedApplication] = await db
         .update(volunteerApplications)
-        .set({
-          ...data,
-          updatedAt: new Date(),
-        })
+        .set(updateData)
         .where(
           and(
             eq(volunteerApplications.id, req.params.id),
@@ -11870,7 +11895,7 @@ Submitted: ${new Date().toLocaleString()}
       }
       
       // Auto-dismiss from widget if moving from 'pending' to another status
-      if (oldStatus === 'pending' && data.status !== 'pending') {
+      if (oldStatus === 'pending' && updateData.status && updateData.status !== 'pending') {
         try {
           const existing = await db.select()
             .from(dismissedWidgetItems)

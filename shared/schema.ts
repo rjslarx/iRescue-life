@@ -946,6 +946,7 @@ export const volunteerApplications = pgTable("volunteer_applications", {
   emergencyContactName: text("emergency_contact_name"),
   emergencyContactPhone: text("emergency_contact_phone"),
   status: text("status").notNull().default("pending").$type<"pending" | "approved" | "rejected">(),
+  pipelineStatus: text("pipeline_status").notNull().default("new_applicant").$type<"new_applicant" | "orientation_scheduled" | "waiver_needed" | "active_pool" | "rejected">(),
   notes: text("notes"),
   customResponses: jsonb("custom_responses").$type<Record<string, any>>(),
   smsConsent: boolean("sms_consent").notNull().default(false), // Whether applicant consented to receive SMS messages
