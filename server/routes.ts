@@ -1472,6 +1472,8 @@ Crawl-delay: 1
                         <p style="text-align: center; margin: 30px 0;">
                           <a href="${resetUrl}" class="button">Reset Password</a>
                         </p>
+                        <p style="color: #6b7280; font-size: 14px;">Or copy and paste this link into your browser:</p>
+                        <p style="font-size: 14px; word-break: break-all;"><a href="${resetUrl}" style="color: #667eea;">${resetUrl}</a></p>
                         <p style="color: #6b7280; font-size: 14px;">This link will expire in 1 hour.</p>
                         <p style="color: #6b7280; font-size: 14px;">If you didn't request this, you can safely ignore this email.</p>
                       </div>
@@ -2223,13 +2225,19 @@ Crawl-delay: 1
             to: user.email,
             subject: 'Password Reset Request',
             html: `
-              <h2>Password Reset Request</h2>
-              <p>Hi ${user.fullName},</p>
-              <p>You requested to reset your password. Click the link below to create a new password:</p>
-              <p><a href="${resetUrl}">Reset Password</a></p>
-              <p>This link will expire in 1 hour.</p>
-              <p>If you didn't request this, you can safely ignore this email.</p>
-              <p>Best regards,<br/>${req.tenant!.name}</p>
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2>Password Reset Request</h2>
+                <p>Hi ${user.fullName},</p>
+                <p>You requested to reset your password. Click the button below to create a new password:</p>
+                <p style="text-align: center; margin: 30px 0;">
+                  <a href="${resetUrl}" style="display: inline-block; background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Reset Password</a>
+                </p>
+                <p style="color: #6b7280; font-size: 14px;">Or copy and paste this link into your browser:</p>
+                <p style="font-size: 14px; word-break: break-all;"><a href="${resetUrl}" style="color: #2563eb;">${resetUrl}</a></p>
+                <p style="color: #6b7280; font-size: 14px;">This link will expire in 1 hour.</p>
+                <p style="color: #6b7280; font-size: 14px;">If you didn't request this, you can safely ignore this email.</p>
+                <p>Best regards,<br/>${req.tenant!.name}</p>
+              </div>
             `,
           });
           console.log(`[FORGOT PASSWORD] Password reset email sent to ${user.email} for tenant ${req.tenant!.subdomain}`);
@@ -13553,10 +13561,11 @@ Submitted: ${new Date().toLocaleString()}
             </p>
             
             <div style="margin: 30px 0;">
-              <a href="${animalUrl}" style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">
-                View ${animal.name}'s Profile
-              </a>
+              <a href="${animalUrl}" style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">View ${animal.name}'s Profile</a>
             </div>
+            
+            <p style="color: #6b7280; font-size: 14px;">Or copy and paste this link into your browser:</p>
+            <p style="font-size: 14px; word-break: break-all;"><a href="${animalUrl}" style="color: #2563eb;">${animalUrl}</a></p>
             
             <p style="color: #6b7280; font-size: 14px;">
               If you're interested in fostering ${animal.name}, please log in to your account or reply to this email.

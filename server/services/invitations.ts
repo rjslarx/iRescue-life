@@ -170,9 +170,7 @@ export async function sendInvitationEmail(
       <p>Click the button below to accept the invitation and create your account:</p>
       
       <div style="text-align: center; margin: 30px 0;">
-        <a href="${acceptUrl}" style="background-color: #2563eb; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">
-          Accept Invitation
-        </a>
+        <a href="${acceptUrl}" style="background-color: #2563eb; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">Accept Invitation</a>
       </div>
       
       <p style="color: #6b7280; font-size: 14px;">

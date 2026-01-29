@@ -276,10 +276,10 @@ export async function runReviewRequestEmails(): Promise<JobResult> {
                 <p>We hope your new family member is settling in well! Your adoption experience matters to us and to other potential adopters.</p>
                 <p>Would you mind taking a moment to share your experience on GreatNonprofits? Your review helps other people find us and supports our mission to save more animals.</p>
                 <p style="text-align: center; margin: 30px 0;">
-                  <a href="${settings.reviewUrl}" style="background-color: #4CAF50; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-weight: bold;">
-                    Write a Review
-                  </a>
+                  <a href="${settings.reviewUrl}" style="background-color: #4CAF50; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-weight: bold;">Write a Review</a>
                 </p>
+                <p style="color: #666; font-size: 14px;">Or copy and paste this link into your browser:</p>
+                <p style="font-size: 14px; word-break: break-all;"><a href="${settings.reviewUrl}" style="color: #4CAF50;">${settings.reviewUrl}</a></p>
                 <p>Thank you for being a part of our rescue family!</p>
                 <p>With gratitude,<br>${tenant.name}</p>
               </div>

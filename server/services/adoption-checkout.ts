@@ -542,6 +542,8 @@ export async function sendCheckoutLink(
       ${session.donationBoost && parseFloat(session.donationBoost) > 0 ? `<p><strong>Additional Donation:</strong> $${session.donationBoost}</p>` : ''}
       ${session.totals ? `<p><strong>Total:</strong> $${(session.totals as any).total}</p>` : ''}
       <p><a href="${checkoutUrl}" style="display: inline-block; padding: 12px 24px; background-color: #4F46E5; color: white; text-decoration: none; border-radius: 6px; margin: 20px 0;">Complete Adoption</a></p>
+      <p style="color: #666; font-size: 14px;">Or copy and paste this link into your browser:</p>
+      <p style="font-size: 14px; word-break: break-all;"><a href="${checkoutUrl}" style="color: #4F46E5;">${checkoutUrl}</a></p>
       <p>This link will expire in 72 hours.</p>
       <p>If you have any questions, please don't hesitate to contact us.</p>
     `;
@@ -655,6 +657,8 @@ export async function sendPaymentLinkEmail(
     ${session.donationBoost && parseFloat(session.donationBoost) > 0 ? `<p><strong>Additional Donation:</strong> $${session.donationBoost}</p>` : ''}
     ${totals ? `<p><strong>Total:</strong> $${totals.total}</p>` : ''}
     <p><a href="${checkoutUrl}" style="display: inline-block; padding: 12px 24px; background-color: #4F46E5; color: white; text-decoration: none; border-radius: 6px; margin: 20px 0;">Complete Payment</a></p>
+    <p style="color: #666; font-size: 14px;">Or copy and paste this link into your browser:</p>
+    <p style="font-size: 14px; word-break: break-all;"><a href="${checkoutUrl}" style="color: #4F46E5;">${checkoutUrl}</a></p>
     <p>Once payment is received, the adoption will be finalized and ${animal.name} will officially be yours!</p>
     <p>This link will expire in 72 hours.</p>
     <p>If you have any questions, please don't hesitate to contact us.</p>
