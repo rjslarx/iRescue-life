@@ -1,7 +1,7 @@
 import bcrypt from 'bcrypt';
 import { db } from '../db';
 import { users, tenants, type InsertUser } from '@shared/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 
 const SALT_ROUNDS = 10;
 
@@ -40,13 +40,13 @@ export async function loginUser(tenantId: string, credentials: LoginCredentials)
 
   console.log(`[AUTH] loginUser called - tenant: ${tenantId}, email: ${email}`);
 
-  // Find user by email within tenant
+  // Find user by email within tenant (case-insensitive)
   const [user] = await db
     .select()
     .from(users)
     .where(and(
       eq(users.tenantId, tenantId),
-      eq(users.email, email),
+      sql`lower(${users.email}) = lower(${email})`,
       eq(users.isActive, true)
     ))
     .limit(1);
