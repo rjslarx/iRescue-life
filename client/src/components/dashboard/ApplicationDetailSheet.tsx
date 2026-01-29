@@ -429,18 +429,17 @@ export default function ApplicationDetailSheet({
   const updateMutation = useMutation({
     mutationFn: async ({ newStatus }: { newStatus: string }) => {
       const endpoint = getApiEndpoint(type);
-      // Use appropriate field name for each application type
-      let statusField: string;
+      // Use appropriate field name and endpoint path for each application type
       if (type === "adoption") {
-        statusField = "stage";
+        // Adoption uses a separate /stage endpoint
+        return apiRequest("PATCH", `${endpoint}/${data?.id}/stage`, { stage: newStatus });
       } else if (type === "foster") {
-        statusField = "pipelineStatus";
+        return apiRequest("PATCH", `${endpoint}/${data?.id}`, { pipelineStatus: newStatus });
       } else if (type === "volunteer") {
-        statusField = "pipelineStatus";
+        return apiRequest("PATCH", `${endpoint}/${data?.id}`, { pipelineStatus: newStatus });
       } else {
-        statusField = "status";
+        return apiRequest("PATCH", `${endpoint}/${data?.id}`, { status: newStatus });
       }
-      return apiRequest("PATCH", `${endpoint}/${data?.id}`, { [statusField]: newStatus });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [getQueryKey(type)] });
