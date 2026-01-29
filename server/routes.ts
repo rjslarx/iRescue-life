@@ -11839,40 +11839,22 @@ Submitted: ${new Date().toLocaleString()}
               throw new Error('Email service not configured');
             }
             
-            // Send email to foster applicant
+            // Send email to foster applicant - use simpler HTML structure for better email client compatibility
+            const buttonStyle = 'display:inline-block;padding:12px 24px;background-color:#f59e0b;color:white;text-decoration:none;border-radius:6px;';
+            
             await emailService.send({
               to: updatedApplication.applicantEmail,
-              subject: `Action Required: Please Sign Your Foster Agreement - ${req.tenant!.name}`,
+              subject: `Action Required: Sign Foster Agreement - ${req.tenant!.name}`,
               html: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                  <h2 style="color: #333;">Foster Agreement Ready for Signature</h2>
-                  <p>Hello ${updatedApplication.applicantName},</p>
-                  <p>Great news! Your foster application with <strong>${req.tenant!.name}</strong> has advanced to the agreement stage.</p>
-                  <p>Please review and sign the Foster Agreement to complete your onboarding as a foster parent.</p>
-                  <div style="margin: 30px 0; text-align: center;">
-                    <a href="${formUrl}" style="background-color: #f59e0b; color: white; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Sign Foster Agreement</a>
-                  </div>
-                  <p style="color: #666; font-size: 14px;">Or copy and paste this link into your browser:</p>
-                  <p style="font-size: 14px; word-break: break-all;"><a href="${formUrl}" style="color: #2563eb; text-decoration: underline;">${formUrl}</a></p>
-                  <p style="color: #666; font-size: 14px;">This link will expire in 14 days.</p>
-                  <p style="color: #666; font-size: 14px;">If you have any questions, please contact us at ${req.tenant!.contactEmail || 'our contact email'}.</p>
-                  <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
-                  <p style="color: #999; font-size: 12px;">You're receiving this email because you applied to foster with ${req.tenant!.name}.</p>
-                </div>
-              `,
-              text: `
-Hello ${updatedApplication.applicantName},
-
-Your foster application with ${req.tenant!.name} has advanced to the agreement stage.
-
-Please sign the Foster Agreement to complete your onboarding:
-${formUrl}
-
-This link will expire in 14 days.
-
-If you have any questions, please contact us.
-
-- ${req.tenant!.name}
+<h2>Foster Agreement Ready for Signature</h2>
+<p>Hello ${updatedApplication.applicantName},</p>
+<p>Your foster application with <strong>${req.tenant!.name}</strong> has advanced to the agreement stage.</p>
+<p>Please review and sign the Foster Agreement to complete your onboarding.</p>
+<p><a href="${formUrl}" style="${buttonStyle}">Sign Foster Agreement</a></p>
+<p style="color:#666;font-size:14px;">Or copy and paste this link into your browser:</p>
+<p><a href="${formUrl}" style="color:#f59e0b;">${formUrl}</a></p>
+<p style="color:#666;font-size:14px;">This link will expire in 14 days.</p>
+<p style="color:#666;font-size:14px;">Questions? Contact us at ${req.tenant!.contactEmail || 'our contact email'}.</p>
               `.trim(),
             });
             
