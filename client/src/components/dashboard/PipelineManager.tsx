@@ -320,6 +320,7 @@ export default function PipelineManager({ activeTab, onTabChange }: PipelineMana
           experience: app.experience,
           availability: app.availability,
           status: app.status,
+          pipelineStatus: app.pipelineStatus,
           notes: app.notes,
           smsConsent: app.smsConsent,
           createdAt: app.createdAt,
