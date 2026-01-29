@@ -12,41 +12,23 @@ interface PipelineManagerProps {
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { 
   Heart, 
   Home, 
   Users, 
   Dog,
-  ArrowRight
+  ArrowRight,
+  ChevronRight
 } from "lucide-react";
 import { Link } from "wouter";
 import { formatDistanceToNow } from "date-fns";
 
-// Helper to get initials from a name
-function getInitials(name: string): string {
-  return name
-    .split(' ')
-    .map(part => part.charAt(0))
-    .join('')
-    .toUpperCase()
-    .slice(0, 2);
-}
-
-// Tab-specific badge colors (no hover - Badges have built-in elevation)
+// Tab-specific badge colors for count badges in tabs
 const pipelineBadgeColors: Record<string, string> = {
   adoption: "bg-blue-600 dark:bg-blue-500 text-white",
   foster: "bg-amber-600 dark:bg-amber-500 text-white",
   volunteer: "bg-emerald-600 dark:bg-emerald-500 text-white",
   intake: "bg-red-600 dark:bg-red-500 text-white",
-};
-
-// Avatar background colors matching pipeline types
-const pipelineAvatarColors: Record<string, string> = {
-  adoption: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200",
-  foster: "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-200",
-  volunteer: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-200",
-  intake: "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-200",
 };
 import { useAuth } from "@/contexts/AuthContext";
 import ApplicationDetailSheet, { 
@@ -163,38 +145,6 @@ const stageLabels: Record<string, string> = {
   waiver_needed: "Waiver Needed",
 };
 
-type BadgeVariant = "default" | "secondary" | "destructive" | "outline";
-
-const stageVariants: Record<string, BadgeVariant> = {
-  new: "default",
-  screening: "secondary",
-  vet_check: "secondary",
-  home_visit: "secondary",
-  approved: "default",
-  trial: "secondary",
-  adopted: "default",
-  denied: "destructive",
-  trial_failed: "destructive",
-  pending: "secondary",
-  rejected: "destructive",
-  review: "secondary",
-  spacecheck: "secondary",
-  waitlist: "outline",
-  scheduled: "default",
-  intaken: "default",
-  declined: "destructive",
-  // Foster pipeline stages
-  new_app: "default",
-  interview: "secondary",
-  home_check: "secondary",
-  orientation: "secondary",
-  agreement: "secondary",
-  active_pool: "default",
-  // Volunteer pipeline stages
-  new_applicant: "default",
-  orientation_scheduled: "secondary",
-  waiver_needed: "secondary",
-};
 
 interface PipelineItemData {
   id: string;
@@ -209,40 +159,21 @@ interface PipelineItemProps extends PipelineItemData {
   onClick: () => void;
 }
 
-function PipelineItem({ id, name, context, status, createdAt, pipelineType, onClick }: PipelineItemProps) {
+function PipelineItem({ id, name, context, createdAt, pipelineType, onClick }: PipelineItemProps) {
   const timeAgo = formatDistanceToNow(new Date(createdAt), { addSuffix: false });
-  const avatarColor = pipelineAvatarColors[pipelineType] || "bg-muted text-muted-foreground";
   
   return (
     <div 
-      className="flex items-center gap-3 p-3 rounded-lg border bg-card shadow-sm hover-elevate cursor-pointer"
+      className="p-3 rounded-md bg-card border shadow-sm hover-elevate cursor-pointer"
       data-testid={`pipeline-item-${pipelineType}-${id}`}
       onClick={onClick}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onClick(); }}
     >
-      <Avatar className={`h-8 w-8 flex-shrink-0 ${avatarColor}`} data-testid={`avatar-${pipelineType}-${id}`}>
-        <AvatarFallback className={avatarColor}>
-          {getInitials(name)}
-        </AvatarFallback>
-      </Avatar>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-medium text-sm" data-testid={`text-name-${pipelineType}-${id}`}>{name}</span>
-          {context && (
-            <span className="text-sm text-muted-foreground" data-testid={`text-context-${pipelineType}-${id}`}>({context})</span>
-          )}
-        </div>
-      </div>
-      <div className="flex items-center gap-2 flex-shrink-0">
-        <span className="text-xs text-muted-foreground whitespace-nowrap" data-testid={`text-time-${pipelineType}-${id}`}>{timeAgo}</span>
-        <Badge 
-          variant={stageVariants[status] || "outline"} 
-          data-testid={`badge-status-${pipelineType}-${id}`}
-        >
-          {stageLabels[status] || status}
-        </Badge>
+      <div className="font-medium text-sm" data-testid={`text-name-${pipelineType}-${id}`}>{name}</div>
+      <div className="text-xs text-muted-foreground mt-0.5" data-testid={`text-context-${pipelineType}-${id}`}>
+        {context || `Added ${timeAgo} ago`}
       </div>
     </div>
   );
@@ -255,39 +186,47 @@ interface StatusColumnProps {
   onItemClick: (id: string) => void;
 }
 
-function StatusColumn({ status, items, pipelineType, onItemClick }: StatusColumnProps) {
+interface StatusColumnWithChevronProps extends StatusColumnProps {
+  showChevron: boolean;
+}
+
+function StatusColumn({ status, items, pipelineType, onItemClick, showChevron }: StatusColumnWithChevronProps) {
   const filteredItems = items.filter(item => item.status === status);
-  const badgeColor = pipelineBadgeColors[pipelineType] || "";
   
   return (
-    <div 
-      className="bg-muted/30 rounded-lg p-3 min-h-[120px] flex flex-col" 
-      data-testid={`status-column-${pipelineType}-${status}`}
-    >
-      <div className="flex items-center gap-2 mb-2">
-        <Badge className={badgeColor}>
-          {stageLabels[status] || status}
-        </Badge>
-        <span className="text-xs text-muted-foreground" data-testid={`text-count-${pipelineType}-${status}`}>
-          ({filteredItems.length})
-        </span>
+    <div className="flex items-stretch" data-testid={`status-column-wrapper-${pipelineType}-${status}`}>
+      <div 
+        className="flex-1 flex flex-col rounded-lg overflow-hidden border bg-card" 
+        data-testid={`status-column-${pipelineType}-${status}`}
+      >
+        {/* Dark header matching reference image */}
+        <div className="bg-slate-700 dark:bg-slate-800 text-white px-3 py-2 text-sm font-medium">
+          {stageLabels[status] || status} <span className="opacity-80" data-testid={`text-count-${pipelineType}-${status}`}>({filteredItems.length})</span>
+        </div>
+        {/* Column body */}
+        <div className="flex-1 p-2 space-y-2 min-h-[180px] bg-muted/20">
+          {filteredItems.length === 0 ? (
+            <p className="text-xs text-muted-foreground text-center py-6" data-testid={`empty-column-${pipelineType}-${status}`}>
+              No applications
+            </p>
+          ) : (
+            filteredItems.map((item) => (
+              <PipelineItem 
+                key={item.id} 
+                {...item} 
+                pipelineType={pipelineType} 
+                onClick={() => onItemClick(item.id)}
+              />
+            ))
+          )}
+        </div>
       </div>
-      <div className="space-y-2 flex-1">
-        {filteredItems.length === 0 ? (
-          <p className="text-xs text-muted-foreground text-center py-4" data-testid={`empty-column-${pipelineType}-${status}`}>
-            No applications
-          </p>
-        ) : (
-          filteredItems.map((item) => (
-            <PipelineItem 
-              key={item.id} 
-              {...item} 
-              pipelineType={pipelineType} 
-              onClick={() => onItemClick(item.id)}
-            />
-          ))
-        )}
-      </div>
+      {/* Chevron between columns */}
+      {showChevron && (
+        <div className="flex items-center justify-center px-1 text-muted-foreground">
+          <ChevronRight className="h-5 w-5" />
+        </div>
+      )}
     </div>
   );
 }
@@ -578,14 +517,15 @@ export default function PipelineManager({ activeTab, onTabChange }: PipelineMana
                         />
                       ))}
                     </div>
-                    <div className="hidden lg:flex lg:flex-wrap lg:gap-4">
-                      {adoptionStages.map(stage => (
-                        <div key={stage} className="min-w-[200px] flex-1">
+                    <div className="hidden lg:flex lg:items-stretch">
+                      {adoptionStages.map((stage, index) => (
+                        <div key={stage} className="min-w-[160px] flex-1">
                           <StatusColumn 
                             status={stage} 
                             items={adoptionItems} 
                             pipelineType="adoption"
                             onItemClick={(id) => handleItemClick("adoption", id)}
+                            showChevron={index < adoptionStages.length - 1}
                           />
                         </div>
                       ))}
@@ -620,14 +560,15 @@ export default function PipelineManager({ activeTab, onTabChange }: PipelineMana
                         />
                       ))}
                     </div>
-                    <div className="hidden lg:flex lg:flex-wrap lg:gap-4">
-                      {fosterPipelineStatuses.map(status => (
-                        <div key={status} className="min-w-[160px] flex-1">
+                    <div className="hidden lg:flex lg:items-stretch">
+                      {fosterPipelineStatuses.map((status, index) => (
+                        <div key={status} className="min-w-[140px] flex-1">
                           <StatusColumn 
                             status={status} 
                             items={fosterItems} 
                             pipelineType="foster"
                             onItemClick={(id) => handleItemClick("foster", id)}
+                            showChevron={index < fosterPipelineStatuses.length - 1}
                           />
                         </div>
                       ))}
@@ -662,14 +603,15 @@ export default function PipelineManager({ activeTab, onTabChange }: PipelineMana
                         />
                       ))}
                     </div>
-                    <div className="hidden lg:flex lg:flex-wrap lg:gap-4">
-                      {volunteerPipelineStatuses.map(status => (
-                        <div key={status} className="min-w-[160px] flex-1">
+                    <div className="hidden lg:flex lg:items-stretch">
+                      {volunteerPipelineStatuses.map((status, index) => (
+                        <div key={status} className="min-w-[180px] flex-1">
                           <StatusColumn 
                             status={status} 
                             items={volunteerItems} 
                             pipelineType="volunteer"
                             onItemClick={(id) => handleItemClick("volunteer", id)}
+                            showChevron={index < volunteerPipelineStatuses.length - 1}
                           />
                         </div>
                       ))}
@@ -704,14 +646,15 @@ export default function PipelineManager({ activeTab, onTabChange }: PipelineMana
                         />
                       ))}
                     </div>
-                    <div className="hidden lg:flex lg:flex-wrap lg:gap-4">
-                      {surrenderStatuses.map(status => (
-                        <div key={status} className="min-w-[180px] flex-1">
+                    <div className="hidden lg:flex lg:items-stretch">
+                      {surrenderStatuses.map((status, index) => (
+                        <div key={status} className="min-w-[160px] flex-1">
                           <StatusColumn 
                             status={status} 
                             items={intakeItems} 
                             pipelineType="intake"
                             onItemClick={(id) => handleItemClick("intake", id)}
+                            showChevron={index < surrenderStatuses.length - 1}
                           />
                         </div>
                       ))}
