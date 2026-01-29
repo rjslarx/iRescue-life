@@ -92,7 +92,7 @@ export function GoveeSettings() {
 
   const connectMutation = useMutation({
     mutationFn: async (data: z.infer<typeof connectSchema>) => {
-      return apiRequest("/api/govee/connect", { method: "POST", body: JSON.stringify(data) });
+      return apiRequest("POST", "/api/govee/connect", data);
     },
     onSuccess: () => {
       toast({ title: "Connected", description: "Govee account connected successfully" });
@@ -107,7 +107,7 @@ export function GoveeSettings() {
 
   const disconnectMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest("/api/govee/disconnect", { method: "DELETE" });
+      return apiRequest("DELETE", "/api/govee/disconnect");
     },
     onSuccess: () => {
       toast({ title: "Disconnected", description: "Govee account disconnected" });
@@ -121,13 +121,10 @@ export function GoveeSettings() {
 
   const registerDeviceMutation = useMutation({
     mutationFn: async (device: DiscoveredDevice) => {
-      return apiRequest("/api/govee/devices", {
-        method: "POST",
-        body: JSON.stringify({
-          goveeDeviceId: device.goveeDeviceId,
-          model: device.model,
-          deviceName: device.deviceName,
-        }),
+      return apiRequest("POST", "/api/govee/devices", {
+        goveeDeviceId: device.goveeDeviceId,
+        model: device.model,
+        deviceName: device.deviceName,
       });
     },
     onSuccess: () => {
@@ -142,10 +139,7 @@ export function GoveeSettings() {
 
   const updateDeviceMutation = useMutation({
     mutationFn: async ({ deviceId, ...data }: { deviceId: string; locationLabel?: string; isEnabled?: boolean }) => {
-      return apiRequest(`/api/govee/devices/${deviceId}`, {
-        method: "PATCH",
-        body: JSON.stringify(data),
-      });
+      return apiRequest("PATCH", `/api/govee/devices/${deviceId}`, data);
     },
     onSuccess: () => {
       toast({ title: "Device updated" });
@@ -159,7 +153,7 @@ export function GoveeSettings() {
 
   const deleteDeviceMutation = useMutation({
     mutationFn: async (deviceId: string) => {
-      return apiRequest(`/api/govee/devices/${deviceId}`, { method: "DELETE" });
+      return apiRequest("DELETE", `/api/govee/devices/${deviceId}`);
     },
     onSuccess: () => {
       toast({ title: "Device removed" });
@@ -172,7 +166,7 @@ export function GoveeSettings() {
 
   const syncMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest("/api/govee/sync", { method: "POST" });
+      return apiRequest("POST", "/api/govee/sync");
     },
     onSuccess: (data: any) => {
       toast({ title: "Sync complete", description: data.message });

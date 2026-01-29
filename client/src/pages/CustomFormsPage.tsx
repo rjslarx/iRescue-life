@@ -190,10 +190,7 @@ export default function CustomFormsPage() {
 
   const createMutation = useMutation({
     mutationFn: async (formData: FormData) => {
-      return apiRequest('/api/custom-forms', {
-        method: 'POST',
-        body: JSON.stringify(formData),
-      });
+      return apiRequest('POST', '/api/custom-forms', formData);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/custom-forms'] });
@@ -215,10 +212,7 @@ export default function CustomFormsPage() {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: FormData }) => {
-      return apiRequest(`/api/custom-forms/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify(data),
-      });
+      return apiRequest('PUT', `/api/custom-forms/${id}`, data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/custom-forms'] });
@@ -241,9 +235,7 @@ export default function CustomFormsPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      return apiRequest(`/api/custom-forms/${id}`, {
-        method: 'DELETE',
-      });
+      return apiRequest('DELETE', `/api/custom-forms/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/custom-forms'] });
@@ -265,10 +257,8 @@ export default function CustomFormsPage() {
 
   const previewMutation = useMutation({
     mutationFn: async (id: string) => {
-      const response = await apiRequest(`/api/custom-forms/${id}/preview`, {
-        method: 'GET',
-      });
-      return response;
+      const response = await apiRequest('GET', `/api/custom-forms/${id}/preview`);
+      return response.json();
     },
     onSuccess: (data: { html: string }) => {
       setPreviewHtml(data.html);
@@ -285,10 +275,8 @@ export default function CustomFormsPage() {
 
   const sendMutation = useMutation({
     mutationFn: async ({ formId, data }: { formId: string; data: SendFormData }) => {
-      return apiRequest(`/api/custom-forms/${formId}/send`, {
-        method: 'POST',
-        body: JSON.stringify(data),
-      });
+      const response = await apiRequest('POST', `/api/custom-forms/${formId}/send`, data);
+      return response.json();
     },
     onSuccess: (data: { formUrl: string }) => {
       setFormLink(data.formUrl);
