@@ -12255,7 +12255,7 @@ Submitted: ${new Date().toLocaleString()}
       const statusChangedToWaiverNeeded = data.pipelineStatus === 'waiver_needed' && oldPipelineStatus !== 'waiver_needed';
       if (statusChangedToWaiverNeeded && updatedApplication.applicantEmail) {
         try {
-          const { emailService } = await import('./lib/email');
+          const { emailService } = await import('./lib/email-service');
           const { customForms, customFormSubmissions } = await import('@shared/schema');
           const { generateToken, hashToken } = await import('./services/custom-form');
           

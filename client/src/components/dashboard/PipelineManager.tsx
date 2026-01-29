@@ -82,6 +82,7 @@ interface VolunteerApplication {
   interests?: string;
   skills?: string;
   status: "pending" | "approved" | "rejected";
+  pipelineStatus?: string;
   notes?: string;
   smsConsent?: boolean;
   createdAt: string;
@@ -332,6 +333,7 @@ export default function PipelineManager({ activeTab, onTabChange }: PipelineMana
           interests: app.interests,
           skills: app.skills,
           status: app.status,
+          pipelineStatus: app.pipelineStatus,
           notes: app.notes,
           smsConsent: app.smsConsent,
           createdAt: app.createdAt,
@@ -392,7 +394,7 @@ export default function PipelineManager({ activeTab, onTabChange }: PipelineMana
   const volunteerItems: PipelineItemData[] = (volunteers || []).map(v => ({
     id: v.id,
     name: v.applicantName,
-    status: (v as any).pipelineStatus || (v.status === 'pending' ? 'new_applicant' : v.status === 'approved' ? 'active_pool' : v.status),
+    status: v.pipelineStatus || (v.status === 'pending' ? 'new_applicant' : v.status === 'approved' ? 'active_pool' : v.status),
     createdAt: v.createdAt,
   }));
 
