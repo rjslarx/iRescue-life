@@ -9127,6 +9127,59 @@ ${renderedHtml}
         }
       }
 
+      // ========================================================================
+      // EMAIL: Send confirmation copy to the signer
+      // ========================================================================
+      if (submission.signerEmail && renderedHtml) {
+        try {
+          const { EmailService } = await import('./lib/email-service');
+          const emailService = await EmailService.forTenant(submission.tenantId);
+          
+          if (emailService) {
+            const escapeHtml = (str: string) => str
+              .replace(/&/g, '&amp;')
+              .replace(/</g, '&lt;')
+              .replace(/>/g, '&gt;')
+              .replace(/"/g, '&quot;')
+              .replace(/'/g, '&#039;');
+            
+            const safeFormName = escapeHtml(form.name);
+            const safeSignerName = escapeHtml(submission.signerName);
+            const safeTenantName = tenant?.name ? escapeHtml(tenant.name) : 'the organization';
+            
+            const signerEmailSubject = `Your Signed Document: ${form.name}`;
+            const signerEmailHtml = `
+<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+  <h2 style="color: #333;">Your Signed Document</h2>
+  <p>Hi ${safeSignerName},</p>
+  <p>Thank you for completing and signing the <strong>${safeFormName}</strong> with ${safeTenantName}.</p>
+  <p>A copy of your signed document is included below for your records.</p>
+  <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+  <div style="background: #f9f9f9; padding: 20px; border-radius: 8px;">
+    ${renderedHtml}
+  </div>
+  <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+  <p style="color: #666; font-size: 12px;">
+    Signed on: ${new Date().toLocaleString()}<br />
+    This is your copy of the signed document. Please keep it for your records.
+  </p>
+</div>
+            `.trim();
+            
+            await emailService.send({
+              to: submission.signerEmail,
+              subject: signerEmailSubject,
+              html: signerEmailHtml,
+            });
+            
+            console.log(`[Form Submission] Sent confirmation copy of "${form.name}" to signer ${submission.signerEmail}`);
+          }
+        } catch (signerEmailError) {
+          // Log error but don't fail the form submission
+          console.error('[Form Submission] Error sending signer confirmation email:', signerEmailError);
+        }
+      }
+
       res.json({ 
         success: true, 
         message: 'Form submitted successfully',
