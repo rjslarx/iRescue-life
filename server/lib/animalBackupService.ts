@@ -81,11 +81,16 @@ export class AnimalBackupService {
       }
     }
 
-    const objectStoragePath = `objects/${this.tenantId}/animals/${animalData.id}`;
+    const objectStoragePath = `animals/${animalData.id}`;
     for (const subfolder of ANIMAL_SUBFOLDERS) {
-      const placeholderPath = `${objectStoragePath}/${subfolder}/.folder`;
       try {
-        await this.objectStorage.upload(placeholderPath, Buffer.from(''), 'text/plain');
+        // Use uploadTenantFile to create placeholder files for folder structure
+        await this.objectStorage.uploadTenantFile(
+          this.tenantId,
+          `animals/${animalData.id}/${subfolder}`,
+          Buffer.from(''),
+          'text/plain'
+        );
       } catch (e) {
         console.log(`[ANIMAL BACKUP] Subfolder placeholder: ${subfolder}`);
       }
@@ -170,8 +175,13 @@ ${animal.bio || 'No notes recorded.'}
           console.log(`[ANIMAL BACKUP] Uploaded intake record to Google Drive`);
         }
       } else {
-        const path = `objects/${this.tenantId}/animals/${animalId}/Medical/${fileName}`;
-        await this.objectStorage.upload(path, buffer, 'text/plain');
+        // Use uploadTenantFile with proper category path
+        await this.objectStorage.uploadTenantFile(
+          this.tenantId,
+          `animals/${animalId}/Medical`,
+          buffer,
+          'text/plain'
+        );
         console.log(`[ANIMAL BACKUP] Uploaded intake record to Object Storage`);
       }
 
@@ -258,8 +268,13 @@ Generated: ${new Date().toLocaleString()}
           console.log(`[ANIMAL BACKUP] Synced medical records to Google Drive`);
         }
       } else {
-        const path = `objects/${this.tenantId}/animals/${animalId}/Medical/${fileName}`;
-        await this.objectStorage.upload(path, buffer, 'text/plain');
+        // Use uploadTenantFile with proper category path
+        await this.objectStorage.uploadTenantFile(
+          this.tenantId,
+          `animals/${animalId}/Medical`,
+          buffer,
+          'text/plain'
+        );
         console.log(`[ANIMAL BACKUP] Synced medical records to Object Storage`);
       }
 

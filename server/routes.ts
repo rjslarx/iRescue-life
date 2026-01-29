@@ -5720,6 +5720,14 @@ Crawl-delay: 1
         }
       }
       
+      // Convert empty strings to null for numeric/decimal fields
+      const numericFields = ['medicalFundGoal', 'medicalFundRaised'];
+      for (const field of numericFields) {
+        if (data[field] === '' || data[field] === undefined) {
+          data[field] = null;
+        }
+      }
+      
       // Normalize photo URLs if provided
       if (data.photoUrls && data.photoUrls.length > 0) {
         const objectStorageService = new ObjectStorageService();
