@@ -283,11 +283,49 @@ export function ViewApplicationDialog({
   };
 
   const fullApplication = fullData?.application || application;
-  // Support formData, formResponses, and customResponses naming conventions
-  const formData = (fullApplication.formData as Record<string, unknown>) || 
+  
+  // Standard field labels for volunteer and foster applications
+  const standardFieldLabels: Record<string, { label: string; order: number }> = {
+    // Volunteer standard fields
+    address: { label: 'Address', order: 1 },
+    experience: { label: 'Experience with Animals', order: 2 },
+    availability: { label: 'Availability', order: 3 },
+    interests: { label: 'Areas of Interest', order: 4 },
+    skills: { label: 'Special Skills', order: 5 },
+    emergencyContactName: { label: 'Emergency Contact Name', order: 6 },
+    emergencyContactPhone: { label: 'Emergency Contact Phone', order: 7 },
+    // Foster standard fields
+    housingType: { label: 'Housing Type', order: 8 },
+    homeType: { label: 'Home Type', order: 8 },
+    hasYard: { label: 'Has Yard', order: 9 },
+    hasFencedYard: { label: 'Has Fenced Yard', order: 10 },
+    hasOtherPets: { label: 'Has Other Pets', order: 11 },
+    otherPetsDetails: { label: 'Other Pets Details', order: 12 },
+    preferences: { label: 'Foster Preferences', order: 13 },
+    preferredAnimals: { label: 'Preferred Animals', order: 14 },
+    vetReference: { label: 'Veterinarian Reference', order: 15 },
+    personalReference: { label: 'Personal Reference', order: 16 },
+  };
+  
+  // Combine standard fields with custom responses for complete view
+  const customResponses = (fullApplication.formData as Record<string, unknown>) || 
                    (fullApplication.formResponses as Record<string, unknown>) ||
                    (fullApplication.customResponses as Record<string, unknown>) || {};
-  const notes = formData.notes || (fullApplication as Record<string, unknown>).notes || null;
+  
+  // For volunteer/foster apps, include standard fields from the application itself
+  const standardFields: Record<string, unknown> = {};
+  if (applicationType === 'volunteer' || applicationType === 'foster') {
+    Object.keys(standardFieldLabels).forEach(key => {
+      const value = (fullApplication as Record<string, unknown>)[key];
+      if (value !== null && value !== undefined && value !== '') {
+        standardFields[key] = value;
+      }
+    });
+  }
+  
+  // Merge standard fields with custom responses (custom responses take priority for display order)
+  const formData = { ...standardFields, ...customResponses };
+  const notes = customResponses.notes || (fullApplication as Record<string, unknown>).notes || null;
 
   const fieldLabelMap = new Map<string, { label: string; order: number; fieldType: string }>();
   if (formFieldsData?.fields) {
@@ -301,24 +339,35 @@ export function ViewApplicationDialog({
     return fieldInfo?.fieldType;
   };
 
+  // Helper to get sort order for any field (standard or custom)
+  const getFieldOrder = (key: string): number => {
+    const customField = fieldLabelMap.get(key);
+    if (customField) {
+      return 100 + customField.order; // Custom fields come after standard fields
+    }
+    const standardField = standardFieldLabels[key];
+    if (standardField) {
+      return standardField.order;
+    }
+    return 999; // Unknown fields go last
+  };
+
   const sortedFormResponses = Object.entries(formData)
     .filter(([key]) => key !== 'notes' && formData[key] !== null && formData[key] !== undefined && formData[key] !== '')
     .sort((a, b) => {
-      const aField = fieldLabelMap.get(a[0]);
-      const bField = fieldLabelMap.get(b[0]);
-      
-      if (aField && bField) {
-        return aField.order - bField.order;
-      }
-      if (aField) return -1;
-      if (bField) return 1;
-      return a[0].localeCompare(b[0]);
+      return getFieldOrder(a[0]) - getFieldOrder(b[0]);
     });
 
   const getFieldLabel = (key: string): string => {
+    // First check custom form fields from API
     const fieldInfo = fieldLabelMap.get(key);
     if (fieldInfo) {
       return fieldInfo.label;
+    }
+    // Then check standard field labels
+    const standardField = standardFieldLabels[key];
+    if (standardField) {
+      return standardField.label;
     }
     if (isUUID(key)) {
       return `Question ${key.slice(0, 8)}...`;
