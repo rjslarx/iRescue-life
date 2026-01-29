@@ -55,6 +55,14 @@ This centralized dashboard manages all medical operations across three sections:
 - **Surgery Queue:** Manages spay/neuter scheduling and tracking.
 - **Active Treatments:** Daily medication management with overdue and due-today sections, including controlled substance tracking.
 
+*Medication Backlogging:*
+Staff can record historical medication prescriptions without generating overdue tasks:
+- When adding a prescription with a start date in the past, a "Next Dose Due" field appears (amber-highlighted)
+- This field auto-populates with today's date but can be adjusted
+- Dose generation uses `nextScheduledDose` as the starting point instead of `startDate`
+- Server-side enforcement ensures this field defaults to today if startDate is past and the field is not provided
+- This allows backloading medical records without flooding the dashboard with overdue tasks
+
 **Phase 1 Intake Pipeline (Surrender Requests):**
 A dedicated pipeline for dog surrender requests, featuring a `surrender_requests` table with a `new` to `intaken` status workflow. Enhanced fields include detailed dog information and TCPA-compliant SMS consent. Public forms are available, and staff use a Kanban view for intake management.
 
