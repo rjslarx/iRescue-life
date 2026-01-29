@@ -146,7 +146,7 @@ function formatFallbackLabel(key: string): string {
     .trim();
 }
 
-function formatFieldValue(value: unknown): string | React.ReactNode {
+function formatFieldValue(value: unknown, fieldType?: string): string | React.ReactNode {
   if (value === null || value === undefined) {
     return <span className="text-muted-foreground italic">Not provided</span>;
   }
@@ -162,6 +162,18 @@ function formatFieldValue(value: unknown): string | React.ReactNode {
     );
   }
   if (typeof value === 'string') {
+    // Handle photo URLs - render as clickable image
+    if (fieldType === 'photo' || (value.startsWith('http') && (value.includes('/uploads/') || value.includes('storage.googleapis.com') || value.includes('.jpg') || value.includes('.jpeg') || value.includes('.png') || value.includes('.gif') || value.includes('.webp')))) {
+      return (
+        <img 
+          src={value} 
+          alt="Uploaded photo" 
+          className="mt-1 w-full max-w-[200px] max-h-[200px] rounded-lg border object-cover cursor-pointer hover:opacity-90 active:opacity-75"
+          onClick={() => window.open(value, '_blank')}
+          data-testid="img-form-response-photo"
+        />
+      );
+    }
     if (value.match(/^\d{4}-\d{2}-\d{2}/)) {
       try {
         return format(new Date(value), 'PPP');
@@ -277,12 +289,17 @@ export function ViewApplicationDialog({
                    (fullApplication.customResponses as Record<string, unknown>) || {};
   const notes = formData.notes || (fullApplication as Record<string, unknown>).notes || null;
 
-  const fieldLabelMap = new Map<string, { label: string; order: number }>();
+  const fieldLabelMap = new Map<string, { label: string; order: number; fieldType: string }>();
   if (formFieldsData?.fields) {
     formFieldsData.fields.forEach((field) => {
-      fieldLabelMap.set(field.id, { label: field.label, order: field.order });
+      fieldLabelMap.set(field.id, { label: field.label, order: field.order, fieldType: field.fieldType });
     });
   }
+  
+  const getFieldType = (key: string): string | undefined => {
+    const fieldInfo = fieldLabelMap.get(key);
+    return fieldInfo?.fieldType;
+  };
 
   const sortedFormResponses = Object.entries(formData)
     .filter(([key]) => key !== 'notes' && formData[key] !== null && formData[key] !== undefined && formData[key] !== '')
@@ -416,7 +433,7 @@ export function ViewApplicationDialog({
                                 {getFieldLabel(key)}
                               </dt>
                               <dd className="text-sm">
-                                {formatFieldValue(value)}
+                                {formatFieldValue(value, getFieldType(key))}
                               </dd>
                             </div>
                           ))}
@@ -587,7 +604,7 @@ export function ViewApplicationDialog({
                               {getFieldLabel(key)}
                             </dt>
                             <dd className="text-sm">
-                              {formatFieldValue(value)}
+                              {formatFieldValue(value, getFieldType(key))}
                             </dd>
                           </div>
                         ))}

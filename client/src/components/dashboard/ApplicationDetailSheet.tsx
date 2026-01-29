@@ -865,7 +865,7 @@ export default function ApplicationDetailSheet({
                       <img 
                         src={value} 
                         alt={label} 
-                        className="mt-1 max-w-[200px] max-h-[200px] rounded-lg border object-cover cursor-pointer hover:opacity-90"
+                        className="mt-1 w-full max-w-[200px] max-h-[200px] rounded-lg border object-cover cursor-pointer hover:opacity-90 active:opacity-75"
                         onClick={() => window.open(value, '_blank')}
                         data-testid={`img-custom-response-${fieldId}`}
                       />
@@ -940,7 +940,7 @@ export default function ApplicationDetailSheet({
                       <img 
                         src={answer} 
                         alt={label} 
-                        className="mt-1 max-w-[200px] max-h-[200px] rounded-lg border object-cover cursor-pointer hover:opacity-90"
+                        className="mt-1 w-full max-w-[200px] max-h-[200px] rounded-lg border object-cover cursor-pointer hover:opacity-90 active:opacity-75"
                         onClick={() => window.open(answer, '_blank')}
                         data-testid={`img-custom-response-${key}`}
                       />
@@ -1006,7 +1006,7 @@ export default function ApplicationDetailSheet({
                       <img 
                         src={value} 
                         alt={label} 
-                        className="mt-1 max-w-[200px] max-h-[200px] rounded-lg border object-cover cursor-pointer hover:opacity-90"
+                        className="mt-1 w-full max-w-[200px] max-h-[200px] rounded-lg border object-cover cursor-pointer hover:opacity-90 active:opacity-75"
                         onClick={() => window.open(value, '_blank')}
                         data-testid={`img-custom-response-${fieldId}`}
                       />
