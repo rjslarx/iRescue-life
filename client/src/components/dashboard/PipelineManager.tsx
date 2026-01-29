@@ -18,7 +18,8 @@ import {
   Users, 
   Dog,
   ArrowRight,
-  ChevronRight
+  ChevronRight,
+  Zap
 } from "lucide-react";
 import { Link } from "wouter";
 import { formatDistanceToNow } from "date-fns";
@@ -189,9 +190,10 @@ interface StatusColumnProps {
 
 interface StatusColumnWithChevronProps extends StatusColumnProps {
   showChevron: boolean;
+  triggersAutomation?: boolean;
 }
 
-function StatusColumn({ status, items, pipelineType, onItemClick, showChevron }: StatusColumnWithChevronProps) {
+function StatusColumn({ status, items, pipelineType, onItemClick, showChevron, triggersAutomation }: StatusColumnWithChevronProps) {
   const filteredItems = items.filter(item => item.status === status);
   
   return (
@@ -222,10 +224,14 @@ function StatusColumn({ status, items, pipelineType, onItemClick, showChevron }:
           )}
         </div>
       </div>
-      {/* Chevron between columns */}
+      {/* Chevron/automation indicator between columns */}
       {showChevron && (
-        <div className="flex items-center justify-center px-1 text-muted-foreground">
-          <ChevronRight className="h-5 w-5" />
+        <div className="flex items-center justify-center px-1" title={triggersAutomation ? "Email automation triggers here" : undefined}>
+          {triggersAutomation ? (
+            <Zap className="h-5 w-5 text-amber-500" data-testid={`icon-automation-${pipelineType}-${status}`} />
+          ) : (
+            <ChevronRight className="h-5 w-5 text-muted-foreground" />
+          )}
         </div>
       )}
     </div>
@@ -571,6 +577,7 @@ export default function PipelineManager({ activeTab, onTabChange }: PipelineMana
                             pipelineType="foster"
                             onItemClick={(id) => handleItemClick("foster", id)}
                             showChevron={index < fosterPipelineStatuses.length - 1}
+                            triggersAutomation={status === "orientation"}
                           />
                         </div>
                       ))}
@@ -614,6 +621,7 @@ export default function PipelineManager({ activeTab, onTabChange }: PipelineMana
                             pipelineType="volunteer"
                             onItemClick={(id) => handleItemClick("volunteer", id)}
                             showChevron={index < volunteerPipelineStatuses.length - 1}
+                            triggersAutomation={status === "orientation_scheduled"}
                           />
                         </div>
                       ))}

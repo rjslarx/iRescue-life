@@ -16,7 +16,8 @@ import {
   XCircle,
   Send,
   Eye,
-  ArrowRight
+  ArrowRight,
+  Zap
 } from "lucide-react";
 import MobilePipelineView, { PipelineStage, PipelineCard } from "./MobilePipelineView";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -62,6 +63,9 @@ const stages: PipelineStage[] = [
   { id: "active_pool", label: "Active Pool", color: "bg-green-500", icon: UserCheck },
   { id: "rejected", label: "Rejected", color: "bg-red-500", icon: XCircle },
 ];
+
+// Stages that trigger email automation when moving from them to the next stage
+const automationTriggerStages = ["orientation"];
 
 function normalizeStage(status: string): string {
   switch (status) {
@@ -219,6 +223,13 @@ export default function FosterKanbanBoard({
                       <div className={`h-2 w-2 rounded-full ${stage.color}`} />
                       <StageIcon className="h-4 w-4 text-muted-foreground" />
                       {stage.label}
+                      {automationTriggerStages.includes(stage.id) && (
+                        <Zap 
+                          className="h-4 w-4 text-amber-500" 
+                          title="Moving to next stage triggers email automation"
+                          data-testid={`icon-automation-trigger-${stage.id}`}
+                        />
+                      )}
                     </CardTitle>
                     <Badge variant="secondary">{stageApps.length}</Badge>
                   </div>
