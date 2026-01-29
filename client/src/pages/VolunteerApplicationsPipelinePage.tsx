@@ -13,15 +13,6 @@ import { Input } from "@/components/ui/input";
 import type { VolunteerApplication } from "@shared/schema";
 import DashboardLayout from "@/components/DashboardLayout";
 
-interface ViewApplicationData {
-  id: string;
-  applicantName: string;
-  applicantEmail: string;
-  applicantPhone: string;
-  pipelineStatus: string;
-  createdAt?: string;
-}
-
 export default function VolunteerApplicationsPipelinePage() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -29,7 +20,7 @@ export default function VolunteerApplicationsPipelinePage() {
   const [activeTab, setActiveTab] = useState<"pipeline" | "active_pool">("pipeline");
   const [searchQuery, setSearchQuery] = useState("");
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
-  const [applicationToView, setApplicationToView] = useState<ViewApplicationData | null>(null);
+  const [viewApplicationId, setViewApplicationId] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery<{ applications: VolunteerApplication[] }>({
     queryKey: ['/api/volunteer-applications'],
@@ -37,7 +28,7 @@ export default function VolunteerApplicationsPipelinePage() {
 
   const updatePipelineStatusMutation = useMutation({
     mutationFn: async ({ id, pipelineStatus }: { id: string; pipelineStatus: string }) => {
-      const response = await apiRequest('PATCH', `/api/volunteer-applications/${id}/pipeline-status`, { pipelineStatus });
+      const response = await apiRequest('PATCH', `/api/volunteer-applications/${id}`, { pipelineStatus });
       return response.json();
     },
     onSuccess: () => {
@@ -124,17 +115,24 @@ export default function VolunteerApplicationsPipelinePage() {
   };
 
   const handleViewApplication = (application: { id: string; applicantName: string; applicantEmail: string; applicantPhone: string; pipelineStatus: string }) => {
-    const fullApp = applications.find(a => a.id === application.id);
-    setApplicationToView({
-      id: application.id,
-      applicantName: application.applicantName,
-      applicantEmail: application.applicantEmail,
-      applicantPhone: application.applicantPhone,
-      pipelineStatus: application.pipelineStatus,
-      createdAt: fullApp?.createdAt?.toString(),
-    });
+    setViewApplicationId(application.id);
     setViewDialogOpen(true);
   };
+
+  // Derive application data from fresh query data each render (prevents stale dropdown)
+  const applicationToView = useMemo(() => {
+    if (!viewApplicationId || !applications.length) return null;
+    const app = applications.find(a => a.id === viewApplicationId);
+    if (!app) return null;
+    return {
+      id: app.id,
+      applicantName: app.applicantName,
+      applicantEmail: app.applicantEmail,
+      applicantPhone: app.applicantPhone,
+      pipelineStatus: app.pipelineStatus || 'new_applicant',
+      createdAt: app.createdAt?.toString(),
+    };
+  }, [viewApplicationId, applications]);
 
   if (isLoading) {
     return (
@@ -263,7 +261,7 @@ export default function VolunteerApplicationsPipelinePage() {
         onOpenChange={(open) => {
           setViewDialogOpen(open);
           if (!open) {
-            setApplicationToView(null);
+            setViewApplicationId(null);
           }
         }}
       />

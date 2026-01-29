@@ -12249,6 +12249,119 @@ Submitted: ${new Date().toLocaleString()}
         }
       }
 
+      // ========================================================================
+      // AUTOMATION: Send hold harmless waiver email when status changes to 'waiver_needed'
+      // ========================================================================
+      const statusChangedToWaiverNeeded = data.pipelineStatus === 'waiver_needed' && oldPipelineStatus !== 'waiver_needed';
+      if (statusChangedToWaiverNeeded && updatedApplication.applicantEmail) {
+        try {
+          const { emailService } = await import('./lib/email');
+          const { customForms, customFormSubmissions } = await import('@shared/schema');
+          const { generateToken, hashToken } = await import('./services/custom-form');
+          
+          // Find a hold harmless waiver form for this tenant
+          // Look for forms with "hold harmless" OR ("volunteer" AND ("waiver" OR "liability")) in the name
+          const [volunteerWaiverForm] = await db
+            .select()
+            .from(customForms)
+            .where(
+              and(
+                eq(customForms.tenantId, req.tenant!.id),
+                eq(customForms.isActive, true),
+                sql`(LOWER(${customForms.name}) LIKE '%hold harmless%' OR (LOWER(${customForms.name}) LIKE '%volunteer%' AND (LOWER(${customForms.name}) LIKE '%waiver%' OR LOWER(${customForms.name}) LIKE '%liability%')))`
+              )
+            )
+            .limit(1);
+          
+          if (volunteerWaiverForm) {
+            // Generate a form submission token for the volunteer applicant
+            const token = generateToken();
+            const tokenHash = hashToken(token);
+            const expiresAt = new Date();
+            expiresAt.setDate(expiresAt.getDate() + 14); // 14 day expiration
+            
+            // Create pending submission
+            await db.insert(customFormSubmissions).values({
+              tenantId: req.tenant!.id,
+              formId: volunteerWaiverForm.id,
+              signerName: updatedApplication.applicantName,
+              signerEmail: updatedApplication.applicantEmail,
+              signerPhone: updatedApplication.applicantPhone || null,
+              status: 'pending',
+              tokenHash,
+              expiresAt,
+            });
+            
+            // Build the form signing URL
+            const protocol = req.headers['x-forwarded-proto'] || 'https';
+            const host = req.headers.host || 'irescue.life';
+            const baseUrl = `${protocol}://${host}`;
+            const formUrl = `${baseUrl}/forms/sign/${token}`;
+            
+            // Send email to volunteer applicant
+            await emailService.sendEmail({
+              tenantId: req.tenant!.id,
+              to: updatedApplication.applicantEmail,
+              subject: `Action Required: Please Sign the Hold Harmless Agreement - ${req.tenant!.name}`,
+              html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                  <h2 style="color: #333;">Hold Harmless Agreement Ready for Signature</h2>
+                  <p>Hello ${updatedApplication.applicantName},</p>
+                  <p>Great news! Your volunteer application with <strong>${req.tenant!.name}</strong> has advanced to the waiver stage.</p>
+                  <p>Please review and sign the Hold Harmless Agreement to complete your onboarding as a volunteer.</p>
+                  <div style="margin: 30px 0; text-align: center;">
+                    <a href="${formUrl}" style="background-color: #22c55e; color: white; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">
+                      Sign Hold Harmless Agreement
+                    </a>
+                  </div>
+                  <p style="color: #666; font-size: 14px;">This link will expire in 14 days.</p>
+                  <p style="color: #666; font-size: 14px;">If you have any questions, please contact us at ${req.tenant!.contactEmail || 'our contact email'}.</p>
+                  <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+                  <p style="color: #999; font-size: 12px;">You're receiving this email because you applied to volunteer with ${req.tenant!.name}.</p>
+                </div>
+              `,
+              text: `
+Hello ${updatedApplication.applicantName},
+
+Your volunteer application with ${req.tenant!.name} has advanced to the waiver stage.
+
+Please sign the Hold Harmless Agreement to complete your onboarding:
+${formUrl}
+
+This link will expire in 14 days.
+
+If you have any questions, please contact us.
+
+- ${req.tenant!.name}
+              `.trim(),
+            });
+            
+            // Log activity
+            const { logActivity } = await import('./lib/activity-logger');
+            await logActivity({
+              tenantId: req.tenant!.id,
+              userId: req.user!.id,
+              action: 'volunteer_waiver_sent',
+              category: 'user',
+              entityType: 'volunteer_application',
+              entityId: updatedApplication.id,
+              description: `Hold harmless waiver email sent to ${updatedApplication.applicantName} (${updatedApplication.applicantEmail})`,
+              metadata: {
+                formId: volunteerWaiverForm.id,
+                formName: volunteerWaiverForm.name,
+              },
+            });
+            
+            console.log(`[Volunteer Automation] Sent hold harmless waiver to ${updatedApplication.applicantEmail}`);
+          } else {
+            console.log(`[Volunteer Automation] No hold harmless waiver form found for tenant ${req.tenant!.id} - skipping email`);
+          }
+        } catch (waiverError) {
+          // Log error but don't fail the status update
+          console.error('[Volunteer Automation] Error sending hold harmless waiver email:', waiverError);
+        }
+      }
+
       res.json({ success: true, application: updatedApplication });
     } catch (error) {
       next(error);
