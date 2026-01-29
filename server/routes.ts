@@ -7901,6 +7901,260 @@ Crawl-delay: 1
   });
 
   // ============================================================================
+  // Foster Agreement Sessions Routes (Public, token-protected)
+  // ============================================================================
+
+  /**
+   * GET /api/public/foster-agreements/:token
+   * Get foster agreement session data for signing (public, token-protected)
+   */
+  app.get('/api/public/foster-agreements/:token', async (req, res, next) => {
+    try {
+      const { fosterAgreementSessions, fosterContractTemplates, fosterApplications, animals, tenants } = await import('@shared/schema');
+      const crypto = await import('crypto');
+      
+      const tokenHash = crypto.createHash('sha256').update(req.params.token).digest('hex');
+      
+      const [session] = await db
+        .select()
+        .from(fosterAgreementSessions)
+        .where(eq(fosterAgreementSessions.secureTokenHash, tokenHash))
+        .limit(1);
+
+      if (!session) {
+        return res.status(404).json({ error: 'Session not found or expired' });
+      }
+
+      // Check expiration
+      if (session.expiresAt && new Date(session.expiresAt) < new Date()) {
+        return res.status(410).json({ error: 'Session has expired' });
+      }
+
+      // Fetch related data
+      const [fosterApp] = await db
+        .select()
+        .from(fosterApplications)
+        .where(eq(fosterApplications.id, session.fosterApplicationId))
+        .limit(1);
+
+      let animal = null;
+      if (fosterApp?.animalId) {
+        const [animalResult] = await db
+          .select()
+          .from(animals)
+          .where(eq(animals.id, fosterApp.animalId))
+          .limit(1);
+        animal = animalResult;
+      }
+
+      const [tenant] = await db
+        .select({ name: tenants.name })
+        .from(tenants)
+        .where(eq(tenants.id, session.tenantId))
+        .limit(1);
+
+      // Fetch and process contract template
+      let contractData: { html: string; name: string } | null = null;
+      if (session.templateId) {
+        const DOMPurify = (await import('isomorphic-dompurify')).default;
+        const [template] = await db
+          .select()
+          .from(fosterContractTemplates)
+          .where(eq(fosterContractTemplates.id, session.templateId))
+          .limit(1);
+        
+        if (template) {
+          // Replace merge fields with actual data
+          const mergeFieldValues: Record<string, string> = {
+            '{{foster_name}}': session.fosterName || '',
+            '{{foster_email}}': session.fosterEmail || '',
+            '{{foster_phone}}': session.fosterPhone || '',
+            '{{animal_name}}': animal?.name || '',
+            '{{animal_species}}': animal?.species || '',
+            '{{animal_breed}}': animal?.breed || '',
+            '{{animal_age}}': animal?.age?.toString() || '',
+            '{{animal_sex}}': animal?.sex || '',
+            '{{organization_name}}': tenant?.name || '',
+            '{{contract_date}}': new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
+          };
+          
+          let processedHtml = template.htmlTemplate;
+          for (const [placeholder, value] of Object.entries(mergeFieldValues)) {
+            processedHtml = processedHtml.replace(new RegExp(placeholder.replace(/[{}]/g, '\\$&'), 'g'), value);
+          }
+          
+          // Sanitize HTML
+          const sanitizedHtml = DOMPurify.sanitize(processedHtml, {
+            ALLOWED_TAGS: ['div', 'span', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'strong', 'em', 'u', 'br', 'hr', 'ul', 'ol', 'li', 'table', 'thead', 'tbody', 'tr', 'th', 'td'],
+            ALLOWED_ATTR: ['class', 'style'],
+            ALLOW_DATA_ATTR: false,
+          });
+          
+          contractData = {
+            html: sanitizedHtml,
+            name: template.name,
+          };
+        }
+      }
+
+      res.json({
+        session: {
+          id: session.id,
+          status: session.status,
+          expiresAt: session.expiresAt,
+          signedAt: session.signedAt,
+          fosterName: session.fosterName,
+          fosterEmail: session.fosterEmail,
+        },
+        animal: animal ? {
+          id: animal.id,
+          name: animal.name,
+          species: animal.species,
+          breed: animal.breed,
+          photoUrls: animal.photoUrls,
+        } : null,
+        applicant: {
+          name: session.fosterName,
+          email: session.fosterEmail,
+          phone: session.fosterPhone,
+        },
+        contract: contractData,
+        organization: tenant ? { name: tenant.name } : null,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/public/foster-agreements/:token/sign
+   * Submit signature for foster agreement (public, token-protected)
+   */
+  app.post('/api/public/foster-agreements/:token/sign', async (req, res, next) => {
+    try {
+      const { fosterAgreementSessions, fosterContractTemplates, fosterApplications, tenants } = await import('@shared/schema');
+      const crypto = await import('crypto');
+      
+      const tokenHash = crypto.createHash('sha256').update(req.params.token).digest('hex');
+      
+      const [session] = await db
+        .select()
+        .from(fosterAgreementSessions)
+        .where(eq(fosterAgreementSessions.secureTokenHash, tokenHash))
+        .limit(1);
+
+      if (!session) {
+        return res.status(404).json({ error: 'Session not found or expired' });
+      }
+
+      if (session.status === 'signed') {
+        return res.status(400).json({ error: 'Agreement has already been signed' });
+      }
+
+      if (session.expiresAt && new Date(session.expiresAt) < new Date()) {
+        return res.status(410).json({ error: 'Session has expired' });
+      }
+
+      const signatureSchema = z.object({
+        signerName: z.string().min(1),
+        signerEmail: z.string().email(),
+        signatureImageData: z.string(),
+      });
+
+      const signatureData = signatureSchema.parse(req.body);
+
+      // Render final contract with signature
+      let renderedContract = '';
+      if (session.templateId) {
+        const [template] = await db
+          .select()
+          .from(fosterContractTemplates)
+          .where(eq(fosterContractTemplates.id, session.templateId))
+          .limit(1);
+        
+        if (template) {
+          const [tenant] = await db
+            .select({ name: tenants.name })
+            .from(tenants)
+            .where(eq(tenants.id, session.tenantId))
+            .limit(1);
+          
+          const mergeFieldValues: Record<string, string> = {
+            '{{foster_name}}': signatureData.signerName,
+            '{{foster_email}}': signatureData.signerEmail,
+            '{{foster_phone}}': session.fosterPhone || '',
+            '{{organization_name}}': tenant?.name || '',
+            '{{contract_date}}': new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
+          };
+          
+          renderedContract = template.htmlTemplate;
+          for (const [placeholder, value] of Object.entries(mergeFieldValues)) {
+            renderedContract = renderedContract.replace(new RegExp(placeholder.replace(/[{}]/g, '\\$&'), 'g'), value);
+          }
+        }
+      }
+
+      // Update session with signature
+      await db
+        .update(fosterAgreementSessions)
+        .set({
+          status: 'signed',
+          signedAt: new Date(),
+          signatureData: signatureData.signatureImageData,
+          signedIp: req.ip,
+          renderedContract,
+          updatedAt: new Date(),
+        })
+        .where(eq(fosterAgreementSessions.id, session.id));
+
+      // Update foster application to 'in_foster' status
+      await db
+        .update(fosterApplications)
+        .set({
+          pipelineStatus: 'in_foster',
+          updatedAt: new Date(),
+        })
+        .where(eq(fosterApplications.id, session.fosterApplicationId));
+
+      // Send confirmation email
+      try {
+        const { EmailService } = await import('./lib/email-service');
+        const [tenant] = await db
+          .select({ name: tenants.name })
+          .from(tenants)
+          .where(eq(tenants.id, session.tenantId))
+          .limit(1);
+        
+        const emailService = await EmailService.forTenant(session.tenantId);
+        await emailService.send({
+          to: signatureData.signerEmail,
+          subject: 'Foster Agreement Signed - Confirmation',
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h2 style="color: #333;">Foster Agreement Signed</h2>
+              <p>Hi ${signatureData.signerName},</p>
+              <p>Thank you for signing the foster agreement with ${tenant?.name || 'us'}.</p>
+              <p>Your signed agreement has been recorded and the rescue organization has been notified.</p>
+              <p>They will be in touch with next steps for picking up your foster pet.</p>
+              <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+              <p style="color: #666; font-size: 12px;">
+                Signed on: ${new Date().toLocaleString()}<br />
+                By: ${signatureData.signerName} (${signatureData.signerEmail})
+              </p>
+            </div>
+          `,
+        });
+      } catch (emailError) {
+        console.error('Failed to send foster agreement confirmation email:', emailError);
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // ============================================================================
   // Contract Templates Routes (Staff only)
   // ============================================================================
 

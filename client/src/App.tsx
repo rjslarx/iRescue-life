@@ -81,6 +81,7 @@ import PublicFosterPage from "@/pages/PublicFosterPage";
 import PublicSurrenderPage from "@/pages/PublicSurrenderPage";
 import FormSuccessPage from "@/pages/FormSuccessPage";
 import PublicAdoptionCheckoutPage from "@/pages/PublicAdoptionCheckoutPage";
+import PublicFosterAgreementPage from "@/pages/PublicFosterAgreementPage";
 import PublicFormSigningPage from "@/pages/PublicFormSigningPage";
 import FormPaymentPage from "@/pages/FormPaymentPage";
 import PublicContactPage from "@/pages/PublicContactPage";
@@ -211,6 +212,7 @@ function RouterSwitch() {
       <Route path="/shop/order/:orderNumber" component={ShopOrderPage} />
       <Route path="/event/:id" component={EventDetailPage} />
       <Route path="/adoption-checkout/:token" component={PublicAdoptionCheckoutPage} />
+      <Route path="/foster-agreement/sign/:token" component={PublicFosterAgreementPage} />
       <Route path="/run-sheet/:token" component={RunSheetPage} />
       <Route path="/form/:token" component={PublicFormSigningPage} />
       <Route path="/form/:token/payment" component={FormPaymentPage} />
