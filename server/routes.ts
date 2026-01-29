@@ -8736,6 +8736,71 @@ Crawl-delay: 1
       }
 
       // ========================================================================
+      // AUTOMATION: Auto-advance foster pipeline when Foster Agreement is signed
+      // ========================================================================
+      // Detect foster agreement: must include "foster" AND ("agreement" OR "contract")
+      const isFosterAgreement = formNameLower.includes('foster') && 
+                                (formNameLower.includes('agreement') || formNameLower.includes('contract'));
+      
+      if (isFosterAgreement && submission.signerEmail) {
+        try {
+          const { fosterApplications } = await import('@shared/schema');
+          
+          // Normalize email for case-insensitive matching
+          const normalizedSignerEmail = submission.signerEmail.toLowerCase().trim();
+          
+          // Find foster application matching signer email with 'agreement' status
+          const [fosterApp] = await db
+            .select()
+            .from(fosterApplications)
+            .where(
+              and(
+                eq(fosterApplications.tenantId, submission.tenantId),
+                sql`LOWER(TRIM(${fosterApplications.applicantEmail})) = ${normalizedSignerEmail}`,
+                eq(fosterApplications.pipelineStatus, 'agreement')
+              )
+            )
+            .limit(1);
+          
+          if (fosterApp) {
+            // Auto-advance to active_pool
+            await db
+              .update(fosterApplications)
+              .set({
+                pipelineStatus: 'active_pool',
+                status: 'approved',
+                updatedAt: new Date(),
+              })
+              .where(eq(fosterApplications.id, fosterApp.id));
+            
+            // Log activity for the auto-advancement
+            const { logActivity } = await import('./lib/activity-logger');
+            await logActivity({
+              tenantId: submission.tenantId,
+              userId: null, // System action
+              action: 'foster_auto_advanced',
+              category: 'user', // Matches volunteer waiver automation pattern
+              entityType: 'foster_application',
+              entityId: fosterApp.id.toString(),
+              description: `Foster ${fosterApp.applicantName} automatically advanced to Active Pool after signing "${form.name}"`,
+              metadata: {
+                formName: form.name,
+                formId: form.id,
+                submissionId: updated?.id,
+                previousStatus: 'agreement',
+                newStatus: 'active_pool',
+              },
+            });
+            
+            console.log(`[Foster Automation] Auto-advanced ${fosterApp.applicantEmail} from agreement to active_pool`);
+          }
+        } catch (automationError) {
+          // Log error but don't fail the form submission
+          console.error('[Foster Automation] Error auto-advancing foster:', automationError);
+        }
+      }
+
+      // ========================================================================
       // EMAIL: Send copy of submitted form to tenant's contact email
       // ========================================================================
       if (tenant?.contactEmail && renderedHtml) {
@@ -11696,6 +11761,119 @@ Submitted: ${new Date().toLocaleString()}
           }
         } catch (error) {
           console.error('Failed to auto-dismiss foster application:', error);
+        }
+      }
+
+      // ========================================================================
+      // AUTOMATION: Send foster agreement email when status changes to 'agreement'
+      // ========================================================================
+      const statusChangedToAgreement = data.pipelineStatus === 'agreement' && oldPipelineStatus !== 'agreement';
+      if (statusChangedToAgreement && updatedApplication.applicantEmail) {
+        try {
+          const { emailService } = await import('./lib/email');
+          const { customForms, customFormSubmissions } = await import('@shared/schema');
+          const { generateToken, hashToken } = await import('./services/custom-form');
+          
+          // Find a foster agreement form for this tenant
+          // Look for forms with "foster" AND ("agreement" OR "contract") in the name
+          const [fosterAgreementForm] = await db
+            .select()
+            .from(customForms)
+            .where(
+              and(
+                eq(customForms.tenantId, req.tenant!.id),
+                eq(customForms.isActive, true),
+                sql`LOWER(${customForms.name}) LIKE '%foster%' AND (LOWER(${customForms.name}) LIKE '%agreement%' OR LOWER(${customForms.name}) LIKE '%contract%')`
+              )
+            )
+            .limit(1);
+          
+          if (fosterAgreementForm) {
+            // Generate a form submission token for the foster applicant
+            const token = generateToken();
+            const tokenHash = hashToken(token);
+            const expiresAt = new Date();
+            expiresAt.setDate(expiresAt.getDate() + 14); // 14 day expiration
+            
+            // Create pending submission
+            await db.insert(customFormSubmissions).values({
+              tenantId: req.tenant!.id,
+              formId: fosterAgreementForm.id,
+              signerName: updatedApplication.applicantName,
+              signerEmail: updatedApplication.applicantEmail,
+              signerPhone: updatedApplication.applicantPhone || null,
+              status: 'pending',
+              tokenHash,
+              expiresAt,
+            });
+            
+            // Build the form signing URL
+            const protocol = req.headers['x-forwarded-proto'] || 'https';
+            const host = req.headers.host || 'irescue.life';
+            const baseUrl = `${protocol}://${host}`;
+            const formUrl = `${baseUrl}/forms/sign/${token}`;
+            
+            // Send email to foster applicant
+            await emailService.sendEmail({
+              tenantId: req.tenant!.id,
+              to: updatedApplication.applicantEmail,
+              subject: `Action Required: Please Sign Your Foster Agreement - ${req.tenant!.name}`,
+              html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                  <h2 style="color: #333;">Foster Agreement Ready for Signature</h2>
+                  <p>Hello ${updatedApplication.applicantName},</p>
+                  <p>Great news! Your foster application with <strong>${req.tenant!.name}</strong> has advanced to the agreement stage.</p>
+                  <p>Please review and sign the Foster Agreement to complete your onboarding as a foster parent.</p>
+                  <div style="margin: 30px 0; text-align: center;">
+                    <a href="${formUrl}" style="background-color: #f59e0b; color: white; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">
+                      Sign Foster Agreement
+                    </a>
+                  </div>
+                  <p style="color: #666; font-size: 14px;">This link will expire in 14 days.</p>
+                  <p style="color: #666; font-size: 14px;">If you have any questions, please contact us at ${req.tenant!.contactEmail || 'our contact email'}.</p>
+                  <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+                  <p style="color: #999; font-size: 12px;">You're receiving this email because you applied to foster with ${req.tenant!.name}.</p>
+                </div>
+              `,
+              text: `
+Hello ${updatedApplication.applicantName},
+
+Your foster application with ${req.tenant!.name} has advanced to the agreement stage.
+
+Please sign the Foster Agreement to complete your onboarding:
+${formUrl}
+
+This link will expire in 14 days.
+
+If you have any questions, please contact us.
+
+- ${req.tenant!.name}
+              `.trim(),
+            });
+            
+            // Log activity
+            const { logActivity } = await import('./lib/activity-logger');
+            await logActivity({
+              tenantId: req.tenant!.id,
+              userId: req.user!.id,
+              action: 'foster_agreement_sent',
+              category: 'user',
+              entityType: 'foster_application',
+              entityId: updatedApplication.id,
+              description: `Foster agreement email sent to ${updatedApplication.applicantName} (${updatedApplication.applicantEmail})`,
+              metadata: {
+                formId: fosterAgreementForm.id,
+                formName: fosterAgreementForm.name,
+              },
+            });
+            
+            console.log(`[Foster Automation] Sent foster agreement to ${updatedApplication.applicantEmail}`);
+          } else {
+            console.log(`[Foster Automation] No foster agreement form found for tenant ${req.tenant!.id} - skipping email`);
+          }
+        } catch (agreementError) {
+          // Log error but don't fail the status update
+          console.error('[Foster Automation] Error sending foster agreement email:', agreementError);
         }
       }
 
