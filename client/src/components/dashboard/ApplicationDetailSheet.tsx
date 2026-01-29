@@ -352,7 +352,7 @@ export default function ApplicationDetailSheet({
 
   // Fetch form field definitions to get proper labels for UUID keys
   const { data: formFieldsData } = useQuery<{ fields: Array<{ id: string; label: string; fieldType: string }> }>({
-    queryKey: ["form-fields", formFieldsEndpoint],
+    queryKey: [formFieldsEndpoint],
     enabled: !!formFieldsEndpoint && isOpen,
   });
 
