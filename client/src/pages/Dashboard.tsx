@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePagePermissions } from "@/hooks/usePagePermissions";
 import { OnboardingChecklist } from "@/components/OnboardingChecklist";
 import { FloatingActionButton } from "@/components/FloatingActionButton";
 import { RecordOfflineDonationDialog } from "@/components/RecordOfflineDonationDialog";
@@ -52,12 +53,35 @@ function getInitialPipelineTab(): PipelineTab | undefined {
 export default function Dashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { canAccessPage } = usePagePermissions();
   const [showWizard, setShowWizard] = useState(false);
   const [supplyDialogOpen, setSupplyDialogOpen] = useState(false);
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
   const [selectedAnimal, setSelectedAnimal] = useState<{id: string, name: string} | null>(null);
   const [offlineDonationDialogOpen, setOfflineDonationDialogOpen] = useState(false);
   const [pipelineTab, setPipelineTab] = useState<PipelineTab | undefined>(getInitialPipelineTab);
+  
+  // Permission checks for dashboard widgets
+  const canViewMedical = canAccessPage('medical-tasks');
+  const canViewApplications = canAccessPage('applications');
+  const canViewFosterManagement = canAccessPage('foster-management');
+  const canViewVolunteers = canAccessPage('volunteers');
+  const canViewDashboard = canAccessPage('dashboard');
+  const canViewAnalytics = canAccessPage('analytics');
+  const canViewReports = canAccessPage('reports');
+  const canViewCalendar = canAccessPage('calendar');
+  const canViewAnimals = canAccessPage('animals');
+  const canViewFinance = canAccessPage('finance');
+  
+  // Check if user has access to any pipeline tabs
+  const hasPipelineAccess = canViewApplications || canViewFosterManagement || canViewVolunteers;
+  
+  // Check if user has access to full dashboard features (requires explicit dashboard permission)
+  // This is stricter - requires 'dashboard' access, not just any other page access
+  const hasFullDashboardAccess = canViewDashboard;
+  
+  // Check if user has some level of command center access (dashboard OR specific widget permissions)
+  const hasAnyCommandCenterAccess = canViewDashboard || canViewMedical || hasPipelineAccess || canViewAnalytics || canViewReports;
 
   // Listen for hash changes and update pipeline tab
   useEffect(() => {
@@ -172,6 +196,9 @@ export default function Dashboard() {
         description=""
       >
         <div className="flex-1 overflow-y-auto overflow-x-hidden w-full min-w-0 space-y-6 sm:p-6">
+          {/* Foster role gets a dedicated dashboard experience showing their foster animals.
+              This is role-based by design: fosters are a distinct user type with their own
+              workflow (viewing/updating their assigned animals) separate from staff permissions. */}
           {user?.activeRole === 'foster' ? (
             <>
               <div className="mb-6">
@@ -296,6 +323,9 @@ export default function Dashboard() {
                 </div>
               </header>
 
+              {/* OnboardingChecklist - admin-only by design: this is a one-time setup wizard 
+                  that guides admins through initial platform configuration. Not a page permission
+                  but an admin-specific onboarding feature. */}
               {user?.activeRole === 'admin' && tenantData?.tenant && (
                 <OnboardingChecklist
                   tenant={tenantData.tenant}
@@ -304,61 +334,88 @@ export default function Dashboard() {
                 />
               )}
 
-              {/* Volunteer/Staff priority: Medical first */}
-              {(user?.activeRole === 'volunteer' || user?.activeRole === 'staff') && (
+              {/* Limited access view for users with minimal permissions (e.g., calendar-only) */}
+              {!hasAnyCommandCenterAccess && canViewCalendar && (
+                <section data-testid="section-limited-access" className="w-full">
+                  <Card className="p-8 text-center">
+                    <Calendar className="h-16 w-16 mx-auto mb-4 text-primary" />
+                    <h3 className="text-xl font-semibold mb-2">Welcome to Your Dashboard</h3>
+                    <p className="text-muted-foreground mb-6">
+                      Your primary workspace is the Volunteer Calendar. Click below to view shifts and sign up for opportunities.
+                    </p>
+                    <Link href="/dashboard/calendar">
+                      <Button size="lg" className="gap-2" data-testid="button-go-to-calendar">
+                        <Calendar className="h-5 w-5" />
+                        Go to Calendar
+                      </Button>
+                    </Link>
+                  </Card>
+                </section>
+              )}
+
+              {/* Fallback for users with no calendar and no command center access */}
+              {!hasAnyCommandCenterAccess && !canViewCalendar && (
+                <section data-testid="section-no-access" className="w-full">
+                  <Card className="p-8 text-center">
+                    <Heart className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+                    <h3 className="text-xl font-semibold mb-2">Welcome!</h3>
+                    <p className="text-muted-foreground mb-6">
+                      Please use the sidebar to navigate to the features available to you.
+                    </p>
+                  </Card>
+                </section>
+              )}
+
+              {/* Medical Snapshot - only show if user has explicit medical-tasks permission */}
+              {canViewMedical && (
                 <section data-testid="section-priority-medical" className="w-full">
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <MedicalSnapshotWidget />
-                    <div className="space-y-4">
-                      <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Quick Actions</h3>
-                      <div className="flex flex-wrap gap-2">
-                        {actionButtons.map((action) => (
-                          <Link key={action.id} href={action.href}>
-                            <Button 
-                              variant="outline" 
-                              className="gap-2"
-                              data-testid={`button-action-${action.id}`}
-                            >
-                              <action.icon className="h-4 w-4" />
-                              {action.label}
-                            </Button>
-                          </Link>
-                        ))}
-                      </div>
+                  <MedicalSnapshotWidget />
+                </section>
+              )}
+
+              {/* Quick Actions Grid - only show if user has dashboard access and at least one permitted action */}
+              {(() => {
+                const filteredActions = actionButtons.filter(action => {
+                  // Filter actions based on permissions only (no role checks)
+                  if (action.id === 'new-intake') return canViewApplications;
+                  if (action.id === 'log-meds') return canViewMedical;
+                  if (action.id === 'find-foster') return canViewFosterManagement;
+                  if (action.id === 'invite-team-member') return canAccessPage('team');
+                  return false; // Default to hidden unless explicitly permitted
+                });
+                
+                return hasFullDashboardAccess && filteredActions.length > 0 && (
+                  <section data-testid="section-quick-actions">
+                    <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-3">Quick Actions</h3>
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                      {filteredActions.map((action) => (
+                        <Link key={action.id} href={action.href}>
+                          <Button 
+                            variant="outline" 
+                            size="lg"
+                            className={`w-full gap-2 justify-center ${action.color}`}
+                            data-testid={`button-action-${action.id}`}
+                          >
+                            <action.icon className="h-5 w-5" />
+                            <span className="font-medium">{action.label}</span>
+                          </Button>
+                        </Link>
+                      ))}
                     </div>
-                  </div>
+                  </section>
+                );
+              })()}
+
+              {/* Stats Overview - only show if user has explicit dashboard permission */}
+              {hasFullDashboardAccess && (
+                <section data-testid="section-stats-overview">
+                  <StatsOverview />
                 </section>
               )}
 
-              {/* Quick Actions Grid - 2x2 on mobile, single row on desktop */}
-              {(user?.activeRole === 'admin' || user?.activeRole === 'staff') && (
-                <section data-testid="section-quick-actions">
-                  <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-3">Quick Actions</h3>
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                    {actionButtons.map((action) => (
-                      <Link key={action.id} href={action.href}>
-                        <Button 
-                          variant="outline" 
-                          size="lg"
-                          className={`w-full gap-2 justify-center ${action.color}`}
-                          data-testid={`button-action-${action.id}`}
-                        >
-                          <action.icon className="h-5 w-5" />
-                          <span className="font-medium">{action.label}</span>
-                        </Button>
-                      </Link>
-                    ))}
-                  </div>
-                </section>
-              )}
-
-              <section data-testid="section-stats-overview">
-                <StatsOverview />
-              </section>
-
-              {/* The Workspace - Split Layout: Operations (alerts) + Pipeline (work) */}
-              <section data-testid="section-workspace" className="w-full min-w-0 space-y-6">
-                  {/* Pipeline Manager - Full width for better Kanban column visibility */}
+              {/* Pipeline Manager - only show if user has access to at least one pipeline */}
+              {hasPipelineAccess && (
+                <section data-testid="section-workspace" className="w-full min-w-0 space-y-6">
                   <div 
                     id="section-pipeline-manager" 
                     className="w-full min-w-0" 
@@ -366,8 +423,12 @@ export default function Dashboard() {
                   >
                     <PipelineManager activeTab={pipelineTab} onTabChange={handlePipelineTabChange} />
                   </div>
+                </section>
+              )}
 
-                  {/* Compliance Widget - Full width below Pipeline */}
+              {/* Compliance Widget - only show if user has analytics OR reports permission */}
+              {(canViewAnalytics || canViewReports) && (
+                <section data-testid="section-compliance" className="w-full min-w-0">
                   <div 
                     id="compliance-widget" 
                     className="w-full min-w-0" 
@@ -375,7 +436,8 @@ export default function Dashboard() {
                   >
                     <ComplianceWidget />
                   </div>
-              </section>
+                </section>
+              )}
             </>
           )}
         </div>
@@ -388,7 +450,8 @@ export default function Dashboard() {
         </>
       )}
 
-      {(user?.activeRole === 'admin' || user?.activeRole === 'staff') && (
+      {/* FloatingActionButton - show if user has finance permission (to record donations) */}
+      {canViewFinance && (
         <FloatingActionButton onRecordDonation={() => setOfflineDonationDialogOpen(true)} />
       )}
 
