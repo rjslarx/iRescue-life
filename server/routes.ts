@@ -13223,10 +13223,19 @@ If you have any questions, please contact us.
     try {
       const { surrenderRequests, insertSurrenderRequestSchema, inboundEmails, surrenderFormFields } = await import('@shared/schema');
       
+      // Debug logging for custom responses
+      console.log('[Surrender API] Received request body keys:', Object.keys(req.body));
+      console.log('[Surrender API] Received customResponses:', JSON.stringify(req.body.customResponses));
+      console.log('[Surrender API] Received photoUrl:', req.body.photoUrl);
+      
       const data = insertSurrenderRequestSchema.parse({
         ...req.body,
         tenantId: req.tenant!.id,
       });
+      
+      // Debug logging after parse
+      console.log('[Surrender API] Parsed data customResponses:', JSON.stringify(data.customResponses));
+      console.log('[Surrender API] Parsed data photoUrl:', data.photoUrl);
 
       const [surrender] = await db
         .insert(surrenderRequests)

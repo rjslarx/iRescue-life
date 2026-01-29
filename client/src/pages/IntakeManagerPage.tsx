@@ -72,7 +72,7 @@ import {
   Plus
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
-import type { SurrenderRequest } from "@shared/schema";
+import type { SurrenderRequest, SurrenderFormField } from "@shared/schema";
 import IntakeInterceptorDialog from "@/components/IntakeInterceptorDialog";
 
 const staffIntakeSchema = z.object({
@@ -257,6 +257,11 @@ export default function IntakeManagerPage() {
     queryKey: ["/api/surrender-requests"],
   });
 
+  // Fetch surrender form fields for displaying custom responses
+  const { data: formFieldsData } = useQuery<{ fields: SurrenderFormField[] }>({
+    queryKey: ["/api/surrender-form-fields"],
+  });
+
   // Filter out declined/intaken requests for active board
   const activeRequests = surrenderRequests.filter(
     (req) => req.status !== 'declined' && req.status !== 'intaken'
@@ -430,6 +435,7 @@ export default function IntakeManagerPage() {
             request={selectedRequest}
             open={detailsDialogOpen}
             onOpenChange={setDetailsDialogOpen}
+            formFields={formFieldsData?.fields || []}
           />
 
           <NewIntakeDialog
@@ -576,6 +582,7 @@ export default function IntakeManagerPage() {
           request={selectedRequest}
           open={detailsDialogOpen}
           onOpenChange={setDetailsDialogOpen}
+          formFields={formFieldsData?.fields || []}
         />
 
         <NewIntakeDialog
@@ -866,6 +873,7 @@ interface SurrenderDetailsDialogProps {
   request: SurrenderRequest | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  formFields: SurrenderFormField[];
 }
 
 const DECLINE_REASONS = [
@@ -877,7 +885,7 @@ const DECLINE_REASONS = [
   { value: "other", label: "Other" },
 ];
 
-function SurrenderDetailsDialog({ request, open, onOpenChange }: SurrenderDetailsDialogProps) {
+function SurrenderDetailsDialog({ request, open, onOpenChange, formFields }: SurrenderDetailsDialogProps) {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
@@ -1095,6 +1103,68 @@ function SurrenderDetailsDialog({ request, open, onOpenChange }: SurrenderDetail
               <p className="text-sm whitespace-pre-wrap bg-muted p-3 rounded-md">
                 {request.behavioralIssues}
               </p>
+            </div>
+          )}
+
+          {/* Custom Form Responses Section */}
+          {request.customResponses && Object.keys(request.customResponses).length > 0 && (
+            <div className="border-t pt-4">
+              <h3 className="font-medium mb-3 flex items-center gap-2">
+                <FileText className="h-4 w-4" />
+                Additional Form Responses
+              </h3>
+              <div className="space-y-3">
+                {Object.entries(request.customResponses).map(([fieldId, value]) => {
+                  if (value === undefined || value === null || value === '') return null;
+                  const field = formFields.find(f => f.id === fieldId);
+                  const label = field?.label || fieldId;
+                  const fieldType = field?.fieldType || 'text';
+                  
+                  // Render photo fields as images
+                  if (fieldType === 'photo' && typeof value === 'string' && value.startsWith('http')) {
+                    return (
+                      <div key={fieldId} className="space-y-2">
+                        <h4 className="text-sm font-medium text-muted-foreground">{label}</h4>
+                        <img 
+                          src={value} 
+                          alt={label} 
+                          className="max-w-full max-h-64 rounded-lg object-cover cursor-pointer"
+                          onClick={() => window.open(value, '_blank')}
+                          data-testid={`img-custom-${fieldId}`}
+                        />
+                      </div>
+                    );
+                  }
+                  
+                  // Render arrays as comma-separated values
+                  if (Array.isArray(value)) {
+                    return (
+                      <div key={fieldId}>
+                        <h4 className="text-sm font-medium text-muted-foreground">{label}</h4>
+                        <p className="text-sm">{value.join(', ')}</p>
+                      </div>
+                    );
+                  }
+                  
+                  // Render booleans as Yes/No
+                  if (typeof value === 'boolean') {
+                    return (
+                      <div key={fieldId}>
+                        <h4 className="text-sm font-medium text-muted-foreground">{label}</h4>
+                        <p className="text-sm">{value ? 'Yes' : 'No'}</p>
+                      </div>
+                    );
+                  }
+                  
+                  // Default text rendering
+                  return (
+                    <div key={fieldId}>
+                      <h4 className="text-sm font-medium text-muted-foreground">{label}</h4>
+                      <p className="text-sm whitespace-pre-wrap">{String(value)}</p>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
 

@@ -55,9 +55,11 @@ export default function PublicSurrenderPage() {
   });
 
   // Form schema for public surrender requests
+  // Use passthrough() to ensure customResponses field is not stripped by Zod validation
   const surrenderFormSchema = useMemo(() => {
     return insertSurrenderRequestSchema.omit({ tenantId: true }).extend({
       dogWeight: z.string().min(1, "Weight is required"),
+      customResponses: z.record(z.any()).optional(),
     });
   }, []);
 
