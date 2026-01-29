@@ -26,6 +26,7 @@ export interface QuickAction {
   href?: string;
   actionType?: 'navigate' | 'callback';
   callbackName?: string;
+  pageId?: string;
 }
 
 export const ALL_QUICK_ACTIONS: QuickAction[] = [
@@ -36,6 +37,7 @@ export const ALL_QUICK_ACTIONS: QuickAction[] = [
     icon: PawPrint,
     href: "/dashboard/animals?action=add",
     actionType: "navigate",
+    pageId: "animals",
   },
   {
     id: "record-donation",
@@ -44,6 +46,7 @@ export const ALL_QUICK_ACTIONS: QuickAction[] = [
     icon: DollarSign,
     actionType: "callback",
     callbackName: "onRecordDonation",
+    pageId: "finance",
   },
   {
     id: "new-application",
@@ -52,6 +55,7 @@ export const ALL_QUICK_ACTIONS: QuickAction[] = [
     icon: FileText,
     href: "/dashboard/applications",
     actionType: "navigate",
+    pageId: "applications",
   },
   {
     id: "add-event",
@@ -60,6 +64,7 @@ export const ALL_QUICK_ACTIONS: QuickAction[] = [
     icon: Calendar,
     href: "/dashboard/calendar",
     actionType: "navigate",
+    pageId: "calendar",
   },
   {
     id: "send-email",
@@ -68,6 +73,7 @@ export const ALL_QUICK_ACTIONS: QuickAction[] = [
     icon: Mail,
     href: "/dashboard/communications",
     actionType: "navigate",
+    pageId: "communications",
   },
   {
     id: "invite-team-member",
@@ -76,6 +82,7 @@ export const ALL_QUICK_ACTIONS: QuickAction[] = [
     icon: Mail,
     href: "/dashboard/team?action=invite",
     actionType: "navigate",
+    pageId: "team",
   },
   {
     id: "add-foster",
@@ -84,6 +91,7 @@ export const ALL_QUICK_ACTIONS: QuickAction[] = [
     icon: Home,
     href: "/dashboard/fosters",
     actionType: "navigate",
+    pageId: "foster-management",
   },
   {
     id: "medical-task",
@@ -92,6 +100,7 @@ export const ALL_QUICK_ACTIONS: QuickAction[] = [
     icon: Stethoscope,
     href: "/dashboard/medical-pipeline",
     actionType: "navigate",
+    pageId: "medical-tasks",
   },
   {
     id: "intake-manager",
@@ -100,6 +109,7 @@ export const ALL_QUICK_ACTIONS: QuickAction[] = [
     icon: Inbox,
     href: "/dashboard/intake",
     actionType: "navigate",
+    pageId: "intake",
   },
   {
     id: "add-supply",
@@ -108,6 +118,7 @@ export const ALL_QUICK_ACTIONS: QuickAction[] = [
     icon: Package,
     href: "/dashboard/supplies",
     actionType: "navigate",
+    pageId: "supply-registry",
   },
   {
     id: "view-reports",
@@ -116,6 +127,7 @@ export const ALL_QUICK_ACTIONS: QuickAction[] = [
     icon: ClipboardList,
     href: "/dashboard/analytics",
     actionType: "navigate",
+    pageId: "analytics",
   },
   {
     id: "adoption-applications",
@@ -124,6 +136,7 @@ export const ALL_QUICK_ACTIONS: QuickAction[] = [
     icon: FileText,
     href: "/dashboard/applications",
     actionType: "navigate",
+    pageId: "applications",
   },
   {
     id: "foster-pipeline",
@@ -132,6 +145,7 @@ export const ALL_QUICK_ACTIONS: QuickAction[] = [
     icon: Kanban,
     href: "/dashboard/foster-pipeline",
     actionType: "navigate",
+    pageId: "foster-management",
   },
   {
     id: "volunteer-pipeline",
@@ -140,6 +154,7 @@ export const ALL_QUICK_ACTIONS: QuickAction[] = [
     icon: UserCheck,
     href: "/dashboard/volunteer-pipeline",
     actionType: "navigate",
+    pageId: "volunteers",
   },
   {
     id: "check-inbox",
@@ -148,6 +163,7 @@ export const ALL_QUICK_ACTIONS: QuickAction[] = [
     icon: Inbox,
     href: "/dashboard/communications",
     actionType: "navigate",
+    pageId: "communications",
   },
   {
     id: "calendar",
@@ -156,6 +172,7 @@ export const ALL_QUICK_ACTIONS: QuickAction[] = [
     icon: Calendar,
     href: "/dashboard/calendar",
     actionType: "navigate",
+    pageId: "calendar",
   },
   {
     id: "add-volunteer",
@@ -164,6 +181,7 @@ export const ALL_QUICK_ACTIONS: QuickAction[] = [
     icon: UserPlus,
     href: "/dashboard/contacts?action=add",
     actionType: "navigate",
+    pageId: "contacts",
   },
   {
     id: "collaboration-hub",
@@ -172,6 +190,7 @@ export const ALL_QUICK_ACTIONS: QuickAction[] = [
     icon: MessageSquare,
     href: "/dashboard/collaboration",
     actionType: "navigate",
+    pageId: "collaboration",
   },
 ];
 
