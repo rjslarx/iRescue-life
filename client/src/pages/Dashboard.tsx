@@ -357,26 +357,24 @@ export default function Dashboard() {
               </section>
 
               {/* The Workspace - Split Layout: Operations (alerts) + Pipeline (work) */}
-              <section data-testid="section-workspace" className="w-full min-w-0">
-                <div className="grid gap-6 lg:grid-cols-12 w-full min-w-0">
-                  {/* Operations Column (Alerts) - Right 30% on desktop, ABOVE on mobile */}
-                  <div 
-                    id="compliance-widget" 
-                    className="w-full min-w-0 order-1 lg:order-2 lg:col-span-4" 
-                    data-testid="workspace-compliance"
-                  >
-                    <ComplianceWidget />
-                  </div>
-
-                  {/* Pipeline Column (The Work) - Left 70% on desktop, BELOW on mobile */}
+              <section data-testid="section-workspace" className="w-full min-w-0 space-y-6">
+                  {/* Pipeline Manager - Full width for better Kanban column visibility */}
                   <div 
                     id="section-pipeline-manager" 
-                    className="w-full min-w-0 order-2 lg:order-1 lg:col-span-8" 
+                    className="w-full min-w-0" 
                     data-testid="workspace-pipeline"
                   >
                     <PipelineManager activeTab={pipelineTab} onTabChange={handlePipelineTabChange} />
                   </div>
-                </div>
+
+                  {/* Compliance Widget - Full width below Pipeline */}
+                  <div 
+                    id="compliance-widget" 
+                    className="w-full min-w-0" 
+                    data-testid="workspace-compliance"
+                  >
+                    <ComplianceWidget />
+                  </div>
               </section>
             </>
           )}

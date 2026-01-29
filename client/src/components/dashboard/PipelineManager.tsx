@@ -259,11 +259,9 @@ function StatusColumn({ status, items, pipelineType, onItemClick }: StatusColumn
   const filteredItems = items.filter(item => item.status === status);
   const badgeColor = pipelineBadgeColors[pipelineType] || "";
   
-  if (filteredItems.length === 0) return null;
-  
   return (
     <div 
-      className="bg-muted/30 rounded-lg p-3 space-y-2" 
+      className="bg-muted/30 rounded-lg p-3 min-h-[120px] flex flex-col" 
       data-testid={`status-column-${pipelineType}-${status}`}
     >
       <div className="flex items-center gap-2 mb-2">
@@ -274,15 +272,21 @@ function StatusColumn({ status, items, pipelineType, onItemClick }: StatusColumn
           ({filteredItems.length})
         </span>
       </div>
-      <div className="space-y-2">
-        {filteredItems.map((item) => (
-          <PipelineItem 
-            key={item.id} 
-            {...item} 
-            pipelineType={pipelineType} 
-            onClick={() => onItemClick(item.id)}
-          />
-        ))}
+      <div className="space-y-2 flex-1">
+        {filteredItems.length === 0 ? (
+          <p className="text-xs text-muted-foreground text-center py-4" data-testid={`empty-column-${pipelineType}-${status}`}>
+            No applications
+          </p>
+        ) : (
+          filteredItems.map((item) => (
+            <PipelineItem 
+              key={item.id} 
+              {...item} 
+              pipelineType={pipelineType} 
+              onClick={() => onItemClick(item.id)}
+            />
+          ))
+        )}
       </div>
     </div>
   );
