@@ -53,6 +53,11 @@ interface PartnerOrganization {
   contactName: string | null;
   contactEmail: string | null;
   contactPhone: string | null;
+  contactTitle: string | null;
+  secondaryContactName: string | null;
+  secondaryContactEmail: string | null;
+  secondaryContactPhone: string | null;
+  secondaryContactTitle: string | null;
   address: string | null;
   city: string | null;
   state: string | null;
@@ -73,6 +78,11 @@ const orgFormSchema = z.object({
   contactName: z.string().optional(),
   contactEmail: z.string().email("Invalid email").optional().or(z.literal("")),
   contactPhone: z.string().optional(),
+  contactTitle: z.string().optional(),
+  secondaryContactName: z.string().optional(),
+  secondaryContactEmail: z.string().email("Invalid email").optional().or(z.literal("")),
+  secondaryContactPhone: z.string().optional(),
+  secondaryContactTitle: z.string().optional(),
   address: z.string().optional(),
   city: z.string().optional(),
   state: z.string().optional(),
@@ -108,6 +118,11 @@ export default function PartnerOrganizationsPage() {
       contactName: "",
       contactEmail: "",
       contactPhone: "",
+      contactTitle: "",
+      secondaryContactName: "",
+      secondaryContactEmail: "",
+      secondaryContactPhone: "",
+      secondaryContactTitle: "",
       address: "",
       city: "",
       state: "",
@@ -225,6 +240,11 @@ export default function PartnerOrganizationsPage() {
         contactName: org.contactName || "",
         contactEmail: org.contactEmail || "",
         contactPhone: org.contactPhone || "",
+        contactTitle: org.contactTitle || "",
+        secondaryContactName: org.secondaryContactName || "",
+        secondaryContactEmail: org.secondaryContactEmail || "",
+        secondaryContactPhone: org.secondaryContactPhone || "",
+        secondaryContactTitle: org.secondaryContactTitle || "",
         address: org.address || "",
         city: org.city || "",
         state: org.state || "",
@@ -389,20 +409,53 @@ export default function PartnerOrganizationsPage() {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <div className="space-y-1">
-                          {org.contactName && (
-                            <div className="text-sm">{org.contactName}</div>
-                          )}
-                          {org.contactEmail && (
-                            <div className="text-xs text-muted-foreground flex items-center gap-1">
-                              <Mail className="h-3 w-3" />
-                              {org.contactEmail}
+                        <div className="space-y-2">
+                          {(org.contactName || org.contactEmail || org.contactPhone) && (
+                            <div className="space-y-0.5">
+                              {org.contactName && (
+                                <div className="text-sm font-medium">
+                                  {org.contactName}
+                                  {org.contactTitle && (
+                                    <span className="text-xs text-muted-foreground ml-1">({org.contactTitle})</span>
+                                  )}
+                                </div>
+                              )}
+                              {org.contactEmail && (
+                                <div className="text-xs text-muted-foreground flex items-center gap-1">
+                                  <Mail className="h-3 w-3" />
+                                  {org.contactEmail}
+                                </div>
+                              )}
+                              {org.contactPhone && (
+                                <div className="text-xs text-muted-foreground flex items-center gap-1">
+                                  <Phone className="h-3 w-3" />
+                                  {org.contactPhone}
+                                </div>
+                              )}
                             </div>
                           )}
-                          {org.contactPhone && (
-                            <div className="text-xs text-muted-foreground flex items-center gap-1">
-                              <Phone className="h-3 w-3" />
-                              {org.contactPhone}
+                          {(org.secondaryContactName || org.secondaryContactEmail || org.secondaryContactPhone) && (
+                            <div className="space-y-0.5 border-t pt-1">
+                              {org.secondaryContactName && (
+                                <div className="text-sm">
+                                  {org.secondaryContactName}
+                                  {org.secondaryContactTitle && (
+                                    <span className="text-xs text-muted-foreground ml-1">({org.secondaryContactTitle})</span>
+                                  )}
+                                </div>
+                              )}
+                              {org.secondaryContactEmail && (
+                                <div className="text-xs text-muted-foreground flex items-center gap-1">
+                                  <Mail className="h-3 w-3" />
+                                  {org.secondaryContactEmail}
+                                </div>
+                              )}
+                              {org.secondaryContactPhone && (
+                                <div className="text-xs text-muted-foreground flex items-center gap-1">
+                                  <Phone className="h-3 w-3" />
+                                  {org.secondaryContactPhone}
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>
@@ -541,19 +594,37 @@ export default function PartnerOrganizationsPage() {
                 </div>
 
                 <div className="border-t pt-4">
-                  <h4 className="text-sm font-medium mb-3">Contact Information</h4>
+                  <h4 className="text-sm font-medium mb-3">Primary Contact</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <FormField
                       control={form.control}
                       name="contactName"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Contact Name</FormLabel>
+                          <FormLabel>Name</FormLabel>
                           <FormControl>
                             <Input 
                               placeholder="Jane Smith" 
                               {...field} 
                               data-testid="input-contact-name"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="contactTitle"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Job Title</FormLabel>
+                          <FormControl>
+                            <Input 
+                              placeholder="Executive Director" 
+                              {...field} 
+                              data-testid="input-contact-title"
                             />
                           </FormControl>
                           <FormMessage />
@@ -591,6 +662,84 @@ export default function PartnerOrganizationsPage() {
                               placeholder="(555) 123-4567" 
                               {...field} 
                               data-testid="input-contact-phone"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
+
+                <div className="border-t pt-4">
+                  <h4 className="text-sm font-medium mb-3">Secondary Contact (Optional)</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="secondaryContactName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Name</FormLabel>
+                          <FormControl>
+                            <Input 
+                              placeholder="John Doe" 
+                              {...field} 
+                              data-testid="input-secondary-contact-name"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="secondaryContactTitle"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Job Title</FormLabel>
+                          <FormControl>
+                            <Input 
+                              placeholder="Intake Coordinator" 
+                              {...field} 
+                              data-testid="input-secondary-contact-title"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="secondaryContactEmail"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Email</FormLabel>
+                          <FormControl>
+                            <Input 
+                              type="email"
+                              placeholder="secondary@example.org" 
+                              {...field} 
+                              data-testid="input-secondary-contact-email"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="secondaryContactPhone"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Phone</FormLabel>
+                          <FormControl>
+                            <Input 
+                              placeholder="(555) 987-6543" 
+                              {...field} 
+                              data-testid="input-secondary-contact-phone"
                             />
                           </FormControl>
                           <FormMessage />

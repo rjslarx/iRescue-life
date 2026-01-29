@@ -26990,7 +26990,11 @@ The user asking is a tenant administrator or staff member.`;
   app.post('/api/partner-organizations', requireTenant, requireAuth, async (req, res, next) => {
     try {
       const tenantId = req.session.tenantId!;
-      const { name, organizationType, contactName, contactEmail, contactPhone, address, city, state, zipCode, website, notes } = req.body;
+      const { 
+        name, organizationType, contactName, contactEmail, contactPhone, contactTitle,
+        secondaryContactName, secondaryContactEmail, secondaryContactPhone, secondaryContactTitle,
+        address, city, state, zipCode, website, notes 
+      } = req.body;
       
       if (!name) {
         return res.status(400).json({ error: 'Organization name is required' });
@@ -27003,6 +27007,11 @@ The user asking is a tenant administrator or staff member.`;
         contactName: contactName || null,
         contactEmail: contactEmail || null,
         contactPhone: contactPhone || null,
+        contactTitle: contactTitle || null,
+        secondaryContactName: secondaryContactName || null,
+        secondaryContactEmail: secondaryContactEmail || null,
+        secondaryContactPhone: secondaryContactPhone || null,
+        secondaryContactTitle: secondaryContactTitle || null,
         address: address || null,
         city: city || null,
         state: state || null,
