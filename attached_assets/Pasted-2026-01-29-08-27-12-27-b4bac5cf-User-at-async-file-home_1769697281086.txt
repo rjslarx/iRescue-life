@@ -1,0 +1,108 @@
+2026-01-29 08:27:12.27
+b4bac5cf
+User
+at async file:///home/runner/workspace/node_modules/drizzle-orm/node-postgres/session.js:83:22
+2026-01-29 08:27:12.27
+b4bac5cf
+User
+at /home/runner/workspace/node_modules/pg-pool/index.js:45:11
+2026-01-29 08:27:12.27
+b4bac5cf
+User
+error: column "custom_responses" does not exist
+2026-01-29 08:27:12.27
+b4bac5cf
+User
+at async file:///home/runner/workspace/dist/index.js:38225:24
+2026-01-29 08:27:27.35
+b4bac5cf
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-01-29 08:27:27.35
+b4bac5cf
+User
+at async file:///home/runner/workspace/dist/index.js:38225:24
+2026-01-29 08:27:27.35
+b4bac5cf
+User
+at async file:///home/runner/workspace/node_modules/drizzle-orm/node-postgres/session.js:83:22
+2026-01-29 08:27:27.35
+b4bac5cf
+User
+at /home/runner/workspace/node_modules/pg-pool/index.js:45:11
+2026-01-29 08:27:27.35
+b4bac5cf
+User
+error: column "custom_responses" does not exist
+2026-01-29 08:28:50.71
+b4bac5cf
+User
+at async file:///home/runner/workspace/dist/index.js:38225:24
+2026-01-29 08:28:50.71
+b4bac5cf
+User
+at async file:///home/runner/workspace/node_modules/drizzle-orm/node-postgres/session.js:83:22
+2026-01-29 08:28:50.71
+b4bac5cf
+User
+at /home/runner/workspace/node_modules/pg-pool/index.js:45:11
+2026-01-29 08:28:50.71
+b4bac5cf
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-01-29 08:28:50.71
+b4bac5cf
+User
+error: column "custom_responses" does not exist
+2026-01-29 08:29:06.33
+b4bac5cf
+User
+at async file:///home/runner/workspace/node_modules/drizzle-orm/node-postgres/session.js:83:22
+2026-01-29 08:29:06.33
+b4bac5cf
+User
+at async file:///home/runner/workspace/dist/index.js:38225:24
+2026-01-29 08:29:06.33
+b4bac5cf
+User
+error: column "custom_responses" does not exist
+2026-01-29 08:29:06.33
+b4bac5cf
+User
+at /home/runner/workspace/node_modules/pg-pool/index.js:45:11
+2026-01-29 08:29:06.33
+b4bac5cf
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-01-29 08:33:51.25
+b4bac5cf
+User
+at /home/runner/workspace/node_modules/pg-pool/index.js:45:11
+2026-01-29 08:33:51.25
+b4bac5cf
+User
+at async file:///home/runner/workspace/node_modules/drizzle-orm/node-postgres/session.js:83:22
+2026-01-29 08:33:51.25
+b4bac5cf
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-01-29 08:33:51.25
+b4bac5cf
+User
+at async file:///home/runner/workspace/dist/index.js:38225:24
+2026-01-29 08:33:51.25
+b4bac5cf
+User
+error: column "custom_responses" does not exist
+2026-01-29 08:34:05.69
+b4bac5cf
+User
+at async file:///home/runner/workspace/node_modules/drizzle-orm/node-postgres/session.js:83:22
+2026-01-29 08:34:05.69
+b4bac5cf
+User
+error: column "custom_responses" does not exist
+2026-01-29 08:34:05.69
+b4bac5cf
+User
+at /home/runner/workspace/node_modules/pg-pool/index.js:45:11
