@@ -856,6 +856,23 @@ export default function ApplicationDetailSheet({
               {Object.entries(intakeData.customResponses).map(([fieldId, value]) => {
                 const field = formFields.find(f => f.id === fieldId);
                 const label = field?.label || fieldId;
+                const fieldType = field?.fieldType || 'text';
+                
+                if (fieldType === 'photo' && typeof value === 'string' && value.startsWith('http')) {
+                  return (
+                    <div key={fieldId} className="mb-3">
+                      <p className="text-sm font-medium text-muted-foreground">{label}</p>
+                      <img 
+                        src={value} 
+                        alt={label} 
+                        className="mt-1 max-w-[200px] max-h-[200px] rounded-lg border object-cover cursor-pointer hover:opacity-90"
+                        onClick={() => window.open(value, '_blank')}
+                        data-testid={`img-custom-response-${fieldId}`}
+                      />
+                    </div>
+                  );
+                }
+                
                 const displayValue = Array.isArray(value) 
                   ? value.join(', ') 
                   : typeof value === 'boolean' 
@@ -911,9 +928,30 @@ export default function ApplicationDetailSheet({
             <>
               <div className="border-t pt-2 mt-2" />
               <p className="text-sm font-medium text-muted-foreground">Additional Questions</p>
-              {Object.entries(fosterData.customResponses).map(([key, answer]) => (
-                <SummaryItem key={key} label={formatFieldLabel(key)} value={formatFieldValue(answer)} />
-              ))}
+              {Object.entries(fosterData.customResponses).map(([key, answer]) => {
+                const field = formFields.find(f => f.id === key);
+                const fieldType = field?.fieldType || 'text';
+                const label = field?.label || formatFieldLabel(key);
+                
+                if (fieldType === 'photo' && typeof answer === 'string' && answer.startsWith('http')) {
+                  return (
+                    <div key={key} className="mb-3">
+                      <p className="text-sm font-medium text-muted-foreground">{label}</p>
+                      <img 
+                        src={answer} 
+                        alt={label} 
+                        className="mt-1 max-w-[200px] max-h-[200px] rounded-lg border object-cover cursor-pointer hover:opacity-90"
+                        onClick={() => window.open(answer, '_blank')}
+                        data-testid={`img-custom-response-${key}`}
+                      />
+                    </div>
+                  );
+                }
+                
+                return (
+                  <SummaryItem key={key} label={label} value={formatFieldValue(answer)} />
+                );
+              })}
             </>
           )}
           {fosterData.notes && (
@@ -959,6 +997,23 @@ export default function ApplicationDetailSheet({
               {Object.entries(volunteerData.customResponses).map(([fieldId, value]) => {
                 const field = formFields.find(f => f.id === fieldId);
                 const label = field?.label || fieldId;
+                const fieldType = field?.fieldType || 'text';
+                
+                if (fieldType === 'photo' && typeof value === 'string' && value.startsWith('http')) {
+                  return (
+                    <div key={fieldId} className="mb-3">
+                      <p className="text-sm font-medium text-muted-foreground">{label}</p>
+                      <img 
+                        src={value} 
+                        alt={label} 
+                        className="mt-1 max-w-[200px] max-h-[200px] rounded-lg border object-cover cursor-pointer hover:opacity-90"
+                        onClick={() => window.open(value, '_blank')}
+                        data-testid={`img-custom-response-${fieldId}`}
+                      />
+                    </div>
+                  );
+                }
+                
                 const displayValue = Array.isArray(value) 
                   ? value.join(', ') 
                   : typeof value === 'boolean' 

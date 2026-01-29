@@ -13282,6 +13282,17 @@ If you have any questions, please contact us.
         }
       }
 
+      // Helper function for escaping HTML
+      const escapeHtml = (text: string): string => {
+        if (!text) return '';
+        return String(text)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#039;');
+      };
+
       // Create inbound email record for inbox
       const emailSubject = `Surrender Request from ${data.ownerName}`;
       const emailBody = `
@@ -13314,6 +13325,81 @@ Surrender Request ID: ${surrender.id}
 Submitted: ${new Date().toLocaleString()}
       `.trim();
 
+      // Format custom responses as HTML for inbox (with embedded photos)
+      let customResponsesHtml = '';
+      if (data.customResponses && Object.keys(data.customResponses).length > 0) {
+        customResponsesHtml = '<div style="margin-top: 15px; border-top: 1px solid #e2e8f0; padding-top: 15px;"><h4 style="margin: 0 0 10px 0;">Additional Form Responses</h4>';
+        for (const [fieldId, value] of Object.entries(data.customResponses)) {
+          if (value === undefined || value === null || value === '') continue;
+          const field = formFieldLabels.find(f => f.id === fieldId);
+          const label = field?.label || fieldId;
+          const fieldType = field?.fieldType || 'text';
+          
+          if (fieldType === 'photo' && typeof value === 'string' && value.startsWith('http')) {
+            customResponsesHtml += `<div style="margin: 10px 0;"><strong>${escapeHtml(label)}:</strong><br><img src="${escapeHtml(value)}" alt="${escapeHtml(label)}" style="max-width: 300px; max-height: 300px; border-radius: 8px; margin-top: 5px;" /></div>`;
+          } else if (Array.isArray(value)) {
+            customResponsesHtml += `<div style="margin: 5px 0;"><strong>${escapeHtml(label)}:</strong> ${value.map(v => escapeHtml(String(v))).join(', ')}</div>`;
+          } else if (typeof value === 'boolean') {
+            customResponsesHtml += `<div style="margin: 5px 0;"><strong>${escapeHtml(label)}:</strong> ${value ? 'Yes' : 'No'}</div>`;
+          } else {
+            customResponsesHtml += `<div style="margin: 5px 0;"><strong>${escapeHtml(label)}:</strong> ${escapeHtml(String(value))}</div>`;
+          }
+        }
+        customResponsesHtml += '</div>';
+      }
+
+      // Create HTML version of email body with embedded photos
+      const emailHtmlBody = `
+<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6;">
+  <h2 style="color: #1e293b; margin-bottom: 20px;">Surrender Request - ${escapeHtml(data.dogName)}</h2>
+  
+  <div style="background: #f8fafc; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+    <h3 style="margin: 0 0 10px 0; color: #334155;">Owner Information</h3>
+    <div><strong>Name:</strong> ${escapeHtml(data.ownerName)}</div>
+    <div><strong>Email:</strong> <a href="mailto:${escapeHtml(data.ownerEmail)}">${escapeHtml(data.ownerEmail)}</a></div>
+    <div><strong>Phone:</strong> ${escapeHtml(data.ownerPhone)}</div>
+    <div><strong>SMS Consent:</strong> ${data.smsConsent ? 'Yes' : 'No'}</div>
+  </div>
+  
+  <div style="background: #f8fafc; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+    <h3 style="margin: 0 0 10px 0; color: #334155;">Dog Information</h3>
+    <div><strong>Name:</strong> ${escapeHtml(data.dogName)}</div>
+    <div><strong>Breed:</strong> ${escapeHtml(data.dogBreed)}</div>
+    <div><strong>Age:</strong> ${escapeHtml(data.dogAge)}</div>
+    <div><strong>Gender:</strong> ${escapeHtml(data.dogGender)}</div>
+  </div>
+  
+  <div style="margin-bottom: 15px;">
+    <h3 style="margin: 0 0 10px 0; color: #334155;">Reason for Surrender</h3>
+    <p style="margin: 0; white-space: pre-wrap;">${escapeHtml(data.reasonForSurrender)}</p>
+  </div>
+  
+  <div style="margin-bottom: 15px;">
+    <h3 style="margin: 0 0 10px 0; color: #334155;">Medical Issues</h3>
+    <p style="margin: 0; white-space: pre-wrap;">${escapeHtml(data.medicalIssues || 'None provided')}</p>
+  </div>
+  
+  <div style="margin-bottom: 15px;">
+    <h3 style="margin: 0 0 10px 0; color: #334155;">Behavioral Issues</h3>
+    <p style="margin: 0; white-space: pre-wrap;">${escapeHtml(data.behavioralIssues || 'None provided')}</p>
+  </div>
+  
+  ${data.photoUrl ? `
+  <div style="margin-bottom: 15px;">
+    <h3 style="margin: 0 0 10px 0; color: #334155;">Photo</h3>
+    <img src="${escapeHtml(data.photoUrl)}" alt="Dog photo" style="max-width: 300px; max-height: 300px; border-radius: 8px;" />
+  </div>
+  ` : ''}
+  
+  ${customResponsesHtml}
+  
+  <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #e2e8f0; color: #64748b; font-size: 14px;">
+    <div><strong>Surrender Request ID:</strong> ${surrender.id}</div>
+    <div><strong>Submitted:</strong> ${new Date().toLocaleString()}</div>
+  </div>
+</div>
+      `.trim();
+
       try {
         await db.insert(inboundEmails).values({
           tenantId: req.tenant!.id,
@@ -13323,6 +13409,7 @@ Submitted: ${new Date().toLocaleString()}
           to: `${req.tenant!.subdomain}@mail.irescue.life`,
           subject: emailSubject,
           textBody: emailBody,
+          htmlBody: emailHtmlBody,
           receivedAt: new Date(),
           status: 'unread',
         });

@@ -204,14 +204,14 @@ export async function sendFormSubmissionNotification(data: FormSubmissionData): 
       <p>You've received a new ${formLabel.toLowerCase()} submission.</p>
       
       <div class="detail">
-        <span class="label">Name:</span> ${data.applicantName}
+        <span class="label">Name:</span> ${escapeHtml(data.applicantName)}
       </div>
       <div class="detail">
-        <span class="label">Email:</span> <a href="mailto:${data.applicantEmail}">${data.applicantEmail}</a>
+        <span class="label">Email:</span> <a href="mailto:${escapeHtml(data.applicantEmail)}">${escapeHtml(data.applicantEmail)}</a>
       </div>
-      ${data.applicantPhone ? `<div class="detail"><span class="label">Phone:</span> ${data.applicantPhone}</div>` : ''}
-      ${data.animalName ? `<div class="detail"><span class="label">Animal:</span> ${data.animalName}</div>` : ''}
-      ${data.additionalDetails ? `<div class="detail"><span class="label">Details:</span> ${data.additionalDetails}</div>` : ''}
+      ${data.applicantPhone ? `<div class="detail"><span class="label">Phone:</span> ${escapeHtml(data.applicantPhone)}</div>` : ''}
+      ${data.animalName ? `<div class="detail"><span class="label">Animal:</span> ${escapeHtml(data.animalName)}</div>` : ''}
+      ${data.additionalDetails ? `<div class="detail"><span class="label">Details:</span> ${escapeHtml(data.additionalDetails)}</div>` : ''}
       
       ${data.customResponses && data.formFieldLabels ? formatCustomResponsesHtml(data.customResponses, data.formFieldLabels) : ''}
       
