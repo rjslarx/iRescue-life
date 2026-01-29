@@ -8107,14 +8107,17 @@ Crawl-delay: 1
         })
         .where(eq(fosterAgreementSessions.id, session.id));
 
-      // Update foster application to 'in_foster' status
+      // Update foster application to 'active_pool' status (approved foster)
       await db
         .update(fosterApplications)
         .set({
-          pipelineStatus: 'in_foster',
+          pipelineStatus: 'active_pool',
+          status: 'approved',
           updatedAt: new Date(),
         })
         .where(eq(fosterApplications.id, session.fosterApplicationId));
+      
+      console.log(`[Foster Agreement] Updated application ${session.fosterApplicationId} to active_pool status`);
 
       // Send confirmation emails with signed agreement
       try {
