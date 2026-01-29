@@ -483,6 +483,8 @@ export const animals = pgTable("animals", {
   mergedWithId: uuid("merged_with_id").references(() => animals.id, { onDelete: 'set null' }),
   intakeDate: timestamp("intake_date").notNull().defaultNow(),
   intakeSource: text("intake_source").$type<"stray" | "owner_surrender" | "transfer" | "born_in_care" | "other">(), // How the animal came to the rescue
+  locationFound: text("location_found"), // Where the stray animal was found (address or intersection)
+  strayHoldUntil: timestamp("stray_hold_until"), // Date when stray hold expires
   weight: text("weight"), // Current weight (e.g., "25 lbs", "4.2 kg")
   activityLevel: text("activity_level").$type<"low" | "moderate" | "high">(), // Energy/activity level
   dietaryRestrictions: text("dietary_restrictions"), // Special diet notes

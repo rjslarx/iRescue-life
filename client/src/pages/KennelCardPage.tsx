@@ -812,6 +812,23 @@ export default function KennelCardPage() {
                 <p className="text-muted-foreground text-sm">Activity Level</p>
                 <p className="font-semibold">{activityInfo.label}</p>
               </div>
+              {/* Stray-specific fields */}
+              {(animal.intakeSource === 'stray' || animal.status === 'stray_hold') && (
+                <>
+                  <div>
+                    <p className="text-muted-foreground text-sm">Location Found</p>
+                    <p className="font-semibold" data-testid="text-location-found">
+                      {animal.locationFound || 'Not recorded'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground text-sm">Stray Hold Until</p>
+                    <p className={`font-semibold ${animal.strayHoldUntil && new Date(animal.strayHoldUntil) > new Date() ? 'text-orange-600' : ''}`} data-testid="text-stray-hold-until">
+                      {animal.strayHoldUntil ? format(new Date(animal.strayHoldUntil), 'MMM d, yyyy') : 'Not set'}
+                    </p>
+                  </div>
+                </>
+              )}
             </div>
           </CardContent>
         </Card>

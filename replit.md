@@ -86,6 +86,15 @@ When volunteers or fosters are moved to `active_pool` status, the system automat
 - Signed waivers/agreements are accessible via "Documents" tab in the application detail dialog
 - PDF download endpoint (`/api/signed-documents/:id/download`) generates legal-grade documents using Puppeteer
 
+**Staff Kennel Cards:**
+Printable kennel cards designed for single-page printing with comprehensive animal information:
+- Header: Animal name, ID, microchip barcode, Staff Portal QR code (scan to edit), and print timestamp
+- Safety banner with color-coded behavior rating (green/yellow/red/purple)
+- Compact status indicators: Kids/Cats/Dogs friendly, Heartworm (HW+/-), Spay/Neuter status
+- Logistics grid: Intake date, source, weight, activity level
+- Stray-specific fields: Location found and stray hold until date (only shown for strays)
+- Medical notes and staff notes sections
+
 **Technical Implementations:**
 The "Paw Pay" platform fee system uses Stripe Connect with a "SaaS + 0%" two-tier model (Free and Professional tiers). A Pro trial system is in place, allowing organizations a 14-day trial before reverting to the Free tier. Stripe Standard Connect OAuth enables tenant-owned Stripe accounts, and a "Donor Covers Fees" feature calculates gross-up amounts. Sensitive data is protected with AES-256-GCM encryption. Unified file storage prioritizes Google Drive, falling back to Replit object storage. Email services use Resend, with optional Google Workspace Gmail API integration. Platform admin security features subdomain resolution, RBAC, frontend guards, authenticated sessions, and TOTP MFA. Production security includes rate limiting, Helmet security headers, CORS fail-closed, and session hardening. Google Analytics 4 is integrated. Optional Google Workspace integration provides Gmail API, Calendar sync, and Drive storage, optimized for CASA OAuth scopes.
 
