@@ -1061,6 +1061,7 @@ export const surrenderRequests = pgTable("surrender_requests", {
   preferredSurrenderDate: date("preferred_surrender_date"),
   smsConsent: boolean("sms_consent").notNull().default(false),
   notes: text("notes"),
+  customResponses: jsonb("custom_responses").$type<Record<string, any>>(),
   assignedUserId: uuid("assigned_user_id").references(() => users.id),
   declinedReason: text("declined_reason"),
   declinedAt: timestamp("declined_at"),

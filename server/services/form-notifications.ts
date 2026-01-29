@@ -4,6 +4,12 @@ import { eq } from 'drizzle-orm';
 
 export type FormType = 'adoption' | 'foster' | 'volunteer' | 'surrender';
 
+interface FormFieldLabel {
+  id: string;
+  label: string;
+  fieldType: string;
+}
+
 interface FormSubmissionData {
   formType: FormType;
   tenantId: string;
@@ -13,6 +19,91 @@ interface FormSubmissionData {
   applicationId: string;
   animalName?: string;
   additionalDetails?: string;
+  customResponses?: Record<string, any>;
+  formFieldLabels?: FormFieldLabel[];
+}
+
+function escapeHtml(text: string): string {
+  if (!text) return '';
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function formatCustomResponsesHtml(
+  customResponses: Record<string, any>,
+  formFieldLabels: FormFieldLabel[]
+): string {
+  if (!customResponses || Object.keys(customResponses).length === 0) {
+    return '';
+  }
+
+  const lines: string[] = [];
+  lines.push('<div style="margin-top: 20px; border-top: 1px solid #e2e8f0; padding-top: 15px;">');
+  lines.push('<h3 style="margin: 0 0 15px 0; color: #1e293b; font-size: 16px;">Additional Form Responses</h3>');
+
+  for (const [fieldId, value] of Object.entries(customResponses)) {
+    if (value === undefined || value === null || value === '') continue;
+
+    const field = formFieldLabels.find(f => f.id === fieldId);
+    const label = field?.label || fieldId;
+    const fieldType = field?.fieldType || 'text';
+
+    if (fieldType === 'photo' && typeof value === 'string' && value.startsWith('http')) {
+      lines.push(`<div class="detail" style="margin: 12px 0;">
+        <span class="label" style="font-weight: 600; color: #64748b;">${escapeHtml(label)}:</span>
+        <div style="margin-top: 8px;">
+          <img src="${escapeHtml(value)}" alt="${escapeHtml(label)}" style="max-width: 300px; max-height: 300px; border-radius: 8px; border: 1px solid #e2e8f0;" />
+        </div>
+      </div>`);
+    } else if (Array.isArray(value)) {
+      lines.push(`<div class="detail" style="margin: 8px 0;">
+        <span class="label" style="font-weight: 600; color: #64748b;">${escapeHtml(label)}:</span> ${value.map(v => escapeHtml(String(v))).join(', ')}
+      </div>`);
+    } else if (typeof value === 'boolean') {
+      lines.push(`<div class="detail" style="margin: 8px 0;">
+        <span class="label" style="font-weight: 600; color: #64748b;">${escapeHtml(label)}:</span> ${value ? 'Yes' : 'No'}
+      </div>`);
+    } else {
+      lines.push(`<div class="detail" style="margin: 8px 0;">
+        <span class="label" style="font-weight: 600; color: #64748b;">${escapeHtml(label)}:</span> ${escapeHtml(String(value))}
+      </div>`);
+    }
+  }
+
+  lines.push('</div>');
+  return lines.join('\n');
+}
+
+function formatCustomResponsesText(
+  customResponses: Record<string, any>,
+  formFieldLabels: FormFieldLabel[]
+): string {
+  if (!customResponses || Object.keys(customResponses).length === 0) {
+    return '';
+  }
+
+  const lines: string[] = ['\n--- Additional Form Responses ---\n'];
+
+  for (const [fieldId, value] of Object.entries(customResponses)) {
+    if (value === undefined || value === null || value === '') continue;
+
+    const field = formFieldLabels.find(f => f.id === fieldId);
+    const label = field?.label || fieldId;
+
+    if (Array.isArray(value)) {
+      lines.push(`${label}: ${value.join(', ')}`);
+    } else if (typeof value === 'boolean') {
+      lines.push(`${label}: ${value ? 'Yes' : 'No'}`);
+    } else {
+      lines.push(`${label}: ${String(value)}`);
+    }
+  }
+
+  return lines.join('\n');
 }
 
 function getFormTypeLabel(formType: FormType): string {
@@ -122,6 +213,8 @@ export async function sendFormSubmissionNotification(data: FormSubmissionData): 
       ${data.animalName ? `<div class="detail"><span class="label">Animal:</span> ${data.animalName}</div>` : ''}
       ${data.additionalDetails ? `<div class="detail"><span class="label">Details:</span> ${data.additionalDetails}</div>` : ''}
       
+      ${data.customResponses && data.formFieldLabels ? formatCustomResponsesHtml(data.customResponses, data.formFieldLabels) : ''}
+      
       <a href="${baseUrl}${dashboardPath}" class="button">View in Dashboard</a>
     </div>
     <div class="footer">
@@ -135,6 +228,10 @@ export async function sendFormSubmissionNotification(data: FormSubmissionData): 
 </html>
     `.trim();
 
+    const customResponsesText = data.customResponses && data.formFieldLabels 
+      ? formatCustomResponsesText(data.customResponses, data.formFieldLabels)
+      : '';
+    
     const textBody = `
 New ${formLabel} from ${data.applicantName}
 
@@ -145,6 +242,7 @@ Email: ${data.applicantEmail}
 ${data.applicantPhone ? `Phone: ${data.applicantPhone}` : ''}
 ${data.animalName ? `Animal: ${data.animalName}` : ''}
 ${data.additionalDetails ? `Details: ${data.additionalDetails}` : ''}
+${customResponsesText}
 
 View in Dashboard: ${baseUrl}${dashboardPath}
 

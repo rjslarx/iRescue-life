@@ -13221,7 +13221,7 @@ If you have any questions, please contact us.
    */
   app.post('/api/surrender', requireTenant, async (req, res, next) => {
     try {
-      const { surrenderRequests, insertSurrenderRequestSchema, inboundEmails } = await import('@shared/schema');
+      const { surrenderRequests, insertSurrenderRequestSchema, inboundEmails, surrenderFormFields } = await import('@shared/schema');
       
       const data = insertSurrenderRequestSchema.parse({
         ...req.body,
@@ -13232,6 +13232,21 @@ If you have any questions, please contact us.
         .insert(surrenderRequests)
         .values([data as any])
         .returning();
+
+      // Fetch form field labels for email notification
+      let formFieldLabels: { id: string; label: string; fieldType: string }[] = [];
+      try {
+        const fields = await db.select({
+          id: surrenderFormFields.id,
+          label: surrenderFormFields.label,
+          fieldType: surrenderFormFields.fieldType,
+        })
+        .from(surrenderFormFields)
+        .where(eq(surrenderFormFields.tenantId, req.tenant!.id));
+        formFieldLabels = fields;
+      } catch (fieldsError) {
+        console.error('Failed to fetch surrender form fields for email:', fieldsError);
+      }
 
       // Create/update contact from this surrender request
       try {
@@ -13247,6 +13262,24 @@ If you have any questions, please contact us.
         });
       } catch (contactError) {
         console.error('Failed to create contact from surrender request:', contactError);
+      }
+
+      // Format custom responses for inbound email
+      let customResponsesText = '';
+      if (data.customResponses && Object.keys(data.customResponses).length > 0) {
+        customResponsesText = '\n\nAdditional Form Responses:\n';
+        for (const [fieldId, value] of Object.entries(data.customResponses)) {
+          if (value === undefined || value === null || value === '') continue;
+          const field = formFieldLabels.find(f => f.id === fieldId);
+          const label = field?.label || fieldId;
+          if (Array.isArray(value)) {
+            customResponsesText += `${label}: ${value.join(', ')}\n`;
+          } else if (typeof value === 'boolean') {
+            customResponsesText += `${label}: ${value ? 'Yes' : 'No'}\n`;
+          } else {
+            customResponsesText += `${label}: ${String(value)}\n`;
+          }
+        }
       }
 
       // Create inbound email record for inbox
@@ -13276,7 +13309,7 @@ Behavioral Issues:
 ${data.behavioralIssues || 'None provided'}
 
 ${data.photoUrl ? `Photo: ${data.photoUrl}` : ''}
-
+${customResponsesText}
 Surrender Request ID: ${surrender.id}
 Submitted: ${new Date().toLocaleString()}
       `.trim();
@@ -13309,6 +13342,8 @@ Submitted: ${new Date().toLocaleString()}
           applicationId: surrender.id,
           animalName: data.dogName,
           additionalDetails: `${data.dogBreed} - ${data.dogAge} - ${data.dogGender}`,
+          customResponses: data.customResponses,
+          formFieldLabels: formFieldLabels,
         });
       } catch (notificationError) {
         console.error('Failed to send surrender notification email:', notificationError);
