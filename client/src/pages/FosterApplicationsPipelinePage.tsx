@@ -138,12 +138,14 @@ export default function FosterApplicationsPipelinePage() {
 
   const applications = (data?.applications || []).map(app => {
     const agreementStatus = agreementSessionsByAppId.get(app.id);
+    // Use pipelineStatus for proper pipeline stage, falling back to status for backwards compatibility
+    const pipelineStage = app.pipelineStatus || (app.status === 'pending' ? 'new_app' : app.status === 'approved' ? 'active_pool' : app.status);
     return {
       id: app.id,
       applicantName: app.applicantName,
       email: app.applicantEmail,
       phone: app.applicantPhone,
-      stage: app.status,
+      stage: pipelineStage,
       hasYard: app.hasYard,
       hasFencedYard: (app as any).hasFencedYard,
       acceptsLargeDogs: (app as any).acceptsLargeDogs,
