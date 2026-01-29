@@ -19,6 +19,7 @@ const prescriptionSchema = z.object({
   frequency: z.string().min(1, "Frequency is required"),
   route: z.string().min(1, "Route is required"),
   startDate: z.string().min(1, "Start date is required"),
+  nextScheduledDose: z.string().optional(),
   endDate: z.string().optional(),
   isControlledSubstance: z.boolean().optional(),
   notes: z.string().optional(),
@@ -40,6 +41,7 @@ interface Prescription {
   frequency: string;
   route: string;
   startDate: string;
+  nextScheduledDose?: string | null;
   endDate?: string | null;
   isControlledSubstance?: boolean;
   notes?: string | null;
@@ -77,6 +79,7 @@ export function AddPrescriptionDialog({ animalId, open, onOpenChange, prescripti
       frequency: "",
       route: "",
       startDate: new Date().toISOString().split('T')[0],
+      nextScheduledDose: "",
       endDate: "",
       isControlledSubstance: false,
       notes: "",
@@ -89,6 +92,11 @@ export function AddPrescriptionDialog({ animalId, open, onOpenChange, prescripti
       grantId: "",
     },
   });
+  
+  // Watch startDate to conditionally show nextScheduledDose field
+  const watchedStartDate = form.watch("startDate");
+  const today = new Date().toISOString().split('T')[0];
+  const isStartDateInPast = watchedStartDate && watchedStartDate < today;
 
   // Reset form when prescription changes (for editing)
   const { reset } = form;
@@ -100,6 +108,7 @@ export function AddPrescriptionDialog({ animalId, open, onOpenChange, prescripti
         frequency: prescription.frequency || "",
         route: prescription.route || "",
         startDate: prescription.startDate ? new Date(prescription.startDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+        nextScheduledDose: prescription.nextScheduledDose ? new Date(prescription.nextScheduledDose).toISOString().split('T')[0] : "",
         endDate: prescription.endDate ? new Date(prescription.endDate).toISOString().split('T')[0] : "",
         isControlledSubstance: prescription.isControlledSubstance || false,
         notes: prescription.notes || "",
@@ -118,6 +127,7 @@ export function AddPrescriptionDialog({ animalId, open, onOpenChange, prescripti
         frequency: "",
         route: "",
         startDate: new Date().toISOString().split('T')[0],
+        nextScheduledDose: "",
         endDate: "",
         isControlledSubstance: false,
         notes: "",
@@ -131,6 +141,13 @@ export function AddPrescriptionDialog({ animalId, open, onOpenChange, prescripti
       });
     }
   }, [prescription, open, reset]);
+  
+  // Auto-set nextScheduledDose to today when startDate changes to past
+  useEffect(() => {
+    if (isStartDateInPast && !form.getValues("nextScheduledDose")) {
+      form.setValue("nextScheduledDose", today);
+    }
+  }, [isStartDateInPast, today, form]);
 
   const createMutation = useMutation({
     mutationFn: async (data: PrescriptionFormData) => {
@@ -297,6 +314,25 @@ export function AddPrescriptionDialog({ animalId, open, onOpenChange, prescripti
                 )}
               />
             </div>
+
+            {isStartDateInPast && (
+              <FormField
+                control={form.control}
+                name="nextScheduledDose"
+                render={({ field }) => (
+                  <FormItem className="rounded-md border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950 p-4">
+                    <FormLabel className="text-amber-800 dark:text-amber-200">Next Dose Due *</FormLabel>
+                    <FormControl>
+                      <Input type="date" {...field} data-testid="input-next-scheduled-dose" />
+                    </FormControl>
+                    <FormDescription className="text-xs text-amber-700 dark:text-amber-300">
+                      Since the start date is in the past, specify when the next dose is due to avoid creating overdue tasks for historical entries.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             <FormField
               control={form.control}

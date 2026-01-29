@@ -23120,6 +23120,7 @@ Email: ${application.applicantEmail || ''}`
       // Convert empty strings to undefined for optional fields (dates, numerics)
       const bodyData = {
         ...req.body,
+        nextScheduledDose: req.body.nextScheduledDose === '' ? undefined : req.body.nextScheduledDose,
         endDate: req.body.endDate === '' ? undefined : req.body.endDate,
         billAmount: req.body.billAmount === '' ? undefined : req.body.billAmount,
         billPaidAmount: req.body.billPaidAmount === '' ? undefined : req.body.billPaidAmount,
@@ -23127,6 +23128,17 @@ Email: ${application.applicantEmail || ''}`
       };
       
       const data = insertMedicalPrescriptionSchema.parse(bodyData);
+
+      // Server-side enforcement: If startDate is in the past and nextScheduledDose is not provided,
+      // automatically set nextScheduledDose to today to prevent generating overdue tasks
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const prescriptionStartDate = new Date(data.startDate);
+      prescriptionStartDate.setHours(0, 0, 0, 0);
+      
+      if (prescriptionStartDate < today && !data.nextScheduledDose) {
+        data.nextScheduledDose = today;
+      }
 
       // Security: Validate grantId belongs to this tenant if provided
       if (data.grantId) {
@@ -23183,8 +23195,13 @@ Email: ${application.applicantEmail || ''}`
         .returning();
 
       // Generate doses based on frequency and date range
+      // If nextScheduledDose is set (for backlogged/historical entries), use it as the starting point
+      // This prevents creating overdue tasks for dates between startDate and nextScheduledDose
       const doses = [];
-      const start = new Date(prescription.startDate);
+      const doseStartDate = prescription.nextScheduledDose 
+        ? new Date(prescription.nextScheduledDose) 
+        : new Date(prescription.startDate);
+      const start = doseStartDate;
       const end = prescription.endDate ? new Date(prescription.endDate) : new Date(start.getTime() + 30 * 24 * 60 * 60 * 1000); // Default 30 days
       
       // Limit max duration to 90 days to prevent timeout from generating too many doses

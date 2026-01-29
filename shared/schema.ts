@@ -1694,6 +1694,7 @@ export const medicalPrescriptions = pgTable("medical_prescriptions", {
   route: text("route").notNull().$type<"PO" | "SQ" | "IM" | "IV" | "Topical" | "Other">(),
   frequency: text("frequency").notNull(),
   startDate: timestamp("start_date").notNull(),
+  nextScheduledDose: timestamp("next_scheduled_dose"),
   endDate: timestamp("end_date"),
   notes: text("notes"),
   isControlledSubstance: boolean("is_controlled_substance").notNull().default(false),
@@ -1717,6 +1718,7 @@ export const insertMedicalPrescriptionSchema = createInsertSchema(medicalPrescri
   createdAt: true,
 }).extend({
   startDate: z.coerce.date(),
+  nextScheduledDose: z.coerce.date().optional(),
   endDate: z.coerce.date().optional(),
 });
 export type InsertMedicalPrescription = z.infer<typeof insertMedicalPrescriptionSchema>;
