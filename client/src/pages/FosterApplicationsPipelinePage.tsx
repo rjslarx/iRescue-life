@@ -136,10 +136,17 @@ export default function FosterApplicationsPipelinePage() {
     return map;
   }, [agreementSessionsData]);
 
+  // Valid foster pipeline stages - unrecognized statuses default to 'new_app' to prevent vanishing
+  const validFosterStages = ['new_app', 'interview', 'home_check', 'orientation', 'agreement', 'active_pool', 'rejected'];
+  
   const applications = (data?.applications || []).map(app => {
     const agreementStatus = agreementSessionsByAppId.get(app.id);
     // Use pipelineStatus for proper pipeline stage, falling back to status for backwards compatibility
-    const pipelineStage = app.pipelineStatus || (app.status === 'pending' ? 'new_app' : app.status === 'approved' ? 'active_pool' : app.status);
+    let pipelineStage = app.pipelineStatus || (app.status === 'pending' ? 'new_app' : app.status === 'approved' ? 'active_pool' : app.status);
+    // Fallback unrecognized statuses to 'new_app' so they don't disappear
+    if (!validFosterStages.includes(pipelineStage)) {
+      pipelineStage = 'new_app';
+    }
     return {
       id: app.id,
       applicantName: app.applicantName,

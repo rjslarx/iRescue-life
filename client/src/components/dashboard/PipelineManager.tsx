@@ -391,12 +391,21 @@ export default function PipelineManager({ activeTab, onTabChange }: PipelineMana
     createdAt: a.createdAt,
   }));
 
-  const fosterItems: PipelineItemData[] = (fosters || []).map(f => ({
-    id: f.id,
-    name: f.applicantName,
-    status: f.pipelineStatus || (f.status === 'pending' ? 'new_app' : f.status === 'approved' ? 'active_pool' : f.status),
-    createdAt: f.createdAt,
-  }));
+  // Valid foster pipeline stages - unrecognized statuses default to 'new_app' to prevent vanishing
+  const validFosterStages = ['new_app', 'interview', 'home_check', 'orientation', 'agreement', 'active_pool', 'rejected'];
+  const fosterItems: PipelineItemData[] = (fosters || []).map(f => {
+    let status = f.pipelineStatus || (f.status === 'pending' ? 'new_app' : f.status === 'approved' ? 'active_pool' : f.status);
+    // Fallback unrecognized statuses to 'new_app' so they don't disappear
+    if (!validFosterStages.includes(status)) {
+      status = 'new_app';
+    }
+    return {
+      id: f.id,
+      name: f.applicantName,
+      status,
+      createdAt: f.createdAt,
+    };
+  });
 
   const volunteerItems: PipelineItemData[] = (volunteers || []).map(v => ({
     id: v.id,
