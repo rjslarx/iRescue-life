@@ -8119,6 +8119,35 @@ Crawl-delay: 1
       
       console.log(`[Foster Agreement] Updated application ${session.fosterApplicationId} to active_pool status`);
 
+      // Create Google Drive folder for the foster (same automation as when manually moved to active_pool)
+      // Check if folder already exists to avoid duplicates
+      const [fosterAppForFolder] = await db
+        .select({ driveFolderId: fosterApplications.driveFolderId })
+        .from(fosterApplications)
+        .where(eq(fosterApplications.id, session.fosterApplicationId))
+        .limit(1);
+      
+      if (!fosterAppForFolder?.driveFolderId) {
+        try {
+          const { VolunteerFosterBackupService } = await import('./lib/volunteerFosterBackupService');
+          const backupService = new VolunteerFosterBackupService(session.tenantId);
+          
+          const result = await backupService.createFosterFolder({
+            id: session.fosterApplicationId,
+            applicantName: signatureData.signerName,
+            applicantEmail: signatureData.signerEmail,
+          });
+          
+          if (result.success) {
+            console.log(`[Foster Agreement] Created ${result.storageType} folder for ${signatureData.signerName}`);
+          }
+        } catch (folderError) {
+          console.error('[Foster Agreement] Error creating folder:', folderError);
+        }
+      } else {
+        console.log(`[Foster Agreement] Folder already exists for application ${session.fosterApplicationId}, skipping creation`);
+      }
+
       // Send confirmation emails with signed agreement
       try {
         const { EmailService } = await import('./lib/email-service');
@@ -9076,6 +9105,28 @@ Crawl-delay: 1
             });
             
             console.log(`[Volunteer Automation] Auto-advanced ${volunteerApp.applicantEmail} from waiver_needed to active_pool`);
+            
+            // Create Google Drive folder for the volunteer (if not already created)
+            if (!volunteerApp.driveFolderId) {
+              try {
+                const { VolunteerFosterBackupService } = await import('./lib/volunteerFosterBackupService');
+                const backupService = new VolunteerFosterBackupService(submission.tenantId);
+                
+                const folderResult = await backupService.createVolunteerFolder({
+                  id: volunteerApp.id,
+                  applicantName: volunteerApp.applicantName,
+                  applicantEmail: volunteerApp.applicantEmail,
+                });
+                
+                if (folderResult.success) {
+                  console.log(`[Volunteer Automation] Created ${folderResult.storageType} folder for ${volunteerApp.applicantName}`);
+                }
+              } catch (folderError) {
+                console.error('[Volunteer Automation] Error creating folder:', folderError);
+              }
+            } else {
+              console.log(`[Volunteer Automation] Folder already exists for ${volunteerApp.applicantName}, skipping creation`);
+            }
           }
         } catch (automationError) {
           // Log error but don't fail the form submission
@@ -9141,6 +9192,28 @@ Crawl-delay: 1
             });
             
             console.log(`[Foster Automation] Auto-advanced ${fosterApp.applicantEmail} from agreement to active_pool`);
+            
+            // Create Google Drive folder for the foster (if not already created)
+            if (!fosterApp.driveFolderId) {
+              try {
+                const { VolunteerFosterBackupService } = await import('./lib/volunteerFosterBackupService');
+                const backupService = new VolunteerFosterBackupService(submission.tenantId);
+                
+                const folderResult = await backupService.createFosterFolder({
+                  id: fosterApp.id,
+                  applicantName: fosterApp.applicantName,
+                  applicantEmail: fosterApp.applicantEmail,
+                });
+                
+                if (folderResult.success) {
+                  console.log(`[Foster Automation] Created ${folderResult.storageType} folder for ${fosterApp.applicantName}`);
+                }
+              } catch (folderError) {
+                console.error('[Foster Automation] Error creating folder:', folderError);
+              }
+            } else {
+              console.log(`[Foster Automation] Folder already exists for ${fosterApp.applicantName}, skipping creation`);
+            }
           }
         } catch (automationError) {
           // Log error but don't fail the form submission
