@@ -8116,36 +8116,107 @@ Crawl-delay: 1
         })
         .where(eq(fosterApplications.id, session.fosterApplicationId));
 
-      // Send confirmation email
+      // Send confirmation emails with signed agreement
       try {
         const { EmailService } = await import('./lib/email-service');
         const [tenant] = await db
-          .select({ name: tenants.name })
+          .select({ name: tenants.name, contactEmail: tenants.contactEmail })
           .from(tenants)
           .where(eq(tenants.id, session.tenantId))
           .limit(1);
         
         const emailService = await EmailService.forTenant(session.tenantId);
+        const signedDate = new Date().toLocaleString();
+        
+        // Sanitize user-provided data for email HTML
+        const safeName = escapeHtml(signatureData.signerName);
+        const safeEmail = escapeHtml(signatureData.signerEmail);
+        const safePhone = escapeHtml(session.fosterPhone || 'Not provided');
+        const safeTenantName = escapeHtml(tenant?.name || 'Animal Rescue Organization');
+        const safeIp = escapeHtml(req.ip || 'Not recorded');
+        
+        // Build the signed agreement HTML with embedded signature
+        const signedAgreementHtml = `
+          <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; border: 1px solid #ddd;">
+            <div style="text-align: center; margin-bottom: 20px; padding-bottom: 20px; border-bottom: 2px solid #333;">
+              <h1 style="color: #333; margin: 0;">Foster Agreement</h1>
+              <p style="color: #666; margin: 5px 0;">${safeTenantName}</p>
+            </div>
+            
+            ${renderedContract || '<p>Agreement content not available.</p>'}
+            
+            <div style="margin-top: 40px; padding-top: 20px; border-top: 2px solid #333;">
+              <h3 style="color: #333;">Electronic Signature</h3>
+              <div style="margin: 20px 0;">
+                <img src="${signatureData.signatureImageData}" alt="Signature" style="max-width: 300px; border-bottom: 1px solid #333;" />
+              </div>
+              <p style="margin: 5px 0;"><strong>Signed by:</strong> ${safeName}</p>
+              <p style="margin: 5px 0;"><strong>Email:</strong> ${safeEmail}</p>
+              <p style="margin: 5px 0;"><strong>Date:</strong> ${signedDate}</p>
+              <p style="margin: 5px 0;"><strong>IP Address:</strong> ${safeIp}</p>
+            </div>
+            
+            <div style="margin-top: 30px; padding: 15px; background-color: #f5f5f5; border-radius: 5px;">
+              <p style="color: #666; font-size: 12px; margin: 0;">
+                This document was electronically signed and is legally binding. A copy has been sent to all parties.
+              </p>
+            </div>
+          </div>
+        `;
+        
+        // Send confirmation email to foster applicant with signed agreement
         await emailService.send({
           to: signatureData.signerEmail,
-          subject: 'Foster Agreement Signed - Confirmation',
+          subject: `Your Signed Foster Agreement - ${safeTenantName}`,
           html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2 style="color: #333;">Foster Agreement Signed</h2>
-              <p>Hi ${signatureData.signerName},</p>
-              <p>Thank you for signing the foster agreement with ${tenant?.name || 'us'}.</p>
-              <p>Your signed agreement has been recorded and the rescue organization has been notified.</p>
-              <p>They will be in touch with next steps for picking up your foster pet.</p>
+            <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto;">
+              <h2 style="color: #333;">Thank You for Signing!</h2>
+              <p>Hi ${safeName},</p>
+              <p>Thank you for signing the foster agreement with <strong>${safeTenantName}</strong>.</p>
+              <p>Your signed agreement is attached below for your records. The rescue organization has been notified and will be in touch with next steps.</p>
+              <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+              
+              <h3 style="color: #333;">Your Signed Agreement</h3>
+              ${signedAgreementHtml}
+              
               <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
               <p style="color: #666; font-size: 12px;">
-                Signed on: ${new Date().toLocaleString()}<br />
-                By: ${signatureData.signerName} (${signatureData.signerEmail})
+                Please keep this email for your records.
               </p>
             </div>
           `,
         });
+        
+        console.log(`[Foster Agreement] Sent confirmation to foster: ${signatureData.signerEmail}`);
+        
+        // Send notification to rescue organization's contact email
+        if (tenant?.contactEmail) {
+          await emailService.send({
+            to: tenant.contactEmail,
+            subject: `Foster Agreement Signed - ${safeName}`,
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto;">
+                <h2 style="color: #22c55e;">Foster Agreement Signed!</h2>
+                <p>Great news! A foster agreement has been signed:</p>
+                <ul style="line-height: 1.8;">
+                  <li><strong>Foster Name:</strong> ${safeName}</li>
+                  <li><strong>Email:</strong> ${safeEmail}</li>
+                  <li><strong>Phone:</strong> ${safePhone}</li>
+                  <li><strong>Signed:</strong> ${signedDate}</li>
+                </ul>
+                <p>The foster applicant has been moved to "In Foster" status and is ready for their foster pet!</p>
+                <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+                
+                <h3 style="color: #333;">Signed Agreement Copy</h3>
+                ${signedAgreementHtml}
+              </div>
+            `,
+          });
+          
+          console.log(`[Foster Agreement] Sent notification to org: ${tenant.contactEmail}`);
+        }
       } catch (emailError) {
-        console.error('Failed to send foster agreement confirmation email:', emailError);
+        console.error('Failed to send foster agreement confirmation emails:', emailError);
       }
 
       res.json({ success: true });
