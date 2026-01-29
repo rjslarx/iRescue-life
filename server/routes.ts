@@ -11757,51 +11757,74 @@ Submitted: ${new Date().toLocaleString()}
 
       // ========================================================================
       // AUTOMATION: Send foster agreement email when status changes to 'agreement'
+      // Uses Foster Contract Templates (not Custom Forms)
       // ========================================================================
       const statusChangedToAgreement = data.pipelineStatus === 'agreement' && oldPipelineStatus !== 'agreement';
       if (statusChangedToAgreement && updatedApplication.applicantEmail) {
         try {
           const { EmailService } = await import('./lib/email-service');
-          const { customForms, customFormSubmissions } = await import('@shared/schema');
-          const { generateSecureToken } = await import('./services/custom-form');
+          const { fosterContractTemplates, fosterAgreementSessions } = await import('@shared/schema');
+          const crypto = await import('crypto');
+          const bcrypt = await import('bcrypt');
           
-          // Find a foster agreement form for this tenant
-          // Look for forms with "foster" AND ("agreement" OR "contract") in the name
-          const [fosterAgreementForm] = await db
+          // Find the default foster contract template for this tenant
+          const [fosterTemplate] = await db
             .select()
-            .from(customForms)
+            .from(fosterContractTemplates)
             .where(
               and(
-                eq(customForms.tenantId, req.tenant!.id),
-                eq(customForms.isActive, true),
-                sql`LOWER(${customForms.name}) LIKE '%foster%' AND (LOWER(${customForms.name}) LIKE '%agreement%' OR LOWER(${customForms.name}) LIKE '%contract%')`
+                eq(fosterContractTemplates.tenantId, req.tenant!.id),
+                eq(fosterContractTemplates.isActive, true),
+                eq(fosterContractTemplates.isDefault, true)
               )
             )
             .limit(1);
           
-          if (fosterAgreementForm) {
-            // Generate a form submission token for the foster applicant
-            const { token, hash: tokenHash } = generateSecureToken();
+          // If no default, try to get any active foster template
+          const template = fosterTemplate || (await db
+            .select()
+            .from(fosterContractTemplates)
+            .where(
+              and(
+                eq(fosterContractTemplates.tenantId, req.tenant!.id),
+                eq(fosterContractTemplates.isActive, true)
+              )
+            )
+            .limit(1))[0];
+          
+          if (template) {
+            // Generate secure token
+            const token = crypto.randomBytes(32).toString('hex');
+            const tokenHash = await bcrypt.hash(token, 10);
             const expiresAt = new Date();
             expiresAt.setDate(expiresAt.getDate() + 14); // 14 day expiration
             
-            // Create pending submission
-            await db.insert(customFormSubmissions).values({
+            // Create foster agreement session
+            await db.insert(fosterAgreementSessions).values({
               tenantId: req.tenant!.id,
-              formId: fosterAgreementForm.id,
-              signerName: updatedApplication.applicantName,
-              signerEmail: updatedApplication.applicantEmail,
-              signerPhone: updatedApplication.applicantPhone || null,
+              fosterApplicationId: updatedApplication.id,
+              templateId: template.id,
+              fosterName: updatedApplication.applicantName,
+              fosterEmail: updatedApplication.applicantEmail,
+              fosterPhone: updatedApplication.applicantPhone || null,
               status: 'pending',
               secureTokenHash: tokenHash,
               expiresAt,
             });
             
-            // Build the form signing URL
-            const protocol = req.headers['x-forwarded-proto'] || 'https';
-            const host = req.headers.host || 'irescue.life';
-            const baseUrl = `${protocol}://${host}`;
-            const formUrl = `${baseUrl}/forms/sign/${token}`;
+            // Build the form signing URL - use custom domain if available
+            let formUrl: string;
+            if (req.tenant!.customDomain) {
+              formUrl = `https://${req.tenant!.customDomain}/foster-agreement/sign/${token}`;
+            } else {
+              const isProduction = process.env.REPLIT_DEPLOYMENT === '1';
+              const baseUrl = isProduction 
+                ? 'https://irescue.life'
+                : process.env.REPLIT_DEV_DOMAIN 
+                  ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+                  : 'http://localhost:5000';
+              formUrl = `${baseUrl}/${req.tenant!.subdomain}/foster-agreement/sign/${token}`;
+            }
             
             // Get email service for tenant
             const emailService = await EmailService.forTenant(req.tenant!.id);
@@ -11810,7 +11833,7 @@ Submitted: ${new Date().toLocaleString()}
               throw new Error('Email service not configured');
             }
             
-            // Send email to foster applicant - use simpler HTML structure for better email client compatibility
+            // Send email with amber button
             const buttonStyle = 'display:inline-block;padding:12px 24px;background-color:#f59e0b;color:white;text-decoration:none;border-radius:6px;';
             
             await emailService.send({
@@ -11840,14 +11863,14 @@ Submitted: ${new Date().toLocaleString()}
               entityId: updatedApplication.id,
               description: `Foster agreement email sent to ${updatedApplication.applicantName} (${updatedApplication.applicantEmail})`,
               metadata: {
-                formId: fosterAgreementForm.id,
-                formName: fosterAgreementForm.name,
+                templateId: template.id,
+                templateName: template.name,
               },
             });
             
-            console.log(`[Foster Automation] Sent foster agreement to ${updatedApplication.applicantEmail}`);
+            console.log(`[Foster Automation] Sent foster agreement to ${updatedApplication.applicantEmail} using template "${template.name}"`);
           } else {
-            console.log(`[Foster Automation] No foster agreement form found for tenant ${req.tenant!.id} - skipping email`);
+            console.log(`[Foster Automation] No foster contract template found for tenant ${req.tenant!.id} - skipping email`);
           }
         } catch (agreementError) {
           // Log error but don't fail the status update

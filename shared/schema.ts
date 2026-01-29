@@ -2785,6 +2785,34 @@ export const insertFosterContractTemplateSchema = createInsertSchema(fosterContr
 export type InsertFosterContractTemplate = z.infer<typeof insertFosterContractTemplateSchema>;
 export type FosterContractTemplate = typeof fosterContractTemplates.$inferSelect;
 
+// Foster Agreement Sessions table - manages foster contract signing workflow
+export const fosterAgreementSessions = pgTable("foster_agreement_sessions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  fosterApplicationId: uuid("foster_application_id").notNull().references(() => fosterApplications.id, { onDelete: 'cascade' }),
+  templateId: integer("template_id").references(() => fosterContractTemplates.id, { onDelete: 'set null' }),
+  fosterName: text("foster_name").notNull(),
+  fosterEmail: text("foster_email").notNull(),
+  fosterPhone: text("foster_phone"),
+  status: text("status").notNull().default("pending").$type<"pending" | "signed" | "expired" | "cancelled">(),
+  secureTokenHash: text("secure_token_hash").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  signedAt: timestamp("signed_at"),
+  signatureData: text("signature_data"), // Base64 signature image
+  signedIp: text("signed_ip"),
+  renderedContract: text("rendered_contract"), // HTML with merged fields and signature
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertFosterAgreementSessionSchema = createInsertSchema(fosterAgreementSessions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertFosterAgreementSession = z.infer<typeof insertFosterAgreementSessionSchema>;
+export type FosterAgreementSession = typeof fosterAgreementSessions.$inferSelect;
+
 // Adoption Checkout Sessions table - manages the end-to-end adoption checkout process
 export const adoptionCheckoutSessions = pgTable("adoption_checkout_sessions", {
   id: uuid("id").primaryKey().defaultRandom(),
