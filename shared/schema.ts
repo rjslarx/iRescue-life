@@ -508,6 +508,8 @@ export const animals = pgTable("animals", {
   // External platform import tracking (for RescueGroups, Petfinder imports, etc.)
   externalId: text("external_id"), // External platform's animal ID (prevents duplicate imports)
   externalSource: text("external_source").$type<"rescuegroups" | "petfinder" | "adoptapet" | "other">(), // Which platform imported from
+  // Google Drive folder tracking for automatic backup
+  driveFolderId: text("drive_folder_id"), // Google Drive folder ID for this animal's documents
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

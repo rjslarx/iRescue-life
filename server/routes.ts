@@ -5669,6 +5669,18 @@ Crawl-delay: 1
         console.error('Failed to log animal creation activity:', logError);
       }
       
+      // Create Google Drive/Object Storage folder for the animal (non-blocking)
+      try {
+        const { createAnimalBackup } = await import('./lib/animalBackupService');
+        createAnimalBackup(req.tenant!.id, {
+          id: animal.id,
+          name: animal.name,
+          intakeDate: animal.intakeDate,
+        }).catch(err => console.error('[ANIMAL BACKUP] Background folder creation failed:', err));
+      } catch (backupError) {
+        console.error('[ANIMAL BACKUP] Failed to initiate backup:', backupError);
+      }
+      
       res.json({ success: true, animal });
     } catch (error) {
       next(error);
@@ -12714,6 +12726,18 @@ Submitted: ${new Date().toLocaleString()}
         });
       }
       
+      // Create Google Drive/Object Storage folder for the animal (non-blocking)
+      try {
+        const { createAnimalBackup } = await import('./lib/animalBackupService');
+        createAnimalBackup(req.tenant!.id, {
+          id: animal.id,
+          name: animal.name,
+          intakeDate: new Date(),
+        }).catch(err => console.error('[ANIMAL BACKUP] Background folder creation failed:', err));
+      } catch (backupError) {
+        console.error('[ANIMAL BACKUP] Failed to initiate backup:', backupError);
+      }
+      
       // Update the surrender request status to 'intaken'
       await db.update(surrenderRequests)
         .set({ 
@@ -14547,7 +14571,16 @@ Submitted: ${new Date().toLocaleString()}
           metadata: { animalId: validatedData.animalId, adopterName: validatedData.adopterName }
         });
         
-        // Move animal folder to archive in Google Drive (if configured)
+        // Sync final medical records before archiving (non-blocking)
+        try {
+          const { syncAnimalMedicalRecords } = await import('./lib/animalBackupService');
+          syncAnimalMedicalRecords(req.tenant!.id, validatedData.animalId)
+            .catch(err => console.error('[MEDICAL BACKUP] Failed to sync before archive:', err));
+        } catch (syncError) {
+          console.error('[MEDICAL BACKUP] Failed to initiate sync before archive:', syncError);
+        }
+        
+        // Move animal folder to archive in Google Drive (if configured, non-blocking)
         try {
           const { TenantFileStorage } = await import('./lib/tenantFileStorage');
           const storage = await TenantFileStorage.forTenant(req.tenant!.id);
@@ -20779,6 +20812,15 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
         .values(examData)
         .returning();
 
+      // Sync medical records to backup (non-blocking)
+      try {
+        const { syncAnimalMedicalRecords } = await import('./lib/animalBackupService');
+        syncAnimalMedicalRecords(req.tenant!.id, req.params.animalId)
+          .catch(err => console.error('[MEDICAL BACKUP] Background sync failed:', err));
+      } catch (syncError) {
+        console.error('[MEDICAL BACKUP] Failed to initiate sync:', syncError);
+      }
+
       res.json({ exam });
     } catch (error) {
       next(error);
@@ -21002,6 +21044,15 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
           createdBy: req.user!.id,
         })
         .returning();
+
+      // Sync medical records to backup (non-blocking)
+      try {
+        const { syncAnimalMedicalRecords } = await import('./lib/animalBackupService');
+        syncAnimalMedicalRecords(req.tenant!.id, req.params.animalId)
+          .catch(err => console.error('[MEDICAL BACKUP] Background sync failed:', err));
+      } catch (syncError) {
+        console.error('[MEDICAL BACKUP] Failed to initiate sync:', syncError);
+      }
 
       res.json({ vaccine });
     } catch (error) {
@@ -21671,6 +21722,15 @@ Email: ${application.applicantEmail || ''}`
         })
         .returning();
 
+      // Sync medical records to backup (non-blocking)
+      try {
+        const { syncAnimalMedicalRecords } = await import('./lib/animalBackupService');
+        syncAnimalMedicalRecords(req.tenant!.id, req.params.animalId)
+          .catch(err => console.error('[MEDICAL BACKUP] Background sync failed:', err));
+      } catch (syncError) {
+        console.error('[MEDICAL BACKUP] Failed to initiate sync:', syncError);
+      }
+
       res.json({ diagnostic });
     } catch (error) {
       next(error);
@@ -21886,6 +21946,15 @@ Email: ${application.applicantEmail || ''}`
           createdBy: req.user!.id,
         })
         .returning();
+
+      // Sync medical records to backup (non-blocking)
+      try {
+        const { syncAnimalMedicalRecords } = await import('./lib/animalBackupService');
+        syncAnimalMedicalRecords(req.tenant!.id, req.params.animalId)
+          .catch(err => console.error('[MEDICAL BACKUP] Background sync failed:', err));
+      } catch (syncError) {
+        console.error('[MEDICAL BACKUP] Failed to initiate sync:', syncError);
+      }
 
       res.json({ procedure });
     } catch (error) {
@@ -22213,6 +22282,15 @@ Email: ${application.applicantEmail || ''}`
 
       if (doses.length > 0) {
         await db.insert(medicalDoses).values(doses);
+      }
+
+      // Sync medical records to backup (non-blocking)
+      try {
+        const { syncAnimalMedicalRecords } = await import('./lib/animalBackupService');
+        syncAnimalMedicalRecords(req.tenant!.id, req.params.animalId)
+          .catch(err => console.error('[MEDICAL BACKUP] Background sync failed:', err));
+      } catch (syncError) {
+        console.error('[MEDICAL BACKUP] Failed to initiate sync:', syncError);
       }
 
       res.json({ prescription, dosesCreated: doses.length, isHistorical });
