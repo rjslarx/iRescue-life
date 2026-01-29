@@ -17881,6 +17881,13 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
           const contextLabel = data.context.type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
           const animalContext = data.context.animalName ? ` regarding ${data.context.animalName}` : '';
           
+          // Determine category based on context type
+          const category = data.context.type.includes('adoption') ? 'adoption' as const :
+                          data.context.type.includes('intake') ? 'intake' as const :
+                          data.context.type.includes('foster') ? 'adoption' as const :
+                          data.context.type.includes('volunteer') ? 'user' as const :
+                          'system' as const;
+          
           await logActivity({
             tenantId: req.tenant!.id,
             userId: staffUser?.id,
@@ -17889,6 +17896,7 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
                        data.context.type === 'intake_request' ? 'intake' : 'communication',
             entityId: data.context.id,
             description: `Email sent to applicant${animalContext}: "${data.subject}"`,
+            category,
             metadata: {
               recipient: data.to,
               subject: data.subject,
