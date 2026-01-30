@@ -352,6 +352,32 @@ export default function KennelCardPage() {
           font-weight: 600 !important;
           color: #666 !important;
         }
+        
+        /* Compact safety banner for single-page print */
+        .safety-banner-green,
+        .safety-banner-yellow,
+        .safety-banner-red,
+        .safety-banner-purple {
+          padding: 4px 8px !important;
+        }
+        
+        .safety-banner-green p,
+        .safety-banner-yellow p,
+        .safety-banner-red p,
+        .safety-banner-purple p {
+          font-size: 0.9rem !important;
+          margin: 0 !important;
+          line-height: 1.2 !important;
+        }
+        
+        /* Compact animal info section for print */
+        .animal-info-section {
+          padding: 0 !important;
+        }
+        
+        .animal-info-section > div {
+          padding: 0.25rem !important;
+        }
       }
     `;
     document.head.appendChild(style);
