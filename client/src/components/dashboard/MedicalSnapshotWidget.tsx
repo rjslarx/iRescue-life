@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
 import { Stethoscope, ChevronRight, Syringe, ClipboardCheck, Pill } from "lucide-react";
 import type { Animal } from "@shared/schema";
+import { useTenant } from "@/contexts/TenantContext";
 
 interface AnimalsResponse {
   animals: Animal[];
@@ -38,6 +39,7 @@ interface DosesTodayResponse {
 }
 
 export default function MedicalSnapshotWidget() {
+  const { basePath } = useTenant();
   const { data, isLoading } = useQuery<AnimalsResponse>({
     queryKey: ['/api/animals'],
   });
@@ -76,7 +78,7 @@ export default function MedicalSnapshotWidget() {
         <Stethoscope className="h-4 w-4 text-muted-foreground" />
       </CardHeader>
       <CardContent>
-        <Link href="/dashboard/medical-pipeline?tab=treatments">
+        <Link href={`${basePath}/dashboard/medical-pipeline?tab=treatments`}>
           <div 
             className={`flex items-center justify-between p-3 rounded-md mb-4 cursor-pointer transition-all hover-elevate ${
               medsDueToday > 0 
@@ -124,7 +126,7 @@ export default function MedicalSnapshotWidget() {
           </Badge>
         )}
 
-        <Link href="/dashboard/medical-pipeline">
+        <Link href={`${basePath}/dashboard/medical-pipeline`}>
           <Button variant="ghost" size="sm" className="w-full" data-testid="link-view-medical">
             View Medical Pipeline
             <ChevronRight className="h-4 w-4 ml-1" />

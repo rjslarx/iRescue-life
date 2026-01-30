@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTenant } from "@/contexts/TenantContext";
 import { usePagePermissions } from "@/hooks/usePagePermissions";
 import { OnboardingChecklist } from "@/components/OnboardingChecklist";
 import { FloatingActionButton } from "@/components/FloatingActionButton";
@@ -52,6 +53,7 @@ function getInitialPipelineTab(): PipelineTab | undefined {
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const { basePath } = useTenant();
   const { toast } = useToast();
   const { canAccessPage } = usePagePermissions();
   const [showWizard, setShowWizard] = useState(false);
@@ -343,7 +345,7 @@ export default function Dashboard() {
                     <p className="text-muted-foreground mb-6">
                       Your primary workspace is the Volunteer Calendar. Click below to view shifts and sign up for opportunities.
                     </p>
-                    <Link href="/dashboard/calendar">
+                    <Link href={`${basePath}/dashboard/calendar`}>
                       <Button size="lg" className="gap-2" data-testid="button-go-to-calendar">
                         <Calendar className="h-5 w-5" />
                         Go to Calendar

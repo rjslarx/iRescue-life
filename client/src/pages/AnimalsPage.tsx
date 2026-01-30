@@ -1955,7 +1955,7 @@ export default function AnimalsPage() {
       description="Manage your rescue's animals"
       actions={
         <div className="flex items-center gap-2">
-          <Link href="/dashboard/animals/duplicates">
+          <Link href={`${basePath}/dashboard/animals/duplicates`}>
             <Button variant="outline" data-testid="button-find-duplicates">
               <GitMerge className="h-4 w-4 mr-2" />
               Find Duplicates

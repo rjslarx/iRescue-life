@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatDistanceToNow } from "date-fns";
 import { Link } from "wouter";
+import { useTenant } from "@/contexts/TenantContext";
 import { 
   FileText, 
   DollarSign, 
@@ -175,6 +176,7 @@ function LoadingSkeleton() {
 }
 
 export default function FormSubmissionsWidget() {
+  const { basePath } = useTenant();
   const { data, isLoading, error } = useQuery<FormSubmissionsResponse>({
     queryKey: ['/api/dashboard/form-submissions'],
     refetchInterval: 30000,
@@ -235,7 +237,7 @@ export default function FormSubmissionsWidget() {
         )}
         
         <div className="mt-4 pt-3 border-t">
-          <Link href="/dashboard/applications" data-testid="link-view-all-applications">
+          <Link href={`${basePath}/dashboard/applications`} data-testid="link-view-all-applications">
             <Button variant="outline" className="w-full gap-2" data-testid="button-view-all-applications">
               View All Applications
               <ChevronRight className="h-4 w-4" />

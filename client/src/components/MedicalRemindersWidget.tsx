@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
 import { Stethoscope, AlertCircle, Clock, ChevronRight, Settings, Syringe, Pill, Activity, Scissors, FileText, CheckCircle } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { useTenant } from "@/contexts/TenantContext";
 
 interface MedicalItem {
   id: string;
@@ -31,6 +32,7 @@ interface MedicalDigest {
 }
 
 export default function MedicalRemindersWidget() {
+  const { basePath } = useTenant();
   const { data, isLoading, error } = useQuery<MedicalDigest>({
     queryKey: ['/api/dashboard/medical-reminders'],
   });
@@ -67,7 +69,7 @@ export default function MedicalRemindersWidget() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Link href="/dashboard/settings?tab=notifications">
+          <Link href={`${basePath}/dashboard/settings?tab=notifications`}>
             <Button variant="outline" size="sm" data-testid="button-enable-reminders">
               <Settings className="h-4 w-4 mr-2" />
               Enable Reminders
@@ -282,13 +284,13 @@ export default function MedicalRemindersWidget() {
         )}
       </CardContent>
       <CardFooter className="pt-3 flex justify-between items-center border-t gap-2">
-        <Link href="/dashboard/medical-pipeline">
+        <Link href={`${basePath}/dashboard/medical-pipeline`}>
           <Button variant="outline" size="sm" data-testid="button-view-all-reminders">
             View All
             <ChevronRight className="h-4 w-4 ml-1" />
           </Button>
         </Link>
-        <Link href="/dashboard/settings?tab=notifications">
+        <Link href={`${basePath}/dashboard/settings?tab=notifications`}>
           <Button variant="ghost" size="sm" data-testid="button-reminder-settings">
             <Settings className="h-4 w-4" />
           </Button>

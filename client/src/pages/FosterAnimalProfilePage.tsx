@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useParams, Link } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTenant } from "@/contexts/TenantContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Heart, ArrowLeft, AlertCircle, Phone, Mail, Clock } from "lucide-react";
@@ -22,6 +23,7 @@ interface RescueContactsData {
 
 export default function FosterAnimalProfilePage() {
   const { user } = useAuth();
+  const { basePath } = useTenant();
   const { animalId } = useParams<{ animalId: string }>();
 
   const { data: fostersData, isLoading: fostersLoading } = useQuery<MyFostersData>({
@@ -61,7 +63,7 @@ export default function FosterAnimalProfilePage() {
             <p className="text-muted-foreground mb-6">
               This animal is not assigned to you or does not exist.
             </p>
-            <Link href="/dashboard/my-fosters">
+            <Link href={`${basePath}/dashboard/my-fosters`}>
               <Button>Back to My Fosters</Button>
             </Link>
           </Card>
@@ -75,7 +77,7 @@ export default function FosterAnimalProfilePage() {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="flex items-center justify-between gap-4 border-b p-4 bg-background flex-wrap">
-        <Link href="/dashboard/my-fosters">
+        <Link href={`${basePath}/dashboard/my-fosters`}>
           <Button variant="ghost" size="sm" className="gap-2" data-testid="button-back">
             <ArrowLeft className="h-4 w-4" />
             Back to My Fosters

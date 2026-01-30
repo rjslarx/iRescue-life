@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useParams, Link } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTenant } from "@/contexts/TenantContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Heart, ArrowLeft, AlertCircle, Pill, Syringe, Clock } from "lucide-react";
@@ -52,6 +53,7 @@ interface MedicalDataResponse {
 
 export default function FosterAnimalMedicalPage() {
   const { user } = useAuth();
+  const { basePath } = useTenant();
   const { animalId } = useParams<{ animalId: string }>();
 
   const { data: fostersData, isLoading: fostersLoading } = useQuery<MyFostersData>({
@@ -108,7 +110,7 @@ export default function FosterAnimalMedicalPage() {
             <p className="text-muted-foreground mb-6">
               This animal is not assigned to you or does not exist.
             </p>
-            <Link href="/dashboard/my-fosters">
+            <Link href={`${basePath}/dashboard/my-fosters`}>
               <Button>Back to My Fosters</Button>
             </Link>
           </Card>

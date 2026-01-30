@@ -15,6 +15,7 @@ import {
   Inbox
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTenant } from "@/contexts/TenantContext";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
@@ -40,6 +41,7 @@ interface ActionItemsResponse {
 
 export default function ActionCenterWidget() {
   const { user } = useAuth();
+  const { basePath } = useTenant();
   const { toast } = useToast();
 
   const { data, isLoading, refetch } = useQuery<ActionItemsResponse>({
@@ -269,7 +271,7 @@ export default function ActionCenterWidget() {
         )}
       </CardContent>
       <CardFooter className="pt-0">
-        <Link href="/dashboard/foster-management" className="w-full">
+        <Link href={`${basePath}/dashboard/foster-management`} className="w-full">
           <Button variant="ghost" size="sm" className="w-full justify-between" data-testid="button-view-all-actions">
             View All Actions
             <ChevronRight className="h-4 w-4" />

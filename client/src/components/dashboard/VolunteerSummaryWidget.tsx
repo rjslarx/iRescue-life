@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
 import { Users, ChevronRight } from "lucide-react";
+import { useTenant } from "@/contexts/TenantContext";
 
 interface VolunteerApplication {
   id: string;
@@ -18,6 +19,7 @@ interface VolunteerApplicationsResponse {
 }
 
 export default function VolunteerSummaryWidget() {
+  const { basePath } = useTenant();
   const { data, isLoading } = useQuery<VolunteerApplicationsResponse>({
     queryKey: ['/api/volunteer-applications'],
   });
@@ -59,7 +61,7 @@ export default function VolunteerSummaryWidget() {
           )}
         </div>
 
-        <Link href="/dashboard/volunteer-applications">
+        <Link href={`${basePath}/dashboard/volunteer-applications`}>
           <Button variant="ghost" size="sm" className="w-full" data-testid="link-view-volunteers">
             View Applications
             <ChevronRight className="h-4 w-4 ml-1" />

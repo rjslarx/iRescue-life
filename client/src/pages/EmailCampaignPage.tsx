@@ -11,6 +11,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTenant } from "@/contexts/TenantContext";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Send, Loader2, Mail, AlertCircle, Users, DollarSign, BookOpen, CheckCircle2, Sparkles, FileText, Heart } from "lucide-react";
@@ -29,6 +30,7 @@ interface EmailTemplate {
 
 export default function EmailCampaignPage() {
   const { user } = useAuth();
+  const { basePath } = useTenant();
   const { toast } = useToast();
   const [selectedRecipients, setSelectedRecipients] = useState<RecipientType[]>([]);
   const [customEmails, setCustomEmails] = useState("");
@@ -203,7 +205,7 @@ export default function EmailCampaignPage() {
               <Alert>
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>
-                  Email service is not configured. Please configure your Resend API key in <a href="/dashboard/settings" className="underline">Settings</a> to send email campaigns.
+                  Email service is not configured. Please configure your Resend API key in <a href={`${basePath}/dashboard/settings`} className="underline">Settings</a> to send email campaigns.
                 </AlertDescription>
               </Alert>
             ) : (

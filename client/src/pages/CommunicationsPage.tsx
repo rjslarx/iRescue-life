@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTenant } from "@/contexts/TenantContext";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Send, Loader2, Mail, AlertCircle, Users, DollarSign, BookOpen, CheckCircle2, Sparkles, FileText, Inbox, Archive, Paperclip, ExternalLink, Newspaper } from "lucide-react";
@@ -34,6 +35,7 @@ interface EmailTemplate {
 
 export default function CommunicationsPage() {
   const { user } = useAuth();
+  const { basePath } = useTenant();
   const { toast } = useToast();
   
   // Email Campaigns state
@@ -316,7 +318,7 @@ export default function CommunicationsPage() {
                     </p>
                   </div>
                 </div>
-                <Link href="/dashboard/newsletter-campaigns">
+                <Link href={`${basePath}/dashboard/newsletter-campaigns`}>
                   <Button data-testid="button-newsletter-campaigns">
                     <Sparkles className="w-4 h-4 mr-2" />
                     Newsletter Builder
@@ -378,7 +380,7 @@ export default function CommunicationsPage() {
                       <p className="text-sm text-muted-foreground">Email not configured</p>
                     )}
                   </div>
-                  <Link href="/dashboard/settings?tab=integrations">
+                  <Link href={`${basePath}/dashboard/settings?tab=integrations`}>
                     <Button variant="ghost" size="sm" data-testid="button-change-sender">
                       {emailSenderData?.senderAddresses && emailSenderData.senderAddresses.length > 0 ? 'Manage' : 'Setup'}
                     </Button>

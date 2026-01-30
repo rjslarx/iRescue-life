@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
 import { Home, ChevronRight } from "lucide-react";
+import { useTenant } from "@/contexts/TenantContext";
 
 interface FosterApplication {
   id: string;
@@ -18,6 +19,7 @@ interface FosterApplicationsResponse {
 }
 
 export default function FosterSummaryWidget() {
+  const { basePath } = useTenant();
   const { data, isLoading } = useQuery<FosterApplicationsResponse>({
     queryKey: ['/api/foster-applications'],
   });
@@ -59,7 +61,7 @@ export default function FosterSummaryWidget() {
           )}
         </div>
 
-        <Link href="/dashboard/foster-applications">
+        <Link href={`${basePath}/dashboard/foster-applications`}>
           <Button variant="ghost" size="sm" className="w-full" data-testid="link-view-foster">
             View Applications
             <ChevronRight className="h-4 w-4 ml-1" />
