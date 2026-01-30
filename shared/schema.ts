@@ -1698,6 +1698,7 @@ export const medicalPrescriptions = pgTable("medical_prescriptions", {
   endDate: timestamp("end_date"),
   notes: text("notes"),
   isControlledSubstance: boolean("is_controlled_substance").notNull().default(false),
+  requiresRefill: boolean("requires_refill").notNull().default(false), // If true, shows "REFILL NEEDED" warning on tasks
   createdBy: uuid("created_by").references(() => users.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   billId: uuid("bill_id").references(() => medicalBills.id, { onDelete: 'set null' }),
