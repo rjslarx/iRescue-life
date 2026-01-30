@@ -204,7 +204,8 @@ export default function KennelCardPage() {
           width: 100% !important;
           max-width: 100% !important;
           height: 100% !important;
-          overflow: visible !important;
+          max-height: 100% !important;
+          overflow: hidden !important;
           padding: 5mm !important;
           margin: 0 !important;
           box-sizing: border-box !important;
@@ -241,8 +242,10 @@ export default function KennelCardPage() {
         .kennel-card-content {
           padding: 0.5rem !important;
           flex: 1 !important;
+          min-height: 0 !important;
           display: flex !important;
           flex-direction: column !important;
+          overflow: hidden !important;
         }
         
         .kennel-card-content > * {
@@ -257,12 +260,15 @@ export default function KennelCardPage() {
         /* Animal Info section expands to fill remaining space */
         .animal-info-section {
           flex: 1 !important;
+          min-height: 0 !important;
           display: flex !important;
           flex-direction: column !important;
+          overflow: hidden !important;
         }
         
         .animal-info-section > div {
           flex: 1 !important;
+          min-height: 0 !important;
           display: flex !important;
           flex-direction: column !important;
         }
