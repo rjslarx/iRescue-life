@@ -435,7 +435,8 @@
       margin: 0.5in;
     }
 
-    /* Kennel card print styles - make location much larger and more prominent */
+    /* Kennel card print styles - use higher specificity to override .kennel-card-content p rule */
+    .kennel-card-content .kennel-location-text,
     .kennel-location-text {
       font-size: 72pt !important;
       font-weight: 900 !important;
@@ -444,6 +445,7 @@
     }
 
     /* Kennel location container - larger padding and thicker border for print */
+    .kennel-card-content .kennel-location-container,
     .kennel-location-container {
       padding: 24px 32px !important;
       border-width: 6px !important;
@@ -452,7 +454,8 @@
       border-radius: 12px !important;
     }
 
-    /* Kennel label text */
+    /* Kennel label text - higher specificity */
+    .kennel-card-content .kennel-label-text,
     .kennel-label-text {
       font-size: 18pt !important;
       font-weight: 600 !important;

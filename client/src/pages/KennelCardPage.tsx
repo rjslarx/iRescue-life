@@ -318,7 +318,8 @@ export default function KennelCardPage() {
         .border-destructive { border-color: hsl(var(--destructive)) !important; }
         .border-orange-500 { border-color: #f97316 !important; }
         
-        /* Larger kennel location for print - significantly larger for visibility */
+        /* Larger kennel location for print - use higher specificity to override .kennel-card-content p rule */
+        .kennel-card-content .kennel-location-text,
         .kennel-location-text {
           font-size: 72pt !important;
           font-weight: 900 !important;
@@ -326,7 +327,8 @@ export default function KennelCardPage() {
           color: black !important;
         }
         
-        /* Kennel location container styling for print */
+        /* Kennel location container styling for print - higher specificity */
+        .kennel-card-content .kennel-location-container,
         .kennel-location-container {
           padding: 24px 32px !important;
           border-width: 6px !important;
@@ -335,7 +337,8 @@ export default function KennelCardPage() {
           border-radius: 12px !important;
         }
         
-        /* Kennel label text for print */
+        /* Kennel label text for print - higher specificity to override .kennel-card-content p */
+        .kennel-card-content .kennel-label-text,
         .kennel-label-text {
           font-size: 18pt !important;
           font-weight: 600 !important;
