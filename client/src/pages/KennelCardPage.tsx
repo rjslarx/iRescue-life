@@ -241,9 +241,11 @@ export default function KennelCardPage() {
           margin-bottom: 0.25rem !important;
         }
         
+        /* Animal photo in print - fixed size to match kennel container */
         .kennel-card-content img {
-          max-width: 120px !important;
-          max-height: 120px !important;
+          width: 120px !important;
+          height: 120px !important;
+          object-fit: cover !important;
         }
         
         .kennel-card-content * {
@@ -318,23 +320,29 @@ export default function KennelCardPage() {
         .border-destructive { border-color: hsl(var(--destructive)) !important; }
         .border-orange-500 { border-color: #f97316 !important; }
         
-        /* Larger kennel location for print - use higher specificity to override .kennel-card-content p rule */
+        /* Kennel location text for print - sized to fit within 120px container height */
         .kennel-card-content .kennel-location-text,
         .kennel-location-text {
-          font-size: 72pt !important;
+          font-size: 36pt !important;
           font-weight: 900 !important;
-          line-height: 1.1 !important;
+          line-height: 1 !important;
           color: black !important;
         }
         
         /* Kennel location container styling for print - higher specificity */
+        /* Match height with animal photo (120px in print) */
         .kennel-card-content .kennel-location-container,
         .kennel-location-container {
-          padding: 24px 32px !important;
+          height: 120px !important;
+          padding: 0 32px !important;
           border-width: 6px !important;
           border-color: black !important;
           border-style: solid !important;
           border-radius: 12px !important;
+          display: flex !important;
+          flex-direction: column !important;
+          align-items: center !important;
+          justify-content: center !important;
         }
         
         /* Kennel label text for print - higher specificity to override .kennel-card-content p */
@@ -710,7 +718,7 @@ export default function KennelCardPage() {
         <div className="flex flex-wrap gap-4 items-start justify-center">
           {/* Kennel Location */}
           {animal.kennelRowName && animal.kennelPosition !== null && animal.kennelPosition !== undefined && (
-            <div className="kennel-location-container flex-shrink-0 flex flex-col items-center justify-center border-4 border-primary rounded-lg p-4 bg-primary/5">
+            <div className="kennel-location-container flex-shrink-0 flex flex-col items-center justify-center border-4 border-primary rounded-lg px-6 bg-primary/5 h-40">
               <p className={`kennel-label-text ${fontSize === 'small' ? 'text-sm' : 'text-base'} font-medium text-muted-foreground mb-1`}>Kennel</p>
               <p className={`kennel-location-text ${fontSize === 'small' ? 'text-4xl' : fontSize === 'medium' ? 'text-5xl' : 'text-6xl'} font-extrabold text-primary`} data-testid="text-kennel-location">
                 {animal.kennelRowName} - #{animal.kennelPosition + 1}
