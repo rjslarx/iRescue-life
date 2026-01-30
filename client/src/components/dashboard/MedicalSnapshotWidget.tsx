@@ -61,10 +61,10 @@ export default function MedicalSnapshotWidget() {
           <Stethoscope className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
-          <Skeleton className="h-14 w-full mb-4" />
-          <div className="grid grid-cols-2 gap-4 mb-4">
-            <Skeleton className="h-16 w-full" />
-            <Skeleton className="h-16 w-full" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+            <Skeleton className="h-20 w-full" />
+            <Skeleton className="h-20 w-full" />
+            <Skeleton className="h-20 w-full" />
           </div>
         </CardContent>
       </Card>
@@ -78,50 +78,61 @@ export default function MedicalSnapshotWidget() {
         <Stethoscope className="h-4 w-4 text-muted-foreground" />
       </CardHeader>
       <CardContent>
-        <Link href={`${basePath}/dashboard/medical-pipeline?tab=treatments`}>
-          <div 
-            className={`flex items-center justify-between p-3 rounded-md mb-4 cursor-pointer transition-all hover-elevate ${
-              medsDueToday > 0 
-                ? 'bg-primary/10 border border-primary/30' 
-                : 'bg-muted/50'
-            }`}
-            data-testid="tile-meds-due-today"
-          >
-            <div className="flex items-center gap-3">
-              <div className={`p-2 rounded-full ${medsDueToday > 0 ? 'bg-primary/20' : 'bg-muted'}`}>
-                <Pill className={`h-5 w-5 ${medsDueToday > 0 ? 'text-primary' : 'text-muted-foreground'}`} />
-              </div>
-              <div>
-                <p className={`text-sm font-semibold ${medsDueToday > 0 ? 'text-primary' : 'text-foreground'}`}>
-                  Meds Due Today
-                </p>
-                <p className="text-xs text-muted-foreground">Click to view treatments</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className={`text-2xl font-bold ${medsDueToday > 0 ? 'text-primary' : 'text-muted-foreground'}`} data-testid="text-meds-due-count">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+          <Link href={`${basePath}/dashboard/medical-pipeline?tab=treatments`}>
+            <div 
+              className={`flex flex-col items-center p-3 rounded-md cursor-pointer hover-elevate ${
+                medsDueToday > 0 
+                  ? 'bg-primary/10 border border-primary/20' 
+                  : 'bg-muted/50'
+              }`}
+              data-testid="tile-meds-due-today"
+            >
+              <Pill className={`h-5 w-5 mb-1 ${medsDueToday > 0 ? 'text-primary' : 'text-muted-foreground'}`} />
+              <div className={`text-xl font-bold ${medsDueToday > 0 ? 'text-primary' : 'text-foreground'}`} data-testid="text-meds-due-count">
                 {medsDueToday}
-              </span>
-              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <p className="text-xs text-muted-foreground text-center">Meds Due Today</p>
             </div>
-          </div>
-        </Link>
-
-        <div className="grid grid-cols-2 gap-4 mb-4">
-          <div className="flex flex-col items-center p-3 rounded-md bg-muted/50">
-            <ClipboardCheck className="h-5 w-5 text-orange-500 mb-1" />
-            <div className="text-xl font-bold" data-testid="text-needs-vetting-count">{needsVetting.length}</div>
-            <p className="text-xs text-muted-foreground text-center">Needs Vetting</p>
-          </div>
-          <div className="flex flex-col items-center p-3 rounded-md bg-muted/50">
-            <Syringe className="h-5 w-5 text-blue-500 mb-1" />
-            <div className="text-xl font-bold" data-testid="text-surgery-pending-count">{surgeryPending.length}</div>
-            <p className="text-xs text-muted-foreground text-center">Surgery Pending</p>
-          </div>
+          </Link>
+          
+          <Link href={`${basePath}/dashboard/medical-pipeline?tab=vetting`}>
+            <div 
+              className={`flex flex-col items-center p-3 rounded-md cursor-pointer hover-elevate ${
+                needsVetting.length > 0 
+                  ? 'bg-primary/10 border border-primary/20' 
+                  : 'bg-muted/50'
+              }`}
+              data-testid="tile-needs-vetting"
+            >
+              <ClipboardCheck className={`h-5 w-5 mb-1 ${needsVetting.length > 0 ? 'text-primary' : 'text-muted-foreground'}`} />
+              <div className={`text-xl font-bold ${needsVetting.length > 0 ? 'text-primary' : 'text-foreground'}`} data-testid="text-needs-vetting-count">
+                {needsVetting.length}
+              </div>
+              <p className="text-xs text-muted-foreground text-center">Needs Vetting</p>
+            </div>
+          </Link>
+          
+          <Link href={`${basePath}/dashboard/medical-pipeline?tab=surgery`}>
+            <div 
+              className={`flex flex-col items-center p-3 rounded-md cursor-pointer hover-elevate ${
+                surgeryPending.length > 0 
+                  ? 'bg-primary/10 border border-primary/20' 
+                  : 'bg-muted/50'
+              }`}
+              data-testid="tile-surgery-pending"
+            >
+              <Syringe className={`h-5 w-5 mb-1 ${surgeryPending.length > 0 ? 'text-primary' : 'text-muted-foreground'}`} />
+              <div className={`text-xl font-bold ${surgeryPending.length > 0 ? 'text-primary' : 'text-foreground'}`} data-testid="text-surgery-pending-count">
+                {surgeryPending.length}
+              </div>
+              <p className="text-xs text-muted-foreground text-center">Surgery Pending</p>
+            </div>
+          </Link>
         </div>
 
         {(needsVetting.length > 0 || surgeryPending.length > 0) && (
-          <Badge variant="secondary" className="w-full justify-center mb-4 bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300">
+          <Badge variant="secondary" className="w-full justify-center mb-4">
             {needsVetting.length + surgeryPending.length} animals need attention
           </Badge>
         )}
