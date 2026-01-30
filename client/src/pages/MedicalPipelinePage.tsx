@@ -15,8 +15,8 @@ import {
   ArrowRight
 } from "lucide-react";
 import { format } from "date-fns";
-import { useState } from "react";
-import { useLocation } from "wouter";
+import { useState, useEffect } from "react";
+import { useLocation, useSearch } from "wouter";
 import DashboardLayout from "@/components/DashboardLayout";
 
 interface IntakeAnimal {
@@ -62,7 +62,52 @@ interface SurgeryQueueAnimal {
 export default function MedicalPipelinePage() {
   const { toast } = useToast();
   const [, navigate] = useLocation();
+  const searchString = useSearch();
+  const validTabs = ["treatments", "intake", "surgery"];
   const [activeTab, setActiveTab] = useState("treatments");
+  const [pendingSection, setPendingSection] = useState<string | null>(null);
+  
+  // Read tab and section from URL parameters
+  useEffect(() => {
+    const params = new URLSearchParams(searchString);
+    const tab = params.get('tab');
+    const section = params.get('section');
+    
+    if (tab && validTabs.includes(tab)) {
+      setActiveTab(tab);
+    }
+    
+    // Store section for later scrolling after tab content renders
+    if (section) {
+      setPendingSection(section);
+    }
+  }, [searchString]);
+  
+  // Scroll to section after tab content has rendered
+  useEffect(() => {
+    if (pendingSection) {
+      let retryCount = 0;
+      const maxRetries = 5;
+      
+      const scrollToSection = () => {
+        const element = document.getElementById(pendingSection);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          setPendingSection(null);
+        } else if (retryCount < maxRetries) {
+          retryCount++;
+          setTimeout(scrollToSection, 100);
+        } else {
+          // Give up after max retries - section may not exist
+          setPendingSection(null);
+        }
+      };
+      
+      requestAnimationFrame(() => {
+        setTimeout(scrollToSection, 150);
+      });
+    }
+  }, [activeTab, pendingSection]);
   const [selectedDose, setSelectedDose] = useState<any>(null);
   const [administerNotes, setAdministerNotes] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -614,7 +659,7 @@ export default function MedicalPipelinePage() {
             ) : (
               <div className="space-y-6">
                 {scheduledSurgeries.length > 0 && (
-                  <div className="space-y-4">
+                  <div id="scheduled-surgeries" className="space-y-4">
                     <h3 className="text-lg font-semibold flex items-center gap-2">
                       <Calendar className="w-5 h-5 text-green-600" />
                       Scheduled Surgeries
@@ -672,7 +717,7 @@ export default function MedicalPipelinePage() {
                 )}
 
                 {unscheduledSurgeries.length > 0 && (
-                  <div className="space-y-4">
+                  <div id="needs-scheduling" className="space-y-4">
                     <h3 className="text-lg font-semibold flex items-center gap-2">
                       <Clock className="w-5 h-5 text-orange-600" />
                       Needs Scheduling

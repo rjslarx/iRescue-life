@@ -96,7 +96,7 @@ export default function MedicalSnapshotWidget() {
             </div>
           </Link>
           
-          <Link href={`${basePath}/dashboard/medical-pipeline?tab=vetting`}>
+          <Link href={`${basePath}/dashboard/medical-pipeline?tab=surgery&section=needs-scheduling`}>
             <div 
               className={`flex flex-col items-center p-3 rounded-md cursor-pointer hover-elevate ${
                 needsVetting.length > 0 
@@ -113,7 +113,7 @@ export default function MedicalSnapshotWidget() {
             </div>
           </Link>
           
-          <Link href={`${basePath}/dashboard/medical-pipeline?tab=surgery`}>
+          <Link href={`${basePath}/dashboard/medical-pipeline?tab=surgery&section=scheduled-surgeries`}>
             <div 
               className={`flex flex-col items-center p-3 rounded-md cursor-pointer hover-elevate ${
                 surgeryPending.length > 0 
