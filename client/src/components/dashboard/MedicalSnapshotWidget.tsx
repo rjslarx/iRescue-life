@@ -96,7 +96,7 @@ export default function MedicalSnapshotWidget() {
             </div>
           </Link>
           
-          <Link href={`${basePath}/dashboard/medical-pipeline?tab=surgery&section=needs-scheduling`}>
+          <Link href={`${basePath}/dashboard/medical-pipeline?tab=intake`}>
             <div 
               className={`flex flex-col items-center p-3 rounded-md cursor-pointer hover-elevate ${
                 needsVetting.length > 0 
