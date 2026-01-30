@@ -318,10 +318,28 @@ export default function KennelCardPage() {
         .border-destructive { border-color: hsl(var(--destructive)) !important; }
         .border-orange-500 { border-color: #f97316 !important; }
         
-        /* Larger kennel location for print - override the smaller text rule */
+        /* Larger kennel location for print - significantly larger for visibility */
         .kennel-location-text {
-          font-size: 4rem !important;
+          font-size: 72pt !important;
+          font-weight: 900 !important;
           line-height: 1.1 !important;
+          color: black !important;
+        }
+        
+        /* Kennel location container styling for print */
+        .kennel-location-container {
+          padding: 24px 32px !important;
+          border-width: 6px !important;
+          border-color: black !important;
+          border-style: solid !important;
+          border-radius: 12px !important;
+        }
+        
+        /* Kennel label text for print */
+        .kennel-label-text {
+          font-size: 18pt !important;
+          font-weight: 600 !important;
+          color: #666 !important;
         }
       }
     `;
@@ -689,8 +707,8 @@ export default function KennelCardPage() {
         <div className="flex flex-wrap gap-4 items-start justify-center">
           {/* Kennel Location */}
           {animal.kennelRowName && animal.kennelPosition !== null && animal.kennelPosition !== undefined && (
-            <div className="flex-shrink-0 flex flex-col items-center justify-center border-4 border-primary rounded-lg p-4 bg-primary/5">
-              <p className={`${fontSize === 'small' ? 'text-sm' : 'text-base'} font-medium text-muted-foreground mb-1`}>Kennel</p>
+            <div className="kennel-location-container flex-shrink-0 flex flex-col items-center justify-center border-4 border-primary rounded-lg p-4 bg-primary/5">
+              <p className={`kennel-label-text ${fontSize === 'small' ? 'text-sm' : 'text-base'} font-medium text-muted-foreground mb-1`}>Kennel</p>
               <p className={`kennel-location-text ${fontSize === 'small' ? 'text-4xl' : fontSize === 'medium' ? 'text-5xl' : 'text-6xl'} font-extrabold text-primary`} data-testid="text-kennel-location">
                 {animal.kennelRowName} - #{animal.kennelPosition + 1}
               </p>
