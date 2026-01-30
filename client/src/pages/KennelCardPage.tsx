@@ -215,8 +215,12 @@ export default function KennelCardPage() {
           display: flex !important;
           flex-direction: column !important;
           height: 100% !important;
+          max-height: 100% !important;
+          overflow: hidden !important;
           page-break-inside: avoid !important;
           break-inside: avoid !important;
+          page-break-after: avoid !important;
+          break-after: avoid !important;
         }
         
         /* Force the Card element to fill the page height */
@@ -224,10 +228,13 @@ export default function KennelCardPage() {
           display: flex !important;
           flex-direction: column !important;
           height: 100% !important;
+          max-height: 100% !important;
           flex: 1 !important;
-          overflow: visible !important;
+          overflow: hidden !important;
           page-break-inside: avoid !important;
           break-inside: avoid !important;
+          page-break-after: avoid !important;
+          break-after: avoid !important;
         }
         
         /* CardContent fills remaining space */
