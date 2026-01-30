@@ -23408,10 +23408,21 @@ Email: ${application.applicantEmail || ''}`
         });
       }
       
-      const parsed = insertMedicalPrescriptionSchema.partial().parse(req.body);
+      // Pre-process: convert empty strings to null for optional date fields
+      const bodyToValidate = { ...req.body };
+      if (bodyToValidate.endDate === '' || bodyToValidate.endDate === null) {
+        delete bodyToValidate.endDate;
+      }
+      
+      const parsed = insertMedicalPrescriptionSchema.partial().parse(bodyToValidate);
       
       // Exclude immutable fields
       const { tenantId, animalId, createdBy, createdAt, ...data } = parsed;
+      
+      // Handle endDate removal - if it was empty/null in original request, set to null in database
+      if (req.body.endDate === '' || req.body.endDate === null) {
+        (data as any).endDate = null;
+      }
 
       // Convert empty strings to undefined for numeric fields
       if ((data as any).billAmount === '' || (data as any).billAmount === null) {
