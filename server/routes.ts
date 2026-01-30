@@ -23194,164 +23194,19 @@ Email: ${application.applicantEmail || ''}`
         })
         .returning();
 
-      // Generate doses based on frequency and date range
-      // If nextScheduledDose is set (for backlogged/historical entries), use it as the starting point
-      // This prevents creating overdue tasks for dates between startDate and nextScheduledDose
-      const doses = [];
-      const doseStartDate = prescription.nextScheduledDose 
-        ? new Date(prescription.nextScheduledDose) 
-        : new Date(prescription.startDate);
-      const start = doseStartDate;
-      const end = prescription.endDate ? new Date(prescription.endDate) : new Date(start.getTime() + 30 * 24 * 60 * 60 * 1000); // Default 30 days
+      // Generate doses using the centralized dose generator
+      const { generateDosesForPrescription } = await import('./lib/dose-generator');
+      const doses = generateDosesForPrescription({
+        prescription,
+        tenant: req.tenant!,
+        tenantId: req.tenant!.id,
+      });
       
-      // Limit max duration to 90 days to prevent timeout from generating too many doses
-      const maxEndDate = new Date(start.getTime() + 90 * 24 * 60 * 60 * 1000);
-      const effectiveEnd = end > maxEndDate ? maxEndDate : end;
-      
-      // Get tenant's configured medication rounds times (or use defaults)
-      const parseTime = (timeStr: string): { hour: number; minute: number } => {
-        const [hours, minutes] = timeStr.split(':').map(Number);
-        return { hour: hours, minute: minutes || 0 };
-      };
-      const morningTime = parseTime(req.tenant!.defaultMorningRounds || '08:00');
-      const middayTime = parseTime(req.tenant!.defaultMiddayRounds || '13:00');
-      const eveningTime = parseTime(req.tenant!.defaultEveningRounds || '17:00');
-      
-      // Parse frequency and determine dose generation strategy
-      // Daily frequencies: SID, BID, TID, QID, HS, EOD
-      // Interval frequencies: WEEKLY, MONTHLY, Q3M, Q6M, Q8M, ANNUALLY
-      // One-time: ONCE (single dose, no repeat)
-      type DoseTimeSlot = { hour: number; minute: number };
-      let doseTimes: DoseTimeSlot[] = [morningTime]; // Default: once daily at morning rounds
-      const freq = data.frequency.toUpperCase();
-      
-      // Determine if this is an interval-based frequency (days between doses)
-      let intervalDays: number | null = null; // null means daily dosing with doseTimes array
-      
-      if (freq === 'ONCE' || freq.includes('ONE TIME')) {
-        intervalDays = 0; // Special: single dose only
-      } else if (freq === 'ANNUALLY' || freq.includes('ANNUAL') || freq.includes('YEARLY')) {
-        intervalDays = 365;
-      } else if (freq === 'Q8M' || freq.includes('8 MONTH') || freq.includes('SERESTO')) {
-        intervalDays = 240;
-      } else if (freq === 'Q6M' || freq.includes('6 MONTH') || freq.includes('PROHEART')) {
-        intervalDays = 180;
-      } else if (freq === 'Q3M' || freq.includes('3 MONTH') || freq.includes('BRAVECTO')) {
-        intervalDays = 90;
-      } else if (freq === 'MONTHLY' || freq.includes('MONTH')) {
-        intervalDays = 30;
-      } else if (freq === 'WEEKLY' || freq.includes('WEEK')) {
-        intervalDays = 7;
-      } else if (freq.includes('EOD') || freq.includes('EVERY OTHER')) {
-        intervalDays = 2;
-      } else if (freq.includes('HS') || freq.includes('BEDTIME')) {
-        doseTimes = [{ hour: 21, minute: 0 }]; // 9 PM (bedtime) - fixed time
-      } else if (freq.includes('BID') || freq.includes('TWICE') || freq.includes('2X')) {
-        doseTimes = [morningTime, eveningTime]; // Morning + Evening
-      } else if (freq.includes('TID') || freq.includes('THREE') || freq.includes('3X')) {
-        doseTimes = [morningTime, middayTime, eveningTime]; // Morning + Midday + Evening
-      } else if (freq.includes('QID') || freq.includes('FOUR') || freq.includes('4X')) {
-        // Four times daily: Morning, Midday, Evening, and late night (evening + 4 hours, max 22:00)
-        const lateHour = Math.min(eveningTime.hour + 4, 22);
-        doseTimes = [morningTime, middayTime, eveningTime, { hour: lateHour, minute: 0 }];
-      }
-      // Default: SID (once daily at morning) - already set
-
-      // Safety limit: max 500 doses to prevent timeout
-      const MAX_DOSES = 500;
+      // Determine if this is a historical prescription for response
       const now = new Date();
-      const isFirstDay = (d: Date) => 
-        d.getFullYear() === start.getFullYear() && 
-        d.getMonth() === start.getMonth() && 
-        d.getDate() === start.getDate();
-      
-      // Determine if this is a historical prescription (end date in the past)
-      // If so, mark all doses as 'given' instead of 'due' for backloading records
-      // This prevents historical medications from appearing as overdue in the Medical Pipeline
       const isHistorical = prescription.endDate && new Date(prescription.endDate) < now;
       
-      // Helper to get first-day adjusted time (avoid immediate overdue for same-day prescriptions)
-      const getFirstDayAdjustedTime = (d: Date): { hour: number; minute: number } => {
-        const nowMinutes = now.getHours() * 60 + now.getMinutes();
-        const morningMinutes = morningTime.hour * 60 + morningTime.minute;
-        
-        // If start date is today and current time is past morning rounds, use current time
-        if (!isHistorical && isFirstDay(d) && nowMinutes >= morningMinutes) {
-          return { hour: now.getHours(), minute: now.getMinutes() };
-        }
-        return morningTime;
-      };
-      
-      // Generate doses based on frequency type
-      if (intervalDays === 0) {
-        // ONE TIME: Single dose only
-        const doseTime = new Date(start);
-        const adjustedTime = getFirstDayAdjustedTime(start);
-        doseTime.setHours(adjustedTime.hour, adjustedTime.minute, 0, 0);
-        const doseStatus = isHistorical ? 'given' as const : 'due' as const;
-        doses.push({
-          prescriptionId: prescription.id,
-          tenantId: req.tenant!.id,
-          dueDate: doseTime,
-          status: doseStatus,
-          ...(isHistorical ? { givenAt: doseTime } : {}),
-        });
-      } else if (intervalDays !== null && intervalDays > 1) {
-        // INTERVAL-BASED: Generate doses at specified day intervals (weekly, monthly, etc.)
-        let isFirst = true;
-        for (let d = new Date(start); d <= effectiveEnd && doses.length < MAX_DOSES; d.setDate(d.getDate() + intervalDays)) {
-          const doseTime = new Date(d);
-          // Apply first-day time adjustment for the first dose only
-          if (isFirst && isFirstDay(d)) {
-            const adjustedTime = getFirstDayAdjustedTime(d);
-            doseTime.setHours(adjustedTime.hour, adjustedTime.minute, 0, 0);
-          } else {
-            doseTime.setHours(morningTime.hour, morningTime.minute, 0, 0);
-          }
-          isFirst = false;
-          const doseStatus = isHistorical ? 'given' as const : 'due' as const;
-          doses.push({
-            prescriptionId: prescription.id,
-            tenantId: req.tenant!.id,
-            dueDate: doseTime,
-            status: doseStatus,
-            ...(isHistorical ? { givenAt: doseTime } : {}),
-          });
-        }
-      } else {
-        // DAILY-BASED: Generate doses each day with multiple times per day if needed
-        for (let d = new Date(start); d <= effectiveEnd && doses.length < MAX_DOSES; d.setDate(d.getDate() + 1)) {
-          for (let i = 0; i < doseTimes.length && doses.length < MAX_DOSES; i++) {
-            const doseTime = new Date(d);
-            let { hour, minute } = doseTimes[i];
-            
-            // For first day with daily (single dose), use current time if after morning rounds
-            // Only for non-historical prescriptions
-            const nowMinutes = now.getHours() * 60 + now.getMinutes();
-            const morningMinutes = morningTime.hour * 60 + morningTime.minute;
-            if (!isHistorical && isFirstDay(d) && doseTimes.length === 1 && nowMinutes >= morningMinutes) {
-              hour = now.getHours();
-              minute = now.getMinutes();
-            }
-            
-            doseTime.setHours(hour, minute, 0, 0);
-            
-            // For historical prescriptions, auto-complete all doses
-            // For current prescriptions, doses in the past are 'due' (shown as overdue), future doses are 'due'
-            const doseStatus = isHistorical ? 'given' as const : 'due' as const;
-            
-            doses.push({
-              prescriptionId: prescription.id,
-              tenantId: req.tenant!.id,
-              dueDate: doseTime,
-              status: doseStatus,
-              // For historical doses, mark them as given at the scheduled time
-              ...(isHistorical ? { givenAt: doseTime } : {}),
-            });
-          }
-        }
-      }
-
+      // Insert doses into database
       if (doses.length > 0) {
         await db.insert(medicalDoses).values(doses);
       }
@@ -23435,6 +23290,25 @@ Email: ${application.applicantEmail || ''}`
         (data as any).grantId = undefined;
       }
 
+      // Check if schedule-affecting fields are actually changing (compare old vs new values)
+      const frequencyChanged = data.frequency !== undefined && data.frequency !== existingPrescription.frequency;
+      
+      const nextDoseChanged = data.nextScheduledDose !== undefined && (
+        !existingPrescription.nextScheduledDose ||
+        new Date(data.nextScheduledDose).getTime() !== new Date(existingPrescription.nextScheduledDose).getTime()
+      );
+      
+      const startDateChanged = data.startDate !== undefined && 
+        new Date(data.startDate).getTime() !== new Date(existingPrescription.startDate).getTime();
+      
+      const endDateCleared = (req.body.endDate === '' || req.body.endDate === null) && existingPrescription.endDate !== null;
+      const endDateSet = data.endDate !== undefined && (
+        !existingPrescription.endDate ||
+        new Date(data.endDate).getTime() !== new Date(existingPrescription.endDate).getTime()
+      );
+      
+      const scheduleFieldsChanged = frequencyChanged || nextDoseChanged || startDateChanged || endDateCleared || endDateSet;
+
       const [prescription] = await db
         .update(medicalPrescriptions)
         .set(data)
@@ -23444,7 +23318,28 @@ Email: ${application.applicantEmail || ''}`
         ))
         .returning();
 
-      res.json({ prescription });
+      // Regenerate doses if schedule-affecting fields changed
+      let dosesRegenerated = false;
+      let regenerateResult = { deletedCount: 0, createdCount: 0 };
+      
+      if (scheduleFieldsChanged) {
+        const { regeneratePrescriptionDoses } = await import('./lib/dose-generator');
+        regenerateResult = await regeneratePrescriptionDoses({
+          prescription,
+          tenant: req.tenant!,
+          tenantId: req.tenant!.id,
+        });
+        dosesRegenerated = true;
+      }
+
+      res.json({ 
+        prescription,
+        dosesRegenerated,
+        ...(dosesRegenerated ? { 
+          dosesDeleted: regenerateResult.deletedCount,
+          dosesCreated: regenerateResult.createdCount 
+        } : {}),
+      });
     } catch (error) {
       next(error);
     }
