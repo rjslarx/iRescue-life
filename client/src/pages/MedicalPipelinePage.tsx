@@ -914,6 +914,11 @@ export default function MedicalPipelinePage() {
                                               Controlled
                                             </Badge>
                                           )}
+                                          {prescription?.requiresRefill && (
+                                            <Badge variant="outline" className="text-xs border-orange-500 text-orange-600 dark:text-orange-400" data-testid="badge-refill-needed">
+                                              REFILL NEEDED
+                                            </Badge>
+                                          )}
                                           {isPending && (
                                             <Badge variant="destructive" className="text-xs">
                                               {daysOverdue} {daysOverdue === 1 ? 'day' : 'days'} overdue
@@ -1059,6 +1064,11 @@ export default function MedicalPipelinePage() {
                                           {prescription?.controlledSubstance && (
                                             <Badge variant="destructive" className="text-xs">
                                               Controlled
+                                            </Badge>
+                                          )}
+                                          {prescription?.requiresRefill && (
+                                            <Badge variant="outline" className="text-xs border-orange-500 text-orange-600 dark:text-orange-400" data-testid="badge-refill-needed">
+                                              REFILL NEEDED
                                             </Badge>
                                           )}
                                           {isGiven && (

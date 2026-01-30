@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useToast } from "@/hooks/use-toast";
@@ -22,6 +22,7 @@ const prescriptionSchema = z.object({
   nextScheduledDose: z.string().optional(),
   endDate: z.string().optional(),
   isControlledSubstance: z.boolean().optional(),
+  requiresRefill: z.boolean().optional(),
   notes: z.string().optional(),
   billVendor: z.string().optional(),
   billAmount: z.string().optional(),
@@ -44,6 +45,7 @@ interface Prescription {
   nextScheduledDose?: string | null;
   endDate?: string | null;
   isControlledSubstance?: boolean;
+  requiresRefill?: boolean;
   notes?: string | null;
   billVendor?: string | null;
   billAmount?: string | null;
@@ -82,6 +84,7 @@ export function AddPrescriptionDialog({ animalId, open, onOpenChange, prescripti
       nextScheduledDose: "",
       endDate: "",
       isControlledSubstance: false,
+      requiresRefill: false,
       notes: "",
       billVendor: "",
       billAmount: "",
@@ -94,7 +97,12 @@ export function AddPrescriptionDialog({ animalId, open, onOpenChange, prescripti
   });
   
   // Watch startDate to conditionally show nextScheduledDose field
-  const watchedStartDate = form.watch("startDate");
+  // Using useWatch hook for reliable re-renders when field changes
+  const watchedStartDate = useWatch({
+    control: form.control,
+    name: "startDate",
+    defaultValue: new Date().toISOString().split('T')[0],
+  });
   const today = new Date().toISOString().split('T')[0];
   const isStartDateInPast = watchedStartDate && watchedStartDate < today;
 
@@ -111,6 +119,7 @@ export function AddPrescriptionDialog({ animalId, open, onOpenChange, prescripti
         nextScheduledDose: prescription.nextScheduledDose ? new Date(prescription.nextScheduledDose).toISOString().split('T')[0] : "",
         endDate: prescription.endDate ? new Date(prescription.endDate).toISOString().split('T')[0] : "",
         isControlledSubstance: prescription.isControlledSubstance || false,
+        requiresRefill: prescription.requiresRefill || false,
         notes: prescription.notes || "",
         billVendor: prescription.billVendor || "",
         billAmount: prescription.billAmount || "",
@@ -130,6 +139,7 @@ export function AddPrescriptionDialog({ animalId, open, onOpenChange, prescripti
         nextScheduledDose: "",
         endDate: "",
         isControlledSubstance: false,
+        requiresRefill: false,
         notes: "",
         billVendor: "",
         billAmount: "",
@@ -328,12 +338,12 @@ export function AddPrescriptionDialog({ animalId, open, onOpenChange, prescripti
                 name="nextScheduledDose"
                 render={({ field }) => (
                   <FormItem className="rounded-md border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950 p-4">
-                    <FormLabel className="text-amber-800 dark:text-amber-200">Next Dose Due *</FormLabel>
+                    <FormLabel className="text-amber-800 dark:text-amber-200">Next Due Date</FormLabel>
                     <FormControl>
                       <Input type="date" {...field} data-testid="input-next-scheduled-dose" />
                     </FormControl>
                     <FormDescription className="text-xs text-amber-700 dark:text-amber-300">
-                      Since the start date is in the past, specify when the next dose is due to avoid creating overdue tasks for historical entries.
+                      Since the start date is in the past, specify when the next dose is due. Leave blank to default to today.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -385,6 +395,30 @@ export function AddPrescriptionDialog({ animalId, open, onOpenChange, prescripti
                     </FormLabel>
                     <FormDescription>
                       Check if this medication is a DEA-regulated controlled substance
+                    </FormDescription>
+                  </div>
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="requiresRefill"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950 p-4">
+                  <FormControl>
+                    <Checkbox
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                      data-testid="checkbox-requires-refill"
+                    />
+                  </FormControl>
+                  <div className="space-y-1 leading-none">
+                    <FormLabel className="text-orange-800 dark:text-orange-200">
+                      Requires Vet Refill for Next Dose
+                    </FormLabel>
+                    <FormDescription className="text-orange-700 dark:text-orange-300">
+                      Check if the medication needs to be obtained from a vet before the next dose can be given
                     </FormDescription>
                   </div>
                 </FormItem>
