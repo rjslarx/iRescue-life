@@ -317,6 +317,12 @@ export default function KennelCardPage() {
         .border-primary { border-color: hsl(var(--primary)) !important; }
         .border-destructive { border-color: hsl(var(--destructive)) !important; }
         .border-orange-500 { border-color: #f97316 !important; }
+        
+        /* Larger kennel location for print - override the smaller text rule */
+        .kennel-location-text {
+          font-size: 4rem !important;
+          line-height: 1.1 !important;
+        }
       }
     `;
     document.head.appendChild(style);
@@ -685,7 +691,7 @@ export default function KennelCardPage() {
           {animal.kennelRowName && animal.kennelPosition !== null && animal.kennelPosition !== undefined && (
             <div className="flex-shrink-0 flex flex-col items-center justify-center border-4 border-primary rounded-lg p-4 bg-primary/5">
               <p className={`${fontSize === 'small' ? 'text-sm' : 'text-base'} font-medium text-muted-foreground mb-1`}>Kennel</p>
-              <p className={`${fontSize === 'small' ? 'text-4xl' : fontSize === 'medium' ? 'text-5xl' : 'text-6xl'} font-extrabold text-primary`} data-testid="text-kennel-location">
+              <p className={`kennel-location-text ${fontSize === 'small' ? 'text-4xl' : fontSize === 'medium' ? 'text-5xl' : 'text-6xl'} font-extrabold text-primary`} data-testid="text-kennel-location">
                 {animal.kennelRowName} - #{animal.kennelPosition + 1}
               </p>
             </div>
