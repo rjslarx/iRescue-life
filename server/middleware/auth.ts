@@ -259,6 +259,9 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
 /**
  * Middleware to require specific roles
  * Checks if the user's active role is one of the specified roles
+ * 
+ * Role hierarchy (higher roles can access lower role endpoints):
+ * - platform_admin > owner > admin > board_member > staff > foster > volunteer
  */
 export function requireRole(...roles: string[]) {
   return (req: Request, res: Response, next: NextFunction) => {
@@ -268,6 +271,25 @@ export function requireRole(...roles: string[]) {
     
     // Check activeRole first (standard check)
     if (roles.includes(req.user.activeRole)) {
+      return next();
+    }
+    
+    // Role hierarchy: higher roles automatically have access to lower role endpoints
+    const roleHierarchy: Record<string, string[]> = {
+      platform_admin: ['owner', 'admin', 'board_member', 'staff', 'foster', 'volunteer'],
+      owner: ['admin', 'board_member', 'staff', 'foster', 'volunteer'],
+      admin: ['board_member', 'staff', 'foster', 'volunteer'],
+      board_member: ['staff', 'foster', 'volunteer'],
+      staff: ['foster', 'volunteer'],
+      foster: ['volunteer'],
+      volunteer: [],
+    };
+    
+    // Get the roles that the user's activeRole can access
+    const accessibleRoles = roleHierarchy[req.user.activeRole] || [];
+    
+    // Check if any of the required roles are accessible by this user's role
+    if (roles.some(role => accessibleRoles.includes(role))) {
       return next();
     }
     
