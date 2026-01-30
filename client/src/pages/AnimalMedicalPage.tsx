@@ -343,39 +343,41 @@ export default function AnimalMedicalPage() {
       <div className="h-full overflow-auto">
         <div className="container mx-auto p-6 space-y-6">
           {/* Header */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="flex items-center gap-3 md:gap-4">
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={() => navigate('/dashboard/animals')}
                 data-testid="button-back"
-            >
-              <ArrowLeft className="w-4 h-4" />
-            </Button>
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <h1 className="text-3xl font-bold" data-testid="text-page-title">
-                  {animal.name} - Medical Records
-                </h1>
-                {animal.animalId && (
-                  <Badge variant="outline" className="text-base font-mono">
-                    {animal.animalId}
-                  </Badge>
-                )}
+              >
+                <ArrowLeft className="w-4 h-4" />
+              </Button>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2 mb-1">
+                  <h1 className="text-xl md:text-3xl font-bold" data-testid="text-page-title">
+                    {animal.name} - Medical Records
+                  </h1>
+                  {animal.animalId && (
+                    <Badge variant="outline" className="text-sm md:text-base font-mono">
+                      {animal.animalId}
+                    </Badge>
+                  )}
+                </div>
+                <p className="text-sm md:text-base text-muted-foreground">
+                  {animal.species} • {animal.breed}
+                </p>
               </div>
-              <p className="text-muted-foreground">
-                {animal.species} • {animal.breed}
-              </p>
             </div>
+            <Button
+              onClick={() => window.open(`${basePath}/dashboard/animals/${animalId}/health-record`, '_blank')}
+              data-testid="button-print-records"
+              className="w-full md:w-auto"
+            >
+              <FileText className="w-4 h-4 mr-2" />
+              Print Health Record
+            </Button>
           </div>
-          <Button
-            onClick={() => window.open(`${basePath}/dashboard/animals/${animalId}/health-record`, '_blank')}
-            data-testid="button-print-records"
-          >
-            <FileText className="w-4 h-4 mr-2" />
-            Print Health Record
-          </Button>
         </div>
 
         {/* Medical Alerts */}
@@ -395,20 +397,22 @@ export default function AnimalMedicalPage() {
 
         {/* Tabs */}
         <Tabs defaultValue="glance" className="w-full">
-          <TabsList className="grid w-full grid-cols-9">
-            <TabsTrigger value="glance" data-testid="tab-glance">At a Glance</TabsTrigger>
-            <TabsTrigger value="history" data-testid="tab-history">History</TabsTrigger>
-            <TabsTrigger value="exams" data-testid="tab-exams">Exams</TabsTrigger>
-            <TabsTrigger value="vaccines" data-testid="tab-vaccines">Vaccines</TabsTrigger>
-            <TabsTrigger value="diagnostics" data-testid="tab-diagnostics">Diagnostics</TabsTrigger>
-            <TabsTrigger value="procedures" data-testid="tab-procedures">Procedures</TabsTrigger>
-            <TabsTrigger value="medications" data-testid="tab-medications">Medications</TabsTrigger>
-            <TabsTrigger value="billing" data-testid="tab-billing">Billing</TabsTrigger>
-            <TabsTrigger value="documents" data-testid="tab-documents">
-              <FolderOpen className="w-4 h-4 mr-1" />
-              Docs
-            </TabsTrigger>
-          </TabsList>
+          <div className="overflow-x-auto -mx-6 px-6 md:mx-0 md:px-0">
+            <TabsList className="inline-flex w-auto min-w-full md:grid md:w-full md:grid-cols-9 gap-1">
+              <TabsTrigger value="glance" data-testid="tab-glance" className="whitespace-nowrap text-xs md:text-sm px-3 md:px-4">At a Glance</TabsTrigger>
+              <TabsTrigger value="history" data-testid="tab-history" className="whitespace-nowrap text-xs md:text-sm px-3 md:px-4">History</TabsTrigger>
+              <TabsTrigger value="exams" data-testid="tab-exams" className="whitespace-nowrap text-xs md:text-sm px-3 md:px-4">Exams</TabsTrigger>
+              <TabsTrigger value="vaccines" data-testid="tab-vaccines" className="whitespace-nowrap text-xs md:text-sm px-3 md:px-4">Vaccines</TabsTrigger>
+              <TabsTrigger value="diagnostics" data-testid="tab-diagnostics" className="whitespace-nowrap text-xs md:text-sm px-3 md:px-4">Diagnostics</TabsTrigger>
+              <TabsTrigger value="procedures" data-testid="tab-procedures" className="whitespace-nowrap text-xs md:text-sm px-3 md:px-4">Procedures</TabsTrigger>
+              <TabsTrigger value="medications" data-testid="tab-medications" className="whitespace-nowrap text-xs md:text-sm px-3 md:px-4">Meds</TabsTrigger>
+              <TabsTrigger value="billing" data-testid="tab-billing" className="whitespace-nowrap text-xs md:text-sm px-3 md:px-4">Billing</TabsTrigger>
+              <TabsTrigger value="documents" data-testid="tab-documents" className="whitespace-nowrap text-xs md:text-sm px-3 md:px-4">
+                <FolderOpen className="w-4 h-4 mr-1" />
+                Docs
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           {/* At a Glance Tab */}
           <TabsContent value="glance" className="space-y-6">
@@ -1545,7 +1549,6 @@ export default function AnimalMedicalPage() {
           />
         </>
       )}
-      </div>
     </DashboardLayout>
   );
 }

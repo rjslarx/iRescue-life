@@ -206,44 +206,46 @@ export default function FosterManagementPage() {
     >
       <div className="flex-1 overflow-auto p-4 md:p-6">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 md:space-y-6">
-              <TabsList className="grid grid-cols-6 w-full h-auto gap-1">
-                <TabsTrigger value="applications" data-testid="tab-applications" className="flex flex-col md:flex-row items-center gap-1 px-2 py-2 md:py-1.5">
-                  <Users className="h-4 w-4 flex-shrink-0" />
-                  <span className="text-xs md:text-sm">
-                    {isMobile ? pendingApplications.length : `Applications (${pendingApplications.length})`}
-                  </span>
-                </TabsTrigger>
-                <TabsTrigger value="fosters" data-testid="tab-fosters" className="flex flex-col md:flex-row items-center gap-1 px-2 py-2 md:py-1.5">
-                  <Heart className="h-4 w-4 flex-shrink-0" />
-                  <span className="text-xs md:text-sm">
-                    {isMobile ? activeFosters.length : `Fosters (${activeFosters.length})`}
-                  </span>
-                </TabsTrigger>
-                <TabsTrigger value="supply-requests" data-testid="tab-supply-requests" className="flex flex-col md:flex-row items-center gap-1 px-2 py-2 md:py-1.5">
-                  <Package className="h-4 w-4 flex-shrink-0" />
-                  <span className="text-xs md:text-sm">
-                    {isMobile ? pendingSupplyRequests.length : `Supplies (${pendingSupplyRequests.length})`}
-                  </span>
-                </TabsTrigger>
-                <TabsTrigger value="foster-updates" data-testid="tab-foster-updates" className="flex flex-col md:flex-row items-center gap-1 px-2 py-2 md:py-1.5">
-                  <MessageSquare className="h-4 w-4 flex-shrink-0" />
-                  <span className="text-xs md:text-sm">
-                    {isMobile ? unacknowledgedUpdates.length : `Updates (${unacknowledgedUpdates.length})`}
-                  </span>
-                </TabsTrigger>
-                <TabsTrigger value="supply-history" data-testid="tab-supply-history" className="flex flex-col md:flex-row items-center gap-1 px-2 py-2 md:py-1.5">
-                  <History className="h-4 w-4 flex-shrink-0 opacity-60" />
-                  <span className="text-xs md:text-sm opacity-60">
-                    {isMobile ? archivedSupplyRequests.length : `Supply Hist (${archivedSupplyRequests.length})`}
-                  </span>
-                </TabsTrigger>
-                <TabsTrigger value="update-history" data-testid="tab-update-history" className="flex flex-col md:flex-row items-center gap-1 px-2 py-2 md:py-1.5">
-                  <History className="h-4 w-4 flex-shrink-0 opacity-60" />
-                  <span className="text-xs md:text-sm opacity-60">
-                    {isMobile ? archivedFosterUpdates.length : `Update Hist (${archivedFosterUpdates.length})`}
-                  </span>
-                </TabsTrigger>
-              </TabsList>
+              <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
+                <TabsList className="inline-flex w-auto min-w-full md:grid md:w-full md:grid-cols-6 h-auto gap-1">
+                  <TabsTrigger value="applications" data-testid="tab-applications" className="flex flex-col md:flex-row items-center gap-1 px-3 py-2 md:py-1.5 whitespace-nowrap">
+                    <Users className="h-4 w-4 flex-shrink-0" />
+                    <span className="text-xs md:text-sm">
+                      {isMobile ? pendingApplications.length : `Applications (${pendingApplications.length})`}
+                    </span>
+                  </TabsTrigger>
+                  <TabsTrigger value="fosters" data-testid="tab-fosters" className="flex flex-col md:flex-row items-center gap-1 px-3 py-2 md:py-1.5 whitespace-nowrap">
+                    <Heart className="h-4 w-4 flex-shrink-0" />
+                    <span className="text-xs md:text-sm">
+                      {isMobile ? activeFosters.length : `Fosters (${activeFosters.length})`}
+                    </span>
+                  </TabsTrigger>
+                  <TabsTrigger value="supply-requests" data-testid="tab-supply-requests" className="flex flex-col md:flex-row items-center gap-1 px-3 py-2 md:py-1.5 whitespace-nowrap">
+                    <Package className="h-4 w-4 flex-shrink-0" />
+                    <span className="text-xs md:text-sm">
+                      {isMobile ? pendingSupplyRequests.length : `Supplies (${pendingSupplyRequests.length})`}
+                    </span>
+                  </TabsTrigger>
+                  <TabsTrigger value="foster-updates" data-testid="tab-foster-updates" className="flex flex-col md:flex-row items-center gap-1 px-3 py-2 md:py-1.5 whitespace-nowrap">
+                    <MessageSquare className="h-4 w-4 flex-shrink-0" />
+                    <span className="text-xs md:text-sm">
+                      {isMobile ? unacknowledgedUpdates.length : `Updates (${unacknowledgedUpdates.length})`}
+                    </span>
+                  </TabsTrigger>
+                  <TabsTrigger value="supply-history" data-testid="tab-supply-history" className="flex flex-col md:flex-row items-center gap-1 px-3 py-2 md:py-1.5 whitespace-nowrap">
+                    <History className="h-4 w-4 flex-shrink-0 opacity-60" />
+                    <span className="text-xs md:text-sm opacity-60">
+                      {isMobile ? archivedSupplyRequests.length : `Supply Hist (${archivedSupplyRequests.length})`}
+                    </span>
+                  </TabsTrigger>
+                  <TabsTrigger value="update-history" data-testid="tab-update-history" className="flex flex-col md:flex-row items-center gap-1 px-3 py-2 md:py-1.5 whitespace-nowrap">
+                    <History className="h-4 w-4 flex-shrink-0 opacity-60" />
+                    <span className="text-xs md:text-sm opacity-60">
+                      {isMobile ? archivedFosterUpdates.length : `Update Hist (${archivedFosterUpdates.length})`}
+                    </span>
+                  </TabsTrigger>
+                </TabsList>
+              </div>
 
               <TabsContent value="applications">
                 {applicationsLoading ? (
