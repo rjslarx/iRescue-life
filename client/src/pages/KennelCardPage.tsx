@@ -674,7 +674,7 @@ export default function KennelCardPage() {
       
       <CardContent className="p-6 space-y-4 kennel-card-content">
         {/* Header: Name/ID (Left) and QR Code/Barcode/Print Date (Right) */}
-        <div className="flex items-start justify-between gap-4 border-b-2 border-primary pb-4">
+        <div className="flex items-start justify-between gap-4 pb-2">
           <div>
             <h1 className={`${getHeadingSizeClass()} font-bold mb-1`} data-testid="text-kennel-card-name">
               {animal.name}
@@ -801,8 +801,8 @@ export default function KennelCardPage() {
         )}
 
         {/* Good With Icons and Logistics Section */}
-        <Card className="border-2 border-border">
-          <CardContent className="p-4">
+        <div className="animal-info-section">
+          <div className="p-4">
             <div className="flex items-center gap-2 mb-3">
               <Info className="w-5 h-5 text-muted-foreground" />
               <h2 className={`${fontSize === 'small' ? 'text-lg' : 'text-xl'} font-bold`}>Animal Info</h2>
@@ -897,8 +897,8 @@ export default function KennelCardPage() {
                 </>
               )}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {/* Additional Comments */}
         {additionalComments && (
