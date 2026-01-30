@@ -526,6 +526,52 @@ export function registerGoogleWorkspaceRoutes(app: Express) {
   });
 
   /**
+   * POST /api/google-workspace/validate-shared-drive
+   * Validate a manually entered Shared Drive ID.
+   * This is used when the drive.file scope prevents listing shared drives.
+   */
+  app.post('/api/google-workspace/validate-shared-drive', requireTenant, requireAuth, requireRole('admin'), async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const validateSchema = z.object({
+        driveId: z.string().min(1, "Drive ID is required"),
+      });
+
+      const { driveId } = validateSchema.parse(req.body);
+
+      const driveService = await DriveService.forTenant(req.tenant!.id);
+      
+      if (!driveService) {
+        return res.status(404).json({ 
+          valid: false,
+          error: 'Google Workspace not connected. Please connect Google Workspace first.'
+        });
+      }
+
+      const validationResult = await driveService.validateSharedDrive(driveId);
+      
+      if (!validationResult.success) {
+        return res.json({ 
+          valid: false,
+          error: validationResult.error || 'Could not validate this Shared Drive ID.'
+        });
+      }
+
+      // If validation was skipped due to scope limitations, we still accept it
+      // The user is manually entering the ID from their Drive URL
+      res.json({
+        valid: true,
+        driveName: validationResult.name || null,
+        skipValidation: validationResult.skipValidation || false,
+      });
+    } catch (error: any) {
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ valid: false, error: 'Invalid request: Drive ID is required' });
+      }
+      next(error);
+    }
+  });
+
+  /**
    * PATCH /api/google-workspace/shared-drive
    * Configure the Shared Drive to use for file storage.
    * Setting a Shared Drive ensures organizational data continuity -
