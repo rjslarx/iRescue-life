@@ -438,7 +438,7 @@
     /* Kennel card print styles - use higher specificity to override .kennel-card-content p rule */
     .kennel-card-content .kennel-location-text,
     .kennel-location-text {
-      font-size: 72pt !important;
+      font-size: 36pt !important;
       font-weight: 900 !important;
       line-height: 1.1 !important;
       color: black !important;
