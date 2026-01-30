@@ -581,7 +581,7 @@ export default function KennelCardPage() {
 
   // ==================== PUBLIC VIEW TEMPLATE ====================
   const PublicViewCard = () => (
-    <Card className="border-4 border-primary overflow-hidden kennel-card-print-wrapper">
+    <Card className="border-2 border-primary overflow-hidden kennel-card-print-wrapper">
       <CardContent className="p-0 kennel-card-content">
         {/* Header: Name/ID (Left) and Photo (Right) */}
         <div className="flex items-start gap-4 p-6 pb-4">
@@ -730,7 +730,7 @@ export default function KennelCardPage() {
 
   // ==================== STAFF/INTERNAL VIEW TEMPLATE ====================
   const StaffViewCard = () => (
-    <Card className="border-4 border-primary overflow-hidden kennel-card-print-wrapper h-full flex flex-col">
+    <Card className="border-2 border-primary overflow-hidden kennel-card-print-wrapper h-full flex flex-col">
       {/* Safety Banner - Full Width at Top */}
       <div className={`${safetyConfig.bg} ${safetyConfig.text} ${safetyConfig.className} py-3 px-6 text-center`}>
         <p className={`font-bold ${fontSize === 'small' ? 'text-lg' : fontSize === 'medium' ? 'text-xl' : fontSize === 'large' ? 'text-2xl' : 'text-3xl'}`}>
