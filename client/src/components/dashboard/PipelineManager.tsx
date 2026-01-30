@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { Link } from "wouter";
 import { formatDistanceToNow } from "date-fns";
+import { useTenant } from "@/contexts/TenantContext";
 
 // Tab-specific badge colors for count badges in tabs
 const pipelineBadgeColors: Record<string, string> = {
@@ -161,22 +162,35 @@ interface PipelineItemProps extends PipelineItemData {
   onClick: () => void;
 }
 
-function PipelineItem({ id, name, context, createdAt, pipelineType, onClick }: PipelineItemProps) {
+function PipelineItem({ id, name, context, status, createdAt, pipelineType, onClick }: PipelineItemProps) {
   const timeAgo = formatDistanceToNow(new Date(createdAt), { addSuffix: false });
+  const statusLabel = stageLabels[status] || status;
   
   return (
     <div 
-      className="p-3 rounded-md bg-card border shadow-sm hover-elevate cursor-pointer"
+      className="p-3 rounded-md bg-card border shadow-sm hover-elevate cursor-pointer flex items-center justify-between gap-2"
       data-testid={`pipeline-item-${pipelineType}-${id}`}
       onClick={onClick}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onClick(); }}
     >
-      <div className="font-medium text-sm" data-testid={`text-name-${pipelineType}-${id}`}>{name}</div>
-      <div className="text-xs text-muted-foreground mt-0.5" data-testid={`text-context-${pipelineType}-${id}`}>
-        {context || `Added ${timeAgo} ago`}
+      <div className="flex-1 min-w-0">
+        <div className="font-medium text-sm truncate" data-testid={`text-name-${pipelineType}-${id}`}>{name}</div>
+        <div className="flex items-center gap-2 mt-1">
+          <Badge 
+            variant="secondary" 
+            className={`text-xs ${pipelineBadgeColors[pipelineType] || ''}`}
+            data-testid={`badge-status-${pipelineType}-${id}`}
+          >
+            {statusLabel}
+          </Badge>
+          <span className="text-xs text-muted-foreground" data-testid={`text-context-${pipelineType}-${id}`}>
+            {context || `${timeAgo} ago`}
+          </span>
+        </div>
       </div>
+      <ChevronRight className="h-5 w-5 text-muted-foreground flex-shrink-0" />
     </div>
   );
 }
@@ -240,6 +254,7 @@ function StatusColumn({ status, items, pipelineType, onItemClick, showChevron, t
 
 export default function PipelineManager({ activeTab, onTabChange }: PipelineManagerProps) {
   const { user } = useAuth();
+  const { basePath } = useTenant();
   const [currentTab, setCurrentTab] = useState<PipelineTab>(activeTab || "adoptions");
   const [sheetOpen, setSheetOpen] = useState(false);
   const [selectedType, setSelectedType] = useState<ApplicationType>("adoption");
@@ -513,7 +528,7 @@ export default function PipelineManager({ activeTab, onTabChange }: PipelineMana
             <TabsContent value="adoptions" data-testid="content-adoptions">
               <div className="flex items-center justify-between gap-2 mb-2">
                 <span className="text-sm font-medium text-muted-foreground">Adoption Applications</span>
-                <Link href="/dashboard/applications" className="text-xs text-muted-foreground hover-elevate flex items-center gap-1" data-testid="link-view-all-adoptions">
+                <Link href={`${basePath}/dashboard/applications`} className="text-xs text-muted-foreground hover-elevate flex items-center gap-1" data-testid="link-view-all-adoptions">
                   View All <ArrowRight className="h-3 w-3" />
                 </Link>
               </div>
@@ -556,7 +571,7 @@ export default function PipelineManager({ activeTab, onTabChange }: PipelineMana
             <TabsContent value="fosters" data-testid="content-fosters">
               <div className="flex items-center justify-between gap-2 mb-2">
                 <span className="text-sm font-medium text-muted-foreground">Foster Applications</span>
-                <Link href="/dashboard/foster-pipeline" className="text-xs text-muted-foreground hover-elevate flex items-center gap-1" data-testid="link-view-all-fosters">
+                <Link href={`${basePath}/dashboard/foster-pipeline`} className="text-xs text-muted-foreground hover-elevate flex items-center gap-1" data-testid="link-view-all-fosters">
                   View All <ArrowRight className="h-3 w-3" />
                 </Link>
               </div>
@@ -600,7 +615,7 @@ export default function PipelineManager({ activeTab, onTabChange }: PipelineMana
             <TabsContent value="volunteers" data-testid="content-volunteers">
               <div className="flex items-center justify-between gap-2 mb-2">
                 <span className="text-sm font-medium text-muted-foreground">Volunteer Applications</span>
-                <Link href="/dashboard/volunteer-pipeline" className="text-xs text-muted-foreground hover-elevate flex items-center gap-1" data-testid="link-view-all-volunteers">
+                <Link href={`${basePath}/dashboard/volunteer-pipeline`} className="text-xs text-muted-foreground hover-elevate flex items-center gap-1" data-testid="link-view-all-volunteers">
                   View All <ArrowRight className="h-3 w-3" />
                 </Link>
               </div>
@@ -644,7 +659,7 @@ export default function PipelineManager({ activeTab, onTabChange }: PipelineMana
             <TabsContent value="intake" data-testid="content-intake">
               <div className="flex items-center justify-between gap-2 mb-2">
                 <span className="text-sm font-medium text-muted-foreground">Intake Requests</span>
-                <Link href="/dashboard/intake" className="text-xs text-muted-foreground hover-elevate flex items-center gap-1" data-testid="link-view-all-intake">
+                <Link href={`${basePath}/dashboard/intake`} className="text-xs text-muted-foreground hover-elevate flex items-center gap-1" data-testid="link-view-all-intake">
                   View All <ArrowRight className="h-3 w-3" />
                 </Link>
               </div>
