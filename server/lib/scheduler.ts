@@ -235,6 +235,29 @@ export function initializeScheduler() {
   });
 
   console.log(`✓ Trial expiration check scheduled for: ${trialExpirationSchedule} (UTC)`);
+
+  // Schedule storage backup daily at 4:00 AM UTC
+  // "0 4 * * *" means: at minute 0, hour 4, every day
+  // This backs up files from Replit Object Storage to Google Drive for all tenants
+  const storageBackupSchedule = process.env.STORAGE_BACKUP_SCHEDULE || "0 4 * * *";
+  
+  cron.schedule(storageBackupSchedule, async () => {
+    console.log("💾 Running storage backup to Google Drive...");
+    try {
+      const { runStorageBackupForAllTenants } = await import("./storage-backup-service");
+      const result = await runStorageBackupForAllTenants();
+      console.log(`✓ Storage backup: ${result.tenantsProcessed} tenants processed, ${result.totalFilesBackedUp} files backed up`);
+      if (result.errors.length > 0) {
+        console.warn(`⚠️ Storage backup errors: ${result.errors.slice(0, 5).join('; ')}${result.errors.length > 5 ? ` (+${result.errors.length - 5} more)` : ''}`);
+      }
+    } catch (error) {
+      console.error(`❌ Storage backup failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }, {
+    timezone: "UTC"
+  });
+
+  console.log(`✓ Storage backup scheduled for: ${storageBackupSchedule} (UTC)`);
   
   // Log next scheduled run times
   const nextMidnight = new Date();

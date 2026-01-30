@@ -120,6 +120,15 @@ Printable kennel cards designed for single-page printing with comprehensive anim
 - Stray-specific fields: Location found and stray hold until date (only shown for strays)
 - Medical notes and staff notes sections
 
+**Automated Google Drive Backup:**
+The platform includes automated daily backups of all tenant files from Replit Object Storage to Google Drive Shared Drives:
+- **Scheduled backup:** Runs daily at 4:00 AM UTC via node-cron
+- **Manual trigger:** Admins can trigger backups from Settings → Integrations → Google Workspace
+- **Files backed up:** Animal photos, medical documents, volunteer waivers, foster agreements, donation receipts, website assets
+- **Folder structure:** Organized into 01_Active_Animals, 02_Adopted_Archive, 03_Volunteers, 04_Fosters, 05_Website_Assets, 06_Finance
+- **Deduplication:** Uses deterministic filenames based on object URL hashes to prevent duplicate uploads
+- **Requirements:** Tenant must have Google Workspace connected with useDrive enabled and a Shared Drive configured
+
 **Technical Implementations:**
 The "Paw Pay" platform fee system uses Stripe Connect with a "SaaS + 0%" two-tier model (Free and Professional tiers). A Pro trial system is in place, allowing organizations a 14-day trial before reverting to the Free tier. Stripe Standard Connect OAuth enables tenant-owned Stripe accounts, and a "Donor Covers Fees" feature calculates gross-up amounts. Sensitive data is protected with AES-256-GCM encryption. Unified file storage prioritizes Google Drive, falling back to Replit object storage. Email services use Resend, with optional Google Workspace Gmail API integration. Platform admin security features subdomain resolution, RBAC, frontend guards, authenticated sessions, and TOTP MFA. Production security includes rate limiting, Helmet security headers, CORS fail-closed, and session hardening. Google Analytics 4 is integrated. Optional Google Workspace integration provides Gmail API, Calendar sync, and Drive storage, optimized for CASA OAuth scopes.
 

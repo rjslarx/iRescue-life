@@ -104,6 +104,144 @@ const platformInfo = {
   },
 };
 
+interface BackupStatus {
+  status: 'idle' | 'pending' | 'in_progress' | 'completed' | 'failed';
+  filesScanned?: number;
+  filesBackedUp?: number;
+  filesSkipped?: number;
+  errors?: string[];
+  startedAt?: string;
+  completedAt?: string;
+  message?: string;
+}
+
+function BackupToDriveSection({ canEdit }: { canEdit: boolean }) {
+  const { toast } = useToast();
+  
+  const { data: backupStatus, refetch: refetchBackupStatus } = useQuery<BackupStatus>({
+    queryKey: ['/api/google-workspace/backup-status'],
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status === 'in_progress' ? 3000 : false;
+    },
+  });
+
+  const triggerBackupMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest('POST', '/api/google-workspace/backup', {});
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Backup started",
+        description: "Files are being synced to Google Drive. This may take a few minutes.",
+      });
+      refetchBackupStatus();
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Backup failed to start",
+        description: error.message || "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const isBackupRunning = backupStatus?.status === 'in_progress' || triggerBackupMutation.isPending;
+
+  return (
+    <div className="pt-4 border-t mt-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <div>
+          <Label className="text-sm font-medium">Backup Files to Google Drive</Label>
+          <p className="text-xs text-muted-foreground mt-1">
+            Sync animal photos, documents, and receipts to your Shared Drive for backup.
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => triggerBackupMutation.mutate()}
+          disabled={!canEdit || isBackupRunning}
+          data-testid="button-trigger-backup"
+        >
+          {isBackupRunning ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Backing up...
+            </>
+          ) : (
+            <>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Backup Now
+            </>
+          )}
+        </Button>
+      </div>
+
+      {backupStatus && backupStatus.status !== 'idle' && (
+        <div className="text-xs text-muted-foreground bg-muted/50 p-3 rounded-md space-y-1">
+          <div className="flex items-center gap-2">
+            {backupStatus.status === 'in_progress' && (
+              <>
+                <Loader2 className="h-3 w-3 animate-spin text-blue-500" />
+                <span>Backup in progress...</span>
+              </>
+            )}
+            {backupStatus.status === 'completed' && (
+              <>
+                <CheckCircle2 className="h-3 w-3 text-green-500" />
+                <span>Last backup completed</span>
+              </>
+            )}
+            {backupStatus.status === 'failed' && (
+              <>
+                <AlertCircle className="h-3 w-3 text-red-500" />
+                <span>Last backup failed</span>
+              </>
+            )}
+          </div>
+          
+          {(backupStatus.filesScanned !== undefined || backupStatus.filesBackedUp !== undefined) && (
+            <div className="flex gap-4 text-xs">
+              {backupStatus.filesScanned !== undefined && (
+                <span>Scanned: {backupStatus.filesScanned}</span>
+              )}
+              {backupStatus.filesBackedUp !== undefined && (
+                <span>Backed up: {backupStatus.filesBackedUp}</span>
+              )}
+              {backupStatus.filesSkipped !== undefined && backupStatus.filesSkipped > 0 && (
+                <span>Skipped: {backupStatus.filesSkipped}</span>
+              )}
+            </div>
+          )}
+
+          {backupStatus.completedAt && (
+            <p className="text-xs opacity-70">
+              Completed: {new Date(backupStatus.completedAt).toLocaleString()}
+            </p>
+          )}
+
+          {backupStatus.errors && backupStatus.errors.length > 0 && (
+            <div className="text-xs text-red-600 dark:text-red-400 mt-1">
+              {backupStatus.errors.slice(0, 3).map((error, i) => (
+                <p key={i} className="truncate">{error}</p>
+              ))}
+              {backupStatus.errors.length > 3 && (
+                <p>+{backupStatus.errors.length - 3} more errors</p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      <p className="text-xs text-muted-foreground">
+        Automatic backups run daily at 4:00 AM UTC.
+      </p>
+    </div>
+  );
+}
+
 export default function PlatformIntegrationsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -921,6 +1059,11 @@ export default function PlatformIntegrationsPage() {
                                     No Shared Drive configured. Files will be stored in internal storage.
                                   </p>
                                 </div>
+                              )}
+
+                              {/* Backup to Google Drive Section */}
+                              {googleWorkspace.features?.sharedDriveId && (
+                                <BackupToDriveSection canEdit={canEdit} />
                               )}
                             </div>
                           )}

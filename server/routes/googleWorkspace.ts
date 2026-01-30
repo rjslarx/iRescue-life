@@ -801,4 +801,83 @@ export function registerGoogleWorkspaceRoutes(app: Express) {
       next(error);
     }
   });
+
+  /**
+   * POST /api/google-workspace/backup
+   * Trigger a manual backup of files from Object Storage to Google Drive
+   * This syncs all tenant files (animal photos, documents, receipts, etc.) to the configured Shared Drive
+   */
+  app.post('/api/google-workspace/backup', requireTenant, requireAuth, requireRole('admin'), async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const driveService = await DriveService.forTenant(req.tenant!.id);
+      
+      if (!driveService) {
+        return res.status(404).json({ 
+          error: 'Google Workspace not connected',
+          message: 'Please connect Google Workspace first to enable backups.'
+        });
+      }
+
+      if (!driveService.hasSharedDriveConfigured()) {
+        return res.status(400).json({
+          error: 'No Shared Drive configured',
+          message: 'Please configure a Shared Drive first to enable backups.'
+        });
+      }
+
+      const { runStorageBackupForTenant } = await import('../lib/storage-backup-service');
+      
+      // Run backup asynchronously and return immediately
+      const tenantName = req.tenant!.name || req.tenant!.subdomain;
+      
+      // Start backup in background
+      runStorageBackupForTenant(req.tenant!.id, tenantName)
+        .then(result => {
+          console.log(`[STORAGE BACKUP] Manual backup completed for ${tenantName}: ${result.filesBackedUp} files backed up`);
+        })
+        .catch(error => {
+          console.error(`[STORAGE BACKUP] Manual backup failed for ${tenantName}:`, error);
+        });
+
+      res.json({
+        success: true,
+        message: 'Backup started. Files are being synced to Google Drive in the background.',
+        status: 'in_progress',
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/google-workspace/backup-status
+   * Get the current backup status for this tenant
+   */
+  app.get('/api/google-workspace/backup-status', requireTenant, requireAuth, requireRole('admin'), async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { getBackupService } = await import('../lib/storage-backup-service');
+      const backupService = getBackupService();
+      const progress = backupService.getProgress(req.tenant!.id);
+
+      if (!progress) {
+        return res.json({
+          status: 'idle',
+          message: 'No backup has been run recently.',
+          lastRun: null,
+        });
+      }
+
+      res.json({
+        status: progress.status,
+        filesScanned: progress.filesScanned,
+        filesBackedUp: progress.filesBackedUp,
+        filesSkipped: progress.filesSkipped,
+        errors: progress.errors,
+        startedAt: progress.startedAt,
+        completedAt: progress.completedAt,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
 }
