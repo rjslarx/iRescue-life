@@ -12,6 +12,28 @@ interface AnimalsResponse {
   animals: Animal[];
 }
 
+interface IntakeAnimal {
+  id: string;
+  name: string;
+  species: string;
+  status: string;
+  intakeDate: string | null;
+  medicalStatus: string | null;
+  photoUrls: string[] | null;
+  checklist: {
+    intakeExam: boolean;
+    vaccines: boolean;
+    microchip: boolean;
+    fecalTest: boolean;
+    heartwormTest: boolean;
+    spayNeuter: boolean;
+  };
+}
+
+interface IntakeAnimalsResponse {
+  animals: IntakeAnimal[];
+}
+
 interface DoseInfo {
   dose: {
     id: string;
@@ -48,12 +70,23 @@ export default function MedicalSnapshotWidget() {
     queryKey: ['/api/medical/doses/today'],
   });
 
+  const { data: intakeAnimalsData, isLoading: isLoadingIntake } = useQuery<IntakeAnimalsResponse>({
+    queryKey: ['/api/medical/intake-animals'],
+  });
+
   const animals = data?.animals || [];
-  const needsVetting = animals.filter(a => a.medicalStatus === 'needs_vetting');
+  const intakeAnimals = intakeAnimalsData?.animals || [];
+  
+  // Calculate needs vetting using same logic as Medical Pipeline intake tab:
+  // Animals that are missing intake exam OR vaccines
+  const needsVettingCount = intakeAnimals.filter(a => 
+    !a.checklist.intakeExam || !a.checklist.vaccines
+  ).length;
+  
   const surgeryPending = animals.filter(a => a.medicalStatus === 'surgery_pending');
   const medsDueToday = dosesTodayData?.doses?.length || 0;
 
-  if (isLoading || isLoadingDoses) {
+  if (isLoading || isLoadingDoses || isLoadingIntake) {
     return (
       <Card data-testid="card-medical-snapshot-widget">
         <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
@@ -99,15 +132,15 @@ export default function MedicalSnapshotWidget() {
           <Link href={`${basePath}/dashboard/medical-pipeline?tab=intake`}>
             <div 
               className={`flex flex-col items-center p-3 rounded-md cursor-pointer hover-elevate ${
-                needsVetting.length > 0 
+                needsVettingCount > 0 
                   ? 'bg-primary/10 border border-primary/20' 
                   : 'bg-muted/50'
               }`}
               data-testid="tile-needs-vetting"
             >
-              <ClipboardCheck className={`h-5 w-5 mb-1 ${needsVetting.length > 0 ? 'text-primary' : 'text-muted-foreground'}`} />
-              <div className={`text-xl font-bold ${needsVetting.length > 0 ? 'text-primary' : 'text-foreground'}`} data-testid="text-needs-vetting-count">
-                {needsVetting.length}
+              <ClipboardCheck className={`h-5 w-5 mb-1 ${needsVettingCount > 0 ? 'text-primary' : 'text-muted-foreground'}`} />
+              <div className={`text-xl font-bold ${needsVettingCount > 0 ? 'text-primary' : 'text-foreground'}`} data-testid="text-needs-vetting-count">
+                {needsVettingCount}
               </div>
               <p className="text-xs text-muted-foreground text-center">Needs Vetting</p>
             </div>
@@ -131,9 +164,9 @@ export default function MedicalSnapshotWidget() {
           </Link>
         </div>
 
-        {(needsVetting.length > 0 || surgeryPending.length > 0) && (
+        {(needsVettingCount > 0 || surgeryPending.length > 0) && (
           <Badge variant="secondary" className="w-full justify-center mb-4">
-            {needsVetting.length + surgeryPending.length} animals need attention
+            {needsVettingCount + surgeryPending.length} animals need attention
           </Badge>
         )}
 
