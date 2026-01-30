@@ -11554,6 +11554,10 @@ ${renderedHtml}
     try {
       const { contacts, users } = await import('@shared/schema');
       
+      // Debug logging for contacts API
+      const hostname = req.headers.host || 'unknown';
+      console.log(`[CONTACTS DEBUG] Hostname: ${hostname}, Tenant ID: ${req.tenant?.id}, Subdomain: ${req.tenant?.subdomain}, User ID: ${req.user?.id}`);
+      
       // Get all contacts with optional user linkage
       const contactList = await db
         .select({
@@ -11580,6 +11584,7 @@ ${renderedHtml}
         .where(eq(contacts.tenantId, req.tenant!.id))
         .orderBy(desc(contacts.updatedAt));
       
+      console.log(`[CONTACTS DEBUG] Found ${contactList.length} contacts for tenant ${req.tenant?.subdomain}`);
       res.json({ contacts: contactList });
     } catch (error) {
       next(error);
