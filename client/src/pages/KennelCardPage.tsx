@@ -218,9 +218,12 @@ export default function KennelCardPage() {
           page-break-before: avoid !important;
         }
         
-        /* Force the Card element itself to not break */
+        /* Force the Card element to fill the page height */
         .kennel-card-print-wrapper {
-          display: block !important;
+          display: flex !important;
+          flex-direction: column !important;
+          height: 100vh !important;
+          min-height: 100vh !important;
           overflow: visible !important;
           page-break-inside: avoid !important;
           break-inside: avoid !important;
@@ -228,17 +231,41 @@ export default function KennelCardPage() {
           page-break-before: avoid !important;
         }
         
+        /* CardContent fills remaining space */
         .kennel-card-content {
-          padding: 0.35rem !important;
+          padding: 0.5rem !important;
+          flex: 1 !important;
+          display: flex !important;
+          flex-direction: column !important;
         }
         
         .kennel-card-content > * {
-          margin-bottom: 0.25rem !important;
+          margin-bottom: 0.35rem !important;
         }
         
         .kennel-card-content .space-y-4 > * {
-          margin-top: 0.25rem !important;
-          margin-bottom: 0.25rem !important;
+          margin-top: 0.35rem !important;
+          margin-bottom: 0.35rem !important;
+        }
+        
+        /* Animal Info section expands to fill remaining space */
+        .animal-info-section {
+          flex: 1 !important;
+          display: flex !important;
+          flex-direction: column !important;
+        }
+        
+        .animal-info-section > div {
+          flex: 1 !important;
+          display: flex !important;
+          flex-direction: column !important;
+        }
+        
+        /* Logistics grid expands and uses more vertical space */
+        .animal-info-section .grid {
+          flex: 1 !important;
+          align-content: space-between !important;
+          gap: 1rem 0.5rem !important;
         }
         
         /* Animal photo in print - fixed size to match kennel container */
@@ -262,17 +289,12 @@ export default function KennelCardPage() {
           padding: 0.5rem !important;
         }
         
-        /* Reduce gaps */
+        /* Preserve horizontal gaps, allow vertical expansion */
         .kennel-card-content .gap-4 {
-          gap: 0.35rem !important;
+          gap: 0.5rem !important;
         }
         
         .kennel-card-content .gap-3 {
-          gap: 0.25rem !important;
-        }
-        
-        /* Reduce spacing in grid */
-        .kennel-card-content .grid {
           gap: 0.35rem !important;
         }
         
@@ -685,7 +707,7 @@ export default function KennelCardPage() {
 
   // ==================== STAFF/INTERNAL VIEW TEMPLATE ====================
   const StaffViewCard = () => (
-    <Card className="border-4 border-primary overflow-hidden kennel-card-print-wrapper">
+    <Card className="border-4 border-primary overflow-hidden kennel-card-print-wrapper h-full flex flex-col">
       {/* Safety Banner - Full Width at Top */}
       <div className={`${safetyConfig.bg} ${safetyConfig.text} ${safetyConfig.className} py-3 px-6 text-center`}>
         <p className={`font-bold ${fontSize === 'small' ? 'text-lg' : fontSize === 'medium' ? 'text-xl' : fontSize === 'large' ? 'text-2xl' : 'text-3xl'}`}>
@@ -698,7 +720,7 @@ export default function KennelCardPage() {
         )}
       </div>
       
-      <CardContent className="p-6 space-y-4 kennel-card-content">
+      <CardContent className="p-6 space-y-4 kennel-card-content flex-1 flex flex-col">
         {/* Header: Name/ID (Left) and QR Code/Barcode/Print Date (Right) */}
         <div className="flex items-start justify-between gap-4 pb-2">
           <div>
@@ -826,9 +848,9 @@ export default function KennelCardPage() {
           </Card>
         )}
 
-        {/* Good With Icons and Logistics Section */}
-        <div className="animal-info-section">
-          <div className="p-4">
+        {/* Good With Icons and Logistics Section - Expands to fill remaining space */}
+        <div className="animal-info-section flex-grow flex flex-col">
+          <div className="p-4 flex-grow flex flex-col">
             <div className="flex items-center gap-2 mb-3">
               <Info className="w-5 h-5 text-muted-foreground" />
               <h2 className={`${fontSize === 'small' ? 'text-lg' : 'text-xl'} font-bold`}>Animal Info</h2>
@@ -885,38 +907,36 @@ export default function KennelCardPage() {
               </div>
             </div>
 
-            {/* Logistics Grid */}
-            <div className={`grid grid-cols-2 gap-3 ${getFontSizeClass()}`}>
+            {/* Logistics Grid - Expanded spacing for better readability */}
+            <div className={`grid grid-cols-2 gap-x-4 gap-y-6 ${getFontSizeClass()} flex-grow`}>
               <div>
                 <p className="text-muted-foreground text-sm">Intake Date</p>
-                <p className="font-semibold">
-                  {animal.intakeDate ? format(new Date(animal.intakeDate), 'MMM d, yyyy') : 'Unknown'}
-                </p>
+                <p className="font-semibold text-lg">{animal.intakeDate ? format(new Date(animal.intakeDate), 'MMM d, yyyy') : 'Unknown'}</p>
               </div>
               <div>
                 <p className="text-muted-foreground text-sm">Intake Source</p>
-                <p className="font-semibold">{getIntakeSourceDisplay(animal.intakeSource)}</p>
+                <p className="font-semibold text-lg">{getIntakeSourceDisplay(animal.intakeSource)}</p>
               </div>
               <div>
                 <p className="text-muted-foreground text-sm">Weight</p>
-                <p className="font-semibold">{animal.weight || 'Unknown'}</p>
+                <p className="font-semibold text-lg">{animal.weight || 'Unknown'}</p>
               </div>
               <div>
                 <p className="text-muted-foreground text-sm">Activity Level</p>
-                <p className="font-semibold">{activityInfo.label}</p>
+                <p className="font-semibold text-lg">{activityInfo.label}</p>
               </div>
               {/* Stray-specific fields */}
               {(animal.intakeSource === 'stray' || animal.status === 'stray_hold') && (
                 <>
                   <div>
                     <p className="text-muted-foreground text-sm">Location Found</p>
-                    <p className="font-semibold" data-testid="text-location-found">
+                    <p className="font-semibold text-lg" data-testid="text-location-found">
                       {animal.locationFound || 'Not recorded'}
                     </p>
                   </div>
                   <div>
                     <p className="text-muted-foreground text-sm">Stray Hold Until</p>
-                    <p className={`font-semibold ${animal.strayHoldUntil && new Date(animal.strayHoldUntil) > new Date() ? 'text-orange-600' : ''}`} data-testid="text-stray-hold-until">
+                    <p className={`font-semibold text-lg ${animal.strayHoldUntil && new Date(animal.strayHoldUntil) > new Date() ? 'text-orange-600' : ''}`} data-testid="text-stray-hold-until">
                       {animal.strayHoldUntil ? format(new Date(animal.strayHoldUntil), 'MMM d, yyyy') : 'Not set'}
                     </p>
                   </div>
