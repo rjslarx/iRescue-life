@@ -186,7 +186,7 @@ export default function KennelCardPage() {
         }
         
         html, body {
-          height: auto !important;
+          height: 100% !important;
           margin: 0 !important;
           padding: 0 !important;
           print-color-adjust: exact;
@@ -196,39 +196,38 @@ export default function KennelCardPage() {
         
         @page {
           size: letter portrait;
-          margin: 5mm;
+          margin: 0;
         }
         
-        /* Main container */
+        /* Main container fills page height */
         .kennel-card-container {
           width: 100% !important;
           max-width: 100% !important;
-          height: auto !important;
+          height: 100% !important;
           overflow: visible !important;
-          padding: 0 !important;
+          padding: 5mm !important;
           margin: 0 !important;
+          box-sizing: border-box !important;
         }
         
-        /* The print page wrapper - critical for single page printing */
+        /* The print page wrapper fills available height */
         .print-page-wrapper {
-          display: block !important;
+          display: flex !important;
+          flex-direction: column !important;
+          height: 100% !important;
           page-break-inside: avoid !important;
           break-inside: avoid !important;
-          page-break-after: avoid !important;
-          page-break-before: avoid !important;
         }
         
         /* Force the Card element to fill the page height */
         .kennel-card-print-wrapper {
           display: flex !important;
           flex-direction: column !important;
-          height: 100vh !important;
-          min-height: 100vh !important;
+          height: 100% !important;
+          flex: 1 !important;
           overflow: visible !important;
           page-break-inside: avoid !important;
           break-inside: avoid !important;
-          page-break-after: avoid !important;
-          page-break-before: avoid !important;
         }
         
         /* CardContent fills remaining space */
@@ -314,11 +313,22 @@ export default function KennelCardPage() {
           line-height: 1.1 !important;
         }
         
-        /* Smaller base text */
+        /* Base text sizing */
         .kennel-card-content p,
         .kennel-card-content span {
-          font-size: 0.8rem !important;
-          line-height: 1.2 !important;
+          font-size: 0.85rem !important;
+          line-height: 1.3 !important;
+        }
+        
+        /* Larger text for logistics grid data values */
+        .animal-info-section .grid p.font-semibold {
+          font-size: 1.1rem !important;
+          line-height: 1.4 !important;
+        }
+        
+        /* Keep labels smaller */
+        .animal-info-section .grid p.text-muted-foreground {
+          font-size: 0.75rem !important;
         }
         
         /* Compact safety banner */
