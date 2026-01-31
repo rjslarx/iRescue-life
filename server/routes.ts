@@ -5666,6 +5666,12 @@ Crawl-delay: 1
         payload.intakeDate = new Date(payload.intakeDate);
       }
       
+      // Convert empty strings to null for unique-constrained text fields
+      // This prevents empty string conflicts in the unique microchip index
+      if (payload.microchipNumber === '' || payload.microchipNumber?.trim() === '') {
+        payload.microchipNumber = null;
+      }
+      
       const data = insertAnimalSchema.omit({ tenantId: true }).parse(payload);
       
       if (data.photoUrls && data.photoUrls.length > 0) {
@@ -5768,6 +5774,12 @@ Crawl-delay: 1
         if (data[field] === '' || data[field] === undefined) {
           data[field] = null;
         }
+      }
+      
+      // Convert empty strings to null for unique-constrained text fields
+      // This prevents empty string conflicts in the unique microchip index
+      if (data.microchipNumber === '' || data.microchipNumber?.trim() === '') {
+        data.microchipNumber = null;
       }
       
       // Validate and normalize photo URLs if provided
