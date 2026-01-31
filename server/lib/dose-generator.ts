@@ -96,8 +96,12 @@ export function generateDosesForPrescription(options: DoseGeneratorOptions): Gen
     d.getMonth() === start.getMonth() && 
     d.getDate() === start.getDate();
   
-  // Determine if this is a historical prescription (end date in the past)
-  const isHistorical = prescription.endDate && new Date(prescription.endDate) < now;
+  // Determine if this is a historical prescription
+  // For One Time meds: historical if startDate is in the past (the dose was already given)
+  // For other meds: historical if endDate is in the past
+  const isHistorical = isOneTime
+    ? new Date(prescription.startDate) < now  // One-time: given date in past = historical
+    : (prescription.endDate && new Date(prescription.endDate) < now);
   
   // Helper to get first-day adjusted time (avoid immediate overdue for same-day prescriptions)
   const getFirstDayAdjustedTime = (d: Date): { hour: number; minute: number } => {
