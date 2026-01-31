@@ -18209,6 +18209,7 @@ Submitted: ${new Date().toLocaleString()}
       
       // Check if Stripe is configured
       const hasStripe = tenant.stripeConnectedAccountId || (tenant.stripeEnabled && tenant.stripeSecretKeyEncrypted);
+      console.log(`[Stripe Debug Payouts] Tenant ${tenant.subdomain}: hasStripe=${hasStripe}, connectedAccountId=${tenant.stripeConnectedAccountId || 'none'}, stripeEnabled=${tenant.stripeEnabled}, hasSecretKey=${!!tenant.stripeSecretKeyEncrypted}`);
       if (!hasStripe) {
         return res.json({ 
           configured: false,
@@ -18276,6 +18277,7 @@ Submitted: ${new Date().toLocaleString()}
       
       // Check if Stripe is configured
       const hasStripe = tenant.stripeConnectedAccountId || (tenant.stripeEnabled && tenant.stripeSecretKeyEncrypted);
+      console.log(`[Stripe Debug] Tenant ${tenant.subdomain}: hasStripe=${hasStripe}, connectedAccountId=${tenant.stripeConnectedAccountId || 'none'}, stripeEnabled=${tenant.stripeEnabled}, hasSecretKey=${!!tenant.stripeSecretKeyEncrypted}`);
       if (!hasStripe) {
         return res.json({ 
           configured: false,
