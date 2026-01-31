@@ -164,12 +164,6 @@ export default function MedicalSnapshotWidget() {
           </Link>
         </div>
 
-        {(needsVettingCount > 0 || surgeryPending.length > 0) && (
-          <Badge variant="secondary" className="w-full justify-center mb-4">
-            {needsVettingCount + surgeryPending.length} animals need attention
-          </Badge>
-        )}
-
         <Link href={`${basePath}/dashboard/medical-pipeline`}>
           <Button variant="ghost" size="sm" className="w-full" data-testid="link-view-medical">
             View Medical Pipeline
