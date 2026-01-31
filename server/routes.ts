@@ -24896,6 +24896,152 @@ Email: ${application.applicantEmail || ''}`
   });
 
   /**
+   * POST /api/preventative-care/backfill-all
+   * Bulk backfill: Scan all active animals and create missing core preventative care records
+   * This is the "Generate Missing Tasks" scheduler engine
+   */
+  app.post('/api/preventative-care/backfill-all', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      const { preventativeCareRecords, preventativeCareTypes, animals } = await import('@shared/schema');
+      const { z } = await import('zod');
+      
+      // Validate request body
+      const bodySchema = z.object({
+        dateAdministered: z.string().datetime().optional(),
+      }).optional();
+      
+      const validatedBody = bodySchema.parse(req.body || {});
+      const effectiveDate = validatedBody?.dateAdministered ? new Date(validatedBody.dateAdministered) : new Date();
+
+      // Get all active animals for this tenant (status = available, hold, medical_hold, foster, pending_adoption, trial)
+      const activeStatuses = ['available', 'hold', 'medical_hold', 'foster', 'pending_adoption', 'trial'];
+      const activeAnimals = await db
+        .select({ id: animals.id, name: animals.name, species: animals.species })
+        .from(animals)
+        .where(and(
+          eq(animals.tenantId, req.tenant!.id),
+          inArray(animals.status, activeStatuses)
+        ));
+
+      if (activeAnimals.length === 0) {
+        return res.json({
+          message: 'No active animals found',
+          summary: { animalsProcessed: 0, totalRecordsCreated: 0, byAnimal: [] }
+        });
+      }
+
+      // Get all core preventative care types
+      const coreTypes = await db
+        .select({
+          id: preventativeCareTypes.id,
+          name: preventativeCareTypes.name,
+          category: preventativeCareTypes.category,
+          targetSpecies: preventativeCareTypes.targetSpecies,
+          defaultIntervalDays: preventativeCareTypes.defaultIntervalDays,
+        })
+        .from(preventativeCareTypes)
+        .where(eq(preventativeCareTypes.isCore, true));
+
+      if (coreTypes.length === 0) {
+        return res.json({
+          message: 'No core preventative care types configured',
+          summary: { animalsProcessed: 0, totalRecordsCreated: 0, byAnimal: [] }
+        });
+      }
+
+      // Get all existing preventative care records for these animals
+      const animalIds = activeAnimals.map(a => a.id);
+      const existingRecords = await db
+        .select({ animalId: preventativeCareRecords.animalId, careTypeId: preventativeCareRecords.careTypeId })
+        .from(preventativeCareRecords)
+        .where(and(
+          eq(preventativeCareRecords.tenantId, req.tenant!.id),
+          inArray(preventativeCareRecords.animalId, animalIds)
+        ));
+
+      // Build a map of existing records: animalId -> Set of careTypeIds
+      const existingMap = new Map<string, Set<string>>();
+      for (const record of existingRecords) {
+        if (!existingMap.has(record.animalId)) {
+          existingMap.set(record.animalId, new Set());
+        }
+        if (record.careTypeId) {
+          existingMap.get(record.animalId)!.add(record.careTypeId);
+        }
+      }
+
+      // Process each animal and determine which core types are missing
+      const allRecordsToInsert: any[] = [];
+      const summary: { animalId: string; animalName: string; created: number; types: string[] }[] = [];
+
+      for (const animal of activeAnimals) {
+        const existingTypeIds = existingMap.get(animal.id) || new Set();
+        // Normalize species to title case for comparison (e.g., "dog" -> "Dog", "CAT" -> "Cat")
+        const rawSpecies = animal.species || 'Dog';
+        const species = rawSpecies.charAt(0).toUpperCase() + rawSpecies.slice(1).toLowerCase();
+
+        // Filter core types applicable to this animal's species (case-insensitive comparison)
+        const applicableTypes = coreTypes.filter(t => 
+          t.targetSpecies === 'Both' || t.targetSpecies.toLowerCase() === species.toLowerCase()
+        );
+
+        // Find missing types
+        const missingTypes = applicableTypes.filter(t => !existingTypeIds.has(t.id));
+
+        if (missingTypes.length > 0) {
+          const typeNames: string[] = [];
+          for (const type of missingTypes) {
+            let nextDueDate: Date | null = null;
+            if (type.defaultIntervalDays) {
+              nextDueDate = new Date(effectiveDate);
+              nextDueDate.setDate(nextDueDate.getDate() + type.defaultIntervalDays);
+            }
+
+            allRecordsToInsert.push({
+              tenantId: req.tenant!.id,
+              animalId: animal.id,
+              careTypeId: type.id,
+              careName: type.name,
+              careCategory: type.category,
+              dateAdministered: effectiveDate,
+              nextDueDate,
+              notes: 'Auto-created via backfill',
+              createdBy: req.user!.id,
+            });
+            typeNames.push(type.name);
+          }
+
+          summary.push({
+            animalId: animal.id,
+            animalName: animal.name,
+            created: missingTypes.length,
+            types: typeNames
+          });
+        }
+      }
+
+      // Bulk insert all records
+      let createdCount = 0;
+      if (allRecordsToInsert.length > 0) {
+        await db.insert(preventativeCareRecords).values(allRecordsToInsert);
+        createdCount = allRecordsToInsert.length;
+      }
+
+      res.status(201).json({
+        message: `Backfill complete: Created ${createdCount} preventative care records for ${summary.length} animals`,
+        summary: {
+          animalsProcessed: activeAnimals.length,
+          animalsWithNewRecords: summary.length,
+          totalRecordsCreated: createdCount,
+          byAnimal: summary
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * GET /api/animals/:animalId/preventative-care
    * Get preventative care records for an animal
    */

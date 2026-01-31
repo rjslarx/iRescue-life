@@ -12,7 +12,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { 
   Pill, CheckCircle2, Clock, AlertCircle, Printer, XCircle, 
   Stethoscope, Scissors, Syringe, ClipboardCheck, Calendar,
-  ArrowRight, Users, Dog, ChevronDown, ChevronRight, Phone, Mail, Shield
+  ArrowRight, Users, Dog, ChevronDown, ChevronRight, Phone, Mail, Shield, Sparkles, Loader2
 } from "lucide-react";
 import {
   Collapsible,
@@ -387,6 +387,27 @@ export default function MedicalPipelinePage() {
       toast({
         title: "Error",
         description: "Failed to mark surgery complete. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const backfillPreventativeCareMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest('POST', '/api/preventative-care/backfill-all', {});
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/medical/preventative-care/coming-due'] });
+      toast({
+        title: "Preventative care tasks generated",
+        description: data.message || `Created ${data.summary?.totalRecordsCreated || 0} tasks for ${data.summary?.animalsWithNewRecords || 0} animals.`,
+      });
+    },
+    onError: (error) => {
+      console.error('Backfill preventative care error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to generate preventative care tasks. Please try again.",
         variant: "destructive",
       });
     },
@@ -1455,6 +1476,27 @@ export default function MedicalPipelinePage() {
               </div>
             ) : (
               <>
+                {/* Header with Backfill Button */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-lg font-semibold">Preventative Care Dashboard</h2>
+                    <p className="text-sm text-muted-foreground">Track vaccines, heartworm prevention, and other core care items</p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={() => backfillPreventativeCareMutation.mutate()}
+                    disabled={backfillPreventativeCareMutation.isPending}
+                    data-testid="button-generate-missing-tasks"
+                  >
+                    {backfillPreventativeCareMutation.isPending ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Sparkles className="w-4 h-4 mr-2" />
+                    )}
+                    Generate Missing Tasks
+                  </Button>
+                </div>
+
                 {/* Stats Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <Card className={preventativeOverdue.length > 0 ? "border-destructive" : ""}>
