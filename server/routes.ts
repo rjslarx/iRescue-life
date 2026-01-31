@@ -23324,6 +23324,10 @@ Email: ${application.applicantEmail || ''}`
       );
       
       const scheduleFieldsChanged = frequencyChanged || nextDoseCleared || nextDoseChanged || startDateChanged || endDateCleared || endDateSet;
+      
+      console.log(`[PRESCRIPTION-UPDATE] Updating prescription ${req.params.prescriptionId}`);
+      console.log(`[PRESCRIPTION-UPDATE]   frequencyChanged: ${frequencyChanged} (${existingPrescription.frequency} -> ${data.frequency})`);
+      console.log(`[PRESCRIPTION-UPDATE]   scheduleFieldsChanged: ${scheduleFieldsChanged} (freq:${frequencyChanged}, nextDoseCleared:${nextDoseCleared}, nextDoseChanged:${nextDoseChanged}, startDateChanged:${startDateChanged}, endDateCleared:${endDateCleared}, endDateSet:${endDateSet})`);
 
       const [prescription] = await db
         .update(medicalPrescriptions)

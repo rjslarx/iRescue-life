@@ -26,6 +26,13 @@ export function generateDosesForPrescription(options: DoseGeneratorOptions): Gen
   const doses: GeneratedDose[] = [];
   const freq = prescription.frequency.toUpperCase();
   
+  console.log(`[DOSE-GEN] Generating doses for prescription ${prescription.id}:`);
+  console.log(`[DOSE-GEN]   medication: ${prescription.medicationName}`);
+  console.log(`[DOSE-GEN]   frequency raw: "${prescription.frequency}", normalized: "${freq}"`);
+  console.log(`[DOSE-GEN]   startDate: ${prescription.startDate}`);
+  console.log(`[DOSE-GEN]   endDate: ${prescription.endDate}`);
+  console.log(`[DOSE-GEN]   nextScheduledDose: ${prescription.nextScheduledDose}`);
+  
   // For ONE TIME medications, always use startDate (when it was given)
   // nextScheduledDose is just informational for when to schedule the next vet appointment
   const isOneTime = freq === 'ONCE' || freq.includes('ONE TIME');
@@ -87,6 +94,9 @@ export function generateDosesForPrescription(options: DoseGeneratorOptions): Gen
     doseTimes = [morningTime, middayTime, eveningTime, { hour: lateHour, minute: 0 }];
   }
   // Default: SID (once daily at morning) - already set
+  
+  console.log(`[DOSE-GEN]   isOneTime: ${isOneTime}, intervalDays: ${intervalDays}`);
+  console.log(`[DOSE-GEN]   start: ${start.toISOString()}, effectiveEnd: ${effectiveEnd?.toISOString() || 'not set yet'}`);
 
   // Safety limit: max 500 doses to prevent timeout
   const MAX_DOSES = 500;
@@ -117,6 +127,7 @@ export function generateDosesForPrescription(options: DoseGeneratorOptions): Gen
   
   // Generate doses based on frequency type
   if (intervalDays === 0) {
+    console.log(`[DOSE-GEN]   PATH: ONE TIME (single dose)`);
     // ONE TIME: Single dose only
     const doseTime = new Date(start);
     const adjustedTime = getFirstDayAdjustedTime(start);
@@ -130,6 +141,7 @@ export function generateDosesForPrescription(options: DoseGeneratorOptions): Gen
       ...(isHistorical ? { givenAt: doseTime } : {}),
     });
   } else if (intervalDays !== null && intervalDays > 1) {
+    console.log(`[DOSE-GEN]   PATH: INTERVAL-BASED (every ${intervalDays} days)`);
     // INTERVAL-BASED: Generate doses at specified day intervals (weekly, monthly, etc.)
     let isFirst = true;
     for (let d = new Date(start); d <= effectiveEnd && doses.length < MAX_DOSES; d.setDate(d.getDate() + intervalDays)) {
@@ -151,6 +163,7 @@ export function generateDosesForPrescription(options: DoseGeneratorOptions): Gen
       });
     }
   } else {
+    console.log(`[DOSE-GEN]   PATH: DAILY-BASED (${doseTimes.length} times/day)`);
     // DAILY-BASED: Generate doses each day with multiple times per day if needed
     for (let d = new Date(start); d <= effectiveEnd && doses.length < MAX_DOSES; d.setDate(d.getDate() + 1)) {
       for (let i = 0; i < doseTimes.length && doses.length < MAX_DOSES; i++) {
@@ -179,6 +192,12 @@ export function generateDosesForPrescription(options: DoseGeneratorOptions): Gen
     }
   }
   
+  console.log(`[DOSE-GEN]   RESULT: Generated ${doses.length} doses`);
+  if (doses.length > 0) {
+    console.log(`[DOSE-GEN]   First dose: ${doses[0].dueDate.toISOString()}, status: ${doses[0].status}`);
+    console.log(`[DOSE-GEN]   Last dose: ${doses[doses.length - 1].dueDate.toISOString()}, status: ${doses[doses.length - 1].status}`);
+  }
+  
   return doses;
 }
 
@@ -189,6 +208,9 @@ export function generateDosesForPrescription(options: DoseGeneratorOptions): Gen
 export async function regeneratePrescriptionDoses(options: DoseGeneratorOptions): Promise<{ deletedCount: number; createdCount: number }> {
   const { prescription, tenant, tenantId } = options;
   
+  console.log(`[DOSE-REGEN] Starting regeneration for prescription ${prescription.id}`);
+  console.log(`[DOSE-REGEN]   medication: ${prescription.medicationName}, frequency: ${prescription.frequency}`);
+  
   // Delete all existing 'due' status doses for this prescription
   const deleteResult = await db
     .delete(medicalDoses)
@@ -198,16 +220,22 @@ export async function regeneratePrescriptionDoses(options: DoseGeneratorOptions)
       eq(medicalDoses.status, 'due')
     ));
   
+  const deletedCount = (deleteResult as any).rowCount || 0;
+  console.log(`[DOSE-REGEN]   Deleted ${deletedCount} existing 'due' doses`);
+  
   // Generate new doses based on updated prescription
   const newDoses = generateDosesForPrescription(options);
   
   // Insert new doses
   if (newDoses.length > 0) {
     await db.insert(medicalDoses).values(newDoses);
+    console.log(`[DOSE-REGEN]   Inserted ${newDoses.length} new doses`);
+  } else {
+    console.log(`[DOSE-REGEN]   No new doses to insert`);
   }
   
   return {
-    deletedCount: (deleteResult as any).rowCount || 0,
+    deletedCount,
     createdCount: newDoses.length,
   };
 }
