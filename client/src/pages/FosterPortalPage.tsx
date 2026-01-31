@@ -20,7 +20,8 @@ import {
   Package,
   ChevronRight,
   Calendar,
-  AlertCircle
+  AlertCircle,
+  Syringe
 } from "lucide-react";
 import { format, isToday, formatDistanceToNow } from "date-fns";
 
@@ -49,6 +50,40 @@ interface FosterTask {
   isActive: boolean;
 }
 
+interface MedicationDose {
+  id: string;
+  prescriptionId: string;
+  dueDate: string;
+  status: string;
+  givenAt: string | null;
+  notes: string | null;
+  medicationName: string;
+  dosage: string | null;
+  route: string | null;
+  frequency: string | null;
+  prescriptionNotes: string | null;
+  animalId: string;
+}
+
+interface AnimalMedications {
+  animalId: string;
+  animalName: string;
+  animalSpecies: string;
+  animalPhotoUrl: string | null;
+  overdue: MedicationDose[];
+  dueToday: MedicationDose[];
+  completedToday: MedicationDose[];
+}
+
+interface MedicationsData {
+  animals: AnimalMedications[];
+  summary: {
+    overdue: number;
+    dueToday: number;
+    completed: number;
+  };
+}
+
 export default function FosterPortalPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -60,6 +95,30 @@ export default function FosterPortalPage() {
 
   const { data: todayTasks, isLoading: loadingTasks } = useQuery<FosterTask[]>({
     queryKey: ["/api/foster/tasks/today"],
+  });
+
+  const { data: medicationsData, isLoading: loadingMedications } = useQuery<MedicationsData>({
+    queryKey: ["/api/foster-portal/medications"],
+  });
+
+  const administerMutation = useMutation({
+    mutationFn: async ({ doseId, notes }: { doseId: string; notes?: string }) => {
+      return await apiRequest('PATCH', '/api/medical/doses/' + doseId + '/administer', { notes });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/foster-portal/medications'] });
+      toast({
+        title: "Medication given",
+        description: "Great job! The dose has been recorded.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Failed to record",
+        description: "Please try again or contact staff.",
+        variant: "destructive",
+      });
+    },
   });
 
   const completeTaskMutation = useMutation({
@@ -141,17 +200,29 @@ export default function FosterPortalPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 h-auto gap-1">
           <TabsTrigger value="tasks" className="gap-2" data-testid="tab-tasks">
             <Clock className="h-4 w-4" />
-            Today's Tasks
+            <span className="hidden sm:inline">Today's Tasks</span>
+            <span className="sm:hidden">Tasks</span>
             {pendingTasks.length > 0 && (
               <Badge variant="secondary" className="ml-1">{pendingTasks.length}</Badge>
             )}
           </TabsTrigger>
+          <TabsTrigger value="medications" className="gap-2" data-testid="tab-medications">
+            <Pill className="h-4 w-4" />
+            <span className="hidden sm:inline">Medications</span>
+            <span className="sm:hidden">Meds</span>
+            {(medicationsData?.summary.overdue || 0) + (medicationsData?.summary.dueToday || 0) > 0 && (
+              <Badge variant={medicationsData?.summary.overdue ? "destructive" : "secondary"} className="ml-1">
+                {(medicationsData?.summary.overdue || 0) + (medicationsData?.summary.dueToday || 0)}
+              </Badge>
+            )}
+          </TabsTrigger>
           <TabsTrigger value="animals" className="gap-2" data-testid="tab-animals">
             <Dog className="h-4 w-4" />
-            My Fosters
+            <span className="hidden sm:inline">My Fosters</span>
+            <span className="sm:hidden">Fosters</span>
           </TabsTrigger>
           <TabsTrigger value="supplies" className="gap-2" data-testid="tab-supplies">
             <Package className="h-4 w-4" />
@@ -250,6 +321,177 @@ export default function FosterPortalPage() {
                   ))}
                 </div>
               )}
+            </>
+          )}
+        </TabsContent>
+
+        <TabsContent value="medications" className="space-y-4">
+          {loadingMedications ? (
+            <div className="space-y-3">
+              <Skeleton className="h-32 w-full" />
+              <Skeleton className="h-32 w-full" />
+            </div>
+          ) : !medicationsData || medicationsData.animals.length === 0 ? (
+            <Card>
+              <CardContent className="py-8 text-center">
+                <CheckCircle2 className="h-12 w-12 mx-auto text-green-500 mb-3" />
+                <h3 className="font-semibold">No Medications Today</h3>
+                <p className="text-sm text-muted-foreground">
+                  Your foster animals don't have any medications due right now
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              {/* Summary Cards */}
+              <div className="grid grid-cols-3 gap-3">
+                <Card className={medicationsData.summary.overdue > 0 ? "border-destructive/50" : ""}>
+                  <CardContent className="p-4 text-center">
+                    <AlertCircle className={`h-6 w-6 mx-auto mb-1 ${medicationsData.summary.overdue > 0 ? 'text-destructive' : 'text-muted-foreground'}`} />
+                    <p className={`text-2xl font-bold ${medicationsData.summary.overdue > 0 ? 'text-destructive' : ''}`}>
+                      {medicationsData.summary.overdue}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Overdue</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4 text-center">
+                    <Clock className="h-6 w-6 mx-auto mb-1 text-orange-500" />
+                    <p className="text-2xl font-bold">{medicationsData.summary.dueToday}</p>
+                    <p className="text-xs text-muted-foreground">Due Today</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4 text-center">
+                    <CheckCircle2 className="h-6 w-6 mx-auto mb-1 text-green-500" />
+                    <p className="text-2xl font-bold">{medicationsData.summary.completed}</p>
+                    <p className="text-xs text-muted-foreground">Done</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Medications by Animal */}
+              {medicationsData.animals.map((animal) => (
+                <Card key={animal.animalId}>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center gap-3">
+                      {animal.animalPhotoUrl ? (
+                        <img
+                          src={animal.animalPhotoUrl}
+                          alt={animal.animalName}
+                          className="w-12 h-12 rounded-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
+                          <Dog className="h-6 w-6 text-muted-foreground" />
+                        </div>
+                      )}
+                      <div>
+                        <CardTitle className="text-lg">{animal.animalName}</CardTitle>
+                        <p className="text-sm text-muted-foreground">{animal.animalSpecies}</p>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {/* Overdue medications */}
+                    {animal.overdue.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium text-destructive flex items-center gap-1">
+                          <AlertCircle className="h-4 w-4" />
+                          Overdue ({animal.overdue.length})
+                        </p>
+                        {animal.overdue.map((dose) => (
+                          <div
+                            key={dose.id}
+                            className="flex items-center justify-between p-3 rounded-lg bg-destructive/5 border border-destructive/30"
+                            data-testid={`foster-dose-overdue-${dose.id}`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <Pill className="h-4 w-4 text-destructive" />
+                              <div>
+                                <p className="font-medium text-sm">{dose.medicationName}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {dose.dosage} • Was due {format(new Date(dose.dueDate), 'h:mm a')}
+                                </p>
+                              </div>
+                            </div>
+                            <Button
+                              size="sm"
+                              onClick={() => administerMutation.mutate({ doseId: dose.id })}
+                              disabled={administerMutation.isPending}
+                              data-testid={`button-give-overdue-${dose.id}`}
+                            >
+                              Give Now
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Due today medications */}
+                    {animal.dueToday.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium text-muted-foreground flex items-center gap-1">
+                          <Clock className="h-4 w-4" />
+                          Due Today ({animal.dueToday.length})
+                        </p>
+                        {animal.dueToday.map((dose) => (
+                          <div
+                            key={dose.id}
+                            className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border"
+                            data-testid={`foster-dose-today-${dose.id}`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <Pill className="h-4 w-4 text-orange-500" />
+                              <div>
+                                <p className="font-medium text-sm">{dose.medicationName}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {dose.dosage} • Due at {format(new Date(dose.dueDate), 'h:mm a')}
+                                </p>
+                              </div>
+                            </div>
+                            <Button
+                              size="sm"
+                              onClick={() => administerMutation.mutate({ doseId: dose.id })}
+                              disabled={administerMutation.isPending}
+                              data-testid={`button-give-today-${dose.id}`}
+                            >
+                              Give
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Completed medications */}
+                    {animal.completedToday.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium text-green-600 flex items-center gap-1">
+                          <CheckCircle2 className="h-4 w-4" />
+                          Completed Today ({animal.completedToday.length})
+                        </p>
+                        {animal.completedToday.map((dose) => (
+                          <div
+                            key={dose.id}
+                            className="flex items-center justify-between p-3 rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-500/30 opacity-75"
+                            data-testid={`foster-dose-completed-${dose.id}`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <CheckCircle2 className="h-4 w-4 text-green-600" />
+                              <div>
+                                <p className="font-medium text-sm line-through">{dose.medicationName}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {dose.dosage} • Given at {dose.givenAt ? format(new Date(dose.givenAt), 'h:mm a') : 'earlier'}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
             </>
           )}
         </TabsContent>

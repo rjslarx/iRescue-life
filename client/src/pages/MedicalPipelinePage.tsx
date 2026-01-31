@@ -12,8 +12,13 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { 
   Pill, CheckCircle2, Clock, AlertCircle, Printer, XCircle, 
   Stethoscope, Scissors, Syringe, ClipboardCheck, Calendar,
-  ArrowRight
+  ArrowRight, Users, Dog, ChevronDown, ChevronRight, Phone, Mail
 } from "lucide-react";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { format } from "date-fns";
 import { useState, useEffect } from "react";
 import { useLocation, useSearch } from "wouter";
@@ -119,6 +124,8 @@ export default function MedicalPipelinePage() {
 
   const [schedulingAnimal, setSchedulingAnimal] = useState<SurgeryQueueAnimal | null>(null);
   const [scheduledDate, setScheduledDate] = useState("");
+  const [treatmentViewMode, setTreatmentViewMode] = useState<"byAnimal" | "byFoster">("byAnimal");
+  const [expandedFosters, setExpandedFosters] = useState<Set<string>>(new Set());
 
   const { data: dosesData, isLoading: isLoadingToday } = useQuery<{ doses: any[] }>({
     queryKey: ['/api/medical/doses/today'],
@@ -131,6 +138,59 @@ export default function MedicalPipelinePage() {
   const { data: intakeAnimalsData, isLoading: isLoadingIntake } = useQuery<{ animals: IntakeAnimal[] }>({
     queryKey: ['/api/medical/intake-animals'],
   });
+
+  // Foster-grouped medication doses
+  interface FosterAnimalDose {
+    id: string;
+    prescriptionId: string;
+    dueDate: string;
+    status: string;
+    givenAt: string | null;
+    notes: string | null;
+    medicationName: string;
+    dosage: string | null;
+    route: string | null;
+    frequency: string | null;
+    isControlledSubstance: boolean | null;
+    requiresRefill: boolean | null;
+    animalId: string;
+  }
+
+  interface FosterAnimalGroup {
+    animalId: string;
+    animalName: string;
+    animalSpecies: string;
+    animalPhotoUrl: string | null;
+    doses: FosterAnimalDose[];
+  }
+
+  interface FosterGroup {
+    fosterId: string;
+    fosterName: string;
+    fosterEmail: string;
+    fosterPhone: string | null;
+    animals: FosterAnimalGroup[];
+    totalDoses: number;
+  }
+
+  const { data: fosterGroupedData, isLoading: isLoadingFosterGrouped } = useQuery<{ fosterGroups: FosterGroup[] }>({
+    queryKey: ['/api/medical/doses/by-foster'],
+    enabled: treatmentViewMode === 'byFoster',
+  });
+
+  const fosterGroups = fosterGroupedData?.fosterGroups || [];
+
+  const toggleFosterExpanded = (fosterId: string) => {
+    setExpandedFosters(prev => {
+      const next = new Set(prev);
+      if (next.has(fosterId)) {
+        next.delete(fosterId);
+      } else {
+        next.add(fosterId);
+      }
+      return next;
+    });
+  };
 
   const { data: surgeryQueueData, isLoading: isLoadingSurgery } = useQuery<{ 
     scheduled: SurgeryQueueAnimal[];
@@ -824,13 +884,213 @@ export default function MedicalPipelinePage() {
               </Card>
             </div>
 
-            {(isLoadingToday || isLoadingOverdue) ? (
-              <Card>
-                <CardContent className="py-12 text-center">
-                  <p className="text-muted-foreground">Loading medication tasks...</p>
-                </CardContent>
-              </Card>
+            {/* View Mode Toggle */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">View:</span>
+                <div className="flex rounded-lg border overflow-hidden">
+                  <Button
+                    variant={treatmentViewMode === "byAnimal" ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setTreatmentViewMode("byAnimal")}
+                    className="rounded-none gap-1"
+                    data-testid="button-view-by-animal"
+                  >
+                    <Dog className="w-4 h-4" />
+                    By Animal
+                  </Button>
+                  <Button
+                    variant={treatmentViewMode === "byFoster" ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setTreatmentViewMode("byFoster")}
+                    className="rounded-none gap-1"
+                    data-testid="button-view-by-foster"
+                  >
+                    <Users className="w-4 h-4" />
+                    By Foster
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            {treatmentViewMode === "byFoster" ? (
+              /* Foster Grouped View */
+              isLoadingFosterGrouped ? (
+                <Card>
+                  <CardContent className="py-12 text-center">
+                    <p className="text-muted-foreground">Loading foster medication tasks...</p>
+                  </CardContent>
+                </Card>
+              ) : fosterGroups.length === 0 ? (
+                <Card>
+                  <CardContent className="py-12 text-center">
+                    <Users className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                    <p className="text-lg font-medium mb-2">No Foster Medications</p>
+                    <p className="text-muted-foreground">
+                      There are no medications due today for fostered animals
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="space-y-4">
+                  <h2 className="text-xl font-semibold flex items-center gap-2">
+                    <Users className="w-5 h-5" />
+                    Foster Households with Medications
+                  </h2>
+                  {fosterGroups.map((fosterGroup) => {
+                    const isExpanded = expandedFosters.has(fosterGroup.fosterId);
+                    
+                    return (
+                      <Collapsible
+                        key={fosterGroup.fosterId}
+                        open={isExpanded}
+                        onOpenChange={() => toggleFosterExpanded(fosterGroup.fosterId)}
+                      >
+                        <Card>
+                          <CollapsibleTrigger asChild>
+                            <CardHeader className="cursor-pointer hover-elevate">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                  {isExpanded ? (
+                                    <ChevronDown className="w-5 h-5 text-muted-foreground" />
+                                  ) : (
+                                    <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                                  )}
+                                  <div>
+                                    <CardTitle className="text-lg flex items-center gap-2">
+                                      {fosterGroup.fosterName}
+                                      <Badge variant="secondary">
+                                        {fosterGroup.totalDoses} {fosterGroup.totalDoses === 1 ? 'dose' : 'doses'}
+                                      </Badge>
+                                      <Badge variant="outline">
+                                        {fosterGroup.animals.length} {fosterGroup.animals.length === 1 ? 'animal' : 'animals'}
+                                      </Badge>
+                                    </CardTitle>
+                                    <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">
+                                      <span className="flex items-center gap-1">
+                                        <Mail className="w-3 h-3" />
+                                        {fosterGroup.fosterEmail}
+                                      </span>
+                                      {fosterGroup.fosterPhone && (
+                                        <span className="flex items-center gap-1">
+                                          <Phone className="w-3 h-3" />
+                                          {fosterGroup.fosterPhone}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </CardHeader>
+                          </CollapsibleTrigger>
+                          <CollapsibleContent>
+                            <CardContent className="pt-0 space-y-4">
+                              {fosterGroup.animals.map((animal) => (
+                                <div key={animal.animalId} className="border rounded-lg p-4">
+                                  <div className="flex items-center gap-3 mb-3">
+                                    {animal.animalPhotoUrl ? (
+                                      <img
+                                        src={animal.animalPhotoUrl}
+                                        alt={animal.animalName}
+                                        className="w-10 h-10 rounded-full object-cover"
+                                      />
+                                    ) : (
+                                      <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
+                                        <Dog className="w-5 h-5 text-muted-foreground" />
+                                      </div>
+                                    )}
+                                    <div>
+                                      <p className="font-medium">{animal.animalName}</p>
+                                      <p className="text-sm text-muted-foreground">{animal.animalSpecies}</p>
+                                    </div>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="ml-auto no-print"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        navigate(`/dashboard/animals/${animal.animalId}/medical`);
+                                      }}
+                                      data-testid={`button-view-foster-animal-${animal.animalId}`}
+                                    >
+                                      View Medical Record
+                                    </Button>
+                                  </div>
+                                  <div className="space-y-2">
+                                    {animal.doses.map((dose) => {
+                                      const isOverdue = new Date(dose.dueDate) < new Date(new Date().setHours(0, 0, 0, 0));
+                                      
+                                      return (
+                                        <div
+                                          key={dose.id}
+                                          className={`flex items-center justify-between p-3 rounded-lg border ${
+                                            isOverdue ? 'border-destructive/30 bg-destructive/5' : 'bg-muted/30'
+                                          }`}
+                                          data-testid={`foster-dose-${dose.id}`}
+                                        >
+                                          <div className="flex items-center gap-3">
+                                            <Pill className={`w-4 h-4 ${isOverdue ? 'text-destructive' : 'text-primary'}`} />
+                                            <div>
+                                              <p className="font-medium text-sm flex items-center gap-2">
+                                                {dose.medicationName}
+                                                {dose.isControlledSubstance && (
+                                                  <Badge variant="destructive" className="text-xs">Controlled</Badge>
+                                                )}
+                                                {isOverdue && (
+                                                  <Badge variant="destructive" className="text-xs">Overdue</Badge>
+                                                )}
+                                              </p>
+                                              <p className="text-xs text-muted-foreground">
+                                                {dose.dosage} • Due {format(new Date(dose.dueDate), 'h:mm a')}
+                                              </p>
+                                            </div>
+                                          </div>
+                                          <div className="flex gap-2 no-print">
+                                            <Button
+                                              size="sm"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleAdminister({ id: dose.id, prescription: dose }, { id: animal.animalId, name: animal.animalName });
+                                              }}
+                                              data-testid={`button-administer-foster-${dose.id}`}
+                                            >
+                                              Administer
+                                            </Button>
+                                            <Button
+                                              size="sm"
+                                              variant="outline"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleUnable({ id: dose.id, prescription: dose }, { id: animal.animalId, name: animal.animalName });
+                                              }}
+                                              data-testid={`button-unable-foster-${dose.id}`}
+                                            >
+                                              Unable
+                                            </Button>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              ))}
+                            </CardContent>
+                          </CollapsibleContent>
+                        </Card>
+                      </Collapsible>
+                    );
+                  })}
+                </div>
+              )
             ) : (
+              /* Original By Animal View */
+              (isLoadingToday || isLoadingOverdue) ? (
+                <Card>
+                  <CardContent className="py-12 text-center">
+                    <p className="text-muted-foreground">Loading medication tasks...</p>
+                  </CardContent>
+                </Card>
+              ) : (
               <>
                 {Object.values(overdueDosesByAnimal).length > 0 && (
                   <div className="space-y-4">
@@ -1140,6 +1400,7 @@ export default function MedicalPipelinePage() {
                   )}
                 </div>
               </>
+              )
             )}
           </TabsContent>
         </Tabs>
