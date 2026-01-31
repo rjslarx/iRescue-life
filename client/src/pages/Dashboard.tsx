@@ -83,6 +83,14 @@ export default function Dashboard() {
   // This is stricter - requires 'dashboard' access, not just any other page access
   const hasFullDashboardAccess = canViewDashboard;
   
+  // Check if user can see the KPI header stats (animals counts + intake numbers)
+  // Show if user has animals OR applications access (intake numbers come from applications)
+  const canViewHeaderStats = canViewDashboard || canViewAnimals || canViewApplications;
+  
+  // Check if user can see the Daily Briefing widget (surgeries, medical tasks, calendar events)
+  // Show if user has medical OR calendar access
+  const canViewDailyBriefing = canViewDashboard || canViewMedical || canViewCalendar;
+  
   // Check if user has some level of command center access (dashboard OR specific widget permissions)
   const hasAnyCommandCenterAccess = canViewDashboard || canViewMedical || hasPipelineAccess || canViewAnalytics || canViewReports;
 
@@ -323,7 +331,7 @@ export default function Dashboard() {
                       {formattedDate}
                     </p>
                   </div>
-                  {hasFullDashboardAccess && <HeaderStats />}
+                  {canViewHeaderStats && <HeaderStats />}
                 </div>
               </header>
 
@@ -416,7 +424,7 @@ export default function Dashboard() {
                 </div>
 
                 {/* Right Column - Daily Briefing (1/3 width, scrollable) */}
-                {hasFullDashboardAccess && (
+                {canViewDailyBriefing && (
                   <div className="lg:col-span-1" style={{ maxHeight: '500px' }}>
                     <DailyBriefing />
                   </div>
