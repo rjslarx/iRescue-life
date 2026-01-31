@@ -675,3 +675,117 @@ export async function runMedicalRemindersForAllTenants(): Promise<{
     };
   }
 }
+
+/**
+ * Get upcoming preventative care items for a tenant
+ * Returns items grouped by urgency (overdue, dueToday, comingSoon)
+ */
+export async function getPreventativeCareReminders(tenantId: string, daysAhead: number = 7) {
+  const { preventativeCareRecords, preventativeCareTypes, animals: animalsTable, fosterAnimals: fosterAnimalsTable, users: usersTable } = await import('@shared/schema');
+  
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const futureDate = new Date();
+  futureDate.setDate(futureDate.getDate() + daysAhead);
+  futureDate.setHours(23, 59, 59, 999);
+
+  // Get all preventative care records with next due date within range or overdue
+  const records = await db
+    .select({
+      record: preventativeCareRecords,
+      type: preventativeCareTypes,
+      animal: {
+        id: animalsTable.id,
+        name: animalsTable.name,
+        species: animalsTable.species,
+        status: animalsTable.status,
+        location: animalsTable.location,
+      },
+    })
+    .from(preventativeCareRecords)
+    .innerJoin(preventativeCareTypes, eq(preventativeCareRecords.careTypeId, preventativeCareTypes.id))
+    .innerJoin(animalsTable, eq(preventativeCareRecords.animalId, animalsTable.id))
+    .where(and(
+      eq(preventativeCareRecords.tenantId, tenantId),
+      lte(preventativeCareRecords.nextDueDate, futureDate),
+      or(
+        eq(animalsTable.status, 'available'),
+        eq(animalsTable.status, 'foster'),
+        eq(animalsTable.status, 'hold'),
+        eq(animalsTable.status, 'medical_hold')
+      )
+    ))
+    .orderBy(preventativeCareRecords.nextDueDate);
+
+  // Get foster assignments for foster animals
+  const fosterAnimalIds = records
+    .filter(r => r.animal.location === 'foster')
+    .map(r => r.animal.id);
+
+  const fosterAssignments = fosterAnimalIds.length > 0
+    ? await db
+        .select({
+          animalId: fosterAnimalsTable.animalId,
+          userId: fosterAnimalsTable.userId,
+          userEmail: usersTable.email,
+          userName: usersTable.name,
+        })
+        .from(fosterAnimalsTable)
+        .innerJoin(usersTable, eq(fosterAnimalsTable.userId, usersTable.id))
+        .where(and(
+          inArray(fosterAnimalsTable.animalId, fosterAnimalIds),
+          eq(fosterAnimalsTable.status, 'active')
+        ))
+    : [];
+
+  const fosterMap = new Map(fosterAssignments.map(f => [f.animalId, f]));
+
+  interface PreventativeCareReminderItem {
+    recordId: string;
+    animalId: string;
+    animalName: string;
+    careName: string;
+    careCategory: string;
+    nextDueDate: Date;
+    isCore: boolean;
+    location: string | null;
+    fosterEmail?: string;
+    fosterName?: string;
+  }
+
+  const items: PreventativeCareReminderItem[] = records.map(r => {
+    const foster = fosterMap.get(r.animal.id);
+    return {
+      recordId: r.record.id,
+      animalId: r.animal.id,
+      animalName: r.animal.name,
+      careName: r.type.name,
+      careCategory: r.type.category,
+      nextDueDate: new Date(r.record.nextDueDate!),
+      isCore: r.type.isCore,
+      location: r.animal.location,
+      fosterEmail: foster?.userEmail,
+      fosterName: foster?.userName,
+    };
+  });
+
+  const overdue: PreventativeCareReminderItem[] = [];
+  const dueToday: PreventativeCareReminderItem[] = [];
+  const comingSoon: PreventativeCareReminderItem[] = [];
+
+  items.forEach(item => {
+    const dueDate = new Date(item.nextDueDate);
+    dueDate.setHours(0, 0, 0, 0);
+    
+    if (dueDate < today) {
+      overdue.push(item);
+    } else if (dueDate.getTime() === today.getTime()) {
+      dueToday.push(item);
+    } else {
+      comingSoon.push(item);
+    }
+  });
+
+  return { overdue, dueToday, comingSoon };
+}

@@ -4654,3 +4654,71 @@ export const insertPartnerOrganizationSchema = createInsertSchema(partnerOrganiz
 });
 export type InsertPartnerOrganization = z.infer<typeof insertPartnerOrganizationSchema>;
 export type PartnerOrganization = typeof partnerOrganizations.$inferSelect;
+
+// ===== PREVENTATIVE CARE SYSTEM =====
+
+// Preventative Care Types - Master list of vaccines, parasite prevention, and tests
+export const preventativeCareTypes = pgTable("preventative_care_types", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").references(() => tenants.id, { onDelete: 'cascade' }), // null = platform default
+  name: text("name").notNull(), // e.g., "Rabies (1-Year)", "DHPP", "Heartworm Prevention"
+  category: text("category").notNull().$type<"vaccine" | "parasite_prevention" | "test" | "other">(),
+  targetSpecies: text("target_species").notNull().$type<"Dog" | "Cat" | "Both">(),
+  isCore: boolean("is_core").notNull().default(false), // Core = required for compliance
+  defaultIntervalDays: integer("default_interval_days"), // null = one-time (e.g., microchip)
+  description: text("description"), // Optional notes for staff
+  sortOrder: integer("sort_order").notNull().default(0), // For dropdown ordering
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertPreventativeCareTypeSchema = createInsertSchema(preventativeCareTypes).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertPreventativeCareType = z.infer<typeof insertPreventativeCareTypeSchema>;
+export type PreventativeCareType = typeof preventativeCareTypes.$inferSelect;
+
+// Preventative Care Records - Track each administration with auto-calculated next due date
+export const preventativeCareRecords = pgTable("preventative_care_records", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  animalId: uuid("animal_id").notNull().references(() => animals.id, { onDelete: 'cascade' }),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  careTypeId: uuid("care_type_id").references(() => preventativeCareTypes.id, { onDelete: 'set null' }),
+  // Denormalized for display (in case care type is deleted)
+  careName: text("care_name").notNull(), // e.g., "Rabies (1-Year)"
+  careCategory: text("care_category").notNull().$type<"vaccine" | "parasite_prevention" | "test" | "other">(),
+  // Administration details
+  dateAdministered: timestamp("date_administered").notNull(),
+  nextDueDate: timestamp("next_due_date"), // Auto-calculated from dateAdministered + interval
+  administeredBy: text("administered_by"), // Vet/staff name
+  clinicName: text("clinic_name").default("In-House"),
+  // Vaccine-specific fields
+  manufacturer: text("manufacturer"),
+  lotNumber: text("lot_number"),
+  anatomicalSite: text("anatomical_site"), // Injection site
+  // Test-specific fields  
+  testResult: text("test_result").$type<"positive" | "negative" | "inconclusive" | null>(),
+  // Billing (optional)
+  billId: uuid("bill_id").references(() => medicalBills.id, { onDelete: 'set null' }),
+  billAmount: numeric("bill_amount", { precision: 10, scale: 2 }),
+  // Notes
+  notes: text("notes"),
+  // Metadata
+  createdBy: uuid("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertPreventativeCareRecordSchema = createInsertSchema(preventativeCareRecords).omit({
+  id: true,
+  createdBy: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  dateAdministered: z.coerce.date(),
+  nextDueDate: z.union([z.coerce.date(), z.literal(""), z.null(), z.undefined()]).optional().transform((val) => (val === "" || val === null || val === undefined) ? null : val),
+  billAmount: z.string().optional(),
+});
+export type InsertPreventativeCareRecord = z.infer<typeof insertPreventativeCareRecordSchema>;
+export type PreventativeCareRecord = typeof preventativeCareRecords.$inferSelect;

@@ -21,7 +21,9 @@ import {
   ChevronRight,
   Calendar,
   AlertCircle,
-  Syringe
+  Syringe,
+  Shield,
+  Star
 } from "lucide-react";
 import { format, isToday, formatDistanceToNow } from "date-fns";
 
@@ -84,6 +86,30 @@ interface MedicationsData {
   };
 }
 
+interface PreventativeCareItem {
+  record: {
+    id: string;
+    animalId: string;
+    careName: string;
+    careCategory: string;
+    nextDueDate: string;
+    dateAdministered: string;
+    isCore: boolean;
+  };
+  animal: {
+    id: string;
+    name: string;
+    species: string;
+    photoUrls: string[] | null;
+  };
+}
+
+interface PreventativeCareData {
+  overdue: PreventativeCareItem[];
+  dueToday: PreventativeCareItem[];
+  comingSoon: PreventativeCareItem[];
+}
+
 export default function FosterPortalPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -100,6 +126,15 @@ export default function FosterPortalPage() {
   const { data: medicationsData, isLoading: loadingMedications } = useQuery<MedicationsData>({
     queryKey: ["/api/foster-portal/medications"],
   });
+
+  const { data: preventativeCareData, isLoading: loadingPreventativeCare } = useQuery<PreventativeCareData>({
+    queryKey: ["/api/foster-portal/preventative-care"],
+  });
+
+  const preventativeOverdue = preventativeCareData?.overdue || [];
+  const preventativeDueToday = preventativeCareData?.dueToday || [];
+  const preventativeComingSoon = preventativeCareData?.comingSoon || [];
+  const totalPreventativeItems = preventativeOverdue.length + preventativeDueToday.length + preventativeComingSoon.length;
 
   const administerMutation = useMutation({
     mutationFn: async ({ doseId, notes }: { doseId: string; notes?: string }) => {
@@ -200,7 +235,7 @@ export default function FosterPortalPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 h-auto gap-1">
+        <TabsList className="grid w-full grid-cols-3 sm:grid-cols-5 h-auto gap-1">
           <TabsTrigger value="tasks" className="gap-2" data-testid="tab-tasks">
             <Clock className="h-4 w-4" />
             <span className="hidden sm:inline">Today's Tasks</span>
@@ -217,6 +252,14 @@ export default function FosterPortalPage() {
               <Badge variant={medicationsData?.summary.overdue ? "destructive" : "secondary"} className="ml-1">
                 {(medicationsData?.summary.overdue || 0) + (medicationsData?.summary.dueToday || 0)}
               </Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="preventative" className="gap-2" data-testid="tab-preventative">
+            <Shield className="h-4 w-4" />
+            <span className="hidden sm:inline">Preventative</span>
+            <span className="sm:hidden">Care</span>
+            {preventativeOverdue.length > 0 && (
+              <Badge variant="destructive" className="ml-1">{preventativeOverdue.length}</Badge>
             )}
           </TabsTrigger>
           <TabsTrigger value="animals" className="gap-2" data-testid="tab-animals">
@@ -492,6 +535,171 @@ export default function FosterPortalPage() {
                   </CardContent>
                 </Card>
               ))}
+            </>
+          )}
+        </TabsContent>
+
+        <TabsContent value="preventative" className="space-y-4">
+          {loadingPreventativeCare ? (
+            <Card>
+              <CardContent className="p-6">
+                <div className="space-y-4">
+                  <Skeleton className="h-12 w-full" />
+                  <Skeleton className="h-12 w-full" />
+                  <Skeleton className="h-12 w-full" />
+                </div>
+              </CardContent>
+            </Card>
+          ) : totalPreventativeItems === 0 ? (
+            <Card>
+              <CardContent className="py-8 text-center">
+                <Shield className="h-12 w-12 mx-auto text-green-500 mb-3" />
+                <h3 className="font-semibold">All Up To Date!</h3>
+                <p className="text-sm text-muted-foreground">No upcoming preventative care items</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              {preventativeOverdue.length > 0 && (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-lg flex items-center gap-2 text-destructive">
+                      <AlertCircle className="h-5 w-5" />
+                      Overdue ({preventativeOverdue.length})
+                    </CardTitle>
+                    <CardDescription>Contact staff about these overdue items</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {preventativeOverdue.map((item) => (
+                      <div
+                        key={item.record.id}
+                        className="flex items-center gap-3 p-3 rounded-md bg-destructive/10 border border-destructive/20"
+                        data-testid={`preventative-item-${item.record.id}`}
+                      >
+                        {item.animal.photoUrls?.[0] ? (
+                          <img
+                            src={item.animal.photoUrls[0]}
+                            alt={item.animal.name}
+                            className="w-10 h-10 rounded-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
+                            <Dog className="h-5 w-5 text-muted-foreground" />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{item.animal.name}</span>
+                            {item.record.isCore && (
+                              <Star className="h-3 w-3 text-amber-500 fill-amber-500" />
+                            )}
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            {item.record.careName}
+                          </div>
+                        </div>
+                        <Badge variant="destructive">
+                          {formatDistanceToNow(new Date(item.record.nextDueDate), { addSuffix: true })}
+                        </Badge>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              )}
+
+              {preventativeDueToday.length > 0 && (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-lg flex items-center gap-2 text-amber-600">
+                      <Calendar className="h-5 w-5" />
+                      Due Today ({preventativeDueToday.length})
+                    </CardTitle>
+                    <CardDescription>These items are scheduled for today</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {preventativeDueToday.map((item) => (
+                      <div
+                        key={item.record.id}
+                        className="flex items-center gap-3 p-3 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800"
+                        data-testid={`preventative-item-${item.record.id}`}
+                      >
+                        {item.animal.photoUrls?.[0] ? (
+                          <img
+                            src={item.animal.photoUrls[0]}
+                            alt={item.animal.name}
+                            className="w-10 h-10 rounded-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
+                            <Dog className="h-5 w-5 text-muted-foreground" />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{item.animal.name}</span>
+                            {item.record.isCore && (
+                              <Star className="h-3 w-3 text-amber-500 fill-amber-500" />
+                            )}
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            {item.record.careName}
+                          </div>
+                        </div>
+                        <Badge variant="outline" className="border-amber-500 text-amber-600">
+                          Today
+                        </Badge>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              )}
+
+              {preventativeComingSoon.length > 0 && (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Clock className="h-5 w-5" />
+                      Coming Soon ({preventativeComingSoon.length})
+                    </CardTitle>
+                    <CardDescription>Upcoming preventative care in the next 7 days</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {preventativeComingSoon.map((item) => (
+                      <div
+                        key={item.record.id}
+                        className="flex items-center gap-3 p-3 rounded-md bg-muted/50"
+                        data-testid={`preventative-item-${item.record.id}`}
+                      >
+                        {item.animal.photoUrls?.[0] ? (
+                          <img
+                            src={item.animal.photoUrls[0]}
+                            alt={item.animal.name}
+                            className="w-10 h-10 rounded-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
+                            <Dog className="h-5 w-5 text-muted-foreground" />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{item.animal.name}</span>
+                            {item.record.isCore && (
+                              <Star className="h-3 w-3 text-amber-500 fill-amber-500" />
+                            )}
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            {item.record.careName}
+                          </div>
+                        </div>
+                        <Badge variant="secondary">
+                          {format(new Date(item.record.nextDueDate), "MMM d")}
+                        </Badge>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              )}
             </>
           )}
         </TabsContent>

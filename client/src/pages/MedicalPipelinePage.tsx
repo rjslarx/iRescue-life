@@ -12,7 +12,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { 
   Pill, CheckCircle2, Clock, AlertCircle, Printer, XCircle, 
   Stethoscope, Scissors, Syringe, ClipboardCheck, Calendar,
-  ArrowRight, Users, Dog, ChevronDown, ChevronRight, Phone, Mail
+  ArrowRight, Users, Dog, ChevronDown, ChevronRight, Phone, Mail, Shield
 } from "lucide-react";
 import {
   Collapsible,
@@ -68,7 +68,7 @@ export default function MedicalPipelinePage() {
   const { toast } = useToast();
   const [, navigate] = useLocation();
   const searchString = useSearch();
-  const validTabs = ["treatments", "intake", "surgery"];
+  const validTabs = ["treatments", "intake", "surgery", "preventative"];
   const [activeTab, setActiveTab] = useState("treatments");
   const [pendingSection, setPendingSection] = useState<string | null>(null);
   
@@ -199,6 +199,41 @@ export default function MedicalPipelinePage() {
   }>({
     queryKey: ['/api/medical/surgery-queue'],
   });
+
+  // Preventative care query
+  interface PreventativeCareRecord {
+    id: string;
+    animalId: string;
+    careName: string;
+    careCategory: string;
+    nextDueDate: string;
+    dateAdministered: string;
+  }
+  interface PreventativeCareItem {
+    record: PreventativeCareRecord;
+    animal: {
+      id: string;
+      name: string;
+      species: string;
+      breed: string;
+      photoUrls: string[] | null;
+      status: string;
+      location: string | null;
+    };
+  }
+  const { data: preventativeCareData, isLoading: isLoadingPreventative } = useQuery<{
+    overdue: PreventativeCareItem[];
+    dueToday: PreventativeCareItem[];
+    comingSoon: PreventativeCareItem[];
+  }>({
+    queryKey: ['/api/medical/preventative-care/coming-due'],
+    enabled: activeTab === 'preventative',
+  });
+
+  const preventativeOverdue = preventativeCareData?.overdue || [];
+  const preventativeDueToday = preventativeCareData?.dueToday || [];
+  const preventativeComingSoon = preventativeCareData?.comingSoon || [];
+  const preventativeTotalCount = preventativeOverdue.length + preventativeDueToday.length + preventativeComingSoon.length;
 
   const doses = dosesData?.doses || [];
   const overdueDoses = overdueDosesData?.doses || [];
@@ -447,7 +482,7 @@ export default function MedicalPipelinePage() {
       <div className="h-full overflow-auto p-4 md:p-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <TabsList className="grid w-full sm:w-auto grid-cols-3">
+            <TabsList className="grid w-full sm:w-auto grid-cols-4">
               <TabsTrigger value="intake" className="flex items-center gap-2" data-testid="tab-intake">
                 <ClipboardCheck className="w-4 h-4" />
                 <span className="hidden sm:inline">Intake Protocol</span>
@@ -472,6 +507,14 @@ export default function MedicalPipelinePage() {
                   <Badge variant={overdueDoses.length > 0 ? "destructive" : "secondary"} className="ml-1">
                     {pendingDoses + overdueDoses.length}
                   </Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="preventative" className="flex items-center gap-2" data-testid="tab-preventative">
+                <Shield className="w-4 h-4" />
+                <span className="hidden sm:inline">Preventative Care</span>
+                <span className="sm:hidden">Prevent</span>
+                {preventativeOverdue.length > 0 && (
+                  <Badge variant="destructive" className="ml-1">{preventativeOverdue.length}</Badge>
                 )}
               </TabsTrigger>
             </TabsList>
@@ -1401,6 +1444,221 @@ export default function MedicalPipelinePage() {
                 </div>
               </>
               )
+            )}
+          </TabsContent>
+
+          {/* Preventative Care Tab */}
+          <TabsContent value="preventative" className="space-y-6">
+            {isLoadingPreventative ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
+              </div>
+            ) : (
+              <>
+                {/* Stats Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <Card className={preventativeOverdue.length > 0 ? "border-destructive" : ""}>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-sm font-medium text-muted-foreground">
+                        Overdue
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex items-center gap-2">
+                        <AlertCircle className={`w-5 h-5 ${preventativeOverdue.length > 0 ? "text-destructive" : "text-muted-foreground"}`} />
+                        <span className={`text-3xl font-bold ${preventativeOverdue.length > 0 ? "text-destructive" : ""}`} data-testid="text-preventative-overdue">
+                          {preventativeOverdue.length}
+                        </span>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-sm font-medium text-muted-foreground">
+                        Due Today
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex items-center gap-2">
+                        <Clock className="w-5 h-5 text-orange-500" />
+                        <span className="text-3xl font-bold" data-testid="text-preventative-today">
+                          {preventativeDueToday.length}
+                        </span>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-sm font-medium text-muted-foreground">
+                        Coming Due (7 days)
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex items-center gap-2">
+                        <Calendar className="w-5 h-5 text-blue-500" />
+                        <span className="text-3xl font-bold" data-testid="text-preventative-upcoming">
+                          {preventativeComingSoon.length}
+                        </span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Overdue Section */}
+                {preventativeOverdue.length > 0 && (
+                  <Card className="border-destructive" id="section-overdue-preventative">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2 text-destructive">
+                        <AlertCircle className="w-5 h-5" />
+                        Overdue ({preventativeOverdue.length})
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3">
+                        {preventativeOverdue.map((item) => {
+                          const daysOverdue = Math.floor((new Date().getTime() - new Date(item.record.nextDueDate).getTime()) / (1000 * 60 * 60 * 24));
+                          return (
+                            <div 
+                              key={item.record.id} 
+                              className="flex items-center justify-between p-3 rounded-lg bg-destructive/10 border border-destructive/20 hover-elevate cursor-pointer"
+                              onClick={() => navigate(`/animals/${item.animal.id}`)}
+                              data-testid={`card-preventative-overdue-${item.record.id}`}
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full overflow-hidden bg-muted flex items-center justify-center">
+                                  {item.animal.photoUrls?.[0] ? (
+                                    <img src={item.animal.photoUrls[0]} alt={item.animal.name} className="w-full h-full object-cover" />
+                                  ) : (
+                                    <Dog className="w-5 h-5 text-muted-foreground" />
+                                  )}
+                                </div>
+                                <div>
+                                  <p className="font-medium">{item.animal.name}</p>
+                                  <p className="text-sm text-muted-foreground">{item.record.careName}</p>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <Badge variant="destructive">{daysOverdue} days overdue</Badge>
+                                {item.animal.location === 'foster' && (
+                                  <Badge variant="outline" className="ml-2">Foster</Badge>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Due Today Section */}
+                {preventativeDueToday.length > 0 && (
+                  <Card id="section-today-preventative">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2 text-orange-600">
+                        <Clock className="w-5 h-5" />
+                        Due Today ({preventativeDueToday.length})
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3">
+                        {preventativeDueToday.map((item) => (
+                          <div 
+                            key={item.record.id} 
+                            className="flex items-center justify-between p-3 rounded-lg bg-orange-500/10 border border-orange-500/20 hover-elevate cursor-pointer"
+                            onClick={() => navigate(`/animals/${item.animal.id}`)}
+                            data-testid={`card-preventative-today-${item.record.id}`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-full overflow-hidden bg-muted flex items-center justify-center">
+                                {item.animal.photoUrls?.[0] ? (
+                                  <img src={item.animal.photoUrls[0]} alt={item.animal.name} className="w-full h-full object-cover" />
+                                ) : (
+                                  <Dog className="w-5 h-5 text-muted-foreground" />
+                                )}
+                              </div>
+                              <div>
+                                <p className="font-medium">{item.animal.name}</p>
+                                <p className="text-sm text-muted-foreground">{item.record.careName}</p>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <Badge className="bg-orange-500">Due Today</Badge>
+                              {item.animal.location === 'foster' && (
+                                <Badge variant="outline" className="ml-2">Foster</Badge>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Coming Soon Section */}
+                {preventativeComingSoon.length > 0 && (
+                  <Card id="section-upcoming-preventative">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Calendar className="w-5 h-5 text-blue-500" />
+                        Coming Due ({preventativeComingSoon.length})
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3">
+                        {preventativeComingSoon.map((item) => {
+                          const daysUntil = Math.ceil((new Date(item.record.nextDueDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+                          return (
+                            <div 
+                              key={item.record.id} 
+                              className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border hover-elevate cursor-pointer"
+                              onClick={() => navigate(`/animals/${item.animal.id}`)}
+                              data-testid={`card-preventative-upcoming-${item.record.id}`}
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full overflow-hidden bg-muted flex items-center justify-center">
+                                  {item.animal.photoUrls?.[0] ? (
+                                    <img src={item.animal.photoUrls[0]} alt={item.animal.name} className="w-full h-full object-cover" />
+                                  ) : (
+                                    <Dog className="w-5 h-5 text-muted-foreground" />
+                                  )}
+                                </div>
+                                <div>
+                                  <p className="font-medium">{item.animal.name}</p>
+                                  <p className="text-sm text-muted-foreground">{item.record.careName}</p>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <Badge variant="secondary">In {daysUntil} days</Badge>
+                                {item.animal.location === 'foster' && (
+                                  <Badge variant="outline" className="ml-2">Foster</Badge>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Empty State */}
+                {preventativeTotalCount === 0 && (
+                  <Card>
+                    <CardContent className="py-8">
+                      <div className="text-center">
+                        <Shield className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                        <h3 className="text-lg font-medium mb-2">No Preventative Care Due</h3>
+                        <p className="text-muted-foreground">
+                          All animals are up to date on their preventative care.
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </>
             )}
           </TabsContent>
         </Tabs>

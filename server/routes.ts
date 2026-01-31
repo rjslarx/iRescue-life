@@ -7,7 +7,7 @@ import { loginUser, createTenantWithAdmin, createUser } from "./services/auth";
 import { PushNotificationService } from "./services/push-notifications";
 import { db } from "./db";
 import { tenants, users, demoRequests, insertDemoRequestSchema, smsMessageLogs, emailEvents, animals, platformIntegrations, newsletterCampaigns, newsletterSubscribers, happyTails, animalMergeHistory, activityLogs, medicalExams, medicalPrescriptions, medicalBills, medicalFiles, animalNotes, applications, adoptionCheckoutSessions, adoptions, partnerOrganizations } from "@shared/schema";
-import { eq, and, desc, sql, inArray, lt, gte, not, notInArray, or, ne } from "drizzle-orm";
+import { eq, and, desc, asc, sql, inArray, lt, lte, gte, not, notInArray, or, ne, isNull, isNotNull } from "drizzle-orm";
 import { z } from "zod";
 import { authLimiter, signupLimiter, passwordResetLimiter, emailLimiter } from "./config/security";
 import QRCode from "qrcode";
@@ -24034,6 +24034,106 @@ Email: ${application.applicantEmail || ''}`
   });
 
   /**
+   * GET /api/foster-portal/preventative-care
+   * Get preventative care items for the logged-in foster's animals
+   */
+  app.get('/api/foster-portal/preventative-care', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { preventativeCareRecords, preventativeCareTypes, animals, fosterAnimals } = await import('@shared/schema');
+      
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + 7);
+      futureDate.setHours(23, 59, 59, 999);
+
+      // Get all animals currently fostered by this user
+      const myFosterAnimals = await db
+        .select({
+          animalId: fosterAnimals.animalId,
+          animalName: animals.name,
+          animalSpecies: animals.species,
+          animalPhotoUrls: animals.photoUrls,
+        })
+        .from(fosterAnimals)
+        .innerJoin(animals, eq(fosterAnimals.animalId, animals.id))
+        .where(and(
+          eq(fosterAnimals.tenantId, req.tenant!.id),
+          eq(fosterAnimals.fosterId, req.user!.id),
+          eq(fosterAnimals.status, 'active')
+        ));
+
+      if (myFosterAnimals.length === 0) {
+        return res.json({ overdue: [], dueToday: [], comingSoon: [] });
+      }
+
+      const animalIds = myFosterAnimals.map(a => a.animalId);
+      const animalMap = new Map(myFosterAnimals.map(a => [a.animalId, a]));
+
+      // Get all preventative care records for these animals that are due within 7 days or overdue
+      const records = await db
+        .select({
+          id: preventativeCareRecords.id,
+          animalId: preventativeCareRecords.animalId,
+          nextDueDate: preventativeCareRecords.nextDueDate,
+          dateAdministered: preventativeCareRecords.dateAdministered,
+          careName: preventativeCareTypes.name,
+          careCategory: preventativeCareTypes.category,
+          isCore: preventativeCareTypes.isCore,
+        })
+        .from(preventativeCareRecords)
+        .innerJoin(preventativeCareTypes, eq(preventativeCareRecords.careTypeId, preventativeCareTypes.id))
+        .where(and(
+          eq(preventativeCareRecords.tenantId, req.tenant!.id),
+          inArray(preventativeCareRecords.animalId, animalIds),
+          lte(preventativeCareRecords.nextDueDate, futureDate)
+        ))
+        .orderBy(preventativeCareRecords.nextDueDate);
+
+      // Categorize into overdue, due today, coming soon
+      const overdue: any[] = [];
+      const dueToday: any[] = [];
+      const comingSoon: any[] = [];
+
+      records.forEach(record => {
+        const dueDate = new Date(record.nextDueDate!);
+        dueDate.setHours(0, 0, 0, 0);
+        const animal = animalMap.get(record.animalId);
+
+        const item = {
+          record: {
+            id: record.id,
+            animalId: record.animalId,
+            careName: record.careName,
+            careCategory: record.careCategory,
+            nextDueDate: record.nextDueDate,
+            dateAdministered: record.dateAdministered,
+            isCore: record.isCore,
+          },
+          animal: {
+            id: animal?.animalId,
+            name: animal?.animalName,
+            species: animal?.animalSpecies,
+            photoUrls: animal?.animalPhotoUrls,
+          },
+        };
+
+        if (dueDate < today) {
+          overdue.push(item);
+        } else if (dueDate.getTime() === today.getTime()) {
+          dueToday.push(item);
+        } else {
+          comingSoon.push(item);
+        }
+      });
+
+      res.json({ overdue, dueToday, comingSoon });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * PATCH /api/medical/doses/:doseId/administer
    * Mark a dose as administered
    */
@@ -24343,6 +24443,373 @@ Email: ${application.applicantEmail || ''}`
       }
 
       res.json({ animal });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // ===== PREVENTATIVE CARE ENDPOINTS =====
+
+  /**
+   * GET /api/medical/preventative-care/types
+   * Get preventative care types (filtered by species)
+   */
+  app.get('/api/medical/preventative-care/types', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { preventativeCareTypes } = await import('@shared/schema');
+      const { species } = req.query;
+
+      let whereConditions = [
+        eq(preventativeCareTypes.isActive, true),
+        or(
+          isNull(preventativeCareTypes.tenantId),
+          eq(preventativeCareTypes.tenantId, req.tenant!.id)
+        )
+      ];
+
+      // Filter by species if provided
+      if (species === 'Dog' || species === 'Cat') {
+        whereConditions.push(
+          or(
+            eq(preventativeCareTypes.targetSpecies, species),
+            eq(preventativeCareTypes.targetSpecies, 'Both')
+          )
+        );
+      }
+
+      const types = await db
+        .select()
+        .from(preventativeCareTypes)
+        .where(and(...whereConditions))
+        .orderBy(asc(preventativeCareTypes.sortOrder), asc(preventativeCareTypes.name));
+
+      res.json({ types });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/medical/preventative-care/coming-due
+   * Get preventative care coming due (overdue, due today, coming due in 7 days)
+   */
+  app.get('/api/medical/preventative-care/coming-due', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { preventativeCareRecords, animals } = await import('@shared/schema');
+
+      const now = new Date();
+      const today = new Date(now);
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const sevenDaysOut = new Date(today);
+      sevenDaysOut.setDate(sevenDaysOut.getDate() + 7);
+
+      // Get all records with next_due_date within the range (overdue to 7 days out)
+      // For animals that are active (not adopted/deceased)
+      const records = await db
+        .select({
+          record: preventativeCareRecords,
+          animal: {
+            id: animals.id,
+            name: animals.name,
+            species: animals.species,
+            breed: animals.breed,
+            photoUrls: animals.photoUrls,
+            status: animals.status,
+            location: animals.location,
+          }
+        })
+        .from(preventativeCareRecords)
+        .innerJoin(animals, eq(preventativeCareRecords.animalId, animals.id))
+        .where(and(
+          eq(preventativeCareRecords.tenantId, req.tenant!.id),
+          isNotNull(preventativeCareRecords.nextDueDate),
+          lte(preventativeCareRecords.nextDueDate, sevenDaysOut),
+          not(inArray(animals.status, ['adopted', 'deceased', 'transferred']))
+        ))
+        .orderBy(asc(preventativeCareRecords.nextDueDate));
+
+      // Categorize records
+      const overdue: typeof records = [];
+      const dueToday: typeof records = [];
+      const comingSoon: typeof records = [];
+
+      for (const item of records) {
+        const dueDate = new Date(item.record.nextDueDate!);
+        dueDate.setHours(0, 0, 0, 0);
+
+        if (dueDate < today) {
+          overdue.push(item);
+        } else if (dueDate >= today && dueDate < tomorrow) {
+          dueToday.push(item);
+        } else {
+          comingSoon.push(item);
+        }
+      }
+
+      res.json({ overdue, dueToday, comingSoon });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/medical/preventative-care/records
+   * Add a new preventative care record
+   */
+  app.post('/api/medical/preventative-care/records', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { preventativeCareRecords, preventativeCareTypes, insertPreventativeCareRecordSchema } = await import('@shared/schema');
+
+      const data = insertPreventativeCareRecordSchema.parse(req.body);
+
+      // Get care type info for interval calculation
+      let intervalDays: number | null = null;
+      if (data.careTypeId) {
+        const [careType] = await db
+          .select()
+          .from(preventativeCareTypes)
+          .where(eq(preventativeCareTypes.id, data.careTypeId))
+          .limit(1);
+        
+        if (careType) {
+          intervalDays = careType.defaultIntervalDays;
+        }
+      }
+
+      // Calculate next due date if interval exists
+      let nextDueDate: Date | null = null;
+      if (intervalDays && data.dateAdministered) {
+        nextDueDate = new Date(data.dateAdministered);
+        nextDueDate.setDate(nextDueDate.getDate() + intervalDays);
+      }
+
+      const [record] = await db
+        .insert(preventativeCareRecords)
+        .values({
+          ...data,
+          tenantId: req.tenant!.id,
+          nextDueDate: data.nextDueDate || nextDueDate,
+          createdBy: req.user!.id,
+        })
+        .returning();
+
+      res.status(201).json({ record });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/animals/:animalId/preventative-care/batch-create-core
+   * Auto-create preventative care records for all core items based on animal species
+   * Used at intake or when initializing preventative care tracking
+   */
+  app.post('/api/animals/:animalId/preventative-care/batch-create-core', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { preventativeCareRecords, preventativeCareTypes, animals } = await import('@shared/schema');
+      const { animalId } = req.params;
+      const { dateAdministered } = req.body;
+      const effectiveDate = dateAdministered ? new Date(dateAdministered) : new Date();
+
+      // Get the animal to determine species
+      const [animal] = await db
+        .select({ species: animals.species })
+        .from(animals)
+        .where(and(
+          eq(animals.id, animalId),
+          eq(animals.tenantId, req.tenant!.id)
+        ))
+        .limit(1);
+
+      if (!animal) {
+        return res.status(404).json({ error: 'Animal not found' });
+      }
+
+      // Get core preventative care types for this species
+      const coreTypes = await db
+        .select()
+        .from(preventativeCareTypes)
+        .where(and(
+          eq(preventativeCareTypes.isCore, true),
+          or(
+            eq(preventativeCareTypes.targetSpecies, animal.species || 'Dog'),
+            eq(preventativeCareTypes.targetSpecies, 'Both')
+          )
+        ));
+
+      // Check which core types already have records for this animal
+      const existingRecords = await db
+        .select({ careTypeId: preventativeCareRecords.careTypeId })
+        .from(preventativeCareRecords)
+        .where(and(
+          eq(preventativeCareRecords.animalId, animalId),
+          eq(preventativeCareRecords.tenantId, req.tenant!.id)
+        ));
+
+      const existingTypeIds = new Set(existingRecords.map(r => r.careTypeId));
+
+      // Filter to only create records for types that don't already exist
+      const typesToCreate = coreTypes.filter(t => !existingTypeIds.has(t.id));
+
+      if (typesToCreate.length === 0) {
+        return res.json({ 
+          message: 'All core preventative care items already recorded',
+          created: 0,
+          records: []
+        });
+      }
+
+      // Create records for each core type
+      const recordsToInsert = typesToCreate.map(type => {
+        let nextDueDate: Date | null = null;
+        if (type.defaultIntervalDays) {
+          nextDueDate = new Date(effectiveDate);
+          nextDueDate.setDate(nextDueDate.getDate() + type.defaultIntervalDays);
+        }
+
+        return {
+          tenantId: req.tenant!.id,
+          animalId,
+          careTypeId: type.id,
+          dateAdministered: effectiveDate,
+          nextDueDate,
+          notes: 'Auto-created at intake',
+          createdBy: req.user!.id,
+        };
+      });
+
+      const createdRecords = await db
+        .insert(preventativeCareRecords)
+        .values(recordsToInsert)
+        .returning();
+
+      res.status(201).json({
+        message: `Created ${createdRecords.length} core preventative care records`,
+        created: createdRecords.length,
+        records: createdRecords,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/animals/:animalId/preventative-care
+   * Get preventative care records for an animal
+   */
+  app.get('/api/animals/:animalId/preventative-care', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { preventativeCareRecords } = await import('@shared/schema');
+
+      const records = await db
+        .select()
+        .from(preventativeCareRecords)
+        .where(and(
+          eq(preventativeCareRecords.animalId, req.params.animalId),
+          eq(preventativeCareRecords.tenantId, req.tenant!.id)
+        ))
+        .orderBy(desc(preventativeCareRecords.dateAdministered));
+
+      res.json({ records });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * PATCH /api/medical/preventative-care/records/:recordId
+   * Update a preventative care record
+   */
+  app.patch('/api/medical/preventative-care/records/:recordId', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { preventativeCareRecords, preventativeCareTypes } = await import('@shared/schema');
+      const { recordId } = req.params;
+
+      // Verify record exists and belongs to tenant
+      const [existingRecord] = await db
+        .select()
+        .from(preventativeCareRecords)
+        .where(and(
+          eq(preventativeCareRecords.id, recordId),
+          eq(preventativeCareRecords.tenantId, req.tenant!.id)
+        ))
+        .limit(1);
+
+      if (!existingRecord) {
+        return res.status(404).json({ error: 'Record not found' });
+      }
+
+      const { careTypeId, dateAdministered, administeredBy, notes, lotNumber, manufacturer } = req.body;
+
+      // Recalculate next due date if date or care type changed
+      let nextDueDate: Date | null = existingRecord.nextDueDate;
+      const effectiveCareTypeId = careTypeId || existingRecord.careTypeId;
+      const effectiveDate = dateAdministered || existingRecord.dateAdministered;
+
+      if (careTypeId || dateAdministered) {
+        const [careType] = await db
+          .select()
+          .from(preventativeCareTypes)
+          .where(eq(preventativeCareTypes.id, effectiveCareTypeId))
+          .limit(1);
+
+        if (careType?.defaultIntervalDays) {
+          nextDueDate = new Date(effectiveDate);
+          nextDueDate.setDate(nextDueDate.getDate() + careType.defaultIntervalDays);
+        }
+      }
+
+      const [updatedRecord] = await db
+        .update(preventativeCareRecords)
+        .set({
+          ...(careTypeId && { careTypeId }),
+          ...(dateAdministered && { dateAdministered: new Date(dateAdministered) }),
+          ...(administeredBy !== undefined && { administeredBy }),
+          ...(notes !== undefined && { notes }),
+          ...(lotNumber !== undefined && { lotNumber }),
+          ...(manufacturer !== undefined && { manufacturer }),
+          nextDueDate,
+          updatedAt: new Date(),
+        })
+        .where(eq(preventativeCareRecords.id, recordId))
+        .returning();
+
+      res.json({ record: updatedRecord });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * DELETE /api/medical/preventative-care/records/:recordId
+   * Delete a preventative care record
+   */
+  app.delete('/api/medical/preventative-care/records/:recordId', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { preventativeCareRecords } = await import('@shared/schema');
+      const { recordId } = req.params;
+
+      // Verify record exists and belongs to tenant
+      const [existingRecord] = await db
+        .select()
+        .from(preventativeCareRecords)
+        .where(and(
+          eq(preventativeCareRecords.id, recordId),
+          eq(preventativeCareRecords.tenantId, req.tenant!.id)
+        ))
+        .limit(1);
+
+      if (!existingRecord) {
+        return res.status(404).json({ error: 'Record not found' });
+      }
+
+      await db
+        .delete(preventativeCareRecords)
+        .where(eq(preventativeCareRecords.id, recordId));
+
+      res.json({ success: true });
     } catch (error) {
       next(error);
     }

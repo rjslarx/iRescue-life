@@ -32,7 +32,10 @@ import {
   Cpu,
   Copy,
   Check,
-  Edit
+  Edit,
+  Shield,
+  Plus,
+  Star
 } from "lucide-react";
 import { useGooglePicker, PickerDocument } from "@/hooks/useGooglePicker";
 import { format } from "date-fns";
@@ -44,6 +47,7 @@ import { AddMedicalBillDialog } from "@/components/AddMedicalBillDialog";
 import { AddExamDialog } from "@/components/AddExamDialog";
 import { MedicalFileUploadDialog } from "@/components/MedicalFileUploadDialog";
 import { AddMicrochipDialog } from "@/components/AddMicrochipDialog";
+import { AddPreventativeCareDialog } from "@/components/AddPreventativeCareDialog";
 import DashboardLayout from "@/components/DashboardLayout";
 import { useTenant } from "@/contexts/TenantContext";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -104,6 +108,8 @@ export default function AnimalMedicalPage() {
   const [documentDialogOpen, setDocumentDialogOpen] = useState(false);
   const [microchipDialogOpen, setMicrochipDialogOpen] = useState(false);
   const [editingMicrochip, setEditingMicrochip] = useState<any>(null);
+  const [preventativeCareDialogOpen, setPreventativeCareDialogOpen] = useState(false);
+  const [editingPreventativeCare, setEditingPreventativeCare] = useState<any>(null);
   const [copiedAdopterInfo, setCopiedAdopterInfo] = useState(false);
 
   // Fetch animal details
@@ -137,6 +143,46 @@ export default function AnimalMedicalPage() {
     queryKey: [`/api/animals/${animalId}/microchips`],
     enabled: !!animalId,
   });
+
+  // Fetch preventative care records
+  interface PreventativeCareRecord {
+    id: string;
+    careTypeId: string;
+    dateAdministered: string;
+    nextDueDate: string | null;
+    administeredBy: string | null;
+    notes: string | null;
+    lotNumber: string | null;
+    manufacturer: string | null;
+  }
+  interface PreventativeCareType {
+    id: string;
+    name: string;
+    category: string;
+    isCore: boolean;
+    defaultIntervalDays: number | null;
+  }
+  const { data: preventativeCareData } = useQuery<{ records: PreventativeCareRecord[] }>({
+    queryKey: [`/api/animals/${animalId}/preventative-care`],
+    enabled: !!animalId,
+  });
+
+  const { data: preventativeCareTypesData } = useQuery<{ types: PreventativeCareType[] }>({
+    queryKey: ['/api/medical/preventative-care/types', { species: animal?.species || 'Dog' }],
+    enabled: !!animal?.species,
+  });
+
+  const preventativeCareRecords = preventativeCareData?.records || [];
+  const preventativeCareTypes = preventativeCareTypesData?.types || [];
+  
+  const getPreventativeCareTypeName = (typeId: string) => {
+    const type = preventativeCareTypes.find(t => t.id === typeId);
+    return type?.name || 'Unknown';
+  };
+
+  const getPreventativeCareType = (typeId: string) => {
+    return preventativeCareTypes.find(t => t.id === typeId);
+  };
 
   // Fetch diagnostics
   const { data: diagnosticsData } = useQuery<any>({
@@ -407,6 +453,7 @@ export default function AnimalMedicalPage() {
               <TabsTrigger value="procedures" data-testid="tab-procedures" className="whitespace-nowrap text-xs md:text-sm px-3 md:px-4">Procedures</TabsTrigger>
               <TabsTrigger value="medications" data-testid="tab-medications" className="whitespace-nowrap text-xs md:text-sm px-3 md:px-4">Meds</TabsTrigger>
               <TabsTrigger value="billing" data-testid="tab-billing" className="whitespace-nowrap text-xs md:text-sm px-3 md:px-4">Billing</TabsTrigger>
+              <TabsTrigger value="preventative" data-testid="tab-preventative" className="whitespace-nowrap text-xs md:text-sm px-3 md:px-4">Preventative</TabsTrigger>
               <TabsTrigger value="documents" data-testid="tab-documents" className="whitespace-nowrap text-xs md:text-sm px-3 md:px-4">
                 <FolderOpen className="w-4 h-4 mr-1" />
                 Docs
@@ -1255,6 +1302,171 @@ export default function AnimalMedicalPage() {
             </div>
           </TabsContent>
 
+          {/* Preventative Care Tab */}
+          <TabsContent value="preventative" className="space-y-4">
+            <div className="flex justify-between items-center flex-wrap gap-2">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <Shield className="w-5 h-5" />
+                Preventative Care
+              </h3>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  onClick={async () => {
+                    try {
+                      const response = await apiRequest(`/api/animals/${animalId}/preventative-care/batch-create-core`, {
+                        method: 'POST',
+                        body: JSON.stringify({ dateAdministered: new Date().toISOString().split('T')[0] }),
+                      });
+                      if (response.created > 0) {
+                        toast({
+                          title: 'Core items added',
+                          description: `Created ${response.created} core preventative care records`,
+                        });
+                        queryClient.invalidateQueries({ queryKey: [`/api/animals/${animalId}/preventative-care`] });
+                      } else {
+                        toast({
+                          title: 'All set',
+                          description: 'All core preventative care items already recorded',
+                        });
+                      }
+                    } catch (error: any) {
+                      toast({
+                        title: 'Error',
+                        description: error.message || 'Failed to add core items',
+                        variant: 'destructive',
+                      });
+                    }
+                  }}
+                  data-testid="button-add-core-items"
+                >
+                  <Star className="h-4 w-4 mr-2" />
+                  Add Core Items
+                </Button>
+                <Button
+                  onClick={() => {
+                    setEditingPreventativeCare(null);
+                    setPreventativeCareDialogOpen(true);
+                  }}
+                  data-testid="button-add-preventative-care"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Record
+                </Button>
+              </div>
+            </div>
+            
+            <div className="space-y-4">
+              {preventativeCareRecords.map((record) => {
+                const careType = getPreventativeCareType(record.careTypeId);
+                const isOverdue = record.nextDueDate && new Date(record.nextDueDate) < new Date();
+                const daysUntilDue = record.nextDueDate 
+                  ? Math.ceil((new Date(record.nextDueDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+                  : null;
+
+                return (
+                  <Card 
+                    key={record.id} 
+                    className={isOverdue ? "border-destructive" : ""}
+                    data-testid={`card-preventative-care-${record.id}`}
+                  >
+                    <CardHeader>
+                      <div className="flex items-start justify-between flex-wrap gap-2">
+                        <div className="space-y-1">
+                          <CardTitle className="flex items-center gap-2">
+                            {getPreventativeCareTypeName(record.careTypeId)}
+                            {careType?.isCore && (
+                              <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
+                            )}
+                          </CardTitle>
+                          <CardDescription className="flex items-center gap-2">
+                            <Calendar className="w-4 h-4" />
+                            Given: {format(new Date(record.dateAdministered), "MMM d, yyyy")}
+                            {record.nextDueDate && (
+                              <>
+                                <span className="mx-2">|</span>
+                                <Clock className="w-4 h-4" />
+                                Next Due: {format(new Date(record.nextDueDate), "MMM d, yyyy")}
+                              </>
+                            )}
+                          </CardDescription>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {isOverdue && (
+                            <Badge variant="destructive">
+                              <AlertCircle className="w-3 h-3 mr-1" />
+                              Overdue
+                            </Badge>
+                          )}
+                          {!isOverdue && daysUntilDue !== null && daysUntilDue <= 7 && daysUntilDue >= 0 && (
+                            <Badge variant="secondary" className="bg-orange-500/10 text-orange-600 border-orange-500/20">
+                              Due in {daysUntilDue} days
+                            </Badge>
+                          )}
+                          {careType && (
+                            <Badge variant="outline">{careType.category}</Badge>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                              setEditingPreventativeCare(record);
+                              setPreventativeCareDialogOpen(true);
+                            }}
+                            data-testid={`button-edit-preventative-${record.id}`}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    {(record.administeredBy || record.notes || record.lotNumber || record.manufacturer) && (
+                      <CardContent>
+                        <div className="grid grid-cols-2 gap-4 text-sm">
+                          {record.administeredBy && (
+                            <div>
+                              <span className="text-muted-foreground">Administered By:</span>
+                              <span className="ml-2">{record.administeredBy}</span>
+                            </div>
+                          )}
+                          {record.lotNumber && (
+                            <div>
+                              <span className="text-muted-foreground">Lot #:</span>
+                              <span className="ml-2">{record.lotNumber}</span>
+                            </div>
+                          )}
+                          {record.manufacturer && (
+                            <div>
+                              <span className="text-muted-foreground">Manufacturer:</span>
+                              <span className="ml-2">{record.manufacturer}</span>
+                            </div>
+                          )}
+                          {record.notes && (
+                            <div className="col-span-2">
+                              <span className="text-muted-foreground">Notes:</span>
+                              <span className="ml-2">{record.notes}</span>
+                            </div>
+                          )}
+                        </div>
+                      </CardContent>
+                    )}
+                  </Card>
+                );
+              })}
+              {preventativeCareRecords.length === 0 && (
+                <Card>
+                  <CardContent className="py-8 text-center text-muted-foreground">
+                    <Shield className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                    <p>No preventative care records yet</p>
+                    <p className="text-sm mt-2">
+                      Add vaccines, heartworm prevention, flea/tick treatments, and other preventative care items
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          </TabsContent>
+
           {/* Documents Tab */}
           <TabsContent value="documents" className="space-y-4">
             <div className="flex justify-between items-center flex-wrap gap-2">
@@ -1501,6 +1713,16 @@ export default function AnimalMedicalPage() {
               if (!open) setEditingMicrochip(null);
             }}
             microchip={editingMicrochip}
+          />
+          <AddPreventativeCareDialog
+            animalId={animalId}
+            animalSpecies={animal?.species || 'Dog'}
+            open={preventativeCareDialogOpen}
+            onOpenChange={(open) => {
+              setPreventativeCareDialogOpen(open);
+              if (!open) setEditingPreventativeCare(null);
+            }}
+            record={editingPreventativeCare}
           />
           <AddDiagnosticDialog
             animalId={animalId}
