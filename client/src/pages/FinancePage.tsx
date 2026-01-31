@@ -3,7 +3,7 @@ import FinanceTable from "@/components/FinanceTable";
 import { useAuth } from "@/contexts/AuthContext";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Wallet, ArrowDownToLine, CreditCard, RefreshCw, ExternalLink, AlertCircle } from "lucide-react";
+import { Loader2, Wallet, ArrowDownToLine, CreditCard, RefreshCw, ExternalLink, AlertCircle, CreditCard as CardIcon } from "lucide-react";
 import type { Donation, Expenditure } from "@shared/schema";
 import Papa from 'papaparse';
 import DashboardLayout from "@/components/DashboardLayout";
@@ -13,6 +13,8 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { StripeConnectProvider } from "@/components/StripeConnectProvider";
+import { ConnectPayments, ConnectPayouts, ConnectBalances } from "@stripe/react-connect-js";
 
 interface FinanceData {
   donations: Donation[];
@@ -123,25 +125,25 @@ export default function FinancePage() {
 
   const { data: stripeBalance, isLoading: isLoadingBalance, isError: isErrorBalance, refetch: refetchBalance } = useQuery<StripeBalanceData>({
     queryKey: ['/api/stripe/balance'],
-    enabled: user?.role === 'admin' || user?.role === 'board_member' || user?.role === 'owner',
+    enabled: user?.activeRole === 'admin' || user?.activeRole === 'board_member' || user?.activeRole === 'owner',
     retry: false,
   });
 
   const { data: stripePayouts, isLoading: isLoadingPayouts, isError: isErrorPayouts } = useQuery<{ configured: boolean; payouts: StripePayout[]; error?: string; message?: string }>({
     queryKey: ['/api/stripe/payouts'],
-    enabled: user?.role === 'admin' || user?.role === 'board_member' || user?.role === 'owner',
+    enabled: user?.activeRole === 'admin' || user?.activeRole === 'board_member' || user?.activeRole === 'owner',
     retry: false,
   });
 
   const { data: stripeTransactions, isLoading: isLoadingTransactions, isError: isErrorTransactions } = useQuery<{ configured: boolean; transactions: StripeTransaction[]; error?: string; message?: string }>({
     queryKey: ['/api/stripe/transactions'],
-    enabled: user?.role === 'admin' || user?.role === 'board_member' || user?.role === 'staff' || user?.role === 'owner',
+    enabled: user?.activeRole === 'admin' || user?.activeRole === 'board_member' || user?.activeRole === 'staff' || user?.activeRole === 'owner',
     retry: false,
   });
 
   const { data: grantsData } = useQuery<{ grants: any[] }>({
     queryKey: ['/api/grants'],
-    enabled: user?.role === 'admin' || user?.role === 'board_member' || user?.role === 'staff',
+    enabled: user?.activeRole === 'admin' || user?.activeRole === 'board_member' || user?.activeRole === 'staff',
   });
 
   const addExpenditureMutation = useMutation({
@@ -438,7 +440,7 @@ export default function FinancePage() {
       description="Track donations and expenditures"
     >
       <div className="flex-1 overflow-auto p-6 space-y-6">
-        {(user?.role === 'admin' || user?.role === 'board_member' || user?.role === 'owner') && (
+        {(user?.activeRole === 'admin' || user?.activeRole === 'board_member' || user?.activeRole === 'owner') && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Card data-testid="card-balance-available">
               <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
@@ -523,7 +525,7 @@ export default function FinancePage() {
           </div>
         )}
 
-        {!stripeConfigured && !stripeBalanceError && !isLoadingBalance && (user?.role === 'admin' || user?.role === 'owner') && (
+        {!stripeConfigured && !stripeBalanceError && !isLoadingBalance && (user?.activeRole === 'admin' || user?.activeRole === 'owner') && (
           <Alert data-testid="alert-stripe-not-configured">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
@@ -535,8 +537,12 @@ export default function FinancePage() {
         <Tabs defaultValue="records" className="w-full">
           <TabsList data-testid="tabs-finance">
             <TabsTrigger value="records" data-testid="tab-records">Records</TabsTrigger>
-            <TabsTrigger value="stripe" data-testid="tab-stripe">Stripe Transactions</TabsTrigger>
-            <TabsTrigger value="payouts" data-testid="tab-payouts">Bank Payouts</TabsTrigger>
+            {(user?.activeRole === 'admin' || user?.activeRole === 'board_member' || user?.activeRole === 'staff' || user?.activeRole === 'owner') && (
+              <TabsTrigger value="stripe" data-testid="tab-stripe">Stripe Transactions</TabsTrigger>
+            )}
+            {(user?.activeRole === 'admin' || user?.activeRole === 'board_member' || user?.activeRole === 'owner') && (
+              <TabsTrigger value="payouts" data-testid="tab-payouts">Bank Payouts</TabsTrigger>
+            )}
           </TabsList>
 
           <TabsContent value="records" className="mt-4">
@@ -557,174 +563,86 @@ export default function FinancePage() {
             )}
           </TabsContent>
 
-          <TabsContent value="stripe" className="mt-4">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between gap-2">
-                <div>
+          {(user?.activeRole === 'admin' || user?.activeRole === 'board_member' || user?.activeRole === 'staff' || user?.activeRole === 'owner') && (
+            <TabsContent value="stripe" className="mt-4">
+              <Card>
+                <CardHeader>
                   <CardTitle>Stripe Transactions</CardTitle>
-                  <CardDescription>Recent payments processed through Stripe</CardDescription>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => queryClient.invalidateQueries({ queryKey: ['/api/stripe/transactions'] })}
-                  data-testid="button-refresh-transactions"
-                >
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Refresh
-                </Button>
-              </CardHeader>
-              <CardContent>
-                {isLoadingTransactions ? (
-                  <div className="flex items-center justify-center h-32">
-                    <Loader2 className="h-6 w-6 animate-spin" />
-                  </div>
-                ) : stripeTransactionsError ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    Unable to load transactions
-                  </div>
-                ) : !stripeTransactions?.configured ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    Stripe is not configured for this organization
-                  </div>
-                ) : stripeTransactions?.error ? (
-                  <div className="text-center py-8">
-                    <p className="text-destructive font-medium">Error loading transactions</p>
-                    <p className="text-sm text-muted-foreground mt-1">{stripeTransactions.error}</p>
-                  </div>
-                ) : stripeTransactions.transactions.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    No transactions yet
-                  </div>
-                ) : (
-                  <Table data-testid="table-stripe-transactions">
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Donor</TableHead>
-                        <TableHead>Amount</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Receipt</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {stripeTransactions.transactions.map(tx => (
-                        <TableRow key={tx.id} data-testid={`transaction-${tx.id}`}>
-                          <TableCell>{formatDate(tx.created)}</TableCell>
-                          <TableCell>
-                            <div>
-                              <div className="font-medium">{tx.billingDetails?.name || 'Anonymous'}</div>
-                              {tx.billingDetails?.email && (
-                                <div className="text-xs text-muted-foreground">{tx.billingDetails.email}</div>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell className="font-medium">
-                            {formatCurrency(tx.amount, tx.currency)}
-                            {tx.refunded && tx.amountRefunded > 0 && (
-                              <span className="text-xs text-red-500 ml-1">
-                                (-{formatCurrency(tx.amountRefunded, tx.currency)})
-                              </span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {getTransactionStatusBadge(tx.status, tx.refunded)}
-                          </TableCell>
-                          <TableCell>
-                            {tx.receiptUrl && (
-                              <Button variant="ghost" size="sm" asChild>
-                                <a href={tx.receiptUrl} target="_blank" rel="noopener noreferrer" data-testid={`link-receipt-${tx.id}`}>
-                                  <ExternalLink className="h-4 w-4" />
-                                </a>
-                              </Button>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
+                  <CardDescription>
+                    All payments processed through Stripe with built-in filtering, search, and CSV export
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <StripeConnectProvider
+                    fallback={
+                      <div className="text-center py-8 text-muted-foreground">
+                        <CardIcon className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
+                        <p>Stripe is not configured for this organization.</p>
+                        <p className="text-sm mt-1">Go to Settings → Integrations to connect your Stripe account.</p>
+                      </div>
+                    }
+                  >
+                    <div className="min-h-[400px]" data-testid="stripe-payments-container">
+                      <ConnectPayments />
+                    </div>
+                  </StripeConnectProvider>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
 
-          <TabsContent value="payouts" className="mt-4">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between gap-2">
-                <div>
-                  <CardTitle>Bank Payouts</CardTitle>
-                  <CardDescription>Transfers to your connected bank account</CardDescription>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    queryClient.invalidateQueries({ queryKey: ['/api/stripe/payouts'] });
-                    refetchBalance();
-                  }}
-                  data-testid="button-refresh-payouts"
-                >
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Refresh
-                </Button>
-              </CardHeader>
-              <CardContent>
-                {isLoadingPayouts ? (
-                  <div className="flex items-center justify-center h-32">
-                    <Loader2 className="h-6 w-6 animate-spin" />
-                  </div>
-                ) : stripePayoutsError ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    Unable to load payouts
-                  </div>
-                ) : !stripePayouts?.configured ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    Stripe is not configured for this organization
-                  </div>
-                ) : stripePayouts?.error ? (
-                  <div className="text-center py-8">
-                    <p className="text-destructive font-medium">Error loading payouts</p>
-                    <p className="text-sm text-muted-foreground mt-1">{stripePayouts.error}</p>
-                  </div>
-                ) : stripePayouts.payouts.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    No payouts yet - Stripe will automatically transfer funds to your bank account
-                  </div>
-                ) : (
-                  <Table data-testid="table-payouts">
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Created</TableHead>
-                        <TableHead>Amount</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Arrival Date</TableHead>
-                        <TableHead>Method</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {stripePayouts.payouts.map(payout => (
-                        <TableRow key={payout.id} data-testid={`payout-row-${payout.id}`}>
-                          <TableCell>{formatDate(payout.created)}</TableCell>
-                          <TableCell className="font-medium">
-                            {formatCurrency(payout.amount, payout.currency)}
-                          </TableCell>
-                          <TableCell>
-                            {getPayoutStatusBadge(payout.status)}
-                          </TableCell>
-                          <TableCell>
-                            {payout.arrivalDate ? formatDate(payout.arrivalDate) : '-'}
-                          </TableCell>
-                          <TableCell className="capitalize">
-                            {payout.method}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
+          {(user?.activeRole === 'admin' || user?.activeRole === 'board_member' || user?.activeRole === 'owner') && (
+            <TabsContent value="payouts" className="mt-4">
+              <div className="space-y-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Account Balance</CardTitle>
+                    <CardDescription>
+                      Your current Stripe balance and available funds
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <StripeConnectProvider
+                      fallback={
+                        <div className="text-center py-8 text-muted-foreground">
+                          <Wallet className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
+                          <p>Stripe is not configured for this organization.</p>
+                        </div>
+                      }
+                    >
+                      <div className="min-h-[200px]" data-testid="stripe-balances-container">
+                        <ConnectBalances />
+                      </div>
+                    </StripeConnectProvider>
+                  </CardContent>
+                </Card>
+                
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Bank Payouts</CardTitle>
+                    <CardDescription>
+                      Transfers to your connected bank account with payout scheduling
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <StripeConnectProvider
+                      fallback={
+                        <div className="text-center py-8 text-muted-foreground">
+                          <ArrowDownToLine className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
+                          <p>Stripe is not configured for this organization.</p>
+                          <p className="text-sm mt-1">Go to Settings → Integrations to connect your Stripe account.</p>
+                        </div>
+                      }
+                    >
+                      <div className="min-h-[400px]" data-testid="stripe-payouts-container">
+                        <ConnectPayouts />
+                      </div>
+                    </StripeConnectProvider>
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+          )}
         </Tabs>
       </div>
     </DashboardLayout>
