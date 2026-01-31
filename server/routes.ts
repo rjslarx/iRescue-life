@@ -18248,12 +18248,17 @@ Submitted: ${new Date().toLocaleString()}
       }
 
       const { decrypt } = await import('./lib/encryption');
-      const { donors, payments, subscriptions } = await import('@shared/schema');
+      const { donors, payments, subscriptions, donations } = await import('@shared/schema');
       const { stripeService } = await import('./lib/stripe-service');
+      
+      console.log('[STRIPE-WEBHOOK] Received webhook event');
 
       const payload = JSON.parse(req.body.toString('utf8'));
+      console.log(`[STRIPE-WEBHOOK] Event type: ${payload.type}, event ID: ${payload.id}`);
+      
       let metadata = payload.data?.object?.metadata || {};
       let tenantId = metadata.tenantId;
+      console.log(`[STRIPE-WEBHOOK] Metadata tenantId: ${tenantId || 'not found in metadata'}`);
 
       if (!tenantId && payload.data?.object?.subscription) {
         const subscriptionId = payload.data.object.subscription;
@@ -18271,9 +18276,12 @@ Submitted: ${new Date().toLocaleString()}
       }
 
       if (!tenantId) {
-        console.error('Webhook missing tenantId in metadata and could not resolve from subscription');
+        console.error('[STRIPE-WEBHOOK] ERROR: Missing tenantId in metadata and could not resolve from subscription');
+        console.error('[STRIPE-WEBHOOK] Full payload metadata:', JSON.stringify(metadata));
         return res.status(400).send('Missing tenant information');
       }
+      
+      console.log(`[STRIPE-WEBHOOK] Resolved tenantId: ${tenantId}`);
 
       const [tenant] = await db
         .select()
@@ -18282,20 +18290,31 @@ Submitted: ${new Date().toLocaleString()}
         .limit(1);
 
       if (!tenant || !tenant.stripeEnabled || !tenant.stripeWebhookSecretEncrypted) {
-        console.error('Webhook tenant not found or not configured:', tenantId);
+        console.error('[STRIPE-WEBHOOK] ERROR: Tenant not found or not configured:', tenantId);
+        console.error(`[STRIPE-WEBHOOK]   tenant found: ${!!tenant}, stripeEnabled: ${tenant?.stripeEnabled}, webhookSecretSet: ${!!tenant?.stripeWebhookSecretEncrypted}`);
         return res.status(400).send('Webhook not configured for this tenant');
       }
+      
+      console.log(`[STRIPE-WEBHOOK] Tenant ${tenant.name} (${tenant.subdomain}) has Stripe configured`);
 
       const webhookSecret = decrypt(tenant.stripeWebhookSecretEncrypted);
       
-      const event = await stripeService.handleWebhook(
-        req.body,
-        signature,
-        webhookSecret
-      );
+      let event;
+      try {
+        event = await stripeService.handleWebhook(
+          req.body,
+          signature,
+          webhookSecret
+        );
+        console.log(`[STRIPE-WEBHOOK] Event verified successfully: ${event.type}`);
+      } catch (verifyError: any) {
+        console.error('[STRIPE-WEBHOOK] ERROR: Failed to verify webhook signature:', verifyError.message);
+        return res.status(400).send(`Webhook signature verification failed: ${verifyError.message}`);
+      }
 
       switch (event.type) {
         case 'checkout.session.completed': {
+          console.log('[STRIPE-WEBHOOK] Processing checkout.session.completed event');
           const session = event.data.object as any;
           const customerEmail = session.customer_email || session.customer_details?.email;
           const customerName = session.customer_details?.name || 'Anonymous Donor';
@@ -18370,6 +18389,29 @@ Submitted: ${new Date().toLocaleString()}
             isRecurring: session.mode === 'subscription',
             message: session.metadata?.message,
           });
+          
+          console.log(`[STRIPE-WEBHOOK] Created payment record for ${session.payment_intent}, amount: ${session.amount_total}, status: ${paymentStatus}`);
+          
+          // Also create a donation record for the Finance page
+          // Only create if payment is complete (for pending ACH, we'll create on payment_intent.succeeded)
+          if (isPaymentComplete) {
+            const [donationRecord] = await db.insert(donations).values({
+              tenantId: tenant.id,
+              donorName: customerName,
+              donorEmail: customerEmail,
+              amount: session.amount_total || 0,
+              source: 'stripe' as any,
+              date: new Date(),
+              message: session.metadata?.message || null,
+              isRecurring: session.mode === 'subscription',
+              recurringFrequency: session.mode === 'subscription' ? 'monthly' : null,
+              recurringStatus: session.mode === 'subscription' ? 'active' : null,
+              donationType: 'cash',
+              isPublic: true,
+            }).returning();
+            
+            console.log(`[STRIPE-WEBHOOK] Created donation record ${donationRecord.id} for Finance page, donor: ${customerName}, amount: ${session.amount_total / 100}`);
+          }
 
           // Send appropriate email based on payment status
           try {
