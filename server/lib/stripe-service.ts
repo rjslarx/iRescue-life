@@ -301,6 +301,88 @@ export class StripeService {
 
     return await stripe.paymentIntents.retrieve(paymentIntentId);
   }
+
+  /**
+   * Get Stripe balance for a tenant (either Connect account or direct)
+   */
+  async getBalance(tenant: Tenant): Promise<Stripe.Balance | null> {
+    const platformKey = getPlatformStripeKey();
+    
+    // For Stripe Connect accounts
+    if (tenant.stripeConnectedAccountId && platformKey) {
+      const stripe = new Stripe(platformKey, {
+        apiVersion: '2025-09-30.clover',
+        typescript: true,
+      });
+      return await stripe.balance.retrieve(
+        {},
+        { stripeAccount: tenant.stripeConnectedAccountId }
+      );
+    }
+    
+    // For tenants with their own Stripe key
+    const stripe = this.getStripeClient(tenant);
+    if (!stripe) {
+      return null;
+    }
+    return await stripe.balance.retrieve();
+  }
+
+  /**
+   * Get recent payouts for a tenant
+   */
+  async getPayouts(tenant: Tenant, limit: number = 10): Promise<Stripe.Payout[] | null> {
+    const platformKey = getPlatformStripeKey();
+    
+    // For Stripe Connect accounts
+    if (tenant.stripeConnectedAccountId && platformKey) {
+      const stripe = new Stripe(platformKey, {
+        apiVersion: '2025-09-30.clover',
+        typescript: true,
+      });
+      const payouts = await stripe.payouts.list(
+        { limit },
+        { stripeAccount: tenant.stripeConnectedAccountId }
+      );
+      return payouts.data;
+    }
+    
+    // For tenants with their own Stripe key
+    const stripe = this.getStripeClient(tenant);
+    if (!stripe) {
+      return null;
+    }
+    const payouts = await stripe.payouts.list({ limit });
+    return payouts.data;
+  }
+
+  /**
+   * Get recent transactions/charges for a tenant
+   */
+  async getTransactions(tenant: Tenant, limit: number = 50): Promise<Stripe.Charge[] | null> {
+    const platformKey = getPlatformStripeKey();
+    
+    // For Stripe Connect accounts
+    if (tenant.stripeConnectedAccountId && platformKey) {
+      const stripe = new Stripe(platformKey, {
+        apiVersion: '2025-09-30.clover',
+        typescript: true,
+      });
+      const charges = await stripe.charges.list(
+        { limit },
+        { stripeAccount: tenant.stripeConnectedAccountId }
+      );
+      return charges.data;
+    }
+    
+    // For tenants with their own Stripe key
+    const stripe = this.getStripeClient(tenant);
+    if (!stripe) {
+      return null;
+    }
+    const charges = await stripe.charges.list({ limit });
+    return charges.data;
+  }
 }
 
 export const stripeService = new StripeService();

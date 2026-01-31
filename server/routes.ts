@@ -18135,6 +18135,192 @@ Submitted: ${new Date().toLocaleString()}
   });
 
   /**
+   * GET /api/stripe/balance
+   * Get the tenant's Stripe balance (pending and available)
+   */
+  app.get('/api/stripe/balance', requireTenant, requireAuth, requireRole('admin', 'board_member', 'owner'), async (req, res, next) => {
+    try {
+      const { stripeService } = await import('./lib/stripe-service');
+      
+      const [tenant] = await db
+        .select()
+        .from(tenants)
+        .where(eq(tenants.id, req.tenant!.id))
+        .limit(1);
+      
+      if (!tenant) {
+        return res.status(404).json({ error: 'Tenant not found' });
+      }
+      
+      // Check if Stripe is configured
+      const hasStripe = tenant.stripeConnectedAccountId || (tenant.stripeEnabled && tenant.stripeSecretKeyEncrypted);
+      if (!hasStripe) {
+        return res.json({ 
+          configured: false,
+          message: 'Stripe is not configured for this organization',
+          available: [],
+          pending: [],
+        });
+      }
+      
+      const balance = await stripeService.getBalance(tenant);
+      if (!balance) {
+        return res.json({ 
+          configured: false,
+          message: 'Unable to retrieve Stripe balance',
+          available: [],
+          pending: [],
+        });
+      }
+      
+      res.json({
+        configured: true,
+        available: balance.available,
+        pending: balance.pending,
+        livemode: balance.livemode,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/stripe/payouts
+   * Get recent payouts (transfers to bank account) for the tenant
+   */
+  app.get('/api/stripe/payouts', requireTenant, requireAuth, requireRole('admin', 'board_member', 'owner'), async (req, res, next) => {
+    try {
+      const { stripeService } = await import('./lib/stripe-service');
+      
+      const limitSchema = z.object({
+        limit: z.string().transform(val => parseInt(val, 10)).optional().default('10'),
+      });
+      const { limit } = limitSchema.parse(req.query);
+      
+      const [tenant] = await db
+        .select()
+        .from(tenants)
+        .where(eq(tenants.id, req.tenant!.id))
+        .limit(1);
+      
+      if (!tenant) {
+        return res.status(404).json({ error: 'Tenant not found' });
+      }
+      
+      // Check if Stripe is configured
+      const hasStripe = tenant.stripeConnectedAccountId || (tenant.stripeEnabled && tenant.stripeSecretKeyEncrypted);
+      if (!hasStripe) {
+        return res.json({ 
+          configured: false,
+          message: 'Stripe is not configured for this organization',
+          payouts: [],
+        });
+      }
+      
+      const payouts = await stripeService.getPayouts(tenant, limit);
+      if (!payouts) {
+        return res.json({ 
+          configured: false,
+          message: 'Unable to retrieve Stripe payouts',
+          payouts: [],
+        });
+      }
+      
+      // Map to friendly format
+      const formattedPayouts = payouts.map(payout => ({
+        id: payout.id,
+        amount: payout.amount,
+        currency: payout.currency,
+        status: payout.status,
+        arrivalDate: payout.arrival_date ? new Date(payout.arrival_date * 1000).toISOString() : null,
+        created: new Date(payout.created * 1000).toISOString(),
+        destination: payout.destination,
+        method: payout.method,
+        type: payout.type,
+        description: payout.description,
+      }));
+      
+      res.json({
+        configured: true,
+        payouts: formattedPayouts,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/stripe/transactions
+   * Get recent payment transactions (charges) for the tenant
+   */
+  app.get('/api/stripe/transactions', requireTenant, requireAuth, requireRole('admin', 'board_member', 'staff', 'owner'), async (req, res, next) => {
+    try {
+      const { stripeService } = await import('./lib/stripe-service');
+      
+      const querySchema = z.object({
+        limit: z.string().transform(val => parseInt(val, 10)).optional().default('50'),
+      });
+      const { limit } = querySchema.parse(req.query);
+      
+      const [tenant] = await db
+        .select()
+        .from(tenants)
+        .where(eq(tenants.id, req.tenant!.id))
+        .limit(1);
+      
+      if (!tenant) {
+        return res.status(404).json({ error: 'Tenant not found' });
+      }
+      
+      // Check if Stripe is configured
+      const hasStripe = tenant.stripeConnectedAccountId || (tenant.stripeEnabled && tenant.stripeSecretKeyEncrypted);
+      if (!hasStripe) {
+        return res.json({ 
+          configured: false,
+          message: 'Stripe is not configured for this organization',
+          transactions: [],
+        });
+      }
+      
+      const charges = await stripeService.getTransactions(tenant, limit);
+      if (!charges) {
+        return res.json({ 
+          configured: false,
+          message: 'Unable to retrieve Stripe transactions',
+          transactions: [],
+        });
+      }
+      
+      // Map to friendly format
+      const formattedTransactions = charges.map(charge => ({
+        id: charge.id,
+        amount: charge.amount,
+        amountRefunded: charge.amount_refunded,
+        currency: charge.currency,
+        status: charge.status,
+        refunded: charge.refunded,
+        created: new Date(charge.created * 1000).toISOString(),
+        description: charge.description,
+        receiptEmail: charge.receipt_email,
+        receiptUrl: charge.receipt_url,
+        billingDetails: charge.billing_details ? {
+          name: charge.billing_details.name,
+          email: charge.billing_details.email,
+        } : null,
+        paymentMethod: charge.payment_method_details?.type,
+        metadata: charge.metadata,
+      }));
+      
+      res.json({
+        configured: true,
+        transactions: formattedTransactions,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * POST /api/stripe/create-checkout-session
    * Create a Stripe checkout session for donations
    */
