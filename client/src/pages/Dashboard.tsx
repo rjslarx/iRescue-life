@@ -18,7 +18,7 @@ import FosterUpdateDialog from "@/components/FosterUpdateDialog";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import {
-  StatsOverview,
+  HeaderStats,
   MedicalSnapshotWidget,
   ComplianceWidget,
 } from "@/components/dashboard";
@@ -311,8 +311,8 @@ export default function Dashboard() {
             </>
           ) : (
             <>
-              <header className="mb-2" data-testid="section-header">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <header className="mb-4" data-testid="section-header">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <div>
                     <h1 className="text-2xl font-bold">
                       Welcome back, {user?.fullName?.split(' ')[0] || 'User'}
@@ -322,6 +322,7 @@ export default function Dashboard() {
                       {formattedDate}
                     </p>
                   </div>
+                  {hasFullDashboardAccess && <HeaderStats />}
                 </div>
               </header>
 
@@ -407,13 +408,6 @@ export default function Dashboard() {
                   </section>
                 );
               })()}
-
-              {/* Stats Overview - only show if user has explicit dashboard permission */}
-              {hasFullDashboardAccess && (
-                <section data-testid="section-stats-overview">
-                  <StatsOverview />
-                </section>
-              )}
 
               {/* Pipeline Manager - only show if user has access to at least one pipeline */}
               {hasPipelineAccess && (
