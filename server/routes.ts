@@ -23273,6 +23273,9 @@ Email: ${application.applicantEmail || ''}`
       if (bodyToValidate.endDate === '' || bodyToValidate.endDate === null) {
         delete bodyToValidate.endDate;
       }
+      if (bodyToValidate.nextScheduledDose === '' || bodyToValidate.nextScheduledDose === null) {
+        delete bodyToValidate.nextScheduledDose;
+      }
       
       const parsed = insertMedicalPrescriptionSchema.partial().parse(bodyToValidate);
       
@@ -23282,6 +23285,12 @@ Email: ${application.applicantEmail || ''}`
       // Handle endDate removal - if it was empty/null in original request, set to null in database
       if (req.body.endDate === '' || req.body.endDate === null) {
         (data as any).endDate = null;
+      }
+      
+      // Handle nextScheduledDose removal - if it was empty/null in original request, set to null in database
+      // This is important for "once only" medications that have already been given
+      if (req.body.nextScheduledDose === '' || req.body.nextScheduledDose === null) {
+        (data as any).nextScheduledDose = null;
       }
 
       // Convert empty strings to undefined for numeric fields
@@ -23298,7 +23307,9 @@ Email: ${application.applicantEmail || ''}`
       // Check if schedule-affecting fields are actually changing (compare old vs new values)
       const frequencyChanged = data.frequency !== undefined && data.frequency !== existingPrescription.frequency;
       
-      const nextDoseChanged = data.nextScheduledDose !== undefined && (
+      // Check if nextScheduledDose is being cleared (set to null for already-given once-only meds)
+      const nextDoseCleared = (req.body.nextScheduledDose === '' || req.body.nextScheduledDose === null) && existingPrescription.nextScheduledDose !== null;
+      const nextDoseChanged = data.nextScheduledDose !== undefined && data.nextScheduledDose !== null && (
         !existingPrescription.nextScheduledDose ||
         new Date(data.nextScheduledDose).getTime() !== new Date(existingPrescription.nextScheduledDose).getTime()
       );
@@ -23312,7 +23323,7 @@ Email: ${application.applicantEmail || ''}`
         new Date(data.endDate).getTime() !== new Date(existingPrescription.endDate).getTime()
       );
       
-      const scheduleFieldsChanged = frequencyChanged || nextDoseChanged || startDateChanged || endDateCleared || endDateSet;
+      const scheduleFieldsChanged = frequencyChanged || nextDoseCleared || nextDoseChanged || startDateChanged || endDateCleared || endDateSet;
 
       const [prescription] = await db
         .update(medicalPrescriptions)
