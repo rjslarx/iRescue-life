@@ -46,18 +46,22 @@ export function generateDosesForPrescription(options: DoseGeneratorOptions): Gen
   
   // Calculate end date:
   // - If endDate exists AND is after start, use it
-  // - If endDate is before start (backlogged prescription with nextScheduledDose), use start + 90 days
+  // - If endDate is before start (backlogged prescription with nextScheduledDose), generate single dose
   // - If no endDate, default to start + 30 days
   let end: Date;
+  let endDateIsBacklogged = false;  // Track if endDate was invalid (before start)
   if (prescription.endDate) {
     const prescEndDate = new Date(prescription.endDate);
     if (prescEndDate >= start) {
       end = prescEndDate;
     } else {
       // endDate is before start - this is a backlogged prescription
-      // For interval-based meds (monthly, etc), just generate from start going forward
-      console.log(`[DOSE-GEN]   Note: endDate ${prescEndDate.toISOString()} is before start ${start.toISOString()}, ignoring endDate`);
-      end = new Date(start.getTime() + 90 * 24 * 60 * 60 * 1000);
+      // For this scenario (e.g., monthly med with past endDate but future nextScheduledDose),
+      // we want to generate just one dose at nextScheduledDose
+      console.log(`[DOSE-GEN]   Note: endDate ${prescEndDate.toISOString()} is before start ${start.toISOString()}, generating single dose (backlogged)`);
+      endDateIsBacklogged = true;
+      // Set end = start so loop generates exactly one dose
+      end = new Date(start.getTime());
     }
   } else {
     end = new Date(start.getTime() + 30 * 24 * 60 * 60 * 1000); // Default 30 days
@@ -111,8 +115,8 @@ export function generateDosesForPrescription(options: DoseGeneratorOptions): Gen
   }
   // Default: SID (once daily at morning) - already set
   
-  console.log(`[DOSE-GEN]   isOneTime: ${isOneTime}, intervalDays: ${intervalDays}`);
-  console.log(`[DOSE-GEN]   start: ${start.toISOString()}, effectiveEnd: ${effectiveEnd?.toISOString() || 'not set yet'}`);
+  console.log(`[DOSE-GEN]   isOneTime: ${isOneTime}, intervalDays: ${intervalDays}, endDateIsBacklogged: ${endDateIsBacklogged}`);
+  console.log(`[DOSE-GEN]   start: ${start.toISOString()}, effectiveEnd: ${effectiveEnd.toISOString()}`);
 
   // Safety limit: max 500 doses to prevent timeout
   const MAX_DOSES = 500;
@@ -124,10 +128,13 @@ export function generateDosesForPrescription(options: DoseGeneratorOptions): Gen
   
   // Determine if this is a historical prescription
   // For One Time meds: historical if startDate is in the past (the dose was already given)
-  // For other meds: historical if endDate is in the past
+  // For other meds: historical if endDate is in the past AND not a backlogged prescription
+  //   (backlogged = endDate < start, meaning we're generating future doses from nextScheduledDose)
   const isHistorical = isOneTime
     ? new Date(prescription.startDate) < now  // One-time: given date in past = historical
-    : (prescription.endDate && new Date(prescription.endDate) < now);
+    : (prescription.endDate && new Date(prescription.endDate) < now && !endDateIsBacklogged);
+  
+  console.log(`[DOSE-GEN]   isHistorical: ${isHistorical}`);
   
   // Helper to get first-day adjusted time (avoid immediate overdue for same-day prescriptions)
   const getFirstDayAdjustedTime = (d: Date): { hour: number; minute: number } => {
