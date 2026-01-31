@@ -1,0 +1,81 @@
+1. The "Core" Vaccines (Must Track)
+These are your non-negotiables for legal compliance and herd health.
+
+For Dogs:
+
+Rabies: (1-year & 3-year). Critical for legal compliance.
+
+DHPP / DA2PP: (Distemper, Hepatitis, Parvovirus, Parainfluenza). Often given as a series for puppies.
+
+Bordetella: (Kennel Cough). Critical for any dog entering a boarding/shelter environment.
+
+For Cats:
+
+Rabies: (1-year & 3-year).
+
+FVRCP: (Feline Viral Rhinotracheitis, Calicivirus, Panleukopenia). The "Distemper" equivalent for cats.
+
+FeLV: (Feline Leukemia). Often standard for kittens, optional for adults depending on rescue policy.
+
+2. The "Risk-Based" Vaccines (Optional/Regional)
+You should include these in your database but maybe mark them as "Non-Core" so they don't flag every dog as overdue.
+
+Leptospirosis: (Often combined as DHLPP). Crucial in wet/rural areas.
+
+Canine Influenza (H3N2/H3N8): High priority for transport programs.
+
+Lyme Disease: Regional (Northeast/Upper Midwest).
+
+3. Parasite Prevention (The Monthly Grind)
+Heartworm Prevention: (e.g., Heartgard, Trifexis, ProHeart).
+
+Flea & Tick Prevention: (e.g., Nexgard, Bravecto, Seresto).
+
+Intake Deworming: (e.g., Pyrantel, Panacur). Usually done at intake and repeated 2 weeks later.
+
+Tapeworm Treatment: (e.g., Praziquantel/Drontal). Often needed if the animal had fleas.
+
+4. Critical "Intake Tests"
+While technically "Diagnostics," these are part of the preventative workflow because they determine if an animal can be housed with others.
+
+Heartworm Test (Antigen): (Dogs 6mo+).
+
+FeLV / FIV Combo Test: (Cats/Kittens).
+
+Fecal Float / Giardia Snap: (Intestinal parasites).
+
+5. Implementation Strategy (The Replit Agent Prompt)
+You want to structure this so you can filter by Species (don't show FVRCP for a Dog).
+
+Copy this prompt to the Agent:
+
+"@Workspace Seed Preventative Care Types
+
+Goal: Populate the medical_task_types or vaccine_types table with standard rescue protocols.
+
+1. Data Structure:
+
+Add a target_species column (Enum: 'Dog', 'Cat', 'Both').
+
+Add a is_core column (Boolean).
+
+2. Seed Data:
+
+Dogs: Rabies (Core), DHPP (Core), Bordetella (Core), Leptospirosis, Canine Influenza, Heartworm Test.
+
+Cats: Rabies (Core), FVRCP (Core), FeLV, FIV/FeLV Test.
+
+Both: Microchip, Flea/Tick Prevention, Heartworm Prevention, Dewormer (Pyrantel/Panacur).
+
+3. Logic:
+
+When a user selects 'Add Vaccine' for a Dog, filter the dropdown to show only Dog + Both types.
+
+Implement this seed list so our dropdowns are ready to go."
+
+One "Hidden" Preventative to Track
+Microchipping. I recommend treating "Microchip" as a preventative task in your system. It is a "One Time" event that prevents loss.
+
+Task: "Verify Microchip" (Intake).
+
+Task: "Register Microchip" (Adoption).
