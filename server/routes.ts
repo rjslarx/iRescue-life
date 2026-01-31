@@ -248,17 +248,13 @@ function validatePhotoUrls(photoUrls: string[]): { valid: boolean; invalidUrls: 
   for (const url of photoUrls) {
     const trimmed = url.trim();
     
-    // Allow object storage paths
+    // Only allow object storage paths - all uploads go to Replit Object Storage
+    // Google Drive is only used for backups, not primary storage
     if (trimmed.startsWith('/objects/') || trimmed.startsWith('objects/')) {
       continue;
     }
     
-    // Allow Google Drive URLs (for tenants using Google Drive storage)
-    if (trimmed.includes('drive.google.com') || trimmed.includes('googleusercontent.com')) {
-      continue;
-    }
-    
-    // All other values are invalid (random external URLs, data URLs, relative paths, etc.)
+    // All other values are invalid (external URLs, data URLs, relative paths, etc.)
     invalidUrls.push(trimmed);
   }
   

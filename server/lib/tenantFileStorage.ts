@@ -81,37 +81,14 @@ export class TenantFileStorage {
   }
 
   async uploadFile(options: UploadOptions): Promise<UploadResult> {
-    const { tenantId, userId, visibility, fileName, mimeType, content, animal, folderId } = options;
+    const { tenantId, userId, visibility, fileName, mimeType, content, animal } = options;
     const category = normalizeCategory(options.category);
 
     console.log(`[TENANT FILE STORAGE] uploadFile called: tenant=${tenantId}, category=${category}, file=${fileName}, size=${content?.length || 0} bytes, animal=${animal?.name || 'none'}`);
 
-    const driveService = await DriveService.forTenant(tenantId);
-    
-    const hasDriveConfig = driveService && driveService.hasSharedDriveConfigured();
-    console.log(`[TENANT FILE STORAGE] DriveService available: ${!!driveService}, hasSharedDrive: ${hasDriveConfig}`);
-    
-    if (hasDriveConfig) {
-      console.log(`[TENANT FILE STORAGE] Attempting Google Drive upload...`);
-      const driveResult = await this.uploadToGoogleDrive(driveService, {
-        category,
-        visibility,
-        fileName,
-        mimeType,
-        content,
-        animal,
-        folderId,
-      });
-
-      if (driveResult.success) {
-        console.log(`[TENANT FILE STORAGE] Google Drive upload SUCCESS: ${driveResult.fileUrl}`);
-        return driveResult;
-      }
-
-      console.warn(`[TENANT FILE STORAGE] Google Drive upload failed for tenant ${tenantId}, falling back to Replit storage:`, driveResult.error);
-    } else {
-      console.log(`[TENANT FILE STORAGE] No Shared Drive configured, using Replit storage`);
-    }
+    // Always use Replit Object Storage as primary storage
+    // Google Drive is only used for backups via the storage-backup-service
+    console.log(`[TENANT FILE STORAGE] Using Replit Object Storage (Google Drive is backup only)`);
 
     return this.uploadToReplitStorage({
       tenantId,
