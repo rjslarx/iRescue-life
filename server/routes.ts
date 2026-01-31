@@ -21620,6 +21620,7 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
         location: z.string().optional(),
         customPageId: z.string().uuid().optional().or(z.literal("")),
         includeMeetLink: z.boolean().optional().default(false),
+        volunteerContactId: z.string().uuid().optional().nullable(),
       });
       
       const validatedData = eventSchema.parse(req.body);
@@ -21691,6 +21692,37 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
           return res.status(403).json({ error: 'You do not have permission to add events to this calendar' });
         }
       }
+      // If user is trying to assign a different volunteer, check canAssignOthers permission
+      if (validatedData.volunteerContactId && validatedData.volunteerContactId !== req.user!.id) {
+        // Check user-specific permission for assigning others
+        const [userAssignPermission] = await db
+          .select()
+          .from(calendarPermissions)
+          .where(and(
+            eq(calendarPermissions.calendarId, eventData.calendarId),
+            eq(calendarPermissions.userId, req.user!.id),
+            eq(calendarPermissions.canAssignOthers, true)
+          ))
+          .limit(1);
+
+        // Check role-based permission for assigning others
+        const { calendarRolePermissions: rolePerms } = await import('@shared/schema');
+        const [roleAssignPermission] = await db
+          .select()
+          .from(rolePerms)
+          .where(and(
+            eq(rolePerms.calendarId, eventData.calendarId),
+            eq(rolePerms.tenantId, req.tenant!.id),
+            eq(rolePerms.canAssignOthers, true),
+            sql`${rolePerms.role} = ANY(${sql.raw(`ARRAY[${req.user!.roles.map(r => `'${r}'`).join(",")}]::text[]`)})`
+          ))
+          .limit(1);
+
+        if (!userAssignPermission && !roleAssignPermission && req.user!.activeRole !== 'admin') {
+          return res.status(403).json({ error: 'You do not have permission to schedule other volunteers' });
+        }
+      }
+
 
       // Create the event in database
       const [newEvent] = await db

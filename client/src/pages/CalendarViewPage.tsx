@@ -110,6 +110,7 @@ export default function CalendarViewPage() {
     location: "",
     customPageId: null as string | null,
     includeMeetLink: false,
+    volunteerContactId: null as string | null,
   });
 
   const { data: calendarsData } = useQuery<{ calendars: Calendar[] }>({
@@ -140,6 +141,7 @@ export default function CalendarViewPage() {
         location: eventData.location || undefined,
         customPageId: eventData.customPageId || "",
         includeMeetLink: eventData.includeMeetLink,
+        volunteerContactId: eventData.volunteerContactId || undefined,
       });
     },
     onSuccess: () => {
@@ -154,6 +156,7 @@ export default function CalendarViewPage() {
         location: "",
         customPageId: null,
         includeMeetLink: false,
+        volunteerContactId: null,
       });
       toast({
         title: "Event Created",
@@ -837,18 +840,62 @@ export default function CalendarViewPage() {
                 const fixedDayConfig = selectedCalendarFormSettings.fixedDayTimes?.[dayOfWeek];
                 const hasFixedTimes = fixedDayConfig?.enabled && fixedDayConfig.startTime && fixedDayConfig.endTime;
                 
+                const volunteers = volunteerTeamMembersData?.volunteers || [];
+                const canAssign = selectedCalendarForForm?.canAssignOthers === true;
+                const selectedVolunteer = newEvent.volunteerContactId 
+                  ? volunteers.find(v => v.id === newEvent.volunteerContactId)
+                  : null;
+                
                 return (
               <>
-                {/* Volunteer Signup Confirmation */}
-                <div className="flex items-center gap-3 p-4 bg-primary/10 rounded-lg border border-primary/20">
-                  <UserCheck className="h-8 w-8 text-primary" />
-                  <div>
-                    <p className="font-medium">I want to volunteer!</p>
+                {/* Volunteer Signup - with dropdown if canAssignOthers */}
+                {canAssign ? (
+                  <div className="space-y-3">
+                    <Label htmlFor="volunteer-select">Select Volunteer</Label>
+                    <Select
+                      value={newEvent.volunteerContactId || "self"}
+                      onValueChange={(value) => {
+                        const volunteerContactId = value === "self" ? null : value;
+                        const volunteer = volunteers.find(v => v.id === value);
+                        const title = value === "self" 
+                          ? `${currentUser?.fullName || currentUser?.email || 'Volunteer'} - Signup`
+                          : `${volunteer?.fullName || volunteer?.email || 'Volunteer'} - Signup`;
+                        setNewEvent({ 
+                          ...newEvent, 
+                          volunteerContactId,
+                          title 
+                        });
+                      }}
+                    >
+                      <SelectTrigger data-testid="select-volunteer">
+                        <SelectValue placeholder="Select a volunteer" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="self">
+                          Myself ({currentUser?.fullName || currentUser?.email})
+                        </SelectItem>
+                        {volunteers.map((volunteer) => (
+                          <SelectItem key={volunteer.id} value={volunteer.id}>
+                            {volunteer.fullName || volunteer.email}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <p className="text-sm text-muted-foreground">
-                      You'll be signed up as: {currentUser?.fullName || currentUser?.email}
+                      Signing up: {selectedVolunteer ? (selectedVolunteer.fullName || selectedVolunteer.email) : (currentUser?.fullName || currentUser?.email)}
                     </p>
                   </div>
-                </div>
+                ) : (
+                  <div className="flex items-center gap-3 p-4 bg-primary/10 rounded-lg border border-primary/20">
+                    <UserCheck className="h-8 w-8 text-primary" />
+                    <div>
+                      <p className="font-medium">I want to volunteer!</p>
+                      <p className="text-sm text-muted-foreground">
+                        You'll be signed up as: {currentUser?.fullName || currentUser?.email}
+                      </p>
+                    </div>
+                  </div>
+                )}
 
                 {/* Date/Time Selection - show fixed times or time pickers */}
                 {hasFixedTimes ? (
