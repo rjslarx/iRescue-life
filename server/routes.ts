@@ -237,8 +237,9 @@ function sanitizeBgImageValue(value: string | undefined): string | undefined {
 }
 
 /**
- * Validate photo URLs to prevent external URLs like Google Drive from being saved
- * Only allows object storage paths (starting with /objects/ or objects/)
+ * Validate photo URLs to ensure they are valid object storage paths
+ * Only allows paths starting with /objects/ or objects/
+ * Rejects ALL other values including external URLs, data URLs, relative paths, etc.
  * Returns an object with validation result and any invalid URLs found
  */
 function validatePhotoUrls(photoUrls: string[]): { valid: boolean; invalidUrls: string[] } {
@@ -247,22 +248,13 @@ function validatePhotoUrls(photoUrls: string[]): { valid: boolean; invalidUrls: 
   for (const url of photoUrls) {
     const trimmed = url.trim();
     
-    // Allow object storage paths
+    // Only allow object storage paths - strict positive validation
     if (trimmed.startsWith('/objects/') || trimmed.startsWith('objects/')) {
       continue;
     }
     
-    // Block Google Drive URLs specifically
-    if (trimmed.includes('drive.google.com') || trimmed.includes('docs.google.com')) {
-      invalidUrls.push(trimmed);
-      continue;
-    }
-    
-    // Block any other external URLs (http/https)
-    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
-      invalidUrls.push(trimmed);
-      continue;
-    }
+    // All other values are invalid (external URLs, data URLs, relative paths, etc.)
+    invalidUrls.push(trimmed);
   }
   
   return {

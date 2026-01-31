@@ -33,6 +33,7 @@ The platform includes comprehensive animal, application, and financial managemen
 - **Staff Kennel Cards:** Printable cards with comprehensive animal information, including header details, safety banner (color-coded behavior rating), compact status indicators, logistics grid, stray-specific fields, and medical/staff notes.
 - **Automated Google Drive Backup:** Daily automated backups of tenant files from Replit Object Storage to Google Drive Shared Drives, with manual trigger options. Files are organized by category, and deduplication is used.
 - **Stripe Embedded Components:** The Finance page uses Stripe Connect Embedded Components for secure display of transactions, payouts, and balance information directly from Stripe. A backend endpoint provides Account Session client secrets. The "Paw Pay" platform fee system uses Stripe Connect with a "SaaS + 0%" two-tier model and a 14-day Pro trial. "Donor Covers Fees" feature calculates gross-up amounts. Sensitive data is protected with AES-256-GCM encryption.
+- **Animal Photo URL Validation:** Backend validates that animal photo URLs are proper object storage paths (starting with `/objects/` or `objects/`). External URLs like Google Drive links are rejected with a user-friendly error message directing users to upload photos directly. Applied to animal creation, update, photos update, and surrender-to-animal conversion endpoints.
 
 ## External Dependencies
 - **Stripe:** Payment processing for donations, adoption fees, subscriptions, and connected accounts.
