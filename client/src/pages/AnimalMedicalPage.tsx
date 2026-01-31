@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   ArrowLeft, 
   AlertCircle, 
@@ -35,7 +36,8 @@ import {
   Edit,
   Shield,
   Plus,
-  Star
+  Star,
+  Zap
 } from "lucide-react";
 import { useGooglePicker, PickerDocument } from "@/hooks/useGooglePicker";
 import { format } from "date-fns";
@@ -111,6 +113,8 @@ export default function AnimalMedicalPage() {
   const [preventativeCareDialogOpen, setPreventativeCareDialogOpen] = useState(false);
   const [editingPreventativeCare, setEditingPreventativeCare] = useState<any>(null);
   const [copiedAdopterInfo, setCopiedAdopterInfo] = useState(false);
+  const [selectedProtocol, setSelectedProtocol] = useState('');
+  const [applyingProtocol, setApplyingProtocol] = useState(false);
 
   // Fetch animal details
   const { data: animalData, isLoading: animalLoading } = useQuery<any>({
@@ -1304,54 +1308,104 @@ export default function AnimalMedicalPage() {
 
           {/* Preventative Care Tab */}
           <TabsContent value="preventative" className="space-y-4">
+            {/* Medical Setup Card - Quick Protocol Application */}
+            <Card className="bg-muted/50" data-testid="card-medical-setup">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Zap className="w-4 h-4 text-amber-500" />
+                  Medical Quick Setup
+                </CardTitle>
+                <CardDescription>
+                  Apply a standard protocol to quickly create multiple medical tasks
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <Select
+                    value={selectedProtocol}
+                    onValueChange={setSelectedProtocol}
+                  >
+                    <SelectTrigger className="flex-1" data-testid="select-protocol">
+                      <SelectValue placeholder="Select a protocol..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="adult_dog">Adult Dog Standard (Rabies, DHPP, Heartworm, Flea/Tick, Bordetella)</SelectItem>
+                      <SelectItem value="puppy">Puppy Protocol (Dewormer, DHPP, Flea/Tick, Heartworm)</SelectItem>
+                      <SelectItem value="adult_cat">Adult Cat Standard (Rabies, FVRCP, Heartworm, Flea/Tick)</SelectItem>
+                      <SelectItem value="kitten">Kitten Protocol (Dewormer, FVRCP, Flea/Tick, Heartworm)</SelectItem>
+                      <SelectItem value="intake_dog">Intake Default - Dog (Dewormer, Flea/Tick, HW Test, Microchip)</SelectItem>
+                      <SelectItem value="intake_cat">Intake Default - Cat (Dewormer, Flea/Tick, FeLV/FIV Test, Microchip)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    onClick={async () => {
+                      if (!selectedProtocol) {
+                        toast({
+                          title: 'Select a protocol',
+                          description: 'Please choose a protocol from the dropdown first',
+                          variant: 'destructive',
+                        });
+                        return;
+                      }
+                      setApplyingProtocol(true);
+                      try {
+                        const res = await apiRequest('POST', `/api/animals/${animalId}/preventative-care/apply-protocol`, { 
+                          protocolName: selectedProtocol,
+                          dateAdministered: new Date().toISOString().split('T')[0] 
+                        });
+                        const response = await res.json();
+                        if (response.created > 0) {
+                          toast({
+                            title: 'Protocol applied',
+                            description: response.message,
+                          });
+                          queryClient.invalidateQueries({ queryKey: [`/api/animals/${animalId}/preventative-care`] });
+                          setSelectedProtocol('');
+                        } else {
+                          toast({
+                            title: 'All set',
+                            description: response.message,
+                          });
+                        }
+                      } catch (error: any) {
+                        toast({
+                          title: 'Error',
+                          description: error.message || 'Failed to apply protocol',
+                          variant: 'destructive',
+                        });
+                      } finally {
+                        setApplyingProtocol(false);
+                      }
+                    }}
+                    disabled={!selectedProtocol || applyingProtocol}
+                    data-testid="button-apply-protocol"
+                  >
+                    {applyingProtocol ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Zap className="h-4 w-4 mr-2" />
+                    )}
+                    Apply Protocol
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
             <div className="flex justify-between items-center flex-wrap gap-2">
               <h3 className="text-lg font-semibold flex items-center gap-2">
                 <Shield className="w-5 h-5" />
-                Preventative Care
+                Preventative Care Records
               </h3>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  onClick={async () => {
-                    try {
-                      const res = await apiRequest('POST', `/api/animals/${animalId}/preventative-care/batch-create-core`, { dateAdministered: new Date().toISOString().split('T')[0] });
-                      const response = await res.json();
-                      if (response.created > 0) {
-                        toast({
-                          title: 'Core items added',
-                          description: `Created ${response.created} core preventative care records`,
-                        });
-                        queryClient.invalidateQueries({ queryKey: [`/api/animals/${animalId}/preventative-care`] });
-                      } else {
-                        toast({
-                          title: 'All set',
-                          description: 'All core preventative care items already recorded',
-                        });
-                      }
-                    } catch (error: any) {
-                      toast({
-                        title: 'Error',
-                        description: error.message || 'Failed to add core items',
-                        variant: 'destructive',
-                      });
-                    }
-                  }}
-                  data-testid="button-add-core-items"
-                >
-                  <Star className="h-4 w-4 mr-2" />
-                  Add Core Items
-                </Button>
-                <Button
-                  onClick={() => {
-                    setEditingPreventativeCare(null);
-                    setPreventativeCareDialogOpen(true);
-                  }}
-                  data-testid="button-add-preventative-care"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Record
-                </Button>
-              </div>
+              <Button
+                onClick={() => {
+                  setEditingPreventativeCare(null);
+                  setPreventativeCareDialogOpen(true);
+                }}
+                data-testid="button-add-preventative-care"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Record
+              </Button>
             </div>
             
             <div className="space-y-4">

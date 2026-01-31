@@ -24908,6 +24908,161 @@ Email: ${application.applicantEmail || ''}`
   });
 
   /**
+   * POST /api/animals/:animalId/preventative-care/apply-protocol
+   * Apply a medical protocol (predefined set of preventative care items) to an animal
+   * Protocols: adult_dog, puppy, adult_cat, kitten, intake_dog, intake_cat
+   */
+  app.post('/api/animals/:animalId/preventative-care/apply-protocol', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { preventativeCareRecords, preventativeCareTypes, animals } = await import('@shared/schema');
+      const { animalId } = req.params;
+      const { protocolName, dateAdministered } = req.body;
+      const effectiveDate = dateAdministered ? new Date(dateAdministered) : new Date();
+
+      if (!protocolName) {
+        return res.status(400).json({ error: 'Protocol name is required' });
+      }
+
+      // Get the animal to determine species
+      const [animal] = await db
+        .select({ species: animals.species, name: animals.name })
+        .from(animals)
+        .where(and(
+          eq(animals.id, animalId),
+          eq(animals.tenantId, req.tenant!.id)
+        ))
+        .limit(1);
+
+      if (!animal) {
+        return res.status(404).json({ error: 'Animal not found' });
+      }
+
+      // Define protocol mappings (care type names for each protocol)
+      const protocolMappings: Record<string, { careTypeNames: string[], description: string }> = {
+        'adult_dog': {
+          careTypeNames: ['Rabies (1-Year)', 'DHPP (DA2PP)', 'Heartworm Prevention', 'Flea & Tick Prevention', 'Bordetella'],
+          description: 'Adult Dog Standard'
+        },
+        'puppy': {
+          careTypeNames: ['Dewormer (Pyrantel)', 'DHPP (DA2PP)', 'Flea & Tick Prevention', 'Heartworm Prevention'],
+          description: 'Puppy Protocol'
+        },
+        'adult_cat': {
+          careTypeNames: ['Rabies (1-Year)', 'FVRCP', 'Heartworm Prevention', 'Flea & Tick Prevention'],
+          description: 'Adult Cat Standard'
+        },
+        'kitten': {
+          careTypeNames: ['Dewormer (Pyrantel)', 'FVRCP', 'Flea & Tick Prevention', 'Heartworm Prevention'],
+          description: 'Kitten Protocol'
+        },
+        'intake_dog': {
+          careTypeNames: ['Dewormer (Pyrantel)', 'Flea & Tick Prevention', 'Heartworm Test (Antigen)', 'Microchip Implant'],
+          description: 'Intake Default (Dog)'
+        },
+        'intake_cat': {
+          careTypeNames: ['Dewormer (Pyrantel)', 'Flea & Tick Prevention', 'FeLV/FIV Combo Test', 'Microchip Implant'],
+          description: 'Intake Default (Cat)'
+        }
+      };
+
+      const protocol = protocolMappings[protocolName];
+      if (!protocol) {
+        return res.status(400).json({ 
+          error: 'Invalid protocol name',
+          validProtocols: Object.keys(protocolMappings)
+        });
+      }
+
+      // Get the care types matching the protocol's care type names
+      // Filter by species compatibility
+      const allTypes = await db
+        .select({
+          id: preventativeCareTypes.id,
+          name: preventativeCareTypes.name,
+          category: preventativeCareTypes.category,
+          targetSpecies: preventativeCareTypes.targetSpecies,
+          defaultIntervalDays: preventativeCareTypes.defaultIntervalDays,
+        })
+        .from(preventativeCareTypes)
+        .where(and(
+          eq(preventativeCareTypes.isActive, true),
+          inArray(preventativeCareTypes.name, protocol.careTypeNames),
+          or(
+            eq(preventativeCareTypes.targetSpecies, animal.species || 'Dog'),
+            eq(preventativeCareTypes.targetSpecies, 'Both')
+          )
+        ));
+
+      if (allTypes.length === 0) {
+        return res.status(400).json({ 
+          error: 'No matching care types found for this protocol and species',
+          protocol: protocol.description,
+          species: animal.species
+        });
+      }
+
+      // Check which types already have records for this animal
+      const existingRecords = await db
+        .select({ careTypeId: preventativeCareRecords.careTypeId })
+        .from(preventativeCareRecords)
+        .where(and(
+          eq(preventativeCareRecords.animalId, animalId),
+          eq(preventativeCareRecords.tenantId, req.tenant!.id)
+        ));
+
+      const existingTypeIds = new Set(existingRecords.map(r => r.careTypeId));
+
+      // Filter to only create records for types that don't already exist
+      const typesToCreate = allTypes.filter(t => !existingTypeIds.has(t.id));
+
+      if (typesToCreate.length === 0) {
+        return res.json({ 
+          message: `All items from ${protocol.description} already recorded for ${animal.name}`,
+          created: 0,
+          skipped: allTypes.length,
+          records: []
+        });
+      }
+
+      // Create records for each type
+      const recordsToInsert = typesToCreate.map(type => {
+        let nextDueDate: Date | null = null;
+        if (type.defaultIntervalDays) {
+          nextDueDate = new Date(effectiveDate);
+          nextDueDate.setDate(nextDueDate.getDate() + type.defaultIntervalDays);
+        }
+
+        return {
+          tenantId: req.tenant!.id,
+          animalId,
+          careTypeId: type.id,
+          careName: type.name,
+          careCategory: type.category as "vaccine" | "parasite_prevention" | "test" | "other",
+          dateAdministered: effectiveDate,
+          nextDueDate,
+          notes: `Applied via ${protocol.description} protocol`,
+          createdBy: req.user!.id,
+        };
+      });
+
+      const createdRecords = await db
+        .insert(preventativeCareRecords)
+        .values(recordsToInsert)
+        .returning();
+
+      res.status(201).json({
+        message: `Applied ${protocol.description}: Created ${createdRecords.length} medical tasks for ${animal.name}`,
+        created: createdRecords.length,
+        skipped: allTypes.length - typesToCreate.length,
+        protocol: protocol.description,
+        records: createdRecords,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * POST /api/preventative-care/backfill-all
    * Bulk backfill: Scan all active animals and create missing core preventative care records
    * This is the "Generate Missing Tasks" scheduler engine
