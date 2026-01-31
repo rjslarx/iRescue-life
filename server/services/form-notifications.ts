@@ -135,6 +135,7 @@ export async function sendFormSubmissionNotification(data: FormSubmissionData): 
         subdomain: tenants.subdomain,
         formNotificationsEnabled: tenants.formNotificationsEnabled,
         formNotificationEmail: tenants.formNotificationEmail,
+        volunteerApplicationNotificationEmails: tenants.volunteerApplicationNotificationEmails,
         contactEmail: tenants.contactEmail,
         customDomain: tenants.customDomain,
       })
@@ -162,6 +163,17 @@ export async function sendFormSubmissionNotification(data: FormSubmissionData): 
     if (recipientEmails.length === 0 && tenant.contactEmail) {
       recipientEmails = [tenant.contactEmail];
     }
+    
+    // For volunteer applications, also add additional volunteer screener emails (additive)
+    if (data.formType === 'volunteer' && tenant.volunteerApplicationNotificationEmails) {
+      const additionalEmails = tenant.volunteerApplicationNotificationEmails
+        .split(',')
+        .map(e => e.trim())
+        .filter(e => e && e.includes('@'));
+      // Merge without duplicates
+      recipientEmails = [...new Set([...recipientEmails, ...additionalEmails])];
+    }
+    
     if (recipientEmails.length === 0) {
       console.log('No notification email configured for tenant:', tenant.subdomain);
       return;

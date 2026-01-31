@@ -191,6 +191,7 @@ const brandingSettingsSchema = z.object({
   contactPhone: z.string().optional(),
   formNotificationsEnabled: z.boolean().optional(),
   formNotificationEmail: z.string().optional(), // Comma-separated emails
+  volunteerApplicationNotificationEmails: z.string().optional(), // Additional emails for volunteer applications (additive)
   footerText: z.string().optional(),
   footerHours: z.string().optional(),
   footerAddress: z.string().optional(),
@@ -577,6 +578,7 @@ export default function SettingsPage() {
       contactPhone: data?.tenant?.contactPhone || "",
       formNotificationsEnabled: data?.tenant?.formNotificationsEnabled || false,
       formNotificationEmail: data?.tenant?.formNotificationEmail || "",
+      volunteerApplicationNotificationEmails: data?.tenant?.volunteerApplicationNotificationEmails || "",
       footerText: data?.tenant?.footerText || "",
       footerHours: data?.tenant?.footerHours || "",
       footerAddress: data?.tenant?.footerAddress || "",
@@ -612,6 +614,7 @@ export default function SettingsPage() {
       contactPhone: data.tenant.contactPhone || "",
       formNotificationsEnabled: data.tenant.formNotificationsEnabled || false,
       formNotificationEmail: data.tenant.formNotificationEmail || "",
+      volunteerApplicationNotificationEmails: data.tenant.volunteerApplicationNotificationEmails || "",
       footerText: data.tenant.footerText || "",
       footerHours: data.tenant.footerHours || "",
       footerAddress: data.tenant.footerAddress || "",
@@ -1610,6 +1613,28 @@ export default function SettingsPage() {
                           <MultiEmailInput 
                             control={brandingForm.control}
                             name="formNotificationEmail"
+                          />
+
+                          <FormField
+                            control={brandingForm.control}
+                            name="volunteerApplicationNotificationEmails"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Additional Volunteer Application Notification Emails</FormLabel>
+                                <FormControl>
+                                  <Input 
+                                    placeholder="volunteer-coordinator@example.org, screener@example.org"
+                                    data-testid="input-volunteer-notification-emails"
+                                    {...field}
+                                    value={field.value || ""}
+                                  />
+                                </FormControl>
+                                <FormDescription>
+                                  Additional email addresses (comma-separated) that will receive volunteer application notifications in addition to the general notification recipients above.
+                                </FormDescription>
+                                <FormMessage />
+                              </FormItem>
+                            )}
                           />
                         </div>
 

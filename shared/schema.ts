@@ -254,6 +254,7 @@ export const tenants = pgTable("tenants", {
   // Form notification settings (email alerts when forms are submitted)
   formNotificationsEnabled: boolean("form_notifications_enabled").notNull().default(false), // Whether to send email notifications
   formNotificationEmail: text("form_notification_email"), // Comma-separated emails to notify
+  volunteerApplicationNotificationEmails: text("volunteer_application_notification_emails"), // Additional emails for volunteer applications (additive to formNotificationEmail)
   
   // Dashboard quick actions preferences (ordered list of action IDs)
   quickActions: text("quick_actions").array(), // e.g., ["add_animal", "intake_dog", "add_foster"]

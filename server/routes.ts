@@ -17273,6 +17273,7 @@ Submitted: ${new Date().toLocaleString()}
         contactPhone: z.string().optional(),
         formNotificationsEnabled: z.boolean().optional(),
         formNotificationEmail: z.string().optional(),
+        volunteerApplicationNotificationEmails: z.string().optional(),
         footerText: z.string().optional(),
         footerHours: z.string().optional(),
         footerAddress: z.string().optional(),
@@ -17301,6 +17302,7 @@ Submitted: ${new Date().toLocaleString()}
       if (settings.contactPhone !== undefined) updateData.contactPhone = settings.contactPhone || null;
       if (settings.formNotificationsEnabled !== undefined) updateData.formNotificationsEnabled = settings.formNotificationsEnabled;
       if (settings.formNotificationEmail !== undefined) updateData.formNotificationEmail = settings.formNotificationEmail || null;
+      if (settings.volunteerApplicationNotificationEmails !== undefined) updateData.volunteerApplicationNotificationEmails = settings.volunteerApplicationNotificationEmails || null;
       if (settings.footerText !== undefined) updateData.footerText = settings.footerText || null;
       if (settings.footerHours !== undefined) updateData.footerHours = settings.footerHours || null;
       if (settings.footerAddress !== undefined) updateData.footerAddress = settings.footerAddress || null;
