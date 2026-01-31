@@ -3344,6 +3344,187 @@ Crawl-delay: 1
   });
 
   /**
+   * GET /api/dashboard/daily-briefing
+   * Aggregate today's and tomorrow's events for the Daily Briefing component
+   * Returns: surgeries, transports, medical tasks, calendar events grouped by urgency
+   */
+  app.get('/api/dashboard/daily-briefing', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { 
+        animals, 
+        transportEvents, 
+        calendarEvents,
+        preventativeCareRecords
+      } = await import('@shared/schema');
+      const { gte, lte } = await import('drizzle-orm');
+      
+      // Calculate date ranges
+      const now = new Date();
+      const todayStart = new Date(now);
+      todayStart.setHours(0, 0, 0, 0);
+      const todayEnd = new Date(now);
+      todayEnd.setHours(23, 59, 59, 999);
+      const tomorrowStart = new Date(todayStart);
+      tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+      const tomorrowEnd = new Date(todayEnd);
+      tomorrowEnd.setDate(tomorrowEnd.getDate() + 1);
+
+      // 1. Get surgeries scheduled for today and tomorrow
+      const surgeriesData = await db
+        .select({
+          id: animals.id,
+          name: animals.name,
+          species: animals.species,
+          photoUrls: animals.photoUrls,
+          scheduledSurgeryDate: animals.scheduledSurgeryDate,
+          medicalStatus: animals.medicalStatus,
+          neuterStatus: animals.neuterStatus,
+        })
+        .from(animals)
+        .where(and(
+          eq(animals.tenantId, req.tenant!.id),
+          isNotNull(animals.scheduledSurgeryDate),
+          gte(animals.scheduledSurgeryDate, todayStart),
+          lte(animals.scheduledSurgeryDate, tomorrowEnd)
+        ));
+
+      const surgeriesToday = surgeriesData.filter(s => 
+        s.scheduledSurgeryDate && new Date(s.scheduledSurgeryDate) <= todayEnd
+      );
+      const surgeriesTomorrow = surgeriesData.filter(s => 
+        s.scheduledSurgeryDate && new Date(s.scheduledSurgeryDate) > todayEnd
+      );
+
+      // 2. Get transports for today and tomorrow
+      const transportsData = await db
+        .select({
+          id: transportEvents.id,
+          name: transportEvents.name,
+          transportType: transportEvents.transportType,
+          status: transportEvents.status,
+          departureDate: transportEvents.departureDate,
+          originLocation: transportEvents.originLocation,
+          destinationLocation: transportEvents.destinationLocation,
+          animalCount: transportEvents.animalCount,
+        })
+        .from(transportEvents)
+        .where(and(
+          eq(transportEvents.tenantId, req.tenant!.id),
+          not(eq(transportEvents.status, 'completed')),
+          not(eq(transportEvents.status, 'cancelled')),
+          isNotNull(transportEvents.departureDate),
+          gte(transportEvents.departureDate, todayStart),
+          lte(transportEvents.departureDate, tomorrowEnd)
+        ));
+
+      const transportsToday = transportsData.filter(t => 
+        t.departureDate && new Date(t.departureDate) <= todayEnd
+      );
+      const transportsTomorrow = transportsData.filter(t => 
+        t.departureDate && new Date(t.departureDate) > todayEnd
+      );
+
+      // 3. Get preventative care items due today and tomorrow
+      const medicalTasksData = await db
+        .select({
+          id: preventativeCareRecords.id,
+          animalId: preventativeCareRecords.animalId,
+          careName: preventativeCareRecords.careName,
+          careCategory: preventativeCareRecords.careCategory,
+          nextDueDate: preventativeCareRecords.nextDueDate,
+          animalName: animals.name,
+          animalSpecies: animals.species,
+        })
+        .from(preventativeCareRecords)
+        .innerJoin(animals, eq(preventativeCareRecords.animalId, animals.id))
+        .where(and(
+          eq(preventativeCareRecords.tenantId, req.tenant!.id),
+          isNotNull(preventativeCareRecords.nextDueDate),
+          gte(preventativeCareRecords.nextDueDate, todayStart),
+          lte(preventativeCareRecords.nextDueDate, tomorrowEnd),
+          not(inArray(animals.status, ['adopted', 'deceased', 'transferred']))
+        ));
+
+      const medicalToday = medicalTasksData.filter(m => 
+        m.nextDueDate && new Date(m.nextDueDate) <= todayEnd
+      );
+      const medicalTomorrow = medicalTasksData.filter(m => 
+        m.nextDueDate && new Date(m.nextDueDate) > todayEnd
+      );
+
+      // Also get overdue items (due before today's start, not including midnight today)
+      const { lt } = await import('drizzle-orm');
+      const overdueData = await db
+        .select({
+          id: preventativeCareRecords.id,
+          animalId: preventativeCareRecords.animalId,
+          careName: preventativeCareRecords.careName,
+          careCategory: preventativeCareRecords.careCategory,
+          nextDueDate: preventativeCareRecords.nextDueDate,
+          animalName: animals.name,
+          animalSpecies: animals.species,
+        })
+        .from(preventativeCareRecords)
+        .innerJoin(animals, eq(preventativeCareRecords.animalId, animals.id))
+        .where(and(
+          eq(preventativeCareRecords.tenantId, req.tenant!.id),
+          isNotNull(preventativeCareRecords.nextDueDate),
+          lt(preventativeCareRecords.nextDueDate, todayStart),
+          not(inArray(animals.status, ['adopted', 'deceased', 'transferred']))
+        ));
+
+      // 4. Get calendar events for today and tomorrow
+      const calendarData = await db
+        .select({
+          id: calendarEvents.id,
+          title: calendarEvents.title,
+          description: calendarEvents.description,
+          startTime: calendarEvents.startTime,
+          endTime: calendarEvents.endTime,
+          location: calendarEvents.location,
+        })
+        .from(calendarEvents)
+        .where(and(
+          eq(calendarEvents.tenantId, req.tenant!.id),
+          gte(calendarEvents.startTime, todayStart),
+          lte(calendarEvents.startTime, tomorrowEnd)
+        ));
+
+      const calendarToday = calendarData.filter(c => 
+        c.startTime && new Date(c.startTime) <= todayEnd
+      );
+      const calendarTomorrow = calendarData.filter(c => 
+        c.startTime && new Date(c.startTime) > todayEnd
+      );
+
+      res.json({
+        today: {
+          surgeries: surgeriesToday,
+          transports: transportsToday,
+          medical: medicalToday,
+          calendar: calendarToday,
+          overdue: overdueData,
+        },
+        tomorrow: {
+          surgeries: surgeriesTomorrow,
+          transports: transportsTomorrow,
+          medical: medicalTomorrow,
+          calendar: calendarTomorrow,
+        },
+        summary: {
+          urgentCount: surgeriesToday.length + transportsToday.length + overdueData.length,
+          medicalTodayCount: medicalToday.length,
+          medicalTomorrowCount: medicalTomorrow.length,
+          calendarTodayCount: calendarToday.length,
+          calendarTomorrowCount: calendarTomorrow.length,
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * GET /api/dashboard/pending-applications
    * Get all pending applications from all sources (adoption, foster, volunteer, surrender, custom forms)
    * Consolidated view for the dashboard

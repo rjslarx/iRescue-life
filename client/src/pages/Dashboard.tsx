@@ -21,6 +21,7 @@ import {
   HeaderStats,
   MedicalSnapshotWidget,
   ComplianceWidget,
+  DailyBriefing,
 } from "@/components/dashboard";
 import PipelineManager, { PipelineTab } from "@/components/dashboard/PipelineManager";
 
@@ -369,45 +370,58 @@ export default function Dashboard() {
                 </section>
               )}
 
-              {/* Medical Snapshot - only show if user has explicit medical-tasks permission */}
-              {canViewMedical && (
-                <section data-testid="section-priority-medical" className="w-full">
-                  <MedicalSnapshotWidget />
-                </section>
-              )}
+              {/* Two-Column Layout: Left (2/3) for KPIs + Actions, Right (1/3) for Daily Briefing */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Left Column - KPIs and Quick Actions */}
+                <div className="lg:col-span-2 space-y-6">
+                  {/* Medical Snapshot - only show if user has explicit medical-tasks permission */}
+                  {canViewMedical && (
+                    <section data-testid="section-priority-medical" className="w-full">
+                      <MedicalSnapshotWidget />
+                    </section>
+                  )}
 
-              {/* Quick Actions Grid - only show if user has dashboard access and at least one permitted action */}
-              {(() => {
-                const filteredActions = actionButtons.filter(action => {
-                  // Filter actions based on permissions only (no role checks)
-                  if (action.id === 'new-intake') return canViewApplications;
-                  if (action.id === 'log-meds') return canViewMedical;
-                  if (action.id === 'find-foster') return canViewFosterManagement;
-                  if (action.id === 'invite-team-member') return canAccessPage('team');
-                  return false; // Default to hidden unless explicitly permitted
-                });
-                
-                return hasFullDashboardAccess && filteredActions.length > 0 && (
-                  <section data-testid="section-quick-actions">
-                    <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-3">Quick Actions</h3>
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                      {filteredActions.map((action) => (
-                        <Link key={action.id} href={action.href}>
-                          <Button 
-                            variant="outline" 
-                            size="lg"
-                            className={`w-full gap-2 justify-center ${action.color}`}
-                            data-testid={`button-action-${action.id}`}
-                          >
-                            <action.icon className="h-5 w-5" />
-                            <span className="font-medium">{action.label}</span>
-                          </Button>
-                        </Link>
-                      ))}
-                    </div>
-                  </section>
-                );
-              })()}
+                  {/* Quick Actions Grid - only show if user has dashboard access and at least one permitted action */}
+                  {(() => {
+                    const filteredActions = actionButtons.filter(action => {
+                      // Filter actions based on permissions only (no role checks)
+                      if (action.id === 'new-intake') return canViewApplications;
+                      if (action.id === 'log-meds') return canViewMedical;
+                      if (action.id === 'find-foster') return canViewFosterManagement;
+                      if (action.id === 'invite-team-member') return canAccessPage('team');
+                      return false; // Default to hidden unless explicitly permitted
+                    });
+                    
+                    return hasFullDashboardAccess && filteredActions.length > 0 && (
+                      <section data-testid="section-quick-actions">
+                        <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-3">Quick Actions</h3>
+                        <div className="grid grid-cols-2 gap-3">
+                          {filteredActions.map((action) => (
+                            <Link key={action.id} href={action.href}>
+                              <Button 
+                                variant="outline" 
+                                size="lg"
+                                className={`w-full gap-2 justify-center ${action.color}`}
+                                data-testid={`button-action-${action.id}`}
+                              >
+                                <action.icon className="h-5 w-5" />
+                                <span className="font-medium">{action.label}</span>
+                              </Button>
+                            </Link>
+                          ))}
+                        </div>
+                      </section>
+                    );
+                  })()}
+                </div>
+
+                {/* Right Column - Daily Briefing (1/3 width, scrollable) */}
+                {hasFullDashboardAccess && (
+                  <div className="lg:col-span-1" style={{ maxHeight: '500px' }}>
+                    <DailyBriefing />
+                  </div>
+                )}
+              </div>
 
               {/* Pipeline Manager - only show if user has access to at least one pipeline */}
               {hasPipelineAccess && (

@@ -6,3 +6,4 @@ export { default as StatsOverview } from './StatsOverview';
 export { default as HeaderStats } from './HeaderStats';
 export { default as ComplianceWidget } from './ComplianceWidget';
 export { default as ActionCenterWidget } from './ActionCenterWidget';
+export { DailyBriefing } from './DailyBriefing';
