@@ -18217,17 +18217,19 @@ Submitted: ${new Date().toLocaleString()}
         });
       }
       
-      const payouts = await stripeService.getPayouts(tenant, limit);
-      if (!payouts) {
+      const result = await stripeService.getPayouts(tenant, limit);
+      if (!result.payouts) {
+        console.error(`[Stripe API] Failed to get payouts for ${tenant.subdomain}: ${result.error}`);
         return res.json({ 
-          configured: false,
-          message: 'Unable to retrieve Stripe payouts',
+          configured: true,
+          message: result.error || 'Unable to retrieve Stripe payouts',
           payouts: [],
+          error: result.error,
         });
       }
       
       // Map to friendly format
-      const formattedPayouts = payouts.map(payout => ({
+      const formattedPayouts = result.payouts.map(payout => ({
         id: payout.id,
         amount: payout.amount,
         currency: payout.currency,
@@ -18282,17 +18284,19 @@ Submitted: ${new Date().toLocaleString()}
         });
       }
       
-      const charges = await stripeService.getTransactions(tenant, limit);
-      if (!charges) {
+      const result = await stripeService.getTransactions(tenant, limit);
+      if (!result.charges) {
+        console.error(`[Stripe API] Failed to get transactions for ${tenant.subdomain}: ${result.error}`);
         return res.json({ 
-          configured: false,
-          message: 'Unable to retrieve Stripe transactions',
+          configured: true,
+          message: result.error || 'Unable to retrieve Stripe transactions',
           transactions: [],
+          error: result.error,
         });
       }
       
       // Map to friendly format
-      const formattedTransactions = charges.map(charge => ({
+      const formattedTransactions = result.charges.map(charge => ({
         id: charge.id,
         amount: charge.amount,
         amountRefunded: charge.amount_refunded,

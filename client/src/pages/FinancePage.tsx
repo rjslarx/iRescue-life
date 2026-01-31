@@ -127,13 +127,13 @@ export default function FinancePage() {
     retry: false,
   });
 
-  const { data: stripePayouts, isLoading: isLoadingPayouts, isError: isErrorPayouts } = useQuery<{ configured: boolean; payouts: StripePayout[] }>({
+  const { data: stripePayouts, isLoading: isLoadingPayouts, isError: isErrorPayouts } = useQuery<{ configured: boolean; payouts: StripePayout[]; error?: string; message?: string }>({
     queryKey: ['/api/stripe/payouts'],
     enabled: user?.role === 'admin' || user?.role === 'board_member' || user?.role === 'owner',
     retry: false,
   });
 
-  const { data: stripeTransactions, isLoading: isLoadingTransactions, isError: isErrorTransactions } = useQuery<{ configured: boolean; transactions: StripeTransaction[] }>({
+  const { data: stripeTransactions, isLoading: isLoadingTransactions, isError: isErrorTransactions } = useQuery<{ configured: boolean; transactions: StripeTransaction[]; error?: string; message?: string }>({
     queryKey: ['/api/stripe/transactions'],
     enabled: user?.role === 'admin' || user?.role === 'board_member' || user?.role === 'staff' || user?.role === 'owner',
     retry: false,
@@ -585,6 +585,11 @@ export default function FinancePage() {
                   <div className="text-center py-8 text-muted-foreground">
                     Stripe is not configured for this organization
                   </div>
+                ) : stripeTransactions?.error ? (
+                  <div className="text-center py-8">
+                    <p className="text-destructive font-medium">Error loading transactions</p>
+                    <p className="text-sm text-muted-foreground mt-1">{stripeTransactions.error}</p>
+                  </div>
                 ) : stripeTransactions.transactions.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
                     No transactions yet
@@ -673,6 +678,11 @@ export default function FinancePage() {
                 ) : !stripePayouts?.configured ? (
                   <div className="text-center py-8 text-muted-foreground">
                     Stripe is not configured for this organization
+                  </div>
+                ) : stripePayouts?.error ? (
+                  <div className="text-center py-8">
+                    <p className="text-destructive font-medium">Error loading payouts</p>
+                    <p className="text-sm text-muted-foreground mt-1">{stripePayouts.error}</p>
                   </div>
                 ) : stripePayouts.payouts.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">

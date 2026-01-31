@@ -331,57 +331,85 @@ export class StripeService {
   /**
    * Get recent payouts for a tenant
    */
-  async getPayouts(tenant: Tenant, limit: number = 10): Promise<Stripe.Payout[] | null> {
+  async getPayouts(tenant: Tenant, limit: number = 10): Promise<{ payouts: Stripe.Payout[] | null; error?: string }> {
     const platformKey = getPlatformStripeKey();
     
     // For Stripe Connect accounts
     if (tenant.stripeConnectedAccountId && platformKey) {
-      const stripe = new Stripe(platformKey, {
-        apiVersion: '2025-09-30.clover',
-        typescript: true,
-      });
-      const payouts = await stripe.payouts.list(
-        { limit },
-        { stripeAccount: tenant.stripeConnectedAccountId }
-      );
-      return payouts.data;
+      try {
+        const stripe = new Stripe(platformKey, {
+          apiVersion: '2025-09-30.clover',
+          typescript: true,
+        });
+        const payouts = await stripe.payouts.list(
+          { limit },
+          { stripeAccount: tenant.stripeConnectedAccountId }
+        );
+        return { payouts: payouts.data };
+      } catch (err: any) {
+        console.error(`[Stripe] Error fetching payouts for connected account:`, err.message);
+        return { payouts: null, error: err.message || 'Failed to fetch payouts' };
+      }
     }
     
     // For tenants with their own Stripe key
     const stripe = this.getStripeClient(tenant);
     if (!stripe) {
-      return null;
+      return { payouts: null, error: 'No Stripe client configured' };
     }
-    const payouts = await stripe.payouts.list({ limit });
-    return payouts.data;
+    
+    try {
+      const payouts = await stripe.payouts.list({ limit });
+      return { payouts: payouts.data };
+    } catch (err: any) {
+      console.error(`[Stripe] Error fetching payouts with tenant key:`, err.message);
+      return { payouts: null, error: err.message || 'Failed to fetch payouts' };
+    }
   }
 
   /**
    * Get recent transactions/charges for a tenant
    */
-  async getTransactions(tenant: Tenant, limit: number = 50): Promise<Stripe.Charge[] | null> {
+  async getTransactions(tenant: Tenant, limit: number = 50): Promise<{ charges: Stripe.Charge[] | null; error?: string }> {
     const platformKey = getPlatformStripeKey();
+    
+    console.log(`[Stripe] getTransactions for tenant ${tenant.subdomain}: connectedAccountId=${tenant.stripeConnectedAccountId ? 'yes' : 'no'}, platformKey=${platformKey ? 'yes' : 'no'}`);
     
     // For Stripe Connect accounts
     if (tenant.stripeConnectedAccountId && platformKey) {
-      const stripe = new Stripe(platformKey, {
-        apiVersion: '2025-09-30.clover',
-        typescript: true,
-      });
-      const charges = await stripe.charges.list(
-        { limit },
-        { stripeAccount: tenant.stripeConnectedAccountId }
-      );
-      return charges.data;
+      try {
+        const stripe = new Stripe(platformKey, {
+          apiVersion: '2025-09-30.clover',
+          typescript: true,
+        });
+        console.log(`[Stripe] Fetching charges for connected account: ${tenant.stripeConnectedAccountId}`);
+        const charges = await stripe.charges.list(
+          { limit },
+          { stripeAccount: tenant.stripeConnectedAccountId }
+        );
+        console.log(`[Stripe] Successfully fetched ${charges.data.length} charges`);
+        return { charges: charges.data };
+      } catch (err: any) {
+        console.error(`[Stripe] Error fetching transactions for connected account:`, err.message);
+        return { charges: null, error: err.message || 'Failed to fetch Stripe transactions' };
+      }
     }
     
     // For tenants with their own Stripe key
     const stripe = this.getStripeClient(tenant);
     if (!stripe) {
-      return null;
+      console.log(`[Stripe] No Stripe client available for tenant ${tenant.subdomain}`);
+      return { charges: null, error: 'No Stripe client configured' };
     }
-    const charges = await stripe.charges.list({ limit });
-    return charges.data;
+    
+    try {
+      const charges = await stripe.charges.list({ limit });
+      console.log(`[Stripe] Successfully fetched ${charges.data.length} charges using tenant key`);
+      return { charges: charges.data };
+    } catch (err: any) {
+      console.error(`[Stripe] Error fetching transactions with tenant key:`, err.message);
+      return { charges: null, error: err.message || 'Failed to fetch Stripe transactions' };
+    }
   }
 }
 
