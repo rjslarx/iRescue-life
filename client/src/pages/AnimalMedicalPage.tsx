@@ -1314,10 +1314,8 @@ export default function AnimalMedicalPage() {
                   variant="outline"
                   onClick={async () => {
                     try {
-                      const response = await apiRequest(`/api/animals/${animalId}/preventative-care/batch-create-core`, {
-                        method: 'POST',
-                        body: JSON.stringify({ dateAdministered: new Date().toISOString().split('T')[0] }),
-                      });
+                      const res = await apiRequest('POST', `/api/animals/${animalId}/preventative-care/batch-create-core`, { dateAdministered: new Date().toISOString().split('T')[0] });
+                      const response = await res.json();
                       if (response.created > 0) {
                         toast({
                           title: 'Core items added',
