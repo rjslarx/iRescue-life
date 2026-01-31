@@ -27784,6 +27784,32 @@ Email: ${application.applicantEmail || ''}`
   // ============================================================================
   // USER PAGE PERMISSIONS - Individual user permission grants
   // ============================================================================
+  /**
+   * GET /api/user-page-permissions/me
+   * Get all page permissions granted to the current user
+   * NOTE: This route MUST be defined before /:userId to prevent "me" being parsed as UUID
+   */
+  app.get('/api/user-page-permissions/me', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { userPagePermissions } = await import('@shared/schema');
+      
+      const permissions = await db
+        .select({
+          id: userPagePermissions.id,
+          pageId: userPagePermissions.pageId,
+          createdAt: userPagePermissions.createdAt,
+        })
+        .from(userPagePermissions)
+        .where(and(
+          eq(userPagePermissions.tenantId, req.tenant!.id),
+          eq(userPagePermissions.userId, req.user!.id)
+        ));
+
+      res.json({ permissions });
+    } catch (error) {
+      next(error);
+    }
+  });
 
   /**
    * GET /api/user-page-permissions/:userId
@@ -27804,32 +27830,6 @@ Email: ${application.applicantEmail || ''}`
         .where(and(
           eq(userPagePermissions.tenantId, req.tenant!.id),
           eq(userPagePermissions.userId, req.params.userId)
-        ));
-
-      res.json({ permissions });
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  /**
-   * GET /api/user-page-permissions/me
-   * Get all page permissions granted to the current user
-   */
-  app.get('/api/user-page-permissions/me', requireTenant, requireAuth, async (req, res, next) => {
-    try {
-      const { userPagePermissions } = await import('@shared/schema');
-      
-      const permissions = await db
-        .select({
-          id: userPagePermissions.id,
-          pageId: userPagePermissions.pageId,
-          createdAt: userPagePermissions.createdAt,
-        })
-        .from(userPagePermissions)
-        .where(and(
-          eq(userPagePermissions.tenantId, req.tenant!.id),
-          eq(userPagePermissions.userId, req.user!.id)
         ));
 
       res.json({ permissions });
