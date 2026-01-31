@@ -6053,6 +6053,24 @@ Crawl-delay: 1
 
           // Upload each file using TenantFileStorage (Google Drive or Replit)
           for (const file of files) {
+            // Detect potential cloud storage references (shortcuts/links from iOS/Android)
+            // These are typically very small files that contain URLs instead of actual image data
+            const fileContent = file.buffer.toString('utf8', 0, Math.min(200, file.buffer.length));
+            const isLikelyCloudRef = 
+              (file.buffer.length < 2048 && // Less than 2KB is too small for a real image
+               (file.originalname.toLowerCase().includes('drivesdk') ||
+                file.originalname.toLowerCase().includes('gdrive') ||
+                fileContent.includes('drive.google.com') ||
+                fileContent.includes('docs.google.com')));
+            
+            if (isLikelyCloudRef) {
+              console.warn(`Detected cloud reference file: ${file.originalname}, size: ${file.buffer.length} bytes`);
+              return res.status(400).json({ 
+                error: 'It looks like you selected a file from cloud storage (like Google Drive or iCloud). Please select photos directly from your Camera Roll or Photos app instead.',
+                isCloudReference: true
+              });
+            }
+            
             let fileBuffer = file.buffer;
             let contentType = file.mimetype;
             

@@ -85,6 +85,31 @@ export function ObjectUploader({
       return;
     }
 
+    // Detect potential cloud storage references (Google Drive, iCloud, etc.)
+    // These are typically very small files (shortcuts/links) that won't contain actual image data
+    const potentialCloudRefs = filesToAdd.filter(file => {
+      const fileName = file.name.toLowerCase();
+      // Check for suspicious patterns indicating cloud shortcuts/references
+      const isCloudRef = 
+        fileName.includes('drivesdk') ||
+        fileName.includes('gdrive') ||
+        fileName.endsWith('.webloc') ||
+        fileName.endsWith('.url') ||
+        fileName.endsWith('.lnk') ||
+        // Very small "image" files are likely shortcuts (real images are usually > 10KB)
+        (file.size < 1024 && (fileName.endsWith('.jpg') || fileName.endsWith('.jpeg') || fileName.endsWith('.png')));
+      return isCloudRef;
+    });
+    
+    if (potentialCloudRefs.length > 0) {
+      toast({
+        title: "Cloud storage files detected",
+        description: "Please select photos directly from your Camera Roll or Photos app instead of from Files, Google Drive, or iCloud. This ensures the actual image data is uploaded.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     // Validate file types based on accept prop
     if (accept) {
       const acceptTypes = accept.split(',').map(t => t.trim());
