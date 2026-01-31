@@ -43,9 +43,25 @@ export function generateDosesForPrescription(options: DoseGeneratorOptions): Gen
         ? new Date(prescription.nextScheduledDose) 
         : new Date(prescription.startDate));
   const start = doseStartDate;
-  const end = prescription.endDate 
-    ? new Date(prescription.endDate) 
-    : new Date(start.getTime() + 30 * 24 * 60 * 60 * 1000); // Default 30 days
+  
+  // Calculate end date:
+  // - If endDate exists AND is after start, use it
+  // - If endDate is before start (backlogged prescription with nextScheduledDose), use start + 90 days
+  // - If no endDate, default to start + 30 days
+  let end: Date;
+  if (prescription.endDate) {
+    const prescEndDate = new Date(prescription.endDate);
+    if (prescEndDate >= start) {
+      end = prescEndDate;
+    } else {
+      // endDate is before start - this is a backlogged prescription
+      // For interval-based meds (monthly, etc), just generate from start going forward
+      console.log(`[DOSE-GEN]   Note: endDate ${prescEndDate.toISOString()} is before start ${start.toISOString()}, ignoring endDate`);
+      end = new Date(start.getTime() + 90 * 24 * 60 * 60 * 1000);
+    }
+  } else {
+    end = new Date(start.getTime() + 30 * 24 * 60 * 60 * 1000); // Default 30 days
+  }
   
   // Limit max duration to 90 days to prevent timeout from generating too many doses
   const maxEndDate = new Date(start.getTime() + 90 * 24 * 60 * 60 * 1000);
