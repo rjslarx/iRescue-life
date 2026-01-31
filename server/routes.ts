@@ -17306,7 +17306,7 @@ Submitted: ${new Date().toLocaleString()}
    * PATCH /api/tenant/medical-protocols
    * Update default medication rounds times (admin only)
    */
-  app.patch('/api/tenant/medical-protocols', requireTenant, requireAuth, requireRole(['admin', 'owner']), async (req, res, next) => {
+  app.patch('/api/tenant/medical-protocols', requireTenant, requireAuth, requireRole('admin', 'owner'), async (req, res, next) => {
     try {
       const medicalProtocolsSchema = z.object({
         defaultMorningRounds: z.string().regex(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/, "Invalid time format (HH:mm)"),
@@ -26954,7 +26954,7 @@ The user asking is a tenant administrator or staff member.`;
   app.use(heartwormTreatmentRoutes.default);
 
   // Volunteer schedule digest settings
-  app.get('/api/tenant/settings/volunteer-digest', requireTenant, requireRole(['admin']), async (req, res, next) => {
+  app.get('/api/tenant/settings/volunteer-digest', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
     try {
       const tenantId = req.session.tenantId!;
       const [tenant] = await db
@@ -26968,7 +26968,7 @@ The user asking is a tenant administrator or staff member.`;
     }
   });
 
-  app.patch('/api/tenant/settings/volunteer-digest', requireTenant, requireRole(['admin']), async (req, res, next) => {
+  app.patch('/api/tenant/settings/volunteer-digest', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
     try {
       const tenantId = req.session.tenantId!;
       const { enabled, dayOfWeek, sendTime, includeUpcomingDays } = req.body;
@@ -26999,7 +26999,7 @@ The user asking is a tenant administrator or staff member.`;
     }
   });
 
-  app.post('/api/tenant/settings/volunteer-digest/test', requireTenant, requireRole(['admin']), async (req, res, next) => {
+  app.post('/api/tenant/settings/volunteer-digest/test', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
     try {
       const tenantId = req.session.tenantId!;
       const { VolunteerScheduleDigestService } = await import('./services/volunteer-schedule-digest');

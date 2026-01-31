@@ -134,7 +134,7 @@ router.patch('/events/:id', requireTenant, requireAuth, async (req, res, next) =
   }
 });
 
-router.delete('/events/:id', requireTenant, requireAuth, requireRole(['admin']), async (req, res, next) => {
+router.delete('/events/:id', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
   try {
     const deleted = await TransportService.deleteTransport(req.tenant!.id, req.params.id);
     
