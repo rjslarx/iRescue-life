@@ -30,7 +30,8 @@ export async function getExpendituresByTenant(tenantId: string) {
       notes: expenditures.notes,
       grantId: expenditures.grantId,
       createdAt: expenditures.createdAt,
-      grantName: grants.name,
+      grantFunderName: grants.funderName,
+      grantProgramName: grants.programName,
     })
     .from(expenditures)
     .leftJoin(grants, eq(expenditures.grantId, grants.id))

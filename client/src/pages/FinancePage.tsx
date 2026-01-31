@@ -224,7 +224,9 @@ export default function FinancePage() {
     amount: typeof e.amount === 'string' ? parseFloat(e.amount) : e.amount,
     date: new Date(e.date).toISOString().split('T')[0],
     category: e.category,
-    grantName: (e as any).grantName,
+    grantName: (e as any).grantFunderName && (e as any).grantProgramName 
+      ? `${(e as any).grantFunderName} - ${(e as any).grantProgramName}`
+      : (e as any).grantFunderName || (e as any).grantProgramName || null,
   }));
 
   const handleAddExpenditure = (expenditure: any) => {
