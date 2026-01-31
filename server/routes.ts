@@ -3354,6 +3354,7 @@ Crawl-delay: 1
         animals, 
         transportEvents, 
         calendarEvents,
+        calendars,
         preventativeCareRecords
       } = await import('@shared/schema');
       const { gte, lte } = await import('drizzle-orm');
@@ -3473,7 +3474,8 @@ Crawl-delay: 1
           not(inArray(animals.status, ['adopted', 'deceased', 'transferred']))
         ));
 
-      // 4. Get calendar events for today and tomorrow
+      // 4. Get calendar events for today and tomorrow (excluding simplified volunteer mode calendars)
+      const { or: orOp, isNull } = await import('drizzle-orm');
       const calendarData = await db
         .select({
           id: calendarEvents.id,
@@ -3484,10 +3486,16 @@ Crawl-delay: 1
           location: calendarEvents.location,
         })
         .from(calendarEvents)
+        .innerJoin(calendars, eq(calendarEvents.calendarId, calendars.id))
         .where(and(
           eq(calendarEvents.tenantId, req.tenant!.id),
           gte(calendarEvents.startTime, todayStart),
-          lte(calendarEvents.startTime, tomorrowEnd)
+          lte(calendarEvents.startTime, tomorrowEnd),
+          // Exclude simplified volunteer mode calendars
+          orOp(
+            eq(calendars.simplifiedVolunteerMode, false),
+            isNull(calendars.simplifiedVolunteerMode)
+          )
         ));
 
       const calendarToday = calendarData.filter(c => 
