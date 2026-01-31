@@ -18185,6 +18185,76 @@ Submitted: ${new Date().toLocaleString()}
   });
 
   /**
+   * POST /api/stripe/connect-session
+   * Create an Account Session for Stripe Connect Embedded Components
+   * Returns a client secret that the frontend uses to initialize the Connect SDK
+   */
+  app.post('/api/stripe/connect-session', requireTenant, requireAuth, requireRole('admin', 'board_member', 'staff', 'owner'), async (req, res, next) => {
+    try {
+      const { getPlatformStripeSecretKey } = await import('./config/platform');
+      const Stripe = (await import('stripe')).default;
+      
+      // Get tenant with Stripe configuration
+      const [tenant] = await db
+        .select()
+        .from(tenants)
+        .where(eq(tenants.id, req.tenant!.id))
+        .limit(1);
+      
+      if (!tenant) {
+        return res.status(404).json({ error: 'Tenant not found' });
+      }
+      
+      // Check if tenant has a connected account
+      if (!tenant.stripeConnectedAccountId) {
+        console.log(`[Stripe Connect Session] Tenant ${tenant.subdomain} has no connected account`);
+        return res.status(400).json({ 
+          error: 'Stripe Connect not configured',
+          message: 'This organization has not connected their Stripe account yet.'
+        });
+      }
+      
+      // Get platform Stripe key
+      const platformKey = getPlatformStripeSecretKey();
+      if (!platformKey) {
+        console.error('[Stripe Connect Session] Platform Stripe secret key not configured');
+        return res.status(500).json({ 
+          error: 'Platform configuration error',
+          message: 'Payment processing is not available. Please contact support.'
+        });
+      }
+      
+      const stripe = new Stripe(platformKey, { apiVersion: '2024-12-18.acacia' });
+      
+      // Create an Account Session for the connected account
+      const accountSession = await stripe.accountSessions.create({
+        account: tenant.stripeConnectedAccountId,
+        components: {
+          payments: { enabled: true, features: { refund_management: true, dispute_management: true, capture_payments: true } },
+          payouts: { enabled: true, features: { instant_payouts: true, standard_payouts: true } },
+          balances: { enabled: true, features: { instant_payouts: true, standard_payouts: true } },
+        },
+      });
+      
+      console.log(`[Stripe Connect Session] Created session for ${tenant.subdomain} (account: ${tenant.stripeConnectedAccountId})`);
+      
+      res.json({ 
+        clientSecret: accountSession.client_secret,
+        connectedAccountId: tenant.stripeConnectedAccountId,
+      });
+    } catch (error: any) {
+      console.error('[Stripe Connect Session] Error:', error.message);
+      if (error.type === 'StripeInvalidRequestError') {
+        return res.status(400).json({ 
+          error: 'Invalid Stripe configuration',
+          message: error.message 
+        });
+      }
+      next(error);
+    }
+  });
+
+  /**
    * GET /api/stripe/payouts
    * Get recent payouts (transfers to bank account) for the tenant
    */
