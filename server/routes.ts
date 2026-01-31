@@ -237,6 +237,41 @@ function sanitizeBgImageValue(value: string | undefined): string | undefined {
 }
 
 /**
+ * Validate photo URLs to prevent external URLs like Google Drive from being saved
+ * Only allows object storage paths (starting with /objects/ or objects/)
+ * Returns an object with validation result and any invalid URLs found
+ */
+function validatePhotoUrls(photoUrls: string[]): { valid: boolean; invalidUrls: string[] } {
+  const invalidUrls: string[] = [];
+  
+  for (const url of photoUrls) {
+    const trimmed = url.trim();
+    
+    // Allow object storage paths
+    if (trimmed.startsWith('/objects/') || trimmed.startsWith('objects/')) {
+      continue;
+    }
+    
+    // Block Google Drive URLs specifically
+    if (trimmed.includes('drive.google.com') || trimmed.includes('docs.google.com')) {
+      invalidUrls.push(trimmed);
+      continue;
+    }
+    
+    // Block any other external URLs (http/https)
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      invalidUrls.push(trimmed);
+      continue;
+    }
+  }
+  
+  return {
+    valid: invalidUrls.length === 0,
+    invalidUrls
+  };
+}
+
+/**
  * Sanitize content module styling object
  * Applies strict allowlists to all CSS values
  */
@@ -5641,6 +5676,14 @@ Crawl-delay: 1
       const data = insertAnimalSchema.omit({ tenantId: true }).parse(payload);
       
       if (data.photoUrls && data.photoUrls.length > 0) {
+        const photoValidation = validatePhotoUrls(data.photoUrls);
+        if (!photoValidation.valid) {
+          return res.status(400).json({
+            error: 'Invalid photo URLs detected. Please upload photos directly instead of using external links (like Google Drive).',
+            invalidUrls: photoValidation.invalidUrls
+          });
+        }
+        
         const objectStorageService = new ObjectStorageService();
         const normalizedPhotoUrls = [];
         
@@ -5734,8 +5777,16 @@ Crawl-delay: 1
         }
       }
       
-      // Normalize photo URLs if provided
+      // Validate and normalize photo URLs if provided
       if (data.photoUrls && data.photoUrls.length > 0) {
+        const photoValidation = validatePhotoUrls(data.photoUrls);
+        if (!photoValidation.valid) {
+          return res.status(400).json({
+            error: 'Invalid photo URLs detected. Please upload photos directly instead of using external links (like Google Drive).',
+            invalidUrls: photoValidation.invalidUrls
+          });
+        }
+        
         const objectStorageService = new ObjectStorageService();
         const normalizedPhotoUrls = [];
         
@@ -6174,6 +6225,14 @@ Crawl-delay: 1
       
       if (!req.body.photoUrls || !Array.isArray(req.body.photoUrls)) {
         return res.status(400).json({ error: 'photoUrls array is required' });
+      }
+
+      const photoValidation = validatePhotoUrls(req.body.photoUrls);
+      if (!photoValidation.valid) {
+        return res.status(400).json({
+          error: 'Invalid photo URLs detected. Please upload photos directly instead of using external links (like Google Drive).',
+          invalidUrls: photoValidation.invalidUrls
+        });
       }
 
       const animal = await getAnimalById(req.tenant!.id, req.params.id);
@@ -13697,6 +13756,16 @@ Submitted: ${new Date().toLocaleString()}
         'unknown': 'unknown'
       };
       
+      // Validate photo URL if provided (skip external URLs like Google Drive)
+      let validatedPhotoUrls: string[] | undefined;
+      if (surrenderRequest.photoUrl) {
+        const photoValidation = validatePhotoUrls([surrenderRequest.photoUrl]);
+        if (photoValidation.valid) {
+          validatedPhotoUrls = [surrenderRequest.photoUrl];
+        }
+        // If invalid (e.g., Google Drive URL), we silently skip it rather than blocking the conversion
+      }
+      
       // Create the animal using the service (which handles ID generation)
       const animal = await createAnimal(req.tenant!.id, {
         name: surrenderRequest.dogName,
@@ -13707,7 +13776,7 @@ Submitted: ${new Date().toLocaleString()}
         medicalStatus: 'needs_vetting',
         status: 'intake',
         bio: bioParts.length > 0 ? bioParts.join('\n\n') : undefined,
-        photoUrls: surrenderRequest.photoUrl ? [surrenderRequest.photoUrl] : undefined,
+        photoUrls: validatedPhotoUrls,
         microchipNumber: surrenderRequest.microchipNumber || undefined,
       });
       
