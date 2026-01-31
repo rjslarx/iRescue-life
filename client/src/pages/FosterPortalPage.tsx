@@ -551,21 +551,21 @@ export default function FosterPortalPage() {
               </CardContent>
             </Card>
           ) : totalPreventativeItems === 0 ? (
-            <Card>
+            <Card data-testid="preventative-empty-state">
               <CardContent className="py-8 text-center">
                 <Shield className="h-12 w-12 mx-auto text-green-500 mb-3" />
-                <h3 className="font-semibold">All Up To Date!</h3>
+                <h3 className="font-semibold" data-testid="text-preventative-uptodate">All Up To Date!</h3>
                 <p className="text-sm text-muted-foreground">No upcoming preventative care items</p>
               </CardContent>
             </Card>
           ) : (
             <>
               {preventativeOverdue.length > 0 && (
-                <Card>
+                <Card data-testid="preventative-overdue-section">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-lg flex items-center gap-2 text-destructive">
                       <AlertCircle className="h-5 w-5" />
-                      Overdue ({preventativeOverdue.length})
+                      Overdue (<span data-testid="text-preventative-overdue-count">{preventativeOverdue.length}</span>)
                     </CardTitle>
                     <CardDescription>Contact staff about these overdue items</CardDescription>
                   </CardHeader>
@@ -581,6 +581,7 @@ export default function FosterPortalPage() {
                             src={item.animal.photoUrls[0]}
                             alt={item.animal.name}
                             className="w-10 h-10 rounded-full object-cover"
+                            data-testid={`img-animal-${item.record.id}`}
                           />
                         ) : (
                           <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
@@ -589,16 +590,16 @@ export default function FosterPortalPage() {
                         )}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <span className="font-medium">{item.animal.name}</span>
+                            <span className="font-medium" data-testid={`text-animal-name-${item.record.id}`}>{item.animal.name}</span>
                             {item.record.isCore && (
                               <Star className="h-3 w-3 text-amber-500 fill-amber-500" />
                             )}
                           </div>
-                          <div className="text-sm text-muted-foreground">
+                          <div className="text-sm text-muted-foreground" data-testid={`text-care-name-${item.record.id}`}>
                             {item.record.careName}
                           </div>
                         </div>
-                        <Badge variant="destructive">
+                        <Badge variant="destructive" data-testid={`badge-due-${item.record.id}`}>
                           {formatDistanceToNow(new Date(item.record.nextDueDate), { addSuffix: true })}
                         </Badge>
                       </div>
@@ -608,11 +609,11 @@ export default function FosterPortalPage() {
               )}
 
               {preventativeDueToday.length > 0 && (
-                <Card>
+                <Card data-testid="preventative-duetoday-section">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-lg flex items-center gap-2 text-amber-600">
                       <Calendar className="h-5 w-5" />
-                      Due Today ({preventativeDueToday.length})
+                      Due Today (<span data-testid="text-preventative-duetoday-count">{preventativeDueToday.length}</span>)
                     </CardTitle>
                     <CardDescription>These items are scheduled for today</CardDescription>
                   </CardHeader>
@@ -628,6 +629,7 @@ export default function FosterPortalPage() {
                             src={item.animal.photoUrls[0]}
                             alt={item.animal.name}
                             className="w-10 h-10 rounded-full object-cover"
+                            data-testid={`img-animal-${item.record.id}`}
                           />
                         ) : (
                           <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
@@ -636,16 +638,16 @@ export default function FosterPortalPage() {
                         )}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <span className="font-medium">{item.animal.name}</span>
+                            <span className="font-medium" data-testid={`text-animal-name-${item.record.id}`}>{item.animal.name}</span>
                             {item.record.isCore && (
                               <Star className="h-3 w-3 text-amber-500 fill-amber-500" />
                             )}
                           </div>
-                          <div className="text-sm text-muted-foreground">
+                          <div className="text-sm text-muted-foreground" data-testid={`text-care-name-${item.record.id}`}>
                             {item.record.careName}
                           </div>
                         </div>
-                        <Badge variant="outline" className="border-amber-500 text-amber-600">
+                        <Badge variant="outline" className="border-amber-500 text-amber-600" data-testid={`badge-due-${item.record.id}`}>
                           Today
                         </Badge>
                       </div>
@@ -655,11 +657,11 @@ export default function FosterPortalPage() {
               )}
 
               {preventativeComingSoon.length > 0 && (
-                <Card>
+                <Card data-testid="preventative-comingsoon-section">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-lg flex items-center gap-2">
                       <Clock className="h-5 w-5" />
-                      Coming Soon ({preventativeComingSoon.length})
+                      Coming Soon (<span data-testid="text-preventative-comingsoon-count">{preventativeComingSoon.length}</span>)
                     </CardTitle>
                     <CardDescription>Upcoming preventative care in the next 7 days</CardDescription>
                   </CardHeader>
@@ -675,6 +677,7 @@ export default function FosterPortalPage() {
                             src={item.animal.photoUrls[0]}
                             alt={item.animal.name}
                             className="w-10 h-10 rounded-full object-cover"
+                            data-testid={`img-animal-${item.record.id}`}
                           />
                         ) : (
                           <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
@@ -683,16 +686,16 @@ export default function FosterPortalPage() {
                         )}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <span className="font-medium">{item.animal.name}</span>
+                            <span className="font-medium" data-testid={`text-animal-name-${item.record.id}`}>{item.animal.name}</span>
                             {item.record.isCore && (
                               <Star className="h-3 w-3 text-amber-500 fill-amber-500" />
                             )}
                           </div>
-                          <div className="text-sm text-muted-foreground">
+                          <div className="text-sm text-muted-foreground" data-testid={`text-care-name-${item.record.id}`}>
                             {item.record.careName}
                           </div>
                         </div>
-                        <Badge variant="secondary">
+                        <Badge variant="secondary" data-testid={`badge-due-${item.record.id}`}>
                           {format(new Date(item.record.nextDueDate), "MMM d")}
                         </Badge>
                       </div>

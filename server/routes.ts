@@ -24071,6 +24071,7 @@ Email: ${application.applicantEmail || ''}`
       const animalMap = new Map(myFosterAnimals.map(a => [a.animalId, a]));
 
       // Get all preventative care records for these animals that are due within 7 days or overdue
+      // Filter out records with null nextDueDate (one-time items already completed)
       const records = await db
         .select({
           id: preventativeCareRecords.id,
@@ -24086,21 +24087,43 @@ Email: ${application.applicantEmail || ''}`
         .where(and(
           eq(preventativeCareRecords.tenantId, req.tenant!.id),
           inArray(preventativeCareRecords.animalId, animalIds),
+          isNotNull(preventativeCareRecords.nextDueDate),
           lte(preventativeCareRecords.nextDueDate, futureDate)
         ))
         .orderBy(preventativeCareRecords.nextDueDate);
 
       // Categorize into overdue, due today, coming soon
-      const overdue: any[] = [];
-      const dueToday: any[] = [];
-      const comingSoon: any[] = [];
+      interface PreventativeCareItem {
+        record: {
+          id: string;
+          animalId: string;
+          careName: string;
+          careCategory: string;
+          nextDueDate: Date | null;
+          dateAdministered: Date | null;
+          isCore: boolean;
+        };
+        animal: {
+          id: string;
+          name: string;
+          species: string;
+          photoUrls: string[] | null;
+        };
+      }
+      
+      const overdue: PreventativeCareItem[] = [];
+      const dueToday: PreventativeCareItem[] = [];
+      const comingSoon: PreventativeCareItem[] = [];
 
       records.forEach(record => {
+        const animal = animalMap.get(record.animalId);
+        // Skip records where animal info is missing (shouldn't happen with inner join but be safe)
+        if (!animal) return;
+
         const dueDate = new Date(record.nextDueDate!);
         dueDate.setHours(0, 0, 0, 0);
-        const animal = animalMap.get(record.animalId);
 
-        const item = {
+        const item: PreventativeCareItem = {
           record: {
             id: record.id,
             animalId: record.animalId,
@@ -24111,10 +24134,10 @@ Email: ${application.applicantEmail || ''}`
             isCore: record.isCore,
           },
           animal: {
-            id: animal?.animalId,
-            name: animal?.animalName,
-            species: animal?.animalSpecies,
-            photoUrls: animal?.animalPhotoUrls,
+            id: animal.animalId,
+            name: animal.animalName,
+            species: animal.animalSpecies,
+            photoUrls: animal.animalPhotoUrls,
           },
         };
 
