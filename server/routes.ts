@@ -23801,6 +23801,239 @@ Email: ${application.applicantEmail || ''}`
   });
 
   /**
+   * GET /api/medical/doses/by-foster
+   * Get medication doses grouped by foster household (for staff view)
+   */
+  app.get('/api/medical/doses/by-foster', requireTenant, requireAuth, requireRole('admin', 'staff', 'board_member'), async (req, res, next) => {
+    try {
+      const { medicalDoses, medicalPrescriptions, animals, fosterAnimals, users } = await import('@shared/schema');
+      
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+
+      // Get all active foster assignments with their animals
+      const activeFosters = await db
+        .select({
+          fosterAssignmentId: fosterAnimals.id,
+          fosterId: fosterAnimals.fosterId,
+          fosterName: users.fullName,
+          fosterEmail: users.email,
+          fosterPhone: users.phone,
+          animalId: fosterAnimals.animalId,
+          animalName: animals.name,
+          animalSpecies: animals.species,
+          animalPhotoUrls: animals.photoUrls,
+        })
+        .from(fosterAnimals)
+        .innerJoin(users, eq(fosterAnimals.fosterId, users.id))
+        .innerJoin(animals, eq(fosterAnimals.animalId, animals.id))
+        .where(and(
+          eq(fosterAnimals.tenantId, req.tenant!.id),
+          eq(fosterAnimals.status, 'active')
+        ));
+
+      if (activeFosters.length === 0) {
+        return res.json({ fosterGroups: [] });
+      }
+
+      // Get all animal IDs that are in foster care
+      const fosterAnimalIds = activeFosters.map(f => f.animalId);
+
+      // Get all due/overdue doses for fostered animals
+      const doses = await db
+        .select({
+          id: medicalDoses.id,
+          prescriptionId: medicalDoses.prescriptionId,
+          dueDate: medicalDoses.dueDate,
+          status: medicalDoses.status,
+          givenAt: medicalDoses.givenAt,
+          notes: medicalDoses.notes,
+          medicationName: medicalPrescriptions.medicationName,
+          dosage: medicalPrescriptions.dosage,
+          route: medicalPrescriptions.route,
+          frequency: medicalPrescriptions.frequency,
+          isControlledSubstance: medicalPrescriptions.isControlledSubstance,
+          requiresRefill: medicalPrescriptions.requiresRefill,
+          animalId: medicalPrescriptions.animalId,
+        })
+        .from(medicalDoses)
+        .innerJoin(medicalPrescriptions, eq(medicalDoses.prescriptionId, medicalPrescriptions.id))
+        .where(and(
+          eq(medicalDoses.tenantId, req.tenant!.id),
+          eq(medicalDoses.status, 'due'),
+          inArray(medicalPrescriptions.animalId, fosterAnimalIds),
+          lt(medicalDoses.dueDate, tomorrow) // Due today or overdue
+        ))
+        .orderBy(medicalDoses.dueDate);
+
+      // Group doses by foster
+      const fosterMap = new Map<string, {
+        fosterId: string;
+        fosterName: string;
+        fosterEmail: string;
+        fosterPhone: string | null;
+        animals: Map<string, {
+          animalId: string;
+          animalName: string;
+          animalSpecies: string;
+          animalPhotoUrl: string | null;
+          doses: typeof doses;
+        }>;
+      }>();
+
+      // Initialize foster groups
+      for (const foster of activeFosters) {
+        if (!fosterMap.has(foster.fosterId)) {
+          fosterMap.set(foster.fosterId, {
+            fosterId: foster.fosterId,
+            fosterName: foster.fosterName,
+            fosterEmail: foster.fosterEmail,
+            fosterPhone: foster.fosterPhone,
+            animals: new Map(),
+          });
+        }
+        const fosterGroup = fosterMap.get(foster.fosterId)!;
+        if (!fosterGroup.animals.has(foster.animalId)) {
+          fosterGroup.animals.set(foster.animalId, {
+            animalId: foster.animalId,
+            animalName: foster.animalName,
+            animalSpecies: foster.animalSpecies,
+            animalPhotoUrl: foster.animalPhotoUrls?.[0] || null,
+            doses: [],
+          });
+        }
+      }
+
+      // Assign doses to their animals/fosters
+      for (const dose of doses) {
+        // Find the foster who has this animal
+        const fosterForAnimal = activeFosters.find(f => f.animalId === dose.animalId);
+        if (fosterForAnimal) {
+          const fosterGroup = fosterMap.get(fosterForAnimal.fosterId);
+          const animalGroup = fosterGroup?.animals.get(dose.animalId);
+          if (animalGroup) {
+            animalGroup.doses.push(dose);
+          }
+        }
+      }
+
+      // Convert to array format and filter out fosters with no doses
+      const fosterGroups = Array.from(fosterMap.values())
+        .map(foster => ({
+          fosterId: foster.fosterId,
+          fosterName: foster.fosterName,
+          fosterEmail: foster.fosterEmail,
+          fosterPhone: foster.fosterPhone,
+          animals: Array.from(foster.animals.values()).filter(a => a.doses.length > 0),
+          totalDoses: Array.from(foster.animals.values()).reduce((sum, a) => sum + a.doses.length, 0),
+        }))
+        .filter(f => f.totalDoses > 0)
+        .sort((a, b) => b.totalDoses - a.totalDoses); // Most doses first
+
+      res.json({ fosterGroups });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/foster-portal/medications
+   * Get consolidated medication view for the logged-in foster's animals
+   */
+  app.get('/api/foster-portal/medications', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { medicalDoses, medicalPrescriptions, animals, fosterAnimals } = await import('@shared/schema');
+      
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+
+      // Get all animals currently fostered by this user
+      const myFosterAnimals = await db
+        .select({
+          animalId: fosterAnimals.animalId,
+          animalName: animals.name,
+          animalSpecies: animals.species,
+          animalPhotoUrls: animals.photoUrls,
+        })
+        .from(fosterAnimals)
+        .innerJoin(animals, eq(fosterAnimals.animalId, animals.id))
+        .where(and(
+          eq(fosterAnimals.tenantId, req.tenant!.id),
+          eq(fosterAnimals.fosterId, req.user!.id),
+          eq(fosterAnimals.status, 'active')
+        ));
+
+      if (myFosterAnimals.length === 0) {
+        return res.json({ 
+          animals: [],
+          summary: { overdue: 0, dueToday: 0, completed: 0 }
+        });
+      }
+
+      const animalIds = myFosterAnimals.map(a => a.animalId);
+
+      // Get all doses for these animals (overdue and due today)
+      const allDoses = await db
+        .select({
+          id: medicalDoses.id,
+          prescriptionId: medicalDoses.prescriptionId,
+          dueDate: medicalDoses.dueDate,
+          status: medicalDoses.status,
+          givenAt: medicalDoses.givenAt,
+          notes: medicalDoses.notes,
+          medicationName: medicalPrescriptions.medicationName,
+          dosage: medicalPrescriptions.dosage,
+          route: medicalPrescriptions.route,
+          frequency: medicalPrescriptions.frequency,
+          prescriptionNotes: medicalPrescriptions.notes,
+          animalId: medicalPrescriptions.animalId,
+        })
+        .from(medicalDoses)
+        .innerJoin(medicalPrescriptions, eq(medicalDoses.prescriptionId, medicalPrescriptions.id))
+        .where(and(
+          eq(medicalDoses.tenantId, req.tenant!.id),
+          inArray(medicalPrescriptions.animalId, animalIds),
+          lt(medicalDoses.dueDate, tomorrow)
+        ))
+        .orderBy(medicalDoses.dueDate);
+
+      // Group doses by animal with overdue/due today categorization
+      const now = new Date();
+      const animalsWithMeds = myFosterAnimals.map(animal => {
+        const animalDoses = allDoses.filter(d => d.animalId === animal.animalId);
+        const overdue = animalDoses.filter(d => d.status === 'due' && new Date(d.dueDate) < today);
+        const dueToday = animalDoses.filter(d => d.status === 'due' && new Date(d.dueDate) >= today && new Date(d.dueDate) < tomorrow);
+        const completedToday = animalDoses.filter(d => d.status === 'given' && d.givenAt && new Date(d.givenAt) >= today);
+
+        return {
+          animalId: animal.animalId,
+          animalName: animal.animalName,
+          animalSpecies: animal.animalSpecies,
+          animalPhotoUrl: animal.animalPhotoUrls?.[0] || null,
+          overdue,
+          dueToday,
+          completedToday,
+        };
+      }).filter(a => a.overdue.length > 0 || a.dueToday.length > 0 || a.completedToday.length > 0);
+
+      // Calculate summary
+      const summary = {
+        overdue: animalsWithMeds.reduce((sum, a) => sum + a.overdue.length, 0),
+        dueToday: animalsWithMeds.reduce((sum, a) => sum + a.dueToday.length, 0),
+        completed: animalsWithMeds.reduce((sum, a) => sum + a.completedToday.length, 0),
+      };
+
+      res.json({ animals: animalsWithMeds, summary });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * PATCH /api/medical/doses/:doseId/administer
    * Mark a dose as administered
    */
