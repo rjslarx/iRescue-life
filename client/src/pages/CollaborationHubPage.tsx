@@ -71,6 +71,7 @@ import type {
   Animal,
   PendingTransfer,
   User as UserType,
+  PartnerOrganization,
 } from "@shared/schema";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
@@ -255,6 +256,13 @@ function CreateTransportDialog({
   onSuccess: () => void;
 }) {
   const { toast } = useToast();
+  const [selectedPartnerId, setSelectedPartnerId] = useState<string>("");
+  
+  const { data: partnerOrganizations = [] } = useQuery<PartnerOrganization[]>({
+    queryKey: ['/api/partner-organizations'],
+  });
+  
+  const activePartners = partnerOrganizations.filter(p => p.isActive);
   
   const form = useForm<TransportFormData>({
     resolver: zodResolver(transportFormSchema),
@@ -276,6 +284,26 @@ function CreateTransportDialog({
       notes: "",
     },
   });
+  
+  const handlePartnerSelect = (partnerId: string) => {
+    setSelectedPartnerId(partnerId);
+    
+    if (partnerId === "manual") {
+      form.setValue("partnerOrganizationName", "");
+      form.setValue("partnerContactName", "");
+      form.setValue("partnerContactEmail", "");
+      form.setValue("partnerContactPhone", "");
+      return;
+    }
+    
+    const partner = activePartners.find(p => p.id === partnerId);
+    if (partner) {
+      form.setValue("partnerOrganizationName", partner.name);
+      form.setValue("partnerContactName", partner.contactName || "");
+      form.setValue("partnerContactEmail", partner.contactEmail || "");
+      form.setValue("partnerContactPhone", partner.contactPhone || "");
+    }
+  };
 
   const createMutation = useMutation({
     mutationFn: async (data: TransportFormData) => {
@@ -457,24 +485,51 @@ function CreateTransportDialog({
             <Separator />
             <h4 className="font-medium">Partner Organization</h4>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <FormField
-                control={form.control}
-                name="partnerOrganizationName"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Organization Name</FormLabel>
-                    <FormControl>
-                      <Input 
-                        placeholder="Partner Rescue Name" 
-                        {...field} 
-                        data-testid="input-partner-org"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <FormLabel>Select Partner Organization</FormLabel>
+                <Select 
+                  value={selectedPartnerId} 
+                  onValueChange={handlePartnerSelect}
+                >
+                  <SelectTrigger data-testid="select-partner-org">
+                    <SelectValue placeholder="Choose from your partners or enter manually" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="manual">Enter manually</SelectItem>
+                    {activePartners.map((partner) => (
+                      <SelectItem key={partner.id} value={partner.id}>
+                        {partner.name}
+                        {partner.city && partner.state && ` - ${partner.city}, ${partner.state}`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {activePartners.length === 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    No partner organizations found. <Link href="/dashboard/partner-organizations" className="text-primary hover:underline">Add partners</Link> to enable quick selection.
+                  </p>
                 )}
-              />
+              </div>
+              
+              <div className="grid gap-4 md:grid-cols-2">
+                <FormField
+                  control={form.control}
+                  name="partnerOrganizationName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Organization Name</FormLabel>
+                      <FormControl>
+                        <Input 
+                          placeholder="Partner Rescue Name" 
+                          {...field} 
+                          data-testid="input-partner-org"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
               <FormField
                 control={form.control}
@@ -530,6 +585,7 @@ function CreateTransportDialog({
                   </FormItem>
                 )}
               />
+              </div>
             </div>
 
             <Separator />
