@@ -24709,7 +24709,19 @@ Email: ${application.applicantEmail || ''}`
       // For animals that are active (not adopted/deceased)
       const records = await db
         .select({
-          record: preventativeCareRecords,
+          record: {
+            id: preventativeCareRecords.id,
+            tenantId: preventativeCareRecords.tenantId,
+            animalId: preventativeCareRecords.animalId,
+            careTypeId: preventativeCareRecords.careTypeId,
+            careName: preventativeCareRecords.careName,
+            careCategory: preventativeCareRecords.careCategory,
+            dateAdministered: preventativeCareRecords.dateAdministered,
+            nextDueDate: preventativeCareRecords.nextDueDate,
+            notes: preventativeCareRecords.notes,
+            createdBy: preventativeCareRecords.createdBy,
+            createdAt: preventativeCareRecords.createdAt,
+          },
           animal: {
             id: animals.id,
             name: animals.name,

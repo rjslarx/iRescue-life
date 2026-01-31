@@ -35,6 +35,21 @@ The platform includes comprehensive animal, application, and financial managemen
 - **Stripe Embedded Components:** The Finance page uses Stripe Connect Embedded Components for secure display of transactions, payouts, and balance information directly from Stripe. A backend endpoint provides Account Session client secrets. The "Paw Pay" platform fee system uses Stripe Connect with a "SaaS + 0%" two-tier model and a 14-day Pro trial. "Donor Covers Fees" feature calculates gross-up amounts. Sensitive data is protected with AES-256-GCM encryption.
 - **Animal Photo URL Validation:** Backend validates that animal photo URLs are proper object storage paths (starting with `/objects/` or `objects/`). External URLs like Google Drive links are rejected with a user-friendly error message directing users to upload photos directly. Applied to animal creation, update, photos update, and surrender-to-animal conversion endpoints.
 - **Mobile Cloud Storage Detection:** The ObjectUploader component detects when users on mobile devices (iOS/Android) select photos from cloud storage services (Google Drive, iCloud) via the Files app instead of from their Camera Roll. These "reference files" contain URLs rather than actual image data. Both client-side and server-side detection provide helpful error messages directing users to select photos from their Camera Roll or Photos app instead.
+- **Preventative Care Backfill:** Bulk generation of missing core preventative care records for all active animals. POST /api/preventative-care/backfill-all scans animals by species, checks for existing records, and auto-creates missing tasks with proper due dates. Bordetella interval updated to 180 days per veterinarian recommendation.
+
+**CRITICAL Drizzle ORM Pattern:**
+When using dynamic imports (`await import('@shared/schema')`) in route handlers, ALWAYS use explicit field selection in Drizzle queries. Using `db.select()` without explicit fields or passing table references like `{ record: myTable }` causes `orderSelectedFields` errors. Always select fields explicitly:
+```typescript
+// CORRECT:
+const records = await db.select({
+  id: preventativeCareRecords.id,
+  name: preventativeCareRecords.careName,
+  // ... explicit fields
+}).from(preventativeCareRecords);
+
+// WRONG (causes orderSelectedFields error):
+const records = await db.select().from(preventativeCareRecords);
+```
 
 ## External Dependencies
 - **Stripe:** Payment processing for donations, adoption fees, subscriptions, and connected accounts.
