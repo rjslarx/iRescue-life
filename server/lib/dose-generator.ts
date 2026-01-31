@@ -24,9 +24,17 @@ export function generateDosesForPrescription(options: DoseGeneratorOptions): Gen
   const { prescription, tenant, tenantId } = options;
   
   const doses: GeneratedDose[] = [];
-  const doseStartDate = prescription.nextScheduledDose 
-    ? new Date(prescription.nextScheduledDose) 
-    : new Date(prescription.startDate);
+  const freq = prescription.frequency.toUpperCase();
+  
+  // For ONE TIME medications, always use startDate (when it was given)
+  // nextScheduledDose is just informational for when to schedule the next vet appointment
+  const isOneTime = freq === 'ONCE' || freq.includes('ONE TIME');
+  
+  const doseStartDate = isOneTime
+    ? new Date(prescription.startDate)  // One-time: use the date it was given
+    : (prescription.nextScheduledDose 
+        ? new Date(prescription.nextScheduledDose) 
+        : new Date(prescription.startDate));
   const start = doseStartDate;
   const end = prescription.endDate 
     ? new Date(prescription.endDate) 
@@ -48,7 +56,6 @@ export function generateDosesForPrescription(options: DoseGeneratorOptions): Gen
   // Parse frequency and determine dose generation strategy
   type DoseTimeSlot = { hour: number; minute: number };
   let doseTimes: DoseTimeSlot[] = [morningTime]; // Default: once daily at morning rounds
-  const freq = prescription.frequency.toUpperCase();
   
   // Determine if this is an interval-based frequency (days between doses)
   let intervalDays: number | null = null; // null means daily dosing with doseTimes array
