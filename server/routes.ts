@@ -248,12 +248,17 @@ function validatePhotoUrls(photoUrls: string[]): { valid: boolean; invalidUrls: 
   for (const url of photoUrls) {
     const trimmed = url.trim();
     
-    // Only allow object storage paths - strict positive validation
+    // Allow object storage paths
     if (trimmed.startsWith('/objects/') || trimmed.startsWith('objects/')) {
       continue;
     }
     
-    // All other values are invalid (external URLs, data URLs, relative paths, etc.)
+    // Allow Google Drive URLs (for tenants using Google Drive storage)
+    if (trimmed.includes('drive.google.com') || trimmed.includes('googleusercontent.com')) {
+      continue;
+    }
+    
+    // All other values are invalid (random external URLs, data URLs, relative paths, etc.)
     invalidUrls.push(trimmed);
   }
   
@@ -6053,20 +6058,17 @@ Crawl-delay: 1
 
           // Upload each file using TenantFileStorage (Google Drive or Replit)
           for (const file of files) {
-            // Detect potential cloud storage references (shortcuts/links from iOS/Android)
-            // These are typically very small files that contain URLs instead of actual image data
-            const fileContent = file.buffer.toString('utf8', 0, Math.min(200, file.buffer.length));
-            const isLikelyCloudRef = 
-              (file.buffer.length < 2048 && // Less than 2KB is too small for a real image
-               (file.originalname.toLowerCase().includes('drivesdk') ||
-                file.originalname.toLowerCase().includes('gdrive') ||
-                fileContent.includes('drive.google.com') ||
-                fileContent.includes('docs.google.com')));
+            // Detect mobile cloud storage reference files (shortcuts from iOS/Android Files app)
+            // Only trigger for files with explicit mobile SDK patterns in filename AND tiny size
+            const filename = file.originalname.toLowerCase();
+            const isMobileCloudRef = 
+              file.buffer.length < 1024 && // Less than 1KB (real images are larger)
+              (filename.includes('drivesdk') || filename.includes('_gdrive'));
             
-            if (isLikelyCloudRef) {
-              console.warn(`Detected cloud reference file: ${file.originalname}, size: ${file.buffer.length} bytes`);
+            if (isMobileCloudRef) {
+              console.warn(`Detected mobile cloud reference: ${file.originalname}, size: ${file.buffer.length} bytes`);
               return res.status(400).json({ 
-                error: 'It looks like you selected a file from cloud storage (like Google Drive or iCloud). Please select photos directly from your Camera Roll or Photos app instead.',
+                error: 'It looks like you selected a file from cloud storage. Please select photos directly from your Camera Roll or Photos app instead.',
                 isCloudReference: true
               });
             }
