@@ -3245,13 +3245,13 @@ Crawl-delay: 1
         fosterCount,
         volunteerCount,
       ] = await Promise.all([
-        // Surrender requests - only active pipeline statuses (exclude 'intaken' and 'denied')
+        // Surrender requests - only active pipeline statuses (exclude 'intaken' and 'declined')
         db.select({ count: count() })
           .from(surrenderRequestsTable)
           .where(
             and(
               eq(surrenderRequestsTable.tenantId, req.tenant!.id),
-              notInArray(surrenderRequestsTable.status, ['intaken', 'denied'])
+              notInArray(surrenderRequestsTable.status, ['intaken', 'declined'])
             )
           ),
         
