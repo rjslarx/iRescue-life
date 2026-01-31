@@ -258,11 +258,11 @@ function CreateTransportDialog({
   const { toast } = useToast();
   const [selectedPartnerId, setSelectedPartnerId] = useState<string>("");
   
-  const { data: partnerOrganizations = [] } = useQuery<PartnerOrganization[]>({
+  const { data: partnerOrgsResponse } = useQuery<{ organizations: PartnerOrganization[] }>({
     queryKey: ['/api/partner-organizations'],
   });
   
-  const activePartners = partnerOrganizations.filter(p => p.isActive);
+  const activePartners = (partnerOrgsResponse?.organizations || []).filter(p => p.isActive);
   
   const form = useForm<TransportFormData>({
     resolver: zodResolver(transportFormSchema),
@@ -319,6 +319,7 @@ function CreateTransportDialog({
       queryClient.invalidateQueries({ queryKey: ['/api/transport/events'] });
       queryClient.invalidateQueries({ queryKey: ['/api/transport/stats'] });
       form.reset();
+      setSelectedPartnerId("");
       onSuccess();
       onOpenChange(false);
     },
