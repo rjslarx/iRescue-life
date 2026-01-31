@@ -329,7 +329,12 @@ function AnimalForm({
 
   useEffect(() => {
     if (initialData?.photoUrls) {
-      setUploadedPhotos(initialData.photoUrls);
+      // Filter out legacy invalid photo URLs (external links like Google Drive)
+      // Only keep object storage paths that start with /objects/ or objects/
+      const validPhotos = initialData.photoUrls.filter(url => 
+        url.startsWith('/objects/') || url.startsWith('objects/')
+      );
+      setUploadedPhotos(validPhotos);
     }
   }, [initialData, setUploadedPhotos]);
 
@@ -1778,7 +1783,12 @@ export default function AnimalsPage() {
   const handleEditAnimal = (animal: Animal) => {
     setEditingAnimal(animal);
     setOriginalEditStatus(animal.status); // Store original status
-    setEditUploadedPhotos(animal.photoUrls || []);
+    // Filter out legacy invalid photo URLs (external links like Google Drive)
+    // Only keep object storage paths that start with /objects/ or objects/
+    const validPhotos = (animal.photoUrls || []).filter(url => 
+      url.startsWith('/objects/') || url.startsWith('objects/')
+    );
+    setEditUploadedPhotos(validPhotos);
     setEditDialogOpen(true);
   };
 
