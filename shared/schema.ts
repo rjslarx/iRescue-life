@@ -2611,6 +2611,25 @@ export const insertPagePermissionSchema = createInsertSchema(pagePermissions).om
 export type InsertPagePermission = z.infer<typeof insertPagePermissionSchema>;
 export type PagePermission = typeof pagePermissions.$inferSelect;
 
+// User Page Permissions - Grant specific page access to individual users (beyond their role)
+export const userPagePermissions = pgTable("user_page_permissions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  pageId: text("page_id").notNull(), // e.g., "volunteer-applications", "animals", etc.
+  grantedBy: uuid("granted_by").references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  uniqueUserPagePerTenant: unique().on(table.tenantId, table.userId, table.pageId),
+}));
+
+export const insertUserPagePermissionSchema = createInsertSchema(userPagePermissions).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertUserPagePermission = z.infer<typeof insertUserPagePermissionSchema>;
+export type UserPagePermission = typeof userPagePermissions.$inferSelect;
+
 // OAuth States - Secure server-side storage for OAuth nonces (prevents CSRF/state forgery attacks)
 export const oauthStates = pgTable("oauth_states", {
   id: uuid("id").primaryKey().defaultRandom(),

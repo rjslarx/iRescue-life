@@ -10,6 +10,12 @@ interface PagePermission {
   isActive: boolean;
 }
 
+interface UserPagePermission {
+  id: string;
+  pageId: string;
+  createdAt: string;
+}
+
 // Default permissions when no database records exist
 // These provide sensible fallbacks for each role
 const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
@@ -26,14 +32,22 @@ const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
 export function usePagePermissions() {
   const { user } = useAuth();
   
-  // Fetch all page permissions for the tenant
-  const { data: permissionsData, isLoading } = useQuery<{ pagePermissions: PagePermission[] }>({
+  // Fetch all page permissions for the tenant (role-based)
+  const { data: permissionsData, isLoading: isLoadingRolePermissions } = useQuery<{ pagePermissions: PagePermission[] }>({
     queryKey: ['/api/page-permissions'],
     enabled: !!user, // Only fetch if user is logged in
   });
 
+  // Fetch user-specific page permissions
+  const { data: userPermissionsData, isLoading: isLoadingUserPermissions } = useQuery<{ permissions: UserPagePermission[] }>({
+    queryKey: ['/api/user-page-permissions/me'],
+    enabled: !!user, // Only fetch if user is logged in
+  });
+
   const permissions = permissionsData?.pagePermissions || [];
+  const userPermissions = userPermissionsData?.permissions || [];
   const userRole = user?.activeRole;
+  const isLoading = isLoadingRolePermissions || isLoadingUserPermissions;
 
   /**
    * Check if the current user can access a specific page
@@ -53,6 +67,11 @@ export function usePagePermissions() {
 
     // Admin and owner roles always have access to all pages
     if (userRole === 'admin' || userRole === 'owner') {
+      return true;
+    }
+
+    // Check user-specific permissions first (grants access beyond role)
+    if (userPermissions.some(p => p.pageId === pageId)) {
       return true;
     }
 
@@ -85,29 +104,35 @@ export function usePagePermissions() {
       return [];
     }
 
+    // Start with user-specific granted permissions
+    const accessiblePages = new Set<string>(userPermissions.map(p => p.pageId));
+
     // Platform admin, admin, and owner have access to all pages
     if (userRole === 'platform_admin' || userRole === 'admin' || userRole === 'owner') {
       // Return all known page IDs
-      const allPageIds = new Set(permissions.map(p => p.pageId));
-      Object.values(DEFAULT_ROLE_PERMISSIONS).flat().forEach(p => allPageIds.add(p));
-      return Array.from(allPageIds);
+      permissions.forEach(p => accessiblePages.add(p.pageId));
+      Object.values(DEFAULT_ROLE_PERMISSIONS).flat().forEach(p => accessiblePages.add(p));
+      return Array.from(accessiblePages);
     }
 
     // If permissions table has records, use database permissions only
     if (permissions.length > 0) {
-      return permissions
+      permissions
         .filter(p => p.isActive && p.allowedRoles.includes(userRole as any))
-        .map(p => p.pageId);
+        .forEach(p => accessiblePages.add(p.pageId));
+      return Array.from(accessiblePages);
     }
 
     // No database permissions configured - use defaults for this role
-    return DEFAULT_ROLE_PERMISSIONS[userRole] || [];
+    (DEFAULT_ROLE_PERMISSIONS[userRole] || []).forEach(p => accessiblePages.add(p));
+    return Array.from(accessiblePages);
   };
 
   return {
     canAccessPage,
     getAccessiblePages,
     permissions,
+    userPermissions,
     isLoading,
   };
 }

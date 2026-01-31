@@ -38,7 +38,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Loader2, UserPlus, Shield, Users as UsersIcon, Trash2, Mail, Clock, Send, Pencil, UserCheck, Copy } from "lucide-react";
+import { Loader2, UserPlus, Shield, Users as UsersIcon, Trash2, Mail, Clock, Send, Pencil, UserCheck, Copy, KeyRound } from "lucide-react";
+import { UserPagePermissionsManager } from "@/components/UserPagePermissionsManager";
 
 interface User {
   id: string;
@@ -769,6 +770,17 @@ export default function TeamManagementPage() {
                                       </div>
                                     )}
                                   </div>
+
+                                  <div className="border-t pt-4">
+                                    <Label className="text-base font-medium flex items-center gap-2">
+                                      <KeyRound className="h-4 w-4" />
+                                      Additional Page Access
+                                    </Label>
+                                    <UserPagePermissionsManager 
+                                      userId={user.id} 
+                                      userRoles={user.roles}
+                                    />
+                                  </div>
                                 </div>
                               </DialogContent>
                             </Dialog>
@@ -919,6 +931,17 @@ export default function TeamManagementPage() {
                                               ))}
                                             </div>
                                           )}
+                                        </div>
+
+                                        <div className="border-t pt-4">
+                                          <Label className="text-base font-medium flex items-center gap-2">
+                                            <KeyRound className="h-4 w-4" />
+                                            Additional Page Access
+                                          </Label>
+                                          <UserPagePermissionsManager 
+                                            userId={user.id} 
+                                            userRoles={user.roles}
+                                          />
                                         </div>
                                       </div>
                                     </DialogContent>

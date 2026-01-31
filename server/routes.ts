@@ -27782,6 +27782,139 @@ Email: ${application.applicantEmail || ''}`
   });
 
   // ============================================================================
+  // USER PAGE PERMISSIONS - Individual user permission grants
+  // ============================================================================
+
+  /**
+   * GET /api/user-page-permissions/:userId
+   * Get all page permissions granted to a specific user
+   */
+  app.get('/api/user-page-permissions/:userId', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+    try {
+      const { userPagePermissions } = await import('@shared/schema');
+      
+      const permissions = await db
+        .select({
+          id: userPagePermissions.id,
+          pageId: userPagePermissions.pageId,
+          grantedBy: userPagePermissions.grantedBy,
+          createdAt: userPagePermissions.createdAt,
+        })
+        .from(userPagePermissions)
+        .where(and(
+          eq(userPagePermissions.tenantId, req.tenant!.id),
+          eq(userPagePermissions.userId, req.params.userId)
+        ));
+
+      res.json({ permissions });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/user-page-permissions/me
+   * Get all page permissions granted to the current user
+   */
+  app.get('/api/user-page-permissions/me', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { userPagePermissions } = await import('@shared/schema');
+      
+      const permissions = await db
+        .select({
+          id: userPagePermissions.id,
+          pageId: userPagePermissions.pageId,
+          createdAt: userPagePermissions.createdAt,
+        })
+        .from(userPagePermissions)
+        .where(and(
+          eq(userPagePermissions.tenantId, req.tenant!.id),
+          eq(userPagePermissions.userId, req.user!.id)
+        ));
+
+      res.json({ permissions });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/user-page-permissions
+   * Grant a page permission to a user (admin only)
+   */
+  app.post('/api/user-page-permissions', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+    try {
+      const { userPagePermissions, users } = await import('@shared/schema');
+      
+      const schema = z.object({
+        userId: z.string().uuid(),
+        pageId: z.string(),
+      });
+
+      const data = schema.parse(req.body);
+
+      // Verify user exists and belongs to tenant
+      const [targetUser] = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(and(
+          eq(users.id, data.userId),
+          eq(users.tenantId, req.tenant!.id)
+        ));
+
+      if (!targetUser) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      const [permission] = await db
+        .insert(userPagePermissions)
+        .values({
+          tenantId: req.tenant!.id,
+          userId: data.userId,
+          pageId: data.pageId,
+          grantedBy: req.user!.id,
+        })
+        .onConflictDoNothing()
+        .returning();
+
+      if (!permission) {
+        return res.status(409).json({ error: 'Permission already granted' });
+      }
+
+      res.status(201).json({ permission });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * DELETE /api/user-page-permissions/:userId/:pageId
+   * Revoke a page permission from a user (admin only)
+   */
+  app.delete('/api/user-page-permissions/:userId/:pageId', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+    try {
+      const { userPagePermissions } = await import('@shared/schema');
+      
+      const [deleted] = await db
+        .delete(userPagePermissions)
+        .where(and(
+          eq(userPagePermissions.tenantId, req.tenant!.id),
+          eq(userPagePermissions.userId, req.params.userId),
+          eq(userPagePermissions.pageId, req.params.pageId)
+        ))
+        .returning();
+
+      if (!deleted) {
+        return res.status(404).json({ error: 'Permission not found' });
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // ============================================================================
   // VOLUNTEER OPPORTUNITIES - Opportunity posting and signup management
   // ============================================================================
 
