@@ -26621,7 +26621,7 @@ Email: ${application.applicantEmail || ''}`
           applicantEmail: volunteerSignups.applicantEmail,
           applicantPhone: volunteerSignups.applicantPhone,
           customResponses: volunteerSignups.customResponses,
-          userName: users.name,
+          userName: users.fullName,
           userEmail: users.email,
         })
         .from(volunteerSignups)
@@ -26653,7 +26653,7 @@ Email: ${application.applicantEmail || ''}`
           customResponses: volunteerSignups.customResponses,
           opportunityId: volunteerSignups.opportunityId,
           opportunityTitle: volunteerOpportunities.title,
-          userName: users.name,
+          userName: users.fullName,
           userEmail: users.email,
         })
         .from(volunteerSignups)
