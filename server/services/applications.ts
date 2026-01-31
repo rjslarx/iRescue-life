@@ -4,9 +4,10 @@ import { eq, and, desc } from 'drizzle-orm';
 
 /**
  * Get all applications for a tenant
+ * Returns animal as nested object { id, name } for frontend compatibility
  */
 export async function getApplicationsByTenant(tenantId: string) {
-  return db
+  const results = await db
     .select({
       id: applications.id,
       tenantId: applications.tenantId,
@@ -18,6 +19,7 @@ export async function getApplicationsByTenant(tenantId: string) {
       stage: applications.stage,
       notes: applications.notes,
       customResponses: applications.customResponses,
+      smsConsent: applications.smsConsent,
       createdAt: applications.createdAt,
       updatedAt: applications.updatedAt,
     })
@@ -25,6 +27,24 @@ export async function getApplicationsByTenant(tenantId: string) {
     .leftJoin(animals, eq(applications.animalId, animals.id))
     .where(eq(applications.tenantId, tenantId))
     .orderBy(desc(applications.createdAt));
+  
+  // Transform to include animal as nested object for frontend compatibility
+  return results.map(app => ({
+    id: app.id,
+    tenantId: app.tenantId,
+    animalId: app.animalId,
+    applicantName: app.applicantName,
+    applicantEmail: app.applicantEmail,
+    applicantPhone: app.applicantPhone,
+    stage: app.stage,
+    notes: app.notes,
+    customResponses: app.customResponses,
+    smsConsent: app.smsConsent,
+    createdAt: app.createdAt,
+    updatedAt: app.updatedAt,
+    // Provide animal as nested object { id, name } for frontend
+    animal: app.animalId && app.animalName ? { id: app.animalId, name: app.animalName } : undefined,
+  }));
 }
 
 /**
