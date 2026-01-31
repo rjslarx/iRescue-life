@@ -5690,7 +5690,13 @@ Crawl-delay: 1
       }
       
       res.json({ success: true, animal });
-    } catch (error) {
+    } catch (error: any) {
+      // Handle duplicate microchip number constraint violation
+      if (error?.code === '23505' && error?.constraint?.includes('microchip')) {
+        return res.status(400).json({ 
+          error: 'This microchip number is already registered to another animal. Please verify the microchip number is correct.' 
+        });
+      }
       next(error);
     }
   });
@@ -5778,7 +5784,13 @@ Crawl-delay: 1
       }
       
       res.json({ success: true, animal });
-    } catch (error) {
+    } catch (error: any) {
+      // Handle duplicate microchip number constraint violation
+      if (error?.code === '23505' && error?.constraint?.includes('microchip')) {
+        return res.status(400).json({ 
+          error: 'This microchip number is already registered to another animal. Please verify the microchip number is correct.' 
+        });
+      }
       next(error);
     }
   });
