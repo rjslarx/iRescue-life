@@ -422,6 +422,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
       title: "My Activities",
       items: [
         { title: "Calendar", url: "/dashboard/calendar", icon: Calendar },
+        { title: "Volunteer Pipeline", url: "/dashboard/volunteer-pipeline", icon: Kanban },
         { title: "Opportunities", url: "/dashboard/opportunities", icon: UserCircle },
         { title: "Today's Medications", url: "/dashboard/volunteer-medications", icon: Pill },
         { title: "Animals", url: "/dashboard/animals", icon: Heart, usesGoogleDrive: true },
@@ -466,6 +467,8 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
     '/dashboard/website-builder': 'custom-pages',
     '/dashboard/collaboration': 'collaboration',
     '/dashboard/tutorials': 'tutorials',
+    '/dashboard/volunteer-pipeline': 'volunteer-pipeline',
+    '/dashboard/foster-pipeline': 'foster-pipeline',
   };
 
   // Helper function to check if menu item should be shown
