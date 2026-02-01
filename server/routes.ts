@@ -4359,7 +4359,7 @@ Crawl-delay: 1
    */
   app.get('/api/users', requireTenant, requireAuth, requireRole('owner', 'admin', 'staff'), async (req, res, next) => {
     try {
-      const { users } = await import('@shared/schema');
+      const { users, contacts } = await import('@shared/schema');
       
       const userList = await db
         .select({
@@ -4367,10 +4367,11 @@ Crawl-delay: 1
           email: users.email,
           fullName: users.fullName,
           roles: users.roles,
-          phone: users.phone,
+          phone: sql<string | null>`COALESCE(${users.phone}, ${contacts.phone})`,
           createdAt: users.createdAt,
         })
         .from(users)
+        .leftJoin(contacts, eq(users.id, contacts.userId))
         .where(eq(users.tenantId, req.tenant!.id))
         .orderBy(desc(users.createdAt));
       
