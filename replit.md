@@ -53,6 +53,24 @@ const records = await db.select({
 const records = await db.select().from(preventativeCareRecords);
 ```
 
+**CRITICAL Wouter Navigation Pattern:**
+When using wouter's `Router` with `base={basePath}`, all `Link href` values and `setLocation()` calls must use **relative paths without the basePath prefix**. The Router's `base` prop automatically prefixes all routes, so adding basePath manually causes double-prefixing and 404 errors.
+
+```typescript
+// CORRECT - Use relative paths:
+<Link href="/dashboard/animals">Animals</Link>
+setLocation("/dashboard/calendar");
+
+// WRONG - Causes 404 due to double-prefixing:
+<Link href={`${basePath}/dashboard/animals`}>Animals</Link>
+setLocation(`${basePath}/dashboard/calendar`);
+```
+
+**Note:** `basePath` is still needed for non-navigation purposes like:
+- Route matching with `useRoute()`: `useRoute(`${basePath}/shop/:slug`)`
+- API calls that include tenant context
+- Building external URLs for sharing
+
 ## External Dependencies
 - **Stripe:** Payment processing for donations, adoption fees, subscriptions, and connected accounts.
 - **Resend:** Email delivery.
