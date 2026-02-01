@@ -61,7 +61,7 @@ export default function VolunteerSummaryWidget() {
           )}
         </div>
 
-        <Link href={`${basePath}/dashboard/volunteer-applications`}>
+        <Link href="/dashboard/volunteer-applications">
           <Button variant="ghost" size="sm" className="w-full" data-testid="link-view-volunteers">
             View Applications
             <ChevronRight className="h-4 w-4 ml-1" />

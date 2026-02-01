@@ -140,7 +140,7 @@ export function TemperatureWidget() {
               />
             ))}
             {readings.length > 4 && (
-              <Link href={`${basePath}/settings`}>
+              <Link href="/settings">
                 <Button variant="ghost" size="sm" className="w-full text-xs">
                   View all {readings.length} sensors
                 </Button>

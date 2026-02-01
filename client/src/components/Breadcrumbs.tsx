@@ -1,6 +1,5 @@
 import { Link } from "wouter";
 import { ChevronRight, Home } from "lucide-react";
-import { useTenant } from "@/contexts/TenantContext";
 
 interface BreadcrumbItem {
   label: string;
@@ -13,7 +12,6 @@ interface BreadcrumbsProps {
 }
 
 export default function Breadcrumbs({ items, showHome = true }: BreadcrumbsProps) {
-  const { basePath } = useTenant();
   return (
     <nav 
       className="flex items-center gap-2 text-sm text-muted-foreground"
@@ -22,7 +20,7 @@ export default function Breadcrumbs({ items, showHome = true }: BreadcrumbsProps
     >
       {showHome && (
         <>
-          <Link href={`${basePath}/dashboard`}>
+          <Link href="/dashboard">
             <a 
               className="flex items-center gap-1 hover:text-foreground transition-colors"
               data-testid="breadcrumb-home"
