@@ -81,7 +81,7 @@ export default function Dashboard() {
   const canViewFinance = canAccessPage('finance');
   const canViewIntake = canAccessPage('intake');
   
-  // Check if user has access to any pipeline tabs
+  // Check if user has access to any pipeline tabs (for pipeline widget rendering)
   // Include volunteer-pipeline as a separate permission for granular volunteer-only access
   const hasPipelineAccess = canViewApplications || canViewFosterManagement || canViewVolunteers || canViewVolunteerPipeline || canViewIntake;
   
@@ -99,7 +99,12 @@ export default function Dashboard() {
   const canViewDailyBriefing = canViewDashboard;
   
   // Check if user has some level of command center access (dashboard OR specific widget permissions)
-  const hasAnyCommandCenterAccess = canViewDashboard || canViewMedical || hasPipelineAccess || canViewAnalytics || canViewReports;
+  // NOTE: This is for dashboard widgets only - don't include standalone page access like 'volunteers' 
+  // which is a separate page volunteers can access but NOT a dashboard widget.
+  // hasPipelineAccess includes canViewVolunteers, but that gives access to the Volunteers PAGE,
+  // not the dashboard pipeline widget. We need canViewVolunteerPipeline for the pipeline widget.
+  const hasDashboardPipelineWidgetAccess = canViewApplications || canViewFosterManagement || canViewVolunteerPipeline || canViewIntake;
+  const hasAnyCommandCenterAccess = canViewDashboard || canViewMedical || hasDashboardPipelineWidgetAccess || canViewAnalytics || canViewReports;
 
   // Wouter navigation hook for redirects
   const [, setLocation] = useLocation();
