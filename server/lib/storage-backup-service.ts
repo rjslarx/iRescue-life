@@ -198,6 +198,11 @@ export class StorageBackupService {
         if (!animal.photos || animal.photos.length === 0) continue;
 
         for (const photoUrl of animal.photos) {
+          // Skip null/undefined/empty URLs
+          if (!photoUrl || typeof photoUrl !== 'string') {
+            continue;
+          }
+
           progress.filesScanned++;
 
           // Skip if already a Google Drive URL
@@ -278,7 +283,8 @@ export class StorageBackupService {
         ));
 
       for (const volunteer of volunteers) {
-        if (!volunteer.signedWaiverUrl) continue;
+        // Skip if signedWaiverUrl is null/undefined or not a string
+        if (!volunteer.signedWaiverUrl || typeof volunteer.signedWaiverUrl !== 'string') continue;
         progress.filesScanned++;
 
         // Skip if already in Google Drive
@@ -297,7 +303,8 @@ export class StorageBackupService {
           const volunteersFolder = await this.getOrCreateFolder(driveService, ROOT_FOLDERS.VOLUNTEERS);
           if (!volunteersFolder.success || !volunteersFolder.folderId) continue;
 
-          const volunteerFolderName = `${volunteer.name} (ID_${volunteer.id.substring(0, 8)})`;
+          const volunteerName = volunteer.name || 'Unknown';
+          const volunteerFolderName = `${volunteerName} (ID_${volunteer.id.substring(0, 8)})`;
           const volunteerFolder = await this.getOrCreateFolder(driveService, volunteerFolderName, volunteersFolder.folderId);
           if (!volunteerFolder.success || !volunteerFolder.folderId) continue;
 
@@ -308,11 +315,11 @@ export class StorageBackupService {
             volunteer.signedWaiverUrl,
             driveService,
             waiversFolder.folderId,
-            `Signed_Waiver_${volunteer.name}.pdf`,
+            `Signed_Waiver_${volunteerName}.pdf`,
             progress
           );
         } catch (error: any) {
-          progress.errors.push(`Failed to backup volunteer waiver for ${volunteer.name}: ${error.message}`);
+          progress.errors.push(`Failed to backup volunteer waiver for ${volunteerName}: ${error.message}`);
         }
       }
     } catch (error: any) {
@@ -342,7 +349,8 @@ export class StorageBackupService {
         ));
 
       for (const foster of fosters) {
-        if (!foster.signedAgreementUrl) continue;
+        // Skip if signedAgreementUrl is null/undefined or not a string
+        if (!foster.signedAgreementUrl || typeof foster.signedAgreementUrl !== 'string') continue;
         progress.filesScanned++;
 
         // Skip if already in Google Drive
@@ -356,12 +364,14 @@ export class StorageBackupService {
           continue;
         }
 
+        const fosterName = foster.name || 'Unknown';
+
         try {
           // Create foster folder if needed
           const fostersFolder = await this.getOrCreateFolder(driveService, ROOT_FOLDERS.FOSTERS);
           if (!fostersFolder.success || !fostersFolder.folderId) continue;
 
-          const fosterFolderName = `${foster.name} (ID_${foster.id.substring(0, 8)})`;
+          const fosterFolderName = `${fosterName} (ID_${foster.id.substring(0, 8)})`;
           const fosterFolder = await this.getOrCreateFolder(driveService, fosterFolderName, fostersFolder.folderId);
           if (!fosterFolder.success || !fosterFolder.folderId) continue;
 
@@ -372,11 +382,11 @@ export class StorageBackupService {
             foster.signedAgreementUrl,
             driveService,
             agreementsFolder.folderId,
-            `Signed_Agreement_${foster.name}.pdf`,
+            `Signed_Agreement_${fosterName}.pdf`,
             progress
           );
         } catch (error: any) {
-          progress.errors.push(`Failed to backup foster agreement for ${foster.name}: ${error.message}`);
+          progress.errors.push(`Failed to backup foster agreement for ${fosterName}: ${error.message}`);
         }
       }
     } catch (error: any) {
@@ -413,7 +423,8 @@ export class StorageBackupService {
       if (!receiptsFolder.success || !receiptsFolder.folderId) return;
 
       for (const donation of donationList) {
-        if (!donation.receiptUrl) continue;
+        // Skip if receiptUrl is null/undefined or not a string
+        if (!donation.receiptUrl || typeof donation.receiptUrl !== 'string') continue;
         progress.filesScanned++;
 
         // Skip if already in Google Drive
@@ -510,6 +521,11 @@ export class StorageBackupService {
     subfolder: string,
     progress: BackupProgress
   ): Promise<void> {
+    // Validate objectUrl before processing
+    if (!objectUrl || typeof objectUrl !== 'string') {
+      throw new Error('Invalid object URL: null or undefined');
+    }
+
     try {
       // Determine target folder based on animal status
       const isAdopted = animal.status === 'adopted';
@@ -521,7 +537,8 @@ export class StorageBackupService {
         throw new Error('Failed to get root folder');
       }
 
-      const animalFolderName = `${animal.name.replace(/[<>:"/\\|?*]/g, '_')} (ID_${animal.id.substring(0, 8)})`;
+      const animalName = animal.name || 'Unknown';
+      const animalFolderName = `${animalName.replace(/[<>:"/\\|?*]/g, '_')} (ID_${animal.id.substring(0, 8)})`;
       const animalFolder = await this.getOrCreateFolder(driveService, animalFolderName, rootFolderResult.folderId);
       if (!animalFolder.success || !animalFolder.folderId) {
         throw new Error('Failed to create animal folder');
@@ -553,6 +570,11 @@ export class StorageBackupService {
     fileName: string,
     progress: BackupProgress
   ): Promise<void> {
+    // Validate objectUrl before processing
+    if (!objectUrl || typeof objectUrl !== 'string') {
+      throw new Error('Invalid object URL: null or undefined');
+    }
+
     try {
       // Check if file already exists in the folder (deduplication)
       const exists = await this.fileExistsInFolder(driveService, fileName, folderId);
@@ -649,6 +671,9 @@ export class StorageBackupService {
    * Generate a simple hash of a string (for deterministic filenames)
    */
   private hashString(str: string): string {
+    if (!str || typeof str !== 'string') {
+      return 'unknown';
+    }
     let hash = 0;
     for (let i = 0; i < str.length; i++) {
       const char = str.charCodeAt(i);
@@ -662,6 +687,9 @@ export class StorageBackupService {
    * Get file extension from a URL
    */
   private getExtensionFromUrl(url: string): string {
+    if (!url || typeof url !== 'string') {
+      return 'jpg';
+    }
     const match = url.match(/\.([a-zA-Z0-9]+)(?:\?|$)/);
     return match ? match[1].toLowerCase() : 'jpg';
   }
