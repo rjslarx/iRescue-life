@@ -18996,6 +18996,16 @@ Submitted: ${new Date().toLocaleString()}
             }).returning();
             
             console.log(`[STRIPE-WEBHOOK] Created donation record ${donationRecord.id} for Finance page, donor: ${customerName}, amount: ${session.amount_total / 100}`);
+            
+            // Create or update contact record for the donor
+            try {
+              const { createContactFromDonation } = await import('./services/contacts');
+              if (customerEmail) { await createContactFromDonation(tenant.id, customerName, customerEmail, (session.amount_total || 0) / 100); }
+              console.log(`[STRIPE-WEBHOOK] Created/updated contact for donor: ${customerEmail}`);
+            } catch (contactError) {
+              console.error('[STRIPE-WEBHOOK] Failed to create contact from donation:', contactError);
+              // Don't fail the webhook if contact creation fails
+            }
           }
 
           // Send appropriate email based on payment status
@@ -19186,6 +19196,15 @@ Submitted: ${new Date().toLocaleString()}
               })
               .where(eq(donors.id, donor.id));
 
+            // Create or update contact record for the recurring donor
+            try {
+              const { createContactFromDonation } = await import('./services/contacts');
+              if (donor.email) { await createContactFromDonation(tenant.id, donor.name, donor.email, invoice.amount_paid / 100); }
+              console.log(`[Webhook] Created/updated contact for recurring donor: ${donor.email}`);
+            } catch (contactError) {
+              console.error('[Webhook] Failed to create contact from recurring donation:', contactError);
+            }
+
             // Send thank-you email for recurring payment
             try {
               const { EmailService } = await import('./lib/email-service');
@@ -19296,6 +19315,15 @@ Submitted: ${new Date().toLocaleString()}
                   lastDonationDate: new Date(),
                 })
                 .where(eq(donors.id, donor.id));
+
+              // Create or update contact record for the donor
+              try {
+                const { createContactFromDonation } = await import('./services/contacts');
+                if (donor.email) { await createContactFromDonation(tenant.id, donor.name, donor.email, updatedPayment.amount / 100); }
+                console.log(`[Webhook] Created/updated contact for ACH donor: ${donor.email}`);
+              } catch (contactError) {
+                console.error('[Webhook] Failed to create contact from ACH donation:', contactError);
+              }
 
               // Send thank-you email now that ACH payment cleared
               try {
