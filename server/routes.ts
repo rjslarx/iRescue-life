@@ -21147,6 +21147,7 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
             canEdit: calendarPermissions.canEdit,
             canAdd: calendarPermissions.canAdd,
             canDelete: calendarPermissions.canDelete,
+            canAssignOthers: calendarPermissions.canAssignOthers,
           })
           .from(calendarPermissions)
           .where(and(
@@ -21161,6 +21162,7 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
             canEdit: calendarRolePermissions.canEdit,
             canAdd: calendarRolePermissions.canAdd,
             canDelete: calendarRolePermissions.canDelete,
+            canAssignOthers: calendarRolePermissions.canAssignOthers,
           })
           .from(calendarRolePermissions)
           .where(and(
@@ -21169,7 +21171,7 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
           ));
         
         // Build permission map - merge user and role permissions (user permissions take precedence, then OR with role permissions)
-        const permissionMap = new Map<string, { canEdit: boolean; canAdd: boolean; canDelete: boolean }>();
+        const permissionMap = new Map<string, { canEdit: boolean; canAdd: boolean; canDelete: boolean; canAssignOthers: boolean }>();
         
         // First add role permissions
         for (const perm of rolePermissions) {
@@ -21179,6 +21181,7 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
               canEdit: existing.canEdit || perm.canEdit,
               canAdd: existing.canAdd || perm.canAdd,
               canDelete: existing.canDelete || perm.canDelete,
+              canAssignOthers: existing.canAssignOthers || perm.canAssignOthers,
             });
           } else {
             permissionMap.set(perm.calendarId, {
@@ -21197,12 +21200,14 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
               canEdit: existing.canEdit || perm.canEdit,
               canAdd: existing.canAdd || perm.canAdd,
               canDelete: existing.canDelete || perm.canDelete,
+              canAssignOthers: existing.canAssignOthers || perm.canAssignOthers,
             });
           } else {
             permissionMap.set(perm.calendarId, {
               canEdit: perm.canEdit,
               canAdd: perm.canAdd,
               canDelete: perm.canDelete,
+              canAssignOthers: perm.canAssignOthers,
             });
           }
         }
@@ -21215,6 +21220,7 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
             canEdit: perms?.canEdit ?? false,
             canAdd: perms?.canAdd ?? false,
             canDelete: perms?.canDelete ?? false,
+            canAssignOthers: perms?.canAssignOthers ?? false,
           };
         });
         
@@ -21227,6 +21233,7 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
         canEdit: true,
         canAdd: true,
         canDelete: true,
+        canAssignOthers: true,
       }));
 
       res.json({ calendars: calendarsWithPermissions });
@@ -22047,6 +22054,7 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
           canEdit: calendarPermissions.canEdit,
           canAdd: calendarPermissions.canAdd,
           canDelete: calendarPermissions.canDelete,
+            canAssignOthers: calendarPermissions.canAssignOthers,
           userName: users.fullName,
           userEmail: users.email,
         })
