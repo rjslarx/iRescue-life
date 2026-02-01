@@ -295,24 +295,27 @@ export default function PipelineManager({ activeTab, onTabChange, permissions }:
     onTabChange?.(tab);
   };
 
+  // Standard admin/staff roles that always have access
+  const hasAdminLikeRole = !!user && ['admin', 'owner', 'board_member', 'staff', 'intake_coordinator'].includes(user.activeRole || '');
+  
   const { data: adoptionsData, isLoading: adoptionsLoading } = useQuery<{ applications: AdoptionApplication[] }>({
     queryKey: ['/api/applications'],
-    enabled: !!user && ['admin', 'owner', 'board_member', 'staff', 'intake_coordinator'].includes(user.activeRole || ''),
+    enabled: hasAdminLikeRole || canViewAdoptions,
   });
 
   const { data: fostersData, isLoading: fostersLoading } = useQuery<{ applications: FosterApplication[] }>({
     queryKey: ['/api/foster-applications'],
-    enabled: !!user && ['admin', 'owner', 'board_member', 'staff', 'intake_coordinator'].includes(user.activeRole || ''),
+    enabled: hasAdminLikeRole || canViewFosters,
   });
 
   const { data: volunteersData, isLoading: volunteersLoading } = useQuery<{ applications: VolunteerApplication[] }>({
     queryKey: ['/api/volunteer-applications'],
-    enabled: !!user && ['admin', 'owner', 'board_member', 'staff', 'intake_coordinator'].includes(user.activeRole || ''),
+    enabled: hasAdminLikeRole || canViewVolunteers,
   });
 
   const { data: intakes, isLoading: intakesLoading } = useQuery<SurrenderRequest[]>({
     queryKey: ['/api/surrender-requests'],
-    enabled: !!user && ['admin', 'owner', 'board_member', 'staff', 'intake_coordinator'].includes(user.activeRole || ''),
+    enabled: hasAdminLikeRole || canViewIntake,
   });
 
   // Extract arrays from wrapped responses
