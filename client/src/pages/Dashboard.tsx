@@ -109,13 +109,23 @@ export default function Dashboard() {
   // Wouter navigation hook for redirects
   const [, setLocation] = useLocation();
 
-  // Redirect calendar-only users (volunteers) directly to the calendar page
-  // This provides a better UX than showing a "Go to Calendar" button
+  // Redirect volunteers to calendar page by default
+  // Volunteers should land on calendar unless they have explicit full dashboard permission
+  // This provides a better UX for the volunteer workflow
   useEffect(() => {
-    if (!isLoadingPermissions && !hasAnyCommandCenterAccess && canViewCalendar && user?.activeRole !== 'foster') {
+    if (isLoadingPermissions) return;
+    
+    // Volunteers default to calendar unless they have explicit dashboard permission
+    const isVolunteerRole = user?.activeRole === 'volunteer';
+    const shouldRedirectVolunteer = isVolunteerRole && !canViewDashboard && canViewCalendar;
+    
+    // Also redirect non-volunteers who have no command center access but can view calendar
+    const shouldRedirectNoAccess = !hasAnyCommandCenterAccess && canViewCalendar && user?.activeRole !== 'foster';
+    
+    if (shouldRedirectVolunteer || shouldRedirectNoAccess) {
       setLocation(`${basePath}/dashboard/calendar`);
     }
-  }, [isLoadingPermissions, hasAnyCommandCenterAccess, canViewCalendar, user?.activeRole, basePath, setLocation]);
+  }, [isLoadingPermissions, hasAnyCommandCenterAccess, canViewCalendar, canViewDashboard, user?.activeRole, basePath, setLocation]);
 
   // Listen for hash changes and update pipeline tab
   useEffect(() => {
