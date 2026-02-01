@@ -338,6 +338,7 @@ export const userInvitations = pgTable("user_invitations", {
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
   email: text("email").notNull(),
   fullName: text("full_name"),
+  phone: text("phone"),
   roles: text("roles").array().notNull().$type<("admin" | "board_member" | "staff" | "foster" | "volunteer")[]>(),
   token: text("token").notNull().unique(),
   invitedBy: uuid("invited_by").notNull().references(() => users.id, { onDelete: 'cascade' }),

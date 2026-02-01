@@ -95,6 +95,7 @@ export default function TeamManagementPage() {
   const [newInvitation, setNewInvitation] = useState({
     email: "",
     fullName: "",
+    phone: "",
     roles: ["volunteer"] as Array<"admin" | "board_member" | "staff" | "foster" | "volunteer">,
   });
 
@@ -134,6 +135,7 @@ export default function TeamManagementPage() {
       setNewInvitation({
         email: "",
         fullName: "",
+        phone: "",
         roles: ["volunteer"],
       });
       toast({
@@ -563,6 +565,17 @@ export default function TeamManagementPage() {
                     required
                     placeholder="john@example.com"
                     data-testid="input-email"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="phone">Phone Number</Label>
+                  <Input
+                    id="phone"
+                    type="tel"
+                    value={newInvitation.phone}
+                    onChange={(e) => setNewInvitation({ ...newInvitation, phone: e.target.value })}
+                    placeholder="(555) 123-4567"
+                    data-testid="input-phone"
                   />
                 </div>
                 <div>

@@ -1626,6 +1626,7 @@ Crawl-delay: 1
         leadType: z.enum(['contact_sales', 'demo_access']).default('contact_sales'),
         email: z.string().email("Valid email is required"),
         fullName: z.string().optional(),
+        phone: z.string().optional(),
         organizationName: z.string().optional(),
         phone: z.string().optional(),
         message: z.string().optional(),
@@ -4732,6 +4733,7 @@ Crawl-delay: 1
       const invitationSchema = z.object({
         email: z.string().email(),
         fullName: z.string().optional(),
+        phone: z.string().optional(),
         roles: z.array(z.enum(['admin', 'board_member', 'staff', 'foster', 'volunteer'])).min(1),
       });
 

@@ -49,6 +49,7 @@ export async function createInvitation(
   data: {
     email: string;
     fullName?: string;
+    phone?: string;
     roles: ('admin' | 'board_member' | 'staff' | 'foster' | 'volunteer')[];
   }
 ) {
@@ -94,6 +95,7 @@ export async function createInvitation(
       tenantId,
       email: data.email,
       fullName: data.fullName || null,
+      phone: data.phone || null,
       roles: data.roles,
       token,
       invitedBy,
@@ -288,6 +290,15 @@ export async function acceptInvitation(
     fullName: fullName || invitation.fullName || invitation.email,
     roles: invitation.roles as ('admin' | 'board_member' | 'staff' | 'foster' | 'volunteer')[],
   });
+
+  // Update user with phone number if provided (from invitation or accept form)
+  const phoneToSave = phone || invitation.phone;
+  if (phoneToSave) {
+    await db
+      .update(users)
+      .set({ phone: phoneToSave })
+      .where(eq(users.id, user.id));
+  }
 
   // Mark invitation as accepted
   await db
