@@ -284,7 +284,7 @@ export default function VolunteerManagementPage() {
                       <TableRow key={volunteer.id} data-testid={`row-volunteer-${volunteer.id}`}>
                         <TableCell className="font-medium">{volunteer.fullName}</TableCell>
                         <TableCell>{volunteer.email}</TableCell>
-                        <TableCell>—</TableCell>
+                        <TableCell>{volunteer.phone || '—'}</TableCell>
                         <TableCell>{formatDate(volunteer.createdAt)}</TableCell>
                       </TableRow>
                     ))}

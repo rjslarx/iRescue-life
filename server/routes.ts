@@ -4366,6 +4366,7 @@ Crawl-delay: 1
           email: users.email,
           fullName: users.fullName,
           roles: users.roles,
+          phone: users.phone,
           createdAt: users.createdAt,
         })
         .from(users)
@@ -4392,6 +4393,7 @@ Crawl-delay: 1
           email: users.email,
           fullName: users.fullName,
           roles: users.roles,
+          phone: users.phone,
         })
         .from(users)
         .where(
@@ -4462,6 +4464,7 @@ Crawl-delay: 1
           email: users.email,
           fullName: users.fullName,
           roles: users.roles,
+          phone: users.phone,
           createdAt: users.createdAt,
         });
 
@@ -4599,6 +4602,7 @@ Crawl-delay: 1
           email: users.email,
           fullName: users.fullName,
           roles: users.roles,
+          phone: users.phone,
           tenantId: users.tenantId,
         })
         .from(users)
@@ -14558,6 +14562,7 @@ Submitted: ${new Date().toLocaleString()}
           fullName: users.fullName,
           email: users.email,
           roles: users.roles,
+          phone: users.phone,
         })
         .from(users)
         .where(
