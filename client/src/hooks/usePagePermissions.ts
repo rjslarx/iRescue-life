@@ -33,14 +33,16 @@ export function usePagePermissions() {
   const { user } = useAuth();
   
   // Fetch all page permissions for the tenant (role-based)
+  // Include user.id and activeRole in key so permissions refetch on impersonation/role changes
   const { data: permissionsData, isLoading: isLoadingRolePermissions } = useQuery<{ pagePermissions: PagePermission[] }>({
-    queryKey: ['/api/page-permissions'],
+    queryKey: ['/api/page-permissions', user?.id, user?.activeRole],
     enabled: !!user, // Only fetch if user is logged in
   });
 
   // Fetch user-specific page permissions
+  // Include user.id in key so user-specific permissions refetch on impersonation
   const { data: userPermissionsData, isLoading: isLoadingUserPermissions } = useQuery<{ permissions: UserPagePermission[] }>({
-    queryKey: ['/api/user-page-permissions/me'],
+    queryKey: ['/api/user-page-permissions/me', user?.id],
     enabled: !!user, // Only fetch if user is logged in
   });
 
