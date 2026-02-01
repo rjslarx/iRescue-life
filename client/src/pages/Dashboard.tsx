@@ -109,23 +109,22 @@ export default function Dashboard() {
   // Wouter navigation hook for redirects
   const [, setLocation] = useLocation();
 
+  // Check if user should be redirected to calendar
+  // Volunteers default to calendar unless they have explicit dashboard permission
+  const isVolunteerRole = user?.activeRole === 'volunteer';
+  const shouldRedirectVolunteer = isVolunteerRole && !canViewDashboard && canViewCalendar;
+  const shouldRedirectNoAccess = !hasAnyCommandCenterAccess && canViewCalendar && user?.activeRole !== 'foster';
+  const shouldRedirectToCalendar = shouldRedirectVolunteer || shouldRedirectNoAccess;
+
   // Redirect volunteers to calendar page by default
-  // Volunteers should land on calendar unless they have explicit full dashboard permission
   // This provides a better UX for the volunteer workflow
   useEffect(() => {
     if (isLoadingPermissions) return;
     
-    // Volunteers default to calendar unless they have explicit dashboard permission
-    const isVolunteerRole = user?.activeRole === 'volunteer';
-    const shouldRedirectVolunteer = isVolunteerRole && !canViewDashboard && canViewCalendar;
-    
-    // Also redirect non-volunteers who have no command center access but can view calendar
-    const shouldRedirectNoAccess = !hasAnyCommandCenterAccess && canViewCalendar && user?.activeRole !== 'foster';
-    
-    if (shouldRedirectVolunteer || shouldRedirectNoAccess) {
+    if (shouldRedirectToCalendar) {
       setLocation(`${basePath}/dashboard/calendar`);
     }
-  }, [isLoadingPermissions, hasAnyCommandCenterAccess, canViewCalendar, canViewDashboard, user?.activeRole, basePath, setLocation]);
+  }, [isLoadingPermissions, shouldRedirectToCalendar, basePath, setLocation]);
 
   // Listen for hash changes and update pipeline tab
   useEffect(() => {
@@ -240,8 +239,8 @@ export default function Dashboard() {
         description=""
       >
         <div className="flex-1 overflow-y-auto overflow-x-hidden w-full min-w-0 space-y-6 sm:p-6">
-          {/* Show loading state while permissions are being fetched */}
-          {isLoadingPermissions ? (
+          {/* Show loading state while permissions are being fetched or while redirecting */}
+          {isLoadingPermissions || shouldRedirectToCalendar ? (
             <div className="flex items-center justify-center h-64" data-testid="loading-permissions">
               <Loader2 className="h-8 w-8 animate-spin" />
             </div>
