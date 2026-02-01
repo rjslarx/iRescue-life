@@ -9,7 +9,7 @@ import { Heart, Users, Pill, Loader2, Inbox, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import type { Tenant, FosterAnimal, Animal, User } from "@shared/schema";
 import DashboardLayout from "@/components/DashboardLayout";
 import SetupWizard from "@/components/SetupWizard";
@@ -97,6 +97,17 @@ export default function Dashboard() {
   
   // Check if user has some level of command center access (dashboard OR specific widget permissions)
   const hasAnyCommandCenterAccess = canViewDashboard || canViewMedical || hasPipelineAccess || canViewAnalytics || canViewReports;
+
+  // Wouter navigation hook for redirects
+  const [, setLocation] = useLocation();
+
+  // Redirect calendar-only users (volunteers) directly to the calendar page
+  // This provides a better UX than showing a "Go to Calendar" button
+  useEffect(() => {
+    if (!isLoadingPermissions && !hasAnyCommandCenterAccess && canViewCalendar && user?.activeRole !== 'foster') {
+      setLocation(`${basePath}/dashboard/calendar`);
+    }
+  }, [isLoadingPermissions, hasAnyCommandCenterAccess, canViewCalendar, user?.activeRole, basePath, setLocation]);
 
   // Listen for hash changes and update pipeline tab
   useEffect(() => {
