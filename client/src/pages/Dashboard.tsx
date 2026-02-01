@@ -56,7 +56,7 @@ export default function Dashboard() {
   const { user } = useAuth();
   const { basePath } = useTenant();
   const { toast } = useToast();
-  const { canAccessPage } = usePagePermissions();
+  const { canAccessPage, isLoading: isLoadingPermissions } = usePagePermissions();
   const [showWizard, setShowWizard] = useState(false);
   const [supplyDialogOpen, setSupplyDialogOpen] = useState(false);
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
@@ -211,10 +211,15 @@ export default function Dashboard() {
         description=""
       >
         <div className="flex-1 overflow-y-auto overflow-x-hidden w-full min-w-0 space-y-6 sm:p-6">
-          {/* Foster role gets a dedicated dashboard experience showing their foster animals.
+          {/* Show loading state while permissions are being fetched */}
+          {isLoadingPermissions ? (
+            <div className="flex items-center justify-center h-64" data-testid="loading-permissions">
+              <Loader2 className="h-8 w-8 animate-spin" />
+            </div>
+          ) : user?.activeRole === 'foster' ? (
+          /* Foster role gets a dedicated dashboard experience showing their foster animals.
               This is role-based by design: fosters are a distinct user type with their own
-              workflow (viewing/updating their assigned animals) separate from staff permissions. */}
-          {user?.activeRole === 'foster' ? (
+              workflow (viewing/updating their assigned animals) separate from staff permissions. */
             <>
               <div className="mb-6">
                 <h2 className="text-2xl font-semibold mb-2">My Foster Animals</h2>

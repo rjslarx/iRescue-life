@@ -1,0 +1,110 @@
+2026-01-31 18:51:18.41
+024d5638
+User
+port: 5432,
+2026-01-31 18:51:18.41
+024d5638
+User
+INT2: 21,
+2026-01-31 18:51:18.41
+024d5638
+User
+at TLSSocket. (/home/runner/workspace/node_modules/pg-protocol/dist/index.js:11:42)
+2026-01-31 18:51:18.41
+024d5638
+User
+column: undefined,
+2026-01-31 18:51:18.41
+024d5638
+User
+statement_timeout: false,
+2026-01-31 18:51:18.41
+024d5638
+User
+routine: 'ProcessInterrupts',
+2026-01-31 18:51:18.41
+024d5638
+User
+database: 'neondb',
+2026-01-31 18:51:18.41
+024d5638
+User
+severity: 'FATAL',
+2026-01-31 18:51:18.41
+024d5638
+User
+length: 116,
+2026-01-31 18:51:18.41
+024d5638
+User
+binary: false,
+2026-01-31 18:51:18.41
+024d5638
+User
+at Parser.parseErrorMessage (/home/runner/workspace/node_modules/pg-protocol/dist/parser.js:285:98)
+2026-01-31 18:51:18.41
+024d5638
+User
+hint: undefined,
+2026-01-31 18:51:18.41
+024d5638
+User
+at TLSWrap.onStreamRead (node:internal/stream_base_commons:191:23)
+2026-01-31 18:51:18.41
+024d5638
+User
+at addChunk (node:internal/streams/readable:561:12)
+2026-01-31 18:51:18.41
+024d5638
+User
+table: undefined,
+2026-01-31 18:51:18.41
+024d5638
+User
+},
+2026-01-31 18:51:18.41
+024d5638
+User
+at Connection.emit (node:events:524:28)
+2026-01-31 18:51:18.41
+024d5638
+User
+application_name: undefined,
+2026-01-31 18:51:18.41
+024d5638
+User
+Emitted 'error' event on BoundPool instance at:
+2026-01-31 18:51:25.91
+024d5638
+User
+npm notice To update run: npm install -g npm@11.8.0
+2026-01-31 18:51:25.91
+024d5638
+User
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.8.0
+2026-01-31 18:51:25.91
+024d5638
+User
+npm notice
+2026-01-31 18:51:25.91
+024d5638
+User
+npm notice
+2026-01-31 18:51:25.91
+024d5638
+User
+npm notice New major version of npm available! 10.8.2 -> 11.8.0
+2026-01-31 18:51:27.11
+024d5638
+System
+command finished with error [npm run start]: exit status 1
+2026-01-31 18:53:29.74
+2d4e1482
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-01-31 18:53:29.74
+2d4e1482
+User
+at async file:///home/runner/workspace/dist/index.js:32401:28
+Wrap
+Colors
