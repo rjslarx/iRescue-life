@@ -7372,13 +7372,59 @@ Crawl-delay: 1
   /**
    * GET /api/applications
    * Get all applications (staff only)
+   * Supports filtering by animalId query parameter
    */
   app.get('/api/applications', requireTenant, requireAuth, requireRole('admin', 'owner', 'board_member', 'staff', 'intake_coordinator'), async (req, res, next) => {
     try {
-      const { getApplicationsByTenant } = await import('./services/applications');
-      const applications = await getApplicationsByTenant(req.tenant!.id);
+      const { animalId, stage } = req.query;
       
-      res.json({ applications });
+      // If animalId filter is provided, use direct query with filtering
+      if (animalId && typeof animalId === 'string') {
+        const { applications, animals } = await import('@shared/schema');
+        const conditions = [eq(applications.tenantId, req.tenant!.id)];
+        conditions.push(eq(applications.animalId, animalId));
+        
+        if (stage && typeof stage === 'string') {
+          conditions.push(eq(applications.stage, stage as any));
+        }
+        
+        const applicationsList = await db
+          .select({
+            id: applications.id,
+            tenantId: applications.tenantId,
+            animalId: applications.animalId,
+            applicantName: applications.applicantName,
+            applicantEmail: applications.applicantEmail,
+            applicantPhone: applications.applicantPhone,
+            applicantAddress: applications.applicantAddress,
+            stage: applications.stage,
+            createdAt: applications.createdAt,
+            notes: applications.notes,
+            assignedToId: applications.assignedToId,
+            customResponses: applications.customResponses,
+          })
+          .from(applications)
+          .where(and(...conditions));
+        
+        // Add animal name to each application
+        const animalsData = await db.select({ id: animals.id, name: animals.name })
+          .from(animals)
+          .where(eq(animals.tenantId, req.tenant!.id));
+        const animalsMap = new Map(animalsData.map(a => [a.id, a.name]));
+        
+        const applicationsWithAnimal = applicationsList.map(app => ({
+          ...app,
+          animalName: app.animalId ? animalsMap.get(app.animalId) || null : null,
+        }));
+        
+        return res.json({ applications: applicationsWithAnimal });
+      }
+      
+      // Otherwise get all applications
+      const { getApplicationsByTenant } = await import('./services/applications');
+      const allApplications = await getApplicationsByTenant(req.tenant!.id);
+      
+      res.json({ applications: allApplications });
     } catch (error) {
       next(error);
     }
@@ -15836,38 +15882,6 @@ Submitted: ${new Date().toLocaleString()}
   // ============================================================================
   // Adoptions Routes
   // ============================================================================
-
-  /**
-   * GET /api/applications - Filter applications (animalId, stage)
-   * List applications with optional filters
-   */
-  app.get('/api/applications', requireTenant, requireAuth, async (req, res, next) => {
-    try {
-      const { applications } = await import('@shared/schema');
-      const { animalId, stage } = req.query;
-      
-      const conditions = [eq(applications.tenantId, req.tenant!.id)];
-
-      // Filter by animalId if provided
-      if (animalId && typeof animalId === 'string') {
-        conditions.push(eq(applications.animalId, animalId));
-      }
-
-      // Filter by stage if provided (e.g., 'approved')
-      if (stage && typeof stage === 'string') {
-        conditions.push(eq(applications.stage, stage as any));
-      }
-
-      const applicationsList = await db
-        .select()
-        .from(applications)
-        .where(and(...conditions));
-
-      res.json({ applications: applicationsList });
-    } catch (error) {
-      next(error);
-    }
-  });
 
   /**
    * POST /api/adoptions
