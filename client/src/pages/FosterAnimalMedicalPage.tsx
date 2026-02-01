@@ -110,7 +110,7 @@ export default function FosterAnimalMedicalPage() {
             <p className="text-muted-foreground mb-6">
               This animal is not assigned to you or does not exist.
             </p>
-            <Link href={`${basePath}/dashboard/my-fosters`}>
+            <Link href="/dashboard/my-fosters">
               <Button>Back to My Fosters</Button>
             </Link>
           </Card>

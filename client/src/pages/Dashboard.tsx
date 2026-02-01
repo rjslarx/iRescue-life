@@ -120,7 +120,7 @@ export default function Dashboard() {
     if (isLoadingPermissions) return;
     
     if (shouldRedirectToCalendar) {
-      setLocation(`${basePath}/dashboard/calendar`);
+      setLocation("/dashboard/calendar");
     }
   }, [isLoadingPermissions, shouldRedirectToCalendar, basePath, setLocation]);
 
@@ -390,7 +390,7 @@ export default function Dashboard() {
                     <p className="text-muted-foreground mb-6">
                       Your primary workspace is the Volunteer Calendar. Click below to view shifts and sign up for opportunities.
                     </p>
-                    <Link href={`${basePath}/dashboard/calendar`}>
+                    <Link href="/dashboard/calendar">
                       <Button size="lg" className="gap-2" data-testid="button-go-to-calendar">
                         <Calendar className="h-5 w-5" />
                         Go to Calendar

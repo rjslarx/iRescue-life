@@ -63,7 +63,7 @@ export default function FosterAnimalProfilePage() {
             <p className="text-muted-foreground mb-6">
               This animal is not assigned to you or does not exist.
             </p>
-            <Link href={`${basePath}/dashboard/my-fosters`}>
+            <Link href="/dashboard/my-fosters">
               <Button>Back to My Fosters</Button>
             </Link>
           </Card>
@@ -77,7 +77,7 @@ export default function FosterAnimalProfilePage() {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="flex items-center justify-between gap-4 border-b p-4 bg-background flex-wrap">
-        <Link href={`${basePath}/dashboard/my-fosters`}>
+        <Link href="/dashboard/my-fosters">
           <Button variant="ghost" size="sm" className="gap-2" data-testid="button-back">
             <ArrowLeft className="h-4 w-4" />
             Back to My Fosters

@@ -318,7 +318,7 @@ export default function CommunicationsPage() {
                     </p>
                   </div>
                 </div>
-                <Link href={`${basePath}/dashboard/newsletter-campaigns`}>
+                <Link href="/dashboard/newsletter-campaigns">
                   <Button data-testid="button-newsletter-campaigns">
                     <Sparkles className="w-4 h-4 mr-2" />
                     Newsletter Builder
@@ -380,7 +380,7 @@ export default function CommunicationsPage() {
                       <p className="text-sm text-muted-foreground">Email not configured</p>
                     )}
                   </div>
-                  <Link href={`${basePath}/dashboard/settings?tab=integrations`}>
+                  <Link href="/dashboard/settings?tab=integrations">
                     <Button variant="ghost" size="sm" data-testid="button-change-sender">
                       {emailSenderData?.senderAddresses && emailSenderData.senderAddresses.length > 0 ? 'Manage' : 'Setup'}
                     </Button>

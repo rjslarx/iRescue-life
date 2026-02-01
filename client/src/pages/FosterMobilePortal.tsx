@@ -117,7 +117,7 @@ export default function FosterMobilePortal() {
             <p className="text-sm text-muted-foreground mb-4 px-4">
               You don't have any animals in foster care right now.
             </p>
-            <Link href={`${basePath}/dashboard`}>
+            <Link href="/dashboard">
               <Button variant="outline">Go to Dashboard</Button>
             </Link>
           </Card>
@@ -185,7 +185,7 @@ export default function FosterMobilePortal() {
                         {animal.species} • {animal.breed}
                       </p>
                     </div>
-                    <Link href={`${basePath}/dashboard/my-fosters/${animal.id}`}>
+                    <Link href={`/dashboard/my-fosters/${animal.id}`}>
                       <Button variant="ghost" size="icon" className="h-8 w-8" data-testid={`button-view-details-${animal.id}`}>
                         <ChevronRight className="h-4 w-4" />
                       </Button>
@@ -298,7 +298,7 @@ export default function FosterMobilePortal() {
                   )}
                 </div>
               ))}
-              <Link href={`${basePath}/dashboard/foster-updates`}>
+              <Link href="/dashboard/foster-updates">
                 <Button variant="ghost" size="sm" className="w-full text-xs" data-testid="button-view-all-updates">
                   View All Updates
                   <ChevronRight className="h-3 w-3 ml-1" />
