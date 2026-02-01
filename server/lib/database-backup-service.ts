@@ -1,12 +1,10 @@
 import { Storage } from "@google-cloud/storage";
-import { exec } from "child_process";
-import { promisify } from "util";
+import { spawn } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
-import * as zlib from "zlib";
-
-const execAsync = promisify(exec);
-const gzip = promisify(zlib.gzip);
+import { createGzip } from "zlib";
+import { pipeline } from "stream/promises";
+import { createWriteStream, createReadStream } from "fs";
 
 interface BackupResult {
   success: boolean;
@@ -51,15 +49,55 @@ function getBucketName(): string {
   return bucketName;
 }
 
+function validateGcpConfig(): { valid: boolean; error?: string } {
+  if (!process.env.GCP_CREDENTIALS) {
+    return { valid: false, error: "GCP_CREDENTIALS environment variable is not set" };
+  }
+  if (!process.env.GCS_BUCKET_NAME) {
+    return { valid: false, error: "GCS_BUCKET_NAME environment variable is not set" };
+  }
+  try {
+    JSON.parse(process.env.GCP_CREDENTIALS);
+  } catch {
+    return { valid: false, error: "GCP_CREDENTIALS is not valid JSON" };
+  }
+  return { valid: true };
+}
+
+function parseDatabaseUrl(url: string): {
+  host: string;
+  port: string;
+  database: string;
+  user: string;
+  password: string;
+} {
+  const parsed = new URL(url);
+  return {
+    host: parsed.hostname,
+    port: parsed.port || "5432",
+    database: parsed.pathname.slice(1),
+    user: decodeURIComponent(parsed.username),
+    password: decodeURIComponent(parsed.password),
+  };
+}
+
 export async function performDatabaseBackup(): Promise<BackupResult> {
   const startTime = Date.now();
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const sqlFileName = `backup-${timestamp}.sql`;
   const gzFileName = `backup-${timestamp}.sql.gz`;
-  const tempSqlPath = path.join("/tmp", sqlFileName);
   const tempGzPath = path.join("/tmp", gzFileName);
 
   console.log(`[DB Backup] Starting database backup at ${new Date().toISOString()}`);
+
+  const gcpValidation = validateGcpConfig();
+  if (!gcpValidation.valid) {
+    console.warn(`[DB Backup] Skipping backup: ${gcpValidation.error}`);
+    return {
+      success: false,
+      message: `Database backup skipped: ${gcpValidation.error}`,
+      duration: Date.now() - startTime,
+    };
+  }
 
   try {
     const databaseUrl = process.env.DATABASE_URL;
@@ -67,26 +105,62 @@ export async function performDatabaseBackup(): Promise<BackupResult> {
       throw new Error("DATABASE_URL environment variable is not set");
     }
 
-    console.log(`[DB Backup] Running pg_dump...`);
-    await execAsync(`pg_dump "${databaseUrl}" -f "${tempSqlPath}"`, {
-      timeout: 300000,
-      maxBuffer: 100 * 1024 * 1024,
+    const dbConfig = parseDatabaseUrl(databaseUrl);
+
+    console.log(`[DB Backup] Running pg_dump with streaming compression...`);
+
+    await new Promise<void>((resolve, reject) => {
+      const env = {
+        ...process.env,
+        PGPASSWORD: dbConfig.password,
+      };
+
+      const pgDump = spawn("pg_dump", [
+        "-h", dbConfig.host,
+        "-p", dbConfig.port,
+        "-U", dbConfig.user,
+        "-d", dbConfig.database,
+        "--no-password",
+      ], {
+        env,
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+
+      const gzip = createGzip();
+      const writeStream = createWriteStream(tempGzPath);
+
+      let stderrOutput = "";
+      pgDump.stderr.on("data", (data) => {
+        stderrOutput += data.toString();
+      });
+
+      pgDump.stdout.pipe(gzip).pipe(writeStream);
+
+      writeStream.on("finish", () => {
+        if (pgDump.exitCode === 0 || pgDump.exitCode === null) {
+          resolve();
+        } else {
+          reject(new Error(`pg_dump failed with exit code ${pgDump.exitCode}: ${stderrOutput}`));
+        }
+      });
+
+      writeStream.on("error", (err) => {
+        reject(new Error(`Write stream error: ${err.message}`));
+      });
+
+      pgDump.on("error", (err) => {
+        reject(new Error(`pg_dump spawn error: ${err.message}`));
+      });
+
+      pgDump.on("close", (code) => {
+        if (code !== 0 && code !== null) {
+          reject(new Error(`pg_dump exited with code ${code}: ${stderrOutput}`));
+        }
+      });
     });
 
-    const sqlStats = fs.statSync(tempSqlPath);
-    console.log(`[DB Backup] SQL dump created: ${(sqlStats.size / 1024 / 1024).toFixed(2)} MB`);
-
-    console.log(`[DB Backup] Compressing with gzip...`);
-    const sqlContent = fs.readFileSync(tempSqlPath);
-    const compressedContent = await gzip(sqlContent);
-    fs.writeFileSync(tempGzPath, compressedContent);
-
     const gzStats = fs.statSync(tempGzPath);
-    const compressionRatio = ((1 - gzStats.size / sqlStats.size) * 100).toFixed(1);
-    console.log(`[DB Backup] Compressed: ${(gzStats.size / 1024 / 1024).toFixed(2)} MB (${compressionRatio}% reduction)`);
-
-    fs.unlinkSync(tempSqlPath);
-    console.log(`[DB Backup] Cleaned up temporary SQL file`);
+    console.log(`[DB Backup] Compressed backup created: ${(gzStats.size / 1024 / 1024).toFixed(2)} MB`);
 
     console.log(`[DB Backup] Uploading to Google Cloud Storage...`);
     const storage = getStorageClient();
@@ -99,7 +173,6 @@ export async function performDatabaseBackup(): Promise<BackupResult> {
         contentType: "application/gzip",
         metadata: {
           backupTimestamp: timestamp,
-          originalSize: sqlStats.size.toString(),
           compressedSize: gzStats.size.toString(),
         },
       },
@@ -121,11 +194,11 @@ export async function performDatabaseBackup(): Promise<BackupResult> {
       duration,
     };
   } catch (error) {
-    if (fs.existsSync(tempSqlPath)) {
-      fs.unlinkSync(tempSqlPath);
-    }
     if (fs.existsSync(tempGzPath)) {
-      fs.unlinkSync(tempGzPath);
+      try {
+        fs.unlinkSync(tempGzPath);
+      } catch {
+      }
     }
 
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
@@ -141,6 +214,16 @@ export async function performDatabaseBackup(): Promise<BackupResult> {
 
 export async function applyRetentionPolicy(retentionDays: number = 30): Promise<RetentionResult> {
   console.log(`[DB Backup] Applying ${retentionDays}-day retention policy...`);
+
+  const gcpValidation = validateGcpConfig();
+  if (!gcpValidation.valid) {
+    console.warn(`[DB Backup] Skipping retention: ${gcpValidation.error}`);
+    return {
+      success: false,
+      deletedCount: 0,
+      message: `Retention policy skipped: ${gcpValidation.error}`,
+    };
+  }
 
   try {
     const storage = getStorageClient();
@@ -197,16 +280,7 @@ export async function runDatabaseBackupJob(): Promise<{
 
   const backup = await performDatabaseBackup();
 
-  let retention: RetentionResult;
-  if (backup.success) {
-    retention = await applyRetentionPolicy(30);
-  } else {
-    retention = {
-      success: false,
-      deletedCount: 0,
-      message: "Retention policy skipped due to backup failure",
-    };
-  }
+  const retention = await applyRetentionPolicy(30);
 
   console.log("=== Database Backup Job Complete ===");
 
@@ -218,6 +292,12 @@ export async function listBackups(): Promise<Array<{
   size: number;
   created: Date;
 }>> {
+  const gcpValidation = validateGcpConfig();
+  if (!gcpValidation.valid) {
+    console.warn(`[DB Backup] Cannot list backups: ${gcpValidation.error}`);
+    return [];
+  }
+
   try {
     const storage = getStorageClient();
     const bucketName = getBucketName();

@@ -258,6 +258,35 @@ export function initializeScheduler() {
   });
 
   console.log(`✓ Storage backup scheduled for: ${storageBackupSchedule} (UTC)`);
+
+  // Schedule database backup daily at 9:00 AM UTC (3:00 AM CST)
+  // "0 9 * * *" means: at minute 0, hour 9, every day
+  // This backs up the PostgreSQL database to Google Cloud Storage
+  const databaseBackupSchedule = process.env.DATABASE_BACKUP_SCHEDULE || "0 9 * * *";
+  
+  cron.schedule(databaseBackupSchedule, async () => {
+    console.log("🗄️ Running database backup to Google Cloud Storage...");
+    try {
+      const { runDatabaseBackupJob } = await import("./database-backup-service");
+      const result = await runDatabaseBackupJob();
+      
+      if (result.backup.success) {
+        console.log(`✓ Database backup: ${result.backup.fileName} (${((result.backup.fileSize || 0) / 1024 / 1024).toFixed(2)} MB)`);
+      } else {
+        console.error(`❌ Database backup failed: ${result.backup.message}`);
+      }
+      
+      if (result.retention.deletedCount > 0) {
+        console.log(`✓ Retention: ${result.retention.message}`);
+      }
+    } catch (error) {
+      console.error(`❌ Database backup failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }, {
+    timezone: "UTC"
+  });
+
+  console.log(`✓ Database backup scheduled for: ${databaseBackupSchedule} (UTC)`);
   
   // Log next scheduled run times
   const nextMidnight = new Date();

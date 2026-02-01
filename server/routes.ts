@@ -29059,6 +29059,79 @@ The user asking is a tenant administrator or staff member.`;
     }
   });
 
+
+  /**
+   * POST /api/admin/trigger-database-backup
+   * Manually trigger a database backup (platform admin only)
+   * This endpoint is for testing and emergency backups
+   */
+  app.post('/api/admin/trigger-database-backup', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      // Only platform admins can trigger manual backups
+      if (!req.user?.isPlatformAdmin) {
+        return res.status(403).json({ error: 'Access denied. Platform admin privileges required.' });
+      }
+
+      const { runDatabaseBackupJob, listBackups } = await import('./lib/database-backup-service');
+      
+      console.log(`[Admin] Manual database backup triggered by user \${req.user.email}`);
+      
+      const result = await runDatabaseBackupJob();
+      
+      // Get list of recent backups
+      const backups = await listBackups();
+      
+      res.json({
+        success: result.backup.success,
+        backup: {
+          fileName: result.backup.fileName,
+          fileSize: result.backup.fileSize,
+          message: result.backup.message,
+          duration: result.backup.duration,
+        },
+        retention: {
+          deletedCount: result.retention.deletedCount,
+          message: result.retention.message,
+        },
+        recentBackups: backups.slice(0, 10).map(b => ({
+          name: b.name,
+          size: `\${(b.size / 1024 / 1024).toFixed(2)} MB`,
+          created: b.created.toISOString(),
+        })),
+      });
+    } catch (error) {
+      console.error(`[Admin] Manual database backup failed:`, error);
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/admin/database-backups
+   * List recent database backups (platform admin only)
+   */
+  app.get('/api/admin/database-backups', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      // Only platform admins can view backups
+      if (!req.user?.isPlatformAdmin) {
+        return res.status(403).json({ error: 'Access denied. Platform admin privileges required.' });
+      }
+
+      const { listBackups } = await import('./lib/database-backup-service');
+      const backups = await listBackups();
+      
+      res.json({
+        backups: backups.map(b => ({
+          name: b.name,
+          size: b.size,
+          sizeFormatted: `\${(b.size / 1024 / 1024).toFixed(2)} MB`,
+          created: b.created.toISOString(),
+        })),
+        count: backups.length,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
   const httpServer = createServer(app);
 
   return httpServer;
