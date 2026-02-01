@@ -56,7 +56,10 @@ export default function Dashboard() {
   const { user } = useAuth();
   const { basePath } = useTenant();
   const { toast } = useToast();
-  const { canAccessPage, isLoading: isLoadingPermissions } = usePagePermissions();
+  const { canAccessPage, isLoading: isLoadingRolePermissions } = usePagePermissions();
+  // Treat as loading if user data isn't loaded yet OR permission queries are still running
+  // This prevents blank screens during "View As" when user context is still being fetched
+  const isLoadingPermissions = !user || isLoadingRolePermissions;
   const [showWizard, setShowWizard] = useState(false);
   const [supplyDialogOpen, setSupplyDialogOpen] = useState(false);
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
