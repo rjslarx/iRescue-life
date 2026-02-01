@@ -562,7 +562,7 @@ export default function PipelineManager({ activeTab, onTabChange, permissions }:
               <TabsContent value="adoptions" data-testid="content-adoptions">
               <div className="flex items-center justify-between gap-2 mb-2">
                 <span className="text-sm font-medium text-muted-foreground">Adoption Applications</span>
-                <Link href={`${basePath}/dashboard/applications`} className="text-xs text-muted-foreground hover-elevate flex items-center gap-1" data-testid="link-view-all-adoptions">
+                <Link href="/dashboard/applications" className="text-xs text-muted-foreground hover-elevate flex items-center gap-1" data-testid="link-view-all-adoptions">
                   View All <ArrowRight className="h-3 w-3" />
                 </Link>
               </div>
@@ -607,7 +607,7 @@ export default function PipelineManager({ activeTab, onTabChange, permissions }:
               <TabsContent value="fosters" data-testid="content-fosters">
               <div className="flex items-center justify-between gap-2 mb-2">
                 <span className="text-sm font-medium text-muted-foreground">Foster Applications</span>
-                <Link href={`${basePath}/dashboard/foster-pipeline`} className="text-xs text-muted-foreground hover-elevate flex items-center gap-1" data-testid="link-view-all-fosters">
+                <Link href="/dashboard/foster-pipeline" className="text-xs text-muted-foreground hover-elevate flex items-center gap-1" data-testid="link-view-all-fosters">
                   View All <ArrowRight className="h-3 w-3" />
                 </Link>
               </div>
@@ -653,7 +653,7 @@ export default function PipelineManager({ activeTab, onTabChange, permissions }:
               <TabsContent value="volunteers" data-testid="content-volunteers">
               <div className="flex items-center justify-between gap-2 mb-2">
                 <span className="text-sm font-medium text-muted-foreground">Volunteer Applications</span>
-                <Link href={`${basePath}/dashboard/volunteer-pipeline`} className="text-xs text-muted-foreground hover-elevate flex items-center gap-1" data-testid="link-view-all-volunteers">
+                <Link href="/dashboard/volunteer-pipeline" className="text-xs text-muted-foreground hover-elevate flex items-center gap-1" data-testid="link-view-all-volunteers">
                   View All <ArrowRight className="h-3 w-3" />
                 </Link>
               </div>
@@ -699,7 +699,7 @@ export default function PipelineManager({ activeTab, onTabChange, permissions }:
               <TabsContent value="intake" data-testid="content-intake">
               <div className="flex items-center justify-between gap-2 mb-2">
                 <span className="text-sm font-medium text-muted-foreground">Intake Requests</span>
-                <Link href={`${basePath}/dashboard/intake`} className="text-xs text-muted-foreground hover-elevate flex items-center gap-1" data-testid="link-view-all-intake">
+                <Link href="/dashboard/intake" className="text-xs text-muted-foreground hover-elevate flex items-center gap-1" data-testid="link-view-all-intake">
                   View All <ArrowRight className="h-3 w-3" />
                 </Link>
               </div>

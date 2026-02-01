@@ -88,7 +88,7 @@ export default function IntakeSummaryWidget() {
           <p className="text-sm text-muted-foreground text-center py-4" data-testid="text-no-surrender-requests">No surrender requests</p>
         )}
 
-        <Link href={`${basePath}/dashboard/intake`}>
+        <Link href="/dashboard/intake">
           <Button variant="ghost" size="sm" className="w-full mt-4" data-testid="link-view-intake">
             View Intake Manager
             <ChevronRight className="h-4 w-4 ml-1" />

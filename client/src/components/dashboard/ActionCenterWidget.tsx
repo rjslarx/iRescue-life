@@ -271,7 +271,7 @@ export default function ActionCenterWidget() {
         )}
       </CardContent>
       <CardFooter className="pt-0">
-        <Link href={`${basePath}/dashboard/foster-management`} className="w-full">
+        <Link href="/dashboard/foster-management" className="w-full">
           <Button variant="ghost" size="sm" className="w-full justify-between" data-testid="button-view-all-actions">
             View All Actions
             <ChevronRight className="h-4 w-4" />

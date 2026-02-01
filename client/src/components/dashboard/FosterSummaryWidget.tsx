@@ -61,7 +61,7 @@ export default function FosterSummaryWidget() {
           )}
         </div>
 
-        <Link href={`${basePath}/dashboard/foster-applications`}>
+        <Link href="/dashboard/foster-applications">
           <Button variant="ghost" size="sm" className="w-full" data-testid="link-view-foster">
             View Applications
             <ChevronRight className="h-4 w-4 ml-1" />

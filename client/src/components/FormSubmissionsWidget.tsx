@@ -237,7 +237,7 @@ export default function FormSubmissionsWidget() {
         )}
         
         <div className="mt-4 pt-3 border-t">
-          <Link href={`${basePath}/dashboard/applications`} data-testid="link-view-all-applications">
+          <Link href="/dashboard/applications" data-testid="link-view-all-applications">
             <Button variant="outline" className="w-full gap-2" data-testid="button-view-all-applications">
               View All Applications
               <ChevronRight className="h-4 w-4" />

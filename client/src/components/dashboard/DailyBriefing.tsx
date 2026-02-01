@@ -142,7 +142,7 @@ export function DailyBriefing() {
                     {data?.today.overdue.map((item) => (
                       <Link 
                         key={item.id} 
-                        href={`${basePath}/dashboard/animals/${item.animalId}/medical`}
+                        href={`/dashboard/animals/${item.animalId}/medical`}
                         className="block"
                         data-testid={`link-overdue-${item.id}`}
                       >
@@ -159,7 +159,7 @@ export function DailyBriefing() {
                     {data?.today.surgeries.map((surgery) => (
                       <Link 
                         key={surgery.id} 
-                        href={`${basePath}/dashboard/animals/${surgery.id}/medical`}
+                        href={`/dashboard/animals/${surgery.id}/medical`}
                         className="block"
                         data-testid={`link-surgery-${surgery.id}`}
                       >
@@ -180,7 +180,7 @@ export function DailyBriefing() {
                     {data?.today.transports.map((transport) => (
                       <Link 
                         key={transport.id} 
-                        href={`${basePath}/dashboard/transports/${transport.id}`}
+                        href={`/dashboard/transports/${transport.id}`}
                         className="block"
                         data-testid={`link-transport-${transport.id}`}
                       >
@@ -215,7 +215,7 @@ export function DailyBriefing() {
                       {data?.today.medical.slice(0, 5).map((task) => (
                         <Link 
                           key={task.id} 
-                          href={`${basePath}/dashboard/animals/${task.animalId}/medical`}
+                          href={`/dashboard/animals/${task.animalId}/medical`}
                           className="block"
                           data-testid={`link-medical-${task.id}`}
                         >
@@ -229,7 +229,7 @@ export function DailyBriefing() {
                         </Link>
                       ))}
                       {data && data.today.medical.length > 5 && (
-                        <Link href={`${basePath}/dashboard/medical-pipeline?tab=preventative`} data-testid="link-more-medical-tasks">
+                        <Link href="/dashboard/medical-pipeline?tab=preventative" data-testid="link-more-medical-tasks">
                           <p className="text-xs text-primary hover:underline pl-2 cursor-pointer">
                             +{data.today.medical.length - 5} more tasks
                           </p>
