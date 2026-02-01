@@ -21188,6 +21188,7 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
               canEdit: perm.canEdit,
               canAdd: perm.canAdd,
               canDelete: perm.canDelete,
+              canAssignOthers: perm.canAssignOthers,
             });
           }
         }
