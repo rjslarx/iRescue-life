@@ -8,6 +8,12 @@ export type PipelineTab = "adoptions" | "fosters" | "volunteers" | "intake";
 interface PipelineManagerProps {
   activeTab?: PipelineTab;
   onTabChange?: (tab: PipelineTab) => void;
+  permissions?: {
+    canViewAdoptions?: boolean;
+    canViewFosters?: boolean;
+    canViewVolunteers?: boolean;
+    canViewIntake?: boolean;
+  };
 }
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -252,10 +258,26 @@ function StatusColumn({ status, items, pipelineType, onItemClick, showChevron, t
   );
 }
 
-export default function PipelineManager({ activeTab, onTabChange }: PipelineManagerProps) {
+export default function PipelineManager({ activeTab, onTabChange, permissions }: PipelineManagerProps) {
   const { user } = useAuth();
   const { basePath } = useTenant();
-  const [currentTab, setCurrentTab] = useState<PipelineTab>(activeTab || "adoptions");
+  
+  // Extract permissions with defaults (all true if not specified for backwards compatibility)
+  const canViewAdoptions = permissions?.canViewAdoptions ?? true;
+  const canViewFosters = permissions?.canViewFosters ?? true;
+  const canViewVolunteers = permissions?.canViewVolunteers ?? true;
+  const canViewIntake = permissions?.canViewIntake ?? true;
+  
+  // Determine available tabs based on permissions
+  const availableTabs: PipelineTab[] = [];
+  if (canViewAdoptions) availableTabs.push("adoptions");
+  if (canViewFosters) availableTabs.push("fosters");
+  if (canViewVolunteers) availableTabs.push("volunteers");
+  if (canViewIntake) availableTabs.push("intake");
+  
+  // Default to first available tab
+  const defaultTab = activeTab && availableTabs.includes(activeTab) ? activeTab : availableTabs[0] || "adoptions";
+  const [currentTab, setCurrentTab] = useState<PipelineTab>(defaultTab);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [selectedType, setSelectedType] = useState<ApplicationType>("adoption");
   const [selectedData, setSelectedData] = useState<ApplicationData | null>(null);
@@ -478,54 +500,63 @@ export default function PipelineManager({ activeTab, onTabChange }: PipelineMana
         </CardHeader>
         <CardContent>
           <Tabs value={currentTab} onValueChange={handleTabChange} className="w-full">
-            <TabsList className="w-full h-auto flex flex-wrap sm:grid sm:grid-cols-4 mb-4 gap-1" data-testid="pipeline-tabs">
-              <TabsTrigger value="adoptions" className="text-xs sm:text-sm" data-testid="tab-adoptions">
-                <Heart className="h-3 w-3 mr-1 hidden sm:inline" />
-                Adoptions
-                {activeAdoptionsCount > 0 ? (
-                  <Badge className={`ml-1 h-5 px-1.5 text-xs ${pipelineBadgeColors.adoption}`} data-testid="badge-count-adoptions">
-                    ({activeAdoptionsCount})
-                  </Badge>
-                ) : (
-                  <span className="ml-1 text-xs text-muted-foreground" data-testid="badge-count-adoptions">(0)</span>
-                )}
-              </TabsTrigger>
-              <TabsTrigger value="fosters" className="text-xs sm:text-sm" data-testid="tab-fosters">
-                <Home className="h-3 w-3 mr-1 hidden sm:inline" />
-                Fosters
-                {activeFostersCount > 0 ? (
-                  <Badge className={`ml-1 h-5 px-1.5 text-xs ${pipelineBadgeColors.foster}`} data-testid="badge-count-fosters">
-                    ({activeFostersCount})
-                  </Badge>
-                ) : (
-                  <span className="ml-1 text-xs text-muted-foreground" data-testid="badge-count-fosters">(0)</span>
-                )}
-              </TabsTrigger>
-              <TabsTrigger value="volunteers" className="text-xs sm:text-sm" data-testid="tab-volunteers">
-                <Users className="h-3 w-3 mr-1 hidden sm:inline" />
-                Volunteers
-                {activeVolunteersCount > 0 ? (
-                  <Badge className={`ml-1 h-5 px-1.5 text-xs ${pipelineBadgeColors.volunteer}`} data-testid="badge-count-volunteers">
-                    ({activeVolunteersCount})
-                  </Badge>
-                ) : (
-                  <span className="ml-1 text-xs text-muted-foreground" data-testid="badge-count-volunteers">(0)</span>
-                )}
-              </TabsTrigger>
-              <TabsTrigger value="intake" className="text-xs sm:text-sm" data-testid="tab-intake">
-                <Dog className="h-3 w-3 mr-1 hidden sm:inline" />
-                Intake
-                {activeIntakesCount > 0 ? (
-                  <Badge className={`ml-1 h-5 px-1.5 text-xs ${pipelineBadgeColors.intake}`} data-testid="badge-count-intake">
-                    ({activeIntakesCount})
-                  </Badge>
-                ) : (
-                  <span className="ml-1 text-xs text-muted-foreground" data-testid="badge-count-intake">(0)</span>
-                )}
-              </TabsTrigger>
+            <TabsList className={`w-full h-auto flex flex-wrap ${availableTabs.length === 1 ? '' : availableTabs.length === 2 ? 'sm:grid sm:grid-cols-2' : availableTabs.length === 3 ? 'sm:grid sm:grid-cols-3' : 'sm:grid sm:grid-cols-4'} mb-4 gap-1`} data-testid="pipeline-tabs">
+              {canViewAdoptions && (
+                <TabsTrigger value="adoptions" className="text-xs sm:text-sm" data-testid="tab-adoptions">
+                  <Heart className="h-3 w-3 mr-1 hidden sm:inline" />
+                  Adoptions
+                  {activeAdoptionsCount > 0 ? (
+                    <Badge className={`ml-1 h-5 px-1.5 text-xs ${pipelineBadgeColors.adoption}`} data-testid="badge-count-adoptions">
+                      ({activeAdoptionsCount})
+                    </Badge>
+                  ) : (
+                    <span className="ml-1 text-xs text-muted-foreground" data-testid="badge-count-adoptions">(0)</span>
+                  )}
+                </TabsTrigger>
+              )}
+              {canViewFosters && (
+                <TabsTrigger value="fosters" className="text-xs sm:text-sm" data-testid="tab-fosters">
+                  <Home className="h-3 w-3 mr-1 hidden sm:inline" />
+                  Fosters
+                  {activeFostersCount > 0 ? (
+                    <Badge className={`ml-1 h-5 px-1.5 text-xs ${pipelineBadgeColors.foster}`} data-testid="badge-count-fosters">
+                      ({activeFostersCount})
+                    </Badge>
+                  ) : (
+                    <span className="ml-1 text-xs text-muted-foreground" data-testid="badge-count-fosters">(0)</span>
+                  )}
+                </TabsTrigger>
+              )}
+              {canViewVolunteers && (
+                <TabsTrigger value="volunteers" className="text-xs sm:text-sm" data-testid="tab-volunteers">
+                  <Users className="h-3 w-3 mr-1 hidden sm:inline" />
+                  Volunteers
+                  {activeVolunteersCount > 0 ? (
+                    <Badge className={`ml-1 h-5 px-1.5 text-xs ${pipelineBadgeColors.volunteer}`} data-testid="badge-count-volunteers">
+                      ({activeVolunteersCount})
+                    </Badge>
+                  ) : (
+                    <span className="ml-1 text-xs text-muted-foreground" data-testid="badge-count-volunteers">(0)</span>
+                  )}
+                </TabsTrigger>
+              )}
+              {canViewIntake && (
+                <TabsTrigger value="intake" className="text-xs sm:text-sm" data-testid="tab-intake">
+                  <Dog className="h-3 w-3 mr-1 hidden sm:inline" />
+                  Intake
+                  {activeIntakesCount > 0 ? (
+                    <Badge className={`ml-1 h-5 px-1.5 text-xs ${pipelineBadgeColors.intake}`} data-testid="badge-count-intake">
+                      ({activeIntakesCount})
+                    </Badge>
+                  ) : (
+                    <span className="ml-1 text-xs text-muted-foreground" data-testid="badge-count-intake">(0)</span>
+                  )}
+                </TabsTrigger>
+              )}
             </TabsList>
 
-            <TabsContent value="adoptions" data-testid="content-adoptions">
+            {canViewAdoptions && (
+              <TabsContent value="adoptions" data-testid="content-adoptions">
               <div className="flex items-center justify-between gap-2 mb-2">
                 <span className="text-sm font-medium text-muted-foreground">Adoption Applications</span>
                 <Link href={`${basePath}/dashboard/applications`} className="text-xs text-muted-foreground hover-elevate flex items-center gap-1" data-testid="link-view-all-adoptions">
@@ -567,8 +598,10 @@ export default function PipelineManager({ activeTab, onTabChange }: PipelineMana
                 )}
               </ScrollArea>
             </TabsContent>
+            )}
 
-            <TabsContent value="fosters" data-testid="content-fosters">
+            {canViewFosters && (
+              <TabsContent value="fosters" data-testid="content-fosters">
               <div className="flex items-center justify-between gap-2 mb-2">
                 <span className="text-sm font-medium text-muted-foreground">Foster Applications</span>
                 <Link href={`${basePath}/dashboard/foster-pipeline`} className="text-xs text-muted-foreground hover-elevate flex items-center gap-1" data-testid="link-view-all-fosters">
@@ -611,8 +644,10 @@ export default function PipelineManager({ activeTab, onTabChange }: PipelineMana
                 )}
               </ScrollArea>
             </TabsContent>
+            )}
 
-            <TabsContent value="volunteers" data-testid="content-volunteers">
+            {canViewVolunteers && (
+              <TabsContent value="volunteers" data-testid="content-volunteers">
               <div className="flex items-center justify-between gap-2 mb-2">
                 <span className="text-sm font-medium text-muted-foreground">Volunteer Applications</span>
                 <Link href={`${basePath}/dashboard/volunteer-pipeline`} className="text-xs text-muted-foreground hover-elevate flex items-center gap-1" data-testid="link-view-all-volunteers">
@@ -655,8 +690,10 @@ export default function PipelineManager({ activeTab, onTabChange }: PipelineMana
                 )}
               </ScrollArea>
             </TabsContent>
+            )}
 
-            <TabsContent value="intake" data-testid="content-intake">
+            {canViewIntake && (
+              <TabsContent value="intake" data-testid="content-intake">
               <div className="flex items-center justify-between gap-2 mb-2">
                 <span className="text-sm font-medium text-muted-foreground">Intake Requests</span>
                 <Link href={`${basePath}/dashboard/intake`} className="text-xs text-muted-foreground hover-elevate flex items-center gap-1" data-testid="link-view-all-intake">
@@ -698,6 +735,7 @@ export default function PipelineManager({ activeTab, onTabChange }: PipelineMana
                 )}
               </ScrollArea>
             </TabsContent>
+            )}
           </Tabs>
         </CardContent>
       </Card>
