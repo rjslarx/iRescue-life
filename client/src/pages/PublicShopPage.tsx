@@ -132,7 +132,7 @@ export default function PublicShopPage() {
             {products.map((product) => (
               <Link 
                 key={product.id} 
-                href={`${basePath}/shop/${product.slug}`}
+                href={`/shop/${product.slug}`}
                 className="block"
               >
                 <Card 

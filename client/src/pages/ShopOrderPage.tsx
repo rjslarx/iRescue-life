@@ -109,7 +109,7 @@ export default function ShopOrderPage() {
           <p className="text-muted-foreground mb-4">
             We couldn't find this order. Please check your order number or contact support.
           </p>
-          <Link href={`${basePath}/shop`}>
+          <Link href="/shop">
             <Button>
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back to Shop
@@ -128,7 +128,7 @@ export default function ShopOrderPage() {
       <PublicHeader rescueName={rescueName} logoUrl={tenant?.logoUrl} />
 
       <main className="container max-w-2xl mx-auto px-4 py-8">
-        <Link href={`${basePath}/shop`} className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground mb-6">
+        <Link href="/shop" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground mb-6">
           <ArrowLeft className="h-4 w-4 mr-1" />
           Back to Shop
         </Link>

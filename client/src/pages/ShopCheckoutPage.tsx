@@ -102,7 +102,7 @@ function StripeCheckoutForm({
             title: "Payment successful!",
             description: "Thank you for your purchase. You will receive a confirmation email shortly.",
           });
-          setLocation(`${basePath}/shop/order/${orderNumber}`);
+          setLocation(`/shop/order/${orderNumber}`);
         } else {
           setError('Payment was processed but order confirmation failed. Please contact support.');
         }
@@ -304,7 +304,7 @@ export default function ShopCheckoutPage() {
           <p className="text-muted-foreground mb-4">
             Online payments are not currently configured for this organization.
           </p>
-          <Link href={`${basePath}/shop`}>
+          <Link href="/shop">
             <Button>
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back to Shop
@@ -325,7 +325,7 @@ export default function ShopCheckoutPage() {
           <p className="text-muted-foreground mb-4">
             Add some items to your cart to proceed to checkout.
           </p>
-          <Link href={`${basePath}/shop`}>
+          <Link href="/shop">
             <Button>
               <ArrowLeft className="h-4 w-4 mr-2" />
               Continue Shopping
@@ -341,7 +341,7 @@ export default function ShopCheckoutPage() {
       <PublicHeader rescueName={rescueName} logoUrl={tenant?.logoUrl} />
 
       <main className="container max-w-4xl mx-auto px-4 py-8">
-        <Link href={`${basePath}/shop`} className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground mb-6">
+        <Link href="/shop" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground mb-6">
           <ArrowLeft className="h-4 w-4 mr-1" />
           Back to Shop
         </Link>
