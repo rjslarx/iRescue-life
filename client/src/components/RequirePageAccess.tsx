@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useLocation } from 'wouter';
 import { usePagePermissions } from '@/hooks/usePagePermissions';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTenant } from '@/contexts/TenantContext';
 import { Loader2 } from 'lucide-react';
 
 interface RequirePageAccessProps {
@@ -12,16 +13,18 @@ interface RequirePageAccessProps {
 
 /**
  * Route guard component that checks if user has permission to access a page
- * Redirects to fallback path (default: /dashboard) if access is denied
+ * Redirects to fallback path if access is denied
+ * Special handling for dashboard: redirects to calendar if user has calendar access but not dashboard
  */
 export function RequirePageAccess({ 
   pageId, 
   children, 
-  fallbackPath = '/dashboard' 
+  fallbackPath
 }: RequirePageAccessProps) {
   const [, navigate] = useLocation();
   const { user, isLoading: authLoading } = useAuth();
   const { canAccessPage, isLoading: permissionsLoading } = usePagePermissions();
+  const { basePath } = useTenant();
 
   useEffect(() => {
     // Wait for auth to complete
@@ -44,10 +47,19 @@ export function RequirePageAccess({
     const hasAccess = canAccessPage(pageId);
 
     if (!hasAccess) {
-      // Redirect to fallback path
-      navigate(fallbackPath);
+      // Smart redirect: if accessing dashboard without permission but has calendar access,
+      // redirect to calendar instead of generic fallback (prevents redirect loops)
+      if (pageId === 'dashboard' && canAccessPage('calendar') && user.activeRole !== 'foster') {
+        navigate(`${basePath}/dashboard/calendar`);
+      } else if (pageId === 'dashboard' && user.activeRole === 'foster' && canAccessPage('my-fosters')) {
+        // Foster users should go to my-fosters page
+        navigate(`${basePath}/dashboard/my-fosters`);
+      } else {
+        // Use provided fallback or default to basePath dashboard
+        navigate(fallbackPath || `${basePath}/dashboard`);
+      }
     }
-  }, [pageId, canAccessPage, permissionsLoading, authLoading, user, navigate, fallbackPath]);
+  }, [pageId, canAccessPage, permissionsLoading, authLoading, user, navigate, fallbackPath, basePath]);
 
   // Show loading state while auth or permissions are loading
   if (authLoading || permissionsLoading) {
