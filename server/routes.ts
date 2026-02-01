@@ -12875,14 +12875,37 @@ Submitted: ${new Date().toLocaleString()}
       next(error);
     }
   });
-
   /**
    * GET /api/volunteer-applications
-   * List volunteer applications (admin/staff only)
+   * List volunteer applications (admin/staff OR users with volunteer page permissions)
    */
-  app.get('/api/volunteer-applications', requireTenant, requireAuth, requireRole('admin', 'owner', 'board_member', 'staff', 'intake_coordinator'), async (req, res, next) => {
+  app.get('/api/volunteer-applications', requireTenant, requireAuth, async (req, res, next) => {
     try {
-      const { volunteerApplications } = await import('@shared/schema');
+      const { volunteerApplications, userPagePermissions } = await import('@shared/schema');
+      
+      // Check if user has admin-like role
+      const adminRoles = ['admin', 'owner', 'board_member', 'staff', 'intake_coordinator'];
+      const hasAdminRole = adminRoles.includes(req.user!.activeRole || '');
+      
+      // If not admin role, check for page permission grants
+      if (!hasAdminRole) {
+        const [volunteerPermission] = await db
+          .select({ id: userPagePermissions.id })
+          .from(userPagePermissions)
+          .where(and(
+            eq(userPagePermissions.tenantId, req.tenant!.id),
+            eq(userPagePermissions.userId, req.user!.id),
+            or(
+              eq(userPagePermissions.pageId, 'volunteers'),
+              eq(userPagePermissions.pageId, 'volunteer-pipeline')
+            )
+          ))
+          .limit(1);
+        
+        if (!volunteerPermission) {
+          return res.status(403).json({ error: 'Access denied' });
+        }
+      }
       
       const applications = await db
         .select()
