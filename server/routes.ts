@@ -8397,17 +8397,41 @@ Crawl-delay: 1
       }
 
       // Update session with signature
+      const signedAt = new Date();
       await db
         .update(fosterAgreementSessions)
         .set({
           status: 'signed',
-          signedAt: new Date(),
+          signedAt,
           signatureData: signatureData.signatureImageData,
           signedIp: req.ip,
           renderedContract,
           updatedAt: new Date(),
         })
         .where(eq(fosterAgreementSessions.id, session.id));
+
+      // Generate PDF of the signed agreement
+      let contractPdfUrl: string | undefined;
+      try {
+        const { generateFosterAgreementPDF } = await import('./services/foster-agreement-pdf');
+        if (renderedContract) {
+          contractPdfUrl = await generateFosterAgreementPDF(session.id, renderedContract, {
+            ipAddress: req.ip,
+            signedAt,
+          });
+          
+          // Update session with PDF URL
+          await db
+            .update(fosterAgreementSessions)
+            .set({ contractPdfUrl })
+            .where(eq(fosterAgreementSessions.id, session.id));
+          
+          console.log(`[Foster Agreement] Generated PDF for session ${session.id}: ${contractPdfUrl}`);
+        }
+      } catch (pdfError) {
+        console.error('[Foster Agreement] Failed to generate PDF:', pdfError);
+        // Don't fail the signing process if PDF generation fails
+      }
 
       // Update foster application to 'active_pool' status (approved foster)
       await db
@@ -8554,6 +8578,78 @@ Crawl-delay: 1
       }
 
       res.json({ success: true });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // ============================================================================
+  // Foster Agreement Download Routes
+  // ============================================================================
+
+  /**
+   * GET /api/foster-agreements/sessions
+   * List all foster agreement sessions for tenant (staff only)
+   */
+  app.get('/api/foster-agreements/sessions', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      const { fosterAgreementSessions } = await import('@shared/schema');
+      
+      const sessions = await db
+        .select()
+        .from(fosterAgreementSessions)
+        .where(eq(fosterAgreementSessions.tenantId, req.tenant!.id))
+        .orderBy(desc(fosterAgreementSessions.createdAt));
+      
+      res.json({ sessions });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/foster-agreements/sessions/:sessionId/download
+   * Download signed foster agreement PDF (staff only)
+   * Returns a time-limited signed URL for secure download
+   */
+  app.get('/api/foster-agreements/sessions/:sessionId/download', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      const { fosterAgreementSessions } = await import('@shared/schema');
+      const { generateSignedFosterContractUrl } = await import('./services/foster-agreement-pdf');
+      
+      const [session] = await db
+        .select()
+        .from(fosterAgreementSessions)
+        .where(
+          and(
+            eq(fosterAgreementSessions.id, req.params.sessionId),
+            eq(fosterAgreementSessions.tenantId, req.tenant!.id)
+          )
+        )
+        .limit(1);
+      
+      if (!session) {
+        return res.status(404).json({ error: 'Foster agreement session not found' });
+      }
+      
+      if (session.status !== 'signed') {
+        return res.status(400).json({ error: 'Agreement has not been signed yet' });
+      }
+      
+      if (!session.contractPdfUrl) {
+        return res.status(404).json({ error: 'PDF not available for this agreement' });
+      }
+      
+      // Generate time-limited signed URL (15 minutes expiry)
+      const signedUrl = await generateSignedFosterContractUrl(session.contractPdfUrl, 900);
+      
+      res.json({
+        downloadUrl: signedUrl,
+        signedAt: session.signedAt,
+        fosterName: session.fosterName,
+        fosterEmail: session.fosterEmail,
+        expiresIn: 900,
+      });
     } catch (error) {
       next(error);
     }

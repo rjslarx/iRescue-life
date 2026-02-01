@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, CheckCircle, XCircle, Clock, Users, Heart, Package, MessageSquare, AlertCircle, History } from "lucide-react";
+import { Loader2, CheckCircle, XCircle, Clock, Users, Heart, Package, MessageSquare, AlertCircle, History, Download } from "lucide-react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { useLocation } from "wouter";
 import {
@@ -59,6 +59,14 @@ interface FosterUpdatesData {
   fosterUpdates: FosterUpdateWithDetails[];
 }
 
+interface FosterAgreementSession {
+  id: string;
+  fosterApplicationId: string | null;
+  status: 'pending' | 'signed' | 'expired';
+  signedAt: string | null;
+  contractPdfUrl: string | null;
+}
+
 export default function FosterManagementPage() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -94,6 +102,43 @@ export default function FosterManagementPage() {
   const { data: fosterUpdatesData, isLoading: fosterUpdatesLoading } = useQuery<FosterUpdatesData>({
     queryKey: ['/api/foster-updates'],
   });
+
+  const { data: agreementSessionsData } = useQuery<{ sessions: FosterAgreementSession[] }>({
+    queryKey: ['/api/foster-agreements/sessions'],
+  });
+
+  const [downloadingAgreementId, setDownloadingAgreementId] = useState<string | null>(null);
+
+  const downloadAgreementMutation = useMutation({
+    mutationFn: async (sessionId: string) => {
+      setDownloadingAgreementId(sessionId);
+      const response = await apiRequest('GET', `/api/foster-agreements/sessions/${sessionId}/download`);
+      return response.json();
+    },
+    onSuccess: (data) => {
+      if (data.downloadUrl) {
+        window.open(data.downloadUrl, '_blank');
+        toast({
+          title: "Download started",
+          description: "The signed foster agreement is being downloaded.",
+        });
+      }
+      setDownloadingAgreementId(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to download agreement",
+        description: error.message || "Please try again later.",
+        variant: "destructive",
+      });
+      setDownloadingAgreementId(null);
+    },
+  });
+
+  const getSignedAgreementSession = (applicationId: string): FosterAgreementSession | null => {
+    const sessions = agreementSessionsData?.sessions || [];
+    return sessions.find(s => s.fosterApplicationId === applicationId && s.status === 'signed' && s.contractPdfUrl) || null;
+  };
 
   const updateApplicationMutation = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: 'approved' | 'rejected' }) => {
@@ -382,6 +427,31 @@ export default function FosterManagementPage() {
                                     </Button>
                                   </>
                                 )}
+                                {(() => {
+                                  const signedSession = getSignedAgreementSession(app.id);
+                                  if (signedSession) {
+                                    const isDownloading = downloadingAgreementId === signedSession.id;
+                                    return (
+                                      <Button
+                                        size="sm"
+                                        variant="secondary"
+                                        onClick={() => downloadAgreementMutation.mutate(signedSession.id)}
+                                        disabled={isDownloading}
+                                        data-testid={`button-download-agreement-${app.id}`}
+                                      >
+                                        {isDownloading ? (
+                                          <Loader2 className="h-4 w-4 animate-spin" />
+                                        ) : (
+                                          <>
+                                            <Download className="h-4 w-4 mr-1" />
+                                            Agreement
+                                          </>
+                                        )}
+                                      </Button>
+                                    );
+                                  }
+                                  return null;
+                                })()}
                               </div>
                             </TableCell>
                           </TableRow>

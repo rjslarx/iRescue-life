@@ -2830,6 +2830,7 @@ export const fosterAgreementSessions = pgTable("foster_agreement_sessions", {
   signatureData: text("signature_data"), // Base64 signature image
   signedIp: text("signed_ip"),
   renderedContract: text("rendered_contract"), // HTML with merged fields and signature
+  contractPdfUrl: text("contract_pdf_url"), // URL to the generated PDF in object storage
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

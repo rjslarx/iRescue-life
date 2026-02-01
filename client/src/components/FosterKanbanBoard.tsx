@@ -17,7 +17,8 @@ import {
   Send,
   Eye,
   ArrowRight,
-  Zap
+  Zap,
+  Download
 } from "lucide-react";
 import MobilePipelineView, { PipelineStage, PipelineCard } from "./MobilePipelineView";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -51,7 +52,9 @@ interface FosterKanbanBoardProps {
   onMoveApplication?: (applicationId: string, newStage: string) => void;
   onSendAgreement?: (application: FosterApplication) => void;
   onViewApplication?: (application: FosterApplication) => void;
+  onDownloadAgreement?: (sessionId: string) => void;
   sendingAgreementId?: string | null;
+  downloadingAgreementId?: string | null;
 }
 
 const stages: PipelineStage[] = [
@@ -127,7 +130,9 @@ export default function FosterKanbanBoard({
   onMoveApplication, 
   onSendAgreement,
   onViewApplication,
-  sendingAgreementId 
+  onDownloadAgreement,
+  sendingAgreementId,
+  downloadingAgreementId
 }: FosterKanbanBoardProps) {
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const isMobile = useIsMobile();
@@ -351,6 +356,27 @@ export default function FosterKanbanBoard({
                                   <CheckCircle2 className="h-3 w-3" />
                                   Agreement signed - ready for Active Pool
                                 </div>
+                              )}
+
+                              {app.agreementStatus && app.agreementStatus.status === 'signed' && app.agreementStatus.sessionId && onDownloadAgreement && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="w-full mt-2"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onDownloadAgreement(app.agreementStatus!.sessionId!);
+                                  }}
+                                  disabled={downloadingAgreementId === app.agreementStatus.sessionId}
+                                  data-testid={`button-download-agreement-${app.id}`}
+                                >
+                                  {downloadingAgreementId === app.agreementStatus.sessionId ? (
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                  ) : (
+                                    <Download className="h-4 w-4 mr-2" />
+                                  )}
+                                  Download Agreement
+                                </Button>
                               )}
                             </CardContent>
                           </Card>

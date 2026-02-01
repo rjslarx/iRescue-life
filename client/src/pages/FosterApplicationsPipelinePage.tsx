@@ -41,6 +41,7 @@ export default function FosterApplicationsPipelinePage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [sendingAgreementId, setSendingAgreementId] = useState<string | null>(null);
+  const [downloadingAgreementId, setDownloadingAgreementId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"pipeline" | "active_pool">("pipeline");
   const [searchQuery, setSearchQuery] = useState("");
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
@@ -115,6 +116,32 @@ export default function FosterApplicationsPipelinePage() {
         variant: "destructive",
       });
       setSendingAgreementId(null);
+    },
+  });
+
+  const downloadAgreementMutation = useMutation({
+    mutationFn: async (sessionId: string) => {
+      setDownloadingAgreementId(sessionId);
+      const response = await apiRequest('GET', `/api/foster-agreements/sessions/${sessionId}/download`);
+      return response.json();
+    },
+    onSuccess: (data) => {
+      if (data.downloadUrl) {
+        window.open(data.downloadUrl, '_blank');
+        toast({
+          title: "Download started",
+          description: "The signed foster agreement is being downloaded.",
+        });
+      }
+      setDownloadingAgreementId(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to download agreement",
+        description: error.message || "Please try again later.",
+        variant: "destructive",
+      });
+      setDownloadingAgreementId(null);
     },
   });
 
@@ -224,6 +251,10 @@ export default function FosterApplicationsPipelinePage() {
     });
   };
 
+  const handleDownloadAgreement = (sessionId: string) => {
+    downloadAgreementMutation.mutate(sessionId);
+  };
+
   const handleViewApplication = (application: { id: string; applicantName: string; email: string; phone: string; stage: string }) => {
     const fullApp = data?.applications.find(a => a.id === application.id);
     setApplicationToView({
@@ -287,7 +318,9 @@ export default function FosterApplicationsPipelinePage() {
               onMoveApplication={handleMoveApplication}
               onSendAgreement={handleSendAgreement}
               onViewApplication={handleViewApplication}
+              onDownloadAgreement={handleDownloadAgreement}
               sendingAgreementId={sendingAgreementId}
+              downloadingAgreementId={downloadingAgreementId}
             />
           </TabsContent>
 
