@@ -110,11 +110,9 @@ export default function Dashboard() {
   const [, setLocation] = useLocation();
 
   // Check if user should be redirected to calendar
-  // Volunteers default to calendar unless they have explicit dashboard permission
-  const isVolunteerRole = user?.activeRole === 'volunteer';
-  const shouldRedirectVolunteer = isVolunteerRole && !canViewDashboard && canViewCalendar;
-  const shouldRedirectNoAccess = !hasAnyCommandCenterAccess && canViewCalendar && user?.activeRole !== 'foster';
-  const shouldRedirectToCalendar = shouldRedirectVolunteer || shouldRedirectNoAccess;
+  // Only redirect users who have NO command center access at all (no dashboard, no pipelines, no medical, etc.)
+  // Users with volunteer-pipeline or other command center permissions should stay on dashboard
+  const shouldRedirectToCalendar = !hasAnyCommandCenterAccess && canViewCalendar && user?.activeRole !== 'foster';
 
   // Redirect volunteers to calendar page by default
   // This provides a better UX for the volunteer workflow
