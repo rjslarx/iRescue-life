@@ -6,7 +6,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
 import { Stethoscope, ChevronRight, Syringe, ClipboardCheck, Pill } from "lucide-react";
 import type { Animal } from "@shared/schema";
-import { useTenant } from "@/contexts/TenantContext";
 
 interface AnimalsResponse {
   animals: Animal[];
@@ -61,7 +60,6 @@ interface DosesTodayResponse {
 }
 
 export default function MedicalSnapshotWidget() {
-  const { basePath } = useTenant();
   const { data, isLoading } = useQuery<AnimalsResponse>({
     queryKey: ['/api/animals'],
   });
@@ -112,7 +110,7 @@ export default function MedicalSnapshotWidget() {
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
-          <Link href={`${basePath}/dashboard/medical-pipeline?tab=treatments`}>
+          <Link href="/dashboard/medical-pipeline?tab=treatments">
             <div 
               className={`flex flex-col items-center p-3 rounded-md cursor-pointer hover-elevate ${
                 medsDueToday > 0 
@@ -129,7 +127,7 @@ export default function MedicalSnapshotWidget() {
             </div>
           </Link>
           
-          <Link href={`${basePath}/dashboard/medical-pipeline?tab=intake`}>
+          <Link href="/dashboard/medical-pipeline?tab=intake">
             <div 
               className={`flex flex-col items-center p-3 rounded-md cursor-pointer hover-elevate ${
                 needsVettingCount > 0 
@@ -146,7 +144,7 @@ export default function MedicalSnapshotWidget() {
             </div>
           </Link>
           
-          <Link href={`${basePath}/dashboard/medical-pipeline?tab=surgery&section=scheduled-surgeries`}>
+          <Link href="/dashboard/medical-pipeline?tab=surgery&section=scheduled-surgeries">
             <div 
               className={`flex flex-col items-center p-3 rounded-md cursor-pointer hover-elevate ${
                 surgeryPending.length > 0 
@@ -164,7 +162,7 @@ export default function MedicalSnapshotWidget() {
           </Link>
         </div>
 
-        <Link href={`${basePath}/dashboard/medical-pipeline`}>
+        <Link href="/dashboard/medical-pipeline">
           <Button variant="ghost" size="sm" className="w-full" data-testid="link-view-medical">
             View Medical Pipeline
             <ChevronRight className="h-4 w-4 ml-1" />
