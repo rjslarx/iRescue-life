@@ -257,14 +257,24 @@ export default function FosterApplicationsPipelinePage() {
 
   const handleViewApplication = (application: { id: string; applicantName: string; email: string; phone: string; stage: string }) => {
     const fullApp = data?.applications.find(a => a.id === application.id);
-    setApplicationToView({
-      id: application.id,
-      applicantName: application.applicantName,
-      email: application.email,
-      phone: application.phone,
-      stage: application.stage,
-      createdAt: fullApp?.createdAt?.toString(),
-    });
+    if (fullApp) {
+      setApplicationToView({
+        ...fullApp,
+        email: fullApp.applicantEmail,
+        phone: fullApp.applicantPhone,
+        stage: fullApp.pipelineStatus || application.stage,
+        createdAt: fullApp.createdAt?.toString(),
+        formResponses: fullApp.customResponses,
+      });
+    } else {
+      setApplicationToView({
+        id: application.id,
+        applicantName: application.applicantName,
+        email: application.email,
+        phone: application.phone,
+        stage: application.stage,
+      });
+    }
     setViewDialogOpen(true);
   };
 

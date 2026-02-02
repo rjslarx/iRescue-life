@@ -125,12 +125,10 @@ export default function VolunteerApplicationsPipelinePage() {
     const app = applications.find(a => a.id === viewApplicationId);
     if (!app) return null;
     return {
-      id: app.id,
-      applicantName: app.applicantName,
-      applicantEmail: app.applicantEmail,
-      applicantPhone: app.applicantPhone,
+      ...app,
       pipelineStatus: app.pipelineStatus || 'new_applicant',
       createdAt: app.createdAt?.toString(),
+      formResponses: app.customResponses,
     };
   }, [viewApplicationId, applications]);
 
