@@ -1750,7 +1750,6 @@ Crawl-delay: 1
         fullName: z.string().optional(),
         phone: z.string().optional(),
         organizationName: z.string().optional(),
-        phone: z.string().optional(),
         message: z.string().optional(),
         landingPageUrl: z.string().optional(),
         referrer: z.string().optional(),
