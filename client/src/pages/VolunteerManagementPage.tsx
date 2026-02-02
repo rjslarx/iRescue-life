@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Users, UserCircle, Calendar, Plus } from "lucide-react";
+import { Loader2, Users, UserCircle, Calendar, Plus, FolderOpen, FileText, ExternalLink } from "lucide-react";
 import DashboardLayout from "@/components/DashboardLayout";
 import {
   Table,
@@ -40,12 +40,29 @@ interface UsersData {
   users: User[];
 }
 
+interface VolunteerApplicationBasic {
+  id: string;
+  applicantEmail: string;
+  driveFolderId: string | null;
+}
+
+interface FolderFile {
+  name: string;
+  path: string;
+  size: number;
+  updatedAt: string;
+  contentType: string;
+}
+
 export default function VolunteerManagementPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [selectedSignup, setSelectedSignup] = useState<VolunteerSignupWithOpportunity | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingOpportunity, setEditingOpportunity] = useState<VolunteerOpportunity | undefined>();
+  const [documentFolderEmail, setDocumentFolderEmail] = useState<string | null>(null);
+  const [documentFolderPath, setDocumentFolderPath] = useState<string | null>(null);
+  const [documentVolunteerName, setDocumentVolunteerName] = useState<string>('');
 
   const isAdmin = user?.roles?.includes('admin') || user?.roles?.includes('staff') || false;
 
@@ -70,11 +87,41 @@ export default function VolunteerManagementPage() {
     queryKey: ["/api/volunteer-opportunities"],
   });
 
+  // Fetch volunteer applications to get driveFolderIds
+  const { data: volunteerAppsData } = useQuery<{ applications: VolunteerApplicationBasic[] }>({
+    queryKey: ['/api/volunteer-applications'],
+    select: (data) => ({
+      applications: data.applications?.map(app => ({
+        id: app.id,
+        applicantEmail: app.applicantEmail,
+        driveFolderId: app.driveFolderId
+      })) || []
+    })
+  });
+
+  // Fetch folder files when a folder is selected
+  const { data: folderFilesData, isLoading: folderFilesLoading } = useQuery<{ files: FolderFile[] }>({
+    queryKey: ['/api/documents/folder', documentFolderPath],
+    queryFn: async () => {
+      if (!documentFolderPath) return { files: [] };
+      const response = await apiRequest('GET', `/api/documents/folder?path=${encodeURIComponent(documentFolderPath)}`);
+      return response.json();
+    },
+    enabled: !!documentFolderPath,
+  });
+
   const signups = signupsData?.signups || [];
   const allUsers = usersData?.users || [];
   // Filter users to show only those with volunteer role
   const volunteers = allUsers.filter(user => user.roles?.includes('volunteer'));
   const opportunities = opportunitiesData?.opportunities || [];
+  const volunteerApps = volunteerAppsData?.applications || [];
+
+  // Helper to find volunteer's folder by email
+  const getVolunteerFolder = (volunteerEmail: string): string | null => {
+    const app = volunteerApps.find(a => a.applicantEmail?.toLowerCase() === volunteerEmail?.toLowerCase());
+    return app?.driveFolderId || null;
+  };
 
   // Sign up mutation
   const signupMutation = useMutation({
@@ -277,17 +324,37 @@ export default function VolunteerManagementPage() {
                       <TableHead>Email</TableHead>
                       <TableHead>Phone</TableHead>
                       <TableHead>Joined Date</TableHead>
+                      <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {volunteers.map((volunteer) => (
-                      <TableRow key={volunteer.id} data-testid={`row-volunteer-${volunteer.id}`}>
-                        <TableCell className="font-medium">{volunteer.fullName}</TableCell>
-                        <TableCell>{volunteer.email}</TableCell>
-                        <TableCell>{volunteer.phone || '—'}</TableCell>
-                        <TableCell>{formatDate(volunteer.createdAt)}</TableCell>
-                      </TableRow>
-                    ))}
+                    {volunteers.map((volunteer) => {
+                      const folderPath = getVolunteerFolder(volunteer.email);
+                      return (
+                        <TableRow key={volunteer.id} data-testid={`row-volunteer-${volunteer.id}`}>
+                          <TableCell className="font-medium">{volunteer.fullName}</TableCell>
+                          <TableCell>{volunteer.email}</TableCell>
+                          <TableCell>{volunteer.phone || '—'}</TableCell>
+                          <TableCell>{formatDate(volunteer.createdAt)}</TableCell>
+                          <TableCell>
+                            {folderPath && (
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                onClick={() => {
+                                  setDocumentFolderPath(folderPath);
+                                  setDocumentVolunteerName(volunteer.fullName || volunteer.email);
+                                }}
+                                data-testid={`button-documents-${volunteer.id}`}
+                              >
+                                <FolderOpen className="h-4 w-4 mr-1" />
+                                Documents
+                              </Button>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </Card>
@@ -411,6 +478,59 @@ export default function VolunteerManagementPage() {
         onOpenChange={setDialogOpen}
         opportunity={editingOpportunity}
       />
+
+      {/* Documents Folder Dialog */}
+      <Dialog open={!!documentFolderPath} onOpenChange={(open) => !open && setDocumentFolderPath(null)}>
+        <DialogContent className="max-w-lg" data-testid="dialog-documents-folder">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FolderOpen className="h-5 w-5" />
+              Documents - {documentVolunteerName}
+            </DialogTitle>
+            <DialogDescription>
+              Files associated with this volunteer (application, hold harmless agreement, etc.)
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-2 max-h-80 overflow-y-auto">
+            {folderFilesLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin" />
+              </div>
+            ) : folderFilesData?.files && folderFilesData.files.length > 0 ? (
+              folderFilesData.files.map((file) => (
+                <Card key={file.path} className="p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <FileText className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{file.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {(file.size / 1024).toFixed(1)} KB • {new Date(file.updatedAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => window.open(file.path, '_blank')}
+                      data-testid={`button-download-file-${file.name}`}
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </Card>
+              ))
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                <FolderOpen className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                <p>No documents uploaded yet</p>
+                <p className="text-xs mt-1">Documents will appear here when uploaded</p>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }
