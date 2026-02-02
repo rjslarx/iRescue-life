@@ -10083,7 +10083,17 @@ ${renderedHtml}
       const { adoptionFormFields } = await import('@shared/schema');
       const { eq, and } = await import('drizzle-orm');
       
-      const fields = await db.select()
+      const fields = await db.select({
+        id: adoptionFormFields.id,
+        tenantId: adoptionFormFields.tenantId,
+        fieldName: adoptionFormFields.fieldName,
+        fieldLabel: adoptionFormFields.fieldLabel,
+        fieldType: adoptionFormFields.fieldType,
+        isRequired: adoptionFormFields.isRequired,
+        isActive: adoptionFormFields.isActive,
+        order: adoptionFormFields.order,
+        options: adoptionFormFields.options,
+      })
         .from(adoptionFormFields)
         .where(and(
           eq(adoptionFormFields.tenantId, req.tenant!.id),
@@ -10271,7 +10281,17 @@ ${renderedHtml}
       const { volunteerFormFields } = await import('@shared/schema');
       const { eq, and } = await import('drizzle-orm');
       
-      const fields = await db.select()
+      const fields = await db.select({
+        id: volunteerFormFields.id,
+        tenantId: volunteerFormFields.tenantId,
+        fieldName: volunteerFormFields.fieldName,
+        fieldLabel: volunteerFormFields.fieldLabel,
+        fieldType: volunteerFormFields.fieldType,
+        isRequired: volunteerFormFields.isRequired,
+        isActive: volunteerFormFields.isActive,
+        order: volunteerFormFields.order,
+        options: volunteerFormFields.options,
+      })
         .from(volunteerFormFields)
         .where(and(
           eq(volunteerFormFields.tenantId, req.tenant!.id),
@@ -10456,7 +10476,17 @@ ${renderedHtml}
       const { fosterFormFields } = await import('@shared/schema');
       const { eq, and } = await import('drizzle-orm');
       
-      const fields = await db.select()
+      const fields = await db.select({
+        id: fosterFormFields.id,
+        tenantId: fosterFormFields.tenantId,
+        fieldName: fosterFormFields.fieldName,
+        fieldLabel: fosterFormFields.fieldLabel,
+        fieldType: fosterFormFields.fieldType,
+        isRequired: fosterFormFields.isRequired,
+        isActive: fosterFormFields.isActive,
+        order: fosterFormFields.order,
+        options: fosterFormFields.options,
+      })
         .from(fosterFormFields)
         .where(and(
           eq(fosterFormFields.tenantId, req.tenant!.id),
@@ -10642,7 +10672,17 @@ ${renderedHtml}
       const { surrenderFormFields } = await import('@shared/schema');
       const { eq, and } = await import('drizzle-orm');
       
-      const fields = await db.select()
+      const fields = await db.select({
+        id: surrenderFormFields.id,
+        tenantId: surrenderFormFields.tenantId,
+        fieldName: surrenderFormFields.fieldName,
+        fieldLabel: surrenderFormFields.fieldLabel,
+        fieldType: surrenderFormFields.fieldType,
+        isRequired: surrenderFormFields.isRequired,
+        isActive: surrenderFormFields.isActive,
+        order: surrenderFormFields.order,
+        options: surrenderFormFields.options,
+      })
         .from(surrenderFormFields)
         .where(and(
           eq(surrenderFormFields.tenantId, req.tenant!.id),
@@ -10835,7 +10875,14 @@ ${renderedHtml}
         return res.status(400).json({ error: 'Invalid form type' });
       }
 
-      const [setting] = await db.select()
+      const [setting] = await db.select({
+        id: formSettings.id,
+        tenantId: formSettings.tenantId,
+        formType: formSettings.formType,
+        introText: formSettings.introText,
+        createdAt: formSettings.createdAt,
+        updatedAt: formSettings.updatedAt,
+      })
         .from(formSettings)
         .where(and(
           eq(formSettings.tenantId, req.tenant!.id),
@@ -10870,7 +10917,9 @@ ${renderedHtml}
       const data = updateSchema.parse(req.body);
 
       // Try to update first
-      const [existing] = await db.select()
+      const [existing] = await db.select({
+        id: formSettings.id,
+      })
         .from(formSettings)
         .where(and(
           eq(formSettings.tenantId, req.tenant!.id),
@@ -11258,7 +11307,13 @@ ${renderedHtml}
       
       // If email provided, find or create donor
       if (data.donorEmail) {
-        let [existingDonor] = await db.select()
+        let [existingDonor] = await db.select({
+          id: donors.id,
+          tenantId: donors.tenantId,
+          name: donors.name,
+          email: donors.email,
+          totalDonated: donors.totalDonated,
+        })
           .from(donors)
           .where(and(
             eq(donors.tenantId, req.tenant!.id),
@@ -12940,7 +12995,9 @@ Submitted: ${new Date().toLocaleString()}
                                  (oldStatus === 'pending' && data.status && data.status !== 'pending');
       if (shouldAutoDismiss) {
         try {
-          const existing = await db.select()
+          const existing = await db.select({
+            id: dismissedWidgetItems.id,
+          })
             .from(dismissedWidgetItems)
             .where(
               and(
@@ -13485,7 +13542,9 @@ Submitted: ${new Date().toLocaleString()}
       // Auto-dismiss from widget if moving from 'pending' to another status
       if (oldStatus === 'pending' && updateData.status && updateData.status !== 'pending') {
         try {
-          const existing = await db.select()
+          const existing = await db.select({
+            id: dismissedWidgetItems.id,
+          })
             .from(dismissedWidgetItems)
             .where(
               and(
@@ -14397,7 +14456,10 @@ Submitted: ${new Date().toLocaleString()}
       }
       
       // Fetch and verify the request exists
-      const [existing] = await db.select()
+      const [existing] = await db.select({
+        id: surrenderRequests.id,
+        status: surrenderRequests.status,
+      })
         .from(surrenderRequests)
         .where(and(
           eq(surrenderRequests.id, surrenderId),
@@ -14461,7 +14523,31 @@ Submitted: ${new Date().toLocaleString()}
       }
       
       // Fetch the surrender request
-      const [surrenderRequest] = await db.select()
+      const [surrenderRequest] = await db.select({
+        id: surrenderRequests.id,
+        tenantId: surrenderRequests.tenantId,
+        status: surrenderRequests.status,
+        dogName: surrenderRequests.dogName,
+        breed: surrenderRequests.breed,
+        age: surrenderRequests.age,
+        weight: surrenderRequests.weight,
+        gender: surrenderRequests.gender,
+        spayedNeutered: surrenderRequests.spayedNeutered,
+        houseTrained: surrenderRequests.houseTrained,
+        microchipped: surrenderRequests.microchipped,
+        vaccinated: surrenderRequests.vaccinated,
+        goodWithDogs: surrenderRequests.goodWithDogs,
+        goodWithCats: surrenderRequests.goodWithCats,
+        goodWithKids: surrenderRequests.goodWithKids,
+        specialNeeds: surrenderRequests.specialNeeds,
+        behaviorNotes: surrenderRequests.behaviorNotes,
+        surrenderReason: surrenderRequests.surrenderReason,
+        ownerName: surrenderRequests.ownerName,
+        ownerEmail: surrenderRequests.ownerEmail,
+        ownerPhone: surrenderRequests.ownerPhone,
+        photoUrls: surrenderRequests.photoUrls,
+        customResponses: surrenderRequests.customResponses,
+      })
         .from(surrenderRequests)
         .where(and(
           eq(surrenderRequests.id, surrenderId),
@@ -14736,7 +14822,9 @@ Submitted: ${new Date().toLocaleString()}
       // Auto-dismiss from widget if moving from 'pending' to another status
       if (oldStatus === 'pending' && data.status !== 'pending') {
         try {
-          const existing = await db.select()
+          const existing = await db.select({
+            id: dismissedWidgetItems.id,
+          })
             .from(dismissedWidgetItems)
             .where(
               and(
