@@ -283,13 +283,14 @@ export async function getAnimalById(tenantId: string, animalId: string): Promise
 /**
  * Create a new animal
  */
-export async function createAnimal(data: Omit<InsertAnimal, 'animalId'>): Promise<Animal> {
+export async function createAnimal(tenantId: string, data: Omit<InsertAnimal, 'animalId' | 'tenantId'>): Promise<Animal> {
   const animalId = await generateAnimalId();
   
   const [animal] = await db
     .insert(animals)
     .values({
       ...data,
+      tenantId,
       animalId,
     })
     .returning();
