@@ -448,7 +448,7 @@ export default function AnimalMedicalPage() {
         {/* Tabs */}
         <Tabs defaultValue="glance" className="w-full">
           <div className="overflow-x-auto -mx-6 px-6 md:mx-0 md:px-0">
-            <TabsList className="inline-flex w-auto min-w-full md:grid md:w-full md:grid-cols-9 gap-1">
+            <TabsList className="inline-flex w-auto min-w-full md:grid md:w-full md:grid-cols-10 gap-1">
               <TabsTrigger value="glance" data-testid="tab-glance" className="whitespace-nowrap text-xs md:text-sm px-3 md:px-4">At a Glance</TabsTrigger>
               <TabsTrigger value="history" data-testid="tab-history" className="whitespace-nowrap text-xs md:text-sm px-3 md:px-4">History</TabsTrigger>
               <TabsTrigger value="exams" data-testid="tab-exams" className="whitespace-nowrap text-xs md:text-sm px-3 md:px-4">Exams</TabsTrigger>
