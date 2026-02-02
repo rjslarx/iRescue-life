@@ -21,6 +21,7 @@ import MascotSettings from "@/components/MascotSettings";
 import NotificationSettings from "@/components/NotificationSettings";
 import MedicalReminderSettings from "@/components/MedicalReminderSettings";
 import MedicalProtocolSettings from "@/components/MedicalProtocolSettings";
+import OrganizationSettings from "@/components/OrganizationSettings";
 import VolunteerAlertSettings from "@/components/VolunteerAlertSettings";
 import VolunteerDigestSettings from "@/components/VolunteerDigestSettings";
 import QuickActionsSettings from "@/components/QuickActionsSettings";
@@ -3234,6 +3235,9 @@ export default function SettingsPage() {
 
                 {/* Medical Protocol Settings - Default medication rounds times */}
                 <MedicalProtocolSettings />
+
+                {/* Organization Legal Settings for Medical Transfer Packets */}
+                <OrganizationSettings />
 
                 {/* Volunteer Threshold Alerts */}
                 <Card>

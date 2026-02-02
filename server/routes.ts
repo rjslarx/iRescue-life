@@ -10086,13 +10086,16 @@ ${renderedHtml}
       const fields = await db.select({
         id: adoptionFormFields.id,
         tenantId: adoptionFormFields.tenantId,
-        fieldName: adoptionFormFields.fieldName,
-        fieldLabel: adoptionFormFields.fieldLabel,
+        label: adoptionFormFields.label,
         fieldType: adoptionFormFields.fieldType,
-        isRequired: adoptionFormFields.isRequired,
-        isActive: adoptionFormFields.isActive,
-        order: adoptionFormFields.order,
         options: adoptionFormFields.options,
+        required: adoptionFormFields.required,
+        placeholder: adoptionFormFields.placeholder,
+        helpText: adoptionFormFields.helpText,
+        textAbove: adoptionFormFields.textAbove,
+        textBelow: adoptionFormFields.textBelow,
+        order: adoptionFormFields.order,
+        isActive: adoptionFormFields.isActive,
       })
         .from(adoptionFormFields)
         .where(and(
@@ -16818,6 +16821,51 @@ Submitted: ${new Date().toLocaleString()}
       const [updatedTenant] = await db
         .update(tenants)
         .set(settingsToUpdate)
+        .where(eq(tenants.id, req.tenant!.id))
+        .returning();
+
+      res.json({ success: true, tenant: updatedTenant });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+
+
+
+  /**
+   * PATCH /api/tenant/settings/organization
+   * Update organization legal/veterinary settings (admin only)
+   */
+  app.patch('/api/tenant/settings/organization', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+    try {
+      const organizationSettingsSchema = z.object({
+        orgLegalName: z.string().optional().nullable(),
+        orgAddressStreet: z.string().optional().nullable(),
+        orgAddressCity: z.string().optional().nullable(),
+        orgAddressState: z.string().optional().nullable(),
+        orgAddressZip: z.string().optional().nullable(),
+        orgPhonePublic: z.string().optional().nullable(),
+        orgEmailRecords: z.string().optional().nullable(),
+        orgWebsiteUrl: z.string().optional().nullable(),
+        orgStateLicenseNumber: z.string().optional().nullable(),
+        orgUsdaLicenseNumber: z.string().optional().nullable(),
+        supervisingVetName: z.string().optional().nullable(),
+        supervisingVetLicense: z.string().optional().nullable(),
+        orgTaxEin: z.string().optional().nullable(),
+      });
+
+      const settings = organizationSettingsSchema.parse(req.body);
+
+      // Clean up empty strings to null
+      const cleanedSettings: Record<string, any> = {};
+      Object.entries(settings).forEach(([key, value]) => {
+        cleanedSettings[key] = value === '' ? null : value;
+      });
+
+      const [updatedTenant] = await db
+        .update(tenants)
+        .set(cleanedSettings)
         .where(eq(tenants.id, req.tenant!.id))
         .returning();
 

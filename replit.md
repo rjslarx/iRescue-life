@@ -41,6 +41,24 @@ The platform includes comprehensive animal, application, and financial managemen
 - **Volunteer Screener Notifications:** Additive email notification system for volunteer applications. Configure additional volunteer-specific notification emails in Settings that receive alerts in addition to general form notification recipients. Uses `volunteerApplicationNotificationEmails` field on tenants with dedupe merge logic.
 - **User-Based Page Permissions:** Individual user permission grants beyond role-based access. Admins can grant specific users access to pages (like volunteer pipeline) without changing their role. Uses `userPagePermissions` table and integrates with the Edit Team Member dialog in Team Management.
 - **Event QR Flyer with Quantity Selection:** Fundraising event ticket system that generates QR codes for events like trivia nights. Staff create event tickets via the Donation Links page with configurable event name, price (default $15), and recurring option. Customers scanning the QR code are taken to a public checkout page where they can select quantity (1-50), optionally cover transaction fees, and see a dynamic total. Uses `event_tickets` table in the database and integrates with Stripe checkout sessions.
+- **Medical Transfer Packet:** Official PDF document for inter-organizational animal transfers. Generated client-side using jspdf and jspdf-autotable. Includes organization letterhead, animal signalment, vaccination history (merged from vaccines and preventative care), diagnostic testing results, and current medications/preventatives. Features professional formatting with color-coded test results and microchip warnings. Accessible via "Download Official Packet" button on animal medical pages. Organization details configured in Settings > Organization tab (legal name, address, phone, state license, supervising veterinarian info).
+
+**CRITICAL jspdf-autotable Pattern:**
+When using jspdf-autotable with dynamic imports, you must call autoTable as a function with doc as the first parameter, NOT as a method on the doc object:
+```typescript
+// CORRECT:
+const jsPDFModule = await import('jspdf');
+const jsPDF = jsPDFModule.default;
+const autoTableModule = await import('jspdf-autotable');
+const autoTable = autoTableModule.default;
+
+const doc = new jsPDF();
+autoTable(doc, { startY: 20, head: [['Name']], body: [['Value']] });
+
+// WRONG (causes "doc.autoTable is not a function" error):
+await import('jspdf-autotable');
+(doc as any).autoTable({ ... });
+```
 
 **CRITICAL Drizzle ORM Pattern:**
 When using dynamic imports (`await import('@shared/schema')`) in route handlers, ALWAYS use explicit field selection in Drizzle queries. Using `db.select()` without explicit fields or passing table references like `{ record: myTable }` causes `orderSelectedFields` errors. Always select fields explicitly:

@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import MedicalTransferPacket from "@/components/MedicalTransferPacket";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   ArrowLeft, 
@@ -419,14 +420,20 @@ export default function AnimalMedicalPage() {
                 </p>
               </div>
             </div>
-            <Button
-              onClick={() => window.open(`${basePath}/dashboard/animals/${animalId}/health-record`, '_blank')}
-              data-testid="button-print-records"
-              className="w-full md:w-auto"
-            >
-              <FileText className="w-4 h-4 mr-2" />
-              Print Health Record
-            </Button>
+            <div className="flex flex-col md:flex-row gap-2">
+              <MedicalTransferPacket 
+                animalId={animalId} 
+                animalName={animal?.name || 'Animal'}
+              />
+              <Button
+                onClick={() => window.open(`${basePath}/dashboard/animals/${animalId}/health-record`, '_blank')}
+                data-testid="button-print-records"
+                className="w-full md:w-auto"
+              >
+                <FileText className="w-4 h-4 mr-2" />
+                Print Health Record
+              </Button>
+            </div>
           </div>
         </div>
 

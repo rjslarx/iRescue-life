@@ -264,6 +264,21 @@ export const tenants = pgTable("tenants", {
   defaultMiddayRounds: text("default_midday_rounds").notNull().default("13:00"), // Default: 1:00 PM
   defaultEveningRounds: text("default_evening_rounds").notNull().default("17:00"), // Default: 5:00 PM
   
+  // Organization Legal/Veterinary Settings (for Medical Transfer Packets)
+  orgLegalName: text("org_legal_name"), // Official legal name for documents
+  orgAddressStreet: text("org_address_street"),
+  orgAddressCity: text("org_address_city"),
+  orgAddressState: text("org_address_state"),
+  orgAddressZip: text("org_address_zip"),
+  orgPhonePublic: text("org_phone_public"), // Public-facing phone number
+  orgEmailRecords: text("org_email_records"), // Email for records requests
+  orgWebsiteUrl: text("org_website_url"),
+  orgStateLicenseNumber: text("org_state_license_number"), // State shelter/rescue license
+  orgUsdaLicenseNumber: text("org_usda_license_number"), // USDA license if applicable
+  supervisingVetName: text("supervising_vet_name"), // Supervising veterinarian name
+  supervisingVetLicense: text("supervising_vet_license"), // Vet license number
+  orgTaxEin: text("org_tax_ein"), // Tax EIN for receiving organizations
+  
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
