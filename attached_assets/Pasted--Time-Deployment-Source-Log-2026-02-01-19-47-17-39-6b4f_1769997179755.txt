@@ -1,0 +1,119 @@
+
+Time
+Deployment
+Source
+Log
+2026-02-01 19:47:17.39
+6b4f12e1
+User
+[TENANT DEBUG] GET /objects/3a4c2321-6a54-41a4-acf3-a7f2ffe0c051/animal-photos/8529a218-bdf2-43b4-a4bf-e2cb98cbbb4b - hostname: haseyasnewbeginningar.com, x-tenant-id: undefined, session.tenantId: undefined
+2026-02-01 19:47:29.40
+6b4f12e1
+User
+[TENANT DEBUG] Custom domain detected: haseyasnewbeginningar.com (original: haseyasnewbeginningar.com)
+2026-02-01 19:47:29.40
+6b4f12e1
+User
+[TENANT DEBUG] GET /objects/3a4c2321-6a54-41a4-acf3-a7f2ffe0c051/animal-photos/794480e9-5e55-46a1-ad0b-a96fe78c9133 - hostname: haseyasnewbeginningar.com, x-tenant-id: undefined, session.tenantId: undefined
+2026-02-01 19:47:33.40
+6b4f12e1
+User
+[TENANT DEBUG] GET /objects/3a4c2321-6a54-41a4-acf3-a7f2ffe0c051/animal-photos/12cd3c80-ab00-4e69-8c39-2fb69595a3d6 - hostname: haseyasnewbeginningar.com, x-tenant-id: undefined, session.tenantId: undefined
+2026-02-01 19:47:33.40
+6b4f12e1
+User
+[TENANT DEBUG] Custom domain detected: haseyasnewbeginningar.com (original: haseyasnewbeginningar.com)
+2026-02-01 19:47:33.40
+6b4f12e1
+User
+[TENANT DEBUG] Custom domain detected: haseyasnewbeginningar.com (original: haseyasnewbeginningar.com)
+2026-02-01 19:47:33.40
+6b4f12e1
+User
+[TENANT DEBUG] GET /objects/3a4c2321-6a54-41a4-acf3-a7f2ffe0c051/animal-photos/a8197294-6f80-4329-ba63-505e97f7736e - hostname: haseyasnewbeginningar.com, x-tenant-id: undefined, session.tenantId: undefined
+2026-02-01 19:47:33.40
+6b4f12e1
+User
+[TENANT DEBUG] GET /objects/3a4c2321-6a54-41a4-acf3-a7f2ffe0c051/animal-photos/060a8287-f5a4-4930-864d-26532b3c9a58 - hostname: haseyasnewbeginningar.com, x-tenant-id: undefined, session.tenantId: undefined
+2026-02-01 19:47:33.40
+6b4f12e1
+User
+[TENANT DEBUG] Custom domain detected: haseyasnewbeginningar.com (original: haseyasnewbeginningar.com)
+2026-02-01 19:47:33.40
+6b4f12e1
+User
+[TENANT DEBUG] GET /objects/3a4c2321-6a54-41a4-acf3-a7f2ffe0c051/animal-photos/fdb3f752-d508-486a-b438-59d3412814d8 - hostname: haseyasnewbeginningar.com, x-tenant-id: undefined, session.tenantId: undefined
+2026-02-01 19:47:33.40
+6b4f12e1
+User
+[TENANT DEBUG] Custom domain detected: haseyasnewbeginningar.com (original: haseyasnewbeginningar.com)
+2026-02-01 19:47:37.40
+6b4f12e1
+User
+[TENANT DEBUG] Custom domain detected: haseyasnewbeginningar.com (original: haseyasnewbeginningar.com)
+2026-02-01 19:47:37.40
+6b4f12e1
+User
+[TENANT DEBUG] GET /objects/3a4c2321-6a54-41a4-acf3-a7f2ffe0c051/animal-photos/00c74f3d-04b5-41a7-8093-256d79e69490 - hostname: haseyasnewbeginningar.com, x-tenant-id: undefined, session.tenantId: undefined
+2026-02-01 19:47:59.27
+6b4f12e1
+User
+[TENANT DEBUG] GET /api/form-settings/surrender - hostname: haseyasnewbeginningar.com, x-tenant-id: undefined, session.tenantId: undefined
+2026-02-01 19:47:59.27
+6b4f12e1
+User
+[TENANT DEBUG] Custom domain detected: haseyasnewbeginningar.com (original: haseyasnewbeginningar.com)
+2026-02-01 19:47:59.30
+6b4f12e1
+User
+[TENANT DEBUG] GET /api/surrender-form-fields - hostname: haseyasnewbeginningar.com, x-tenant-id: undefined, session.tenantId: undefined
+2026-02-01 19:47:59.30
+6b4f12e1
+User
+[TENANT DEBUG] Custom domain detected: haseyasnewbeginningar.com (original: haseyasnewbeginningar.com)
+2026-02-01 19:47:59.31
+6b4f12e1
+User
+1:47:59 AM [express] GET /api/form-settings/surrender 200 in 22ms :: {"setting":{"id":"31262b3a-87db…
+2026-02-01 19:47:59.37
+6b4f12e1
+User
+1:47:59 AM [express] GET /api/surrender-form-fields 200 in 48ms :: {"fields":[{"id":"c025ad69-3e17-4…
+2026-02-01 19:47:59.76
+6b4f12e1
+User
+[TENANT DEBUG] POST /api/page-visits - hostname: haseyasnewbeginningar.com, x-tenant-id: undefined, session.tenantId: undefined
+2026-02-01 19:47:59.76
+6b4f12e1
+User
+[TENANT DEBUG] Custom domain detected: haseyasnewbeginningar.com (original: haseyasnewbeginningar.com)
+2026-02-01 19:47:59.78
+6b4f12e1
+User
+1:47:59 AM [express] POST /api/page-visits 200 in 1ms
+2026-02-01 19:48:53.86
+6b4f12e1
+User
+[TENANT DEBUG] Custom domain detected: haseyasnewbeginningar.com (original: haseyasnewbeginningar.com)
+2026-02-01 19:48:53.86
+6b4f12e1
+User
+[TENANT DEBUG] GET / - hostname: haseyasnewbeginningar.com, x-tenant-id: undefined, session.tenantId: undefined
+2026-02-01 19:49:54.69
+6b4f12e1
+User
+[TENANT DEBUG] Custom domain detected: haseyasnewbeginningar.com (original: haseyasnewbeginningar.com)
+2026-02-01 19:49:54.69
+6b4f12e1
+User
+[TENANT DEBUG] GET /api/impersonation/status - hostname: haseyasnewbeginningar.com, x-tenant-id: undefined, session.tenantId: 3a4c2321-6a54-41a4-acf3-a7f2ffe0c051
+2026-02-01 19:49:54.91
+6b4f12e1
+User
+1:49:54 AM [express] GET /api/impersonation/status 304 in 26ms :: {"impersonating":false}
+2026-02-01 19:52:18.18
+6b4f12e1
+User
+[TENANT DEBUG] GET /munchkin3/happy-tails - hostname: irescue.life, x-tenant-id: undefined, session.tenantId: undefined
+Wrap
+Colors
