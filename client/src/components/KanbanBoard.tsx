@@ -3,7 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Check, CreditCard, FileSignature, Clock, Loader2, DollarSign, X, Banknote, Eye, ArrowRight } from "lucide-react";
+import { Check, CreditCard, FileSignature, Clock, Loader2, DollarSign, X, Banknote, Eye, ArrowRight, RefreshCw } from "lucide-react";
+import { ChangeAnimalDialog } from "./ChangeAnimalDialog";
 import { RecordOfflinePaymentDialog } from "./RecordOfflinePaymentDialog";
 import MobilePipelineView, { PipelineStage, PipelineCard } from "./MobilePipelineView";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -98,6 +99,7 @@ export default function KanbanBoard({ applications, onMoveApplication, onAssignA
   
   const canRecordOfflinePayment = subscriptionTier === "professional";
   const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [changeAnimalApp, setChangeAnimalApp] = useState<Application | null>(null);
 
   const getApplicationsByStage = (stageId: string) => {
     return applications.filter(app => app.stage === stageId);
@@ -245,6 +247,23 @@ export default function KanbanBoard({ applications, onMoveApplication, onAssignA
                                 >
                                   <Check className="h-4 w-4 mr-2" />
                                   Assign Animal
+                                </Button>
+                              )}
+                              {/* Change Animal button - show for eligible stages before checkout */}
+                              {['new', 'screening', 'vet_check', 'home_visit', 'approved'].includes(stage.id) && 
+                               !app.checkoutStatus && app.animalId && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="w-full mt-1"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setChangeAnimalApp(app);
+                                  }}
+                                  data-testid={`button-change-animal-${app.id}`}
+                                >
+                                  <RefreshCw className="h-4 w-4 mr-2" />
+                                  Change Animal
                                 </Button>
                               )}
                               {stage.id === "approved" && onStartCheckout && !app.checkoutStatus && app.animalId && (
