@@ -7604,7 +7604,7 @@ Crawl-delay: 1
       
       // If animalId filter is provided, use direct query with filtering
       if (animalId && typeof animalId === 'string') {
-        const { applications, animals } = await import('@shared/schema');
+        // Using static imports from top of file for production reliability
         const conditions = [eq(applications.tenantId, req.tenant!.id)];
         conditions.push(eq(applications.animalId, animalId));
         
