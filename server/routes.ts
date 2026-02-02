@@ -29427,9 +29427,11 @@ The user asking is a tenant administrator or staff member.`;
 
       // Create Stripe checkout session
       const { stripeService } = await import('./lib/stripe-service');
-      const baseUrl = `https://${req.get('host')}`;
+      const host = req.get('host') || '';
+      const baseUrl = `https://${host}`;
       
-      // Get tenant path for redirect URLs
+      // Get tenant path for redirect URLs - skip for custom domains
+      const hasCustomDomain = (tenant as any).customDomain && host.includes((tenant as any).customDomain);
       const tenantPath = (tenant as any).subdomain || tenant.id;
 
       const session = await stripeService.createCheckoutSession(tenant, {
@@ -29437,8 +29439,8 @@ The user asking is a tenant administrator or staff member.`;
         currency: 'usd',
         isRecurring: ticket.isRecurring,
         interval: 'month',
-        successUrl: `${baseUrl}/${tenantPath}/event-success?session_id={CHECKOUT_SESSION_ID}`,
-        cancelUrl: `${baseUrl}/${tenantPath}/event/${eventId}`,
+        successUrl: hasCustomDomain ? `${baseUrl}/event-success?session_id={CHECKOUT_SESSION_ID}` : `${baseUrl}/${tenantPath}/event-success?session_id={CHECKOUT_SESSION_ID}`,
+        cancelUrl: hasCustomDomain ? `${baseUrl}/event/${eventId}` : `${baseUrl}/${tenantPath}/event/${eventId}`,
         metadata: {
           eventTicketId: eventId,
           eventName: ticket.eventName,
@@ -29497,9 +29499,14 @@ The user asking is a tenant administrator or staff member.`;
         .limit(1);
 
       // Generate checkout URL
-      const baseUrl = `https://${req.get('host')}`;
+      // For custom domains, do not include tenant path in URL
+      const host = req.get('host') || '';
+      const baseUrl = `https://${host}`;
+      const hasCustomDomain = (tenant as any)?.customDomain && host.includes((tenant as any).customDomain);
       const tenantPath = (tenant as any)?.subdomain || req.tenant!.id;
-      const checkoutUrl = `${baseUrl}/${tenantPath}/event/${id}`;
+      const checkoutUrl = hasCustomDomain 
+        ? `${baseUrl}/event/${id}`
+        : `${baseUrl}/${tenantPath}/event/${id}`;
 
       // Generate QR code as data URL
       const qrCodeDataUrl = await QRCode.toDataURL(checkoutUrl, {
