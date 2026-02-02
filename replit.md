@@ -9,6 +9,12 @@ The Multi-Tenant Animal Rescue SaaS Platform centralizes and streamlines operati
 - Multi-tenant architecture with subdomain-based access
 - Single database schema with tenant_id foreign keys (NOT separate schemas per tenant)
 
+## Demo Tenant Credentials
+Demo credentials are stored as environment variables for consistency:
+- **Email:** `DEMO_USER_EMAIL` (admin@demo.com)
+- **Password:** `DEMO_USER_PASSWORD` (password123)
+- **Tenant:** demo (path: /demo/login)
+
 ## System Architecture
 The platform utilizes a React, TypeScript, and Vite frontend with Wouter, TanStack Query, Tailwind CSS, and shadcn/ui. The backend is an Express and Node.js application in TypeScript, interacting with PostgreSQL via Drizzle ORM.
 
