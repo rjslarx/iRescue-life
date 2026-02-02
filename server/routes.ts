@@ -2687,8 +2687,10 @@ Crawl-delay: 1
               sql`COALESCE(${donations.donationType}, 'cash') NOT IN ('in_kind', 'in_kind_goods', 'in_kind_services')`
             )
           ),
-        // Volunteers
-        db.select().from(users).where(
+        // Volunteers - explicit field selection for dynamic import
+        db.select({
+          id: users.id,
+        }).from(users).where(
           and(
             eq(users.tenantId, req.tenant!.id),
             sql`'volunteer' = ANY(${users.roles})`
@@ -4342,14 +4344,26 @@ Crawl-delay: 1
         expendituresYTD,
         fosters
       ] = await Promise.all([
-        // Get all animals for intake calculations
-        db.select().from(animals).where(eq(animals.tenantId, req.tenant!.id)),
+        // Get all animals for intake calculations - explicit field selection for dynamic import
+        db.select({
+          id: animals.id,
+          intakeDate: animals.intakeDate,
+        }).from(animals).where(eq(animals.tenantId, req.tenant!.id)),
         
-        // Get all adoptions for adoption calculations
-        db.select().from(adoptions).where(eq(adoptions.tenantId, req.tenant!.id)),
+        // Get all adoptions for adoption calculations - explicit field selection
+        db.select({
+          id: adoptions.id,
+          animalId: adoptions.animalId,
+          adoptionDate: adoptions.adoptionDate,
+        }).from(adoptions).where(eq(adoptions.tenantId, req.tenant!.id)),
         
         // Get donations this month (with upper bound to exclude future dates)
-        db.select().from(donations).where(
+        db.select({
+          id: donations.id,
+          amount: donations.amount,
+          donationType: donations.donationType,
+          estimatedValue: donations.estimatedValue,
+        }).from(donations).where(
           and(
             eq(donations.tenantId, req.tenant!.id),
             gte(donations.date, startOfMonth),
@@ -4358,7 +4372,12 @@ Crawl-delay: 1
         ),
         
         // Get donations YTD (with upper bound to exclude future dates)
-        db.select().from(donations).where(
+        db.select({
+          id: donations.id,
+          amount: donations.amount,
+          donationType: donations.donationType,
+          estimatedValue: donations.estimatedValue,
+        }).from(donations).where(
           and(
             eq(donations.tenantId, req.tenant!.id),
             gte(donations.date, startOfYear),
@@ -4367,7 +4386,10 @@ Crawl-delay: 1
         ),
         
         // Get expenditures this month (with upper bound to exclude future dates)
-        db.select().from(expenditures).where(
+        db.select({
+          id: expenditures.id,
+          amount: expenditures.amount,
+        }).from(expenditures).where(
           and(
             eq(expenditures.tenantId, req.tenant!.id),
             gte(expenditures.date, startOfMonth),
@@ -4376,7 +4398,10 @@ Crawl-delay: 1
         ),
         
         // Get expenditures YTD (with upper bound to exclude future dates)
-        db.select().from(expenditures).where(
+        db.select({
+          id: expenditures.id,
+          amount: expenditures.amount,
+        }).from(expenditures).where(
           and(
             eq(expenditures.tenantId, req.tenant!.id),
             gte(expenditures.date, startOfYear),
@@ -4385,7 +4410,9 @@ Crawl-delay: 1
         ),
         
         // Get active fosters (users with foster role)
-        db.select().from(users).where(
+        db.select({
+          id: users.id,
+        }).from(users).where(
           and(
             eq(users.tenantId, req.tenant!.id),
             sql`'foster' = ANY(${users.roles})`
@@ -4865,8 +4892,11 @@ Crawl-delay: 1
       // Create the invitation
       const invitation = await createInvitation(req.tenant!.id, req.user!.id, data);
 
-      // Get inviter name and tenant name for email
-      const [inviter] = await db.select().from(users).where(eq(users.id, req.user!.id)).limit(1);
+      // Get inviter name and tenant name for email - explicit field selection for dynamic import
+      const [inviter] = await db.select({
+        id: users.id,
+        fullName: users.fullName,
+      }).from(users).where(eq(users.id, req.user!.id)).limit(1);
       
       // Send invitation email
       await sendInvitationEmail(
@@ -4952,8 +4982,11 @@ Crawl-delay: 1
       
       const invitation = await resendInvitation(req.params.id, req.tenant!.id);
       
-      // Get inviter name for email
-      const [inviter] = await db.select().from(users).where(eq(users.id, req.user!.id)).limit(1);
+      // Get inviter name for email - explicit field selection for dynamic import
+      const [inviter] = await db.select({
+        id: users.id,
+        fullName: users.fullName,
+      }).from(users).where(eq(users.id, req.user!.id)).limit(1);
       
       // Send invitation email again
       await sendInvitationEmail(
@@ -4980,8 +5013,11 @@ Crawl-delay: 1
       
       const invitation = await getInvitationByToken(req.params.token);
       
-      // Get tenant info
-      const [tenant] = await db.select().from(tenants).where(eq(tenants.id, invitation.tenantId)).limit(1);
+      // Get tenant info - explicit field selection for dynamic import
+      const [tenant] = await db.select({
+        id: tenants.id,
+        name: tenants.name,
+      }).from(tenants).where(eq(tenants.id, invitation.tenantId)).limit(1);
 
       res.json({
         valid: true,
@@ -20726,7 +20762,16 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
       const { renderNewsletterTemplate } = await import('./emails/newsletter-renderer');
       
       const [campaign] = await db
-        .select()
+        .select({
+          id: newsletterCampaigns.id,
+          name: newsletterCampaigns.name,
+          subject: newsletterCampaigns.subject,
+          template: newsletterCampaigns.template,
+          content: newsletterCampaigns.content,
+          status: newsletterCampaigns.status,
+          scheduledAt: newsletterCampaigns.scheduledAt,
+          sentAt: newsletterCampaigns.sentAt,
+        })
         .from(newsletterCampaigns)
         .where(and(
           eq(newsletterCampaigns.id, req.params.id),
@@ -20738,15 +20783,29 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
         return res.status(404).json({ error: 'Campaign not found' });
       }
 
-      // Fetch animals if needed
+      // Fetch animals if needed - explicit field selection for dynamic import
       const allAnimals = await db
-        .select()
+        .select({
+          id: animals.id,
+          name: animals.name,
+          species: animals.species,
+          breed: animals.breed,
+          status: animals.status,
+          photoUrls: animals.photoUrls,
+        })
         .from(animals)
         .where(eq(animals.tenantId, req.tenant!.id));
 
-      // Fetch happy tails if needed
+      // Fetch happy tails if needed - explicit field selection for dynamic import
       const allHappyTails = await db
-        .select()
+        .select({
+          id: happyTails.id,
+          animalName: happyTails.animalName,
+          story: happyTails.story,
+          photoUrl: happyTails.photoUrl,
+          adopter: happyTails.adopter,
+          adoptionDate: happyTails.adoptionDate,
+        })
         .from(happyTails)
         .where(eq(happyTails.tenantId, req.tenant!.id));
 
@@ -20793,7 +20852,17 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
       const { EmailService, cleanSubjectLine, htmlToPlainText, generateUnsubscribeHeader } = await import('./lib/email-service');
       
       const [campaign] = await db
-        .select()
+        .select({
+          id: newsletterCampaigns.id,
+          name: newsletterCampaigns.name,
+          subject: newsletterCampaigns.subject,
+          template: newsletterCampaigns.template,
+          content: newsletterCampaigns.content,
+          status: newsletterCampaigns.status,
+          scheduledAt: newsletterCampaigns.scheduledAt,
+          sentAt: newsletterCampaigns.sentAt,
+          tenantId: newsletterCampaigns.tenantId,
+        })
         .from(newsletterCampaigns)
         .where(and(
           eq(newsletterCampaigns.id, req.params.id),
@@ -25874,25 +25943,80 @@ Email: ${application.applicantEmail || ''}`
         });
       }
       
-      // Get all medical records for this animal
+      // Get all medical records for this animal - explicit field selection for dynamic import
       const [exams, vaccines, diagnostics, procedures, prescriptions] = await Promise.all([
-        db.select().from(medicalExams).where(and(
+        db.select({
+          id: medicalExams.id,
+          animalId: medicalExams.animalId,
+          examDate: medicalExams.examDate,
+          examType: medicalExams.examType,
+          veterinarianName: medicalExams.veterinarianName,
+          findings: medicalExams.findings,
+          notes: medicalExams.notes,
+          weight: medicalExams.weight,
+          temperature: medicalExams.temperature,
+          heartRate: medicalExams.heartRate,
+          respiratoryRate: medicalExams.respiratoryRate,
+          createdAt: medicalExams.createdAt,
+        }).from(medicalExams).where(and(
           eq(medicalExams.animalId, req.params.animalId),
           eq(medicalExams.tenantId, req.tenant!.id)
         )),
-        db.select().from(vaccineRecords).where(and(
+        db.select({
+          id: vaccineRecords.id,
+          animalId: vaccineRecords.animalId,
+          vaccineName: vaccineRecords.vaccineName,
+          dateGiven: vaccineRecords.dateGiven,
+          expirationDate: vaccineRecords.expirationDate,
+          lotNumber: vaccineRecords.lotNumber,
+          manufacturer: vaccineRecords.manufacturer,
+          administeredBy: vaccineRecords.administeredBy,
+          notes: vaccineRecords.notes,
+          createdAt: vaccineRecords.createdAt,
+        }).from(vaccineRecords).where(and(
           eq(vaccineRecords.animalId, req.params.animalId),
           eq(vaccineRecords.tenantId, req.tenant!.id)
         )),
-        db.select().from(diagnosticTests).where(and(
+        db.select({
+          id: diagnosticTests.id,
+          animalId: diagnosticTests.animalId,
+          testName: diagnosticTests.testName,
+          testDate: diagnosticTests.testDate,
+          results: diagnosticTests.results,
+          notes: diagnosticTests.notes,
+          orderedBy: diagnosticTests.orderedBy,
+          labName: diagnosticTests.labName,
+          createdAt: diagnosticTests.createdAt,
+        }).from(diagnosticTests).where(and(
           eq(diagnosticTests.animalId, req.params.animalId),
           eq(diagnosticTests.tenantId, req.tenant!.id)
         )),
-        db.select().from(procedureLogs).where(and(
+        db.select({
+          id: procedureLogs.id,
+          animalId: procedureLogs.animalId,
+          procedureName: procedureLogs.procedureName,
+          procedureDate: procedureLogs.procedureDate,
+          performedBy: procedureLogs.performedBy,
+          notes: procedureLogs.notes,
+          outcome: procedureLogs.outcome,
+          createdAt: procedureLogs.createdAt,
+        }).from(procedureLogs).where(and(
           eq(procedureLogs.animalId, req.params.animalId),
           eq(procedureLogs.tenantId, req.tenant!.id)
         )),
-        db.select().from(medicalPrescriptions).where(and(
+        db.select({
+          id: medicalPrescriptions.id,
+          animalId: medicalPrescriptions.animalId,
+          medicationName: medicalPrescriptions.medicationName,
+          dosage: medicalPrescriptions.dosage,
+          frequency: medicalPrescriptions.frequency,
+          startDate: medicalPrescriptions.startDate,
+          endDate: medicalPrescriptions.endDate,
+          prescribedBy: medicalPrescriptions.prescribedBy,
+          notes: medicalPrescriptions.notes,
+          status: medicalPrescriptions.status,
+          createdAt: medicalPrescriptions.createdAt,
+        }).from(medicalPrescriptions).where(and(
           eq(medicalPrescriptions.animalId, req.params.animalId),
           eq(medicalPrescriptions.tenantId, req.tenant!.id)
         )),
@@ -25922,9 +26046,11 @@ Email: ${application.applicantEmail || ''}`
     try {
       const { medicalPrescriptions, vaccineRecords, fosterAnimals } = await import('@shared/schema');
       
-      // Check if user is a foster and has access to this animal
+      // Check if user is a foster and has access to this animal - explicit field selection for dynamic import
       const fosterAnimal = await db
-        .select()
+        .select({
+          id: fosterAnimals.id,
+        })
         .from(fosterAnimals)
         .where(and(
           eq(fosterAnimals.animalId, req.params.animalId),
@@ -25941,13 +26067,29 @@ Email: ${application.applicantEmail || ''}`
         });
       }
       
-      // Get prescriptions and vaccines for this animal
+      // Get prescriptions and vaccines for this animal - explicit field selection for dynamic import
       const [prescriptions, vaccines] = await Promise.all([
-        db.select().from(medicalPrescriptions).where(and(
+        db.select({
+          id: medicalPrescriptions.id,
+          medicationName: medicalPrescriptions.medicationName,
+          dosage: medicalPrescriptions.dosage,
+          frequency: medicalPrescriptions.frequency,
+          startDate: medicalPrescriptions.startDate,
+          endDate: medicalPrescriptions.endDate,
+          prescribedBy: medicalPrescriptions.prescribedBy,
+          notes: medicalPrescriptions.notes,
+          status: medicalPrescriptions.status,
+        }).from(medicalPrescriptions).where(and(
           eq(medicalPrescriptions.animalId, req.params.animalId),
           eq(medicalPrescriptions.tenantId, req.tenant!.id)
         )).orderBy(desc(medicalPrescriptions.startDate)),
-        db.select().from(vaccineRecords).where(and(
+        db.select({
+          id: vaccineRecords.id,
+          vaccineName: vaccineRecords.vaccineName,
+          dateGiven: vaccineRecords.dateGiven,
+          expirationDate: vaccineRecords.expirationDate,
+          notes: vaccineRecords.notes,
+        }).from(vaccineRecords).where(and(
           eq(vaccineRecords.animalId, req.params.animalId),
           eq(vaccineRecords.tenantId, req.tenant!.id)
         )).orderBy(desc(vaccineRecords.dateGiven)),
