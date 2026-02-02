@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Loader2, ClipboardList, Mail, Phone, Calendar, Eye } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { getTenantHeaders, buildTenantUrl } from "@/lib/tenantApi";
 import { useToast } from "@/hooks/use-toast";
 import type { ApplicationWithAnimal } from "@shared/schema";
 import { ViewApplicationDialog } from "@/components/ViewApplicationDialog";
@@ -28,8 +29,10 @@ export default function AnimalApplicationsPage() {
     queryKey: ['/api/applications', animalId],
     queryFn: async () => {
       // The backend supports filtering by animalId via query parameter
-      const response = await fetch(`/api/applications?animalId=${animalId}`, {
+      const url = buildTenantUrl(`/api/applications?animalId=${animalId}`);
+      const response = await fetch(url, {
         credentials: 'include',
+        headers: getTenantHeaders(),
       });
       if (!response.ok) {
         throw new Error('Failed to fetch applications');
