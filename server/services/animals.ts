@@ -51,37 +51,58 @@ export async function getAnimalsByTenant(tenantId: string): Promise<(Animal & { 
       status: animals.status,
       microchipNumber: animals.microchipNumber,
       intakeDate: animals.intakeDate,
-      intakeType: animals.intakeType,
-      intakeNotes: animals.intakeNotes,
-      behaviorRating: animals.behaviorRating,
-      description: animals.description,
-      bio: animals.bio,
-      photos: animals.photos,
-      tags: animals.tags,
-      childFriendly: animals.childFriendly,
-      dogFriendly: animals.dogFriendly,
-      catFriendly: animals.catFriendly,
-      specialNeeds: animals.specialNeeds,
-      spayedNeutered: animals.spayedNeutered,
-      vaccinated: animals.vaccinated,
-      houseTrained: animals.houseTrained,
-      adoptionFee: animals.adoptionFee,
-      fosterFee: animals.fosterFee,
+      intakeSource: animals.intakeSource,
+      neuterStatus: animals.neuterStatus,
+      dateOfBirth: animals.dateOfBirth,
+      kennelLocation: animals.kennelLocation,
+      kennelBuildingId: animals.kennelBuildingId,
       kennelRowId: animals.kennelRowId,
       kennelPosition: animals.kennelPosition,
-      petfinderStatus: animals.petfinderStatus,
-      petfinderLastSync: animals.petfinderLastSync,
+      medicalAlertMemo: animals.medicalAlertMemo,
+      medicalStatus: animals.medicalStatus,
+      scheduledSurgeryDate: animals.scheduledSurgeryDate,
+      photoUrls: animals.photoUrls,
+      bio: animals.bio,
+      petfinderType: animals.petfinderType,
+      petfinderBreed: animals.petfinderBreed,
+      petfinderBreedSecondary: animals.petfinderBreedSecondary,
+      petfinderAge: animals.petfinderAge,
+      petfinderSize: animals.petfinderSize,
+      petfinderGender: animals.petfinderGender,
+      houseTrained: animals.houseTrained,
+      declawed: animals.declawed,
+      specialNeeds: animals.specialNeeds,
+      shotsCurrent: animals.shotsCurrent,
+      heartwormPositive: animals.heartwormPositive,
+      childFriendly: animals.childFriendly,
+      catFriendly: animals.catFriendly,
+      dogFriendly: animals.dogFriendly,
+      needsFence: animals.needsFence,
+      mergedWithId: animals.mergedWithId,
+      locationFound: animals.locationFound,
+      strayHoldUntil: animals.strayHoldUntil,
+      activityLevel: animals.activityLevel,
+      dietaryRestrictions: animals.dietaryRestrictions,
+      adoptionDate: animals.adoptionDate,
+      deceasedDate: animals.deceasedDate,
+      causeOfDeath: animals.causeOfDeath,
+      deceasedNotes: animals.deceasedNotes,
+      postedToPetfinder: animals.postedToPetfinder,
+      petfinderUrl: animals.petfinderUrl,
+      petfinderSyncedAt: animals.petfinderSyncedAt,
+      flaggedForStory: animals.flaggedForStory,
+      storyTags: animals.storyTags,
+      behaviorColor: animals.behaviorColor,
+      behaviorRestrictionReason: animals.behaviorRestrictionReason,
+      flyerUrls: animals.flyerUrls,
+      canvaDesignId: animals.canvaDesignId,
+      medicalFundGoal: animals.medicalFundGoal,
+      medicalFundRaised: animals.medicalFundRaised,
+      externalId: animals.externalId,
+      externalSource: animals.externalSource,
+      driveFolderId: animals.driveFolderId,
       createdAt: animals.createdAt,
       updatedAt: animals.updatedAt,
-      isStray: animals.isStray,
-      strayFoundDate: animals.strayFoundDate,
-      strayFoundLocation: animals.strayFoundLocation,
-      strayHoldEndDate: animals.strayHoldEndDate,
-      surrenderRequestId: animals.surrenderRequestId,
-      heartwormPositive: animals.heartwormPositive,
-      euthanasiaDate: animals.euthanasiaDate,
-      deceasedDate: animals.deceasedDate,
-      deceasedReason: animals.deceasedReason,
       kennelRowName: kennelRows.name,
     })
     .from(animals)
@@ -89,7 +110,7 @@ export async function getAnimalsByTenant(tenantId: string): Promise<(Animal & { 
     .where(eq(animals.tenantId, tenantId))
     .orderBy(desc(animals.createdAt));
   
-  return results;
+  return results as any;
 }
 
 /**
@@ -111,37 +132,58 @@ export async function getAvailableAnimals(tenantId: string): Promise<Animal[]> {
       status: animals.status,
       microchipNumber: animals.microchipNumber,
       intakeDate: animals.intakeDate,
-      intakeType: animals.intakeType,
-      intakeNotes: animals.intakeNotes,
-      behaviorRating: animals.behaviorRating,
-      description: animals.description,
-      bio: animals.bio,
-      photos: animals.photos,
-      tags: animals.tags,
-      childFriendly: animals.childFriendly,
-      dogFriendly: animals.dogFriendly,
-      catFriendly: animals.catFriendly,
-      specialNeeds: animals.specialNeeds,
-      spayedNeutered: animals.spayedNeutered,
-      vaccinated: animals.vaccinated,
-      houseTrained: animals.houseTrained,
-      adoptionFee: animals.adoptionFee,
-      fosterFee: animals.fosterFee,
+      intakeSource: animals.intakeSource,
+      neuterStatus: animals.neuterStatus,
+      dateOfBirth: animals.dateOfBirth,
+      kennelLocation: animals.kennelLocation,
+      kennelBuildingId: animals.kennelBuildingId,
       kennelRowId: animals.kennelRowId,
       kennelPosition: animals.kennelPosition,
-      petfinderStatus: animals.petfinderStatus,
-      petfinderLastSync: animals.petfinderLastSync,
+      medicalAlertMemo: animals.medicalAlertMemo,
+      medicalStatus: animals.medicalStatus,
+      scheduledSurgeryDate: animals.scheduledSurgeryDate,
+      photoUrls: animals.photoUrls,
+      bio: animals.bio,
+      petfinderType: animals.petfinderType,
+      petfinderBreed: animals.petfinderBreed,
+      petfinderBreedSecondary: animals.petfinderBreedSecondary,
+      petfinderAge: animals.petfinderAge,
+      petfinderSize: animals.petfinderSize,
+      petfinderGender: animals.petfinderGender,
+      houseTrained: animals.houseTrained,
+      declawed: animals.declawed,
+      specialNeeds: animals.specialNeeds,
+      shotsCurrent: animals.shotsCurrent,
+      heartwormPositive: animals.heartwormPositive,
+      childFriendly: animals.childFriendly,
+      catFriendly: animals.catFriendly,
+      dogFriendly: animals.dogFriendly,
+      needsFence: animals.needsFence,
+      mergedWithId: animals.mergedWithId,
+      locationFound: animals.locationFound,
+      strayHoldUntil: animals.strayHoldUntil,
+      activityLevel: animals.activityLevel,
+      dietaryRestrictions: animals.dietaryRestrictions,
+      adoptionDate: animals.adoptionDate,
+      deceasedDate: animals.deceasedDate,
+      causeOfDeath: animals.causeOfDeath,
+      deceasedNotes: animals.deceasedNotes,
+      postedToPetfinder: animals.postedToPetfinder,
+      petfinderUrl: animals.petfinderUrl,
+      petfinderSyncedAt: animals.petfinderSyncedAt,
+      flaggedForStory: animals.flaggedForStory,
+      storyTags: animals.storyTags,
+      behaviorColor: animals.behaviorColor,
+      behaviorRestrictionReason: animals.behaviorRestrictionReason,
+      flyerUrls: animals.flyerUrls,
+      canvaDesignId: animals.canvaDesignId,
+      medicalFundGoal: animals.medicalFundGoal,
+      medicalFundRaised: animals.medicalFundRaised,
+      externalId: animals.externalId,
+      externalSource: animals.externalSource,
+      driveFolderId: animals.driveFolderId,
       createdAt: animals.createdAt,
       updatedAt: animals.updatedAt,
-      isStray: animals.isStray,
-      strayFoundDate: animals.strayFoundDate,
-      strayFoundLocation: animals.strayFoundLocation,
-      strayHoldEndDate: animals.strayHoldEndDate,
-      surrenderRequestId: animals.surrenderRequestId,
-      heartwormPositive: animals.heartwormPositive,
-      euthanasiaDate: animals.euthanasiaDate,
-      deceasedDate: animals.deceasedDate,
-      deceasedReason: animals.deceasedReason,
     })
     .from(animals)
     .where(and(
@@ -151,7 +193,7 @@ export async function getAvailableAnimals(tenantId: string): Promise<Animal[]> {
         eq(animals.status, 'foster')
       )
     ))
-    .orderBy(desc(animals.createdAt));
+    .orderBy(desc(animals.createdAt)) as any;
 }
 
 /**
@@ -173,37 +215,58 @@ export async function getAnimalById(tenantId: string, animalId: string): Promise
       status: animals.status,
       microchipNumber: animals.microchipNumber,
       intakeDate: animals.intakeDate,
-      intakeType: animals.intakeType,
-      intakeNotes: animals.intakeNotes,
-      behaviorRating: animals.behaviorRating,
-      description: animals.description,
-      bio: animals.bio,
-      photos: animals.photos,
-      tags: animals.tags,
-      childFriendly: animals.childFriendly,
-      dogFriendly: animals.dogFriendly,
-      catFriendly: animals.catFriendly,
-      specialNeeds: animals.specialNeeds,
-      spayedNeutered: animals.spayedNeutered,
-      vaccinated: animals.vaccinated,
-      houseTrained: animals.houseTrained,
-      adoptionFee: animals.adoptionFee,
-      fosterFee: animals.fosterFee,
+      intakeSource: animals.intakeSource,
+      neuterStatus: animals.neuterStatus,
+      dateOfBirth: animals.dateOfBirth,
+      kennelLocation: animals.kennelLocation,
+      kennelBuildingId: animals.kennelBuildingId,
       kennelRowId: animals.kennelRowId,
       kennelPosition: animals.kennelPosition,
-      petfinderStatus: animals.petfinderStatus,
-      petfinderLastSync: animals.petfinderLastSync,
+      medicalAlertMemo: animals.medicalAlertMemo,
+      medicalStatus: animals.medicalStatus,
+      scheduledSurgeryDate: animals.scheduledSurgeryDate,
+      photoUrls: animals.photoUrls,
+      bio: animals.bio,
+      petfinderType: animals.petfinderType,
+      petfinderBreed: animals.petfinderBreed,
+      petfinderBreedSecondary: animals.petfinderBreedSecondary,
+      petfinderAge: animals.petfinderAge,
+      petfinderSize: animals.petfinderSize,
+      petfinderGender: animals.petfinderGender,
+      houseTrained: animals.houseTrained,
+      declawed: animals.declawed,
+      specialNeeds: animals.specialNeeds,
+      shotsCurrent: animals.shotsCurrent,
+      heartwormPositive: animals.heartwormPositive,
+      childFriendly: animals.childFriendly,
+      catFriendly: animals.catFriendly,
+      dogFriendly: animals.dogFriendly,
+      needsFence: animals.needsFence,
+      mergedWithId: animals.mergedWithId,
+      locationFound: animals.locationFound,
+      strayHoldUntil: animals.strayHoldUntil,
+      activityLevel: animals.activityLevel,
+      dietaryRestrictions: animals.dietaryRestrictions,
+      adoptionDate: animals.adoptionDate,
+      deceasedDate: animals.deceasedDate,
+      causeOfDeath: animals.causeOfDeath,
+      deceasedNotes: animals.deceasedNotes,
+      postedToPetfinder: animals.postedToPetfinder,
+      petfinderUrl: animals.petfinderUrl,
+      petfinderSyncedAt: animals.petfinderSyncedAt,
+      flaggedForStory: animals.flaggedForStory,
+      storyTags: animals.storyTags,
+      behaviorColor: animals.behaviorColor,
+      behaviorRestrictionReason: animals.behaviorRestrictionReason,
+      flyerUrls: animals.flyerUrls,
+      canvaDesignId: animals.canvaDesignId,
+      medicalFundGoal: animals.medicalFundGoal,
+      medicalFundRaised: animals.medicalFundRaised,
+      externalId: animals.externalId,
+      externalSource: animals.externalSource,
+      driveFolderId: animals.driveFolderId,
       createdAt: animals.createdAt,
       updatedAt: animals.updatedAt,
-      isStray: animals.isStray,
-      strayFoundDate: animals.strayFoundDate,
-      strayFoundLocation: animals.strayFoundLocation,
-      strayHoldEndDate: animals.strayHoldEndDate,
-      surrenderRequestId: animals.surrenderRequestId,
-      heartwormPositive: animals.heartwormPositive,
-      euthanasiaDate: animals.euthanasiaDate,
-      deceasedDate: animals.deceasedDate,
-      deceasedReason: animals.deceasedReason,
       kennelRowName: kennelRows.name,
     })
     .from(animals)
@@ -214,23 +277,19 @@ export async function getAnimalById(tenantId: string, animalId: string): Promise
     ))
     .limit(1);
   
-  if (!result) return null;
-  
-  return result;
+  return (result as any) || null;
 }
 
 /**
  * Create a new animal
  */
-export async function createAnimal(tenantId: string, data: Omit<InsertAnimal, 'tenantId'>): Promise<Animal> {
-  // Generate unique animal ID
+export async function createAnimal(data: Omit<InsertAnimal, 'animalId'>): Promise<Animal> {
   const animalId = await generateAnimalId();
   
   const [animal] = await db
     .insert(animals)
     .values({
-      ...(data as any),
-      tenantId,
+      ...data,
       animalId,
     })
     .returning();
@@ -239,17 +298,13 @@ export async function createAnimal(tenantId: string, data: Omit<InsertAnimal, 't
 }
 
 /**
- * Update an animal
+ * Update an existing animal
  */
-export async function updateAnimal(
-  tenantId: string,
-  animalId: string,
-  data: Partial<Omit<InsertAnimal, 'tenantId'>>
-): Promise<Animal | null> {
-  const [animal] = await db
+export async function updateAnimal(tenantId: string, animalId: string, data: Partial<InsertAnimal>): Promise<Animal | null> {
+  const [updated] = await db
     .update(animals)
     .set({
-      ...(data as any),
+      ...data,
       updatedAt: new Date(),
     })
     .where(and(
@@ -258,20 +313,5 @@ export async function updateAnimal(
     ))
     .returning();
   
-  return animal || null;
-}
-
-/**
- * Delete an animal
- */
-export async function deleteAnimal(tenantId: string, animalId: string): Promise<boolean> {
-  const result = await db
-    .delete(animals)
-    .where(and(
-      eq(animals.tenantId, tenantId),
-      eq(animals.id, animalId)
-    ))
-    .returning();
-  
-  return result.length > 0;
+  return updated || null;
 }
