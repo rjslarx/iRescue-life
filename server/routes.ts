@@ -7752,6 +7752,67 @@ Crawl-delay: 1
   });
 
   /**
+   * POST /api/applications/:id/change-animal
+   * Change the animal associated with an application (only before agreement is sent)
+   */
+  app.post('/api/applications/:id/change-animal', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      const { applications, animals } = await import('@shared/schema');
+      const changeAnimalSchema = z.object({ newAnimalId: z.string().uuid() });
+      const { newAnimalId } = changeAnimalSchema.parse(req.body);
+      
+      const [application] = await db.select({
+        id: applications.id,
+        stage: applications.stage,
+        animalId: applications.animalId,
+        checkoutStatus: applications.checkoutStatus,
+      }).from(applications).where(
+        and(eq(applications.id, req.params.id), eq(applications.tenantId, req.tenant!.id))
+      );
+      
+      if (!application) {
+        return res.status(404).json({ error: 'Application not found' });
+      }
+      
+      const eligibleStages = ['new', 'screening', 'vet_check', 'home_visit', 'approved'];
+      if (!eligibleStages.includes(application.stage)) {
+        return res.status(400).json({ 
+          error: 'Cannot change animal at this stage',
+          message: 'Animal can only be changed before the agreement is sent'
+        });
+      }
+      
+      if (application.checkoutStatus && application.checkoutStatus !== 'pending') {
+        return res.status(400).json({ 
+          error: 'Cannot change animal',
+          message: 'A checkout process has already been started for this application'
+        });
+      }
+      
+      const [animal] = await db.select({
+        id: animals.id,
+        name: animals.name,
+        status: animals.status,
+      }).from(animals).where(
+        and(eq(animals.id, newAnimalId), eq(animals.tenantId, req.tenant!.id))
+      );
+      
+      if (!animal) {
+        return res.status(404).json({ error: 'Animal not found' });
+      }
+      
+      const [updated] = await db.update(applications)
+        .set({ animalId: newAnimalId })
+        .where(and(eq(applications.id, req.params.id), eq(applications.tenantId, req.tenant!.id)))
+        .returning();
+      
+      res.json({ success: true, application: updated, newAnimal: animal });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * POST /api/applications/approve-and-send
    * Approve an application and optionally create checkout session + send contract for e-signature
    * This is the automated adoption workflow trigger
