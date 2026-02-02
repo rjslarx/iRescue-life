@@ -6,7 +6,7 @@ import { requireAuth, requireRole } from "./middleware/auth";
 import { loginUser, createTenantWithAdmin, createUser } from "./services/auth";
 import { PushNotificationService } from "./services/push-notifications";
 import { db } from "./db";
-import { tenants, users, demoRequests, insertDemoRequestSchema, smsMessageLogs, emailEvents, animals, platformIntegrations, newsletterCampaigns, newsletterSubscribers, happyTails, animalMergeHistory, activityLogs, medicalExams, medicalPrescriptions, medicalBills, medicalFiles, animalNotes, applications, adoptionCheckoutSessions, adoptions, partnerOrganizations } from "@shared/schema";
+import { tenants, users, demoRequests, insertDemoRequestSchema, smsMessageLogs, emailEvents, animals, platformIntegrations, newsletterCampaigns, newsletterSubscribers, happyTails, animalMergeHistory, activityLogs, medicalExams, medicalPrescriptions, medicalBills, medicalFiles, animalNotes, applications, adoptionCheckoutSessions, adoptions, partnerOrganizations, microchipRecords } from "@shared/schema";
 import { eq, and, desc, asc, sql, inArray, lt, lte, gte, not, notInArray, or, ne, isNull, isNotNull } from "drizzle-orm";
 import { z } from "zod";
 import { authLimiter, signupLimiter, passwordResetLimiter, emailLimiter } from "./config/security";
@@ -7620,7 +7620,6 @@ Crawl-delay: 1
             applicantName: applications.applicantName,
             applicantEmail: applications.applicantEmail,
             applicantPhone: applications.applicantPhone,
-            applicantAddress: applications.applicantAddress,
             stage: applications.stage,
             createdAt: applications.createdAt,
             notes: applications.notes,
@@ -8097,7 +8096,7 @@ Crawl-delay: 1
         .limit(1);
 
       const [application] = await db
-        .select()
+        .select({ applicantName: applications.applicantName, applicantPhone: applications.applicantPhone, applicantEmail: applications.applicantEmail, customResponses: applications.customResponses })
         .from(applications)
         .where(eq(applications.id, session.applicationId))
         .limit(1);
@@ -8130,7 +8129,7 @@ Crawl-delay: 1
             '{{adopter_name}}': application?.applicantName || '',
             '{{adopter_email}}': application?.applicantEmail || '',
             '{{adopter_phone}}': application?.applicantPhone || '',
-            '{{adopter_address}}': application?.applicantAddress || '',
+            '{{adopter_address}}': ((application?.customResponses as Record<string, any> | null)?.address || '') || '',
             '{{animal_name}}': animal?.name || '',
             '{{animal_species}}': animal?.species || '',
             '{{animal_breed}}': animal?.breed || '',
@@ -8186,7 +8185,7 @@ Crawl-delay: 1
           name: application.applicantName,
           email: application.applicantEmail,
           phone: application.applicantPhone,
-          address: application.applicantAddress,
+          address: ((application.customResponses as Record<string, any> | null)?.address || ''),
         } : null,
         contract: contractData,
         organization: tenant ? { name: tenant.name } : null,
@@ -11614,7 +11613,7 @@ ${renderedHtml}
     try {
       const { 
         animals, 
-        adoptionApplications, 
+        applications, 
         fosterPlacements, 
         volunteerOpportunities,
         donations,
@@ -11737,10 +11736,10 @@ ${renderedHtml}
           activeFosterHomes,
           pendingApplications: await db
             .select({ count: sql<number>`count(*)` })
-            .from(adoptionApplications)
+            .from(applications)
             .where(and(
-              eq(adoptionApplications.tenantId, req.tenant!.id),
-              inArray(adoptionApplications.status, ['new', 'under_review', 'home_visit_scheduled'])
+              eq(applications.tenantId, req.tenant!.id),
+              inArray(applications.stage, ['new', 'under_review', 'home_visit_scheduled'])
             ))
             .then(r => r[0]?.count || 0),
         },
@@ -12734,7 +12733,7 @@ Submitted: ${new Date().toLocaleString()}
       const { fosterApplications } = await import('@shared/schema');
       
       const applications = await db
-        .select()
+        .select({ applicantName: applications.applicantName, applicantPhone: applications.applicantPhone, applicantEmail: applications.applicantEmail, customResponses: applications.customResponses })
         .from(fosterApplications)
         .where(eq(fosterApplications.tenantId, req.tenant!.id))
         .orderBy(desc(fosterApplications.createdAt));
@@ -12754,7 +12753,7 @@ Submitted: ${new Date().toLocaleString()}
       const { fosterApplications } = await import('@shared/schema');
       
       const [application] = await db
-        .select()
+        .select({ applicantName: applications.applicantName, applicantPhone: applications.applicantPhone, applicantEmail: applications.applicantEmail, customResponses: applications.customResponses })
         .from(fosterApplications)
         .where(
           and(
@@ -13301,7 +13300,7 @@ Submitted: ${new Date().toLocaleString()}
       const { volunteerApplications } = await import('@shared/schema');
       
       const [application] = await db
-        .select()
+        .select({ applicantName: applications.applicantName, applicantPhone: applications.applicantPhone, applicantEmail: applications.applicantEmail, customResponses: applications.customResponses })
         .from(volunteerApplications)
         .where(
           and(
@@ -13586,7 +13585,7 @@ If you have any questions, please contact us.
       
       // Get the volunteer application
       const [application] = await db
-        .select()
+        .select({ applicantName: applications.applicantName, applicantPhone: applications.applicantPhone, applicantEmail: applications.applicantEmail, customResponses: applications.customResponses })
         .from(volunteerApplications)
         .where(and(
           eq(volunteerApplications.id, req.params.id),
@@ -23512,7 +23511,7 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
    */
   app.get('/api/microchips/pending-transfers', requireTenant, requireAuth, async (req, res, next) => {
     try {
-      const { microchipRecords, animals } = await import('@shared/schema');
+      // Using static imports from top of file for production reliability
 
       // Only admin/owner can view pending transfers
       const userRoles = req.user!.roles || [];
@@ -23525,8 +23524,16 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
 
       const pendingTransfers = await db
         .select({
-          microchip: microchipRecords,
-          animal: animals,
+          microchipId: microchipRecords.id,
+          microchipNumber: microchipRecords.microchipNumber,
+          microchipBrand: microchipRecords.brand,
+          registrationStatus: microchipRecords.registrationStatus,
+          transferVerified: microchipRecords.transferVerified,
+          animalId: animals.id,
+          animalName: animals.name,
+          animalStatus: animals.status,
+          animalSpecies: animals.species,
+          createdAt: microchipRecords.createdAt,
         })
         .from(microchipRecords)
         .innerJoin(animals, eq(microchipRecords.animalId, animals.id))
@@ -23550,21 +23557,21 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
    */
   app.get('/api/animals/:animalId/microchips/adopter-info', requireTenant, requireAuth, async (req, res, next) => {
     try {
-      const { adoptionApplications, animals } = await import('@shared/schema');
+      // Using static imports from top of file for production reliability
 
       // Get the most recent approved/adopted application for this animal
       const [application] = await db
-        .select()
-        .from(adoptionApplications)
+        .select({ applicantName: applications.applicantName, applicantPhone: applications.applicantPhone, applicantEmail: applications.applicantEmail, customResponses: applications.customResponses })
+        .from(applications)
         .where(and(
-          eq(adoptionApplications.animalId, req.params.animalId),
-          eq(adoptionApplications.tenantId, req.tenant!.id),
+          eq(applications.animalId, req.params.animalId),
+          eq(applications.tenantId, req.tenant!.id),
           or(
-            eq(adoptionApplications.status, 'adopted'),
-            eq(adoptionApplications.status, 'approved')
+            eq(applications.stage, 'adopted'),
+            eq(applications.stage, 'approved')
           )
         ))
-        .orderBy(desc(adoptionApplications.updatedAt))
+        .orderBy(desc(applications.updatedAt))
         .limit(1);
 
       if (!application) {
@@ -23573,25 +23580,27 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
 
       // Get animal info
       const [animal] = await db
-        .select()
+        .select({ name: animals.name })
         .from(animals)
         .where(eq(animals.id, req.params.animalId))
         .limit(1);
 
+      // Extract address from customResponses if available
+      const customResponses = application.customResponses as Record<string, any> | null;
+      const address = customResponses?.address || '';
+      const city = customResponses?.city || '';
+      const state = customResponses?.state || '';
+      const zip = customResponses?.zip || customResponses?.zipCode || '';
+
       // Format adopter info for clipboard
       const adopterInfo = {
-        name: `${application.applicantFirstName || ''} ${application.applicantLastName || ''}`.trim(),
-        address: [
-          application.applicantAddress,
-          application.applicantCity,
-          application.applicantState,
-          application.applicantZip
-        ].filter(Boolean).join(', '),
+        name: application.applicantName || '',
+        address: [address, city, state, zip].filter(Boolean).join(', '),
         phone: application.applicantPhone || '',
         email: application.applicantEmail || '',
         animalName: animal?.name || '',
-        formatted: `Name: ${application.applicantFirstName || ''} ${application.applicantLastName || ''}
-Address: ${[application.applicantAddress, application.applicantCity, application.applicantState, application.applicantZip].filter(Boolean).join(', ')}
+        formatted: `Name: ${application.applicantName || ''}
+Address: ${[address, city, state, zip].filter(Boolean).join(', ')}
 Phone: ${application.applicantPhone || ''}
 Email: ${application.applicantEmail || ''}`
       };
@@ -23608,7 +23617,7 @@ Email: ${application.applicantEmail || ''}`
    */
   app.get('/api/animals/:animalId/microchips/compliance', requireTenant, requireAuth, async (req, res, next) => {
     try {
-      const { microchipRecords, animals } = await import('@shared/schema');
+      // Using static imports from top of file for production reliability
 
       // Check if animal exists
       const [animal] = await db
