@@ -17,7 +17,7 @@ export default function PlatformLoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [showMfaDialog, setShowMfaDialog] = useState(false);
   const [mfaUserId, setMfaUserId] = useState<string | null>(null);
-  const { completeMfaLogin, checkAuth } = useAuth();
+  const { login, completeMfaLogin } = useAuth();
   const { toast } = useToast();
   const [, navigate] = useLocation();
 
@@ -27,25 +27,13 @@ export default function PlatformLoginPage() {
     setIsLoading(true);
 
     try {
-      // Use platform-specific login endpoint (doesn't require tenant context)
-      const response = await fetch('/api/platform/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({ email, password }),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        if (data.requiresMfa && data.userId) {
-          setMfaUserId(data.userId);
+      const result = await login(email, password);
+      
+      if (result.success) {
+        if (result.requiresMfa && result.userId) {
+          setMfaUserId(result.userId);
           setShowMfaDialog(true);
-        } else if (data.user) {
-          // Refresh auth state after successful login
-          await checkAuth();
+        } else {
           toast({
             title: "Login successful",
             description: "Welcome to Platform Admin!",
@@ -53,7 +41,7 @@ export default function PlatformLoginPage() {
           window.location.href = "/platform/dashboard";
         }
       } else {
-        setError(data.error || data.message || "Login failed");
+        setError(result.error || "Login failed");
       }
     } catch (err) {
       setError("An unexpected error occurred");

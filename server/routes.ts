@@ -18682,7 +18682,7 @@ Submitted: ${new Date().toLocaleString()}
         platformFeePercent,
         stripeProcessingPercent: STRIPE_PROCESSING_FEE_PERCENT,
         hasPlatformFee: platformFeePercent > 0,
-        isPaidTier: subscriptionTier === 'professional',
+        isPaidTier: subscriptionTier === 'professional' || subscriptionTier === 'enterprise',
       });
     } catch (error) {
       next(error);
