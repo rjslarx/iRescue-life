@@ -1,10 +1,10 @@
 import { CheckCircle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { useTenantPath } from "@/hooks/use-tenant-path";
+import { useTenant } from "@/contexts/TenantContext";
 
 export default function EventSuccessPage() {
-  const { basePath } = useTenantPath();
+  const { basePath } = useTenant();
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-muted/30">
