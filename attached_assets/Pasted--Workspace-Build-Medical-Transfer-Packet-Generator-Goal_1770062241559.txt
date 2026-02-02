@@ -1,0 +1,53 @@
+@Workspace Build 'Medical Transfer Packet' Generator
+
+Goal: Create a system to generate a professional PDF 'Medical Transfer Record' for an animal, combining the animal's medical history with the organization's legal details.
+
+Phase 1: Organization Settings (organization_settings table)
+
+Create a table (or ensure one exists) to store the Rescue's legal entity info. Fields needed:
+
+org_name (string)
+
+address_street, address_city, address_state, address_zip
+
+phone, email, website
+
+shelter_license_number (string)
+
+supervising_vet_name (string)
+
+vet_license_number (string)
+
+logo_url (string)
+
+UI: Create a new page /admin/settings/organization where the Admin can save/update this information.
+
+Phase 2: The PDF Generation Logic (generateTransferPacket)
+
+Install jspdf and jspdf-autotable (frontend libraries).
+
+Create a component TransferPacketButton that takes an animalId.
+
+On Click: Fetch the Animal's data (including Medical Records) AND the Organization Settings.
+
+Generate PDF Layout:
+
+Header: Top Left: Organization Logo (if exists). Top Right: Org Name, Address, License #, Contact Info.
+
+Title: 'OFFICIAL MEDICAL TRANSFER RECORD'.
+
+Section A (Animal Signalment): A clear grid showing: Photo (if avail), Name, ID, Breed, Color, Age/DOB, Sex, Weight, Microchip # (Bold), Spay/Neuter Status.
+
+Section B (Vaccination History): A table listing all vaccinations. Columns: 'Vaccine Type', 'Date Administered', 'Due Date', 'Manufacturer/Lot' (if recorded).
+
+Section C (Diagnostic Testing): A table for Heartworm, Fecal, and FIV/FeLV tests. Columns: 'Test', 'Date', 'Result'.
+
+Section D (Current Preventatives): List the last given date for Flea/Tick and Heartworm prevention.
+
+Footer (Legal): A certification statement: 'I certify that the information provided is a true and accurate record...' followed by 'Supervising Veterinarian: [Vet Name] ([License #])' and a signature line.
+
+Phase 3: Integration
+
+Add this TransferPacketButton to the Animal Profile (top of the Medical Tab). Label it '📄 Print Transfer Packet'.
+
+Execute this so we can print legal records for transport.

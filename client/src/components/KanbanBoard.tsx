@@ -357,6 +357,18 @@ export default function KanbanBoard({ applications, onMoveApplication, onAssignA
           baseFee={offlinePaymentApp.checkoutStatus.baseFee}
         />
       )}
+
+      {changeAnimalApp && (
+        <ChangeAnimalDialog
+          open={!!changeAnimalApp}
+          onOpenChange={(open) => !open && setChangeAnimalApp(null)}
+          applicationId={changeAnimalApp.id}
+          applicationType="adoption"
+          currentAnimalId={changeAnimalApp.animalId}
+          currentAnimalName={changeAnimalApp.animalName}
+          applicantName={changeAnimalApp.applicantName}
+        />
+      )}
     </div>
   );
 }
