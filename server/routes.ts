@@ -27043,6 +27043,33 @@ Email: ${application.applicantEmail || ''}`
 
   // ============================================================================
   // Document Management Routes
+
+  /**
+   * GET /api/documents/folder
+   * List files in a foster/volunteer document folder
+   */
+  app.get('/api/documents/folder', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { path } = req.query;
+      if (!path || typeof path !== 'string') {
+        return res.status(400).json({ error: 'Path parameter is required' });
+      }
+
+      // Validate the path belongs to this tenant
+      const tenantId = req.tenant!.id;
+      if (!path.includes(tenantId)) {
+        return res.status(403).json({ error: 'Access denied to this folder' });
+      }
+
+      const { listFolderFiles } = await import('./objectStorage');
+      const files = await listFolderFiles(path);
+
+      res.json({ files });
+    } catch (error) {
+      console.error('Error listing folder files:', error);
+      next(error);
+    }
+  });
   // ============================================================================
 
   /**

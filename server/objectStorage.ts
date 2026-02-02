@@ -495,3 +495,41 @@ async function signObjectURL({
   const { signed_url: signedURL } = await response.json();
   return signedURL;
 }
+
+export async function listFolderFiles(folderPath: string): Promise<Array<{
+  name: string;
+  path: string;
+  size: number;
+  updatedAt: string;
+  contentType: string;
+}>> {
+  const privateObjectDir = process.env.PRIVATE_OBJECT_DIR || "";
+  if (!privateObjectDir) {
+    throw new Error("PRIVATE_OBJECT_DIR not set");
+  }
+
+  let normalizedPath = folderPath;
+  if (normalizedPath.startsWith('/objects/')) {
+    normalizedPath = normalizedPath.slice('/objects/'.length);
+  } else if (normalizedPath.startsWith('objects/')) {
+    normalizedPath = normalizedPath.slice('objects/'.length);
+  }
+
+  const fullPath = `${privateObjectDir}/${normalizedPath}`;
+  const { bucketName, objectName } = parseObjectPath(fullPath);
+
+  const bucket = objectStorageClient.bucket(bucketName);
+  const [files] = await bucket.getFiles({ prefix: objectName });
+
+  return files.map((file) => {
+    const metadata = file.metadata;
+    const fileName = file.name.split('/').pop() || file.name;
+    return {
+      name: fileName,
+      path: `/objects/${normalizedPath}/${fileName}`,
+      size: Number(metadata.size || 0),
+      updatedAt: metadata.updated || new Date().toISOString(),
+      contentType: metadata.contentType || 'application/octet-stream',
+    };
+  });
+}

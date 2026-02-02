@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, CheckCircle, XCircle, Clock, Users, Heart, Package, MessageSquare, AlertCircle, History, Download } from "lucide-react";
+import { Loader2, CheckCircle, XCircle, Clock, Users, Heart, Package, MessageSquare, AlertCircle, History, Download, FolderOpen, FileText, ExternalLink } from "lucide-react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { useLocation } from "wouter";
 import {
@@ -74,6 +74,7 @@ export default function FosterManagementPage() {
   const isMobile = useIsMobile();
   const [selectedApplication, setSelectedApplication] = useState<FosterApplication | null>(null);
   const [selectedUpdate, setSelectedUpdate] = useState<FosterUpdateWithDetails | null>(null);
+  const [documentFolderApp, setDocumentFolderApp] = useState<FosterApplication | null>(null);
   
   // Parse tab from query params
   const urlParams = new URLSearchParams(location.split('?')[1]);
@@ -105,6 +106,24 @@ export default function FosterManagementPage() {
 
   const { data: agreementSessionsData } = useQuery<{ sessions: FosterAgreementSession[] }>({
     queryKey: ['/api/foster-agreements/sessions'],
+  });
+
+  interface FolderFile {
+    name: string;
+    path: string;
+    size: number;
+    updatedAt: string;
+    contentType: string;
+  }
+
+  const { data: folderFilesData, isLoading: folderFilesLoading } = useQuery<{ files: FolderFile[] }>({
+    queryKey: ['/api/documents/folder', documentFolderApp?.driveFolderId],
+    queryFn: async () => {
+      if (!documentFolderApp?.driveFolderId) return { files: [] };
+      const response = await apiRequest('GET', `/api/documents/folder?path=${encodeURIComponent(documentFolderApp.driveFolderId)}`);
+      return response.json();
+    },
+    enabled: !!documentFolderApp?.driveFolderId,
   });
 
   const [downloadingAgreementId, setDownloadingAgreementId] = useState<string | null>(null);
@@ -363,6 +382,17 @@ export default function FosterManagementPage() {
                                 </Button>
                               </>
                             )}
+                            {app.driveFolderId && (
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                onClick={() => setDocumentFolderApp(app)}
+                                data-testid={`button-documents-${app.id}`}
+                              >
+                                <FolderOpen className="h-4 w-4 mr-1" />
+                                Documents
+                              </Button>
+                            )}
                           </div>
                         </CardContent>
                       </Card>
@@ -452,6 +482,17 @@ export default function FosterManagementPage() {
                                   }
                                   return null;
                                 })()}
+                                {app.driveFolderId && (
+                                  <Button
+                                    size="sm"
+                                    variant="secondary"
+                                    onClick={() => setDocumentFolderApp(app)}
+                                    data-testid={`button-documents-${app.id}`}
+                                  >
+                                    <FolderOpen className="h-4 w-4 mr-1" />
+                                    Documents
+                                  </Button>
+                                )}
                               </div>
                             </TableCell>
                           </TableRow>
@@ -1305,6 +1346,59 @@ export default function FosterManagementPage() {
               )}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Documents Folder Dialog */}
+      <Dialog open={!!documentFolderApp} onOpenChange={(open) => !open && setDocumentFolderApp(null)}>
+        <DialogContent className="max-w-lg" data-testid="dialog-documents-folder">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FolderOpen className="h-5 w-5" />
+              Documents - {documentFolderApp?.applicantName}
+            </DialogTitle>
+            <DialogDescription>
+              Files associated with this foster application
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-2 max-h-80 overflow-y-auto">
+            {folderFilesLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin" />
+              </div>
+            ) : folderFilesData?.files && folderFilesData.files.length > 0 ? (
+              folderFilesData.files.map((file) => (
+                <Card key={file.path} className="p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <FileText className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{file.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {(file.size / 1024).toFixed(1)} KB • {new Date(file.updatedAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => window.open(file.path, '_blank')}
+                      data-testid={`button-download-file-${file.name}`}
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </Card>
+              ))
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                <FolderOpen className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                <p>No documents uploaded yet</p>
+                <p className="text-xs mt-1">Documents will appear here when uploaded</p>
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </DashboardLayout>
