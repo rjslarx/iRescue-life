@@ -6082,6 +6082,9 @@ Crawl-delay: 1
       if (payload.intakeDate && typeof payload.intakeDate === 'string') {
         payload.intakeDate = new Date(payload.intakeDate);
       }
+      if (payload.strayHoldUntil && typeof payload.strayHoldUntil === 'string') {
+        payload.strayHoldUntil = new Date(payload.strayHoldUntil);
+      }
       
       // Convert empty strings to null for unique-constrained text fields
       // This prevents empty string conflicts in the unique microchip index
@@ -6177,7 +6180,7 @@ Crawl-delay: 1
         'scheduledSurgeryDate', 
         'intakeDate', 
         'adoptionDate', 
-        'deceasedDate'
+        'deceasedDate', 'strayHoldUntil'
       ];
       for (const field of timestampFields) {
         if (data[field] && typeof data[field] === 'string') {
