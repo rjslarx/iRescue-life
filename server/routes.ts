@@ -22474,6 +22474,14 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
         }
         throw dbError;
       }
+      // Check if Google Calendar sync is enabled for this tenant
+      let shouldSyncToGoogle = validatedData.includeMeetLink;
+      let googleIntegration = null;
+      
+      if (!shouldSyncToGoogle) {
+        // Check if syncCalendar feature is enabled
+        const { platformIntegrations } = await import('@shared/schema');
+        const [integration] = await db
           .select()
           .from(platformIntegrations)
           .where(and(
