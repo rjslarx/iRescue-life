@@ -35,7 +35,8 @@ function escapeHtml(text: string): string {
 
 function formatCustomResponsesHtml(
   customResponses: Record<string, any>,
-  formFieldLabels: FormFieldLabel[]
+  formFieldLabels: FormFieldLabel[],
+  baseUrl?: string
 ): string {
   if (!customResponses || Object.keys(customResponses).length === 0) {
     return '';
@@ -52,11 +53,24 @@ function formatCustomResponsesHtml(
     const label = field?.label || fieldId;
     const fieldType = field?.fieldType || 'text';
 
-    if (fieldType === 'photo' && typeof value === 'string' && value.startsWith('http')) {
+    // Check if this is a photo field with an image URL or object storage path
+    const isPhotoField = fieldType === 'photo' && typeof value === 'string';
+    const isHttpUrl = typeof value === 'string' && value.startsWith('http');
+    const isObjectPath = typeof value === 'string' && (value.startsWith('/objects/') || value.startsWith('objects/'));
+    
+    if (isPhotoField && (isHttpUrl || isObjectPath)) {
+      // Convert object storage paths to full URLs
+      let imageUrl = value;
+      if (isObjectPath && baseUrl) {
+        // Ensure path starts with /
+        const normalizedPath = value.startsWith('/') ? value : `/${value}`;
+        imageUrl = `${baseUrl}${normalizedPath}`;
+      }
+      
       lines.push(`<div class="detail" style="margin: 12px 0;">
         <span class="label" style="font-weight: 600; color: #64748b;">${escapeHtml(label)}:</span>
         <div style="margin-top: 8px;">
-          <img src="${escapeHtml(value)}" alt="${escapeHtml(label)}" style="max-width: 300px; max-height: 300px; border-radius: 8px; border: 1px solid #e2e8f0;" />
+          <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(label)}" style="max-width: 300px; max-height: 300px; border-radius: 8px; border: 1px solid #e2e8f0;" />
         </div>
       </div>`);
     } else if (Array.isArray(value)) {
@@ -121,7 +135,7 @@ function getDashboardPath(formType: FormType): string {
     adoption: '/dashboard/applications',
     foster: '/dashboard/foster-management',
     volunteer: '/dashboard/volunteers',
-    surrender: '/dashboard/intake-manager',
+    surrender: '/dashboard/intake',
   };
   return paths[formType];
 }
@@ -225,7 +239,7 @@ export async function sendFormSubmissionNotification(data: FormSubmissionData): 
       ${data.animalName ? `<div class="detail"><span class="label">Animal:</span> ${escapeHtml(data.animalName)}</div>` : ''}
       ${data.additionalDetails ? `<div class="detail"><span class="label">Details:</span> ${escapeHtml(data.additionalDetails)}</div>` : ''}
       
-      ${data.customResponses && data.formFieldLabels ? formatCustomResponsesHtml(data.customResponses, data.formFieldLabels) : ''}
+      ${data.customResponses && data.formFieldLabels ? formatCustomResponsesHtml(data.customResponses, data.formFieldLabels, baseUrl) : ''}
       
       <a href="${baseUrl}${dashboardPath}" class="button">View in Dashboard</a>
     </div>
