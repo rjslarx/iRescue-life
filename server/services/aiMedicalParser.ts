@@ -1,4 +1,7 @@
 import OpenAI from "openai";
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
+const pdfParse = require("pdf-parse");
 
 const openai = new OpenAI({
   baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
@@ -76,7 +79,6 @@ export interface MedicalExtractionResult {
 
 export async function extractTextFromPdf(pdfBuffer: Buffer): Promise<{ text: string; pageCount: number }> {
   try {
-    const pdfParse = (await import('pdf-parse')).default;
     const data = await pdfParse(pdfBuffer);
     return {
       text: data.text,
