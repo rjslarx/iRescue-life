@@ -8165,7 +8165,31 @@ Crawl-delay: 1
         .limit(1);
 
       const [application] = await db
-        .select({ applicantName: applications.applicantName, applicantPhone: applications.applicantPhone, applicantEmail: applications.applicantEmail, customResponses: applications.customResponses })
+        .select({
+        id: fosterApplications.id,
+        tenantId: fosterApplications.tenantId,
+        applicantName: fosterApplications.applicantName,
+        applicantEmail: fosterApplications.applicantEmail,
+        applicantPhone: fosterApplications.applicantPhone,
+        address: fosterApplications.address,
+        housingType: fosterApplications.housingType,
+        hasYard: fosterApplications.hasYard,
+        hasOtherPets: fosterApplications.hasOtherPets,
+        otherPetsDetails: fosterApplications.otherPetsDetails,
+        experience: fosterApplications.experience,
+        availability: fosterApplications.availability,
+        preferences: fosterApplications.preferences,
+        vetReference: fosterApplications.vetReference,
+        personalReference: fosterApplications.personalReference,
+        status: fosterApplications.status,
+        pipelineStatus: fosterApplications.pipelineStatus,
+        notes: fosterApplications.notes,
+        customResponses: fosterApplications.customResponses,
+        smsConsent: fosterApplications.smsConsent,
+        driveFolderId: fosterApplications.driveFolderId,
+        createdAt: fosterApplications.createdAt,
+        updatedAt: fosterApplications.updatedAt,
+      })
         .from(applications)
         .where(eq(applications.id, session.applicationId))
         .limit(1);
@@ -12880,7 +12904,31 @@ Submitted: ${new Date().toLocaleString()}
       const { fosterApplications } = await import('@shared/schema');
       
       const applications = await db
-        .select({ applicantName: applications.applicantName, applicantPhone: applications.applicantPhone, applicantEmail: applications.applicantEmail, customResponses: applications.customResponses })
+        .select({
+        id: fosterApplications.id,
+        tenantId: fosterApplications.tenantId,
+        applicantName: fosterApplications.applicantName,
+        applicantEmail: fosterApplications.applicantEmail,
+        applicantPhone: fosterApplications.applicantPhone,
+        address: fosterApplications.address,
+        housingType: fosterApplications.housingType,
+        hasYard: fosterApplications.hasYard,
+        hasOtherPets: fosterApplications.hasOtherPets,
+        otherPetsDetails: fosterApplications.otherPetsDetails,
+        experience: fosterApplications.experience,
+        availability: fosterApplications.availability,
+        preferences: fosterApplications.preferences,
+        vetReference: fosterApplications.vetReference,
+        personalReference: fosterApplications.personalReference,
+        status: fosterApplications.status,
+        pipelineStatus: fosterApplications.pipelineStatus,
+        notes: fosterApplications.notes,
+        customResponses: fosterApplications.customResponses,
+        smsConsent: fosterApplications.smsConsent,
+        driveFolderId: fosterApplications.driveFolderId,
+        createdAt: fosterApplications.createdAt,
+        updatedAt: fosterApplications.updatedAt,
+      })
         .from(fosterApplications)
         .where(eq(fosterApplications.tenantId, req.tenant!.id))
         .orderBy(desc(fosterApplications.createdAt));
@@ -12900,7 +12948,31 @@ Submitted: ${new Date().toLocaleString()}
       const { fosterApplications } = await import('@shared/schema');
       
       const [application] = await db
-        .select({ applicantName: applications.applicantName, applicantPhone: applications.applicantPhone, applicantEmail: applications.applicantEmail, customResponses: applications.customResponses })
+        .select({
+        id: fosterApplications.id,
+        tenantId: fosterApplications.tenantId,
+        applicantName: fosterApplications.applicantName,
+        applicantEmail: fosterApplications.applicantEmail,
+        applicantPhone: fosterApplications.applicantPhone,
+        address: fosterApplications.address,
+        housingType: fosterApplications.housingType,
+        hasYard: fosterApplications.hasYard,
+        hasOtherPets: fosterApplications.hasOtherPets,
+        otherPetsDetails: fosterApplications.otherPetsDetails,
+        experience: fosterApplications.experience,
+        availability: fosterApplications.availability,
+        preferences: fosterApplications.preferences,
+        vetReference: fosterApplications.vetReference,
+        personalReference: fosterApplications.personalReference,
+        status: fosterApplications.status,
+        pipelineStatus: fosterApplications.pipelineStatus,
+        notes: fosterApplications.notes,
+        customResponses: fosterApplications.customResponses,
+        smsConsent: fosterApplications.smsConsent,
+        driveFolderId: fosterApplications.driveFolderId,
+        createdAt: fosterApplications.createdAt,
+        updatedAt: fosterApplications.updatedAt,
+      })
         .from(fosterApplications)
         .where(
           and(
@@ -13449,7 +13521,31 @@ Submitted: ${new Date().toLocaleString()}
       const { volunteerApplications } = await import('@shared/schema');
       
       const [application] = await db
-        .select({ applicantName: applications.applicantName, applicantPhone: applications.applicantPhone, applicantEmail: applications.applicantEmail, customResponses: applications.customResponses })
+        .select({
+        id: fosterApplications.id,
+        tenantId: fosterApplications.tenantId,
+        applicantName: fosterApplications.applicantName,
+        applicantEmail: fosterApplications.applicantEmail,
+        applicantPhone: fosterApplications.applicantPhone,
+        address: fosterApplications.address,
+        housingType: fosterApplications.housingType,
+        hasYard: fosterApplications.hasYard,
+        hasOtherPets: fosterApplications.hasOtherPets,
+        otherPetsDetails: fosterApplications.otherPetsDetails,
+        experience: fosterApplications.experience,
+        availability: fosterApplications.availability,
+        preferences: fosterApplications.preferences,
+        vetReference: fosterApplications.vetReference,
+        personalReference: fosterApplications.personalReference,
+        status: fosterApplications.status,
+        pipelineStatus: fosterApplications.pipelineStatus,
+        notes: fosterApplications.notes,
+        customResponses: fosterApplications.customResponses,
+        smsConsent: fosterApplications.smsConsent,
+        driveFolderId: fosterApplications.driveFolderId,
+        createdAt: fosterApplications.createdAt,
+        updatedAt: fosterApplications.updatedAt,
+      })
         .from(volunteerApplications)
         .where(
           and(
@@ -13736,7 +13832,31 @@ If you have any questions, please contact us.
       
       // Get the volunteer application
       const [application] = await db
-        .select({ applicantName: applications.applicantName, applicantPhone: applications.applicantPhone, applicantEmail: applications.applicantEmail, customResponses: applications.customResponses })
+        .select({
+        id: fosterApplications.id,
+        tenantId: fosterApplications.tenantId,
+        applicantName: fosterApplications.applicantName,
+        applicantEmail: fosterApplications.applicantEmail,
+        applicantPhone: fosterApplications.applicantPhone,
+        address: fosterApplications.address,
+        housingType: fosterApplications.housingType,
+        hasYard: fosterApplications.hasYard,
+        hasOtherPets: fosterApplications.hasOtherPets,
+        otherPetsDetails: fosterApplications.otherPetsDetails,
+        experience: fosterApplications.experience,
+        availability: fosterApplications.availability,
+        preferences: fosterApplications.preferences,
+        vetReference: fosterApplications.vetReference,
+        personalReference: fosterApplications.personalReference,
+        status: fosterApplications.status,
+        pipelineStatus: fosterApplications.pipelineStatus,
+        notes: fosterApplications.notes,
+        customResponses: fosterApplications.customResponses,
+        smsConsent: fosterApplications.smsConsent,
+        driveFolderId: fosterApplications.driveFolderId,
+        createdAt: fosterApplications.createdAt,
+        updatedAt: fosterApplications.updatedAt,
+      })
         .from(volunteerApplications)
         .where(and(
           eq(volunteerApplications.id, req.params.id),
@@ -23859,7 +23979,31 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
 
       // Get the most recent approved/adopted application for this animal
       const [application] = await db
-        .select({ applicantName: applications.applicantName, applicantPhone: applications.applicantPhone, applicantEmail: applications.applicantEmail, customResponses: applications.customResponses })
+        .select({
+        id: fosterApplications.id,
+        tenantId: fosterApplications.tenantId,
+        applicantName: fosterApplications.applicantName,
+        applicantEmail: fosterApplications.applicantEmail,
+        applicantPhone: fosterApplications.applicantPhone,
+        address: fosterApplications.address,
+        housingType: fosterApplications.housingType,
+        hasYard: fosterApplications.hasYard,
+        hasOtherPets: fosterApplications.hasOtherPets,
+        otherPetsDetails: fosterApplications.otherPetsDetails,
+        experience: fosterApplications.experience,
+        availability: fosterApplications.availability,
+        preferences: fosterApplications.preferences,
+        vetReference: fosterApplications.vetReference,
+        personalReference: fosterApplications.personalReference,
+        status: fosterApplications.status,
+        pipelineStatus: fosterApplications.pipelineStatus,
+        notes: fosterApplications.notes,
+        customResponses: fosterApplications.customResponses,
+        smsConsent: fosterApplications.smsConsent,
+        driveFolderId: fosterApplications.driveFolderId,
+        createdAt: fosterApplications.createdAt,
+        updatedAt: fosterApplications.updatedAt,
+      })
         .from(applications)
         .where(and(
           eq(applications.animalId, req.params.animalId),
