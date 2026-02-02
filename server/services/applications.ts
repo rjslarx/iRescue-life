@@ -52,7 +52,24 @@ export async function getApplicationsByTenant(tenantId: string) {
  */
 export async function getApplicationById(tenantId: string, applicationId: string) {
   const [application] = await db
-    .select()
+    .select({
+      id: applications.id,
+      tenantId: applications.tenantId,
+      animalId: applications.animalId,
+      applicantName: applications.applicantName,
+      applicantEmail: applications.applicantEmail,
+      applicantPhone: applications.applicantPhone,
+      applicantAddress: applications.applicantAddress,
+      stage: applications.stage,
+      notes: applications.notes,
+      customResponses: applications.customResponses,
+      smsConsent: applications.smsConsent,
+      assignedToId: applications.assignedToId,
+      gclid: applications.gclid,
+      gclidCapturedAt: applications.gclidCapturedAt,
+      createdAt: applications.createdAt,
+      updatedAt: applications.updatedAt,
+    })
     .from(applications)
     .where(and(
       eq(applications.tenantId, tenantId),
@@ -69,7 +86,7 @@ export async function getApplicationById(tenantId: string, applicationId: string
 export async function createApplication(tenantId: string, data: Omit<InsertApplication, 'tenantId'>): Promise<Application> {
   // Verify animal belongs to this tenant
   const [animal] = await db
-    .select()
+    .select({ id: animals.id, tenantId: animals.tenantId })
     .from(animals)
     .where(and(
       eq(animals.tenantId, tenantId),
@@ -169,7 +186,7 @@ export async function updateApplicationStage(
     } else {
       try {
         // Check if already dismissed
-        const existing = await db.select()
+        const existing = await db.select({ id: dismissedWidgetItems.id })
           .from(dismissedWidgetItems)
           .where(
             and(
