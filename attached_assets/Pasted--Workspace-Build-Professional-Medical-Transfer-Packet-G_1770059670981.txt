@@ -1,0 +1,83 @@
+@Workspace Build Professional Medical Transfer Packet Generator
+
+Goal: Create a feature to generate a legally robust PDF 'Medical Transfer Record' (Health Certificate) that combines Animal Data with Organization Legal Settings.
+
+1. Database Schema (organization_settings)
+
+Create a table organization_settings to store the Rescue's legal identity.
+
+Fields:
+
+org_legal_name (string)
+
+address_street, address_city, address_state, address_zip
+
+phone_public, email_records
+
+website_url
+
+state_license_number (e.g., 'LA-Shelter-123')
+
+usda_license_number (Optional)
+
+supervising_vet_name (string)
+
+supervising_vet_license (string)
+
+logo_url (string)
+
+tax_ein (string - useful for receiving shelters)
+
+2. The Settings Page (/admin/settings/org)
+
+Create a form to Edit/Save these settings.
+
+Layout: clearly group 'Contact Info', 'License Numbers', and 'Veterinary Authority'.
+
+3. The PDF Generator Logic (TransferPacket.tsx)
+
+Library: Use jspdf and jspdf-autotable.
+
+Data Source: Fetch animal (with breed, color, age, weight, microchip), medical_records (vaccines, tests, meds), and organization_settings.
+
+PDF Layout & Content:
+
+Header:
+
+Left: Organization Logo (Scaled to fit).
+
+Right: org_legal_name, Address Block, 'Phone: [phone]', 'License: [state_license]'.
+
+Title: Centered, Bold: 'OFFICIAL MEDICAL TRANSFER RECORD'.
+
+Section 1: Animal Identity (The 'Signalment')
+
+Draw a box/grid containing: Name, ID, Microchip (BOLD), Species/Breed, Sex, Age/DOB, Color, Weight, Spay/Neuter Status.
+
+Crucial: If Microchip is missing, print 'NO MICROCHIP FOUND' in red text.
+
+Section 2: Vaccination History (Table)
+
+Columns: Vaccine (e.g., Rabies, DHPP), Date Administered, Date Due, Manufacturer/Lot #, Administered By.
+
+Section 3: Diagnostic Testing (Table)
+
+Columns: Test (Heartworm, Fecal, FIV/FeLV), Date, Result (Negative/Positive).
+
+Section 4: Current Medications (Preventatives)
+
+List current Heartworm/Flea prevention with 'Last Date Given' and 'Next Due Date'.
+
+Footer: Legal Attestation
+
+Add this exact text at the bottom: 'I certify that the information provided in this record is a true and accurate reflection of the medical history for the animal described above. To the best of my knowledge, this animal displays no clinical signs of infectious disease at the time of transfer.'
+
+Signature Line: 'Authorized Representative' (Line for signature).
+
+Vet Block: 'Medical Protocols Supervised By: [supervising_vet_name], DVM (License: [supervising_vet_license])'.
+
+4. Integration
+
+Add a button '📄 Download Official Packet' to the Animal Profile Header and the Medical Tab.
+
+Execute this to build the compliance engine.
