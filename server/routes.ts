@@ -1380,6 +1380,128 @@ Crawl-delay: 1
       }
       next(error);
     }
+
+  /**
+   * POST /api/platform/login
+   * Login for platform admin users - doesn't require tenant context
+   */
+  app.post('/api/platform/login', authLimiter, async (req, res, next) => {
+    try {
+      const { users } = await import('@shared/schema');
+      
+      const loginSchema = z.object({
+        email: z.string().email(),
+        password: z.string(),
+      });
+
+      const credentials = loginSchema.parse(req.body);
+      console.log(`[PLATFORM LOGIN] Attempt for email: ${credentials.email}`);
+      
+      // Find platform tenant
+      const [platformTenant] = await db
+        .select({ id: tenants.id })
+        .from(tenants)
+        .where(eq(tenants.subdomain, 'platform'))
+        .limit(1);
+
+      if (!platformTenant) {
+        console.error('[PLATFORM LOGIN] Platform tenant not found');
+        return res.status(500).json({ error: 'Platform tenant not configured' });
+      }
+
+      // Find user in platform tenant
+      const [user] = await db
+        .select()
+        .from(users)
+        .where(and(
+          eq(users.email, credentials.email),
+          eq(users.tenantId, platformTenant.id)
+        ))
+        .limit(1);
+
+      if (!user) {
+        console.log(`[PLATFORM LOGIN] No user found for email: ${credentials.email}`);
+        return res.status(401).json({ error: 'Invalid email or password' });
+      }
+
+      // Verify user has platform_admin role
+      if (!user.roles.includes('platform_admin')) {
+        console.log(`[PLATFORM LOGIN] User ${credentials.email} is not a platform admin`);
+        return res.status(401).json({ error: 'Access denied - not a platform administrator' });
+      }
+
+      // Verify password
+      const bcrypt = await import('bcrypt');
+      const validPassword = await bcrypt.compare(credentials.password, user.passwordHash);
+      if (!validPassword) {
+        console.log(`[PLATFORM LOGIN] Invalid password for: ${credentials.email}`);
+        return res.status(401).json({ error: 'Invalid email or password' });
+      }
+
+      // Check if user is active
+      if (!user.isActive) {
+        console.log(`[PLATFORM LOGIN] Account disabled for: ${credentials.email}`);
+        return res.status(401).json({ error: 'Account is disabled' });
+      }
+
+      console.log(`[PLATFORM LOGIN] SUCCESS: User ${user.email} logged in`);
+
+      // Check if MFA is enabled
+      if (user.mfaEnabled) {
+        return res.json({
+          success: true,
+          requiresMfa: true,
+          userId: user.id,
+        });
+      }
+
+      // Set session
+      req.session.userId = user.id;
+      req.session.tenantId = user.tenantId;
+      req.session.activeRole = 'platform_admin';
+
+      // Save session before sending response
+      req.session.save(async (err) => {
+        if (err) {
+          console.error('[PLATFORM LOGIN] Session save error:', err);
+          return res.status(500).json({ error: 'Failed to save session' });
+        }
+
+        // Log login activity
+        try {
+          const { logActivity } = await import('./lib/activity-logger');
+          await logActivity({
+            tenantId: user.tenantId,
+            userId: user.id,
+            entityType: 'User',
+            entityId: user.id,
+            action: 'login',
+            description: 'logged in as platform_admin',
+            category: 'user',
+            metadata: { role: 'platform_admin' }
+          });
+        } catch (logError) {
+          console.error('[PLATFORM LOGIN] Failed to log login activity:', logError);
+        }
+
+        res.json({
+          success: true,
+          user: {
+            id: user.id,
+            email: user.email,
+            fullName: user.fullName,
+            roles: user.roles,
+            activeRole: 'platform_admin',
+          },
+        });
+      });
+    } catch (error: any) {
+      console.error('[PLATFORM LOGIN] Error:', error);
+      res.status(401).json({ 
+        error: error.message || 'Login failed' 
+      });
+    }
+  });
   });
 
   /**
