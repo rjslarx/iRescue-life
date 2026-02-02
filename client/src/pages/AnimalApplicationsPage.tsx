@@ -25,7 +25,7 @@ export default function AnimalApplicationsPage() {
   });
 
   // Fetch all applications for this animal
-  const { data: applicationsData, isLoading: applicationsLoading } = useQuery<{ applications: ApplicationWithAnimal[] }>({
+  const { data: applicationsData, isLoading: applicationsLoading, error: applicationsError } = useQuery<{ applications: ApplicationWithAnimal[] }>({
     queryKey: ['/api/applications', animalId],
     queryFn: async () => {
       // The backend supports filtering by animalId via query parameter
@@ -35,7 +35,8 @@ export default function AnimalApplicationsPage() {
         headers: getTenantHeaders(),
       });
       if (!response.ok) {
-        throw new Error('Failed to fetch applications');
+        const errorText = await response.text().catch(() => response.statusText);
+        throw new Error(`Failed to fetch applications: ${response.status} ${errorText}`);
       }
       return response.json();
     },
@@ -146,6 +147,19 @@ export default function AnimalApplicationsPage() {
           <div className="flex items-center justify-center py-12">
             <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
           </div>
+        ) : applicationsError ? (
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+              <ClipboardList className="w-12 h-12 text-destructive mb-4" />
+              <h3 className="text-lg font-semibold mb-2">Failed to Load Applications</h3>
+              <p className="text-sm text-muted-foreground max-w-md">
+                {applicationsError instanceof Error ? applicationsError.message : 'An error occurred while loading applications.'}
+              </p>
+              <p className="text-xs text-muted-foreground mt-2">
+                Please try refreshing the page or logging in again.
+              </p>
+            </CardContent>
+          </Card>
         ) : applications.length === 0 ? (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12 text-center">
