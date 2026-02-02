@@ -3,12 +3,14 @@ import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Printer, X } from "lucide-react";
+import { Printer, X, Download } from "lucide-react";
 import { format } from "date-fns";
-import { useEffect } from "react";
+import { useEffect, useState, useRef } from "react";
 
 export default function PrintableHealthRecordPage() {
   const { animalId } = useParams<{ animalId: string }>();
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   // Fetch animal details
   const { data: animalData } = useQuery({
@@ -95,6 +97,62 @@ export default function PrintableHealthRecordPage() {
     window.close();
   };
 
+  const handleDownload = async () => {
+    if (!contentRef.current || !animal) return;
+    
+    setIsDownloading(true);
+    try {
+      const html2canvas = (await import('html2canvas')).default;
+      const jsPDF = (await import('jspdf')).default;
+      
+      // Capture the content
+      const canvas = await html2canvas(contentRef.current, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+      });
+      
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+      });
+      
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = canvas.width;
+      const imgHeight = canvas.height;
+      const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
+      const imgX = (pdfWidth - imgWidth * ratio) / 2;
+      
+      // Calculate how many pages we need
+      const scaledImgHeight = imgHeight * ratio;
+      const pageHeight = pdfHeight - 20; // Leave some margin
+      let heightLeft = scaledImgHeight;
+      let position = 10;
+      
+      // First page
+      pdf.addImage(imgData, 'PNG', imgX, position, imgWidth * ratio, scaledImgHeight);
+      heightLeft -= pageHeight;
+      
+      // Add additional pages if needed
+      while (heightLeft > 0) {
+        position = heightLeft - scaledImgHeight + 10;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', imgX, position, imgWidth * ratio, scaledImgHeight);
+        heightLeft -= pageHeight;
+      }
+      
+      pdf.save(`${animal.name}-health-record.pdf`);
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
   if (!animal) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -107,6 +165,10 @@ export default function PrintableHealthRecordPage() {
     <div className="min-h-screen bg-background p-8">
       {/* Print Controls - Hidden when printing */}
       <div className="no-print fixed top-4 right-4 flex gap-2 z-50">
+        <Button onClick={handleDownload} disabled={isDownloading} data-testid="button-download">
+          <Download className="w-4 h-4 mr-2" />
+          {isDownloading ? 'Generating...' : 'Download PDF'}
+        </Button>
         <Button onClick={handlePrint} data-testid="button-print">
           <Printer className="w-4 h-4 mr-2" />
           Print
@@ -118,7 +180,7 @@ export default function PrintableHealthRecordPage() {
       </div>
 
       {/* Printable Content */}
-      <div className="max-w-4xl mx-auto space-y-6">
+      <div ref={contentRef} className="max-w-4xl mx-auto space-y-6 bg-white">
         {/* Header */}
         <div className="text-center space-y-2">
           <h1 className="text-3xl font-bold" data-testid="text-animal-name">
