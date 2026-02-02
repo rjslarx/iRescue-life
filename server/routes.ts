@@ -10602,10 +10602,10 @@ ${renderedHtml}
       const fields = await db.select({
         id: surrenderFormFields.id,
         tenantId: surrenderFormFields.tenantId,
-        fieldName: surrenderFormFields.fieldName,
-        fieldLabel: surrenderFormFields.fieldLabel,
+        label: surrenderFormFields.label,
+        
         fieldType: surrenderFormFields.fieldType,
-        isRequired: surrenderFormFields.isRequired,
+        required: surrenderFormFields.required,
         isActive: surrenderFormFields.isActive,
         order: surrenderFormFields.order,
         options: surrenderFormFields.options,
