@@ -5169,7 +5169,16 @@ Crawl-delay: 1
       }
       
       // Get all active animals (not merged, not deceased)
-      const allAnimals = await db.select().from(animals)
+      // Using explicit field selection for dynamic import compatibility
+      const allAnimals = await db.select({
+        id: animals.id,
+        name: animals.name,
+        species: animals.species,
+        breed: animals.breed,
+        status: animals.status,
+        intakeDate: animals.intakeDate,
+        photoUrls: animals.photoUrls,
+      }).from(animals)
         .where(and(
           eq(animals.tenantId, tenantId),
           not(eq(animals.status, 'merged')),
@@ -5483,9 +5492,42 @@ Crawl-delay: 1
       // Fetch both animals before transaction with error handling
       let primaryAnimal, secondaryAnimal;
       try {
-        const [primary] = await db.select().from(animals)
+        // Using explicit field selection for dynamic import compatibility
+        const [primary] = await db.select({
+          id: animals.id,
+          name: animals.name,
+          species: animals.species,
+          breed: animals.breed,
+          age: animals.age,
+          gender: animals.gender,
+          weight: animals.weight,
+          color: animals.color,
+          description: animals.description,
+          status: animals.status,
+          intakeDate: animals.intakeDate,
+          intakeSource: animals.intakeSource,
+          photoUrls: animals.photoUrls,
+          neuterStatus: animals.neuterStatus,
+          tenantId: animals.tenantId,
+        }).from(animals)
           .where(and(eq(animals.id, primaryAnimalId), eq(animals.tenantId, tenantId)));
-        const [secondary] = await db.select().from(animals)
+        const [secondary] = await db.select({
+          id: animals.id,
+          name: animals.name,
+          species: animals.species,
+          breed: animals.breed,
+          age: animals.age,
+          gender: animals.gender,
+          weight: animals.weight,
+          color: animals.color,
+          description: animals.description,
+          status: animals.status,
+          intakeDate: animals.intakeDate,
+          intakeSource: animals.intakeSource,
+          photoUrls: animals.photoUrls,
+          neuterStatus: animals.neuterStatus,
+          tenantId: animals.tenantId,
+        }).from(animals)
           .where(and(eq(animals.id, secondaryAnimalId), eq(animals.tenantId, tenantId)));
         primaryAnimal = primary;
         secondaryAnimal = secondary;
@@ -5594,7 +5636,24 @@ Crawl-delay: 1
         console.log(`[MERGE] Related records reassigned in ${Date.now() - mergeStartTime}ms`);
         
         // Fetch updated primary animal BEFORE audit trail (critical for response)
-        const [result] = await db.select().from(animals).where(eq(animals.id, primaryAnimalId));
+        // Using explicit field selection for dynamic import compatibility
+        const [result] = await db.select({
+          id: animals.id,
+          name: animals.name,
+          species: animals.species,
+          breed: animals.breed,
+          age: animals.age,
+          gender: animals.gender,
+          weight: animals.weight,
+          color: animals.color,
+          description: animals.description,
+          status: animals.status,
+          intakeDate: animals.intakeDate,
+          intakeSource: animals.intakeSource,
+          photoUrls: animals.photoUrls,
+          neuterStatus: animals.neuterStatus,
+          tenantId: animals.tenantId,
+        }).from(animals).where(eq(animals.id, primaryAnimalId));
         updatedPrimary = result;
         
         console.log(`[MERGE] Complete in ${Date.now() - mergeStartTime}ms`);
@@ -6286,8 +6345,16 @@ Crawl-delay: 1
       const animalId = req.params.id;
       const tenantId = req.tenant!.id;
 
-      // Get current animal
-      const [existingAnimal] = await db.select().from(animals)
+      // Get current animal - explicit field selection for dynamic import compatibility
+      const [existingAnimal] = await db.select({
+        id: animals.id,
+        name: animals.name,
+        species: animals.species,
+        breed: animals.breed,
+        status: animals.status,
+        intakeDate: animals.intakeDate,
+        tenantId: animals.tenantId,
+      }).from(animals)
         .where(and(
           eq(animals.id, animalId),
           eq(animals.tenantId, tenantId)
@@ -20902,8 +20969,12 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
         console.log(`[Newsletter Send] Subscribers: ${subscribers.map(s => s.email).join(', ')}`);
       } else {
         console.log(`[Newsletter Send] ⚠️ NO SUBSCRIBERS FOUND - checking raw query...`);
-        // Debug query to understand why no subscribers
-        const allSubs = await db.select().from(newsletterSubscribers).where(eq(newsletterSubscribers.tenantId, tenantId));
+        // Debug query to understand why no subscribers - explicit field selection for dynamic import
+        const allSubs = await db.select({
+          id: newsletterSubscribers.id,
+          email: newsletterSubscribers.email,
+          status: newsletterSubscribers.status,
+        }).from(newsletterSubscribers).where(eq(newsletterSubscribers.tenantId, tenantId));
         console.log(`[Newsletter Send] All subscribers for tenant (any status): ${allSubs.length}`);
         if (allSubs.length > 0) {
           console.log(`[Newsletter Send] Subscriber statuses: ${allSubs.map(s => `${s.email}:${s.status}`).join(', ')}`);
