@@ -29649,6 +29649,229 @@ The user asking is a tenant administrator or staff member.`;
       next(error);
     }
   });
+
+  // ===== DONATION LINKS =====
+
+  /**
+   * GET /api/donation-links
+   * List all donation links for the tenant
+   */
+  app.get('/api/donation-links', requireTenant, requireAuth, requireRole('admin', 'owner', 'board_member', 'staff'), async (req, res, next) => {
+    try {
+      const { donationLinks } = await import('@shared/schema');
+
+      const links = await db
+        .select({
+          id: donationLinks.id,
+          tenantId: donationLinks.tenantId,
+          title: donationLinks.title,
+          description: donationLinks.description,
+          amount: donationLinks.amount,
+          isRecurring: donationLinks.isRecurring,
+          interval: donationLinks.interval,
+          stripePaymentLinkUrl: donationLinks.stripePaymentLinkUrl,
+          stripePaymentLinkId: donationLinks.stripePaymentLinkId,
+          imageUrl: donationLinks.imageUrl,
+          type: donationLinks.type,
+          eventTicketId: donationLinks.eventTicketId,
+          isActive: donationLinks.isActive,
+          createdAt: donationLinks.createdAt,
+        })
+        .from(donationLinks)
+        .where(eq(donationLinks.tenantId, req.tenant!.id))
+        .orderBy(desc(donationLinks.createdAt));
+
+      res.json({ donationLinks: links });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/donation-links
+   * Create a new donation link with Stripe Payment Link
+   */
+  app.post('/api/donation-links', requireTenant, requireAuth, requireRole('admin', 'owner', 'board_member', 'staff'), async (req, res, next) => {
+    try {
+      const { donationLinks, insertDonationLinkSchema } = await import('@shared/schema');
+      const Stripe = (await import('stripe')).default;
+
+      // Validate request body
+      const createSchema = z.object({
+        title: z.string().min(1).max(200),
+        description: z.string().optional(),
+        amount: z.number().min(100), // minimum $1.00 in cents
+        isRecurring: z.boolean().default(true),
+        interval: z.enum(['month', 'year']).default('month'),
+        imageUrl: z.string().url().optional().or(z.literal('')),
+        type: z.enum(['donation', 'emergency', 'virtual_kennel', 'event']).optional().default('donation'),
+      });
+
+      const validatedData = createSchema.parse(req.body);
+
+      // Get tenant's Stripe account
+      const [tenant] = await db
+        .select({ id: tenants.id, stripeConnectedAccountId: tenants.stripeConnectedAccountId })
+        .from(tenants)
+        .where(eq(tenants.id, req.tenant!.id))
+        .limit(1);
+
+      if (!tenant) {
+        return res.status(404).json({ error: 'Tenant not found' });
+      }
+
+      const stripeConnectedAccountId = tenant.stripeConnectedAccountId;
+      if (!stripeConnectedAccountId) {
+        return res.status(400).json({ error: 'Stripe Connect account not configured. Please set up Stripe Connect first.' });
+      }
+
+      // Initialize Stripe with platform secret key
+      const stripeSecretKey = process.env.PLATFORM_STRIPE_SECRET_KEY;
+      if (!stripeSecretKey) {
+        return res.status(500).json({ error: 'Stripe configuration missing' });
+      }
+
+      const stripe = new Stripe(stripeSecretKey, { apiVersion: '2024-12-18.acacia' });
+
+      // Create Stripe Product
+      const product = await stripe.products.create({
+        name: validatedData.title,
+        description: validatedData.description || undefined,
+        images: validatedData.imageUrl ? [validatedData.imageUrl] : undefined,
+      }, {
+        stripeAccount: stripeConnectedAccountId,
+      });
+
+      // Create Stripe Price
+      const priceParams: Stripe.PriceCreateParams = {
+        product: product.id,
+        currency: 'usd',
+        unit_amount: validatedData.amount,
+      };
+
+      if (validatedData.isRecurring) {
+        priceParams.recurring = {
+          interval: validatedData.interval,
+        };
+      }
+
+      const price = await stripe.prices.create(priceParams, {
+        stripeAccount: stripeConnectedAccountId,
+      });
+
+      // Create Stripe Payment Link
+      const paymentLink = await stripe.paymentLinks.create({
+        line_items: [{
+          price: price.id,
+          quantity: 1,
+          adjustable_quantity: validatedData.isRecurring ? undefined : { enabled: true, minimum: 1, maximum: 100 },
+        }],
+        after_completion: {
+          type: 'redirect',
+          redirect: {
+            url: `https://${req.get('host')}/thank-you`,
+          },
+        },
+      }, {
+        stripeAccount: stripeConnectedAccountId,
+      });
+
+      // Store in database
+      const [newLink] = await db
+        .insert(donationLinks)
+        .values({
+          tenantId: req.tenant!.id,
+          title: validatedData.title,
+          description: validatedData.description || null,
+          amount: validatedData.amount,
+          isRecurring: validatedData.isRecurring,
+          interval: validatedData.interval,
+          stripePaymentLinkUrl: paymentLink.url,
+          stripePaymentLinkId: paymentLink.id,
+          stripeProductId: product.id,
+          stripePriceId: price.id,
+          imageUrl: validatedData.imageUrl || null,
+          type: validatedData.type,
+          isActive: true,
+        })
+        .returning();
+
+      res.status(201).json({ donationLink: newLink });
+    } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      }
+      if (error.type === 'StripeInvalidRequestError') {
+        return res.status(400).json({ error: error.message });
+      }
+      next(error);
+    }
+  });
+
+  /**
+   * DELETE /api/donation-links/:id
+   * Delete (deactivate) a donation link
+   */
+  app.delete('/api/donation-links/:id', requireTenant, requireAuth, requireRole('admin', 'owner'), async (req, res, next) => {
+    try {
+      const { donationLinks } = await import('@shared/schema');
+      const Stripe = (await import('stripe')).default;
+      const { id } = req.params;
+
+      // Find the donation link
+      const [link] = await db
+        .select({
+          id: donationLinks.id,
+          stripePaymentLinkId: donationLinks.stripePaymentLinkId,
+          stripeProductId: donationLinks.stripeProductId,
+        })
+        .from(donationLinks)
+        .where(and(
+          eq(donationLinks.id, id),
+          eq(donationLinks.tenantId, req.tenant!.id)
+        ))
+        .limit(1);
+
+      if (!link) {
+        return res.status(404).json({ error: 'Donation link not found' });
+      }
+
+      // Get tenant's Stripe account
+      const [tenant] = await db
+        .select({ id: tenants.id, stripeConnectedAccountId: tenants.stripeConnectedAccountId })
+        .from(tenants)
+        .where(eq(tenants.id, req.tenant!.id))
+        .limit(1);
+
+      const stripeConnectedAccountId = tenant.stripeConnectedAccountId;
+
+      // Try to deactivate Stripe payment link
+      if (stripeConnectedAccountId && link.stripePaymentLinkId) {
+        try {
+          const stripeSecretKey = process.env.PLATFORM_STRIPE_SECRET_KEY;
+          if (stripeSecretKey) {
+            const stripe = new Stripe(stripeSecretKey, { apiVersion: '2024-12-18.acacia' });
+            await stripe.paymentLinks.update(link.stripePaymentLinkId, {
+              active: false,
+            }, {
+              stripeAccount: stripeConnectedAccountId,
+            });
+          }
+        } catch (stripeError) {
+          console.error('Failed to deactivate Stripe payment link:', stripeError);
+        }
+      }
+
+      // Delete from database
+      await db
+        .delete(donationLinks)
+        .where(eq(donationLinks.id, id));
+
+      res.json({ success: true });
+    } catch (error) {
+      next(error);
+    }
+  });
   const httpServer = createServer(app);
 
   return httpServer;
