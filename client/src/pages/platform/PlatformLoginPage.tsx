@@ -17,7 +17,7 @@ export default function PlatformLoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [showMfaDialog, setShowMfaDialog] = useState(false);
   const [mfaUserId, setMfaUserId] = useState<string | null>(null);
-  const { login, completeMfaLogin } = useAuth();
+  const { completeMfaLogin, checkAuth } = useAuth();
   const { toast } = useToast();
   const [, navigate] = useLocation();
 
@@ -27,13 +27,21 @@ export default function PlatformLoginPage() {
     setIsLoading(true);
 
     try {
-      const result = await login(email, password);
-      
-      if (result.success) {
-        if (result.requiresMfa && result.userId) {
-          setMfaUserId(result.userId);
+      const response = await fetch('/api/platform/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        if (data.requiresMfa && data.userId) {
+          setMfaUserId(data.userId);
           setShowMfaDialog(true);
-        } else {
+        } else if (data.user) {
+          await checkAuth();
           toast({
             title: "Login successful",
             description: "Welcome to Platform Admin!",
@@ -41,7 +49,7 @@ export default function PlatformLoginPage() {
           window.location.href = "/platform/dashboard";
         }
       } else {
-        setError(result.error || "Login failed");
+        setError(data.error || data.message || "Login failed");
       }
     } catch (err) {
       setError("An unexpected error occurred");
