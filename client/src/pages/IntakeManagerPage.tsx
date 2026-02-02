@@ -1120,16 +1120,17 @@ function SurrenderDetailsDialog({ request, open, onOpenChange, formFields }: Sur
                   const label = field?.label || fieldId;
                   const fieldType = field?.fieldType || 'text';
                   
-                  // Render photo fields as images
-                  if (fieldType === 'photo' && typeof value === 'string' && value.startsWith('http')) {
+                  // Render photo fields as images (supports http URLs and /objects/ storage paths)
+                  if (fieldType === 'photo' && typeof value === 'string' && (value.startsWith('http') || value.startsWith('/objects/') || value.startsWith('objects/'))) {
+                    const imgSrc = value.startsWith('objects/') ? `/${value}` : value;
                     return (
                       <div key={fieldId} className="space-y-2">
                         <h4 className="text-sm font-medium text-muted-foreground">{label}</h4>
                         <img 
-                          src={value} 
+                          src={imgSrc} 
                           alt={label} 
                           className="max-w-full max-h-64 rounded-lg object-cover cursor-pointer"
-                          onClick={() => window.open(value, '_blank')}
+                          onClick={() => window.open(imgSrc, '_blank')}
                           data-testid={`img-custom-${fieldId}`}
                         />
                       </div>
