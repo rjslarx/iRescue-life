@@ -24,7 +24,9 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTenant } from "@/contexts/TenantContext";
-import { Plus, Loader2, ExternalLink, Check, Stethoscope, Upload, X, ChevronLeft, ChevronRight, FileText, Pencil, ClipboardList, Calendar, ChevronDown, ChevronUp, Cat, Dog, Camera, Sparkles, Palette, ChevronsUpDown, AlertCircle, Wand2, FileUp, MapPin, Users, PawPrint, GitMerge, Heart } from "lucide-react";
+import { Plus, Loader2, ExternalLink, Check, Stethoscope, Upload, X, ChevronLeft, ChevronRight, FileText, Pencil, ClipboardList, Calendar as CalendarIcon, ChevronDown, ChevronUp, Cat, Dog, Camera, Sparkles, Palette, ChevronsUpDown, AlertCircle, Wand2, FileUp, MapPin, Users, PawPrint, GitMerge, Heart } from "lucide-react";
+import { Calendar } from "@/components/ui/calendar";
+import { format } from "date-fns";
 import { Link } from "wouter";
 import { z } from "zod";
 import { cn } from "@/lib/utils";
@@ -279,6 +281,8 @@ function AnimalForm({
       specialNeeds: initialData.specialNeeds ?? null,
       shotsCurrent: initialData.shotsCurrent ?? null,
       heartwormPositive: initialData.heartwormPositive ?? null,
+      locationFound: initialData.locationFound || "",
+      strayHoldUntil: initialData.strayHoldUntil ? new Date(initialData.strayHoldUntil) : null,
     } : {
       name: "",
       // Petfinder-compliant primary fields (user must fill these)
@@ -314,6 +318,8 @@ function AnimalForm({
       specialNeeds: null,
       shotsCurrent: null,
       heartwormPositive: null,
+      locationFound: "",
+      strayHoldUntil: null,
     },
   });
   
@@ -383,6 +389,9 @@ function AnimalForm({
       specialNeeds: data.specialNeeds ?? null,
       shotsCurrent: data.shotsCurrent ?? null,
       heartwormPositive: data.heartwormPositive ?? null,
+      // Stray hold fields
+      locationFound: data.status === 'stray_hold' ? (data.locationFound || null) : null,
+      strayHoldUntil: data.status === 'stray_hold' && data.strayHoldUntil ? data.strayHoldUntil.toISOString() : null,
       // Kennel assignment - structured fields only
       kennelBuildingId: selectedBuildingId || null,
       kennelRowId: selectedRowId || null,
@@ -1156,6 +1165,74 @@ function AnimalForm({
             </FormItem>
           )}
         />
+
+        {/* Stray Hold Fields - Only shown when status is stray_hold */}
+        {form.watch("status") === "stray_hold" && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-md bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800">
+            <FormField
+              control={form.control}
+              name="locationFound"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Location Found</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="Address or intersection where animal was found"
+                      data-testid="input-location-found"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    Where the stray animal was found (address or intersection)
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="strayHoldUntil"
+              render={({ field }) => (
+                <FormItem className="flex flex-col">
+                  <FormLabel>On Stray Hold Until</FormLabel>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <FormControl>
+                        <Button
+                          variant="outline"
+                          className={cn(
+                            "w-full pl-3 text-left font-normal",
+                            !field.value && "text-muted-foreground"
+                          )}
+                          data-testid="button-stray-hold-until"
+                        >
+                          {field.value ? (
+                            format(field.value, "PPP")
+                          ) : (
+                            <span>Select stray hold expiry date</span>
+                          )}
+                          <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                        </Button>
+                      </FormControl>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={field.value || undefined}
+                        onSelect={field.onChange}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                  <FormDescription>
+                    Date when the stray hold period expires
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+        )}
 
         {/* Photos Section - Petfinder requires at least 1, max 6 */}
         <div className="space-y-3 border-t pt-4">
@@ -2105,7 +2182,7 @@ export default function AnimalsPage() {
                                   {animal.breed} • {animal.age}
                                 </CardDescription>
                                 <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
-                                  <Calendar className="h-3 w-3" />
+                                  <CalendarIcon className="h-3 w-3" />
                                   <span data-testid={`text-days-in-care-${animal.id}`}>
                                     {calculateDaysInCare(animal)} {calculateDaysInCare(animal) === 1 ? 'day' : 'days'} in care
                                   </span>
@@ -2436,7 +2513,7 @@ export default function AnimalsPage() {
                             {animal.breed} • {animal.age}
                           </CardDescription>
                           <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
-                            <Calendar className="h-3 w-3" />
+                            <CalendarIcon className="h-3 w-3" />
                             <span data-testid={`text-days-in-care-${animal.id}`}>
                               {calculateDaysInCare(animal)} {calculateDaysInCare(animal) === 1 ? 'day' : 'days'} in care
                             </span>
@@ -2653,7 +2730,7 @@ export default function AnimalsPage() {
                                       {animal.breed} • {animal.age}
                                     </CardDescription>
                                     <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
-                                      <Calendar className="h-3 w-3" />
+                                      <CalendarIcon className="h-3 w-3" />
                                       <span data-testid={`text-days-in-care-${animal.id}`}>
                                         {calculateDaysInCare(animal)} {calculateDaysInCare(animal) === 1 ? 'day' : 'days'} in care
                                       </span>
