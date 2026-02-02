@@ -22452,26 +22452,28 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
         }
       }
 
-
-
       // Create the event in database
-      const [newEvent] = await db
-        .insert(calendarEvents)
-        .values({
-          ...eventData,
-          tenantId: req.tenant!.id,
-          createdBy: req.user!.id,
-        })
-        .returning();
-
-      // Check if Google Calendar sync is enabled for this tenant
-      let shouldSyncToGoogle = validatedData.includeMeetLink;
-      let googleIntegration = null;
-      
-      if (!shouldSyncToGoogle) {
-        // Check if syncCalendar feature is enabled
-        const { platformIntegrations } = await import('@shared/schema');
-        const [integration] = await db
+      let newEvent;
+      try {
+        const [insertedEvent] = await db
+          .insert(calendarEvents)
+          .values({
+            ...eventData,
+            tenantId: req.tenant!.id,
+            createdBy: req.user!.id,
+          })
+          .returning();
+        newEvent = insertedEvent;
+      } catch (dbError: any) {
+        // Handle foreign key constraint violations gracefully
+        if (dbError?.code === '23503' && dbError?.constraint?.includes('volunteer_contact_id')) {
+          return res.status(400).json({
+            error: 'Invalid volunteer',
+            message: 'The selected volunteer is no longer available. Please refresh and try again.'
+          });
+        }
+        throw dbError;
+      }
           .select()
           .from(platformIntegrations)
           .where(and(
