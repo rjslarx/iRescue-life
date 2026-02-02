@@ -6,7 +6,7 @@ import { requireAuth, requireRole } from "./middleware/auth";
 import { loginUser, createTenantWithAdmin, createUser } from "./services/auth";
 import { PushNotificationService } from "./services/push-notifications";
 import { db } from "./db";
-import { tenants, users, demoRequests, insertDemoRequestSchema, smsMessageLogs, emailEvents, animals, platformIntegrations, newsletterCampaigns, newsletterSubscribers, happyTails, animalMergeHistory, activityLogs, medicalExams, medicalPrescriptions, medicalBills, medicalFiles, animalNotes, applications, adoptionCheckoutSessions, adoptions, partnerOrganizations, microchipRecords } from "@shared/schema";
+import { tenants, users, demoRequests, insertDemoRequestSchema, smsMessageLogs, emailEvents, animals, platformIntegrations, newsletterCampaigns, newsletterSubscribers, happyTails, animalMergeHistory, activityLogs, medicalExams, medicalPrescriptions, medicalBills, medicalFiles, animalNotes, applications, adoptionCheckoutSessions, adoptions, partnerOrganizations, microchipRecords, surrenderRequests, surrenderFormFields, insertSurrenderRequestSchema, insertSurrenderFormFieldSchema, inboundEmails } from "@shared/schema";
 import { eq, and, desc, asc, sql, inArray, lt, lte, gte, not, notInArray, or, ne, isNull, isNotNull } from "drizzle-orm";
 import { z } from "zod";
 import { authLimiter, signupLimiter, passwordResetLimiter, emailLimiter } from "./config/security";
@@ -3358,9 +3358,9 @@ Crawl-delay: 1
         applications, 
         volunteerApplications, 
         fosterApplications, 
-        surrenderRequests: surrenderRequestsTable,
       } = await import('@shared/schema');
       const { or, count, ne, notInArray } = await import('drizzle-orm');
+      const surrenderRequestsTable = surrenderRequests;
 
       // Get counts from all sources in parallel
       const [
@@ -3671,13 +3671,13 @@ Crawl-delay: 1
         volunteerApplications, 
         fosterApplications, 
         animalSurrenders,
-        surrenderRequests: surrenderRequestsTable,
         customFormSubmissions,
         customForms,
         animals 
       } = await import('@shared/schema');
       const { or, desc } = await import('drizzle-orm');
 
+      const surrenderRequestsTable = surrenderRequests;
       // Fetch all pending applications from different sources in parallel
       const [
         adoptionApps,
@@ -6894,7 +6894,7 @@ Crawl-delay: 1
   app.patch('/api/kennels/:id', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
     try {
       const { kennels } = await import('@shared/schema');
-      const { eq, and } = await import('drizzle-orm');
+      
       
       // Strict validation - only allow updating specific fields
       const updateSchema = z.object({
@@ -6940,7 +6940,7 @@ Crawl-delay: 1
   app.post('/api/kennels/bulk-position', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
     try {
       const { kennels } = await import('@shared/schema');
-      const { eq, and } = await import('drizzle-orm');
+      
       
       const bulkPositionSchema = z.object({
         updates: z.array(z.object({
@@ -7018,7 +7018,7 @@ Crawl-delay: 1
   app.post('/api/kennels/bulk-labels', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
     try {
       const { kennels } = await import('@shared/schema');
-      const { eq, and } = await import('drizzle-orm');
+      
       
       const bulkLabelsSchema = z.object({
         updates: z.array(z.object({
@@ -7086,7 +7086,7 @@ Crawl-delay: 1
   app.delete('/api/kennels/:id', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
     try {
       const { kennels } = await import('@shared/schema');
-      const { eq, and } = await import('drizzle-orm');
+      
       
       const [kennel] = await db
         .delete(kennels)
@@ -7178,7 +7178,7 @@ Crawl-delay: 1
   app.patch('/api/kennel-buildings/:id', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
     try {
       const { kennelBuildings } = await import('@shared/schema');
-      const { eq, and } = await import('drizzle-orm');
+      
       const { z } = await import('zod');
       
       // Validate input
@@ -7223,7 +7223,7 @@ Crawl-delay: 1
   app.delete('/api/kennel-buildings/:id', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
     try {
       const { kennelBuildings } = await import('@shared/schema');
-      const { eq, and } = await import('drizzle-orm');
+      
       
       const [building] = await db
         .delete(kennelBuildings)
@@ -7280,7 +7280,7 @@ Crawl-delay: 1
   app.patch('/api/kennel-rows/:id', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
     try {
       const { kennelRows } = await import('@shared/schema');
-      const { eq, and } = await import('drizzle-orm');
+      
       const { z } = await import('zod');
       
       // Validate input
@@ -7328,7 +7328,7 @@ Crawl-delay: 1
   app.delete('/api/kennel-rows/:id', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
     try {
       const { kennelRows, animals } = await import('@shared/schema');
-      const { eq, and } = await import('drizzle-orm');
+      
       
       // Clear any animals assigned to this row
       await db
@@ -7412,7 +7412,7 @@ Crawl-delay: 1
   app.patch('/api/animals/:id/kennel-assignment', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
     try {
       const { animals } = await import('@shared/schema');
-      const { eq, and } = await import('drizzle-orm');
+      
       const { z } = await import('zod');
       
       // Validate input - either all null or all provided
@@ -7471,7 +7471,7 @@ Crawl-delay: 1
   app.get('/api/animals/:animalId/notes', requireTenant, requireAuth, requireRole('admin', 'staff', 'volunteer'), async (req, res, next) => {
     try {
       const { animalNotes, users } = await import('@shared/schema');
-      const { eq, and } = await import('drizzle-orm');
+      
       
       const notes = await db
         .select({
@@ -7537,7 +7537,7 @@ Crawl-delay: 1
   app.patch('/api/animal-notes/:id', requireTenant, requireAuth, requireRole('admin', 'staff', 'volunteer'), async (req, res, next) => {
     try {
       const { animalNotes } = await import('@shared/schema');
-      const { eq, and } = await import('drizzle-orm');
+      
       
       const updateData = {
         noteText: req.body.noteText,
@@ -7572,7 +7572,7 @@ Crawl-delay: 1
   app.delete('/api/animal-notes/:id', requireTenant, requireAuth, requireRole('admin', 'staff', 'volunteer'), async (req, res, next) => {
     try {
       const { animalNotes } = await import('@shared/schema');
-      const { eq, and } = await import('drizzle-orm');
+      
       
       const [note] = await db
         .delete(animalNotes)
@@ -10081,7 +10081,7 @@ ${renderedHtml}
   app.get('/api/adoption-form-fields', requireTenant, async (req, res, next) => {
     try {
       const { adoptionFormFields } = await import('@shared/schema');
-      const { eq, and } = await import('drizzle-orm');
+      
       
       const fields = await db.select({
         id: adoptionFormFields.id,
@@ -10138,7 +10138,7 @@ ${renderedHtml}
   app.patch('/api/adoption-form-fields/:id', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
     try {
       const { adoptionFormFields } = await import('@shared/schema');
-      const { eq, and } = await import('drizzle-orm');
+      
       
       const updateSchema = z.object({
         label: z.string().optional(),
@@ -10180,7 +10180,7 @@ ${renderedHtml}
   app.delete('/api/adoption-form-fields/:id', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
     try {
       const { adoptionFormFields } = await import('@shared/schema');
-      const { eq, and } = await import('drizzle-orm');
+      
       
       const [field] = await db.delete(adoptionFormFields)
         .where(and(
@@ -10206,7 +10206,7 @@ ${renderedHtml}
   app.post('/api/adoption-form-fields/reorder', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
     try {
       const { adoptionFormFields } = await import('@shared/schema');
-      const { eq, and } = await import('drizzle-orm');
+      
       
       const schema = z.object({
         fieldIds: z.array(z.string()),
@@ -10282,7 +10282,7 @@ ${renderedHtml}
   app.get('/api/volunteer-form-fields', requireTenant, async (req, res, next) => {
     try {
       const { volunteerFormFields } = await import('@shared/schema');
-      const { eq, and } = await import('drizzle-orm');
+      
       
       const fields = await db.select({
         id: volunteerFormFields.id,
@@ -10336,7 +10336,7 @@ ${renderedHtml}
   app.patch('/api/volunteer-form-fields/:id', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
     try {
       const { volunteerFormFields } = await import('@shared/schema');
-      const { eq, and } = await import('drizzle-orm');
+      
       
       const updateSchema = z.object({
         label: z.string().optional(),
@@ -10378,7 +10378,7 @@ ${renderedHtml}
   app.delete('/api/volunteer-form-fields/:id', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
     try {
       const { volunteerFormFields } = await import('@shared/schema');
-      const { eq, and } = await import('drizzle-orm');
+      
       
       const [field] = await db.delete(volunteerFormFields)
         .where(and(
@@ -10404,7 +10404,7 @@ ${renderedHtml}
   app.post('/api/volunteer-form-fields/reorder', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
     try {
       const { volunteerFormFields } = await import('@shared/schema');
-      const { eq, and } = await import('drizzle-orm');
+      
       
       const schema = z.object({
         fieldIds: z.array(z.string()),
@@ -10477,7 +10477,7 @@ ${renderedHtml}
   app.get('/api/foster-form-fields', requireTenant, async (req, res, next) => {
     try {
       const { fosterFormFields } = await import('@shared/schema');
-      const { eq, and } = await import('drizzle-orm');
+      
       
       const fields = await db.select({
         id: fosterFormFields.id,
@@ -10531,7 +10531,7 @@ ${renderedHtml}
   app.patch('/api/foster-form-fields/:id', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
     try {
       const { fosterFormFields } = await import('@shared/schema');
-      const { eq, and } = await import('drizzle-orm');
+      
       
       const updateSchema = z.object({
         label: z.string().optional(),
@@ -10573,7 +10573,7 @@ ${renderedHtml}
   app.delete('/api/foster-form-fields/:id', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
     try {
       const { fosterFormFields } = await import('@shared/schema');
-      const { eq, and } = await import('drizzle-orm');
+      
       
       const [field] = await db.delete(fosterFormFields)
         .where(and(
@@ -10599,7 +10599,7 @@ ${renderedHtml}
   app.post('/api/foster-form-fields/reorder', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
     try {
       const { fosterFormFields } = await import('@shared/schema');
-      const { eq, and } = await import('drizzle-orm');
+      
       
       const schema = z.object({
         fieldIds: z.array(z.string()),
@@ -10672,8 +10672,8 @@ ${renderedHtml}
    */
   app.get('/api/surrender-form-fields', requireTenant, async (req, res, next) => {
     try {
-      const { surrenderFormFields } = await import('@shared/schema');
-      const { eq, and } = await import('drizzle-orm');
+      
+      
       
       const fields = await db.select({
         id: surrenderFormFields.id,
@@ -10705,7 +10705,7 @@ ${renderedHtml}
    */
   app.post('/api/surrender-form-fields', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
     try {
-      const { surrenderFormFields, insertSurrenderFormFieldSchema } = await import('@shared/schema');
+      
       
       const data = insertSurrenderFormFieldSchema.parse({
         ...req.body,
@@ -10726,8 +10726,8 @@ ${renderedHtml}
    */
   app.patch('/api/surrender-form-fields/:id', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
     try {
-      const { surrenderFormFields } = await import('@shared/schema');
-      const { eq, and } = await import('drizzle-orm');
+      
+      
       
       const updateSchema = z.object({
         label: z.string().optional(),
@@ -10771,8 +10771,8 @@ ${renderedHtml}
    */
   app.delete('/api/surrender-form-fields/:id', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
     try {
-      const { surrenderFormFields } = await import('@shared/schema');
-      const { eq, and } = await import('drizzle-orm');
+      
+      
       
       const [field] = await db.delete(surrenderFormFields)
         .where(and(
@@ -10797,8 +10797,8 @@ ${renderedHtml}
    */
   app.post('/api/surrender-form-fields/reorder', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
     try {
-      const { surrenderFormFields } = await import('@shared/schema');
-      const { eq, and } = await import('drizzle-orm');
+      
+      
       
       const schema = z.object({
         fieldIds: z.array(z.string()),
@@ -10828,7 +10828,7 @@ ${renderedHtml}
    */
   app.post('/api/surrender-form-fields/lookup', requireTenant, requireAuth, async (req, res, next) => {
     try {
-      const { surrenderFormFields } = await import('@shared/schema');
+      
       const { inArray, eq, and } = await import('drizzle-orm');
       
       const schema = z.object({
@@ -10871,7 +10871,7 @@ ${renderedHtml}
   app.get('/api/form-settings/:formType', requireTenant, async (req, res, next) => {
     try {
       const { formSettings } = await import('@shared/schema');
-      const { eq, and } = await import('drizzle-orm');
+      
       
       const formType = req.params.formType;
       if (!['adoption', 'volunteer', 'foster', 'surrender'].includes(formType)) {
@@ -10906,7 +10906,7 @@ ${renderedHtml}
   app.put('/api/form-settings/:formType', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
     try {
       const { formSettings } = await import('@shared/schema');
-      const { eq, and } = await import('drizzle-orm');
+      
       
       const formType = req.params.formType;
       if (!['adoption', 'volunteer', 'foster', 'surrender'].includes(formType)) {
@@ -11105,7 +11105,7 @@ ${renderedHtml}
   app.get('/api/donations', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
     try {
       const { donations } = await import('@shared/schema');
-      const { eq, desc } = await import('drizzle-orm');
+      
       
       const allDonations = await db.select({
         id: donations.id,
@@ -11139,7 +11139,7 @@ ${renderedHtml}
   app.post('/api/donations/manual', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
     try {
       const { donations, donors } = await import('@shared/schema');
-      const { eq, and } = await import('drizzle-orm');
+      
       
       const donationSchema = z.object({
         donorName: z.string().min(1),
@@ -11247,7 +11247,7 @@ ${renderedHtml}
   app.post('/api/donations/offline', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
     try {
       const { donations, donors } = await import('@shared/schema');
-      const { eq, and } = await import('drizzle-orm');
+      
       
       const offlineDonationSchema = z.object({
         donorName: z.string().min(1),
@@ -14064,7 +14064,7 @@ If you have any questions, please contact us.
    */
   app.post('/api/surrender', requireTenant, async (req, res, next) => {
     try {
-      const { surrenderRequests, insertSurrenderRequestSchema, inboundEmails, surrenderFormFields } = await import('@shared/schema');
+      
       
       // Debug logging for custom responses
       console.log('[Surrender API] Received request body keys:', Object.keys(req.body));
@@ -14300,8 +14300,6 @@ Submitted: ${new Date().toLocaleString()}
    */
   app.get('/api/surrender-requests', requireTenant, requireAuth, requireRole('admin', 'owner', 'board_member', 'staff', 'intake_coordinator'), async (req, res, next) => {
     try {
-      const { surrenderRequests } = await import('@shared/schema');
-      const { eq, desc } = await import('drizzle-orm');
       
       console.log('[SURRENDER DEBUG] Fetching for tenant:', req.tenant!.id, 'subdomain:', req.tenant!.subdomain);
       
@@ -14345,8 +14343,8 @@ Submitted: ${new Date().toLocaleString()}
    */
   app.get('/api/surrender-requests/:id', requireTenant, requireAuth, requireRole('admin', 'owner', 'board_member', 'staff'), async (req, res, next) => {
     try {
-      const { surrenderRequests } = await import('@shared/schema');
-      const { eq, and } = await import('drizzle-orm');
+      
+      
       
       const [request] = await db.select({
         id: surrenderRequests.id,
@@ -14401,8 +14399,8 @@ Submitted: ${new Date().toLocaleString()}
    */
   app.patch('/api/surrender-requests/:id/status', requireTenant, requireAuth, requireRole('admin', 'owner', 'board_member', 'staff'), async (req, res, next) => {
     try {
-      const { surrenderRequests } = await import('@shared/schema');
-      const { eq, and } = await import('drizzle-orm');
+      
+      
       
       const schema = z.object({
         status: z.enum(['new', 'review', 'spacecheck', 'waitlist', 'scheduled', 'intaken', 'declined']),
@@ -14442,8 +14440,8 @@ Submitted: ${new Date().toLocaleString()}
    */
   app.post('/api/surrender/:id/decline', requireTenant, requireAuth, requireRole('admin', 'owner', 'board_member', 'staff'), async (req, res, next) => {
     try {
-      const { surrenderRequests } = await import('@shared/schema');
-      const { eq, and } = await import('drizzle-orm');
+      
+      
       
       const schema = z.object({
         reason: z.string().min(1, 'Decline reason is required'),
@@ -14513,8 +14511,8 @@ Submitted: ${new Date().toLocaleString()}
    */
   app.post('/api/surrender/:id/promote', requireTenant, requireAuth, requireRole('admin', 'owner', 'board_member', 'staff'), async (req, res, next) => {
     try {
-      const { surrenderRequests, animals } = await import('@shared/schema');
-      const { eq, and } = await import('drizzle-orm');
+      
+      
       const { createAnimal } = await import('./services/animals');
       
       const surrenderId = req.params.id;
