@@ -112,6 +112,7 @@ export const STRIPE_PROCESSING_FEE_FIXED_CENTS = 30; // $0.30
 export const PLATFORM_FEES_BY_TIER: Record<string, number> = {
   free: DEFAULT_PLATFORM_FEE_PERCENT,   // Free plan: configurable % (default 5%)
   professional: 0,  // Professional plan: 0% platform fee (included in subscription)
+  enterprise: 0,    // Enterprise plan: 0% platform fee (special tier)
 };
 
 /**
@@ -162,10 +163,10 @@ export function getPlatformFeePercent(subscriptionTier?: string): number {
 
 /**
  * Check if a subscription tier is a paid tier (0% platform fee)
- * Only 'professional' tier is the paid tier in our two-tier model
+ * 'professional' and 'enterprise' tiers have 0% platform fee
  */
 export function isPaidSubscriptionTier(subscriptionTier?: string): boolean {
-  return subscriptionTier === 'professional';
+  return subscriptionTier === 'professional' || subscriptionTier === 'enterprise';
 }
 
 /**
