@@ -3440,7 +3440,10 @@ Crawl-delay: 1
       const { animals } = await import('@shared/schema');
       const { or, count } = await import('drizzle-orm');
 
-      const allAnimals = await db.select()
+      const allAnimals = await db.select({
+        id: animals.id,
+        status: animals.status,
+      })
         .from(animals)
         .where(
           and(
@@ -4096,7 +4099,9 @@ Crawl-delay: 1
       }
       
       // Check if already dismissed
-      const existing = await db.select()
+      const existing = await db.select({
+        id: dismissedWidgetItems.id,
+      })
         .from(dismissedWidgetItems)
         .where(
           and(
@@ -11050,7 +11055,21 @@ ${renderedHtml}
       const { donations } = await import('@shared/schema');
       const { eq, desc } = await import('drizzle-orm');
       
-      const allDonations = await db.select()
+      const allDonations = await db.select({
+        id: donations.id,
+        tenantId: donations.tenantId,
+        donorId: donations.donorId,
+        donorName: donations.donorName,
+        donorEmail: donations.donorEmail,
+        amount: donations.amount,
+        donationType: donations.donationType,
+        itemDescription: donations.itemDescription,
+        donorStatedValue: donations.donorStatedValue,
+        message: donations.message,
+        date: donations.date,
+        createdAt: donations.createdAt,
+        sponsoredAnimalId: donations.sponsoredAnimalId,
+      })
         .from(donations)
         .where(eq(donations.tenantId, req.tenant!.id))
         .orderBy(desc(donations.date));
@@ -11093,7 +11112,13 @@ ${renderedHtml}
       }
       
       // Check if donor exists, create if not
-      let [existingDonor] = await db.select()
+      let [existingDonor] = await db.select({
+        id: donors.id,
+        email: donors.email,
+        name: donors.name,
+        totalDonated: donors.totalDonated,
+        lastDonationDate: donors.lastDonationDate,
+      })
         .from(donors)
         .where(and(
           eq(donors.tenantId, req.tenant!.id),
@@ -14218,7 +14243,28 @@ Submitted: ${new Date().toLocaleString()}
       
       console.log('[SURRENDER DEBUG] Fetching for tenant:', req.tenant!.id, 'subdomain:', req.tenant!.subdomain);
       
-      const requests = await db.select()
+      const requests = await db.select({
+        id: surrenderRequests.id,
+        tenantId: surrenderRequests.tenantId,
+        dogName: surrenderRequests.dogName,
+        species: surrenderRequests.species,
+        breed: surrenderRequests.breed,
+        age: surrenderRequests.age,
+        gender: surrenderRequests.gender,
+        weight: surrenderRequests.weight,
+        color: surrenderRequests.color,
+        neuterStatus: surrenderRequests.neuterStatus,
+        ownerName: surrenderRequests.ownerName,
+        ownerEmail: surrenderRequests.ownerEmail,
+        ownerPhone: surrenderRequests.ownerPhone,
+        surrenderReason: surrenderRequests.surrenderReason,
+        status: surrenderRequests.status,
+        staffNotes: surrenderRequests.staffNotes,
+        photos: surrenderRequests.photos,
+        createdAt: surrenderRequests.createdAt,
+        customResponses: surrenderRequests.customResponses,
+        smsConsent: surrenderRequests.smsConsent,
+      })
         .from(surrenderRequests)
         .where(eq(surrenderRequests.tenantId, req.tenant!.id))
         .orderBy(desc(surrenderRequests.createdAt));
@@ -14240,7 +14286,37 @@ Submitted: ${new Date().toLocaleString()}
       const { surrenderRequests } = await import('@shared/schema');
       const { eq, and } = await import('drizzle-orm');
       
-      const [request] = await db.select()
+      const [request] = await db.select({
+        id: surrenderRequests.id,
+        tenantId: surrenderRequests.tenantId,
+        dogName: surrenderRequests.dogName,
+        species: surrenderRequests.species,
+        breed: surrenderRequests.breed,
+        age: surrenderRequests.age,
+        gender: surrenderRequests.gender,
+        weight: surrenderRequests.weight,
+        color: surrenderRequests.color,
+        neuterStatus: surrenderRequests.neuterStatus,
+        vaccinationStatus: surrenderRequests.vaccinationStatus,
+        microchipNumber: surrenderRequests.microchipNumber,
+        medicalHistory: surrenderRequests.medicalHistory,
+        behaviorNotes: surrenderRequests.behaviorNotes,
+        goodWithKids: surrenderRequests.goodWithKids,
+        goodWithDogs: surrenderRequests.goodWithDogs,
+        goodWithCats: surrenderRequests.goodWithCats,
+        ownerName: surrenderRequests.ownerName,
+        ownerEmail: surrenderRequests.ownerEmail,
+        ownerPhone: surrenderRequests.ownerPhone,
+        surrenderReason: surrenderRequests.surrenderReason,
+        additionalNotes: surrenderRequests.additionalNotes,
+        status: surrenderRequests.status,
+        staffNotes: surrenderRequests.staffNotes,
+        photos: surrenderRequests.photos,
+        createdAt: surrenderRequests.createdAt,
+        updatedAt: surrenderRequests.updatedAt,
+        customResponses: surrenderRequests.customResponses,
+        smsConsent: surrenderRequests.smsConsent,
+      })
         .from(surrenderRequests)
         .where(and(
           eq(surrenderRequests.id, req.params.id),
