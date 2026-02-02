@@ -22436,6 +22436,22 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
           return res.status(403).json({ error: 'You do not have permission to schedule other volunteers' });
         }
       }
+      // Validate that volunteerContactId exists if provided
+      if (validatedData.volunteerContactId) {
+        const [existingUser] = await db
+          .select({ id: users.id })
+          .from(users)
+          .where(eq(users.id, validatedData.volunteerContactId))
+          .limit(1);
+        
+        if (!existingUser) {
+          return res.status(400).json({ 
+            error: 'Invalid volunteer',
+            message: 'The selected volunteer does not exist. Please select a valid volunteer.'
+          });
+        }
+      }
+
 
 
       // Create the event in database

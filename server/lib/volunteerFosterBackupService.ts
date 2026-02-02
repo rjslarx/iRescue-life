@@ -199,8 +199,22 @@ export class VolunteerFosterBackupService {
     subfolder: 'Waivers' | 'Agreements' | 'Training' | 'Certifications' | 'Updates' | 'Notes';
   }): Promise<{ success: boolean; filePath?: string; error?: string }> {
     try {
-      const table = params.type === 'volunteer' ? volunteerApplications : fosterApplications;
-      const [application] = await db.select().from(table).where(eq(table.id, params.applicationId));
+      // Query the appropriate table with explicit field selection to avoid orderSelectedFields errors
+      let application: { id: string; driveFolderId: string | null } | undefined;
+      
+      if (params.type === 'volunteer') {
+        const [result] = await db.select({
+          id: volunteerApplications.id,
+          driveFolderId: volunteerApplications.driveFolderId,
+        }).from(volunteerApplications).where(eq(volunteerApplications.id, params.applicationId));
+        application = result;
+      } else {
+        const [result] = await db.select({
+          id: fosterApplications.id,
+          driveFolderId: fosterApplications.driveFolderId,
+        }).from(fosterApplications).where(eq(fosterApplications.id, params.applicationId));
+        application = result;
+      }
       
       if (!application) {
         return { success: false, error: `${params.type} application not found` };

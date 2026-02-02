@@ -110,7 +110,28 @@ export class AnimalBackupService {
 
   async generateIntakeDocument(animalId: string): Promise<{ success: boolean; error?: string }> {
     try {
-      const [animal] = await db.select().from(animals).where(eq(animals.id, animalId));
+      const [animal] = await db.select({
+        id: animals.id,
+        name: animals.name,
+        animalId: animals.animalId,
+        species: animals.species,
+        breed: animals.breed,
+        age: animals.age,
+        sex: animals.sex,
+        neuterStatus: animals.neuterStatus,
+        weight: animals.weight,
+        intakeDate: animals.intakeDate,
+        intakeSource: animals.intakeSource,
+        medicalStatus: animals.medicalStatus,
+        medicalAlertMemo: animals.medicalAlertMemo,
+        heartwormPositive: animals.heartwormPositive,
+        shotsCurrent: animals.shotsCurrent,
+        specialNeeds: animals.specialNeeds,
+        bio: animals.bio,
+        behaviorNotes: animals.behaviorNotes,
+        status: animals.status,
+        driveFolderId: animals.driveFolderId,
+      }).from(animals).where(eq(animals.id, animalId));
       if (!animal) {
         return { success: false, error: 'Animal not found' };
       }
@@ -194,17 +215,54 @@ ${animal.bio || 'No notes recorded.'}
 
   async syncMedicalRecords(animalId: string): Promise<{ success: boolean; error?: string }> {
     try {
-      const [animal] = await db.select().from(animals).where(eq(animals.id, animalId));
+      const [animal] = await db.select({
+        id: animals.id,
+        name: animals.name,
+        animalId: animals.animalId,
+        driveFolderId: animals.driveFolderId,
+      }).from(animals).where(eq(animals.id, animalId));
       if (!animal) {
         return { success: false, error: 'Animal not found' };
       }
 
       const [vaccines, prescriptions, procedures, diagnostics, exams] = await Promise.all([
-        db.select().from(vaccineRecords).where(eq(vaccineRecords.animalId, animalId)),
-        db.select().from(medicalPrescriptions).where(eq(medicalPrescriptions.animalId, animalId)),
-        db.select().from(procedureLogs).where(eq(procedureLogs.animalId, animalId)),
-        db.select().from(diagnosticTests).where(eq(diagnosticTests.animalId, animalId)),
-        db.select().from(medicalExams).where(eq(medicalExams.animalId, animalId)),
+        db.select({
+          id: vaccineRecords.id,
+          vaccineName: vaccineRecords.vaccineName,
+          dateGiven: vaccineRecords.dateGiven,
+          expirationDate: vaccineRecords.expirationDate,
+          notes: vaccineRecords.notes,
+        }).from(vaccineRecords).where(eq(vaccineRecords.animalId, animalId)),
+        db.select({
+          id: medicalPrescriptions.id,
+          medicationName: medicalPrescriptions.medicationName,
+          dosage: medicalPrescriptions.dosage,
+          frequency: medicalPrescriptions.frequency,
+          startDate: medicalPrescriptions.startDate,
+          endDate: medicalPrescriptions.endDate,
+          prescribedBy: medicalPrescriptions.prescribedBy,
+        }).from(medicalPrescriptions).where(eq(medicalPrescriptions.animalId, animalId)),
+        db.select({
+          id: procedureLogs.id,
+          procedureName: procedureLogs.procedureName,
+          procedureDate: procedureLogs.procedureDate,
+          performedBy: procedureLogs.performedBy,
+          notes: procedureLogs.notes,
+        }).from(procedureLogs).where(eq(procedureLogs.animalId, animalId)),
+        db.select({
+          id: diagnosticTests.id,
+          testName: diagnosticTests.testName,
+          testDate: diagnosticTests.testDate,
+          result: diagnosticTests.result,
+          notes: diagnosticTests.notes,
+        }).from(diagnosticTests).where(eq(diagnosticTests.animalId, animalId)),
+        db.select({
+          id: medicalExams.id,
+          examDate: medicalExams.examDate,
+          examType: medicalExams.examType,
+          veterinarian: medicalExams.veterinarian,
+          findings: medicalExams.findings,
+        }).from(medicalExams).where(eq(medicalExams.animalId, animalId)),
       ]);
 
       let content = `
@@ -287,7 +345,11 @@ Generated: ${new Date().toLocaleString()}
 
   async moveToAdoptedArchive(animalId: string, adoptionYear: number): Promise<{ success: boolean; error?: string }> {
     try {
-      const [animal] = await db.select().from(animals).where(eq(animals.id, animalId));
+      const [animal] = await db.select({
+        id: animals.id,
+        name: animals.name,
+        driveFolderId: animals.driveFolderId,
+      }).from(animals).where(eq(animals.id, animalId));
       if (!animal || !animal.driveFolderId) {
         return { success: false, error: 'Animal not found or no Drive folder' };
       }

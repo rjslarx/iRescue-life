@@ -1,0 +1,110 @@
+2026-02-02 16:42:44.57
+9938db1c
+User
+at /home/runner/workspace/node_modules/pg-pool/index.js:45:11
+2026-02-02 16:42:44.57
+9938db1c
+User
+at async file:///home/runner/workspace/node_modules/drizzle-orm/node-postgres/session.js:83:22
+2026-02-02 16:42:44.57
+9938db1c
+User
+error: insert or update on table "calendar_events" violates foreign key constraint "calendar_events_volunteer_contact_id_fkey"
+2026-02-02 16:42:44.57
+9938db1c
+User
+at async file:///home/runner/workspace/dist/index.js:46181:26
+2026-02-02 16:42:44.57
+9938db1c
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-02-02 16:48:06.46
+9938db1c
+User
+at async file:///home/runner/workspace/dist/index.js:33155:28
+2026-02-02 16:48:06.46
+9938db1c
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-02-02 16:48:06.46
+9938db1c
+User
+at /home/runner/workspace/node_modules/pg-pool/index.js:45:11
+2026-02-02 16:48:06.46
+9938db1c
+User
+error: syntax error at or near "="
+2026-02-02 16:48:06.46
+9938db1c
+User
+at async file:///home/runner/workspace/node_modules/drizzle-orm/node-postgres/session.js:83:22
+2026-02-02 16:49:16.53
+9938db1c
+User
+at /home/runner/workspace/node_modules/pg-pool/index.js:45:11
+2026-02-02 16:49:16.53
+9938db1c
+User
+at async file:///home/runner/workspace/node_modules/drizzle-orm/node-postgres/session.js:83:22
+2026-02-02 16:49:16.53
+9938db1c
+User
+error: syntax error at or near "="
+2026-02-02 16:49:16.53
+9938db1c
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-02-02 16:49:16.53
+9938db1c
+User
+at async file:///home/runner/workspace/dist/index.js:33155:28
+2026-02-02 16:50:56.33
+9938db1c
+User
+at Array.reduce ()
+2026-02-02 16:50:56.33
+9938db1c
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:63:22
+2026-02-02 16:50:56.33
+9938db1c
+User
+at Function.entries ()
+2026-02-02 16:50:56.33
+9938db1c
+User
+TypeError: Cannot convert undefined or null to object
+2026-02-02 16:50:56.33
+9938db1c
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:684:26
+2026-02-02 16:50:56.33
+9938db1c
+User
+at Object.startActiveSpan (file:///home/runner/workspace/node_modules/drizzle-orm/tracing.js:8:14)
+2026-02-02 16:50:56.33
+9938db1c
+User
+at Object.startActiveSpan (file:///home/runner/workspace/node_modules/drizzle-orm/tracing.js:8:14)
+2026-02-02 16:50:56.33
+9938db1c
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:708:19
+2026-02-02 16:50:56.33
+9938db1c
+User
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:17)
+2026-02-02 16:50:56.33
+9938db1c
+User
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:33)
+2026-02-02 16:50:56.33
+9938db1c
+User
+at PgSelectBase._prepare (file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:683:19)
+2026-02-02 17:05:48.68
+3aab7173
+User
+at /home/runner/workspace/node_modules/pg-pool/index.js:45:11
+Wrap
+Colors
