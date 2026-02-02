@@ -39,7 +39,49 @@ async function generateAnimalId(): Promise<string> {
 export async function getAnimalsByTenant(tenantId: string): Promise<(Animal & { kennelRowName?: string | null })[]> {
   const results = await db
     .select({
-      animal: animals,
+      id: animals.id,
+      tenantId: animals.tenantId,
+      animalId: animals.animalId,
+      name: animals.name,
+      species: animals.species,
+      breed: animals.breed,
+      sex: animals.sex,
+      age: animals.age,
+      weight: animals.weight,
+      status: animals.status,
+      microchipNumber: animals.microchipNumber,
+      intakeDate: animals.intakeDate,
+      intakeType: animals.intakeType,
+      intakeNotes: animals.intakeNotes,
+      behaviorRating: animals.behaviorRating,
+      description: animals.description,
+      bio: animals.bio,
+      photos: animals.photos,
+      tags: animals.tags,
+      childFriendly: animals.childFriendly,
+      dogFriendly: animals.dogFriendly,
+      catFriendly: animals.catFriendly,
+      specialNeeds: animals.specialNeeds,
+      spayedNeutered: animals.spayedNeutered,
+      vaccinated: animals.vaccinated,
+      houseTrained: animals.houseTrained,
+      adoptionFee: animals.adoptionFee,
+      fosterFee: animals.fosterFee,
+      kennelRowId: animals.kennelRowId,
+      kennelPosition: animals.kennelPosition,
+      petfinderStatus: animals.petfinderStatus,
+      petfinderLastSync: animals.petfinderLastSync,
+      createdAt: animals.createdAt,
+      updatedAt: animals.updatedAt,
+      isStray: animals.isStray,
+      strayFoundDate: animals.strayFoundDate,
+      strayFoundLocation: animals.strayFoundLocation,
+      strayHoldEndDate: animals.strayHoldEndDate,
+      surrenderRequestId: animals.surrenderRequestId,
+      heartwormPositive: animals.heartwormPositive,
+      euthanasiaDate: animals.euthanasiaDate,
+      deceasedDate: animals.deceasedDate,
+      deceasedReason: animals.deceasedReason,
       kennelRowName: kennelRows.name,
     })
     .from(animals)
@@ -47,10 +89,7 @@ export async function getAnimalsByTenant(tenantId: string): Promise<(Animal & { 
     .where(eq(animals.tenantId, tenantId))
     .orderBy(desc(animals.createdAt));
   
-  return results.map(r => ({
-    ...r.animal,
-    kennelRowName: r.kennelRowName,
-  }));
+  return results;
 }
 
 /**
@@ -59,7 +98,51 @@ export async function getAnimalsByTenant(tenantId: string): Promise<(Animal & { 
  */
 export async function getAvailableAnimals(tenantId: string): Promise<Animal[]> {
   return db
-    .select()
+    .select({
+      id: animals.id,
+      tenantId: animals.tenantId,
+      animalId: animals.animalId,
+      name: animals.name,
+      species: animals.species,
+      breed: animals.breed,
+      sex: animals.sex,
+      age: animals.age,
+      weight: animals.weight,
+      status: animals.status,
+      microchipNumber: animals.microchipNumber,
+      intakeDate: animals.intakeDate,
+      intakeType: animals.intakeType,
+      intakeNotes: animals.intakeNotes,
+      behaviorRating: animals.behaviorRating,
+      description: animals.description,
+      bio: animals.bio,
+      photos: animals.photos,
+      tags: animals.tags,
+      childFriendly: animals.childFriendly,
+      dogFriendly: animals.dogFriendly,
+      catFriendly: animals.catFriendly,
+      specialNeeds: animals.specialNeeds,
+      spayedNeutered: animals.spayedNeutered,
+      vaccinated: animals.vaccinated,
+      houseTrained: animals.houseTrained,
+      adoptionFee: animals.adoptionFee,
+      fosterFee: animals.fosterFee,
+      kennelRowId: animals.kennelRowId,
+      kennelPosition: animals.kennelPosition,
+      petfinderStatus: animals.petfinderStatus,
+      petfinderLastSync: animals.petfinderLastSync,
+      createdAt: animals.createdAt,
+      updatedAt: animals.updatedAt,
+      isStray: animals.isStray,
+      strayFoundDate: animals.strayFoundDate,
+      strayFoundLocation: animals.strayFoundLocation,
+      strayHoldEndDate: animals.strayHoldEndDate,
+      surrenderRequestId: animals.surrenderRequestId,
+      heartwormPositive: animals.heartwormPositive,
+      euthanasiaDate: animals.euthanasiaDate,
+      deceasedDate: animals.deceasedDate,
+      deceasedReason: animals.deceasedReason,
+    })
     .from(animals)
     .where(and(
       eq(animals.tenantId, tenantId),
@@ -78,7 +161,49 @@ export async function getAvailableAnimals(tenantId: string): Promise<Animal[]> {
 export async function getAnimalById(tenantId: string, animalId: string): Promise<(Animal & { kennelRowName?: string | null }) | null> {
   const [result] = await db
     .select({
-      animal: animals,
+      id: animals.id,
+      tenantId: animals.tenantId,
+      animalId: animals.animalId,
+      name: animals.name,
+      species: animals.species,
+      breed: animals.breed,
+      sex: animals.sex,
+      age: animals.age,
+      weight: animals.weight,
+      status: animals.status,
+      microchipNumber: animals.microchipNumber,
+      intakeDate: animals.intakeDate,
+      intakeType: animals.intakeType,
+      intakeNotes: animals.intakeNotes,
+      behaviorRating: animals.behaviorRating,
+      description: animals.description,
+      bio: animals.bio,
+      photos: animals.photos,
+      tags: animals.tags,
+      childFriendly: animals.childFriendly,
+      dogFriendly: animals.dogFriendly,
+      catFriendly: animals.catFriendly,
+      specialNeeds: animals.specialNeeds,
+      spayedNeutered: animals.spayedNeutered,
+      vaccinated: animals.vaccinated,
+      houseTrained: animals.houseTrained,
+      adoptionFee: animals.adoptionFee,
+      fosterFee: animals.fosterFee,
+      kennelRowId: animals.kennelRowId,
+      kennelPosition: animals.kennelPosition,
+      petfinderStatus: animals.petfinderStatus,
+      petfinderLastSync: animals.petfinderLastSync,
+      createdAt: animals.createdAt,
+      updatedAt: animals.updatedAt,
+      isStray: animals.isStray,
+      strayFoundDate: animals.strayFoundDate,
+      strayFoundLocation: animals.strayFoundLocation,
+      strayHoldEndDate: animals.strayHoldEndDate,
+      surrenderRequestId: animals.surrenderRequestId,
+      heartwormPositive: animals.heartwormPositive,
+      euthanasiaDate: animals.euthanasiaDate,
+      deceasedDate: animals.deceasedDate,
+      deceasedReason: animals.deceasedReason,
       kennelRowName: kennelRows.name,
     })
     .from(animals)
@@ -91,10 +216,7 @@ export async function getAnimalById(tenantId: string, animalId: string): Promise
   
   if (!result) return null;
   
-  return {
-    ...result.animal,
-    kennelRowName: result.kennelRowName,
-  };
+  return result;
 }
 
 /**
