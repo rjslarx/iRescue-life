@@ -4765,20 +4765,30 @@ export const insertEventTicketSchema = createInsertSchema(eventTickets).omit({
 export type InsertEventTicket = z.infer<typeof insertEventTicketSchema>;
 export type EventTicket = typeof eventTickets.$inferSelect;
 
-// DonationLink type for Stripe Payment Links (not stored in DB, generated on the fly)
-export interface DonationLink {
-  id: string;
-  tenantId: string;
-  title: string;
-  description?: string;
-  amount: number;
-  isRecurring: boolean;
-  interval: "month" | "year";
-  stripePaymentLinkUrl: string;
-  stripePaymentLinkId: string;
-  imageUrl?: string;
-  type?: "donation" | "emergency" | "virtual_kennel" | "event";
-  eventTicketId?: string;
-  isActive: boolean;
-  createdAt: Date;
-}
+// ===== DONATION LINKS =====
+// Donation links for Stripe Payment Links
+export const donationLinks = pgTable("donation_links", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  title: text("title").notNull(),
+  description: text("description"),
+  amount: integer("amount").notNull(), // Amount in cents
+  isRecurring: boolean("is_recurring").notNull().default(true),
+  interval: text("interval").notNull().default("month"), // "month" or "year"
+  stripePaymentLinkUrl: text("stripe_payment_link_url").notNull(),
+  stripePaymentLinkId: text("stripe_payment_link_id").notNull(),
+  stripeProductId: text("stripe_product_id"),
+  stripePriceId: text("stripe_price_id"),
+  imageUrl: text("image_url"),
+  type: text("type").notNull().default("donation"), // "donation", "emergency", "virtual_kennel", "event"
+  eventTicketId: uuid("event_ticket_id").references(() => eventTickets.id, { onDelete: 'set null' }),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertDonationLinkSchema = createInsertSchema(donationLinks).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertDonationLink = z.infer<typeof insertDonationLinkSchema>;
+export type DonationLink = typeof donationLinks.$inferSelect;
