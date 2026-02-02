@@ -43,11 +43,25 @@ export default function PrintableHealthRecordPage() {
     enabled: !!animalId,
   });
 
+  // Fetch diagnostics (includes heartworm tests)
+  const { data: diagnosticsData } = useQuery({
+    queryKey: [`/api/animals/${animalId}/medical/diagnostics`],
+    enabled: !!animalId,
+  });
+
+  // Fetch preventative care records (flea/heartworm preventions)
+  const { data: preventativeCareData } = useQuery({
+    queryKey: [`/api/animals/${animalId}/preventative-care`],
+    enabled: !!animalId,
+  });
+
   const animal = animalData?.animal;
   const exams = examsData?.exams || [];
   const vaccines = vaccinesData?.vaccines || [];
   const procedures = proceduresData?.procedures || [];
   const prescriptions = prescriptionsData?.prescriptions || [];
+  const diagnostics = diagnosticsData?.diagnostics || [];
+  const preventativeCare = preventativeCareData?.records || [];
 
   // Hide non-printable elements and adjust for print
   useEffect(() => {
@@ -287,6 +301,108 @@ export default function PrintableHealthRecordPage() {
                           </div>
                         )}
                       </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Diagnostics (Heartworm Tests, Labs, etc.) */}
+        {diagnostics.length > 0 && (
+          <Card>
+            <CardContent className="pt-6">
+              <h2 className="text-xl font-semibold mb-4">Diagnostics & Lab Results</h2>
+              <div className="space-y-4">
+                {diagnostics.map((diagnostic: any, index: number) => (
+                  <div key={diagnostic.id || index} className="border-b pb-3 last:border-b-0">
+                    <div className="flex justify-between items-start mb-2">
+                      <p className="font-medium">{diagnostic.testName}</p>
+                      <p className="text-sm">{diagnostic.testDate ? format(new Date(diagnostic.testDate), 'MMMM d, yyyy') : 'N/A'}</p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      {diagnostic.result && (
+                        <div>
+                          <span className="text-muted-foreground">Result: </span>
+                          <span className={diagnostic.result?.toLowerCase() === 'positive' ? 'text-red-600 font-medium' : diagnostic.result?.toLowerCase() === 'negative' ? 'text-green-600 font-medium' : ''}>{diagnostic.result}</span>
+                        </div>
+                      )}
+                      {diagnostic.testType && (
+                        <div>
+                          <span className="text-muted-foreground">Type: </span>
+                          <span>{diagnostic.testType}</span>
+                        </div>
+                      )}
+                      {diagnostic.laboratory && (
+                        <div>
+                          <span className="text-muted-foreground">Lab: </span>
+                          <span>{diagnostic.laboratory}</span>
+                        </div>
+                      )}
+                      {diagnostic.veterinarian && (
+                        <div>
+                          <span className="text-muted-foreground">Veterinarian: </span>
+                          <span>{diagnostic.veterinarian}</span>
+                        </div>
+                      )}
+                    </div>
+                    {diagnostic.notes && (
+                      <p className="text-sm text-muted-foreground mt-2">{diagnostic.notes}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Preventative Care (Flea/Heartworm Prevention, etc.) */}
+        {preventativeCare.length > 0 && (
+          <Card>
+            <CardContent className="pt-6">
+              <h2 className="text-xl font-semibold mb-4">Preventative Care</h2>
+              <div className="space-y-4">
+                {preventativeCare.map((record: any, index: number) => (
+                  <div key={record.id || index} className="border-b pb-3 last:border-b-0">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <p className="font-medium">{record.careName}</p>
+                        {record.careType && (
+                          <p className="text-sm text-muted-foreground capitalize">{record.careType?.replace(/_/g, ' ')}</p>
+                        )}
+                      </div>
+                      <div className="text-right text-sm">
+                        {record.lastAdministered && (
+                          <p>Given: {format(new Date(record.lastAdministered), 'MMM d, yyyy')}</p>
+                        )}
+                        {record.dueDate && (
+                          <p className="text-muted-foreground">Due: {format(new Date(record.dueDate), 'MMM d, yyyy')}</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      {record.manufacturer && (
+                        <div>
+                          <span className="text-muted-foreground">Brand: </span>
+                          <span>{record.manufacturer}</span>
+                        </div>
+                      )}
+                      {record.lotNumber && (
+                        <div>
+                          <span className="text-muted-foreground">Lot #: </span>
+                          <span>{record.lotNumber}</span>
+                        </div>
+                      )}
+                      {record.administeredBy && (
+                        <div>
+                          <span className="text-muted-foreground">Administered by: </span>
+                          <span>{record.administeredBy}</span>
+                        </div>
+                      )}
+                    </div>
+                    {record.notes && (
+                      <p className="text-sm text-muted-foreground mt-2">{record.notes}</p>
                     )}
                   </div>
                 ))}
