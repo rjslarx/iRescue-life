@@ -1,0 +1,15 @@
+[TENANT INIT] Custom domain detected: haseyasnewbeginningar.com
+index-1B_Fm-HX.js:1073 [PWA] Custom domain detected - using /manifest.json (hostname-based resolution)
+index-1B_Fm-HX.js:1326 Error: Failed to load Connect.js
+    at HTMLScriptElement.<anonymous> (index-1B_Fm-HX.js:1326:7611)
+(anonymous) @ index-1B_Fm-HX.js:1326Understand this warning
+index-1B_Fm-HX.js:1073 [PWA] Custom domain detected - using /manifest.json (hostname-based resolution)
+index-1B_Fm-HX.js:1073 [PWA] Updating meta tags for tenant: Haseya's New Beginning Animal Rescue, logo: no
+index-1B_Fm-HX.js:1073 [PWA] Updated apple-touch-icon to: /apple-touch-icon.png
+/login:1 [DOM] Input elements should have autocomplete attributes (suggested: "username"): (More info: https://goo.gl/9p2vKq) <input type=​"email" class=​"flex h-9 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background file:​border-0 file:​bg-transparent file:​text-sm file:​font-medium file:​text-foreground placeholder:​text-muted-foreground focus-visible:​outline-none focus-visible:​ring-2 focus-visible:​ring-ring focus-visible:​ring-offset-2 disabled:​cursor-not-allowed disabled:​opacity-50 md:​text-sm" id=​"email" placeholder=​"you@example.com" required data-testid=​"input-email" value=​"rstelly3@gmail.com" data-gtm-form-interact-field-id=​"0" disabled>​
+/api/dashboard/daily-briefing:1  Failed to load resource: the server responded with a status of 503 ()Understand this error
+/api/applications?animalId=4cd0c174-fc30-432b-8a61-01ae7c0c13d9:1  Failed to load resource: the server responded with a status of 503 ()Understand this error
+/api/applications?animalId=2400944e-b6a4-4dd4-ad07-4665913260f6:1  Failed to load resource: the server responded with a status of 503 ()Understand this error
+animals:1 Uncaught (in promise) Error: Could not establish connection. Receiving end does not exist.Understand this error
+/api/donation-links:1  Failed to load resource: the server responded with a status of 503 ()Understand this error
+index-1B_Fm-HX.js:48 Fetch finished loading: GET "https://haseyasnewbeginningar.com/api/impersonation/status".
