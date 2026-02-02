@@ -194,8 +194,14 @@ export class StorageBackupService {
         .from(animals)
         .where(eq(animals.tenantId, tenantId));
 
+      // Guard against undefined/null results
+      if (!tenantAnimals || !Array.isArray(tenantAnimals)) {
+        console.log(`[STORAGE BACKUP] No animals found or invalid response for tenant: ${tenantId}`);
+        return;
+      }
+
       for (const animal of tenantAnimals) {
-        if (!animal.photos || animal.photos.length === 0) continue;
+        if (!animal.photos || !Array.isArray(animal.photos) || animal.photos.length === 0) continue;
 
         for (const photoUrl of animal.photos) {
           // Skip null/undefined/empty URLs
@@ -282,6 +288,12 @@ export class StorageBackupService {
           isNotNull(volunteerApplications.signedWaiverUrl)
         ));
 
+      // Guard against undefined/null results
+      if (!volunteers || !Array.isArray(volunteers)) {
+        console.log(`[STORAGE BACKUP] No volunteers found or invalid response for tenant: ${tenantId}`);
+        return;
+      }
+
       for (const volunteer of volunteers) {
         // Skip if signedWaiverUrl is null/undefined or not a string
         if (!volunteer.signedWaiverUrl || typeof volunteer.signedWaiverUrl !== 'string') continue;
@@ -347,6 +359,12 @@ export class StorageBackupService {
           eq(fosterApplications.tenantId, tenantId),
           isNotNull(fosterApplications.signedAgreementUrl)
         ));
+
+      // Guard against undefined/null results
+      if (!fosters || !Array.isArray(fosters)) {
+        console.log(`[STORAGE BACKUP] No fosters found or invalid response for tenant: ${tenantId}`);
+        return;
+      }
 
       for (const foster of fosters) {
         // Skip if signedAgreementUrl is null/undefined or not a string
@@ -414,6 +432,12 @@ export class StorageBackupService {
           eq(donations.tenantId, tenantId),
           isNotNull(donations.receiptUrl)
         ));
+
+      // Guard against undefined/null results
+      if (!donationList || !Array.isArray(donationList)) {
+        console.log(`[STORAGE BACKUP] No donations found or invalid response for tenant: ${tenantId}`);
+        return;
+      }
 
       // Create finance/receipts folder
       const financeFolder = await this.getOrCreateFolder(driveService, ROOT_FOLDERS.FINANCE);
@@ -490,6 +514,12 @@ export class StorageBackupService {
       const bucket = objectStorageClient.bucket(bucketName);
       
       const [files] = await bucket.getFiles({ prefix: objectName });
+      
+      // Guard against undefined/null files array
+      if (!files || !Array.isArray(files)) {
+        console.log(`[STORAGE BACKUP] No files found or invalid response for path: ${path}`);
+        return;
+      }
       
       for (const file of files) {
         progress.filesScanned++;
