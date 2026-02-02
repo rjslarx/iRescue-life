@@ -49,7 +49,7 @@ export function ChangeAnimalDialog({
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedAnimalId, setSelectedAnimalId] = useState<string | null>(null);
 
-  const { data: animalsData, isLoading: loadingAnimals } = useQuery<{ animals: Animal[] }>({
+  const { data: animalsData, isLoading: loadingAnimals, isError: animalsError } = useQuery<{ animals: Animal[] }>({
     queryKey: ["/api/animals"],
     enabled: open,
   });
@@ -129,6 +129,12 @@ export function ChangeAnimalDialog({
           {loadingAnimals ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : animalsError ? (
+            <div className="text-center py-8 text-destructive">
+              <PawPrint className="h-8 w-8 mx-auto mb-2 opacity-50" />
+              <p>Failed to load animals</p>
+              <p className="text-sm text-muted-foreground mt-1">Please try again</p>
             </div>
           ) : availableAnimals.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">

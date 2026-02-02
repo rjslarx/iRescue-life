@@ -249,8 +249,9 @@ export default function KanbanBoard({ applications, onMoveApplication, onAssignA
                                   Assign Animal
                                 </Button>
                               )}
-                              {/* Change Animal button - show for eligible stages before checkout */}
+                              {/* Change Animal button - show for eligible adoption stages before checkout */}
                               {['new', 'screening', 'vet_check', 'home_visit', 'approved'].includes(stage.id) && 
+                               (!app.applicationType || app.applicationType === 'adoption') &&
                                !app.checkoutStatus && app.animalId && (
                                 <Button
                                   size="sm"
