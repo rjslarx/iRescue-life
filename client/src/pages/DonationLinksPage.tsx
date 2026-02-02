@@ -50,9 +50,9 @@ export default function DonationLinksPage() {
   const [emergencyImageUrl, setEmergencyImageUrl] = useState("");
   
   // Event flyer state
-  const [eventName, setEventName] = useState("Adoption Event");
-  const [eventAmount, setEventAmount] = useState(2000); // $20
-  const [eventRecurring, setEventRecurring] = useState(true);
+  const [eventName, setEventName] = useState("Trivia Fundraiser");
+  const [eventAmount, setEventAmount] = useState(1500); // $15 default for trivia fundraiser // $20
+  const [eventRecurring, setEventRecurring] = useState(false); // Default to one-time for events
   const [generatedQrCode, setGeneratedQrCode] = useState<string | null>(null);
   const [generatedFlyerLink, setGeneratedFlyerLink] = useState<DonationLink | null>(null);
 
@@ -166,21 +166,50 @@ export default function DonationLinksPage() {
     },
   });
 
-  // Event Flyer mutation
+  // Event Flyer mutation - creates event ticket and generates QR code
   const eventFlyerMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("POST", "/api/donation-links/event-flyer", {
+      // First, create the event ticket in the database
+      const createResponse = await apiRequest("POST", "/api/event-tickets", {
         eventName,
-        amount: eventAmount,
+        pricePerTicket: eventAmount,
         isRecurring: eventRecurring,
+        description: `Entry fee for ${eventName}`,
       });
-      return response.json();
+      
+      if (!createResponse.ok) {
+        const errorData = await createResponse.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to create event ticket');
+      }
+      
+      const { eventTicket } = await createResponse.json();
+      
+      // Then generate the QR code for the checkout page
+      const qrResponse = await apiRequest("POST", `/api/event-tickets/${eventTicket.id}/generate-qr`, {});
+      
+      if (!qrResponse.ok) {
+        const errorData = await qrResponse.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to generate QR code');
+      }
+      
+      return qrResponse.json();
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/donation-links"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/event-tickets"] });
       setGeneratedQrCode(data.qrCodeDataUrl);
-      setGeneratedFlyerLink(data.donationLink);
-      toast({ title: "Event flyer generated!" });
+      setGeneratedFlyerLink({
+        id: data.eventTicket.id,
+        tenantId: '',
+        title: data.eventTicket.eventName,
+        amount: data.eventTicket.pricePerTicket,
+        isRecurring: data.eventTicket.isRecurring,
+        interval: 'month',
+        stripePaymentLinkUrl: data.checkoutUrl,
+        stripePaymentLinkId: '',
+        isActive: true,
+        createdAt: new Date(),
+      });
+      toast({ title: "Event flyer generated!", description: "Customers can now select quantity and cover fees when checking out." });
     },
     onError: (error: any) => {
       toast({
@@ -357,7 +386,7 @@ export default function DonationLinksPage() {
                     Create Event QR Code Flyer
                   </DialogTitle>
                   <DialogDescription>
-                    Generate a printable QR code for in-person donation collection
+                    Generate a QR code for events. Customers can select quantity and optionally cover transaction fees at checkout.
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4">

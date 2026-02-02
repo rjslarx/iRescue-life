@@ -29270,6 +29270,256 @@ The user asking is a tenant administrator or staff member.`;
       next(error);
     }
   });
+
+  // ============================================================================
+  // Event Tickets Routes
+  // ============================================================================
+
+  /**
+   * POST /api/event-tickets
+   * Create a new event ticket for fundraising events
+   */
+  app.post('/api/event-tickets', requireTenant, requireAuth, requireRole('admin', 'owner', 'board_member', 'staff'), async (req, res, next) => {
+    try {
+      const { eventTickets, insertEventTicketSchema } = await import('@shared/schema');
+      
+      const data = insertEventTicketSchema.parse({
+        ...req.body,
+        tenantId: req.tenant!.id,
+      });
+
+      const [eventTicket] = await db
+        .insert(eventTickets)
+        .values(data)
+        .returning();
+
+      res.status(201).json({ eventTicket });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/event-tickets
+   * List all event tickets for the tenant
+   */
+  app.get('/api/event-tickets', requireTenant, requireAuth, requireRole('admin', 'owner', 'board_member', 'staff'), async (req, res, next) => {
+    try {
+      const { eventTickets } = await import('@shared/schema');
+      
+      const tickets = await db
+        .select({
+          id: eventTickets.id,
+          tenantId: eventTickets.tenantId,
+          eventName: eventTickets.eventName,
+          description: eventTickets.description,
+          pricePerTicket: eventTickets.pricePerTicket,
+          isRecurring: eventTickets.isRecurring,
+          isActive: eventTickets.isActive,
+          createdAt: eventTickets.createdAt,
+        })
+        .from(eventTickets)
+        .where(eq(eventTickets.tenantId, req.tenant!.id))
+        .orderBy(desc(eventTickets.createdAt));
+
+      res.json({ eventTickets: tickets });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/event-tickets/:id
+   * Get event ticket details (public endpoint for checkout page)
+   */
+  app.get('/api/event-tickets/:id', requireTenant, async (req, res, next) => {
+    try {
+      const { eventTickets } = await import('@shared/schema');
+      const { id } = req.params;
+
+      const [ticket] = await db
+        .select({
+          id: eventTickets.id,
+          eventName: eventTickets.eventName,
+          description: eventTickets.description,
+          pricePerTicket: eventTickets.pricePerTicket,
+          isRecurring: eventTickets.isRecurring,
+          isActive: eventTickets.isActive,
+        })
+        .from(eventTickets)
+        .where(and(
+          eq(eventTickets.id, id),
+          eq(eventTickets.tenantId, req.tenant!.id),
+          eq(eventTickets.isActive, true)
+        ))
+        .limit(1);
+
+      if (!ticket) {
+        return res.status(404).json({ error: 'Event not found' });
+      }
+
+      res.json({ event: ticket });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/event-tickets/checkout
+   * Create Stripe checkout session for event tickets with quantity and fee coverage
+   */
+  app.post('/api/event-tickets/checkout', requireTenant, async (req, res, next) => {
+    try {
+      const { eventTickets } = await import('@shared/schema');
+      const { calculateDonorCoversFees } = await import('./config/platform');
+      
+      const checkoutSchema = z.object({
+        eventId: z.string().uuid(),
+        quantity: z.number().int().min(1).max(50),
+        donorCoversFees: z.boolean().default(false),
+      });
+
+      const { eventId, quantity, donorCoversFees } = checkoutSchema.parse(req.body);
+
+      // Get event ticket details
+      const [ticket] = await db
+        .select({
+          id: eventTickets.id,
+          eventName: eventTickets.eventName,
+          pricePerTicket: eventTickets.pricePerTicket,
+          isRecurring: eventTickets.isRecurring,
+          isActive: eventTickets.isActive,
+        })
+        .from(eventTickets)
+        .where(and(
+          eq(eventTickets.id, eventId),
+          eq(eventTickets.tenantId, req.tenant!.id),
+          eq(eventTickets.isActive, true)
+        ))
+        .limit(1);
+
+      if (!ticket) {
+        return res.status(404).json({ error: 'Event not found' });
+      }
+
+      // Get tenant for Stripe configuration
+      const [tenant] = await db
+        .select()
+        .from(tenants)
+        .where(eq(tenants.id, req.tenant!.id))
+        .limit(1);
+
+      if (!tenant) {
+        return res.status(404).json({ error: 'Organization not found' });
+      }
+
+      // Calculate total amount
+      const baseAmount = ticket.pricePerTicket * quantity;
+      let finalAmount = baseAmount;
+      let platformFeeAmount = 0;
+
+      if (donorCoversFees) {
+        const subscriptionTier = tenant.subscriptionTier || 'free';
+        const feeCalc = calculateDonorCoversFees(baseAmount, subscriptionTier);
+        finalAmount = feeCalc.totalAmount;
+        platformFeeAmount = feeCalc.platformFee;
+      }
+
+      // Create Stripe checkout session
+      const { stripeService } = await import('./lib/stripe-service');
+      const baseUrl = `https://${req.get('host')}`;
+      
+      // Get tenant path for redirect URLs
+      const tenantPath = (tenant as any).subdomain || tenant.id;
+
+      const session = await stripeService.createCheckoutSession(tenant, {
+        amount: finalAmount,
+        currency: 'usd',
+        isRecurring: ticket.isRecurring,
+        interval: 'month',
+        successUrl: `${baseUrl}/${tenantPath}/event-success?session_id={CHECKOUT_SESSION_ID}`,
+        cancelUrl: `${baseUrl}/${tenantPath}/event/${eventId}`,
+        metadata: {
+          eventTicketId: eventId,
+          eventName: ticket.eventName,
+          quantity: quantity.toString(),
+          donorCoversFees: donorCoversFees.toString(),
+          baseAmount: baseAmount.toString(),
+        },
+        platformFeeAmount: platformFeeAmount > 0 ? platformFeeAmount : undefined,
+        connectedAccountId: tenant.stripeConnectedAccountId || undefined,
+      });
+
+      if (!session || !session.url) {
+        return res.status(500).json({ error: 'Failed to create checkout session' });
+      }
+
+      res.json({ url: session.url, sessionId: session.id });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/event-tickets/:id/generate-qr
+   * Generate QR code for event ticket checkout page
+   */
+  app.post('/api/event-tickets/:id/generate-qr', requireTenant, requireAuth, requireRole('admin', 'owner', 'board_member', 'staff'), async (req, res, next) => {
+    try {
+      const { eventTickets } = await import('@shared/schema');
+      const QRCode = await import('qrcode');
+      const { id } = req.params;
+
+      // Verify event exists and belongs to tenant
+      const [ticket] = await db
+        .select({
+          id: eventTickets.id,
+          eventName: eventTickets.eventName,
+          pricePerTicket: eventTickets.pricePerTicket,
+          isRecurring: eventTickets.isRecurring,
+        })
+        .from(eventTickets)
+        .where(and(
+          eq(eventTickets.id, id),
+          eq(eventTickets.tenantId, req.tenant!.id)
+        ))
+        .limit(1);
+
+      if (!ticket) {
+        return res.status(404).json({ error: 'Event not found' });
+      }
+
+      // Get tenant for URL generation
+      const [tenant] = await db
+        .select()
+        .from(tenants)
+        .where(eq(tenants.id, req.tenant!.id))
+        .limit(1);
+
+      // Generate checkout URL
+      const baseUrl = `https://${req.get('host')}`;
+      const tenantPath = (tenant as any)?.subdomain || req.tenant!.id;
+      const checkoutUrl = `${baseUrl}/${tenantPath}/event/${id}`;
+
+      // Generate QR code as data URL
+      const qrCodeDataUrl = await QRCode.toDataURL(checkoutUrl, {
+        width: 400,
+        margin: 2,
+        color: {
+          dark: '#000000',
+          light: '#ffffff',
+        },
+      });
+
+      res.json({
+        qrCodeDataUrl,
+        checkoutUrl,
+        eventTicket: ticket,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
   const httpServer = createServer(app);
 
   return httpServer;

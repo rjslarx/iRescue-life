@@ -86,6 +86,8 @@ import PublicFormSigningPage from "@/pages/PublicFormSigningPage";
 import FormPaymentPage from "@/pages/FormPaymentPage";
 import PublicContactPage from "@/pages/PublicContactPage";
 import DonatePage from "@/pages/DonatePage";
+import EventTicketCheckoutPage from "@/pages/EventTicketCheckoutPage";
+import EventSuccessPage from "@/pages/EventSuccessPage";
 import GivePage from "@/pages/GivePage";
 import PublicTransparencyPage from "@/pages/PublicTransparencyPage";
 import PublicCampaignPage from "@/pages/PublicCampaignPage";
@@ -196,6 +198,8 @@ function RouterSwitch() {
       <Route path="/form-success/:formType" component={FormSuccessPage} />
       <Route path="/contact" component={PublicContactPage} />
       <Route path="/donate" component={DonatePage} />
+      <Route path="/event/:eventId" component={EventTicketCheckoutPage} />
+      <Route path="/event-success" component={EventSuccessPage} />
       <Route path="/give" component={GivePage} />
       <Route path="/transparency" component={PublicTransparencyPage} />
       <Route path="/campaign/:animalId" component={PublicCampaignPage} />

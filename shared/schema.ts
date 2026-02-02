@@ -4744,3 +4744,41 @@ export const insertPreventativeCareRecordSchema = createInsertSchema(preventativ
 });
 export type InsertPreventativeCareRecord = z.infer<typeof insertPreventativeCareRecordSchema>;
 export type PreventativeCareRecord = typeof preventativeCareRecords.$inferSelect;
+
+// ===== EVENT TICKETS =====
+// Event tickets for fundraising events with quantity support and fee coverage option
+export const eventTickets = pgTable("event_tickets", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  eventName: text("event_name").notNull(),
+  description: text("description"),
+  pricePerTicket: integer("price_per_ticket").notNull(), // Amount in cents
+  isRecurring: boolean("is_recurring").notNull().default(false),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertEventTicketSchema = createInsertSchema(eventTickets).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertEventTicket = z.infer<typeof insertEventTicketSchema>;
+export type EventTicket = typeof eventTickets.$inferSelect;
+
+// DonationLink type for Stripe Payment Links (not stored in DB, generated on the fly)
+export interface DonationLink {
+  id: string;
+  tenantId: string;
+  title: string;
+  description?: string;
+  amount: number;
+  isRecurring: boolean;
+  interval: "month" | "year";
+  stripePaymentLinkUrl: string;
+  stripePaymentLinkId: string;
+  imageUrl?: string;
+  type?: "donation" | "emergency" | "virtual_kennel" | "event";
+  eventTicketId?: string;
+  isActive: boolean;
+  createdAt: Date;
+}
