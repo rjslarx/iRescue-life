@@ -433,7 +433,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .from(tenants)
           .where(eq(tenants.subdomain, tenantSubdomain))
           .limit(1);
-        
         if (tenantFromLookup && tenantFromLookup.isActive) {
           tenant = tenantFromLookup as any;
           // For query param lookups (path-based tenants), basePath should be /{subdomain}
@@ -445,18 +444,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // If this is a tenant request, customize the manifest
       if (tenant) {
         console.log(`[MANIFEST] Customizing manifest for tenant: ${tenant.name}, logo: ${tenant.logoUrl ? 'yes' : 'no'}`);
-        
         manifest.name = `${tenant.name} - Animal Rescue Portal`;
         manifest.short_name = tenant.name.substring(0, 12); // PWA short names should be ≤12 chars
         manifest.description = tenant.tagline || `${tenant.name} - Animal rescue management and adoption portal`;
         manifest.start_url = basePath;
         manifest.scope = basePath;
-        
         // Use tenant's primary color if available
         if (tenant.branding?.primaryColor) {
           manifest.theme_color = tenant.branding.primaryColor;
         }
-        
         // Use tenant's logo as app icon if available
         if (tenant.logoUrl) {
           manifest.icons = [
@@ -474,7 +470,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           ];
         }
-        
         // Update shortcuts to include base path
         manifest.shortcuts = manifest.shortcuts.map(shortcut => ({
           ...shortcut,
@@ -660,16 +655,13 @@ Crawl-delay: 1
       // Verify webhook signature if secret is configured
       if (webhookSecret) {
         const { Webhook } = await import('svix');
-        
         const svixId = req.headers['svix-id'] as string;
         const svixTimestamp = req.headers['svix-timestamp'] as string;
         const svixSignature = req.headers['svix-signature'] as string;
-        
         if (!svixId || !svixTimestamp || !svixSignature) {
           console.warn('[RESEND WEBHOOK] Missing Svix headers');
           return res.status(401).json({ error: 'Missing webhook signature headers' });
         }
-        
         try {
           const wh = new Webhook(webhookSecret);
           const rawBody = (req as any).rawBody;
@@ -947,7 +939,6 @@ Crawl-delay: 1
       // Send welcome emails now that account is immediately active
       try {
         const { EmailService } = await import('./lib/email-service');
-        
         // Send notification to platform admin
         await EmailService.sendNewTenantNotification({
           rescueName: finalTenant.name,
@@ -1331,7 +1322,6 @@ Crawl-delay: 1
         console.log(`[EMAIL DEBUG] Starting email send for tenant: ${updatedTenant.subdomain}, admin: ${adminUser.email}`);
         console.log(`[EMAIL DEBUG] PLATFORM_RESEND_API_KEY exists: ${!!process.env.PLATFORM_RESEND_API_KEY}`);
         console.log(`[EMAIL DEBUG] PLATFORM_ADMIN_EMAIL: ${process.env.PLATFORM_ADMIN_EMAIL}`);
-        
         try {
           const { EmailService } = await import('./lib/email-service');
           
@@ -1878,7 +1868,6 @@ Crawl-delay: 1
           .from(tenants)
           .where(eq(tenants.subdomain, 'platform'))
           .limit(1);
-        
         if (!platformTenant) {
           return res.status(500).json({ error: 'Platform tenant not configured' });
         }
@@ -2100,7 +2089,6 @@ Crawl-delay: 1
         req.session.userId = user.id;
         req.session.tenantId = user.tenantId;
         req.session.activeRole = user.roles[0];
-        
         // Save session before sending response
         return req.session.save((err) => {
           if (err) {
@@ -2124,7 +2112,6 @@ Crawl-delay: 1
       // Try backup code
       if (user.mfaBackupCodes && user.mfaBackupCodes.length > 0) {
         const backupCodeIndex = await verifyBackupCode(code, user.mfaBackupCodes);
-        
         if (backupCodeIndex !== null) {
           // Valid backup code - remove it from the list
           const updatedBackupCodes = [...user.mfaBackupCodes];
@@ -2351,7 +2338,6 @@ Crawl-delay: 1
       // Send reset email using EmailService (Gmail priority, platform Resend fallback)
       try {
         const { EmailService } = await import('./lib/email-service');
-        
         // Construct reset URL with proper domain and path-based routing
         let resetUrl: string;
         if (req.tenant!.customDomain) {
@@ -2366,10 +2352,8 @@ Crawl-delay: 1
               : 'http://localhost:5000';
           resetUrl = `${baseUrl}/${req.tenant!.subdomain}/reset-password?token=${token}`;
         }
-        
         // Use EmailService.forTenant which prioritizes Gmail, then falls back to platform Resend
         const emailService = await EmailService.forTenant(req.tenant!.id);
-        
         if (emailService) {
           await emailService.send({
             to: user.email,
@@ -2843,7 +2827,6 @@ Crawl-delay: 1
           .where(eq(applications.tenantId, req.tenant!.id))
           .orderBy(desc(applications.createdAt))
           .limit(10),
-        
         // Donations
         db.select({
           id: donations.id,
@@ -2855,7 +2838,6 @@ Crawl-delay: 1
           .where(eq(donations.tenantId, req.tenant!.id))
           .orderBy(desc(donations.createdAt))
           .limit(10),
-        
         // Animal status updates
         db.select({
           id: animals.id,
@@ -2872,7 +2854,6 @@ Crawl-delay: 1
           )
           .orderBy(desc(animals.updatedAt))
           .limit(10),
-        
         // Volunteer applications
         db.select({
           id: volunteerApplications.id,
@@ -2883,7 +2864,6 @@ Crawl-delay: 1
           .where(eq(volunteerApplications.tenantId, req.tenant!.id))
           .orderBy(desc(volunteerApplications.createdAt))
           .limit(10),
-        
         // Foster applications
         db.select({
           id: fosterApplications.id,
@@ -2894,7 +2874,6 @@ Crawl-delay: 1
           .where(eq(fosterApplications.tenantId, req.tenant!.id))
           .orderBy(desc(fosterApplications.createdAt))
           .limit(10),
-        
         // New events
         db.select({
           id: calendarEvents.id,
@@ -2906,7 +2885,6 @@ Crawl-delay: 1
           .where(eq(calendarEvents.tenantId, req.tenant!.id))
           .orderBy(desc(calendarEvents.createdAt))
           .limit(10),
-        
         // New happy tails
         db.select({
           id: happyTails.id,
@@ -2917,7 +2895,6 @@ Crawl-delay: 1
           .where(eq(happyTails.tenantId, req.tenant!.id))
           .orderBy(desc(happyTails.createdAt))
           .limit(10),
-        
         // New animals added
         db.select({
           id: animals.id,
@@ -2953,7 +2930,6 @@ Crawl-delay: 1
           description: `${app.applicantName} applied to adopt ${animalsMap.get(app.animalId) || 'an animal'}`,
           timestamp: app.createdAt,
         })),
-        
         // Donations
         ...recentDonations.map(don => ({
           type: 'donation' as const,
@@ -2961,7 +2937,6 @@ Crawl-delay: 1
           description: `$${Number(don.amount).toFixed(2)} from ${don.donorName}`,
           timestamp: don.createdAt,
         })),
-        
         // Animal status updates
         ...recentAnimalUpdates.map(animal => ({
           type: 'status_change' as const,
@@ -2969,7 +2944,6 @@ Crawl-delay: 1
           description: `${animal.name} ${animal.status === 'adopted' ? 'was adopted' : `moved to ${animal.status}`}`,
           timestamp: animal.updatedAt,
         })),
-        
         // Volunteer applications
         ...recentVolunteerApps.map(app => ({
           type: 'volunteer_app' as const,
@@ -2977,7 +2951,6 @@ Crawl-delay: 1
           description: `${app.applicantName} applied to volunteer`,
           timestamp: app.createdAt,
         })),
-        
         // Foster applications
         ...recentFosterApps.map(app => ({
           type: 'foster_app' as const,
@@ -2985,7 +2958,6 @@ Crawl-delay: 1
           description: `${app.applicantName} applied to foster`,
           timestamp: app.createdAt,
         })),
-        
         // New events
         ...recentEvents.map(event => ({
           type: 'event' as const,
@@ -2993,7 +2965,6 @@ Crawl-delay: 1
           description: `${event.title}`,
           timestamp: event.createdAt,
         })),
-        
         // New happy tails
         ...recentHappyTails.map(tale => ({
           type: 'happy_tail' as const,
@@ -3001,7 +2972,6 @@ Crawl-delay: 1
           description: `Happy tail posted for ${tale.animalName}`,
           timestamp: tale.createdAt,
         })),
-        
         // New animals
         ...recentNewAnimals.map(animal => ({
           type: 'animal_new' as const,
@@ -3050,7 +3020,6 @@ Crawl-delay: 1
               lt(medicalDoses.dueDate, now)
             )
           ),
-        
         // Applications pending for more than 7 days
         db.select({
           id: applications.id,
@@ -3069,7 +3038,6 @@ Crawl-delay: 1
             )
           )
           .limit(10),
-        
         // Animals available for adoption for more than 90 days
         db.select({
           id: animals.id,
@@ -3098,19 +3066,15 @@ Crawl-delay: 1
         })
           .from(medicalPrescriptions)
           .where(inArray(medicalPrescriptions.id, prescriptionIds));
-        
         const prescriptionsMap = new Map(prescriptions.map(p => [p.id, p]));
         const animalIdsForDoses = prescriptions.map(p => p.animalId).filter(Boolean);
-        
         const animalsForDoses = await db.select({
           id: animals.id,
           name: animals.name,
         })
           .from(animals)
           .where(inArray(animals.id, animalIdsForDoses));
-        
         const animalsMap = new Map(animalsForDoses.map(a => [a.id, a.name]));
-        
         dosesWithMedication = overdueDoses.map(dose => {
           const prescription = prescriptionsMap.get(dose.prescriptionId);
           return {
@@ -3378,7 +3342,6 @@ Crawl-delay: 1
               notInArray(surrenderRequestsTable.status, ['intaken', 'declined'])
             )
           ),
-        
         // Adoption applications - all active stages (exclude only final stages)
         db.select({ count: count() })
           .from(applications)
@@ -3388,7 +3351,6 @@ Crawl-delay: 1
               notInArray(applications.stage, ['adopted', 'denied', 'trial_failed'])
             )
           ),
-        
         // Foster applications - pending status
         db.select({ count: count() })
           .from(fosterApplications)
@@ -3398,7 +3360,6 @@ Crawl-delay: 1
               eq(fosterApplications.status, 'pending')
             )
           ),
-        
         // Volunteer applications - pending status
         db.select({ count: count() })
           .from(volunteerApplications)
@@ -3714,7 +3675,6 @@ Crawl-delay: 1
           )
           .orderBy(desc(applications.createdAt))
           .limit(50),
-        
         // Volunteer applications - pending status
         db.select({
           id: volunteerApplications.id,
@@ -3742,7 +3702,6 @@ Crawl-delay: 1
           )
           .orderBy(desc(volunteerApplications.createdAt))
           .limit(50),
-        
         // Foster applications - pending status
         db.select({
           id: fosterApplications.id,
@@ -3773,7 +3732,6 @@ Crawl-delay: 1
           )
           .orderBy(desc(fosterApplications.createdAt))
           .limit(50),
-        
         // Legacy surrender requests - pending status (old animalSurrenders table)
         db.select({
           id: animalSurrenders.id,
@@ -3805,7 +3763,6 @@ Crawl-delay: 1
           )
           .orderBy(desc(animalSurrenders.createdAt))
           .limit(50),
-        
         // Phase 1 surrender requests - new surrenderRequests table (statuses: new, review, spacecheck, waitlist, scheduled)
         db.select({
           id: surrenderRequestsTable.id,
@@ -3838,7 +3795,6 @@ Crawl-delay: 1
           )
           .orderBy(desc(surrenderRequestsTable.createdAt))
           .limit(50),
-        
         // Custom form submissions - pending status
         db.select({
           id: customFormSubmissions.id,
@@ -3875,7 +3831,6 @@ Crawl-delay: 1
         })
           .from(animals)
           .where(inArray(animals.id, allAnimalIds));
-        
         animalsMap = new Map(animalRecords.map(a => [a.id, a.name]));
       }
 
@@ -3889,7 +3844,6 @@ Crawl-delay: 1
         })
           .from(customForms)
           .where(inArray(customForms.id, formIds));
-        
         formsMap = new Map(formRecords.map(f => [f.id, f.name]));
       }
 
@@ -4353,14 +4307,12 @@ Crawl-delay: 1
           id: animals.id,
           intakeDate: animals.intakeDate,
         }).from(animals).where(eq(animals.tenantId, req.tenant!.id)),
-        
         // Get all adoptions for adoption calculations - explicit field selection
         db.select({
           id: adoptions.id,
           animalId: adoptions.animalId,
           adoptionDate: adoptions.adoptionDate,
         }).from(adoptions).where(eq(adoptions.tenantId, req.tenant!.id)),
-        
         // Get donations this month (with upper bound to exclude future dates)
         db.select({
           id: donations.id,
@@ -4374,7 +4326,6 @@ Crawl-delay: 1
             lte(donations.date, endOfMonth)
           )
         ),
-        
         // Get donations YTD (with upper bound to exclude future dates)
         db.select({
           id: donations.id,
@@ -4388,7 +4339,6 @@ Crawl-delay: 1
             lte(donations.date, endOfYear)
           )
         ),
-        
         // Get expenditures this month (with upper bound to exclude future dates)
         db.select({
           id: expenditures.id,
@@ -4400,7 +4350,6 @@ Crawl-delay: 1
             lte(expenditures.date, endOfMonth)
           )
         ),
-        
         // Get expenditures YTD (with upper bound to exclude future dates)
         db.select({
           id: expenditures.id,
@@ -4412,7 +4361,6 @@ Crawl-delay: 1
             lte(expenditures.date, endOfYear)
           )
         ),
-        
         // Get active fosters (users with foster role)
         db.select({
           id: users.id,
@@ -5124,14 +5072,11 @@ Crawl-delay: 1
       function levenshteinDistance(str1: string, str2: string): number {
         const m = str1.length;
         const n = str2.length;
-        
         // Create a matrix of distances
         const dp: number[][] = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
-        
         // Initialize first row and column
         for (let i = 0; i <= m; i++) dp[i][0] = i;
         for (let j = 0; j <= n; j++) dp[0][j] = j;
-        
         // Fill in the rest of the matrix
         for (let i = 1; i <= m; i++) {
           for (let j = 1; j <= n; j++) {
@@ -5146,7 +5091,6 @@ Crawl-delay: 1
             }
           }
         }
-        
         return dp[m][n];
       }
       
@@ -5154,20 +5098,16 @@ Crawl-delay: 1
       function nameSimilarityScore(name1: string, name2: string): number {
         const s1 = name1.toLowerCase().trim();
         const s2 = name2.toLowerCase().trim();
-        
         // Exact match
         if (s1 === s2) return 1.0;
-        
         // One contains the other (e.g., "Max" vs "Maxy")
         if (s1.includes(s2) || s2.includes(s1)) {
           return 0.9;
         }
-        
         // Levenshtein-based similarity
         const distance = levenshteinDistance(s1, s2);
         const maxLen = Math.max(s1.length, s2.length);
         if (maxLen === 0) return 1.0;
-        
         const similarity = 1 - (distance / maxLen);
         return similarity;
       }
@@ -5205,13 +5145,11 @@ Crawl-delay: 1
       
       for (let i = 0; i < allAnimals.length; i++) {
         if (usedIds.has(allAnimals[i].id)) continue;
-        
         const matches: typeof allAnimals = [];
         const allReasons = new Set<string>();
         let highestNameSimilarity = 0;
         let hasAnyBreedMatch = false;
         let hasAnyDateMatch = false;
-        
         for (let j = i + 1; j < allAnimals.length; j++) {
           if (usedIds.has(allAnimals[j].id)) continue;
           
@@ -5270,7 +5208,6 @@ Crawl-delay: 1
             usedIds.add(b.id);
           }
         }
-        
         if (matches.length > 0) {
           usedIds.add(allAnimals[i].id);
           const allMatches = [allAnimals[i], ...matches];
@@ -5356,7 +5293,6 @@ Crawl-delay: 1
             eq(animals.tenantId, tenantId),
             eq(animals.microchipNumber, microchipValue)
           ));
-        
         results.microchipMatches = microchipResults.map(a => ({
           ...a,
           matchType: 'microchip_exact' as const
@@ -5366,7 +5302,6 @@ Crawl-delay: 1
       // Name fuzzy search (case-insensitive prefix/contains)
       if (name && typeof name === 'string' && name.trim().length >= 2) {
         const nameValue = name.trim().toLowerCase();
-        
         // Get all animals for fuzzy matching
         const allAnimals = await db.select({
           id: animals.id,
@@ -5587,7 +5522,6 @@ Crawl-delay: 1
         if (Object.keys(updateData).length > 0) {
           await tx.update(animals).set(updateData).where(eq(animals.id, primaryAnimalId));
         }
-        
         // Mark secondary as merged - CRITICAL: must be atomic with primary update
         await tx.update(animals)
           .set({ status: 'merged', mergedWithId: primaryAnimalId })
@@ -5626,10 +5560,8 @@ Crawl-delay: 1
             .set({ animalId: primaryAnimalId })
             .where(eq(adoptions.animalId, secondaryAnimalId)),
         ]);
-        
         // Extract results by index (0-5 have row counts we care about)
         const [examResult, prescriptionResult, billsResult, filesResult, notesResult, appsResult] = results;
-        
         reassignedMedicalRecords = (Number(examResult.rowCount) || 0) + 
           (Number(prescriptionResult.rowCount) || 0) + 
           (Number(billsResult.rowCount) || 0) + 
@@ -5638,7 +5570,6 @@ Crawl-delay: 1
         reassignedApplications = Number(appsResult.rowCount) || 0;
           
         console.log(`[MERGE] Related records reassigned in ${Date.now() - mergeStartTime}ms`);
-        
         // Fetch updated primary animal BEFORE audit trail (critical for response)
         // Using explicit field selection for dynamic import compatibility
         const [result] = await db.select({
@@ -5659,9 +5590,7 @@ Crawl-delay: 1
           tenantId: animals.tenantId,
         }).from(animals).where(eq(animals.id, primaryAnimalId));
         updatedPrimary = result;
-        
         console.log(`[MERGE] Complete in ${Date.now() - mergeStartTime}ms`);
-        
         // STEP 3: Create audit trail - FIRE AND FORGET (non-blocking)
         // These are important but not critical for the merge operation
         Promise.all([
@@ -5693,7 +5622,6 @@ Crawl-delay: 1
         ]).catch(auditError => {
           console.error('[MERGE] Audit trail creation failed (non-critical):', auditError);
         });
-        
       } catch (postMergeError) {
         // COMPENSATING ROLLBACK: Restore secondary animal status if post-merge steps fail
         console.error('[MERGE] Post-merge steps failed, attempting rollback:', postMergeError);
@@ -6102,10 +6030,8 @@ Crawl-delay: 1
             invalidUrls: photoValidation.invalidUrls
           });
         }
-        
         const objectStorageService = new ObjectStorageService();
         const normalizedPhotoUrls = [];
-        
         for (const photoUrl of data.photoUrls) {
           const normalizedPath = await objectStorageService.trySetObjectEntityAclPolicy(
             photoUrl,
@@ -6116,7 +6042,6 @@ Crawl-delay: 1
           );
           normalizedPhotoUrls.push(normalizedPath);
         }
-        
         data.photoUrls = normalizedPhotoUrls;
       }
       
@@ -6211,10 +6136,8 @@ Crawl-delay: 1
             invalidUrls: photoValidation.invalidUrls
           });
         }
-        
         const objectStorageService = new ObjectStorageService();
         const normalizedPhotoUrls = [];
-        
         for (const photoUrl of data.photoUrls) {
           const normalizedPath = await objectStorageService.trySetObjectEntityAclPolicy(
             photoUrl,
@@ -6225,7 +6148,6 @@ Crawl-delay: 1
           );
           normalizedPhotoUrls.push(normalizedPath);
         }
-        
         data.photoUrls = normalizedPhotoUrls;
       }
       
@@ -6242,7 +6164,6 @@ Crawl-delay: 1
         if (data.status) changes.push(`status to "${data.status}"`);
         if (data.weight) changes.push(`weight to ${data.weight}`);
         if (data.name) changes.push(`name to "${data.name}"`);
-        
         await logActivity({
           tenantId: req.tenant!.id,
           userId: req.session.userId,
@@ -6865,7 +6786,6 @@ Crawl-delay: 1
       for (let i = data.startNumber; i <= data.endNumber; i++) {
         const name = data.pattern.replace('{number}', i.toString());
         const displayOrder = data.startDisplayOrder + (i - data.startNumber);
-        
         kennelsToInsert.push({
           tenantId: req.tenant!.id,
           name,
@@ -6998,7 +6918,6 @@ Crawl-delay: 1
             )
           )
           .returning();
-        
         if (updated) {
           updatedKennels.push(updated);
         }
@@ -7048,7 +6967,6 @@ Crawl-delay: 1
       const updatedKennels = [];
       for (const { id, rowLabel, kennelNumber } of updates) {
         const updateData: any = { updatedAt: new Date() };
-        
         if (rowLabel !== undefined) {
           updateData.rowLabel = rowLabel;
         }
@@ -7066,7 +6984,6 @@ Crawl-delay: 1
             )
           )
           .returning();
-        
         if (updated) {
           updatedKennels.push(updated);
         }
@@ -7615,11 +7532,9 @@ Crawl-delay: 1
         // Using static imports from top of file for production reliability
         const conditions = [eq(applications.tenantId, req.tenant!.id)];
         conditions.push(eq(applications.animalId, animalId));
-        
         if (stage && typeof stage === 'string') {
           conditions.push(eq(applications.stage, stage as any));
         }
-        
         const applicationsList = await db
           .select({
             id: applications.id,
@@ -7636,18 +7551,15 @@ Crawl-delay: 1
           })
           .from(applications)
           .where(and(...conditions));
-        
         // Add animal name to each application
         const animalsData = await db.select({ id: animals.id, name: animals.name })
           .from(animals)
           .where(eq(animals.tenantId, req.tenant!.id));
         const animalsMap = new Map(animalsData.map(a => [a.id, a.name]));
-        
         const applicationsWithAnimal = applicationsList.map(app => ({
           ...app,
           animalName: app.animalId ? animalsMap.get(app.animalId) || null : null,
         }));
-        
         return res.json({ applications: applicationsWithAnimal });
       }
       
@@ -7857,7 +7769,6 @@ Crawl-delay: 1
             message: 'A contract template must be selected to send an agreement' 
           });
         }
-        
         parsedTemplateId = parseInt(contractTemplateId, 10);
         if (isNaN(parsedTemplateId) || parsedTemplateId <= 0) {
           return res.status(400).json({ 
@@ -7887,11 +7798,9 @@ Crawl-delay: 1
           grantId: grantId || undefined,
           contractTemplateId: parsedTemplateId,
         });
-        
         checkoutSession = sessionResult.session;
         // Use the token returned by createCheckoutSession - it matches the stored hash
         const token = sessionResult.token;
-        
         // Update session status to awaiting_signature
         await db
           .update(adoptionCheckoutSessions)
@@ -7900,10 +7809,8 @@ Crawl-delay: 1
             updatedAt: new Date(),
           })
           .where(eq(adoptionCheckoutSessions.id, checkoutSession.id));
-        
         // Send the checkout link email
         await sendCheckoutLink(checkoutSession.id, token, 'email');
-        
         contractSent = true;
       }
       
@@ -7955,7 +7862,6 @@ Crawl-delay: 1
             eq(grants.tenantId, req.tenant!.id)
           ))
           .limit(1);
-        
         if (!grant) {
           return res.status(400).json({ error: 'Grant not found or does not belong to this organization' });
         }
@@ -8215,7 +8121,6 @@ Crawl-delay: 1
           .from(adoptionContractTemplates)
           .where(eq(adoptionContractTemplates.id, session.contractTemplateId))
           .limit(1);
-        
         if (template) {
           // Replace merge fields with actual data
           const mergeFieldValues: Record<string, string> = {
@@ -8626,7 +8531,6 @@ Crawl-delay: 1
           .from(fosterContractTemplates)
           .where(eq(fosterContractTemplates.id, session.templateId))
           .limit(1);
-        
         if (template) {
           // Replace merge fields with actual data
           const mergeFieldValues: Record<string, string> = {
@@ -8735,7 +8639,6 @@ Crawl-delay: 1
           .from(fosterContractTemplates)
           .where(eq(fosterContractTemplates.id, session.templateId))
           .limit(1);
-        
         if (template) {
           const [tenant] = await db
             .select({ name: tenants.name })
@@ -8844,17 +8747,14 @@ Crawl-delay: 1
           .from(tenants)
           .where(eq(tenants.id, session.tenantId))
           .limit(1);
-        
         const emailService = await EmailService.forTenant(session.tenantId);
         const signedDate = new Date().toLocaleString();
-        
         // Sanitize user-provided data for email HTML
         const safeName = escapeHtml(signatureData.signerName);
         const safeEmail = escapeHtml(signatureData.signerEmail);
         const safePhone = escapeHtml(session.fosterPhone || 'Not provided');
         const safeTenantName = escapeHtml(tenant?.name || 'Animal Rescue Organization');
         const safeIp = escapeHtml(req.ip || 'Not recorded');
-        
         // Build the signed agreement HTML with embedded signature
         const signedAgreementHtml = `
           <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; border: 1px solid #ddd;">
@@ -8883,7 +8783,6 @@ Crawl-delay: 1
             </div>
           </div>
         `;
-        
         // Send confirmation email to foster applicant with signed agreement
         await emailService.send({
           to: signatureData.signerEmail,
@@ -8906,9 +8805,7 @@ Crawl-delay: 1
             </div>
           `,
         });
-        
         console.log(`[Foster Agreement] Sent confirmation to foster: ${signatureData.signerEmail}`);
-        
         // Send notification to rescue organization's contact email
         if (tenant?.contactEmail) {
           await emailService.send({
@@ -11349,7 +11246,6 @@ ${renderedHtml}
             eq(donors.tenantId, req.tenant!.id),
             eq(donors.email, data.donorEmail)
           ));
-        
         if (!existingDonor) {
           [existingDonor] = await db.insert(donors)
             .values({
@@ -11420,7 +11316,6 @@ ${renderedHtml}
         const activityDescription = isInKind
           ? `recorded in-kind donation from ${data.donorName}: ${data.description?.substring(0, 50)}${(data.description?.length || 0) > 50 ? '...' : ''}`
           : `recorded $${data.amount?.toFixed(2)} ${data.donationType} donation from ${data.donorName}`;
-        
         await logActivity({
           tenantId: req.tenant!.id,
           userId: req.user!.id,
@@ -12526,7 +12421,6 @@ ${renderedHtml}
 
           const mode = (req.body.mode || 'skip') as 'skip' | 'update';
           const csvContent = req.file.buffer.toString('utf-8');
-        
           const results = Papa.default.parse(csvContent, {
             header: true,
             skipEmptyLines: true,
@@ -13494,7 +13388,6 @@ Submitted: ${new Date().toLocaleString()}
             )
           ))
           .limit(1);
-        
         if (!volunteerPermission) {
           return res.status(403).json({ error: 'Access denied' });
         }
@@ -13522,29 +13415,26 @@ Submitted: ${new Date().toLocaleString()}
       
       const [application] = await db
         .select({
-        id: fosterApplications.id,
-        tenantId: fosterApplications.tenantId,
-        applicantName: fosterApplications.applicantName,
-        applicantEmail: fosterApplications.applicantEmail,
-        applicantPhone: fosterApplications.applicantPhone,
-        address: fosterApplications.address,
-        housingType: fosterApplications.housingType,
-        hasYard: fosterApplications.hasYard,
-        hasOtherPets: fosterApplications.hasOtherPets,
-        otherPetsDetails: fosterApplications.otherPetsDetails,
-        experience: fosterApplications.experience,
-        availability: fosterApplications.availability,
-        preferences: fosterApplications.preferences,
-        vetReference: fosterApplications.vetReference,
-        personalReference: fosterApplications.personalReference,
-        status: fosterApplications.status,
-        pipelineStatus: fosterApplications.pipelineStatus,
-        notes: fosterApplications.notes,
-        customResponses: fosterApplications.customResponses,
-        smsConsent: fosterApplications.smsConsent,
-        driveFolderId: fosterApplications.driveFolderId,
-        createdAt: fosterApplications.createdAt,
-        updatedAt: fosterApplications.updatedAt,
+        id: volunteerApplications.id,
+        tenantId: volunteerApplications.tenantId,
+        applicantName: volunteerApplications.applicantName,
+        applicantEmail: volunteerApplications.applicantEmail,
+        applicantPhone: volunteerApplications.applicantPhone,
+        address: volunteerApplications.address,
+        experience: volunteerApplications.experience,
+        availability: volunteerApplications.availability,
+        interests: volunteerApplications.interests,
+        skills: volunteerApplications.skills,
+        emergencyContactName: volunteerApplications.emergencyContactName,
+        emergencyContactPhone: volunteerApplications.emergencyContactPhone,
+        status: volunteerApplications.status,
+        pipelineStatus: volunteerApplications.pipelineStatus,
+        notes: volunteerApplications.notes,
+        customResponses: volunteerApplications.customResponses,
+        smsConsent: volunteerApplications.smsConsent,
+        driveFolderId: volunteerApplications.driveFolderId,
+        createdAt: volunteerApplications.createdAt,
+        updatedAt: volunteerApplications.updatedAt,
       })
         .from(volunteerApplications)
         .where(
@@ -15220,7 +15110,6 @@ Submitted: ${new Date().toLocaleString()}
               lt(medicalReminders.scheduledDate, tomorrow)
             )
           );
-        
         // Transform reminders to tasks
         tasks = reminders.map(r => {
           const animal = myFosterAnimals.find(a => a.animalId === r.animalId);
@@ -15893,7 +15782,6 @@ Submitted: ${new Date().toLocaleString()}
       try {
         const { EmailService } = await import('./lib/email-service');
         const { users, animals } = await import('@shared/schema');
-        
         // HTML escape function to prevent injection
         const escapeHtml = (text: string) => {
           return text
@@ -15903,7 +15791,6 @@ Submitted: ${new Date().toLocaleString()}
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#039;');
         };
-        
         // Get admin/staff emails
         const staffUsers = await db
           .select({ email: users.email, fullName: users.fullName })
@@ -16032,11 +15919,9 @@ Submitted: ${new Date().toLocaleString()}
           eq(fosterUpdates.tenantId, req.tenant!.id),
           eq(fosterUpdates.fosterId, req.user!.id),
         ];
-        
         if (animalIdFilter) {
           conditions.push(eq(fosterUpdates.animalId, animalIdFilter));
         }
-        
         updates = await db
           .select({
             id: fosterUpdates.id,
@@ -16063,11 +15948,9 @@ Submitted: ${new Date().toLocaleString()}
       } else {
         // Staff/admin see all updates
         const conditions = [eq(fosterUpdates.tenantId, req.tenant!.id)];
-        
         if (animalIdFilter) {
           conditions.push(eq(fosterUpdates.animalId, animalIdFilter));
         }
-        
         updates = await db
           .select({
             id: fosterUpdates.id,
@@ -16217,7 +16100,6 @@ Submitted: ${new Date().toLocaleString()}
       try {
         const { EmailService } = await import('./lib/email-service');
         const { users, animals } = await import('@shared/schema');
-        
         // HTML escape function to prevent injection
         const escapeHtml = (text: string) => {
           return text
@@ -16227,7 +16109,6 @@ Submitted: ${new Date().toLocaleString()}
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#039;');
         };
-        
         // Get admin/staff emails
         const staffUsers = await db
           .select({ email: users.email, fullName: users.fullName })
@@ -16588,7 +16469,6 @@ Submitted: ${new Date().toLocaleString()}
           category: 'adoption',
           metadata: { animalId: validatedData.animalId, adopterName: validatedData.adopterName }
         });
-        
         // Sync final medical records before archiving (non-blocking)
         try {
           const { syncAnimalMedicalRecords } = await import('./lib/animalBackupService');
@@ -16597,7 +16477,6 @@ Submitted: ${new Date().toLocaleString()}
         } catch (syncError) {
           console.error('[MEDICAL BACKUP] Failed to initiate sync before archive:', syncError);
         }
-        
         // Move animal folder to archive in Google Drive (if configured, non-blocking)
         try {
           const { TenantFileStorage } = await import('./lib/tenantFileStorage');
@@ -18611,7 +18490,6 @@ Submitted: ${new Date().toLocaleString()}
       try {
         // Check CNAME record
         const cnameRecords = await dns.resolveCname(customDomain).catch(() => null);
-        
         if (cnameRecords && cnameRecords.includes(expectedSubdomain)) {
           // CNAME is correctly configured
           await db
@@ -18808,7 +18686,6 @@ Submitted: ${new Date().toLocaleString()}
       
       try {
         const account = await stripeClient.accounts.retrieve(tenant.stripeConnectedAccountId);
-        
         // Update stripeEnabled based on actual charges_enabled status
         // This ensures donations are only enabled when Stripe says they're ready
         if (account.charges_enabled && !tenant.stripeEnabled) {
@@ -18822,7 +18699,6 @@ Submitted: ${new Date().toLocaleString()}
             .set({ stripeEnabled: false })
             .where(eq(tenants.id, req.tenant!.id));
         }
-        
         res.json({
           connected: true,
           chargesEnabled: account.charges_enabled,
@@ -19100,7 +18976,6 @@ Submitted: ${new Date().toLocaleString()}
           .from(tenants)
           .where(eq(tenants.id, tenantIdFromState))
           .limit(1);
-        
         if (tenant) {
           return res.redirect(`/${tenant.subdomain}/dashboard/settings?stripe_error=${encodeURIComponent(error.message)}`);
         }
@@ -19605,7 +19480,6 @@ Submitted: ${new Date().toLocaleString()}
           .where(eq(subscriptions.stripeSubscriptionId, subscriptionId))
           .limit(1)
           .then(rows => rows[0]);
-        
         if (subscription) {
           tenantId = subscription.tenantId;
         }
@@ -20629,7 +20503,6 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
       if (integration?.googleFeatures?.useGmail) {
         // Get saved sender addresses
         const senderAddresses = integration.googleFeatures.senderAddresses || [];
-        
         // Get default sender - first try senderAddresses default, then fall back to legacy fields
         const defaultAddress = senderAddresses.find(a => a.isDefault);
         const senderEmail = defaultAddress?.email || 
@@ -20639,7 +20512,6 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
                           integration.googleFeatures.senderName || 
                           tenant.resendFromName || 
                           tenant.name;
-        
         if (senderEmail) {
           return res.json({
             provider: 'gmail',
@@ -20908,7 +20780,6 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
         // Use template
         const { getTemplateById, replaceTemplateVariables } = await import('./lib/email-templates');
         const template = getTemplateById(data.templateId);
-        
         if (!template) {
           return res.status(400).json({ error: 'Invalid template ID' });
         }
@@ -21446,7 +21317,6 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
       if (isUsingGmail) {
         const gmailQuota = await emailService.checkGmailQuota(subscribers.length);
         console.log(`[Newsletter Send] Gmail quota check: ${gmailQuota.used}/${EmailService.getDailyLimit()} used, ${gmailQuota.remaining} remaining, need ${subscribers.length}`);
-        
         // Check if we would exceed the daily limit
         if (gmailQuota.wouldExceed) {
           // Reset campaign status to draft
@@ -21469,13 +21339,11 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
             message: `You've sent ${gmailQuota.used} emails in the last 24 hours. Gmail allows ${EmailService.getDailyLimit()} per day. You need to send ${subscribers.length} emails but only have ${gmailQuota.remaining} quota remaining. Consider scheduling this campaign in batches or waiting until your quota resets.`
           });
         }
-        
         // Warn if approaching limit (>80% used)
         const usagePercent = (gmailQuota.used / EmailService.getDailyLimit()) * 100;
         if (usagePercent > 80) {
           console.log(`[Newsletter Send] ⚠️ Gmail quota at ${usagePercent.toFixed(1)}% - approaching daily limit`);
         }
-        
         // Recommend batching for large campaigns
         if (EmailService.shouldBatchCampaign(subscribers.length)) {
           console.log(`[Newsletter Send] ℹ️ Large campaign (${subscribers.length} recipients) - batch scheduling recommended`);
@@ -21924,7 +21792,6 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
       
       for (const animal of allAnimals) {
         if (!animal.photoUrls || animal.photoUrls.length === 0) continue;
-        
         for (const photoUrl of animal.photoUrls) {
           try {
             // Only process new-format URLs with tenant ID
@@ -22001,7 +21868,6 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
             eq(calendarPermissions.userId, req.user!.id),
             eq(calendarPermissions.tenantId, req.tenant!.id)
           ));
-        
         // Get role-based permissions for all user's roles with all capability flags
         const rolePermissions = await db
           .select({
@@ -22016,10 +21882,8 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
             eq(calendarRolePermissions.tenantId, req.tenant!.id),
             sql`${calendarRolePermissions.role} = ANY(${sql.raw(`ARRAY[${req.user!.roles.map(r => `'${r}'`).join(',')}]::text[]`)})`
           ));
-        
         // Build permission map - merge user and role permissions (user permissions take precedence, then OR with role permissions)
         const permissionMap = new Map<string, { canEdit: boolean; canAdd: boolean; canDelete: boolean; canAssignOthers: boolean }>();
-        
         // First add role permissions
         for (const perm of rolePermissions) {
           const existing = permissionMap.get(perm.calendarId);
@@ -22039,7 +21903,6 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
             });
           }
         }
-        
         // Then add/merge user-specific permissions (these override/supplement role permissions)
         for (const perm of userPermissions) {
           const existing = permissionMap.get(perm.calendarId);
@@ -22059,7 +21922,6 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
             });
           }
         }
-        
         // Return calendars with granular permission info
         const calendarsWithPermissions = allCalendars.map(cal => {
           const perms = permissionMap.get(cal.id);
@@ -22071,7 +21933,6 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
             canAssignOthers: perms?.canAssignOthers ?? false,
           };
         });
-        
         return res.json({ calendars: calendarsWithPermissions });
       }
 
@@ -22484,7 +22345,6 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
       if (validatedData.includeMeetLink) {
         const { CalendarService } = await import('./lib/googleWorkspace');
         const calendarService = await CalendarService.forTenant(req.tenant!.id);
-        
         if (!calendarService) {
           return res.status(400).json({ 
             error: 'Google Workspace not connected',
@@ -22519,7 +22379,6 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
       if (req.user!.activeRole !== 'admin') {
         // Check if user has permission to add events (either user-specific or role-based)
         const { calendarRolePermissions } = await import('@shared/schema');
-        
         // Check user-specific permission for adding events
         const [userPermission] = await db
           .select()
@@ -22605,7 +22464,6 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
             eq(platformIntegrations.isEnabled, true)
           ))
           .limit(1);
-        
         googleIntegration = integration;
         shouldSyncToGoogle = integration?.googleFeatures?.syncCalendar === true;
       }
@@ -22615,7 +22473,6 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
       if (shouldSyncToGoogle) {
         const { CalendarService } = await import('./lib/googleWorkspace');
         const calendarService = await CalendarService.forTenant(req.tenant!.id);
-        
         if (calendarService) {
           // Set sync status to pending
           await db
@@ -24674,7 +24531,6 @@ Email: ${application.applicantEmail || ''}`
             eq(grants.tenantId, req.tenant!.id)
           ))
           .limit(1);
-        
         if (!grant) {
           return res.status(400).json({ 
             error: 'Invalid grant',
@@ -25603,7 +25459,6 @@ Email: ${application.applicantEmail || ''}`
       const animalsWithChecklist = intakeAnimals.map(animal => {
         const examCount = examCounts.find(e => e.animalId === animal.id)?.count || 0;
         const vaccineCount = vaccineCounts.find(v => v.animalId === animal.id)?.count || 0;
-        
         return {
           ...animal,
           checklist: {
@@ -25897,7 +25752,6 @@ Email: ${application.applicantEmail || ''}`
           .from(preventativeCareTypes)
           .where(eq(preventativeCareTypes.id, data.careTypeId))
           .limit(1);
-        
         if (careType) {
           intervalDays = careType.defaultIntervalDays;
         }
@@ -26745,7 +26599,6 @@ Email: ${application.applicantEmail || ''}`
             eq(grants.tenantId, req.tenant!.id)
           ))
           .limit(1);
-        
         if (!grant) {
           return res.status(400).json({ 
             error: 'Invalid grant',
@@ -27251,7 +27104,6 @@ Email: ${application.applicantEmail || ''}`
         }
 
         const { title, description, category } = req.body;
-        
         if (!title || !category) {
           return res.status(400).json({ error: 'Title and category are required' });
         }
@@ -28935,7 +28787,6 @@ Email: ${application.applicantEmail || ''}`
           .where(eq(volunteerSignups.userId, req.user.id));
 
         const signupIds = new Set(userSignups.map(s => s.opportunityId));
-        
         const opportunitiesWithSignup = opportunities.map(opp => ({
           ...opp,
           signedUp: signupIds.has(opp.id),
@@ -29353,7 +29204,6 @@ The user asking is a tenant administrator or staff member.`;
       // Send email notification to platform admins
       try {
         const { EmailService } = await import('./lib/email-service');
-        
         // HTML escape function to prevent injection
         const escapeHtml = (text: string) => {
           return text
@@ -29363,16 +29213,13 @@ The user asking is a tenant administrator or staff member.`;
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#039;');
         };
-        
         // Get platform email address from environment or use default
         const platformEmail = process.env.PLATFORM_ADMIN_EMAIL || 'platform@irescue.life';
-        
         const typeLabel = data.type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
         const isUrgent = data.priority === 'urgent' || data.priority === 'high';
         const subject = isUrgent 
           ? `🚨 ${data.priority.toUpperCase()}: ${escapeHtml(data.subject)}`
           : `Platform Feedback: ${escapeHtml(data.subject)}`;
-        
         const html = `
           ${isUrgent ? '<div style="background-color: #fee; border-left: 4px solid #f00; padding: 15px; margin-bottom: 20px;"><strong>⚠️ HIGH PRIORITY FEEDBACK</strong></div>' : ''}
           
@@ -29395,7 +29242,6 @@ The user asking is a tenant administrator or staff member.`;
           
           <p>Please review this feedback in the platform admin panel or respond directly to the submitter.</p>
         `;
-        
         // Use platform email service directly (not tenant-specific)
         const emailService = new EmailService(process.env.PLATFORM_RESEND_API_KEY || '');
         await emailService.send({
