@@ -858,7 +858,7 @@ export default function ApplicationDetailSheet({
                 const label = field?.label || fieldId;
                 const fieldType = field?.fieldType || 'text';
                 
-                if (fieldType === 'photo' && typeof value === 'string' && value.startsWith('http')) {
+                if (fieldType === 'photo' && typeof value === 'string' && (value.startsWith('http') || value.startsWith('/objects/') || value.startsWith('objects/'))) {
                   return (
                     <div key={fieldId} className="mb-3">
                       <p className="text-sm font-medium text-muted-foreground">{label}</p>
@@ -999,7 +999,7 @@ export default function ApplicationDetailSheet({
                 const label = field?.label || fieldId;
                 const fieldType = field?.fieldType || 'text';
                 
-                if (fieldType === 'photo' && typeof value === 'string' && value.startsWith('http')) {
+                if (fieldType === 'photo' && typeof value === 'string' && (value.startsWith('http') || value.startsWith('/objects/') || value.startsWith('objects/'))) {
                   return (
                     <div key={fieldId} className="mb-3">
                       <p className="text-sm font-medium text-muted-foreground">{label}</p>
