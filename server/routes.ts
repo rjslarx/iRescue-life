@@ -9730,7 +9730,7 @@ Crawl-delay: 1
       let animal = null;
       if (form.formType === 'animal_specific' && submission.animalId) {
         const [animalRecord] = await db
-          .select()
+          .select({ id: animals.id, name: animals.name, species: animals.species, breed: animals.breed, photoUrls: animals.photoUrls })
           .from(animals)
           .where(eq(animals.id, submission.animalId))
           .limit(1);
@@ -9811,7 +9811,7 @@ Crawl-delay: 1
       let animal = null;
       if (form.formType === 'animal_specific' && submission.animalId) {
         const [animalRecord] = await db
-          .select()
+          .select({ id: animals.id, name: animals.name, species: animals.species, breed: animals.breed, photoUrls: animals.photoUrls })
           .from(animals)
           .where(eq(animals.id, submission.animalId))
           .limit(1);
@@ -15650,7 +15650,7 @@ Submitted: ${new Date().toLocaleString()}
       
       // Get the animal
       const [animal] = await db
-        .select()
+        .select({ id: animals.id, tenantId: animals.tenantId, name: animals.name, species: animals.species, breed: animals.breed, status: animals.status, photoUrls: animals.photoUrls, microchipNumber: animals.microchipNumber, weight: animals.weight, weightUnit: animals.weightUnit })
         .from(animals)
         .where(
           and(
@@ -17329,7 +17329,7 @@ Submitted: ${new Date().toLocaleString()}
 
       // Get current animal
       const [animal] = await db
-        .select()
+        .select({ id: animals.id, tenantId: animals.tenantId, name: animals.name, flyerUrls: animals.flyerUrls })
         .from(animals)
         .where(and(
           eq(animals.id, animalId),
@@ -21548,7 +21548,7 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
 
       // Fetch required data using captured tenantId
       const allAnimals = await db
-        .select()
+        .select({ id: animals.id, tenantId: animals.tenantId, name: animals.name, species: animals.species, breed: animals.breed, status: animals.status, photoUrls: animals.photoUrls, updatedAt: animals.updatedAt })
         .from(animals)
         .where(eq(animals.tenantId, tenantId));
 
@@ -24215,7 +24215,7 @@ Email: ${application.applicantEmail || ''}`
 
       // Check if animal exists
       const [animal] = await db
-        .select()
+        .select({ id: animals.id, tenantId: animals.tenantId, name: animals.name, microchipNumber: animals.microchipNumber })
         .from(animals)
         .where(and(
           eq(animals.id, req.params.animalId),
