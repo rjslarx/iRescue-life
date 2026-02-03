@@ -77,6 +77,7 @@ interface FosterApplication {
   notes?: string;
   smsConsent?: boolean;
   createdAt: string;
+  customResponses?: Record<string, any>;
 }
 
 interface VolunteerApplication {
@@ -94,6 +95,7 @@ interface VolunteerApplication {
   notes?: string;
   smsConsent?: boolean;
   createdAt: string;
+  customResponses?: Record<string, any>;
 }
 
 interface SurrenderRequest {
@@ -366,6 +368,7 @@ export default function PipelineManager({ activeTab, onTabChange, permissions }:
           notes: app.notes,
           smsConsent: app.smsConsent,
           createdAt: app.createdAt,
+          customResponses: app.customResponses,
         };
       }
     } else if (type === "volunteer") {
@@ -386,6 +389,7 @@ export default function PipelineManager({ activeTab, onTabChange, permissions }:
           notes: app.notes,
           smsConsent: app.smsConsent,
           createdAt: app.createdAt,
+          customResponses: app.customResponses,
         };
       }
     } else if (type === "intake") {
