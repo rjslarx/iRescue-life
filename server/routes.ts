@@ -3608,8 +3608,7 @@ Crawl-delay: 1
           not(inArray(animals.status, ['adopted', 'deceased', 'transferred']))
         ));
 
-      // 4. Get calendar events for today and tomorrow (excluding simplified volunteer mode calendars)
-      const { or: orOp, isNull } = await import('drizzle-orm');
+      // 4. Get calendar events for today through day-after-tomorrow (timezone buffer)
       const calendarData = await db
         .select({
           id: calendarEvents.id,
@@ -3620,23 +3619,18 @@ Crawl-delay: 1
           location: calendarEvents.location,
         })
         .from(calendarEvents)
-        .innerJoin(calendars, eq(calendarEvents.calendarId, calendars.id))
         .where(and(
           eq(calendarEvents.tenantId, req.tenant!.id),
           gte(calendarEvents.startTime, todayStart),
-          lte(calendarEvents.startTime, tomorrowEnd),
-          // Exclude simplified volunteer mode calendars
-          orOp(
-            eq(calendars.simplifiedVolunteerMode, false),
-            isNull(calendars.simplifiedVolunteerMode)
-          )
+          lte(calendarEvents.startTime, extendedEnd)
         ));
 
+      // Filter calendar events - use extended range for "tomorrow" to account for timezone offset
       const calendarToday = calendarData.filter(c => 
         c.startTime && new Date(c.startTime) <= todayEnd
       );
       const calendarTomorrow = calendarData.filter(c => 
-        c.startTime && new Date(c.startTime) > todayEnd
+        c.startTime && new Date(c.startTime) > todayEnd && new Date(c.startTime) <= extendedEnd
       );
 
       res.json({
