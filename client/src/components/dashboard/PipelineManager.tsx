@@ -116,6 +116,8 @@ interface SurrenderRequest {
   notes?: string;
   smsConsent?: boolean;
   createdAt: string;
+  customResponses?: Record<string, any>;
+  photoUrl?: string;
 }
 
 const adoptionStages = ["new", "screening", "vet_check", "home_visit", "approved", "trial"] as const;
@@ -409,6 +411,8 @@ export default function PipelineManager({ activeTab, onTabChange, permissions }:
           notes: app.notes,
           smsConsent: app.smsConsent,
           createdAt: app.createdAt,
+          customResponses: app.customResponses,
+          photoUrl: app.photoUrl,
         };
       }
     }
