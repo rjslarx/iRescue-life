@@ -2711,7 +2711,7 @@ Crawl-delay: 1
         }).from(users).where(
           and(
             eq(users.tenantId, req.tenant!.id),
-            sql`'volunteer' = ANY(${users.roles})`
+            sql`(${users.roles} && ARRAY['volunteer', 'admin', 'owner', 'staff']::text[])`
           )
         ),
         // Previous month animals in care (those that existed and were in care)
@@ -4519,7 +4519,8 @@ Crawl-delay: 1
 
   /**
    * GET /api/users/volunteers
-   * List all users with volunteer role for calendar assignment
+   * List all users who can be assigned to volunteer calendar shifts
+   * Includes users with volunteer, admin, owner, or staff roles
    */
   app.get('/api/users/volunteers', requireTenant, requireAuth, async (req, res, next) => {
     try {
@@ -4537,7 +4538,7 @@ Crawl-delay: 1
         .where(
           and(
             eq(users.tenantId, req.tenant!.id),
-            sql`'volunteer' = ANY(${users.roles})`
+            sql`(${users.roles} && ARRAY['volunteer', 'admin', 'owner', 'staff']::text[])`
           )
         )
         .orderBy(users.fullName);
