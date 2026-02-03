@@ -257,7 +257,14 @@ export async function syncAllUsersToContacts(tenantId: string) {
   const { users } = await import('@shared/schema');
   
   const userList = await db
-    .select()
+    .select({
+      id: users.id,
+      tenantId: users.tenantId,
+      email: users.email,
+      fullName: users.fullName,
+      roles: users.roles,
+      isActive: users.isActive,
+    })
     .from(users)
     .where(and(
       eq(users.tenantId, tenantId),

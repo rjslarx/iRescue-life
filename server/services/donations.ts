@@ -71,7 +71,10 @@ export async function createExpenditure(tenantId: string, data: Omit<InsertExpen
   if (data.grantId) {
     const { grants } = await import('@shared/schema');
     const [grant] = await db
-      .select()
+      .select({
+        id: grants.id,
+        tenantId: grants.tenantId,
+      })
       .from(grants)
       .where(and(
         eq(grants.id, data.grantId),

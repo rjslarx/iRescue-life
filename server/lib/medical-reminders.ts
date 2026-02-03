@@ -691,10 +691,23 @@ export async function getPreventativeCareReminders(tenantId: string, daysAhead: 
   futureDate.setHours(23, 59, 59, 999);
 
   // Get all preventative care records with next due date within range or overdue
+  // Using explicit field selection for dynamic imports to avoid orderSelectedFields errors
   const records = await db
     .select({
-      record: preventativeCareRecords,
-      type: preventativeCareTypes,
+      record: {
+        id: preventativeCareRecords.id,
+        animalId: preventativeCareRecords.animalId,
+        careTypeId: preventativeCareRecords.careTypeId,
+        careName: preventativeCareRecords.careName,
+        careCategory: preventativeCareRecords.careCategory,
+        nextDueDate: preventativeCareRecords.nextDueDate,
+      },
+      type: {
+        id: preventativeCareTypes.id,
+        name: preventativeCareTypes.name,
+        category: preventativeCareTypes.category,
+        isCore: preventativeCareTypes.isCore,
+      },
       animal: {
         id: animalsTable.id,
         name: animalsTable.name,
