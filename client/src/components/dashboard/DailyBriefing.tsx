@@ -116,15 +116,15 @@ export function DailyBriefing() {
     (!data?.today.calendar || data.today.calendar.length === 0);
 
   return (
-    <Card className="h-full flex flex-col" data-testid="card-daily-briefing">
+    <Card className="max-h-[500px] flex flex-col" data-testid="card-daily-briefing">
       <CardHeader className="pb-2 flex-shrink-0">
         <CardTitle className="text-base flex items-center gap-2">
           <Calendar className="h-4 w-4" />
           Daily Briefing
         </CardTitle>
       </CardHeader>
-      <CardContent className="flex-1 overflow-hidden p-0">
-        <ScrollArea className="h-full px-4 pb-4">
+      <CardContent className="flex-1 min-h-0 overflow-hidden p-0">
+        <ScrollArea className="h-full max-h-[420px] px-4 pb-4">
           {isEmpty ? (
             <div className="text-center py-8 text-muted-foreground">
               <Calendar className="h-8 w-8 mx-auto mb-2 opacity-50" />

@@ -3609,7 +3609,7 @@ Crawl-delay: 1
         ));
 
       // 4. Get calendar events for today through day-after-tomorrow (timezone buffer)
-      // Exclude events from calendars that have simplifiedVolunteerMode enabled in themeSettings
+      // Exclude events from calendars that have simplifiedVolunteerMode enabled in eventFormSettings
       const { or: orOp, isNull, sql: sqlOp } = await import('drizzle-orm');
       const calendarData = await db
         .select({
@@ -3628,8 +3628,8 @@ Crawl-delay: 1
           lte(calendarEvents.startTime, extendedEnd),
           // Exclude simplified volunteer mode calendars using JSON field check
           orOp(
-            isNull(calendars.themeSettings),
-            sqlOp`(${calendars.themeSettings}->>'simplifiedVolunteerMode')::boolean IS NOT TRUE`
+            isNull(calendars.eventFormSettings),
+            sqlOp`(${calendars.eventFormSettings}->>'simplifiedVolunteerMode')::boolean IS NOT TRUE`
           )
         ));
 
