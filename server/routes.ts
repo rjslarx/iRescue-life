@@ -1401,7 +1401,16 @@ Crawl-delay: 1
 
       // Find user in platform tenant
       const [user] = await db
-        .select()
+        .select({
+          id: users.id,
+          email: users.email,
+          fullName: users.fullName,
+          passwordHash: users.passwordHash,
+          roles: users.roles,
+          isActive: users.isActive,
+          tenantId: users.tenantId,
+          mfaEnabled: users.mfaEnabled,
+        })
         .from(users)
         .where(and(
           eq(users.email, credentials.email),
@@ -1513,7 +1522,7 @@ Crawl-delay: 1
       
       // Find platform tenant
       const [platformTenant] = await db
-        .select()
+        .select({ id: tenants.id })
         .from(tenants)
         .where(eq(tenants.subdomain, 'platform'))
         .limit(1);
@@ -1525,7 +1534,12 @@ Crawl-delay: 1
 
       // Find user by email in platform tenant
       const [user] = await db
-        .select()
+        .select({
+          id: users.id,
+          email: users.email,
+          fullName: users.fullName,
+          tenantId: users.tenantId,
+        })
         .from(users)
         .where(and(
           eq(users.email, email),
@@ -1666,7 +1680,7 @@ Crawl-delay: 1
       
       // Find platform tenant
       const [platformTenant] = await db
-        .select()
+        .select({ id: tenants.id })
         .from(tenants)
         .where(eq(tenants.subdomain, 'platform'))
         .limit(1);
@@ -1680,7 +1694,13 @@ Crawl-delay: 1
 
       // Find and validate token
       const [resetToken] = await db
-        .select()
+        .select({
+          id: passwordResetTokens.id,
+          token: passwordResetTokens.token,
+          userId: passwordResetTokens.userId,
+          expiresAt: passwordResetTokens.expiresAt,
+          tenantId: passwordResetTokens.tenantId,
+        })
         .from(passwordResetTokens)
         .where(and(
           eq(passwordResetTokens.token, token),
@@ -1693,7 +1713,10 @@ Crawl-delay: 1
       if (!resetToken) {
         // Debug: check if token exists without tenant filter
         const [anyToken] = await db
-          .select()
+          .select({
+            id: passwordResetTokens.id,
+            tenantId: passwordResetTokens.tenantId,
+          })
           .from(passwordResetTokens)
           .where(eq(passwordResetTokens.token, token))
           .limit(1);
@@ -11688,7 +11711,17 @@ ${renderedHtml}
       const { donors } = await import('@shared/schema');
       
       const donorList = await db
-        .select()
+        .select({
+          id: donors.id,
+          tenantId: donors.tenantId,
+          stripeCustomerId: donors.stripeCustomerId,
+          email: donors.email,
+          name: donors.name,
+          phone: donors.phone,
+          totalDonated: donors.totalDonated,
+          lastDonationDate: donors.lastDonationDate,
+          createdAt: donors.createdAt,
+        })
         .from(donors)
         .where(eq(donors.tenantId, req.tenant!.id))
         .orderBy(desc(donors.lastDonationDate));
@@ -11712,7 +11745,24 @@ ${renderedHtml}
       const { grants } = await import('@shared/schema');
       
       const grantList = await db
-        .select()
+        .select({
+          id: grants.id,
+          tenantId: grants.tenantId,
+          funderName: grants.funderName,
+          programName: grants.programName,
+          funderWebsite: grants.funderWebsite,
+          status: grants.status,
+          applicationDeadline: grants.applicationDeadline,
+          amountRequested: grants.amountRequested,
+          amountAwarded: grants.amountAwarded,
+          awardDate: grants.awardDate,
+          finalReportDeadline: grants.finalReportDeadline,
+          finalReportSubmitted: grants.finalReportSubmitted,
+          programArea: grants.programArea,
+          notes: grants.notes,
+          createdAt: grants.createdAt,
+          updatedAt: grants.updatedAt,
+        })
         .from(grants)
         .where(eq(grants.tenantId, req.tenant!.id))
         .orderBy(desc(grants.createdAt));
@@ -12035,7 +12085,17 @@ ${renderedHtml}
       
       // Get regular expenditures
       const expenses = await db
-        .select()
+        .select({
+          id: expenditures.id,
+          tenantId: expenditures.tenantId,
+          vendor: expenditures.vendor,
+          amount: expenditures.amount,
+          category: expenditures.category,
+          date: expenditures.date,
+          notes: expenditures.notes,
+          grantId: expenditures.grantId,
+          createdAt: expenditures.createdAt,
+        })
         .from(expenditures)
         .where(and(
           eq(expenditures.tenantId, req.tenant!.id),
@@ -12141,7 +12201,23 @@ ${renderedHtml}
       
       // Fetch all awarded grants for this tenant
       const awardedGrants = await db
-        .select()
+        .select({
+          id: grants.id,
+          tenantId: grants.tenantId,
+          name: grants.name,
+          funder: grants.funder,
+          amount: grants.amount,
+          status: grants.status,
+          dueDate: grants.dueDate,
+          awardDate: grants.awardDate,
+          fundingPeriodStart: grants.fundingPeriodStart,
+          fundingPeriodEnd: grants.fundingPeriodEnd,
+          description: grants.description,
+          requirements: grants.requirements,
+          notes: grants.notes,
+          createdAt: grants.createdAt,
+          updatedAt: grants.updatedAt,
+        })
         .from(grants)
         .where(and(
           eq(grants.tenantId, req.tenant!.id),
@@ -12154,7 +12230,17 @@ ${renderedHtml}
         awardedGrants.map(async (grant) => {
           // Fetch regular expenditures for this grant
           const grantExpenditures = await db
-            .select()
+            .select({
+              id: expenditures.id,
+              tenantId: expenditures.tenantId,
+              vendor: expenditures.vendor,
+              amount: expenditures.amount,
+              category: expenditures.category,
+              date: expenditures.date,
+              notes: expenditures.notes,
+              grantId: expenditures.grantId,
+              createdAt: expenditures.createdAt,
+            })
             .from(expenditures)
             .where(and(
               eq(expenditures.tenantId, req.tenant!.id),
@@ -12346,7 +12432,19 @@ ${renderedHtml}
       
       // Get the document first to get the file URL
       const [document] = await db
-        .select()
+        .select({
+          id: grantDocuments.id,
+          tenantId: grantDocuments.tenantId,
+          grantId: grantDocuments.grantId,
+          documentType: grantDocuments.documentType,
+          title: grantDocuments.title,
+          fileUrl: grantDocuments.fileUrl,
+          fileName: grantDocuments.fileName,
+          fileSize: grantDocuments.fileSize,
+          uploadedBy: grantDocuments.uploadedBy,
+          notes: grantDocuments.notes,
+          createdAt: grantDocuments.createdAt,
+        })
         .from(grantDocuments)
         .where(and(
           eq(grantDocuments.id, req.params.id),
@@ -12705,7 +12803,18 @@ ${renderedHtml}
       );
 
       let query = db
-        .select()
+        .select({
+          id: happyTails.id,
+          tenantId: happyTails.tenantId,
+          animalId: happyTails.animalId,
+          animalName: happyTails.animalName,
+          adopterName: happyTails.adopterName,
+          story: happyTails.story,
+          photoUrl: happyTails.photoUrl,
+          date: happyTails.date,
+          isPublished: happyTails.isPublished,
+          createdAt: happyTails.createdAt,
+        })
         .from(happyTails)
         .where(eq(happyTails.tenantId, req.tenant!.id));
 
@@ -14918,7 +15027,30 @@ Submitted: ${new Date().toLocaleString()}
       const { animalSurrenders } = await import('@shared/schema');
       
       const surrenders = await db
-        .select()
+        .select({
+          id: animalSurrenders.id,
+          tenantId: animalSurrenders.tenantId,
+          submitterName: animalSurrenders.submitterName,
+          submitterEmail: animalSurrenders.submitterEmail,
+          submitterPhone: animalSurrenders.submitterPhone,
+          address: animalSurrenders.address,
+          animalName: animalSurrenders.animalName,
+          species: animalSurrenders.species,
+          breed: animalSurrenders.breed,
+          age: animalSurrenders.age,
+          sex: animalSurrenders.sex,
+          spayedNeutered: animalSurrenders.spayedNeutered,
+          medicalHistory: animalSurrenders.medicalHistory,
+          behaviorNotes: animalSurrenders.behaviorNotes,
+          reasonForSurrender: animalSurrenders.reasonForSurrender,
+          isEmergency: animalSurrenders.isEmergency,
+          status: animalSurrenders.status,
+          notes: animalSurrenders.notes,
+          customResponses: animalSurrenders.customResponses,
+          smsConsent: animalSurrenders.smsConsent,
+          createdAt: animalSurrenders.createdAt,
+          updatedAt: animalSurrenders.updatedAt,
+        })
         .from(animalSurrenders)
         .where(eq(animalSurrenders.tenantId, req.tenant!.id))
         .orderBy(desc(animalSurrenders.createdAt));
@@ -16809,7 +16941,21 @@ Submitted: ${new Date().toLocaleString()}
       const { rescueContacts } = await import('@shared/schema');
       
       const contacts = await db
-        .select()
+        .select({
+          id: rescueContacts.id,
+          tenantId: rescueContacts.tenantId,
+          contactType: rescueContacts.contactType,
+          name: rescueContacts.name,
+          role: rescueContacts.role,
+          phone: rescueContacts.phone,
+          email: rescueContacts.email,
+          availability: rescueContacts.availability,
+          notes: rescueContacts.notes,
+          displayOrder: rescueContacts.displayOrder,
+          isActive: rescueContacts.isActive,
+          createdAt: rescueContacts.createdAt,
+          updatedAt: rescueContacts.updatedAt,
+        })
         .from(rescueContacts)
         .where(
           and(
@@ -27579,7 +27725,23 @@ Email: ${application.applicantEmail || ''}`
       const { slug } = req.params;
 
       const [page] = await db
-        .select()
+        .select({
+          id: customPages.id,
+          tenantId: customPages.tenantId,
+          title: customPages.title,
+          slug: customPages.slug,
+          excerpt: customPages.excerpt,
+          contentMarkdown: customPages.contentMarkdown,
+          contentBlocks: customPages.contentBlocks,
+          useBlockEditor: customPages.useBlockEditor,
+          isPublished: customPages.isPublished,
+          showInNavigation: customPages.showInNavigation,
+          publishedAt: customPages.publishedAt,
+          createdBy: customPages.createdBy,
+          updatedBy: customPages.updatedBy,
+          createdAt: customPages.createdAt,
+          updatedAt: customPages.updatedAt,
+        })
         .from(customPages)
         .where(
           req.user
@@ -28131,7 +28293,16 @@ Email: ${application.applicantEmail || ''}`
       const { supplyCategories } = await import('@shared/schema');
       
       const categories = await db
-        .select()
+        .select({
+          id: supplyCategories.id,
+          tenantId: supplyCategories.tenantId,
+          name: supplyCategories.name,
+          description: supplyCategories.description,
+          icon: supplyCategories.icon,
+          displayOrder: supplyCategories.displayOrder,
+          isActive: supplyCategories.isActive,
+          createdAt: supplyCategories.createdAt,
+        })
         .from(supplyCategories)
         .where(and(
           eq(supplyCategories.tenantId, req.tenant!.id),
@@ -29592,7 +29763,20 @@ The user asking is a tenant administrator or staff member.`;
       const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
       
       const logs = await db
-        .select()
+        .select({
+          id: medicalReminderLogs.id,
+          tenantId: medicalReminderLogs.tenantId,
+          reminderId: medicalReminderLogs.reminderId,
+          recipientEmail: medicalReminderLogs.recipientEmail,
+          recipientName: medicalReminderLogs.recipientName,
+          recipientRole: medicalReminderLogs.recipientRole,
+          emailType: medicalReminderLogs.emailType,
+          subject: medicalReminderLogs.subject,
+          sentAt: medicalReminderLogs.sentAt,
+          messageId: medicalReminderLogs.messageId,
+          status: medicalReminderLogs.status,
+          errorMessage: medicalReminderLogs.errorMessage,
+        })
         .from(medicalReminderLogs)
         .where(eq(medicalReminderLogs.tenantId, req.tenant!.id))
         .orderBy(desc(medicalReminderLogs.sentAt))
