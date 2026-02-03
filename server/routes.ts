@@ -3483,6 +3483,10 @@ Crawl-delay: 1
       const { gte, lte } = await import('drizzle-orm');
       
       // Calculate date ranges
+      // Note: Server runs in UTC, but dates are displayed in user's local time.
+      // To account for timezone offset (US timezones are up to 8 hours behind UTC),
+      // we extend the query range by 1 extra day. A surgery stored as "Feb 6 00:00 UTC"
+      // would appear as "Feb 5 6PM" in CST. The frontend uses local time for display.
       const now = new Date();
       const todayStart = new Date(now);
       todayStart.setHours(0, 0, 0, 0);
@@ -3492,8 +3496,12 @@ Crawl-delay: 1
       tomorrowStart.setDate(tomorrowStart.getDate() + 1);
       const tomorrowEnd = new Date(todayEnd);
       tomorrowEnd.setDate(tomorrowEnd.getDate() + 1);
+      
+      // Extended end date to account for timezone offset (up to +1 day for US timezones)
+      const extendedEnd = new Date(tomorrowEnd);
+      extendedEnd.setDate(extendedEnd.getDate() + 1);
 
-      // 1. Get surgeries scheduled for today and tomorrow
+      // 1. Get surgeries scheduled for today through day-after-tomorrow (timezone buffer)
       const surgeriesData = await db
         .select({
           id: animals.id,
@@ -3509,17 +3517,18 @@ Crawl-delay: 1
           eq(animals.tenantId, req.tenant!.id),
           isNotNull(animals.scheduledSurgeryDate),
           gte(animals.scheduledSurgeryDate, todayStart),
-          lte(animals.scheduledSurgeryDate, tomorrowEnd)
+          lte(animals.scheduledSurgeryDate, extendedEnd)
         ));
 
+      // Filter surgeries - use extended range for "tomorrow" to account for timezone offset
       const surgeriesToday = surgeriesData.filter(s => 
         s.scheduledSurgeryDate && new Date(s.scheduledSurgeryDate) <= todayEnd
       );
       const surgeriesTomorrow = surgeriesData.filter(s => 
-        s.scheduledSurgeryDate && new Date(s.scheduledSurgeryDate) > todayEnd
+        s.scheduledSurgeryDate && new Date(s.scheduledSurgeryDate) > todayEnd && new Date(s.scheduledSurgeryDate) <= extendedEnd
       );
 
-      // 2. Get transports for today and tomorrow
+      // 2. Get transports for today through day-after-tomorrow (timezone buffer)
       const transportsData = await db
         .select({
           id: transportEvents.id,
@@ -3538,17 +3547,18 @@ Crawl-delay: 1
           not(eq(transportEvents.status, 'cancelled')),
           isNotNull(transportEvents.departureDate),
           gte(transportEvents.departureDate, todayStart),
-          lte(transportEvents.departureDate, tomorrowEnd)
+          lte(transportEvents.departureDate, extendedEnd)
         ));
 
+      // Filter transports - use extended range for "tomorrow" to account for timezone offset
       const transportsToday = transportsData.filter(t => 
         t.departureDate && new Date(t.departureDate) <= todayEnd
       );
       const transportsTomorrow = transportsData.filter(t => 
-        t.departureDate && new Date(t.departureDate) > todayEnd
+        t.departureDate && new Date(t.departureDate) > todayEnd && new Date(t.departureDate) <= extendedEnd
       );
 
-      // 3. Get preventative care items due today and tomorrow
+      // 3. Get preventative care items due today through day-after-tomorrow (timezone buffer)
       const medicalTasksData = await db
         .select({
           id: preventativeCareRecords.id,
@@ -3565,15 +3575,16 @@ Crawl-delay: 1
           eq(preventativeCareRecords.tenantId, req.tenant!.id),
           isNotNull(preventativeCareRecords.nextDueDate),
           gte(preventativeCareRecords.nextDueDate, todayStart),
-          lte(preventativeCareRecords.nextDueDate, tomorrowEnd),
+          lte(preventativeCareRecords.nextDueDate, extendedEnd),
           not(inArray(animals.status, ['adopted', 'deceased', 'transferred']))
         ));
 
+      // Filter medical tasks - use extended range for "tomorrow" to account for timezone offset
       const medicalToday = medicalTasksData.filter(m => 
         m.nextDueDate && new Date(m.nextDueDate) <= todayEnd
       );
       const medicalTomorrow = medicalTasksData.filter(m => 
-        m.nextDueDate && new Date(m.nextDueDate) > todayEnd
+        m.nextDueDate && new Date(m.nextDueDate) > todayEnd && new Date(m.nextDueDate) <= extendedEnd
       );
 
       // Also get overdue items (due before today's start, not including midnight today)
