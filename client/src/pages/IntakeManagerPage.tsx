@@ -892,6 +892,12 @@ function SurrenderDetailsDialog({ request, open, onOpenChange, formFields }: Sur
   const [declineDialogOpen, setDeclineDialogOpen] = useState(false);
   const [declineReason, setDeclineReason] = useState<string>("");
   
+  // Debug logging for custom responses
+  console.log('[DEBUG SurrenderDetailsDialog] request:', request?.dogName);
+  console.log('[DEBUG SurrenderDetailsDialog] customResponses:', request?.customResponses);
+  console.log('[DEBUG SurrenderDetailsDialog] customResponses type:', typeof request?.customResponses);
+  console.log('[DEBUG SurrenderDetailsDialog] formFields count:', formFields?.length);
+  
   const promoteMutation = useMutation({
     mutationFn: async (id: string) => {
       const response = await apiRequest("POST", `/api/surrender/${id}/promote`);
