@@ -854,7 +854,7 @@ export default function ApplicationDetailSheet({
               <div className="border-t pt-2 mt-2" />
               <p className="text-sm font-medium text-muted-foreground mb-2">Additional Responses</p>
               {Object.entries(intakeData.customResponses).map(([fieldId, value]) => {
-                const field = formFields.find(f => f.id === fieldId);
+                const field = allFields.find(f => f.id === fieldId);
                 const label = field?.label || fieldId;
                 const fieldType = field?.fieldType || 'text';
                 
@@ -929,7 +929,7 @@ export default function ApplicationDetailSheet({
               <div className="border-t pt-2 mt-2" />
               <p className="text-sm font-medium text-muted-foreground">Additional Questions</p>
               {Object.entries(fosterData.customResponses).map(([key, answer]) => {
-                const field = formFields.find(f => f.id === key);
+                const field = allFields.find(f => f.id === key);
                 const fieldType = field?.fieldType || 'text';
                 const label = field?.label || formatFieldLabel(key);
                 
@@ -995,7 +995,7 @@ export default function ApplicationDetailSheet({
               <div className="border-t pt-2 mt-2" />
               <p className="text-sm font-medium text-muted-foreground mb-2">Additional Responses</p>
               {Object.entries(volunteerData.customResponses).map(([fieldId, value]) => {
-                const field = formFields.find(f => f.id === fieldId);
+                const field = allFields.find(f => f.id === fieldId);
                 const label = field?.label || fieldId;
                 const fieldType = field?.fieldType || 'text';
                 
