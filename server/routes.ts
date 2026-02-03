@@ -30519,6 +30519,41 @@ The user asking is a tenant administrator or staff member.`;
     }
   });
 
+  /**
+   * DELETE /api/event-tickets/:id
+   * Deactivate an event ticket (soft delete)
+   */
+  app.delete('/api/event-tickets/:id', requireTenant, requireAuth, requireRole('admin', 'owner', 'board_member', 'staff'), async (req, res, next) => {
+    try {
+      const { eventTickets } = await import('@shared/schema');
+      const { id } = req.params;
+
+      // Verify event exists and belongs to tenant
+      const [ticket] = await db
+        .select({ id: eventTickets.id })
+        .from(eventTickets)
+        .where(and(
+          eq(eventTickets.id, id),
+          eq(eventTickets.tenantId, req.tenant!.id)
+        ))
+        .limit(1);
+
+      if (!ticket) {
+        return res.status(404).json({ error: 'Event ticket not found' });
+      }
+
+      // Soft delete by setting isActive to false
+      await db
+        .update(eventTickets)
+        .set({ isActive: false })
+        .where(eq(eventTickets.id, id));
+
+      res.json({ success: true, message: 'Event ticket deactivated' });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   // ===== DONATION LINKS =====
 
   /**

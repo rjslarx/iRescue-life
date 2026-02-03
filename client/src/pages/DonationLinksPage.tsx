@@ -72,6 +72,20 @@ export default function DonationLinksPage() {
     queryKey: ["/api/donation-links", tenantId],
   });
 
+  // Fetch event tickets
+  interface EventTicket {
+    id: string;
+    eventName: string;
+    pricePerTicket: number;
+    isRecurring: boolean;
+    isActive: boolean;
+    createdAt: string;
+  }
+  
+  const { data: eventTicketsData, isLoading: eventTicketsLoading } = useQuery<{ eventTickets: EventTicket[] }>({
+    queryKey: ["/api/event-tickets", tenantId],
+  });
+
   const createMutation = useMutation({
     mutationFn: async (data: CreateLinkFormData) => {
       const payload = {
@@ -219,6 +233,52 @@ export default function DonationLinksPage() {
       });
     },
   });
+
+  // Delete event ticket mutation
+  const deleteEventTicketMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest("DELETE", `/api/event-tickets/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/event-tickets"] });
+      toast({ title: "Event ticket deactivated" });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to deactivate event ticket",
+        description: error.message || "Please try again",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Download QR code for an existing event ticket
+  const [downloadingQrId, setDownloadingQrId] = useState<string | null>(null);
+  
+  const downloadEventQr = async (ticketId: string, eventName: string) => {
+    try {
+      setDownloadingQrId(ticketId);
+      const response = await apiRequest("POST", `/api/event-tickets/${ticketId}/generate-qr`, {});
+      if (!response.ok) throw new Error("Failed to generate QR code");
+      const data = await response.json();
+      
+      // Download the QR code
+      const link = document.createElement('a');
+      link.download = `${eventName.replace(/\s+/g, '-')}-QR.png`;
+      link.href = data.qrCodeDataUrl;
+      link.click();
+      
+      toast({ title: "QR code downloaded!" });
+    } catch (error: any) {
+      toast({
+        title: "Failed to download QR code",
+        description: error.message || "Please try again",
+        variant: "destructive",
+      });
+    } finally {
+      setDownloadingQrId(null);
+    }
+  };
 
   const copyToClipboard = (url: string) => {
     navigator.clipboard.writeText(url);
@@ -868,6 +928,73 @@ export default function DonationLinksPage() {
                               data-testid={`button-delete-link-${link.id}`}
                             >
                               <Trash2 className="h-3 w-3 text-destructive" />
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Event Tickets Section */}
+              {(eventTicketsData?.eventTickets?.length ?? 0) > 0 && (
+                <div className="space-y-4 mt-8">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-lg font-semibold flex items-center gap-2">
+                      <QrCode className="h-5 w-5" />
+                      Event QR Codes
+                    </h2>
+                    <Badge variant="secondary">{eventTicketsData?.eventTickets?.length} events</Badge>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {eventTicketsData?.eventTickets?.map((ticket) => (
+                      <Card key={ticket.id} data-testid={`card-event-ticket-${ticket.id}`}>
+                        <CardHeader className="pb-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              <CardTitle className="text-base truncate">{ticket.eventName}</CardTitle>
+                              <CardDescription className="mt-1">
+                                ${(ticket.pricePerTicket / 100).toFixed(2)}
+                                {ticket.isRecurring && " / month"}
+                              </CardDescription>
+                            </div>
+                            <Badge variant="outline" className="shrink-0">
+                              <QrCode className="h-3 w-3 mr-1" />
+                              Event
+                            </Badge>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="pt-0">
+                          <div className="text-xs text-muted-foreground mb-3">
+                            Created: {new Date(ticket.createdAt).toLocaleDateString()}
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="flex-1"
+                              onClick={() => downloadEventQr(ticket.id, ticket.eventName)}
+                              disabled={downloadingQrId === ticket.id}
+                              data-testid={`button-download-qr-${ticket.id}`}
+                            >
+                              {downloadingQrId === ticket.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <>
+                                  <Download className="h-4 w-4 mr-1" />
+                                  QR
+                                </>
+                              )}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => deleteEventTicketMutation.mutate(ticket.id)}
+                              disabled={deleteEventTicketMutation.isPending}
+                              data-testid={`button-delete-event-ticket-${ticket.id}`}
+                            >
+                              <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
                         </CardContent>
