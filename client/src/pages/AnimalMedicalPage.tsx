@@ -1530,30 +1530,13 @@ export default function AnimalMedicalPage() {
           <TabsContent value="documents" className="space-y-4">
             <div className="flex justify-between items-center flex-wrap gap-2">
               <h3 className="text-lg font-semibold">Medical Documents</h3>
-              <div className="flex items-center gap-2">
-                {isDriveEnabled && (
-                  <Button
-                    variant="outline"
-                    onClick={() => openDrivePicker()}
-                    disabled={isPickerLoading || attachDriveFileMutation.isPending}
-                    data-testid="button-upload-to-drive"
-                  >
-                    {isPickerLoading || attachDriveFileMutation.isPending ? (
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    ) : (
-                      <Upload className="h-4 w-4 mr-2" />
-                    )}
-                    Upload to Google Drive
-                  </Button>
-                )}
-                <Button
-                  onClick={() => setDocumentDialogOpen(true)}
-                  data-testid="button-upload-document"
-                >
-                  <Upload className="h-4 w-4 mr-2" />
-                  Upload Document
-                </Button>
-              </div>
+              <Button
+                onClick={() => setDocumentDialogOpen(true)}
+                data-testid="button-upload-document"
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                Upload Document
+              </Button>
             </div>
 
             {/* Google Drive Files Section */}
