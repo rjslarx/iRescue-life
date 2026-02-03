@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict xmKWKviFqFldo9Nh1RlRz72zYWk8OZksMdrWwYogcT1ZUfpP9DcJey8pq0G7nCM
+\restrict oqrP3zf94vz5Llqc9WfnCgqmfuM8Rd5zFKMLDSb9t6IoxWmpatjFWnU7eEZSuXf
 
 -- Dumped from database version 16.11 (df20cf9)
 -- Dumped by pg_dump version 16.10
@@ -5292,6 +5292,10 @@ c0095b0e-81ef-44e5-92a4-b7023a6ee74f	8e34d17d-d8d1-4616-8f63-f3edc01f5139	99e3f9
 291db3b6-3f59-4367-9175-918c12205d66	8e34d17d-d8d1-4616-8f63-f3edc01f5139	99e3f9c5-52ff-44f3-8691-c7bf1ce8474d	User	99e3f9c5-52ff-44f3-8691-c7bf1ce8474d	login	logged in as admin	user	{"role": "admin"}	2026-02-03 04:17:56.072825
 fb7cd9c7-cce8-4c6b-b5ea-888a3d410035	8e34d17d-d8d1-4616-8f63-f3edc01f5139	99e3f9c5-52ff-44f3-8691-c7bf1ce8474d	User	99e3f9c5-52ff-44f3-8691-c7bf1ce8474d	login	logged in as admin	user	{"role": "admin"}	2026-02-03 04:22:17.966688
 197d2b12-06c1-4147-9eab-2eb7d86e1a59	8e34d17d-d8d1-4616-8f63-f3edc01f5139	99e3f9c5-52ff-44f3-8691-c7bf1ce8474d	User	99e3f9c5-52ff-44f3-8691-c7bf1ce8474d	login	logged in as admin	user	{"role": "admin"}	2026-02-03 04:27:01.914939
+749f0b0d-ac8c-4055-ac23-216cae8cfb33	3a4c2321-6a54-41a4-acf3-a7f2ffe0c051	c9f80047-4456-426b-9ee8-d1b15f7301b9	User	c9f80047-4456-426b-9ee8-d1b15f7301b9	login	logged in as admin	user	{"role": "admin"}	2026-02-03 05:47:31.5603
+f85e9929-9083-4753-ab6a-daeed2780a30	3a4c2321-6a54-41a4-acf3-a7f2ffe0c051	c9f80047-4456-426b-9ee8-d1b15f7301b9	User	c9f80047-4456-426b-9ee8-d1b15f7301b9	login	logged in as admin	user	{"role": "admin"}	2026-02-03 05:48:19.578332
+079dda3a-a454-4295-88ce-58adcad5bcf7	8e34d17d-d8d1-4616-8f63-f3edc01f5139	99e3f9c5-52ff-44f3-8691-c7bf1ce8474d	User	99e3f9c5-52ff-44f3-8691-c7bf1ce8474d	login	logged in as admin	user	{"role": "admin"}	2026-02-03 05:53:26.749382
+76e23458-32bd-4821-ae3f-09d8c8f36b7e	3a4c2321-6a54-41a4-acf3-a7f2ffe0c051	c9f80047-4456-426b-9ee8-d1b15f7301b9	User	c9f80047-4456-426b-9ee8-d1b15f7301b9	login	logged in as admin	user	{"role": "admin"}	2026-02-03 06:19:47.132747
 \.
 
 
@@ -6473,6 +6477,7 @@ af947301-6192-474a-b39e-696dff9ace6b	3a4c2321-6a54-41a4-acf3-a7f2ffe0c051	kevinm
 72fa86df-aa54-4953-96c6-77630abe3c3d	3a4c2321-6a54-41a4-acf3-a7f2ffe0c051	Sarahcruth@icloud.com	1	19c2158d42c461c1	other	2026-02-03 02:33:15.654857
 57960577-880a-44ea-8d22-59c84d057873	3a4c2321-6a54-41a4-acf3-a7f2ffe0c051	Achaillot@yahoo.com	1	19c2166f6972a622	other	2026-02-03 02:48:42.139531
 ae860617-e4bd-4107-abb6-a491b60526d0	3a4c2321-6a54-41a4-acf3-a7f2ffe0c051	Marie.Boudreaux@yahoo.com	1	19c2172c4fcadeae	other	2026-02-03 03:01:35.559157
+40edb964-975d-4ee3-8831-8dcca53094ed	3a4c2321-6a54-41a4-acf3-a7f2ffe0c051	allissamarie02@gmail.com	1	19c22051428dbfb2	other	2026-02-03 05:41:24.529995
 \.
 
 
@@ -8558,7 +8563,7 @@ COPY public.platform_feedback (id, tenant_id, user_id, type, subject, message, p
 --
 
 COPY public.platform_integrations (id, tenant_id, platform, is_enabled, client_id_encrypted, client_secret_encrypted, access_token_encrypted, refresh_token_encrypted, token_expires_at, organization_id, google_features, auto_sync, sync_frequency, last_sync_at, last_sync_status, last_sync_error, total_synced, total_errors, created_at, updated_at, ftp_host, ftp_username_encrypted, ftp_password_encrypted, ftp_path) FROM stdin;
-bd3cd1e4-8000-43b5-bfcb-ae0f7e079408	3a4c2321-6a54-41a4-acf3-a7f2ffe0c051	google_workspace	t	\N	\N	c9c7db686fee87d9b642472e1c56af0f:f0f03d00b0d4bc1f4bc2ad92f23677e2:c8f2c0f9c410ba94cb8826793f1746bbabd757a2217ac3605499e14a2beae26b3ce1840858ee02cea9df235fceb0e3f424c56574514e49b02d473d3edc9648fab511a9621128ca91ecd760a2b5600e48ba8a90f38a855ac131ac2059eef3604b4f02a50ba669f0a679291eb0d1ff0f20fb67970a5625963b776c428350b9733de3a9b0a7effd26038e541dd826dab7fe25a7cbc5a369aa73c5747329891c681d03347eef2fdfa07cbd677e39137900a1fff91444de84b4fc407baa17ac58b0df9ad5a7e817783f9d344284cfcf38f62c9a607f5951f67d9164e7a8b4a556a6fb021942284f4e6ffd4da2d8b87dd16f811b306ab29b584d0a494e3328486e	30f761c1ba03302749e395abbf7187fb:1222264e4ffe572617188b713f7c85e1:edb2b8431fbcf4ac7d82bfafd3c6fe7b25cf666b8b7496ff960ae3b64a1877d5229a672c7a6a5e3612c074da24815ee1b498901664788b030b887a63270b9841bc47064606c903c7147bb5bf35fcba623d8ab3769ffac60e196c1cff6111ff65dcde242ec2a406	2026-02-03 04:59:59.234	\N	{"useDrive": true, "useGmail": true, "syncCalendar": true, "sharedDriveId": "0AOC8gAlhUHlrUk9PVA", "connectedEmail": "robby@haseyasnewbeginningar.com", "senderAddresses": [{"name": "Haseyas New Beginning Animal Rescue", "email": "news@haseyasnewbeginningar.com", "isDefault": false}, {"name": "Haseyas New Beginning Animal Rescue", "email": "adopt@haseyasnewbeginningar.com", "isDefault": false}, {"name": "Haseyas New Beginning Animal Rescue", "email": "info@haseyasnewbeginningar.com", "isDefault": false}, {"name": "Haseyas New Beginning Animal Rescue", "email": "hello@haseyasnewbeginningar.com", "isDefault": false}, {"name": "Kelli Briscoe", "email": "kelli@haseyasnewbeginningar.com", "isDefault": true}], "sharedDriveName": "Haseyas - irescue"}	f	manual	\N	\N	\N	0	0	2025-12-12 17:43:17.709569	2026-02-03 04:00:00.235	\N	\N	\N	\N
+bd3cd1e4-8000-43b5-bfcb-ae0f7e079408	3a4c2321-6a54-41a4-acf3-a7f2ffe0c051	google_workspace	t	\N	\N	81542e649de787080694f8bcdb959541:d096708385b693ade455442022a50f19:3aa33713dba854f19f58e41e08f571a47206542b998432079b95ffe1d4f29318a54f5d85953be62a8d6748ba85b8252c72432348d55cbaef78d0919e043660625b727324767e87d169826877662837ab7eabef4222bc6148dde721bcead0e0e922c183832b4137f3d23cf08c706f2a937d5d6ba7d291e5ba7fcfbb2aaa89ebfbb7b8efcdf6d3140ce53262b449263ea75d61d053fcdc17a8c83155446378c0b614d24a3c8f7fcbf946dd7cee7cba7894a47e6e4f54ec69e5fbb9897516927ddd97a0216ee3b24d887e9a8fd97460571442ae5db06863a1b7c33f7c4f9d69b578dc1230cf76921da6413463a9cf03e14ddb2b897812a9a4c1ed627dcf88ae	30f761c1ba03302749e395abbf7187fb:1222264e4ffe572617188b713f7c85e1:edb2b8431fbcf4ac7d82bfafd3c6fe7b25cf666b8b7496ff960ae3b64a1877d5229a672c7a6a5e3612c074da24815ee1b498901664788b030b887a63270b9841bc47064606c903c7147bb5bf35fcba623d8ab3769ffac60e196c1cff6111ff65dcde242ec2a406	2026-02-03 06:41:23.219	\N	{"useDrive": true, "useGmail": true, "syncCalendar": true, "sharedDriveId": "0AOC8gAlhUHlrUk9PVA", "connectedEmail": "robby@haseyasnewbeginningar.com", "senderAddresses": [{"name": "Haseyas New Beginning Animal Rescue", "email": "news@haseyasnewbeginningar.com", "isDefault": false}, {"name": "Haseyas New Beginning Animal Rescue", "email": "adopt@haseyasnewbeginningar.com", "isDefault": false}, {"name": "Haseyas New Beginning Animal Rescue", "email": "info@haseyasnewbeginningar.com", "isDefault": false}, {"name": "Haseyas New Beginning Animal Rescue", "email": "hello@haseyasnewbeginningar.com", "isDefault": false}, {"name": "Kelli Briscoe", "email": "kelli@haseyasnewbeginningar.com", "isDefault": true}], "sharedDriveName": "Haseyas - irescue"}	f	manual	\N	\N	\N	0	0	2025-12-12 17:43:17.709569	2026-02-03 05:41:24.219	\N	\N	\N	\N
 \.
 
 
@@ -8684,7 +8689,7 @@ z_scqchA0bx2RehxA5pldu87ddnCAd82	{"cookie":{"originalMaxAge":604800000,"expires"
 _x6dxjBQRnwTI02XOPL7TTaq5ljgfpVP	{"cookie":{"originalMaxAge":604800000,"expires":"2026-02-10T01:23:03.087Z","secure":true,"httpOnly":true,"path":"/","sameSite":"lax"},"userId":"930da696-9f4f-450b-953a-abe3fab28568","tenantId":"3a4c2321-6a54-41a4-acf3-a7f2ffe0c051","activeRole":"staff"}	2026-02-10 01:25:49
 hbtSYdL9zkK5DCtzTs4GPZsRnRa0jv07	{"cookie":{"originalMaxAge":604800000,"expires":"2026-02-10T00:05:22.616Z","secure":true,"httpOnly":true,"path":"/","sameSite":"lax"},"userId":"bf0bd994-6a67-44c7-a01a-1d9e14e0e708","tenantId":"3a4c2321-6a54-41a4-acf3-a7f2ffe0c051","activeRole":"foster"}	2026-02-10 00:05:43
 xCa7J8S-XSLYZ719HoScMJ4o59dLueD9	{"cookie":{"originalMaxAge":604800000,"expires":"2026-02-05T22:42:01.563Z","secure":true,"httpOnly":true,"path":"/","sameSite":"lax"},"userId":"a881704d-8b39-4530-9e7f-eafa0e3cec19","tenantId":"3a4c2321-6a54-41a4-acf3-a7f2ffe0c051","activeRole":"volunteer"}	2026-02-10 03:52:37
-6VGKAjRDs9rDeeLwxR8kBcYX_o2m52Zi	{"cookie":{"originalMaxAge":604800000,"expires":"2026-02-08T03:30:09.562Z","secure":true,"httpOnly":true,"path":"/","sameSite":"lax"},"userId":"c9f80047-4456-426b-9ee8-d1b15f7301b9","tenantId":"3a4c2321-6a54-41a4-acf3-a7f2ffe0c051","activeRole":"admin"}	2026-02-10 05:35:12
+6VGKAjRDs9rDeeLwxR8kBcYX_o2m52Zi	{"cookie":{"originalMaxAge":604800000,"expires":"2026-02-08T03:30:09.562Z","secure":true,"httpOnly":true,"path":"/","sameSite":"lax"},"userId":"c9f80047-4456-426b-9ee8-d1b15f7301b9","tenantId":"3a4c2321-6a54-41a4-acf3-a7f2ffe0c051","activeRole":"admin"}	2026-02-10 06:22:31
 zt0KMGAibmhGer43hixNb1UdPUJXuUYU	{"cookie":{"originalMaxAge":604800000,"expires":"2026-02-01T23:54:58.949Z","secure":true,"httpOnly":true,"path":"/","sameSite":"lax"},"userId":"3e66e46d-f78b-4e72-9ed5-6d6b6442ad85","tenantId":"3a4c2321-6a54-41a4-acf3-a7f2ffe0c051","activeRole":"admin"}	2026-02-07 18:28:57
 jvoYxwMmhgg3n49MrQ-Q9J_Ssf5NmjYL	{"cookie":{"originalMaxAge":604800000,"expires":"2026-02-07T07:33:03.258Z","secure":true,"httpOnly":true,"path":"/","sameSite":"lax"},"userId":"c9f80047-4456-426b-9ee8-d1b15f7301b9","tenantId":"3a4c2321-6a54-41a4-acf3-a7f2ffe0c051","activeRole":"admin"}	2026-02-09 03:23:15
 WSMfIPLKDlvzT4trvmzEE0ILpE212GcM	{"cookie":{"originalMaxAge":604800000,"expires":"2026-01-29T23:46:10.913Z","secure":true,"httpOnly":true,"path":"/","sameSite":"lax"},"userId":"166f4fd6-5659-43e3-b139-4483ec1a81ed","tenantId":"3a4c2321-6a54-41a4-acf3-a7f2ffe0c051","activeRole":"volunteer"}	2026-02-03 19:12:35
@@ -9014,6 +9019,7 @@ b60ba2a1-671d-47ef-84b9-a32633e4fabf	3a4c2321-6a54-41a4-acf3-a7f2ffe0c051	Hebert
 9039c223-058e-4e5c-aaed-2ba63500110a	3a4c2321-6a54-41a4-acf3-a7f2ffe0c051	Sarahcruth@icloud.com	Samantha Cruth	{volunteer}	PCWsyfZRISn9XZ2F	c9f80047-4456-426b-9ee8-d1b15f7301b9	2026-02-10 02:33:15.201	2026-02-03 02:34:56.018	2026-02-03 02:33:15.212663	\N
 e0d57667-2e48-4493-ad9b-f737d2b3471f	3a4c2321-6a54-41a4-acf3-a7f2ffe0c051	Achaillot@yahoo.com	Alex Chaillot	{volunteer}	TWG-HE4oHvqIqdBZ	c9f80047-4456-426b-9ee8-d1b15f7301b9	2026-02-10 02:48:41.537	\N	2026-02-03 02:48:41.549814	5049194882
 cc705531-26b1-470a-bcd5-81fa3e800ea4	3a4c2321-6a54-41a4-acf3-a7f2ffe0c051	Marie.Boudreaux@yahoo.com	Marie Boudreaux	{volunteer}	7dZI8gkY5ppBqipx	c9f80047-4456-426b-9ee8-d1b15f7301b9	2026-02-10 03:01:35.13	\N	2026-02-03 03:01:35.141424	\N
+dd09c12d-fa66-45c8-b1fd-159bd89913b5	3a4c2321-6a54-41a4-acf3-a7f2ffe0c051	allissamarie02@gmail.com	Allissa Marie Lee	{volunteer}	JcWIyua0Y2h2cthO	c9f80047-4456-426b-9ee8-d1b15f7301b9	2026-02-10 05:41:23.883	\N	2026-02-03 05:41:23.89377	337-561-9077
 \.
 
 
@@ -14037,5 +14043,5 @@ ALTER DEFAULT PRIVILEGES FOR ROLE cloud_admin IN SCHEMA public GRANT ALL ON TABL
 -- PostgreSQL database dump complete
 --
 
-\unrestrict xmKWKviFqFldo9Nh1RlRz72zYWk8OZksMdrWwYogcT1ZUfpP9DcJey8pq0G7nCM
+\unrestrict oqrP3zf94vz5Llqc9WfnCgqmfuM8Rd5zFKMLDSb9t6IoxWmpatjFWnU7eEZSuXf
 
