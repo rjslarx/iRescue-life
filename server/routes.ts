@@ -2305,7 +2305,13 @@ Crawl-delay: 1
       
       // Find user by email and tenant
       const [user] = await db
-        .select()
+        .select({
+          id: users.id,
+          email: users.email,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          tenantId: users.tenantId,
+        })
         .from(users)
         .where(and(
           eq(users.email, email),
@@ -2407,7 +2413,13 @@ Crawl-delay: 1
       
       // Find and validate token
       const [resetToken] = await db
-        .select()
+        .select({
+          id: passwordResetTokens.id,
+          userId: passwordResetTokens.userId,
+          tenantId: passwordResetTokens.tenantId,
+          token: passwordResetTokens.token,
+          expiresAt: passwordResetTokens.expiresAt,
+        })
         .from(passwordResetTokens)
         .where(and(
           eq(passwordResetTokens.token, token),
@@ -6713,7 +6725,19 @@ Crawl-delay: 1
       const { eq, asc } = await import('drizzle-orm');
       
       const kennelList = await db
-        .select()
+        .select({
+          id: kennels.id,
+          tenantId: kennels.tenantId,
+          name: kennels.name,
+          rowLabel: kennels.rowLabel,
+          kennelNumber: kennels.kennelNumber,
+          gridRow: kennels.gridRow,
+          gridColumn: kennels.gridColumn,
+          displayOrder: kennels.displayOrder,
+          isActive: kennels.isActive,
+          createdAt: kennels.createdAt,
+          updatedAt: kennels.updatedAt,
+        })
         .from(kennels)
         .where(eq(kennels.tenantId, req.tenant!.id))
         .orderBy(asc(kennels.displayOrder), asc(kennels.name));
@@ -7043,14 +7067,31 @@ Crawl-delay: 1
       
       // Get all buildings for tenant
       const buildings = await db
-        .select()
+        .select({
+          id: kennelBuildings.id,
+          tenantId: kennelBuildings.tenantId,
+          name: kennelBuildings.name,
+          displayOrder: kennelBuildings.displayOrder,
+          createdAt: kennelBuildings.createdAt,
+          updatedAt: kennelBuildings.updatedAt,
+        })
         .from(kennelBuildings)
         .where(eq(kennelBuildings.tenantId, req.tenant!.id))
         .orderBy(asc(kennelBuildings.displayOrder), asc(kennelBuildings.createdAt));
       
       // Get all rows for all buildings
       const rows = await db
-        .select()
+        .select({
+          id: kennelRows.id,
+          tenantId: kennelRows.tenantId,
+          buildingId: kennelRows.buildingId,
+          name: kennelRows.name,
+          capacity: kennelRows.capacity,
+          type: kennelRows.type,
+          displayOrder: kennelRows.displayOrder,
+          createdAt: kennelRows.createdAt,
+          updatedAt: kennelRows.updatedAt,
+        })
         .from(kennelRows)
         .where(eq(kennelRows.tenantId, req.tenant!.id))
         .orderBy(asc(kennelRows.displayOrder), asc(kennelRows.createdAt));
@@ -7855,7 +7896,10 @@ Crawl-delay: 1
       if (data.grantId) {
         const { grants } = await import('@shared/schema');
         const [grant] = await db
-          .select()
+          .select({
+            id: grants.id,
+            tenantId: grants.tenantId,
+          })
           .from(grants)
           .where(and(
             eq(grants.id, data.grantId),
@@ -8065,7 +8109,15 @@ Crawl-delay: 1
 
       // Fetch related data for display
       const [animal] = await db
-        .select()
+        .select({
+          id: animals.id,
+          name: animals.name,
+          species: animals.species,
+          breed: animals.breed,
+          age: animals.age,
+          sex: animals.sex,
+          photoUrls: animals.photoUrls,
+        })
         .from(animals)
         .where(eq(animals.id, session.animalId))
         .limit(1);
@@ -8117,7 +8169,11 @@ Crawl-delay: 1
         const { adoptionContractTemplates } = await import('@shared/schema');
         const DOMPurify = (await import('isomorphic-dompurify')).default;
         const [template] = await db
-          .select()
+          .select({
+            id: adoptionContractTemplates.id,
+            name: adoptionContractTemplates.name,
+            htmlTemplate: adoptionContractTemplates.htmlTemplate,
+          })
           .from(adoptionContractTemplates)
           .where(eq(adoptionContractTemplates.id, session.contractTemplateId))
           .limit(1);
@@ -8445,7 +8501,14 @@ Crawl-delay: 1
 
       // Fetch the contract record
       const [contract] = await db
-        .select()
+        .select({
+          id: adoptionContracts.id,
+          sessionId: adoptionContracts.sessionId,
+          contractPdfUrl: adoptionContracts.contractPdfUrl,
+          signerName: adoptionContracts.signerName,
+          signerEmail: adoptionContracts.signerEmail,
+          signedAt: adoptionContracts.signedAt,
+        })
         .from(adoptionContracts)
         .where(eq(adoptionContracts.sessionId, session.id))
         .limit(1);
@@ -8485,7 +8548,18 @@ Crawl-delay: 1
       const tokenHash = crypto.createHash('sha256').update(req.params.token).digest('hex');
       
       const [session] = await db
-        .select()
+        .select({
+          id: fosterAgreementSessions.id,
+          tenantId: fosterAgreementSessions.tenantId,
+          fosterApplicationId: fosterAgreementSessions.fosterApplicationId,
+          templateId: fosterAgreementSessions.templateId,
+          fosterName: fosterAgreementSessions.fosterName,
+          fosterEmail: fosterAgreementSessions.fosterEmail,
+          fosterPhone: fosterAgreementSessions.fosterPhone,
+          status: fosterAgreementSessions.status,
+          expiresAt: fosterAgreementSessions.expiresAt,
+          signedAt: fosterAgreementSessions.signedAt,
+        })
         .from(fosterAgreementSessions)
         .where(eq(fosterAgreementSessions.secureTokenHash, tokenHash))
         .limit(1);
@@ -8501,7 +8575,10 @@ Crawl-delay: 1
 
       // Fetch related data
       const [fosterApp] = await db
-        .select()
+        .select({
+          id: fosterApplications.id,
+          animalId: fosterApplications.animalId,
+        })
         .from(fosterApplications)
         .where(eq(fosterApplications.id, session.fosterApplicationId))
         .limit(1);
@@ -8509,7 +8586,15 @@ Crawl-delay: 1
       let animal = null;
       if (fosterApp?.animalId) {
         const [animalResult] = await db
-          .select()
+          .select({
+            id: animals.id,
+            name: animals.name,
+            species: animals.species,
+            breed: animals.breed,
+            age: animals.age,
+            sex: animals.sex,
+            photoUrls: animals.photoUrls,
+          })
           .from(animals)
           .where(eq(animals.id, fosterApp.animalId))
           .limit(1);
@@ -8527,7 +8612,11 @@ Crawl-delay: 1
       if (session.templateId) {
         const DOMPurify = (await import('isomorphic-dompurify')).default;
         const [template] = await db
-          .select()
+          .select({
+            id: fosterContractTemplates.id,
+            name: fosterContractTemplates.name,
+            htmlTemplate: fosterContractTemplates.htmlTemplate,
+          })
           .from(fosterContractTemplates)
           .where(eq(fosterContractTemplates.id, session.templateId))
           .limit(1);
@@ -8606,7 +8695,17 @@ Crawl-delay: 1
       const tokenHash = crypto.createHash('sha256').update(req.params.token).digest('hex');
       
       const [session] = await db
-        .select()
+        .select({
+          id: fosterAgreementSessions.id,
+          tenantId: fosterAgreementSessions.tenantId,
+          fosterApplicationId: fosterAgreementSessions.fosterApplicationId,
+          templateId: fosterAgreementSessions.templateId,
+          fosterName: fosterAgreementSessions.fosterName,
+          fosterEmail: fosterAgreementSessions.fosterEmail,
+          fosterPhone: fosterAgreementSessions.fosterPhone,
+          status: fosterAgreementSessions.status,
+          expiresAt: fosterAgreementSessions.expiresAt,
+        })
         .from(fosterAgreementSessions)
         .where(eq(fosterAgreementSessions.secureTokenHash, tokenHash))
         .limit(1);
@@ -8635,7 +8734,10 @@ Crawl-delay: 1
       let renderedContract = '';
       if (session.templateId) {
         const [template] = await db
-          .select()
+          .select({
+            id: fosterContractTemplates.id,
+            htmlTemplate: fosterContractTemplates.htmlTemplate,
+          })
           .from(fosterContractTemplates)
           .where(eq(fosterContractTemplates.id, session.templateId))
           .limit(1);
@@ -8855,7 +8957,21 @@ Crawl-delay: 1
       const { fosterAgreementSessions } = await import('@shared/schema');
       
       const sessions = await db
-        .select()
+        .select({
+          id: fosterAgreementSessions.id,
+          tenantId: fosterAgreementSessions.tenantId,
+          fosterApplicationId: fosterAgreementSessions.fosterApplicationId,
+          templateId: fosterAgreementSessions.templateId,
+          fosterName: fosterAgreementSessions.fosterName,
+          fosterEmail: fosterAgreementSessions.fosterEmail,
+          fosterPhone: fosterAgreementSessions.fosterPhone,
+          status: fosterAgreementSessions.status,
+          expiresAt: fosterAgreementSessions.expiresAt,
+          signedAt: fosterAgreementSessions.signedAt,
+          contractPdfUrl: fosterAgreementSessions.contractPdfUrl,
+          createdAt: fosterAgreementSessions.createdAt,
+          updatedAt: fosterAgreementSessions.updatedAt,
+        })
         .from(fosterAgreementSessions)
         .where(eq(fosterAgreementSessions.tenantId, req.tenant!.id))
         .orderBy(desc(fosterAgreementSessions.createdAt));
@@ -8877,7 +8993,14 @@ Crawl-delay: 1
       const { generateSignedFosterContractUrl } = await import('./services/foster-agreement-pdf');
       
       const [session] = await db
-        .select()
+        .select({
+          id: fosterAgreementSessions.id,
+          status: fosterAgreementSessions.status,
+          signedAt: fosterAgreementSessions.signedAt,
+          fosterName: fosterAgreementSessions.fosterName,
+          fosterEmail: fosterAgreementSessions.fosterEmail,
+          contractPdfUrl: fosterAgreementSessions.contractPdfUrl,
+        })
         .from(fosterAgreementSessions)
         .where(
           and(
