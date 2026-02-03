@@ -7610,7 +7610,7 @@ Crawl-delay: 1
             stage: applications.stage,
             createdAt: applications.createdAt,
             notes: applications.notes,
-            assignedToId: applications.assignedToId,
+            updatedAt: applications.updatedAt,
             customResponses: applications.customResponses,
           })
           .from(applications)

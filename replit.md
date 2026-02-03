@@ -80,6 +80,8 @@ const records = await db.select({
 const records = await db.select().from(preventativeCareRecords);
 ```
 
+**IMPORTANT:** Also ensure all field references in select actually exist in the schema! Referencing non-existent fields like `applications.assignedToId` when that field doesn't exist in the schema causes "Cannot convert undefined or null to object" errors. Always verify field names against shared/schema.ts.
+
 **CRITICAL Wouter Navigation Pattern:**
 When using wouter's `Router` with `base={basePath}`, all `Link href` values and `setLocation()` calls must use **relative paths without the basePath prefix**. The Router's `base` prop automatically prefixes all routes, so adding basePath manually causes double-prefixing and 404 errors.
 
