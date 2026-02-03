@@ -704,7 +704,11 @@ export function registerGoogleWorkspaceRoutes(app: Express) {
 
       // Get all calendars without a Google Calendar ID
       const unsyncedCalendars = await db
-        .select()
+        .select({
+          id: calendars.id,
+          name: calendars.name,
+          description: calendars.description,
+        })
         .from(calendars)
         .where(and(
           eq(calendars.tenantId, req.tenant!.id),
