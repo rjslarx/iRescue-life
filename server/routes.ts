@@ -9866,7 +9866,7 @@ Crawl-delay: 1
           // Find volunteer application matching signer email with waiver_needed status
           // Use case-insensitive email comparison
           const [volunteerApp] = await db
-            .select()
+            .select({ id: volunteerApplications.id, tenantId: volunteerApplications.tenantId, applicantEmail: volunteerApplications.applicantEmail, pipelineStatus: volunteerApplications.pipelineStatus })
             .from(volunteerApplications)
             .where(
               and(
@@ -9953,7 +9953,7 @@ Crawl-delay: 1
           
           // Find foster application matching signer email with 'agreement' status
           const [fosterApp] = await db
-            .select()
+            .select({ id: fosterApplications.id, tenantId: fosterApplications.tenantId, applicantEmail: fosterApplications.applicantEmail, pipelineStatus: fosterApplications.pipelineStatus })
             .from(fosterApplications)
             .where(
               and(
@@ -11868,7 +11868,7 @@ ${renderedHtml}
       
       // Animal Statistics
       const allAnimals = await db
-        .select()
+        .select({ id: animals.id, intakeDate: animals.intakeDate, status: animals.status, adoptionDate: animals.adoptionDate })
         .from(animals)
         .where(eq(animals.tenantId, req.tenant!.id));
       
@@ -12000,7 +12000,7 @@ ${renderedHtml}
       const tagFilter = req.query.tag as string | undefined;
       
       let query = db
-        .select()
+        .select({ id: animals.id, name: animals.name, status: animals.status, storyTags: animals.storyTags, updatedAt: animals.updatedAt, photoUrls: animals.photoUrls, breed: animals.breed, species: animals.species, flaggedForStory: animals.flaggedForStory })
         .from(animals)
         .where(and(
           eq(animals.tenantId, req.tenant!.id),
@@ -13242,7 +13242,7 @@ Submitted: ${new Date().toLocaleString()}
           
           // Find the default foster contract template for this tenant
           const [fosterTemplate] = await db
-            .select()
+            .select({ id: fosterContractTemplates.id, tenantId: fosterContractTemplates.tenantId, name: fosterContractTemplates.name, htmlTemplate: fosterContractTemplates.htmlTemplate, isDefault: fosterContractTemplates.isDefault, isActive: fosterContractTemplates.isActive, guidedSections: fosterContractTemplates.guidedSections })
             .from(fosterContractTemplates)
             .where(
               and(
@@ -13255,7 +13255,7 @@ Submitted: ${new Date().toLocaleString()}
           
           // If no default, try to get any active foster template
           const template = fosterTemplate || (await db
-            .select()
+            .select({ id: fosterContractTemplates.id, tenantId: fosterContractTemplates.tenantId, name: fosterContractTemplates.name, htmlTemplate: fosterContractTemplates.htmlTemplate, isDefault: fosterContractTemplates.isDefault, isActive: fosterContractTemplates.isActive, guidedSections: fosterContractTemplates.guidedSections })
             .from(fosterContractTemplates)
             .where(
               and(
@@ -13808,7 +13808,7 @@ Submitted: ${new Date().toLocaleString()}
           // Find a hold harmless waiver form for this tenant
           // Look for forms with "hold harmless" OR ("volunteer" AND ("waiver" OR "liability")) in the name
           const [volunteerWaiverForm] = await db
-            .select()
+            .select({ id: customForms.id, tenantId: customForms.tenantId, name: customForms.name, isActive: customForms.isActive, htmlTemplate: customForms.htmlTemplate, requiresSignature: customForms.requiresSignature, formType: customForms.formType })
             .from(customForms)
             .where(
               and(
@@ -13996,7 +13996,7 @@ If you have any questions, please contact us.
       
       // Find a hold harmless waiver form for this tenant
       const [volunteerWaiverForm] = await db
-        .select()
+        .select({ id: customForms.id, tenantId: customForms.tenantId, name: customForms.name, isActive: customForms.isActive, htmlTemplate: customForms.htmlTemplate, requiresSignature: customForms.requiresSignature, formType: customForms.formType })
         .from(customForms)
         .where(and(
           eq(customForms.tenantId, req.tenant!.id),
@@ -15480,7 +15480,7 @@ Submitted: ${new Date().toLocaleString()}
       
       // First, get the animal to check compatibility requirements
       const [animal] = await db
-        .select()
+        .select({ id: animals.id, tenantId: animals.tenantId, name: animals.name, species: animals.species, breed: animals.breed, goodWithChildren: animals.goodWithChildren, goodWithDogs: animals.goodWithDogs, goodWithCats: animals.goodWithCats })
         .from(animals)
         .where(
           and(
@@ -28873,7 +28873,7 @@ Email: ${application.applicantEmail || ''}`
 
       // Check if permission for this page already exists
       const [existing] = await db
-        .select()
+        .select({ id: pagePermissions.id, tenantId: pagePermissions.tenantId, pageId: pagePermissions.pageId, displayName: pagePermissions.displayName, allowedRoles: pagePermissions.allowedRoles, isActive: pagePermissions.isActive })
         .from(pagePermissions)
         .where(and(
           eq(pagePermissions.tenantId, req.tenant!.id),
@@ -29121,7 +29121,7 @@ Email: ${application.applicantEmail || ''}`
       const { volunteerOpportunities, volunteerSignups } = await import('@shared/schema');
       
       const opportunities = await db
-        .select()
+        .select({ id: volunteerOpportunities.id, tenantId: volunteerOpportunities.tenantId, title: volunteerOpportunities.title, description: volunteerOpportunities.description, date: volunteerOpportunities.date, time: volunteerOpportunities.time, location: volunteerOpportunities.location, slotsTotal: volunteerOpportunities.slotsTotal, slotsFilled: volunteerOpportunities.slotsFilled })
         .from(volunteerOpportunities)
         .where(eq(volunteerOpportunities.tenantId, req.tenant!.id))
         .orderBy(volunteerOpportunities.date);
@@ -30081,7 +30081,7 @@ The user asking is a tenant administrator or staff member.`;
       const { tutorials } = await import('@shared/schema');
       
       const results = await db
-        .select()
+        .select({ id: tutorials.id, tenantId: tutorials.tenantId, title: tutorials.title, description: tutorials.description, youtubeUrl: tutorials.youtubeUrl, category: tutorials.category, sortOrder: tutorials.sortOrder, isGlobal: tutorials.isGlobal })
         .from(tutorials)
         .where(
           or(
