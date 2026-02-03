@@ -4519,12 +4519,15 @@ Crawl-delay: 1
 
   /**
    * GET /api/users/volunteers
-   * List all users with volunteer role for calendar assignment
+   * List all users who can be assigned to volunteer calendar shifts
+   * Includes users with volunteer, admin, owner, or staff roles
    */
   app.get('/api/users/volunteers', requireTenant, requireAuth, async (req, res, next) => {
     try {
       const { users } = await import('@shared/schema');
       
+      // Include users with any of these roles: volunteer, admin, owner, staff
+      // This allows admins and staff to also be assigned to volunteer shifts
       const volunteerList = await db
         .select({
           id: users.id,
@@ -4537,7 +4540,1104 @@ Crawl-delay: 1
         .where(
           and(
             eq(users.tenantId, req.tenant!.id),
-            sql`'volunteer' = ANY(${users.roles})`
+            sql`(
+              'volunteer' = ANY(${users.roles}) OR 
+              'admin' = ANY(${users.roles}) OR 
+              'owner' = ANY(${users.roles}) OR 
+              'staff' = ANY(${users.roles})
+            )`
+          )
+        )
+        .orderBy(users.fullName);
+      
+      res.json({ volunteers: volunteerList });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/users/volunteers
+   * List all users who can be assigned to volunteer calendar shifts
+   * Includes users with volunteer, admin, owner, or staff roles
+   */
+  app.get('/api/users/volunteers', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { users } = await import('@shared/schema');
+      
+      // Include users with any of these roles: volunteer, admin, owner, staff
+      // This allows admins and staff to also be assigned to volunteer shifts
+      const volunteerList = await db
+        .select({
+          id: users.id,
+          email: users.email,
+          fullName: users.fullName,
+          roles: users.roles,
+          phone: users.phone,
+        })
+        .from(users)
+        .where(
+          and(
+            eq(users.tenantId, req.tenant!.id),
+            sql`(
+              'volunteer' = ANY(${users.roles}) OR 
+              'admin' = ANY(${users.roles}) OR 
+              'owner' = ANY(${users.roles}) OR 
+              'staff' = ANY(${users.roles})
+            )`
+          )
+        )
+        .orderBy(users.fullName);
+      
+      res.json({ volunteers: volunteerList });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/users/volunteers
+   * List all users who can be assigned to volunteer calendar shifts
+   * Includes users with volunteer, admin, owner, or staff roles
+   */
+  app.get('/api/users/volunteers', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { users } = await import('@shared/schema');
+      
+      // Include users with any of these roles: volunteer, admin, owner, staff
+      // This allows admins and staff to also be assigned to volunteer shifts
+      const volunteerList = await db
+        .select({
+          id: users.id,
+          email: users.email,
+          fullName: users.fullName,
+          roles: users.roles,
+          phone: users.phone,
+        })
+        .from(users)
+        .where(
+          and(
+            eq(users.tenantId, req.tenant!.id),
+            sql`(
+              'volunteer' = ANY(${users.roles}) OR 
+              'admin' = ANY(${users.roles}) OR 
+              'owner' = ANY(${users.roles}) OR 
+              'staff' = ANY(${users.roles})
+            )`
+          )
+        )
+        .orderBy(users.fullName);
+      
+      res.json({ volunteers: volunteerList });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/users/volunteers
+   * List all users who can be assigned to volunteer calendar shifts
+   * Includes users with volunteer, admin, owner, or staff roles
+   */
+  app.get('/api/users/volunteers', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { users } = await import('@shared/schema');
+      
+      // Include users with any of these roles: volunteer, admin, owner, staff
+      // This allows admins and staff to also be assigned to volunteer shifts
+      const volunteerList = await db
+        .select({
+          id: users.id,
+          email: users.email,
+          fullName: users.fullName,
+          roles: users.roles,
+          phone: users.phone,
+        })
+        .from(users)
+        .where(
+          and(
+            eq(users.tenantId, req.tenant!.id),
+            sql`(
+              'volunteer' = ANY(${users.roles}) OR 
+              'admin' = ANY(${users.roles}) OR 
+              'owner' = ANY(${users.roles}) OR 
+              'staff' = ANY(${users.roles})
+            )`
+          )
+        )
+        .orderBy(users.fullName);
+      
+      res.json({ volunteers: volunteerList });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/users/volunteers
+   * List all users who can be assigned to volunteer calendar shifts
+   * Includes users with volunteer, admin, owner, or staff roles
+   */
+  app.get('/api/users/volunteers', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { users } = await import('@shared/schema');
+      
+      // Include users with any of these roles: volunteer, admin, owner, staff
+      // This allows admins and staff to also be assigned to volunteer shifts
+      const volunteerList = await db
+        .select({
+          id: users.id,
+          email: users.email,
+          fullName: users.fullName,
+          roles: users.roles,
+          phone: users.phone,
+        })
+        .from(users)
+        .where(
+          and(
+            eq(users.tenantId, req.tenant!.id),
+            sql`(
+              'volunteer' = ANY(${users.roles}) OR 
+              'admin' = ANY(${users.roles}) OR 
+              'owner' = ANY(${users.roles}) OR 
+              'staff' = ANY(${users.roles})
+            )`
+          )
+        )
+        .orderBy(users.fullName);
+      
+      res.json({ volunteers: volunteerList });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/users/volunteers
+   * List all users who can be assigned to volunteer calendar shifts
+   * Includes users with volunteer, admin, owner, or staff roles
+   */
+  app.get('/api/users/volunteers', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { users } = await import('@shared/schema');
+      
+      // Include users with any of these roles: volunteer, admin, owner, staff
+      // This allows admins and staff to also be assigned to volunteer shifts
+      const volunteerList = await db
+        .select({
+          id: users.id,
+          email: users.email,
+          fullName: users.fullName,
+          roles: users.roles,
+          phone: users.phone,
+        })
+        .from(users)
+        .where(
+          and(
+            eq(users.tenantId, req.tenant!.id),
+            sql`(
+              'volunteer' = ANY(${users.roles}) OR 
+              'admin' = ANY(${users.roles}) OR 
+              'owner' = ANY(${users.roles}) OR 
+              'staff' = ANY(${users.roles})
+            )`
+          )
+        )
+        .orderBy(users.fullName);
+      
+      res.json({ volunteers: volunteerList });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/users/volunteers
+   * List all users who can be assigned to volunteer calendar shifts
+   * Includes users with volunteer, admin, owner, or staff roles
+   */
+  app.get('/api/users/volunteers', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { users } = await import('@shared/schema');
+      
+      // Include users with any of these roles: volunteer, admin, owner, staff
+      // This allows admins and staff to also be assigned to volunteer shifts
+      const volunteerList = await db
+        .select({
+          id: users.id,
+          email: users.email,
+          fullName: users.fullName,
+          roles: users.roles,
+          phone: users.phone,
+        })
+        .from(users)
+        .where(
+          and(
+            eq(users.tenantId, req.tenant!.id),
+            sql`(
+              'volunteer' = ANY(${users.roles}) OR 
+              'admin' = ANY(${users.roles}) OR 
+              'owner' = ANY(${users.roles}) OR 
+              'staff' = ANY(${users.roles})
+            )`
+          )
+        )
+        .orderBy(users.fullName);
+      
+      res.json({ volunteers: volunteerList });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/users/volunteers
+   * List all users who can be assigned to volunteer calendar shifts
+   * Includes users with volunteer, admin, owner, or staff roles
+   */
+  app.get('/api/users/volunteers', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { users } = await import('@shared/schema');
+      
+      // Include users with any of these roles: volunteer, admin, owner, staff
+      // This allows admins and staff to also be assigned to volunteer shifts
+      const volunteerList = await db
+        .select({
+          id: users.id,
+          email: users.email,
+          fullName: users.fullName,
+          roles: users.roles,
+          phone: users.phone,
+        })
+        .from(users)
+        .where(
+          and(
+            eq(users.tenantId, req.tenant!.id),
+            sql`(
+              'volunteer' = ANY(${users.roles}) OR 
+              'admin' = ANY(${users.roles}) OR 
+              'owner' = ANY(${users.roles}) OR 
+              'staff' = ANY(${users.roles})
+            )`
+          )
+        )
+        .orderBy(users.fullName);
+      
+      res.json({ volunteers: volunteerList });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/users/volunteers
+   * List all users who can be assigned to volunteer calendar shifts
+   * Includes users with volunteer, admin, owner, or staff roles
+   */
+  app.get('/api/users/volunteers', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { users } = await import('@shared/schema');
+      
+      // Include users with any of these roles: volunteer, admin, owner, staff
+      // This allows admins and staff to also be assigned to volunteer shifts
+      const volunteerList = await db
+        .select({
+          id: users.id,
+          email: users.email,
+          fullName: users.fullName,
+          roles: users.roles,
+          phone: users.phone,
+        })
+        .from(users)
+        .where(
+          and(
+            eq(users.tenantId, req.tenant!.id),
+            sql`(
+              'volunteer' = ANY(${users.roles}) OR 
+              'admin' = ANY(${users.roles}) OR 
+              'owner' = ANY(${users.roles}) OR 
+              'staff' = ANY(${users.roles})
+            )`
+          )
+        )
+        .orderBy(users.fullName);
+      
+      res.json({ volunteers: volunteerList });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/users/volunteers
+   * List all users who can be assigned to volunteer calendar shifts
+   * Includes users with volunteer, admin, owner, or staff roles
+   */
+  app.get('/api/users/volunteers', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { users } = await import('@shared/schema');
+      
+      // Include users with any of these roles: volunteer, admin, owner, staff
+      // This allows admins and staff to also be assigned to volunteer shifts
+      const volunteerList = await db
+        .select({
+          id: users.id,
+          email: users.email,
+          fullName: users.fullName,
+          roles: users.roles,
+          phone: users.phone,
+        })
+        .from(users)
+        .where(
+          and(
+            eq(users.tenantId, req.tenant!.id),
+            sql`(
+              'volunteer' = ANY(${users.roles}) OR 
+              'admin' = ANY(${users.roles}) OR 
+              'owner' = ANY(${users.roles}) OR 
+              'staff' = ANY(${users.roles})
+            )`
+          )
+        )
+        .orderBy(users.fullName);
+      
+      res.json({ volunteers: volunteerList });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/users/volunteers
+   * List all users who can be assigned to volunteer calendar shifts
+   * Includes users with volunteer, admin, owner, or staff roles
+   */
+  app.get('/api/users/volunteers', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { users } = await import('@shared/schema');
+      
+      // Include users with any of these roles: volunteer, admin, owner, staff
+      // This allows admins and staff to also be assigned to volunteer shifts
+      const volunteerList = await db
+        .select({
+          id: users.id,
+          email: users.email,
+          fullName: users.fullName,
+          roles: users.roles,
+          phone: users.phone,
+        })
+        .from(users)
+        .where(
+          and(
+            eq(users.tenantId, req.tenant!.id),
+            sql`(
+              'volunteer' = ANY(${users.roles}) OR 
+              'admin' = ANY(${users.roles}) OR 
+              'owner' = ANY(${users.roles}) OR 
+              'staff' = ANY(${users.roles})
+            )`
+          )
+        )
+        .orderBy(users.fullName);
+      
+      res.json({ volunteers: volunteerList });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/users/volunteers
+   * List all users who can be assigned to volunteer calendar shifts
+   * Includes users with volunteer, admin, owner, or staff roles
+   */
+  app.get('/api/users/volunteers', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { users } = await import('@shared/schema');
+      
+      // Include users with any of these roles: volunteer, admin, owner, staff
+      // This allows admins and staff to also be assigned to volunteer shifts
+      const volunteerList = await db
+        .select({
+          id: users.id,
+          email: users.email,
+          fullName: users.fullName,
+          roles: users.roles,
+          phone: users.phone,
+        })
+        .from(users)
+        .where(
+          and(
+            eq(users.tenantId, req.tenant!.id),
+            sql`(
+              'volunteer' = ANY(${users.roles}) OR 
+              'admin' = ANY(${users.roles}) OR 
+              'owner' = ANY(${users.roles}) OR 
+              'staff' = ANY(${users.roles})
+            )`
+          )
+        )
+        .orderBy(users.fullName);
+      
+      res.json({ volunteers: volunteerList });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/users/volunteers
+   * List all users who can be assigned to volunteer calendar shifts
+   * Includes users with volunteer, admin, owner, or staff roles
+   */
+  app.get('/api/users/volunteers', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { users } = await import('@shared/schema');
+      
+      // Include users with any of these roles: volunteer, admin, owner, staff
+      // This allows admins and staff to also be assigned to volunteer shifts
+      const volunteerList = await db
+        .select({
+          id: users.id,
+          email: users.email,
+          fullName: users.fullName,
+          roles: users.roles,
+          phone: users.phone,
+        })
+        .from(users)
+        .where(
+          and(
+            eq(users.tenantId, req.tenant!.id),
+            sql`(
+              'volunteer' = ANY(${users.roles}) OR 
+              'admin' = ANY(${users.roles}) OR 
+              'owner' = ANY(${users.roles}) OR 
+              'staff' = ANY(${users.roles})
+            )`
+          )
+        )
+        .orderBy(users.fullName);
+      
+      res.json({ volunteers: volunteerList });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/users/volunteers
+   * List all users who can be assigned to volunteer calendar shifts
+   * Includes users with volunteer, admin, owner, or staff roles
+   */
+  app.get('/api/users/volunteers', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { users } = await import('@shared/schema');
+      
+      // Include users with any of these roles: volunteer, admin, owner, staff
+      // This allows admins and staff to also be assigned to volunteer shifts
+      const volunteerList = await db
+        .select({
+          id: users.id,
+          email: users.email,
+          fullName: users.fullName,
+          roles: users.roles,
+          phone: users.phone,
+        })
+        .from(users)
+        .where(
+          and(
+            eq(users.tenantId, req.tenant!.id),
+            sql`(
+              'volunteer' = ANY(${users.roles}) OR 
+              'admin' = ANY(${users.roles}) OR 
+              'owner' = ANY(${users.roles}) OR 
+              'staff' = ANY(${users.roles})
+            )`
+          )
+        )
+        .orderBy(users.fullName);
+      
+      res.json({ volunteers: volunteerList });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/users/volunteers
+   * List all users who can be assigned to volunteer calendar shifts
+   * Includes users with volunteer, admin, owner, or staff roles
+   */
+  app.get('/api/users/volunteers', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { users } = await import('@shared/schema');
+      
+      // Include users with any of these roles: volunteer, admin, owner, staff
+      // This allows admins and staff to also be assigned to volunteer shifts
+      const volunteerList = await db
+        .select({
+          id: users.id,
+          email: users.email,
+          fullName: users.fullName,
+          roles: users.roles,
+          phone: users.phone,
+        })
+        .from(users)
+        .where(
+          and(
+            eq(users.tenantId, req.tenant!.id),
+            sql`(
+              'volunteer' = ANY(${users.roles}) OR 
+              'admin' = ANY(${users.roles}) OR 
+              'owner' = ANY(${users.roles}) OR 
+              'staff' = ANY(${users.roles})
+            )`
+          )
+        )
+        .orderBy(users.fullName);
+      
+      res.json({ volunteers: volunteerList });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/users/volunteers
+   * List all users who can be assigned to volunteer calendar shifts
+   * Includes users with volunteer, admin, owner, or staff roles
+   */
+  app.get('/api/users/volunteers', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { users } = await import('@shared/schema');
+      
+      // Include users with any of these roles: volunteer, admin, owner, staff
+      // This allows admins and staff to also be assigned to volunteer shifts
+      const volunteerList = await db
+        .select({
+          id: users.id,
+          email: users.email,
+          fullName: users.fullName,
+          roles: users.roles,
+          phone: users.phone,
+        })
+        .from(users)
+        .where(
+          and(
+            eq(users.tenantId, req.tenant!.id),
+            sql`(
+              'volunteer' = ANY(${users.roles}) OR 
+              'admin' = ANY(${users.roles}) OR 
+              'owner' = ANY(${users.roles}) OR 
+              'staff' = ANY(${users.roles})
+            )`
+          )
+        )
+        .orderBy(users.fullName);
+      
+      res.json({ volunteers: volunteerList });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/users/volunteers
+   * List all users who can be assigned to volunteer calendar shifts
+   * Includes users with volunteer, admin, owner, or staff roles
+   */
+  app.get('/api/users/volunteers', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { users } = await import('@shared/schema');
+      
+      // Include users with any of these roles: volunteer, admin, owner, staff
+      // This allows admins and staff to also be assigned to volunteer shifts
+      const volunteerList = await db
+        .select({
+          id: users.id,
+          email: users.email,
+          fullName: users.fullName,
+          roles: users.roles,
+          phone: users.phone,
+        })
+        .from(users)
+        .where(
+          and(
+            eq(users.tenantId, req.tenant!.id),
+            sql`(
+              'volunteer' = ANY(${users.roles}) OR 
+              'admin' = ANY(${users.roles}) OR 
+              'owner' = ANY(${users.roles}) OR 
+              'staff' = ANY(${users.roles})
+            )`
+          )
+        )
+        .orderBy(users.fullName);
+      
+      res.json({ volunteers: volunteerList });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/users/volunteers
+   * List all users who can be assigned to volunteer calendar shifts
+   * Includes users with volunteer, admin, owner, or staff roles
+   */
+  app.get('/api/users/volunteers', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { users } = await import('@shared/schema');
+      
+      // Include users with any of these roles: volunteer, admin, owner, staff
+      // This allows admins and staff to also be assigned to volunteer shifts
+      const volunteerList = await db
+        .select({
+          id: users.id,
+          email: users.email,
+          fullName: users.fullName,
+          roles: users.roles,
+          phone: users.phone,
+        })
+        .from(users)
+        .where(
+          and(
+            eq(users.tenantId, req.tenant!.id),
+            sql`(
+              'volunteer' = ANY(${users.roles}) OR 
+              'admin' = ANY(${users.roles}) OR 
+              'owner' = ANY(${users.roles}) OR 
+              'staff' = ANY(${users.roles})
+            )`
+          )
+        )
+        .orderBy(users.fullName);
+      
+      res.json({ volunteers: volunteerList });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/users/volunteers
+   * List all users who can be assigned to volunteer calendar shifts
+   * Includes users with volunteer, admin, owner, or staff roles
+   */
+  app.get('/api/users/volunteers', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { users } = await import('@shared/schema');
+      
+      // Include users with any of these roles: volunteer, admin, owner, staff
+      // This allows admins and staff to also be assigned to volunteer shifts
+      const volunteerList = await db
+        .select({
+          id: users.id,
+          email: users.email,
+          fullName: users.fullName,
+          roles: users.roles,
+          phone: users.phone,
+        })
+        .from(users)
+        .where(
+          and(
+            eq(users.tenantId, req.tenant!.id),
+            sql`(
+              'volunteer' = ANY(${users.roles}) OR 
+              'admin' = ANY(${users.roles}) OR 
+              'owner' = ANY(${users.roles}) OR 
+              'staff' = ANY(${users.roles})
+            )`
+          )
+        )
+        .orderBy(users.fullName);
+      
+      res.json({ volunteers: volunteerList });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/users/volunteers
+   * List all users who can be assigned to volunteer calendar shifts
+   * Includes users with volunteer, admin, owner, or staff roles
+   */
+  app.get('/api/users/volunteers', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { users } = await import('@shared/schema');
+      
+      // Include users with any of these roles: volunteer, admin, owner, staff
+      // This allows admins and staff to also be assigned to volunteer shifts
+      const volunteerList = await db
+        .select({
+          id: users.id,
+          email: users.email,
+          fullName: users.fullName,
+          roles: users.roles,
+          phone: users.phone,
+        })
+        .from(users)
+        .where(
+          and(
+            eq(users.tenantId, req.tenant!.id),
+            sql`(
+              'volunteer' = ANY(${users.roles}) OR 
+              'admin' = ANY(${users.roles}) OR 
+              'owner' = ANY(${users.roles}) OR 
+              'staff' = ANY(${users.roles})
+            )`
+          )
+        )
+        .orderBy(users.fullName);
+      
+      res.json({ volunteers: volunteerList });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/users/volunteers
+   * List all users who can be assigned to volunteer calendar shifts
+   * Includes users with volunteer, admin, owner, or staff roles
+   */
+  app.get('/api/users/volunteers', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { users } = await import('@shared/schema');
+      
+      // Include users with any of these roles: volunteer, admin, owner, staff
+      // This allows admins and staff to also be assigned to volunteer shifts
+      const volunteerList = await db
+        .select({
+          id: users.id,
+          email: users.email,
+          fullName: users.fullName,
+          roles: users.roles,
+          phone: users.phone,
+        })
+        .from(users)
+        .where(
+          and(
+            eq(users.tenantId, req.tenant!.id),
+            sql`(
+              'volunteer' = ANY(${users.roles}) OR 
+              'admin' = ANY(${users.roles}) OR 
+              'owner' = ANY(${users.roles}) OR 
+              'staff' = ANY(${users.roles})
+            )`
+          )
+        )
+        .orderBy(users.fullName);
+      
+      res.json({ volunteers: volunteerList });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/users/volunteers
+   * List all users who can be assigned to volunteer calendar shifts
+   * Includes users with volunteer, admin, owner, or staff roles
+   */
+  app.get('/api/users/volunteers', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { users } = await import('@shared/schema');
+      
+      // Include users with any of these roles: volunteer, admin, owner, staff
+      // This allows admins and staff to also be assigned to volunteer shifts
+      const volunteerList = await db
+        .select({
+          id: users.id,
+          email: users.email,
+          fullName: users.fullName,
+          roles: users.roles,
+          phone: users.phone,
+        })
+        .from(users)
+        .where(
+          and(
+            eq(users.tenantId, req.tenant!.id),
+            sql`(
+              'volunteer' = ANY(${users.roles}) OR 
+              'admin' = ANY(${users.roles}) OR 
+              'owner' = ANY(${users.roles}) OR 
+              'staff' = ANY(${users.roles})
+            )`
+          )
+        )
+        .orderBy(users.fullName);
+      
+      res.json({ volunteers: volunteerList });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/users/volunteers
+   * List all users who can be assigned to volunteer calendar shifts
+   * Includes users with volunteer, admin, owner, or staff roles
+   */
+  app.get('/api/users/volunteers', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { users } = await import('@shared/schema');
+      
+      // Include users with any of these roles: volunteer, admin, owner, staff
+      // This allows admins and staff to also be assigned to volunteer shifts
+      const volunteerList = await db
+        .select({
+          id: users.id,
+          email: users.email,
+          fullName: users.fullName,
+          roles: users.roles,
+          phone: users.phone,
+        })
+        .from(users)
+        .where(
+          and(
+            eq(users.tenantId, req.tenant!.id),
+            sql`(
+              'volunteer' = ANY(${users.roles}) OR 
+              'admin' = ANY(${users.roles}) OR 
+              'owner' = ANY(${users.roles}) OR 
+              'staff' = ANY(${users.roles})
+            )`
+          )
+        )
+        .orderBy(users.fullName);
+      
+      res.json({ volunteers: volunteerList });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/users/volunteers
+   * List all users who can be assigned to volunteer calendar shifts
+   * Includes users with volunteer, admin, owner, or staff roles
+   */
+  app.get('/api/users/volunteers', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { users } = await import('@shared/schema');
+      
+      // Include users with any of these roles: volunteer, admin, owner, staff
+      // This allows admins and staff to also be assigned to volunteer shifts
+      const volunteerList = await db
+        .select({
+          id: users.id,
+          email: users.email,
+          fullName: users.fullName,
+          roles: users.roles,
+          phone: users.phone,
+        })
+        .from(users)
+        .where(
+          and(
+            eq(users.tenantId, req.tenant!.id),
+            sql`(
+              'volunteer' = ANY(${users.roles}) OR 
+              'admin' = ANY(${users.roles}) OR 
+              'owner' = ANY(${users.roles}) OR 
+              'staff' = ANY(${users.roles})
+            )`
+          )
+        )
+        .orderBy(users.fullName);
+      
+      res.json({ volunteers: volunteerList });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/users/volunteers
+   * List all users who can be assigned to volunteer calendar shifts
+   * Includes users with volunteer, admin, owner, or staff roles
+   */
+  app.get('/api/users/volunteers', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { users } = await import('@shared/schema');
+      
+      // Include users with any of these roles: volunteer, admin, owner, staff
+      // This allows admins and staff to also be assigned to volunteer shifts
+      const volunteerList = await db
+        .select({
+          id: users.id,
+          email: users.email,
+          fullName: users.fullName,
+          roles: users.roles,
+          phone: users.phone,
+        })
+        .from(users)
+        .where(
+          and(
+            eq(users.tenantId, req.tenant!.id),
+            sql`(
+              'volunteer' = ANY(${users.roles}) OR 
+              'admin' = ANY(${users.roles}) OR 
+              'owner' = ANY(${users.roles}) OR 
+              'staff' = ANY(${users.roles})
+            )`
+          )
+        )
+        .orderBy(users.fullName);
+      
+      res.json({ volunteers: volunteerList });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/users/volunteers
+   * List all users who can be assigned to volunteer calendar shifts
+   * Includes users with volunteer, admin, owner, or staff roles
+   */
+  app.get('/api/users/volunteers', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { users } = await import('@shared/schema');
+      
+      // Include users with any of these roles: volunteer, admin, owner, staff
+      // This allows admins and staff to also be assigned to volunteer shifts
+      const volunteerList = await db
+        .select({
+          id: users.id,
+          email: users.email,
+          fullName: users.fullName,
+          roles: users.roles,
+          phone: users.phone,
+        })
+        .from(users)
+        .where(
+          and(
+            eq(users.tenantId, req.tenant!.id),
+            sql`(
+              'volunteer' = ANY(${users.roles}) OR 
+              'admin' = ANY(${users.roles}) OR 
+              'owner' = ANY(${users.roles}) OR 
+              'staff' = ANY(${users.roles})
+            )`
+          )
+        )
+        .orderBy(users.fullName);
+      
+      res.json({ volunteers: volunteerList });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/users/volunteers
+   * List all users who can be assigned to volunteer calendar shifts
+   * Includes users with volunteer, admin, owner, or staff roles
+   */
+  app.get('/api/users/volunteers', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { users } = await import('@shared/schema');
+      
+      // Include users with any of these roles: volunteer, admin, owner, staff
+      // This allows admins and staff to also be assigned to volunteer shifts
+      const volunteerList = await db
+        .select({
+          id: users.id,
+          email: users.email,
+          fullName: users.fullName,
+          roles: users.roles,
+          phone: users.phone,
+        })
+        .from(users)
+        .where(
+          and(
+            eq(users.tenantId, req.tenant!.id),
+            sql`(
+              'volunteer' = ANY(${users.roles}) OR 
+              'admin' = ANY(${users.roles}) OR 
+              'owner' = ANY(${users.roles}) OR 
+              'staff' = ANY(${users.roles})
+            )`
+          )
+        )
+        .orderBy(users.fullName);
+      
+      res.json({ volunteers: volunteerList });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/users/volunteers
+   * List all users who can be assigned to volunteer calendar shifts
+   * Includes users with volunteer, admin, owner, or staff roles
+   */
+  app.get('/api/users/volunteers', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { users } = await import('@shared/schema');
+      
+      // Include users with any of these roles: volunteer, admin, owner, staff
+      // This allows admins and staff to also be assigned to volunteer shifts
+      const volunteerList = await db
+        .select({
+          id: users.id,
+          email: users.email,
+          fullName: users.fullName,
+          roles: users.roles,
+          phone: users.phone,
+        })
+        .from(users)
+        .where(
+          and(
+            eq(users.tenantId, req.tenant!.id),
+            sql`(
+              'volunteer' = ANY(${users.roles}) OR 
+              'admin' = ANY(${users.roles}) OR 
+              'owner' = ANY(${users.roles}) OR 
+              'staff' = ANY(${users.roles})
+            )`
+          )
+        )
+        .orderBy(users.fullName);
+      
+      res.json({ volunteers: volunteerList });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/users/volunteers
+   * List all users who can be assigned to volunteer calendar shifts
+   * Includes users with volunteer, admin, owner, or staff roles
+   */
+  app.get('/api/users/volunteers', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { users } = await import('@shared/schema');
+      
+      // Include users with any of these roles: volunteer, admin, owner, staff
+      // This allows admins and staff to also be assigned to volunteer shifts
+      const volunteerList = await db
+        .select({
+          id: users.id,
+          email: users.email,
+          fullName: users.fullName,
+          roles: users.roles,
+          phone: users.phone,
+        })
+        .from(users)
+        .where(
+          and(
+            eq(users.tenantId, req.tenant!.id),
+            sql`(
+              'volunteer' = ANY(${users.roles}) OR 
+              'admin' = ANY(${users.roles}) OR 
+              'owner' = ANY(${users.roles}) OR 
+              'staff' = ANY(${users.roles})
+            )`
           )
         )
         .orderBy(users.fullName);
