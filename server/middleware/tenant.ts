@@ -98,6 +98,20 @@ export interface TenantContext {
     };
   };
   quickActions?: string[] | null;
+  // Organization Legal Settings
+  orgLegalName?: string | null;
+  orgAddressStreet?: string | null;
+  orgAddressCity?: string | null;
+  orgAddressState?: string | null;
+  orgAddressZip?: string | null;
+  orgPhonePublic?: string | null;
+  orgEmailRecords?: string | null;
+  orgWebsiteUrl?: string | null;
+  orgStateLicenseNumber?: string | null;
+  orgUsdaLicenseNumber?: string | null;
+  supervisingVetName?: string | null;
+  supervisingVetLicense?: string | null;
+  orgTaxEin?: string | null;
 }
 
 // Extend Express Request type to include tenant and platform admin flag
@@ -368,6 +382,20 @@ export async function resolveTenant(req: Request, res: Response, next: NextFunct
           heroLayoutType: tenants.heroLayoutType,
           threeDoorsConfig: tenants.threeDoorsConfig,
           quickActions: tenants.quickActions,
+          // Organization Legal Settings
+          orgLegalName: tenants.orgLegalName,
+          orgAddressStreet: tenants.orgAddressStreet,
+          orgAddressCity: tenants.orgAddressCity,
+          orgAddressState: tenants.orgAddressState,
+          orgAddressZip: tenants.orgAddressZip,
+          orgPhonePublic: tenants.orgPhonePublic,
+          orgEmailRecords: tenants.orgEmailRecords,
+          orgWebsiteUrl: tenants.orgWebsiteUrl,
+          orgStateLicenseNumber: tenants.orgStateLicenseNumber,
+          orgUsdaLicenseNumber: tenants.orgUsdaLicenseNumber,
+          supervisingVetName: tenants.supervisingVetName,
+          supervisingVetLicense: tenants.supervisingVetLicense,
+          orgTaxEin: tenants.orgTaxEin,
         })
         .from(tenants)
         .where(whereClause!)
@@ -435,6 +463,20 @@ export async function resolveTenant(req: Request, res: Response, next: NextFunct
         heroLayoutType: tenant.heroLayoutType as TenantContext['heroLayoutType'],
         threeDoorsConfig: tenant.threeDoorsConfig as TenantContext['threeDoorsConfig'],
         quickActions: tenant.quickActions,
+        // Organization Legal Settings
+        orgLegalName: tenant.orgLegalName,
+        orgAddressStreet: tenant.orgAddressStreet,
+        orgAddressCity: tenant.orgAddressCity,
+        orgAddressState: tenant.orgAddressState,
+        orgAddressZip: tenant.orgAddressZip,
+        orgPhonePublic: tenant.orgPhonePublic,
+        orgEmailRecords: tenant.orgEmailRecords,
+        orgWebsiteUrl: tenant.orgWebsiteUrl,
+        orgStateLicenseNumber: tenant.orgStateLicenseNumber,
+        orgUsdaLicenseNumber: tenant.orgUsdaLicenseNumber,
+        supervisingVetName: tenant.supervisingVetName,
+        supervisingVetLicense: tenant.supervisingVetLicense,
+        orgTaxEin: tenant.orgTaxEin,
       };
       
       // Set cookie for PWA manifest resolution on path-based tenants
