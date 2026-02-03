@@ -273,31 +273,83 @@ export function DailyBriefing() {
                       <Calendar className="h-4 w-4 text-muted-foreground" />
                       <span className="text-sm font-semibold text-muted-foreground">Tomorrow</span>
                     </div>
-                    <div className="space-y-1 text-muted-foreground">
-                      {data?.tomorrow.surgeries.length > 0 && (
-                        <div className="flex items-center gap-2 text-sm">
-                          <Scissors className="h-3 w-3" />
-                          <span>{data.tomorrow.surgeries.length} surgeries</span>
-                        </div>
+                    <div className="space-y-2">
+                      {data?.tomorrow.surgeries.map((surgery) => (
+                        <Link 
+                          key={surgery.id} 
+                          href={`/dashboard/animals/${surgery.id}/medical`}
+                          className="block"
+                          data-testid={`link-tomorrow-surgery-${surgery.id}`}
+                        >
+                          <div className="flex items-center gap-2 p-2 rounded-md bg-amber-500/5 hover-elevate cursor-pointer">
+                            <Scissors className="h-3 w-3 text-amber-600/70 flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm text-muted-foreground truncate">
+                                {surgery.neuterStatus === 'intact' ? 'Spay/Neuter' : 'Surgery'} - {surgery.name}
+                              </p>
+                              <p className="text-xs text-muted-foreground/70 truncate">
+                                {format(new Date(surgery.scheduledSurgeryDate), 'h:mm a')}
+                              </p>
+                            </div>
+                            <ChevronRight className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                          </div>
+                        </Link>
+                      ))}
+                      {data?.tomorrow.transports.map((transport) => (
+                        <Link 
+                          key={transport.id} 
+                          href={`/dashboard/transports/${transport.id}`}
+                          className="block"
+                          data-testid={`link-tomorrow-transport-${transport.id}`}
+                        >
+                          <div className="flex items-center gap-2 p-2 rounded-md bg-blue-500/5 hover-elevate cursor-pointer">
+                            <Truck className="h-3 w-3 text-blue-600/70 flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm text-muted-foreground truncate">{transport.name}</p>
+                              <p className="text-xs text-muted-foreground/70 truncate">
+                                {transport.animalCount} animals • {format(new Date(transport.departureDate), 'h:mm a')}
+                              </p>
+                            </div>
+                            <ChevronRight className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                          </div>
+                        </Link>
+                      ))}
+                      {data?.tomorrow.medical.slice(0, 5).map((task) => (
+                        <Link 
+                          key={task.id} 
+                          href={`/dashboard/animals/${task.animalId}/medical`}
+                          className="block"
+                          data-testid={`link-tomorrow-medical-${task.id}`}
+                        >
+                          <div className="flex items-center gap-2 p-2 rounded-md hover-elevate cursor-pointer">
+                            <Pill className="h-3 w-3 text-green-600/70 flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm text-muted-foreground truncate">{task.careName}</p>
+                              <p className="text-xs text-muted-foreground/70 truncate">{task.animalName}</p>
+                            </div>
+                            <ChevronRight className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                          </div>
+                        </Link>
+                      ))}
+                      {data && data.tomorrow.medical.length > 5 && (
+                        <Link href="/dashboard/medical-pipeline?tab=preventative" data-testid="link-more-tomorrow-medical">
+                          <p className="text-xs text-primary hover:underline pl-2 cursor-pointer">
+                            +{data.tomorrow.medical.length - 5} more medical tasks
+                          </p>
+                        </Link>
                       )}
-                      {data?.tomorrow.transports.length > 0 && (
-                        <div className="flex items-center gap-2 text-sm">
-                          <Truck className="h-3 w-3" />
-                          <span>{data.tomorrow.transports.length} transports</span>
+                      {data?.tomorrow.calendar.map((event) => (
+                        <div key={event.id} className="flex items-center gap-2 p-2 rounded-md bg-purple-500/5">
+                          <Calendar className="h-3 w-3 text-purple-600/70 flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-muted-foreground truncate">{event.title}</p>
+                            <p className="text-xs text-muted-foreground/70 truncate">
+                              {format(new Date(event.startTime), 'h:mm a')}
+                              {event.location && ` • ${event.location}`}
+                            </p>
+                          </div>
                         </div>
-                      )}
-                      {data?.tomorrow.medical.length > 0 && (
-                        <div className="flex items-center gap-2 text-sm">
-                          <Pill className="h-3 w-3" />
-                          <span>{data.tomorrow.medical.length} medical tasks</span>
-                        </div>
-                      )}
-                      {data?.tomorrow.calendar.length > 0 && (
-                        <div className="flex items-center gap-2 text-sm">
-                          <Calendar className="h-3 w-3" />
-                          <span>{data.tomorrow.calendar.length} events</span>
-                        </div>
-                      )}
+                      ))}
                     </div>
                   </div>
                 </>

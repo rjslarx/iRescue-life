@@ -6,7 +6,7 @@ import { requireAuth, requireRole } from "./middleware/auth";
 import { loginUser, createTenantWithAdmin, createUser } from "./services/auth";
 import { PushNotificationService } from "./services/push-notifications";
 import { db } from "./db";
-import { tenants, users, demoRequests, insertDemoRequestSchema, smsMessageLogs, emailEvents, animals, platformIntegrations, newsletterCampaigns, newsletterSubscribers, happyTails, animalMergeHistory, activityLogs, medicalExams, medicalPrescriptions, medicalBills, medicalFiles, animalNotes, applications, adoptionCheckoutSessions, adoptions, partnerOrganizations, microchipRecords, surrenderRequests, surrenderFormFields, insertSurrenderRequestSchema, insertSurrenderFormFieldSchema, inboundEmails } from "@shared/schema";
+import { tenants, users, demoRequests, insertDemoRequestSchema, smsMessageLogs, emailEvents, animals, platformIntegrations, newsletterCampaigns, newsletterSubscribers, happyTails, animalMergeHistory, activityLogs, medicalExams, medicalPrescriptions, medicalBills, medicalFiles, animalNotes, applications, adoptionCheckoutSessions, adoptions, partnerOrganizations, microchipRecords, surrenderRequests, surrenderFormFields, insertSurrenderRequestSchema, insertSurrenderFormFieldSchema, inboundEmails, calendars } from "@shared/schema";
 import { eq, and, desc, asc, sql, inArray, lt, lte, gte, not, notInArray, or, ne, isNull, isNotNull } from "drizzle-orm";
 import { z } from "zod";
 import { authLimiter, signupLimiter, passwordResetLimiter, emailLimiter } from "./config/security";
@@ -3609,6 +3609,8 @@ Crawl-delay: 1
         ));
 
       // 4. Get calendar events for today through day-after-tomorrow (timezone buffer)
+      // Exclude events from calendars that have simplifiedVolunteerMode enabled in themeSettings
+      const { or: orOp, isNull, sql: sqlOp } = await import('drizzle-orm');
       const calendarData = await db
         .select({
           id: calendarEvents.id,
@@ -3619,10 +3621,16 @@ Crawl-delay: 1
           location: calendarEvents.location,
         })
         .from(calendarEvents)
+        .innerJoin(calendars, eq(calendarEvents.calendarId, calendars.id))
         .where(and(
           eq(calendarEvents.tenantId, req.tenant!.id),
           gte(calendarEvents.startTime, todayStart),
-          lte(calendarEvents.startTime, extendedEnd)
+          lte(calendarEvents.startTime, extendedEnd),
+          // Exclude simplified volunteer mode calendars using JSON field check
+          orOp(
+            isNull(calendars.themeSettings),
+            sqlOp`(${calendars.themeSettings}->>'simplifiedVolunteerMode')::boolean IS NOT TRUE`
+          )
         ));
 
       // Filter calendar events - use extended range for "tomorrow" to account for timezone offset
