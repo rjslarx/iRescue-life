@@ -64,7 +64,6 @@ export async function getApplicationById(tenantId: string, applicationId: string
       notes: applications.notes,
       customResponses: applications.customResponses,
       smsConsent: applications.smsConsent,
-      assignedToId: applications.assignedToId,
       gclid: applications.gclid,
       gclidCapturedAt: applications.gclidCapturedAt,
       createdAt: applications.createdAt,
