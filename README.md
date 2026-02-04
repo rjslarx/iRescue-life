@@ -1,3 +1,5 @@
+[![Run on Replit](https://replit.com/badge/github/rjslarx/iRescue-life)](https://replit.com/new/github/rjslarx/iRescue-life)
+
 # iRescue.life 🐾
 
 **"Epic" for Animal Rescues.** An open-source, medical-grade management platform for foster-based animal rescues.
