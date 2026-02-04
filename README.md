@@ -39,6 +39,17 @@ In my career, I saw how software like **Epic** revolutionized patient safety and
 * **Database:** PostgreSQL (via Neon/Replit)
 * **Infrastructure:** Built and deployed on **Replit**
 
+## 📍 Trusted in Production
+**iRescue.life** is the daily operating system for **[Haseya's New Beginning Animal Rescue](https://www.haseyasnewbeginningar.com/)** in Rayne, Louisiana.
+
+> "We moved from spreadsheets to iRescue and saved 15 hours of admin work per week. That's 15 more hours we spend with the dogs."
+> — *Robert Stelly, Volunteer & Board Member*
+
+**Live Stats:**
+* **Active Fosters Managed:** 20+
+* **Medical Records Tracked:** 200+
+* **Uptime:** 99.9%  
+
 ## 🤝 Contributing
 We are actively looking for contributors! Whether you are a frontend wizard or a backend architect, help us save time for rescuers so they can save more lives.
 
