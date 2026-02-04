@@ -1,68 +1,53 @@
-# iRescue.life
+# iRescue.life 🐾
 
-An open-source animal rescue management platform.
+**"Epic" for Animal Rescues.** An open-source, medical-grade management platform for foster-based animal rescues.
 
-## Description
+[![Run on Replit](https://replit.com/badge/github/rjslarx/iRescue-life)](https://replit.com/new/github/rjslarx/iRescue-life)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](http://makeapullrequest.com)
 
-iRescue.life is a comprehensive platform designed to help animal rescue organizations manage their operations efficiently. From intake and medical records to adoptions and volunteer coordination, this platform streamlines the entire rescue workflow.
-This project is tested with BrowserStack.
+## 📊 The Command Center
+<img width="100%" alt="iRescue Dashboard" src="https://github.com/user-attachments/assets/be1d806a-e741-43c4-a308-cc1350290875" />
 
-## Self-Hosting (Free)
+## 🩺 The Story
+I am a semi-retired hospital pharmacist and a volunteer at **Haseya’s New Beginning Animal Rescue**.
 
-You can run iRescue.life on your own infrastructure for free.
+In my career, I saw how software like **Epic** revolutionized patient safety and hospital efficiency. But when I began volunteering in animal rescue, I saw dedicated people drowning in spreadsheets, missing medication doses, and struggling with "clunky" software that cost them money they didn't have.
 
-### Option 1: Run on Replit
+**iRescue.life** is my attempt to bring **medical-grade safety and operational efficiency** to animal welfare. We are building a platform that treats a foster dog's heartworm protocol with the same seriousness as a hospital patient's treatment plan—but simple enough for a volunteer to use on their phone.
 
-1. Fork this repository on GitHub
-2. Go to [Replit](https://replit.com) and create an account
-3. Click "Create Repl" and select "Import from GitHub"
-4. Paste your forked repository URL
-5. Replit will automatically detect the configuration and set up the environment
-6. Click "Run" to start the application
+## 🚀 Key Features
 
-### Option 2: Run Locally
+### 🏥 Medical Compliance Engine
+* **"Magic Link" Adherence:** Fosters receive SMS reminders with secure, one-click links to confirm meds were given. No login required.
+* **Inventory Logic:** The system tracks pill counts and alerts staff *before* a foster runs out of medication.
+* **Automated Protocols:** Assign a "Parvo Protocol" and generate 14 days of scheduled tasks instantly.
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/YOUR_USERNAME/irescue-life.git
-   cd irescue-life
-   ```
+### 🎛 The Command Center
+* **Exception-Based Dashboard:** Directors don't see what's going right; they see a "Red List" of what's going wrong (Overdue Meds, Pending Intakes).
+* **Tenant-Based SaaS:** Built to support multiple rescues on one instance (Multi-tenant architecture).
 
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
+### 📱 Foster & Adopter Experience
+* **Mobile-First Portal:** A "My Fosters" app for uploading photos and writing bios.
+* **Adopter Retention:** Automated "3-3-3 Rule" email sequences to prevent returns during the decompression period.
 
-3. Set up your environment variables (copy `.env.example` to `.env` and configure)
+## 🛠 Tech Stack
+* **Frontend:** React, Tailwind CSS, Shadcn UI
+* **Backend:** Node.js, Express
+* **Database:** PostgreSQL (via Neon/Replit)
+* **Infrastructure:** Built and deployed on **Replit**
 
-4. Set up the database:
-   ```bash
-   npm run db:push
-   ```
+## 🤝 Contributing
+We are actively looking for contributors! Whether you are a frontend wizard or a backend architect, help us save time for rescuers so they can save more lives.
 
-5. Start the development server:
-   ```bash
-   npm run dev
-   ```
+**Good First Issues:**
+* [ ] Refine the "Mobile Homepage" CSS.
+* [ ] Add "Dark Mode" to the Admin Dashboard.
+* [ ] Create email templates for the Adopter Journey.
 
-6. Open your browser to `http://localhost:5000`
+## 📍 Pilot Site
+Proudly piloting at **Haseya's New Beginning Animal Rescue** (Lafayette, LA).
 
-## Managed Hosting (Paid)
+---
 
-Don't want to manage servers? Sign up for our fully managed cloud version here: [Link Pending]
-
-## Contributing
-
-We welcome contributions from the community! Whether it's bug fixes, new features, or documentation improvements, your pull requests are appreciated.
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## License
-
-This project is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0). See the [LICENSE](LICENSE) file for details.
-
-This means if you modify and host this application, you must also share your source code.
+*"Saving lives, one pull request at a time."*
