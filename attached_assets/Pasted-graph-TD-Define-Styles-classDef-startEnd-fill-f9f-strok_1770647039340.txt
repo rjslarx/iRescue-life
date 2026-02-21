@@ -1,0 +1,88 @@
+graph TD
+    %% --- Define Styles ---
+    classDef startEnd fill:#f9f,stroke:#333,stroke-width:2px,color:black,rounded;
+    classDef process fill:#fff,stroke:#333,stroke-width:1px,color:black,rounded;
+    classDef decision fill:#ff9,stroke:#333,stroke-width:1px,color:black,rhombus;
+    classDef database fill:#e1f5fe,stroke:#0277bd,stroke-width:2px,color:black,c1;
+    classDef transport fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:black,dashed;
+    classDef document fill:#fff9c4,stroke:#fbc02d,stroke-width:1px,shape:document,color:black;
+
+    %% --- Swimlane Subgraphs ---
+    subgraph "SENDING RESCUE (Rescue A)"
+        StartA((Start: Need to Move Animal)):::startEnd
+        CreateListing[Create 'Transfer Request' Listing]:::process
+        UploadRecords>Upload Medical Records & Vetting Info]:::document
+        ReviewOffers[Review Incoming Offers]:::process
+        ApproveOffer{Approve Offer?}:::decision
+        PrepareAnimal[Prepare Animal for Transport]:::process
+        PhysicalHandoffA[Physical Handoff to Driver 1]:::process
+    end
+
+    subgraph "THE COLLABORATION HUB (Platform)"
+        HubDB[(Central Database)]:::database
+        Notify[Broadcast Alerts to Partners based on criteria]:::process
+        MatchMade[Record Match & Lock Animal Status]:::process
+        GenTransport[Generate Transport 'Run Sheet']:::process
+        BroadcastLegs[Broadcast Transport Legs to Volunteers]:::transport
+        MonitorTransport[Real-Time Transport Tracking via App]:::transport
+        FinalizeTransfer[Update Custody Record & Archive Transport Data]:::process
+    end
+
+    subgraph "RECEIVING RESCUE (Rescue B)"
+        ReceiveAlert[Receive Alert / Browse Listings]:::process
+        ReviewProfile[Review Animal Profile & Medical Docs]:::process
+        CanCommit{Can Commit to Intake?}:::decision
+        SubmitOffer[Submit Commitment Offer via Hub]:::process
+        AwaitArrival[Prepare Foster/Kennel Space]:::process
+        PhysicalIntakeB[Physical Intake from Final Driver]:::process
+        EndB((End: Animal Integrated)):::startEnd
+    end
+
+    subgraph "TRANSPORT VOLUNTEERS"
+        DriverSignup[Drivers Sign Up for Legs]:::transport
+        ExecuteLegs[Execute Transport Legs & Mobile Check-ins]:::transport
+    end
+
+    %% --- Workflow Connections ---
+
+    %% Phase 1: The Request
+    StartA --> CreateListing
+    CreateListing --> UploadRecords
+    UploadRecords -- Digital Data Payload --> HubDB
+    HubDB --> Notify
+
+    %% Phase 2: The Offer
+    Notify --> ReceiveAlert
+    ReceiveAlert --> ReviewProfile
+    ReviewProfile -- Fetches Data from --> HubDB
+    ReviewProfile --> CanCommit
+    CanCommit -- No --> ReceiveAlert
+    CanCommit -- Yes --> SubmitOffer
+    SubmitOffer -- Offer Details --> HubDB
+
+    %% Phase 3: The Agreement
+    HubDB -- Alerts Sending Rescue --> ReviewOffers
+    ReviewOffers --> ApproveOffer
+    ApproveOffer -- No --> ReviewOffers
+    ApproveOffer -- "Yes (Digital Handshake)" --> MatchMade
+    MatchMade --> HubDB
+    MatchMade -- Notify both parties --> AwaitArrival & PrepareAnimal
+
+    %% Phase 4: Transport Logistics
+    MatchMade --> GenTransport
+    GenTransport --> BroadcastLegs
+    BroadcastLegs --> DriverSignup
+    DriverSignup -- Route confirmed --> HubDB
+    PrepareAnimal --> PhysicalHandoffA
+
+    %% Phase 5: Execution & Handoff
+    PhysicalHandoffA -- "Animal enters transport network" --> ExecuteLegs
+    ExecuteLegs -- "Mobile App Updates location/status" --> MonitorTransport
+    MonitorTransport --> HubDB
+    ExecuteLegs -- "Final Leg Completion" --> PhysicalIntakeB
+    PhysicalIntakeB -- "Confirm Receipt on App" --> FinalizeTransfer
+    FinalizeTransfer --> HubDB
+    FinalizeTransfer --> EndB
+
+    %% Ensure database is central
+    HubDB ~~~ GenTransport

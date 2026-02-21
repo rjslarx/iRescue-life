@@ -1,0 +1,110 @@
+2026-02-09 18:23:09.81
+7d15661f
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:63:22
+2026-02-09 18:23:09.81
+7d15661f
+User
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:17)
+2026-02-09 18:23:09.81
+7d15661f
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:708:19
+2026-02-09 18:23:09.81
+7d15661f
+User
+at Array.reduce ()
+2026-02-09 18:23:09.81
+7d15661f
+User
+at PgSelectBase._prepare (file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:683:19)
+2026-02-09 18:25:06.03
+7d15661f
+User
+at Object.startActiveSpan (file:///home/runner/workspace/node_modules/drizzle-orm/tracing.js:8:14)
+2026-02-09 18:25:06.03
+7d15661f
+User
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:17)
+2026-02-09 18:25:06.03
+7d15661f
+User
+[ANIMAL BACKUP] Failed to sync medical records: TypeError: Cannot convert undefined or null to object
+2026-02-09 18:25:06.03
+7d15661f
+User
+at Function.entries ()
+2026-02-09 18:25:06.03
+7d15661f
+User
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:33)
+2026-02-09 18:25:06.03
+7d15661f
+User
+at PgSelectBase._prepare (file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:683:19)
+2026-02-09 18:25:06.03
+7d15661f
+User
+at Object.startActiveSpan (file:///home/runner/workspace/node_modules/drizzle-orm/tracing.js:8:14)
+2026-02-09 18:25:06.03
+7d15661f
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:63:22
+2026-02-09 18:25:06.03
+7d15661f
+User
+at Array.reduce ()
+2026-02-09 18:25:06.03
+7d15661f
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:708:19
+2026-02-09 18:25:06.03
+7d15661f
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:684:26
+2026-02-09 18:25:06.45
+7d15661f
+User
+at Object.startActiveSpan (file:///home/runner/workspace/node_modules/drizzle-orm/tracing.js:8:14)
+2026-02-09 18:25:06.45
+7d15661f
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:708:19
+2026-02-09 18:25:06.45
+7d15661f
+User
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:33)
+2026-02-09 18:25:06.45
+7d15661f
+User
+at Array.reduce ()
+2026-02-09 18:25:06.45
+7d15661f
+User
+at Object.startActiveSpan (file:///home/runner/workspace/node_modules/drizzle-orm/tracing.js:8:14)
+2026-02-09 18:25:06.45
+7d15661f
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:684:26
+2026-02-09 18:25:06.45
+7d15661f
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:63:22
+2026-02-09 18:25:06.45
+7d15661f
+User
+TypeError: Cannot convert undefined or null to object
+2026-02-09 18:25:06.45
+7d15661f
+User
+at PgSelectBase._prepare (file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:683:19)
+2026-02-09 18:25:06.45
+7d15661f
+User
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:17)
+2026-02-09 18:25:06.45
+7d15661f
+User
+at Function.entries ()
+Wrap
+Colors

@@ -1,0 +1,126 @@
+Surrender Request Form
+Please provide as much information as possible about the animal you need to surrender. This helps us prepare for their care and find the best placement.
+Owner Information
+Full Name *
+John Doe
+Email *
+john@example.com
+Mobile Phone *
+(555) 123-4567
+By entering your number, you agree to receive mobile messages from Haseya's New Beginning Animal Rescue. Message frequency varies. Carrier rates may apply. Reply STOP to opt out.
+
+Address *
+123 Main St, City, State ZIP
+Dog Information
+Dog's Name *
+Buddy
+Breed *
+Labrador Mix, German Shepherd, etc.
+Date of Birth
+Select date
+If unknown, enter approximate age below
+
+Age (if DOB unknown) *
+2 years, 6 months, etc.
+Gender *
+Unknown
+
+Weight *
+e.g., 45 lbs
+Size *
+Select size
+
+Spayed/Neutered?
+Select
+
+Microchipped?
+Select
+
+Compatibility
+Good with Kids?
+Select
+
+Good with Dogs?
+Select
+
+Good with Cats?
+Select
+
+Additional Details
+Preferred Surrender Date
+Select date
+When would you like to bring the dog to us?
+
+Reason for Surrender *
+Please explain why you need to surrender this dog
+Understanding your situation helps us provide the best care and placement
+
+Medical Issues
+Any medical conditions, medications, vaccinations, etc.
+Include any known medical issues, current medications, and vaccination history
+
+Behavioral Issues
+Describe any behavioral concerns, training, temperament, etc.
+Tell us about their personality, any behavioral issues, good with kids/pets, etc.
+
+Additional Information
+Location of the dog *
+Dog's Weight *
+How long have you owned the dog? *
+Where did the dog originally come from? *
+Is the dog up to date on Vaccines? From licensed veterinarian? *
+Has the dog been tested for heartworms? *
+
+Yes
+
+No
+Date of heartworm test (type n/a if no test has been done) *
+If tested, what were the results? *
+
+Yes
+
+No
+
+Not tested
+Has the dog been on heartworm prevention? *
+
+Yes
+
+No
+Is the dog microchipped? *
+
+Yes
+
+No
+Date of dogs last vet visit *
+Does the dog have any known medical problems? *
+Is your dog good with kids? *
+Is your dog potty trained? *
+
+Yes
+
+No
+Please check all that apply: *
+
+Friendly
+
+Friendly with strangers
+
+Leary of strangers
+
+Active
+
+Lazy
+
+Aggressive
+
+Playful
+
+Good with other dogs
+
+Good with cats
+Please upload a photo of your dog. *
+Upload Photo
+
+
+I agree to receive text messages from Haseya's New Beginning Animal Rescue regarding my surrender request. Message frequency varies. Message & data rates may apply. Reply STOP to unsubscribe, HELP for help.

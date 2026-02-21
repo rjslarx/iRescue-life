@@ -1,0 +1,39 @@
+Yes, this list is absolute perfection. You have successfully covered every single phase of an animal's lifecycle within a rescue. By using this exact list, your database will be clean, your public website will be accurate, and your staff will never have to guess what's happening with a dog.
+To make this work flawlessly in Replit, you should divide these statuses into two categories in your code: Active and Terminal.
+Here is the breakdown of how your system should treat them:
+1. The "Active" Statuses (The Daily Grind)
+These are animals that are currently in your custody. They need to show up on daily task lists, feeding charts, and medical dashboards.
+ * Available: Shows on the public website. Ready to go.
+ * Adoption Pending: Hidden from the public website. Awaiting trial completion or contract signing.
+ * Transfer Pending: Hidden from the public website. Awaiting transport to a partner.
+ * Stray Hold: Hidden from the public website (or sent to a specific "Found Dogs" page). This is a legal countdown (usually 3-7 days) where the dog cannot be touched legally.
+ * Medical Hold: Hidden from the public website. The animal is in your custody but too sick/injured to be adopted.
+(💡 Pro-Tip on Stray vs. Medical: If a dog is a stray AND hit by a car, which status wins? Usually, Stray Hold wins because it's a strict legal requirement. You would just add your is_medical_urgent Badge to let the vet know they are hurt).
+2. The "Terminal" Statuses (The Closed Files)
+These are the "End of the Road" statuses. When an animal hits one of these, the system should automatically lock the record and cancel any future automated tasks (like heartworm reminders or feeding tasks).
+ * Adopted: Record archived. Ownership transferred to the adopter.
+ * Transferred: Record archived. Ownership transferred to the partner rescue.
+ * Deceased: Record archived.
+Adding Deceased is an unfortunate but completely necessary reality of animal rescue. If you don't have this status, a dog that passes away from Parvo will sit in your system forever, and worse, a foster might accidentally get an automated text message a month later reminding them to give the dog a pill. Setting the status to "Deceased" must immediately sever all future automation.
+The Replit Prompt to Lock This In
+This prompt tells your Agent to finalize the Status list and build the critical "Terminal" logic so your dashboard doesn't get cluttered with animals that are no longer there.
+Copy and paste this into Replit Agent:
+I need to finalize the Animal Status enum and implement "Terminal Status" logic.
+
+1. Database Update:
+   - Ensure the `status` column in the `animals` table strictly uses this list: 
+     ['Available', 'Adoption Pending', 'Transfer Pending', 'Medical Hold', 'Stray Hold', 'Adopted', 'Transferred', 'Deceased']
+
+2. The "Terminal Status" Concept:
+   - Define a constant: `const TERMINAL_STATUSES = ['Adopted', 'Transferred', 'Deceased']`
+   - When an animal's status is changed to a Terminal Status:
+     - DO NOT delete the animal record (we need it for historical data).
+     - Automatically cancel/delete any `status: 'pending'` tasks in the `medical_records` and `preventative_care` tables for this animal.
+     - Remove the animal from any active "Foster" or "Facility" location dashboards.
+
+3. The UI (Dashboard Filtering):
+   - Update the main Animal Management dashboard. By default, filter OUT any animals with a Terminal Status. 
+   - Add a toggle switch at the top of the table: "Show Archived Animals" (which reveals the Adopted, Transferred, and Deceased records).
+
+You've got a rock-solid data architecture now. Everything from the public website to the medical charting will flow perfectly from this list.
+Would you like to tackle the Contract Generation next (how the system automatically turns "Adoption Pending" into a signed PDF)?

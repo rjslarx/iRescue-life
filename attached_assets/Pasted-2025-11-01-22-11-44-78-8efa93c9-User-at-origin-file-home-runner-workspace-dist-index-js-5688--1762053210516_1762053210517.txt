@@ -1,0 +1,111 @@
+2025-11-01 22:11:44.78
+8efa93c9
+User
+at origin (file:///home/runner/workspace/dist/index.js:5688:18)
+2025-11-01 22:11:44.78
+8efa93c9
+User
+at /home/runner/workspace/node_modules/cors/lib/index.js:219:13
+2025-11-01 22:11:44.78
+8efa93c9
+User
+at optionsCallback (/home/runner/workspace/node_modules/cors/lib/index.js:199:9)
+2025-11-01 22:11:44.78
+8efa93c9
+User
+at corsMiddleware (/home/runner/workspace/node_modules/cors/lib/index.js:204:7)
+2025-11-01 22:11:44.78
+8efa93c9
+User
+at Layer.handle [as handle_request] (/home/runner/workspace/node_modules/express/lib/router/layer.js:95:5)
+2025-11-01 22:11:44.78
+8efa93c9
+User
+at trim_prefix (/home/runner/workspace/node_modules/express/lib/router/index.js:328:13)
+2025-11-01 22:11:44.78
+8efa93c9
+User
+at /home/runner/workspace/node_modules/express/lib/router/index.js:286:9
+2025-11-01 22:11:44.78
+8efa93c9
+User
+at Function.process_params (/home/runner/workspace/node_modules/express/lib/router/index.js:346:12)
+2025-11-01 22:11:44.78
+8efa93c9
+User
+at next (/home/runner/workspace/node_modules/express/lib/router/index.js:280:10)
+2025-11-01 22:11:44.78
+8efa93c9
+User
+at internalNext (file:///home/runner/workspace/node_modules/helmet/index.mjs:527:6)
+2025-11-01 22:11:44.78
+8efa93c9
+User
+Error: Origin https://platform.irescue.life not allowed by CORS
+2025-11-01 22:11:44.78
+8efa93c9
+User
+at origin (file:///home/runner/workspace/dist/index.js:5688:18)
+2025-11-01 22:11:44.78
+8efa93c9
+User
+at /home/runner/workspace/node_modules/cors/lib/index.js:219:13
+2025-11-01 22:11:44.78
+8efa93c9
+User
+at optionsCallback (/home/runner/workspace/node_modules/cors/lib/index.js:199:9)
+2025-11-01 22:11:44.78
+8efa93c9
+User
+at corsMiddleware (/home/runner/workspace/node_modules/cors/lib/index.js:204:7)
+2025-11-01 22:11:44.78
+8efa93c9
+User
+at Layer.handle [as handle_request] (/home/runner/workspace/node_modules/express/lib/router/layer.js:95:5)
+2025-11-01 22:11:44.78
+8efa93c9
+User
+at trim_prefix (/home/runner/workspace/node_modules/express/lib/router/index.js:328:13)
+2025-11-01 22:11:44.78
+8efa93c9
+User
+at /home/runner/workspace/node_modules/express/lib/router/index.js:286:9
+2025-11-01 22:11:44.78
+8efa93c9
+User
+at Function.process_params (/home/runner/workspace/node_modules/express/lib/router/index.js:346:12)
+2025-11-01 22:11:44.78
+8efa93c9
+User
+at next (/home/runner/workspace/node_modules/express/lib/router/index.js:280:10)
+2025-11-01 22:11:44.78
+8efa93c9
+User
+at internalNext (file:///home/runner/workspace/node_modules/helmet/index.mjs:527:6)
+2025-11-01 22:11:44.91
+8efa93c9
+User
+[TENANT DEBUG] GET /favicon.png - hostname: platform.irescue.life, x-tenant-id: undefined, session.tenantId: undefined
+2025-11-01 22:11:44.91
+8efa93c9
+User
+[TENANT DEBUG] Platform admin context detected (platform.irescue.life)
+2025-11-01 22:11:50.27
+8efa93c9
+User
+[TENANT DEBUG] GET /assets/index-09j3OdQm.css - hostname: platform.irescue.life, x-tenant-id: undefined, session.tenantId: undefined
+2025-11-01 22:11:50.27
+8efa93c9
+User
+[TENANT DEBUG] Platform admin context detected (platform.irescue.life)
+2025-11-01 22:11:50.49
+8efa93c9
+User
+[TENANT DEBUG] GET /manifest.json - hostname: platform.irescue.life, x-tenant-id: undefined, session.tenantId: undefined
+
+2025-11-01 22:11:50.49
+8efa93c9
+User
+[TENANT DEBUG] Platform admin context detected (platform.irescue.life)
+
+Collapse

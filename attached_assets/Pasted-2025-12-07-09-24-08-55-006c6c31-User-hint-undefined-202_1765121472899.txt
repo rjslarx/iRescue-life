@@ -1,0 +1,109 @@
+2025-12-07 09:24:08.55
+006c6c31
+User
+hint: undefined,
+2025-12-07 09:24:08.55
+006c6c31
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2025-12-07 09:24:08.55
+006c6c31
+User
+schema: undefined,
+2025-12-07 09:24:08.55
+006c6c31
+User
+routine: 'errorMissingColumn'
+2025-12-07 09:27:21.28
+006c6c31
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2025-12-07 09:27:21.28
+006c6c31
+User
+position: '689',
+2025-12-07 09:27:21.28
+006c6c31
+User
+code: '42703',
+2025-12-07 09:27:21.28
+006c6c31
+User
+Error resolving tenant: error: column "donation_section" does not exist
+2025-12-07 09:27:21.28
+006c6c31
+User
+length: 117,
+2025-12-07 09:27:21.28
+006c6c31
+User
+hint: undefined,
+2025-12-07 09:27:21.28
+006c6c31
+User
+constraint: undefined,
+2025-12-07 09:27:21.28
+006c6c31
+User
+at async resolveTenant (file:///home/runner/workspace/dist/index.js:3670:24) {
+2025-12-07 09:27:21.28
+006c6c31
+User
+routine: 'errorMissingColumn'
+2025-12-07 09:27:21.28
+006c6c31
+User
+column: undefined,
+2025-12-07 09:27:21.28
+006c6c31
+User
+at async NeonPreparedQuery.execute (file:///home/runner/workspace/node_modules/drizzle-orm/neon-serverless/session.js:76:20)
+2025-12-07 09:27:21.28
+006c6c31
+User
+severity: 'ERROR',
+2025-12-07 09:27:21.28
+006c6c31
+User
+schema: undefined,
+2025-12-07 09:27:21.28
+006c6c31
+User
+internalQuery: undefined,
+2025-12-07 09:27:21.28
+006c6c31
+User
+file: 'parse_relation.c',
+2025-12-07 09:27:21.28
+006c6c31
+User
+table: undefined,
+2025-12-07 09:27:21.28
+006c6c31
+User
+line: '3722',
+2025-12-07 09:27:21.28
+006c6c31
+User
+where: undefined,
+2025-12-07 09:27:21.28
+006c6c31
+User
+internalPosition: undefined,
+
+2025-12-07 09:27:21.28
+006c6c31
+User
+}
+2025-12-07 09:27:21.28
+006c6c31
+User
+at file:///home/runner/workspace/node_modules/@neondatabase/serverless/index.mjs:1345:74
+2025-12-07 09:27:21.28
+006c6c31
+User
+dataType: undefined,
+2025-12-07 09:27:21.28
+006c6c31
+User
+detail: undefined,

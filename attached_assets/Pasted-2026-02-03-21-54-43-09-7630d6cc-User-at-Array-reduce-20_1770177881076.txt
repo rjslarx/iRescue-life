@@ -1,0 +1,110 @@
+2026-02-03 21:54:43.09
+7630d6cc
+User
+at Array.reduce ()
+2026-02-03 21:54:43.09
+7630d6cc
+User
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:33)
+2026-02-03 21:54:43.09
+7630d6cc
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:63:22
+2026-02-03 21:54:43.09
+7630d6cc
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:708:19
+2026-02-03 21:54:43.09
+7630d6cc
+User
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:17)
+2026-02-03 21:56:20.59
+7630d6cc
+User
+at PgSelectBase._prepare (file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:683:19)
+2026-02-03 21:56:20.59
+7630d6cc
+User
+at Object.startActiveSpan (file:///home/runner/workspace/node_modules/drizzle-orm/tracing.js:8:14)
+2026-02-03 21:56:20.59
+7630d6cc
+User
+at Array.reduce ()
+2026-02-03 21:56:20.59
+7630d6cc
+User
+at Function.entries ()
+2026-02-03 21:56:20.59
+7630d6cc
+User
+at Object.startActiveSpan (file:///home/runner/workspace/node_modules/drizzle-orm/tracing.js:8:14)
+2026-02-03 21:56:20.59
+7630d6cc
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:63:22
+2026-02-03 21:56:20.59
+7630d6cc
+User
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:17)
+2026-02-03 21:56:20.59
+7630d6cc
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:684:26
+2026-02-03 21:56:20.59
+7630d6cc
+User
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:33)
+2026-02-03 21:56:20.59
+7630d6cc
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:708:19
+2026-02-03 21:56:20.59
+7630d6cc
+User
+TypeError: Cannot convert undefined or null to object
+2026-02-03 21:56:20.81
+7630d6cc
+User
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:17)
+2026-02-03 21:56:20.81
+7630d6cc
+User
+at PgSelectBase._prepare (file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:683:19)
+2026-02-03 21:56:20.81
+7630d6cc
+User
+at Function.entries ()
+2026-02-03 21:56:20.81
+7630d6cc
+User
+TypeError: Cannot convert undefined or null to object
+2026-02-03 21:56:20.81
+7630d6cc
+User
+at Array.reduce ()
+2026-02-03 21:56:20.81
+7630d6cc
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:63:22
+2026-02-03 21:56:20.81
+7630d6cc
+User
+at Object.startActiveSpan (file:///home/runner/workspace/node_modules/drizzle-orm/tracing.js:8:14)
+2026-02-03 21:56:20.81
+7630d6cc
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:684:26
+2026-02-03 21:56:20.81
+7630d6cc
+User
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:33)
+2026-02-03 22:00:03.09
+7630d6cc
+User
+[2026-02-04T04:00:03.098Z] [PID: 41] [NODE-CRON] [WARN] missed execution at Wed Feb 04 2026 04:00:00 GMT+0000 (Coordinated Universal Time)! Possible blocking IO or high CPU user at the same process used by node-cron.
+2026-02-03 22:00:20.49
+7630d6cc
+User
+⚠️ Storage backup errors: [Haseya's New Beginning Animal Rescue] Failed to backup animal photos: Cannot convert undefined or null to object; [Haseya's New Beginning Animal Rescue] Failed to backup volunteer documents: Cannot convert undefined or null to object; [Haseya's New Beginning Animal Rescue] Failed to backup foster documents: Cannot convert undefined or null to object; [Haseya's New Beginning Animal Rescue] Failed to backup donation receipts: Cannot convert undefined or null to object
+Wrap
+Colors

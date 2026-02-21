@@ -1,0 +1,92 @@
+2026-01-28 18:20:28.49
+1bd5ace3
+User
+table: 'activity_logs',
+2026-01-28 18:20:28.49
+1bd5ace3
+User
+constraint: undefined,
+2026-01-28 18:20:28.49
+1bd5ace3
+User
+where: undefined,
+2026-01-28 18:20:28.49
+1bd5ace3
+User
+internalPosition: undefined,
+2026-01-28 18:20:28.49
+1bd5ace3
+User
+file: 'execMain.c',
+2026-01-28 18:20:28.49
+1bd5ace3
+User
+dataType: undefined,
+2026-01-28 18:20:28.49
+1bd5ace3
+User
+internalQuery: undefined,
+2026-01-28 18:20:28.49
+1bd5ace3
+User
+column: 'category',
+2026-01-28 18:20:28.49
+1bd5ace3
+User
+severity: 'ERROR',
+2026-01-28 18:20:28.49
+1bd5ace3
+User
+code: '23502',
+2026-01-28 18:20:28.49
+1bd5ace3
+User
+detail: 'Failing row contains (30f6ad45-4ff7-4a06-9519-22db6789376c, 3a4c2321-6a54-41a4-acf3-a7f2ffe0c051, c9f80047-4456-426b-9ee8-d1b15f7301b9, application, af864ad1-bf83-4e79-a4fa-c4394d76c865, email_sent, Email sent to applicant: "Your adoption application", null, {"subject": "Your adoption application", "provider": "gmail", "r..., 2026-01-29 00:20:28.47593).',
+2026-01-28 18:20:28.49
+1bd5ace3
+User
+position: undefined,
+2026-01-28 18:20:28.49
+1bd5ace3
+User
+length: 541,
+2026-01-28 18:20:28.49
+1bd5ace3
+User
+[Activity Logger] Failed to log activity: error: null value in column "category" of relation "activity_logs" violates not-null constraint
+2026-01-28 18:20:28.49
+1bd5ace3
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-01-28 18:20:28.49
+1bd5ace3
+User
+at async logActivity (file:///home/runner/workspace/dist/index.js:8720:5)
+2026-01-28 18:20:28.49
+1bd5ace3
+User
+schema: 'public',
+2026-01-28 18:20:28.49
+1bd5ace3
+User
+at async file:///home/runner/workspace/dist/index.js:40369:11 {
+2026-01-28 18:20:28.49
+1bd5ace3
+User
+}
+2026-01-28 18:20:28.49
+1bd5ace3
+User
+hint: undefined,
+2026-01-28 18:20:28.49
+1bd5ace3
+User
+at /home/runner/workspace/node_modules/pg-pool/index.js:45:11
+2026-01-28 18:20:28.49
+1bd5ace3
+User
+routine: 'ExecConstraints'
+2026-01-28 18:20:28.49
+1bd5ace3
+User
+line: '2067',

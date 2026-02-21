@@ -1,0 +1,44 @@
+I need to build a "RescueGroups.org Importer" to help new users migrate their data to our platform.
+Please build this feature using the following technical specifications:
+
+PHASE 1: DEPENDENCIES & SETUP
+1. Install 'csv-parser' and 'multer' (for handling file uploads) and 'axios' (for downloading images from URLs).
+2. Create a backend API route: POST /api/import/rescuegroups
+
+PHASE 2: FRONTEND UI (The "One-Click" Experience)
+1. Create a new settings page or tab called "Import Data".
+2. Add a specialized "Upload CSV" box that accepts .csv files.
+3. When the user selects a file, show a "Processing..." loading state (this process may take time).
+4. On success, display a summary: "Success! Imported X dogs. Skipped Y duplicates."
+
+PHASE 3: BACKEND IMPORT LOGIC (The Processor)
+1. File Upload:
+   - Receive the CSV file via Multer.
+   - Stream the file through 'csv-parser'.
+
+2. The Mapping Logic (CRITICAL):
+   - Map the standard RescueGroups CSV headers to our 'animals' table columns. Use this mapping logic:
+     - 'AnimalName' -> database 'name'
+     - 'AnimalBreed' -> database 'breed'
+     - 'AnimalSex' -> database 'gender' (Handle 'Male'/'Female'/'M'/'F')
+     - 'AnimalBirthdate' -> database 'dob' (Parse standard date formats)
+     - 'AnimalDescription' -> database 'bio' or 'description'
+     - 'AnimalStatus' -> database 'status' (Map 'Available' -> 'Available', 'Adopted' -> 'Alumni')
+     - 'AnimalID' -> database 'external_id' (Save this to prevent duplicates later!)
+
+3. Duplicate Prevention:
+   - Before inserting a record, check if an animal with this specific 'external_id' (RescueGroups ID) already exists in our DB for this tenant.
+   - If yes, SKIP it (or update it). Do not create duplicates.
+
+4. Image Migration Strategy:
+   - The CSV will contain an 'AnimalImage' or 'Photo' column with a URL (e.g., http://rescuegroups.org/photo123.jpg).
+   - Do NOT just save the URL (links rot).
+   - Using 'axios', fetch the image data from that URL.
+   - Upload/Save that image to our own storage (wherever we store animal photos).
+   - Save the *new* internal file path to the animal record.
+   - If the image download fails, log it but still import the animal record (don't crash the whole import).
+
+5. Response:
+   - Return a JSON object with { imported: count, duplicates: count, errors: [] }.
+
+Please implement this full stack feature now.

@@ -1,0 +1,148 @@
+2026-02-04 21:00:51.30
+0fd1bebf
+User
+at Function.entries ()
+2026-02-04 21:00:51.30
+0fd1bebf
+User
+at Object.startActiveSpan (file:///home/runner/workspace/node_modules/drizzle-orm/tracing.js:8:14)
+2026-02-04 21:00:51.31
+0fd1bebf
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:63:22
+2026-02-04 21:00:51.31
+0fd1bebf
+User
+at Object.startActiveSpan (file:///home/runner/workspace/node_modules/drizzle-orm/tracing.js:8:14)
+2026-02-04 21:00:51.31
+0fd1bebf
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:684:26
+2026-02-04 21:00:51.31
+0fd1bebf
+User
+at Function.entries ()
+2026-02-04 21:00:51.31
+0fd1bebf
+User
+TypeError: Cannot convert undefined or null to object
+2026-02-04 21:00:51.31
+0fd1bebf
+User
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:17)
+2026-02-04 21:01:03.24
+0fd1bebf
+User
+Error fetching application details: TypeError: Cannot convert undefined or null to object
+2026-02-04 21:01:03.24
+0fd1bebf
+User
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:33)
+2026-02-04 21:01:03.24
+0fd1bebf
+User
+at Function.entries ()
+2026-02-04 21:01:03.24
+0fd1bebf
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:63:22
+2026-02-04 21:01:03.24
+0fd1bebf
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:684:26
+2026-02-04 21:01:03.24
+0fd1bebf
+User
+at Object.startActiveSpan (file:///home/runner/workspace/node_modules/drizzle-orm/tracing.js:8:14)
+2026-02-04 21:01:03.24
+0fd1bebf
+User
+at PgSelectBase._prepare (file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:683:19)
+2026-02-04 21:01:03.24
+0fd1bebf
+User
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:17)
+2026-02-04 21:01:03.24
+0fd1bebf
+User
+at Array.reduce ()
+2026-02-04 21:01:03.24
+0fd1bebf
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:708:19
+2026-02-04 21:01:03.24
+0fd1bebf
+User
+at Object.startActiveSpan (file:///home/runner/workspace/node_modules/drizzle-orm/tracing.js:8:14)
+2026-02-04 21:01:03.25
+0fd1bebf
+User
+at Object.startActiveSpan (file:///home/runner/workspace/node_modules/drizzle-orm/tracing.js:8:14)
+2026-02-04 21:01:03.25
+0fd1bebf
+User
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:33)
+2026-02-04 21:01:03.25
+0fd1bebf
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:708:19
+2026-02-04 21:01:03.25
+0fd1bebf
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:684:26
+2026-02-04 21:01:03.25
+0fd1bebf
+User
+at Array.reduce ()
+2026-02-04 21:01:03.25
+0fd1bebf
+User
+at PgSelectBase._prepare (file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:683:19)
+2026-02-04 21:01:03.25
+0fd1bebf
+User
+at Function.entries ()
+2026-02-04 21:01:03.25
+0fd1bebf
+User
+TypeError: Cannot convert undefined or null to object
+2026-02-04 21:01:03.25
+0fd1bebf
+User
+at Object.startActiveSpan (file:///home/runner/workspace/node_modules/drizzle-orm/tracing.js:8:14)
+2026-02-04 21:01:03.25
+0fd1bebf
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:63:22
+2026-02-04 21:01:03.25
+0fd1bebf
+User
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:17)
+2026-02-04 21:01:03.38
+0fd1bebf
+User
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:33)
+2026-02-04 21:01:03.38
+0fd1bebf
+User
+at PgSelectBase._prepare (file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:683:19)
+2026-02-04 21:01:03.38
+0fd1bebf
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:708:19
+2026-02-04 21:01:03.38
+0fd1bebf
+User
+at Array.reduce ()
+2026-02-04 21:01:03.38
+0fd1bebf
+User
+at Function.entries ()
+2026-02-04 21:01:03.38
+0fd1bebf
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:63:22
+2026-02-04 21:01:03.38
+0fd1bebf
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:63:22

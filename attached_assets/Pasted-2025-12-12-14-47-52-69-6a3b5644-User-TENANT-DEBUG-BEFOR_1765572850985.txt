@@ -1,0 +1,105 @@
+2025-12-12 14:47:52.69
+6a3b5644
+User
+[TENANT DEBUG] BEFORE stripping - req.url: /munchkin/dashboard/platform-integrations, req.originalUrl: /munchkin/dashboard/platform-integrations, req.path: /munchkin/dashboard/platform-integrations
+2025-12-12 14:47:52.69
+6a3b5644
+User
+[TENANT DEBUG] Path-based tenant detected: munchkin
+2025-12-12 14:47:54.45
+6a3b5644
+User
+[TENANT DEBUG] BEFORE stripping - req.url: /munchkin/api/notifications/counts, req.originalUrl: /munchkin/api/notifications/counts, req.path: /munchkin/api/notifications/counts
+2025-12-12 14:47:54.46
+6a3b5644
+User
+[TENANT DEBUG] BEFORE stripping - req.url: /munchkin/api/tenant, req.originalUrl: /munchkin/api/tenant, req.path: /munchkin/api/tenant
+2025-12-12 14:47:54.46
+6a3b5644
+User
+[TENANT DEBUG] Path-based tenant detected: munchkin
+2025-12-12 14:47:54.46
+6a3b5644
+User
+[TENANT DEBUG] AFTER stripping - req.url: /api/tenant, req.originalUrl: /api/tenant, req.path: /api/tenant
+2025-12-12 14:47:54.46
+6a3b5644
+User
+[TENANT DEBUG] GET /munchkin/api/google-workspace/shared-drives - hostname: irescue.life, x-tenant-id: munchkin, session.tenantId: 3a4c2321-6a54-41a4-acf3-a7f2ffe0c051
+2025-12-12 14:47:54.51
+6a3b5644
+User
+[TENANT DEBUG] GET /manifest.json - hostname: irescue.life, x-tenant-id: undefined, session.tenantId: undefined
+2025-12-12 14:47:54.53
+6a3b5644
+User
+8:47:54 PM [express] GET /api/tenant 200 in 24ms :: {"tenant":{"id":"3a4c2321-6a54-41a4-acf3-a7f2ffe…
+2025-12-12 14:47:54.53
+6a3b5644
+User
+[MANIFEST] Using query param for tenant: munchkin
+2025-12-12 14:47:54.53
+6a3b5644
+User
+[MANIFEST] Request - tenant: none, isCustomDomain: undefined, basePath: /, hostname: irescue.life
+2025-12-12 14:47:54.55
+6a3b5644
+User
+[MANIFEST] Found tenant from DB: Munchkin Rescue, basePath: /munchkin
+2025-12-12 14:47:54.55
+6a3b5644
+User
+[MANIFEST] Customizing manifest for tenant: Munchkin Rescue, logo: no
+2025-12-12 14:47:54.59
+6a3b5644
+User
+[TENANT DEBUG] GET /munchkin/api/google-workspace/status - hostname: irescue.life, x-tenant-id: munchkin, session.tenantId: 3a4c2321-6a54-41a4-acf3-a7f2ffe0c051
+2025-12-12 14:47:54.60
+6a3b5644
+User
+[TENANT DEBUG] GET /munchkin/api/platform-integrations - hostname: irescue.life, x-tenant-id: munchkin, session.tenantId: 3a4c2321-6a54-41a4-acf3-a7f2ffe0c051
+2025-12-12 14:47:54.61
+6a3b5644
+User
+[TENANT DEBUG] BEFORE stripping - req.url: /munchkin/api/google-workspace/status, req.originalUrl: /munchkin/api/google-workspace/status, req.path: /munchkin/api/google-workspace/status
+2025-12-12 14:47:54.61
+6a3b5644
+User
+[TENANT DEBUG] AFTER stripping - req.url: /api/google-workspace/status, req.originalUrl: /api/google-workspace/status, req.path: /api/google-workspace/status
+2025-12-12 14:47:54.61
+6a3b5644
+User
+[TENANT DEBUG] Path-based tenant detected: munchkin
+2025-12-12 14:47:54.62
+6a3b5644
+User
+[TENANT DEBUG] AFTER stripping - req.url: /api/google-workspace/shared-drives, req.originalUrl: /api/google-workspace/shared-drives, req.path: /api/google-workspace/shared-drives
+2025-12-12 14:47:54.62
+6a3b5644
+User
+[TENANT DEBUG] Path-based tenant detected: munchkin
+2025-12-12 14:47:54.65
+6a3b5644
+User
+[Google Workspace Status] Checking status for tenant: {
+
+2025-12-12 14:47:54.65
+6a3b5644
+User
+userId: 'c9f80047-4456-426b-9ee8-d1b15f7301b9'
+2025-12-12 14:47:54.68
+6a3b5644
+User
+[Google Workspace Status] Returning connected: false - integration not found or disabled
+2025-12-12 14:47:54.68
+6a3b5644
+User
+connectedEmail: undefined
+2025-12-12 14:47:54.68
+6a3b5644
+User
+hasTokens: false,
+2025-12-12 14:47:54.68
+6a3b5644
+User
+isEnabled: undefined,

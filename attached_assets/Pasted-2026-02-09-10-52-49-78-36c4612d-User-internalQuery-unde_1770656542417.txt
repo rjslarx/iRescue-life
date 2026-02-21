@@ -1,0 +1,108 @@
+2026-02-09 10:52:49.78
+36c4612d
+User
+internalQuery: undefined,
+2026-02-09 10:52:49.78
+36c4612d
+User
+at Readable.push (node:internal/streams/readable:392:5)
+2026-02-09 10:52:49.78
+36c4612d
+User
+at Parser.parse (/home/runner/workspace/node_modules/pg-protocol/dist/parser.js:36:17)
+2026-02-09 10:52:49.78
+36c4612d
+User
+where: undefined,
+2026-02-09 10:52:49.78
+36c4612d
+User
+hint: undefined,
+2026-02-09 10:52:49.78
+36c4612d
+User
+at Parser.handlePacket (/home/runner/workspace/node_modules/pg-protocol/dist/parser.js:122:29)
+2026-02-09 10:52:49.78
+36c4612d
+User
+node:events:502
+2026-02-09 10:52:49.78
+36c4612d
+User
+table: undefined,
+2026-02-09 10:52:49.78
+36c4612d
+User
+internalPosition: undefined,
+2026-02-09 10:52:49.78
+36c4612d
+User
+signal: undefined
+2026-02-09 10:52:49.78
+36c4612d
+User
+dataType: undefined,
+2026-02-09 10:52:49.78
+36c4612d
+User
+at Parser.parseErrorMessage (/home/runner/workspace/node_modules/pg-protocol/dist/parser.js:285:98)
+2026-02-09 10:52:49.78
+36c4612d
+User
+file: 'postgres.c',
+2026-02-09 10:52:49.78
+36c4612d
+User
+Emitted 'error' event on BoundPool instance at:
+2026-02-09 10:52:49.78
+36c4612d
+User
+at Parser.parse (/home/runner/workspace/node_modules/pg-protocol/dist/parser.js:35:38)
+2026-02-09 10:52:49.78
+36c4612d
+User
+at Client._handleErrorMessage (/home/runner/workspace/node_modules/pg/lib/client.js:361:12)
+2026-02-09 10:52:49.78
+36c4612d
+User
+at /home/runner/workspace/node_modules/pg/lib/connection.js:116:12
+2026-02-09 10:52:49.78
+36c4612d
+User
+line: '3289',
+2026-02-09 10:52:49.78
+36c4612d
+User
+at Client.emit (node:events:524:28)
+2026-02-09 10:52:49.78
+36c4612d
+User
+throw er; // Unhandled 'error' event
+2026-02-09 10:52:49.78
+36c4612d
+User
+position: undefined,
+2026-02-09 10:52:58.68
+36c4612d
+User
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.9.0
+2026-02-09 10:52:58.68
+36c4612d
+User
+npm notice
+2026-02-09 10:52:58.68
+36c4612d
+User
+npm notice
+2026-02-09 10:52:58.68
+36c4612d
+User
+npm notice New major version of npm available! 10.8.2 -> 11.9.0
+2026-02-09 10:52:58.68
+36c4612d
+User
+npm notice To update run: npm install -g npm@11.9.0
+2026-02-09 10:53:00.28
+36c4612d
+System
+command finished with error [npm run start]: exit status 1

@@ -1,0 +1,108 @@
+2026-01-30 17:05:54.19
+958abaa5
+User
+host: 'ep-cold-truth-aelbjfhc.c-2.us-east-2.aws.neon.tech',
+2026-01-30 17:05:54.19
+958abaa5
+User
+constraint: undefined,
+2026-01-30 17:05:54.19
+958abaa5
+User
+connect_timeout: 30
+2026-01-30 17:05:54.19
+958abaa5
+User
+at Connection.emit (node:events:524:28)
+2026-01-30 17:05:54.19
+958abaa5
+User
+at TLSSocket. (/home/runner/workspace/node_modules/pg-protocol/dist/index.js:11:42)
+2026-01-30 17:05:54.19
+958abaa5
+User
+where: undefined,
+2026-01-30 17:05:54.19
+958abaa5
+User
+routine: 'ProcessInterrupts',
+2026-01-30 17:05:54.19
+958abaa5
+User
+^
+2026-01-30 17:05:54.19
+958abaa5
+User
+at /home/runner/workspace/node_modules/pg/lib/connection.js:116:12
+2026-01-30 17:05:54.19
+958abaa5
+User
+at Readable.push (node:internal/streams/readable:392:5)
+2026-01-30 17:05:54.19
+958abaa5
+User
+connectionParameters: ConnectionParameters {
+2026-01-30 17:05:54.19
+958abaa5
+User
+client: Client {
+2026-01-30 17:05:54.19
+958abaa5
+User
+line: '3289',
+2026-01-30 17:05:54.19
+958abaa5
+User
+at Client.idleListener (/home/runner/workspace/node_modules/pg-pool/index.js:62:10)
+2026-01-30 17:05:54.19
+958abaa5
+User
+at Client.emit (node:events:524:28)
+2026-01-30 17:05:54.19
+958abaa5
+User
+position: undefined,
+2026-01-30 17:05:54.19
+958abaa5
+User
+internalQuery: undefined,
+2026-01-30 17:05:54.19
+958abaa5
+User
+Emitted 'error' event on BoundPool instance at:
+2026-01-30 17:05:54.19
+958abaa5
+User
+getTypeParser: [Function: getTypeParser],
+2026-01-30 17:05:54.19
+958abaa5
+User
+fallback_application_name: undefined,
+2026-01-30 17:05:54.19
+958abaa5
+User
+idle_in_transaction_session_timeout: false,
+2026-01-30 17:05:54.19
+958abaa5
+User
+application_name: undefined,
+2026-01-30 17:05:54.19
+958abaa5
+User
+replication: undefined,
+2026-01-30 17:05:54.19
+958abaa5
+User
+table: undefined,
+2026-01-30 17:05:54.19
+958abaa5
+User
+_server: null,
+2026-01-30 17:05:54.19
+958abaa5
+User
+detail: undefined,
+2026-01-30 17:05:54.19
+958abaa5
+User
+at Parser.parseErrorMessage (/home/runner/workspace/node_modules/pg-protocol/dist/parser.js:285:98)

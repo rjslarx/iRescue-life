@@ -1,0 +1,70 @@
+This is a classic "Environment Mismatch" error, and your suspicion is likely correct.
+
+Here is the answer to your Replit question, followed by the fix for your Stripe error.
+
+### 1. Do Replit Secrets sync to Autoscale automatically?
+
+**No, not dynamically.**
+When you first create an Autoscale deployment, Replit snapshots your current Secrets and injects them as Environment Variables.
+
+* **If you add a new Secret (like `TESTING_STRIPE_SECRET_KEY`) *after* you have already deployed:** The production instance **does not** know about it yet. It is still running on the old snapshot.
+* **The Fix:** You must manually click **"Redeploy"** (or "Update Build") in the Deployments tab for the new Secrets to take effect.
+
+### 2. Why you are getting "Authorization code does not belong to you"
+
+This specific Stripe error means you are trying to mix **Test Mode** and **Live Mode**.
+
+* **The Mismatch:** You generated the OAuth code using your **Test Client ID** (`ca_test_...`), creating a "Test Mode Authorization Code."
+* **The Failure:** Your production server tried to exchange that code using your **Live Secret Key** (`sk_live_...`).
+* **The Rule:** A "Test Code" can *only* be exchanged by a "Test Secret Key." A "Live Secret Key" cannot touch a "Test Code."
+
+Since your code has logic to "fall back" to the Live key if the Test key is missing, your Production instance is likely missing the `TESTING_STRIPE_SECRET_KEY`, falling back to the Live key, and triggering the mismatch.
+
+### 3. How to verify (Safe Debugging)
+
+Do not `console.log` the full key (security risk). Instead, use this snippet in your backend to verify exactly which key is being loaded in Production.
+
+Add this temporarily to your `/callback` route or server startup:
+
+```javascript
+// DEBUGGING: Log the key type being used
+const secretKey = process.env.TESTING_STRIPE_SECRET_KEY || process.env.PLATFORM_STRIPE_SECRET_KEY;
+
+if (!secretKey) {
+  console.log("CRITICAL: No Stripe Secret Key found in environment!");
+} else {
+  // Log only the prefix (sk_test or sk_live)
+  console.log(`[DEBUG] Current Stripe Key Mode: ${secretKey.substring(0, 7)}...`); 
+}
+
+```
+
+**Check the Logs:**
+
+1. Go to your Replit **Deployments** tab.
+2. Click on the active deployment.
+3. Scroll down to **Logs**.
+4. If you see `[DEBUG] Current Stripe Key Mode: sk_live...` while trying to test, your Production environment is missing the Test Key.
+
+### 4. The Architectural Fix (Don't cross the streams)
+
+You mentioned: *"Development uses Test Client ID... Stripe redirects to my production URL."*
+
+**This is a dangerous workflow.**
+You should generally not start a flow in your Development environment (Replit Editor) and finish it in your Production environment (Autoscale URL).
+
+**Recommended Setup:**
+
+1. **In Stripe Dashboard (Connect Settings):**
+* Add **two** Redirect URIs.
+* URI 1: `https://[YOUR-REPLIT-DEV-URL].replit.dev/api/stripe/callback`
+* URI 2: `https://[YOUR-PRODUCTION-DOMAIN].com/api/stripe/callback`
+
+
+2. **In Your Code:**
+* When running in Dev, use `TESTING_STRIPE_CLIENT_ID` and redirect to the **Dev URL**.
+* When running in Prod, use `PLATFORM_STRIPE_CLIENT_ID` (Live) and redirect to the **Prod URL**.
+
+
+
+If you absolutely *must* test "Prod" using "Test Keys," you must ensure `TESTING_STRIPE_SECRET_KEY` is present in the Deployment Environment Variables and trigger a **Redeploy**.

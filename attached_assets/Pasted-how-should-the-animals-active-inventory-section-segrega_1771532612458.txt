@@ -1,0 +1,74 @@
+how should the animals (active inventory) section segregate in-house/shelter animals from foster?
+
+Gemini said
+The best way to segregate these two groups is by using Top-Level Tabs combined with Contextual Views.
+
+While both groups are "Active Inventory," the rescue staff needs completely different information depending on where the animal is sleeping tonight.
+
+If a dog is in the shelter, the staff needs to know: "What kennel is he in, and who is walking him at 8:00 AM?"
+If a dog is in foster, the staff needs to know: "Who has him, what is their phone number, and when is the dog coming back for an adoption event?"
+
+Here is the exact UI layout to make this seamless for your users.
+
+1. The Tabbed Dashboard
+When staff clicks 🐾 Animals on the main menu, the top of the screen should have three large tabs:
+
+🏢 In Facility (Shelter): Dogs physically in the building.
+
+🏠 In Foster: Dogs living in a volunteer's home.
+
+🌎 All Active: The combined master list.
+
+2. Contextual Views (Tailoring the Data)
+The magic happens when the staff clicks a specific tab. The "Trading Cards" (or data table) should instantly morph to show the most relevant data for that location.
+
+When the "In Facility" Tab is clicked:
+
+The Sorting: Group the animals by physical location (e.g., "Run A", "Run B", "Quarantine Room"). This acts as a digital map of the shelter.
+
+The Quick Action: The hover menu on the card should feature a "Move Kennel" button prominently.
+
+When the "In Foster" Tab is clicked:
+
+The Sorting: Alphabetical by the Foster Parent's Last Name, or by "Next Check-in Date."
+
+The Visuals: The bottom of the card must display the Foster's Name and a quick-click Phone/Email icon so the coordinator can text them instantly.
+
+The Quick Action: The hover menu should feature a "Message Foster" or "Request Return" button.
+
+3. The "Transfer" Workflow
+Animals move between these two states constantly (e.g., a dog goes to foster for the weekend and comes back to the shelter on Monday).
+You must have a "Move Location" modal. When clicked, it asks:
+
+Moving to: [Dropdown: Facility vs. Foster]
+
+If Facility: Select Kennel/Run.
+
+If Foster: Select Foster Parent from the database.
+
+The Replit Prompt to Build the Segregation
+This prompt will build the tabbed interface and ensure the data changes intelligently based on which tab is active.
+
+Copy and paste this into Replit Agent:
+
+Plaintext
+I need to build the Main "Animals" Dashboard with location-based segregation.
+
+1. The Layout & State:
+   - Create a page at `/portal/animals`.
+   - Implement a Top Tab Navigation with 3 states: `activeTab = 'all' | 'facility' | 'foster'`.
+   - Query all animals where `adoption_status !== 'finalized'`.
+
+2. The Data Filtering:
+   - If `activeTab === 'facility'`, filter the list to animals where `location_type === 'facility'`. 
+   - If `activeTab === 'foster'`, filter the list to animals where `location_type === 'foster'`.
+
+3. The Contextual UI Rendering (Card Footer):
+   - Modify the Animal Card component to accept the `activeTab` prop.
+   - IF in 'facility' view: The card footer should display a building icon and the `kennel_number` (e.g., "🏢 Kennel: Run 4B").
+   - IF in 'foster' view: The card footer should display a house icon, the `foster_parent_name`, and a clickable `mailto:` or `tel:` link (e.g., "🏠 Foster: Sarah Jenkins").
+
+4. The "Move Animal" Action:
+   - Add a global action button to the card: "Change Location".
+   - This opens a modal to update the `location_type` and either the `kennel_number` OR the `foster_id` depending on the selection.
+By structuring the page this way, your Kennel Manager can stay on the "Facility" tab all day to manage cleanings and walks, while the Foster Coordinator stays on the "Foster" tab to manage volunteers, without ever tripping over each other's data.

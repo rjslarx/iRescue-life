@@ -1,0 +1,46 @@
+I need to build a "Transport Manifest" feature for my animal rescue app, iRescue.life. This feature allows a "Sending Rescue" to organize a transport of dogs to a "Receiving Rescue" and automates the transfer of their data.
+
+Here are the specific requirements:
+
+1. Database Updates: Please create three new tables: TransportTrip, TransportStop, and TransportManifestItem.
+
+TransportTrip: Needs status (Planned, In Transit, Completed), driver details, and departure date.
+
+TransportManifestItem: Links an animal_id to a transport_id. It must also store the destination_org_id (which is another Organization in our User table).
+
+2. The "Manifest Builder" UI (Sender View): Create a page where an Admin can:
+
+Create a new Trip.
+
+Select animals from their current active roster to add to the trip.
+
+Validation Logic: If an animal is selected, check if they have a document tagged "Health Certificate" or "CVI" uploaded. If not, show a warning flag.
+
+3. The "Mobile Run Sheet" (Driver View): Create a simplified mobile-friendly view (read-only) accessible via a shareable link.
+
+It should list the stops and the animals to be dropped off at each stop.
+
+Include a "Special Instructions" field for each dog (e.g., "Meds due at 8 AM", "Flight Risk").
+
+Include a "Confirm Delivery" button that captures a timestamp.
+
+4. The "One-Click Import" Logic (Receiver View): This is the most important part. When the Transport is marked "Completed," the Receiving Organization (identified by destination_org_id) should see a notification in their dashboard.
+
+Create a button for the Receiver called "Accept Transfer".
+
+Backend Logic: When clicked, this function should CLONE the animal record (Name, Breed, Age, Description, Photos, and Medical Records) and create a NEW entry in the Receiver's database organization_id.
+
+The Sender's original record should be updated to status "Outcome: Transferred".
+
+Please start by setting up the Database Schema updates.
+
+4. Why this "Clone" logic matters (Technical Context)
+You might wonder: "Why clone the record? Why not just move it?"
+
+If you just move the record (change the Owner ID), the Sending Rescue loses their history.
+
+Sender needs to keep the record for their annual stats ("We saved 500 dogs this year").
+
+Receiver needs a fresh record they can edit (add new weight, new vaccines) without messing up the Sender's old data.
+
+The Clone/Fork method is the industry standard for this type of data handover.

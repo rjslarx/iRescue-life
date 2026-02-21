@@ -1,0 +1,68 @@
+Phase 2: Operational Efficiency (The "Workflow Engine")
+Goal: Stop the Rescue Director from having to manually text 50 people, and prevent "I didn't have the pill" excuses.
+
+Inventory-Aware Logic (The "Smart" Check):
+
+The Logic: Before sending a "Give Meds" reminder, the system queries the InventoryAssignment table.
+
+The Check: If (doses_assigned < 1), DO NOT send "Give Pill."
+
+The Action: Instead, send: "Inventory Alert: [Dog] is due for Heartgard, but you are out. Click here to request a refill pick-up."
+
+Protocol Templates (The Time Saver):
+
+Create a MedicalProtocol builder.
+
+Example: "Parvo Recovery Protocol" = 2 weeks of specific alerts.
+
+Action: When a Director assigns "Parvo Protocol" to a dog, the system auto-generates 14 days of scheduled notifications instantly.
+
+Bulk "Nudge" Actions:
+
+Add a feature to the Compliance Widget allowing the Director to select multiple overdue items and send a Batch SMS: "Hi everyone, friendly reminder to update your medical logs today!"
+
+Phase 3: The Foster Experience (Adherence & "Magic Links")
+Goal: Remove all friction. No passwords, no logins, just compliance.
+
+"Magic Link" Confirmations (No-Login Required):
+
+The Tech: SMS contains a unique, time-sensitive token (e.g., irescue.life/action?token=xyz123).
+
+The Action: Clicking the link opens a simple mobile web page with two big buttons:
+
+✅ GIVEN: Updates DB to completed, logs timestamp. Shows a "Great Job!" animation (Positive Reinforcement).
+
+⚠️ ISSUE: Opens a dropdown: "Lost Pill," "Dog Vomited," "Dog Refused." (This alerts the Medical Team immediately).
+
+The "Download Schedule" Button (Replacing Sync):
+
+Instead of complex syncing, provide a "Add to My Calendar" button on the Foster Dashboard.
+
+Action: Generates a static .ics file with the next 6 months of dues dates. Simple, reliable, no API breakage.
+
+Mandatory SMS Channels:
+
+Hard Rule: Fosters cannot opt-out of "Critical Medical Alerts" via SMS. They can opt-out of "Event Invites" or "Newsletters," but not health safety.
+
+Phase 4: Oversight, Liability & Funding (The "Director's View")
+Goal: Give the Director the data they need to fire bad fosters and win big grants.
+
+The "Morning Rounds" Briefing:
+
+An automated 7:00 AM email to the Medical Director.
+
+Content: "Good Morning. You have 3 Overdue Meds (Action Required), 1 Foster requesting a refill, and 2 Intakes pending vet checks."
+
+Foster Reliability Scoring:
+
+The Metric: Calculate a "Reliability Score" (0-100%) for every foster.
+
+Calculation: (On-Time Responses / Total Requests).
+
+Usage: If a foster drops below 70%, flag them as "High Risk" so the Director knows not to give them medically complex cases (like heartworm treatment dogs).
+
+The "Grant Winner" Report:
+
+A one-click CSV export designed specifically for grant applications.
+
+Data: "In 2025, we managed 45 Heartworm Positive dogs with a 99.2% treatment compliance rate." (This is the kind of data that wins $50k grants).

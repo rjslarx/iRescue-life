@@ -1,0 +1,81 @@
+Replit likely set up your project with a static manifest.json file in your root directory. When you add a site to the iOS Home Screen, Safari prioritizes the start_url defined in that manifest over the actual URL you are currently visiting.
+If your manifest has "start_url": "/", iOS will always save the "Platform" homepage, even if the user is currently on a tenant page.
+To fix this, you must change your setup from a static file to a dynamic route so the manifest dictates the correct starting point for each tenant.
+1. The Core Issue
+Your current manifest.json likely looks like this:
+{
+  "name": "iRescue Platform",
+  "start_url": "/", 
+  "display": "standalone"
+}
+
+Because of "start_url": "/", every "Add to Home Screen" action creates a shortcut to iRescue.life.
+2. The Solution (Dynamic Manifest)
+You need to serve the manifest via your server code (e.g., index.js or server.js in Replit) instead of as a static file. This allows you to inject the current tenant's URL into the start_url field.
+Step A: Create a Dynamic Manifest Route
+In your main server file (typically Node/Express on Replit), add a route to handle manifest.json requests dynamically.
+Add this to your index.js or server.js:
+// Example using Express.js (standard on Replit)
+app.get('/manifest.json', (req, res) => {
+  // Check if a 'tenant' query parameter was passed
+  const tenant = req.query.tenant;
+  
+  // Base configuration
+  const manifest = {
+    name: tenant ? `iRescue: ${tenant}` : "iRescue Platform",
+    short_name: tenant || "iRescue",
+    // IF a tenant is present, start at that tenant's path. 
+    // OTHERWISE, start at the root platform.
+    start_url: tenant ? `/tenant/${tenant}` : "/",
+    display: "standalone",
+    background_color: "#ffffff",
+    theme_color: "#000000",
+    icons: [
+      {
+        src: "/icon-192.png",
+        sizes: "192x192",
+        type: "image/png"
+      },
+      {
+        src: "/icon-512.png",
+        sizes: "512x512",
+        type: "image/png"
+      }
+    ]
+  };
+
+  res.json(manifest);
+});
+
+Step B: Update Your HTML Headers
+Now you must tell the browser to request the specific manifest for the page the user is viewing. Update the <head> section of your HTML templates.
+If you use a template engine (like EJS, Handlebars, or Pug):
+Pass the tenantId variable to your view and modify the link tag:
+<link rel="manifest" href="/manifest.json?tenant=<%= tenantId %>">
+
+<link rel="manifest" href="/manifest.json">
+
+If you are using Client-Side Rendering (React/Vue):
+You can update the link tag using JavaScript when the component mounts.
+// Inside your Tenant component (React example)
+useEffect(() => {
+  const link = document.querySelector("link[rel~='manifest']");
+  if (link) {
+    link.href = `/manifest.json?tenant=${currentTenantName}`;
+  }
+}, [currentTenantName]);
+
+3. Critical iOS Specifics
+iOS Safari has two specific quirks you must handle for this to work perfectly:
+ * Cache Busting: iOS caches the manifest file aggressively. If you change the code above, users might still get the old version. Adding the query param (e.g., ?tenant=abc) usually forces it to fetch the new one, but to be safe during development, you may need to clear Safari website data.
+ * Apple Touch Icon: While the manifest handles the URL, the Icon on the home screen is handled by a meta tag. Ensure this is also correct in your <head>:
+   <link rel="apple-touch-icon" href="/path/to/icon.png">
+
+Summary of Changes
+| Feature | Old Setup (Static) | New Setup (Dynamic) |
+|---|---|---|
+| File Location | Root folder (/manifest.json) | Server Route (app.get('/manifest.json')) |
+| Start URL | Hardcoded to / | Dynamically set to /tenant/xyz |
+| Home Screen Result | Always opens Platform | Opens specific Tenant Dashboard |
+This video covers the fundamental difference between standard web apps and PWAs, which helps explain why the manifest file overrides the browser's current URL.
+PWA Manifest Explained

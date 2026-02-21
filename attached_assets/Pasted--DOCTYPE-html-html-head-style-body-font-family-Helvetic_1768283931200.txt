@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+  body { font-family: 'Helvetica', 'Arial', sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; }
+  h1 { text-align: center; border-bottom: 2px solid #333; padding-bottom: 10px; }
+  h2 { font-size: 1.2em; background-color: #f4f4f4; padding: 5px; border-left: 5px solid #333; margin-top: 30px; }
+  .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }
+  .info-item { background: #fafafa; padding: 10px; border: 1px solid #ddd; }
+  .label { font-weight: bold; font-size: 0.9em; color: #666; display: block; }
+  .value { font-size: 1.1em; }
+  .terms-list { padding-left: 20px; }
+  .terms-list li { margin-bottom: 10px; }
+  .signature-block { margin-top: 50px; background-color: #f9f9f9; padding: 20px; border: 1px dashed #ccc; }
+  .digital-stamp { font-size: 0.8em; color: #888; margin-top: 10px; font-family: 'Courier New', monospace; }
+  .fee-summary { text-align: right; font-size: 1.2em; margin-top: 20px; }
+</style>
+</head>
+<body>
+
+  <h1>Adoption Agreement</h1>
+  <p style="text-align: center;"><strong>{{organization_name}}</strong></p>
+
+  <h2>1. The Parties</h2>
+  <div class="info-grid">
+    <div class="info-item">
+      <span class="label">Adopter Name:</span>
+      <span class="value">{{adopter_name}}</span>
+    </div>
+    <div class="info-item">
+      <span class="label">Date:</span>
+      <span class="value">{{contract_date}}</span>
+    </div>
+    <div class="info-item">
+      <span class="label">Email:</span>
+      <span class="value">{{adopter_email}}</span>
+    </div>
+    <div class="info-item">
+      <span class="label">Phone:</span>
+      <span class="value">{{adopter_phone}}</span>
+    </div>
+    <div class="info-item" style="grid-column: span 2;">
+      <span class="label">Address:</span>
+      <span class="value">{{adopter_address}}</span>
+    </div>
+  </div>
+
+  <h2>2. The Animal</h2>
+  <p>The Adopter agrees to adopt the animal described below (the "Animal"):</p>
+  <div class="info-grid">
+    <div class="info-item">
+      <span class="label">Name:</span>
+      <span class="value">{{animal_name}}</span>
+    </div>
+    <div class="info-item">
+      <span class="label">Species/Breed:</span>
+      <span class="value">{{animal_species}} / {{animal_breed}}</span>
+    </div>
+    <div class="info-item">
+      <span class="label">Sex:</span>
+      <span class="value">{{animal_sex}}</span>
+    </div>
+    <div class="info-item">
+      <span class="label">Age (Approx):</span>
+      <span class="value">{{animal_age}}</span>
+    </div>
+  </div>
+
+  <h2>3. Terms and Conditions</h2>
+  <p>By signing this Agreement, the Adopter agrees to the following terms:</p>
+  <ol class="terms-list">
+    <li><strong>Standard of Care:</strong> The Adopter agrees to provide the Animal with fresh water, wholesome food, adequate exercise, and shelter at all times. The Animal will be treated as a family companion.</li>
+    <li><strong>Medical Care:</strong> The Adopter agrees to provide veterinary care as needed, including annual vaccinations and heartworm prevention.</li>
+    <li><strong>No Transfer of Ownership:</strong> The Adopter shall not sell, give away, or otherwise transfer the Animal to any third party, shelter, or research facility.</li>
+    <li><strong>Return Policy:</strong> If, for any reason, the Adopter is unable to keep the Animal, the Adopter agrees to return the Animal to <strong>{{organization_name}}</strong>.</li>
+    <li><strong>Liability Waiver:</strong> The Adopter assumes all responsibility for the Animal's actions and releases <strong>{{organization_name}}</strong> from any liability for damage or injury caused by the Animal after the date of this Agreement.</li>
+  </ol>
+
+  <h2>4. Adoption Fees</h2>
+  <div class="fee-summary">
+    <p>Adoption Fee: <strong>{{adoption_fee}}</strong></p>
+    <p>Additional Donation: <strong>{{donation_amount}}</strong></p>
+    <p style="border-top: 1px solid #ccc; padding-top: 5px;">Total Received: <strong>{{total_amount}}</strong></p>
+  </div>
+
+  <h2>5. Execution</h2>
+  <div class="signature-block">
+    <p>I, <strong>{{adopter_name}}</strong>, certify that the information provided is true and I understand and agree to the terms of this Adoption Agreement.</p>
+    
+    <div style="margin: 20px 0; border-bottom: 1px solid #000; display: inline-block; min-width: 300px;">
+      <img src="{{signature_image_url}}" alt="Adopter Signature" style="max-height: 80px;" />
+    </div>
+    <br>
+    <strong>Signature of Adopter</strong>
+    
+    <div class="digital-stamp">
+      <p>Digitally Signed via iRescue.life</p>
+      <p>Timestamp: {{signed_timestamp}}</p>
+      <p>IP Address: {{signed_ip}}</p>
+    </div>
+  </div>
+
+</body>
+</html>

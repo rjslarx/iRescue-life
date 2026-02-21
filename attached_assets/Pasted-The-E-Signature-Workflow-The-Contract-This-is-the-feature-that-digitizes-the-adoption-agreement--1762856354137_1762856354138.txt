@@ -1,0 +1,31 @@
+The E-Signature Workflow (The "Contract")
+This is the feature that digitizes the adoption agreement. Instead of handing an adopter a clipboard with a multi-page paper contract, the software sends them a digital version.  
+How it works (for platforms like iShelter, Shelter Buddy, etc.):
+1. Template Creation: The rescue's admin first logs into the software (iShelter, Shelter Buddy, etc.) and builds their "Master Adoption Contract" in a template editor. They use a drag-and-drop builder to add text blocks, custom fields (like [Adopter_Name], [Animal_Name]), and most importantly, a [Signature] field.
+2. Generating the Contract: During the adoption, the staff member clicks "Adopt" on an animal's profile. They select the adopter, and the software automatically merges the adopter's and animal's data into the contract template.
+3. Sending for Signature: The staff member has two common options:
+• Email: They click "Send for Signature," and the adopter instantly receives an email with a link. The adopter can sign on their own phone, even if they're standing right there.
+• On-Screen: They flip a tablet or computer monitor around, and the adopter signs directly on the staff's device using their finger, a mouse, or a stylus.  
+4. The Adopter's Experience: The adopter clicks the link, scrolls through the contract to read the terms (e.g., "I agree to provide vet care," "I agree to return the animal if I can no longer keep it"), and then draws or types their legal signature.
+5. Finalization: Once they hit "Submit," the legally-binding, signed PDF is automatically emailed to both the adopter (as a receipt) and the rescue. Crucially, it is also instantly attached to the animal's and the adopter's permanent profiles in the software. No scanning, no filing, no "lost" paperwork.
+2. The Mobile Checkout Workflow (The "Payment")
+This feature, which Shelterluv pioneered and others (like PetPoint) have adopted, combines the e-signature contract with the payment process into a single, slick workflow.
+Shelterluv's "Mobile Checkout" Workflow:
+This process is designed to be done entirely on the adopter's own smartphone, making it perfect for off-site adoption events or for a "no-kiosk" shelter.
+• Step 1: Staff Initiates Checkout
+A staff member in Shelterluv selects the animal and the adopter, confirms the adoption fee (e.g., $150), and clicks "Mobile Checkout." They confirm the adopter's phone number.
+• Step 2: Adopter Receives a Text
+The adopter instantly receives a text message with a link (e.g., "Complete your adoption for 'Buddy' here: [link]").
+• Step 3: Adopter Opens the Link (on their phone)
+The link opens a secure, step-by-step web portal. This is what they see:
+1. Review: A confirmation screen with the pet's photo and the adoption fee.
+2. Contract: The full adoption contract. They must scroll to the bottom and check an "I Agree" box (this is the e-signature part).
+3. Payment: A checkout screen to enter their credit card information.
+• Step 4: The "Upsell" (This is Shelterluv's key feature)
+On the payment screen, the adopter is presented with two options before they pay:
+• Donation Boost: "Would you like to add a donation of $5, $10, or $20 to help another animal?"
+• Processing Fee: "Help us cover costs by adding the 2.9% + $0.30 processing fee."
+This is extremely effective at increasing the total value of the transaction.
+• Step 5: Transaction Complete
+The adopter pays. On the staff member's computer, the screen automatically updates to "Paid." The adoption is finalized, the contract is stored, and the adopter receives their receipt, contract, and the animal's medical records via email.
+This entire process can take as little as 90 seconds and requires no paper, no pens, and no staff members handling credit cards. It turns a clunky administrative process into a modern, professional retail-like experience.

@@ -1,0 +1,113 @@
+injected.js:204  GET https://be89be9e-6a6a-443f-9996-8bdfc0b79d2c-00-13cespn89a94g.spock.replit.dev/api/platform/impersonation-status 401 (Unauthorized)
+apply @ injected.js:204
+(anonymous) @ queryClient.ts:56
+fetchFn @ @tanstack_react-query.js?v=08198b87:840
+run @ @tanstack_react-query.js?v=08198b87:494
+start @ @tanstack_react-query.js?v=08198b87:536
+fetch @ @tanstack_react-query.js?v=08198b87:926
+executeFetch_fn @ @tanstack_react-query.js?v=08198b87:2211
+(anonymous) @ @tanstack_react-query.js?v=08198b87:2245
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=08198b87:2243
+updateTimers_fn @ @tanstack_react-query.js?v=08198b87:2250
+onQueryUpdate @ @tanstack_react-query.js?v=08198b87:2206
+(anonymous) @ @tanstack_react-query.js?v=08198b87:998
+(anonymous) @ @tanstack_react-query.js?v=08198b87:997
+batch @ @tanstack_react-query.js?v=08198b87:583
+dispatch_fn @ @tanstack_react-query.js?v=08198b87:996
+onError @ @tanstack_react-query.js?v=08198b87:861
+reject @ @tanstack_react-query.js?v=08198b87:465
+(anonymous) @ @tanstack_react-query.js?v=08198b87:508
+Promise.catch
+run @ @tanstack_react-query.js?v=08198b87:498
+start @ @tanstack_react-query.js?v=08198b87:536
+fetch @ @tanstack_react-query.js?v=08198b87:926
+executeFetch_fn @ @tanstack_react-query.js?v=08198b87:2211
+(anonymous) @ @tanstack_react-query.js?v=08198b87:2245Understand this error
+injected.js:204 Fetch failed loading: GET "https://be89be9e-6a6a-443f-9996-8bdfc0b79d2c-00-13cespn89a94g.spock.replit.dev/api/platform/impersonation-status".
+apply @ injected.js:204
+(anonymous) @ queryClient.ts:56
+fetchFn @ @tanstack_react-query.js?v=08198b87:840
+run @ @tanstack_react-query.js?v=08198b87:494
+start @ @tanstack_react-query.js?v=08198b87:536
+fetch @ @tanstack_react-query.js?v=08198b87:926
+executeFetch_fn @ @tanstack_react-query.js?v=08198b87:2211
+(anonymous) @ @tanstack_react-query.js?v=08198b87:2245
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=08198b87:2243
+updateTimers_fn @ @tanstack_react-query.js?v=08198b87:2250
+onQueryUpdate @ @tanstack_react-query.js?v=08198b87:2206
+(anonymous) @ @tanstack_react-query.js?v=08198b87:998
+(anonymous) @ @tanstack_react-query.js?v=08198b87:997
+batch @ @tanstack_react-query.js?v=08198b87:583
+dispatch_fn @ @tanstack_react-query.js?v=08198b87:996
+onError @ @tanstack_react-query.js?v=08198b87:861
+reject @ @tanstack_react-query.js?v=08198b87:465
+(anonymous) @ @tanstack_react-query.js?v=08198b87:508
+Promise.catch
+run @ @tanstack_react-query.js?v=08198b87:498
+start @ @tanstack_react-query.js?v=08198b87:536
+fetch @ @tanstack_react-query.js?v=08198b87:926
+executeFetch_fn @ @tanstack_react-query.js?v=08198b87:2211
+(anonymous) @ @tanstack_react-query.js?v=08198b87:2245
+_app-9b3d7a5da68f2d8c.js:13 Fetch finished loading: POST "https://logs.browser-intake-us5-datadoghq.com/api/v2/logs?ddsource=browser&ddtags=sdk_version%3A4.46.0%2Capi%3Afetch%2Cenv%3Aproduction%2Cservice%3Awebsite%2Cversion%3Aefe7e0d7&dd-api-key=pub31a5047a3a4692afb84a423db984dc57&dd-evp-origin-version=4.46.0&dd-evp-origin=browser&dd-request-id=af407c27-175c-46f0-8284-8f46d618ad62".
+(anonymous) @ _app-9b3d7a5da68f2d8c.js:13
+(anonymous) @ _app-9b3d7a5da68f2d8c.js:1
+o @ _app-9b3d7a5da68f2d8c.js:15
+a @ _app-9b3d7a5da68f2d8c.js:30
+m @ _app-9b3d7a5da68f2d8c.js:30
+g @ _app-9b3d7a5da68f2d8c.js:30
+send @ _app-9b3d7a5da68f2d8c.js:30
+e.flush @ _app-9b3d7a5da68f2d8c.js:15
+(anonymous) @ _app-9b3d7a5da68f2d8c.js:15
+(anonymous) @ _app-9b3d7a5da68f2d8c.js:15
+e.notify @ _app-9b3d7a5da68f2d8c.js:15
+f @ _app-9b3d7a5da68f2d8c.js:1
+(anonymous) @ _app-9b3d7a5da68f2d8c.js:1
+d @ _app-9b3d7a5da68f2d8c.js:1
+(anonymous) @ _app-9b3d7a5da68f2d8c.js:1
+n @ _app-9b3d7a5da68f2d8c.js:13
+injected.js:204  GET https://be89be9e-6a6a-443f-9996-8bdfc0b79d2c-00-13cespn89a94g.spock.replit.dev/api/platform/impersonation-status 401 (Unauthorized)
+apply @ injected.js:204
+(anonymous) @ queryClient.ts:56
+fetchFn @ @tanstack_react-query.js?v=08198b87:840
+run @ @tanstack_react-query.js?v=08198b87:494
+start @ @tanstack_react-query.js?v=08198b87:536
+fetch @ @tanstack_react-query.js?v=08198b87:926
+executeFetch_fn @ @tanstack_react-query.js?v=08198b87:2211
+(anonymous) @ @tanstack_react-query.js?v=08198b87:2245
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=08198b87:2243
+updateTimers_fn @ @tanstack_react-query.js?v=08198b87:2250
+onQueryUpdate @ @tanstack_react-query.js?v=08198b87:2206
+(anonymous) @ @tanstack_react-query.js?v=08198b87:998
+(anonymous) @ @tanstack_react-query.js?v=08198b87:997
+batch @ @tanstack_react-query.js?v=08198b87:583
+dispatch_fn @ @tanstack_react-query.js?v=08198b87:996
+onError @ @tanstack_react-query.js?v=08198b87:861
+reject @ @tanstack_react-query.js?v=08198b87:465
+(anonymous) @ @tanstack_react-query.js?v=08198b87:508
+Promise.catch
+run @ @tanstack_react-query.js?v=08198b87:498
+start @ @tanstack_react-query.js?v=08198b87:536
+fetch @ @tanstack_react-query.js?v=08198b87:926
+executeFetch_fn @ @tanstack_react-query.js?v=08198b87:2211
+(anonymous) @ @tanstack_react-query.js?v=08198b87:2245
+setInterval
+updateRefetchInterval_fn @ @tanstack_react-query.js?v=08198b87:2243
+updateTimers_fn @ @tanstack_react-query.js?v=08198b87:2250
+onQueryUpdate @ @tanstack_react-query.js?v=08198b87:2206
+(anonymous) @ @tanstack_react-query.js?v=08198b87:998
+(anonymous) @ @tanstack_react-query.js?v=08198b87:997
+batch @ @tanstack_react-query.js?v=08198b87:583
+dispatch_fn @ @tanstack_react-query.js?v=08198b87:996
+onError @ @tanstack_react-query.js?v=08198b87:861
+reject @ @tanstack_react-query.js?v=08198b87:465
+(anonymous) @ @tanstack_react-query.js?v=08198b87:508
+Promise.catch
+run @ @tanstack_react-query.js?v=08198b87:498
+start @ @tanstack_react-query.js?v=08198b87:536
+fetch @ @tanstack_react-query.js?v=08198b87:926
+executeFetch_fn @ @tanstack_react-query.js?v=08198b87:2211
+(anonymous) @ @tanstack_react-query.js?v=08198b87:2245Understand this error
+injected.js:204 Fetch failed loading: GET "https://be89be9e-6a6a-443f-9996-8bdfc0b79d2c-00-13cespn89a94g.spock.replit.dev/api/platform/impersonation-status

@@ -1,0 +1,108 @@
+2026-02-02 12:16:23.05
+7b9f464c
+User
+at extractTextFromPdf (file:///home/runner/workspace/dist/index.js:24056:11)
+2026-02-02 12:16:23.05
+7b9f464c
+User
+at async file:///home/runner/workspace/dist/index.js:24381:24
+2026-02-02 12:16:23.05
+7b9f464c
+User
+at async processMedicalDocument (file:///home/runner/workspace/dist/index.js:24284:38)
+2026-02-02 12:17:54.06
+7b9f464c
+User
+at async processMedicalDocument (file:///home/runner/workspace/dist/index.js:24284:38)
+2026-02-02 12:17:54.06
+7b9f464c
+User
+PDF parsing error: TypeError: pdfParse is not a function
+2026-02-02 12:17:54.06
+7b9f464c
+User
+at extractTextFromPdf (file:///home/runner/workspace/dist/index.js:24049:24)
+2026-02-02 12:17:54.06
+7b9f464c
+User
+at async file:///home/runner/workspace/dist/index.js:24381:24
+2026-02-02 12:17:54.07
+7b9f464c
+User
+Error: Failed to parse PDF: pdfParse is not a function
+2026-02-02 12:17:54.07
+7b9f464c
+User
+at async processMedicalDocument (file:///home/runner/workspace/dist/index.js:24284:38)
+2026-02-02 12:17:54.07
+7b9f464c
+User
+at async file:///home/runner/workspace/dist/index.js:24381:24
+2026-02-02 12:17:54.07
+7b9f464c
+User
+at extractTextFromPdf (file:///home/runner/workspace/dist/index.js:24056:11)
+2026-02-02 12:18:41.98
+7b9f464c
+User
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:33)
+2026-02-02 12:18:41.98
+7b9f464c
+User
+at Object.startActiveSpan (file:///home/runner/workspace/node_modules/drizzle-orm/tracing.js:8:14)
+2026-02-02 12:18:41.98
+7b9f464c
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:684:26
+2026-02-02 12:18:41.98
+7b9f464c
+User
+at Array.reduce ()
+2026-02-02 12:18:41.98
+7b9f464c
+User
+at Function.entries ()
+2026-02-02 12:18:41.98
+7b9f464c
+User
+at PgSelectBase._prepare (file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:683:19)
+2026-02-02 12:18:41.98
+7b9f464c
+User
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:17)
+2026-02-02 12:18:41.98
+7b9f464c
+User
+TypeError: Cannot convert undefined or null to object
+2026-02-02 12:19:03.55
+7b9f464c
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:708:19
+2026-02-02 12:19:03.55
+7b9f464c
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:684:26
+2026-02-02 12:19:03.55
+7b9f464c
+User
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:17)
+2026-02-02 12:19:03.55
+7b9f464c
+User
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:33)
+2026-02-02 12:19:03.55
+7b9f464c
+User
+at Function.entries ()
+2026-02-02 12:19:03.55
+7b9f464c
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:63:22
+2026-02-02 12:19:03.55
+7b9f464c
+User
+at Object.startActiveSpan (file:///home/runner/workspace/node_modules/drizzle-orm/tracing.js:8:14)
+2026-02-02 12:19:03.55
+7b9f464c
+User
+TypeError: Cannot convert undefined or null to objec

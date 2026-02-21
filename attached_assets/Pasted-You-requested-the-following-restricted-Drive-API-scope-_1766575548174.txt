@@ -1,0 +1,30 @@
+You requested the following restricted Drive API scope(s):
+
+https://www.googleapis.com/auth/drive
+Please review the following information to understand if the drive.file scope is a better fit for your application. If your request does not meet the eligibility requirements outlined below, we won’t be able to grant your request for restricted Drive APIs.
+
+Why should I use the drive.file scope?
+
+Eligibility
+
+We won’t be able to approve restricted Drive APIs for your application if your request does not meet the minimum scope requirement under the Workspace API user data and developer policy , which requires that permission requests be limited to the critical information necessary to implement your application’s services. Please note that UI preferences or client library limitations alone are not valid policy exceptions from these requirements.
+
+User Experience
+
+The drive.file scope allows the user to create Drive files , and select and modify any file from their Drive that they want to share with your application , including files not created with the application. This gives users more control and confidence that your application's access to their files is limited and secure.
+
+In January 2025 the Google Picker API introduced a new method to the Class view called setFileIds(fileIds), which allows you to present users with a picker that is pre-navigated to the specified file IDs the application is seeking access to , allowing efficient file access directly from Google Drive file links and faster consent for your users. Read this update for more information.
+
+No Verification Required
+
+Since the drive.file scope is non-sensitive , approval is not required to use this scope. Additionally , note that all apps requesting access to restricted APIs must complete a third-party CASA security assessment before the restricted APIs can be approved; this assessment must also be recertified annually in order for the app to maintain access to restricted APIs. Since drive.file is not a restricted scope , this security assessment and annual recertification won’t be required.
+
+What do I need to do next?
+
+Please follow the instructions provided here to create another project for testing and use the recommended drive.file scope.
+
+You can use the Google Picker API to display a file picker. Applications can narrow to certain Drive file types (e.g. docs , sheets , photos etc) , via a filter on the Google Picker files.
+If your application is a Google Workspace add-on , you should use Advanced Drive Service in order to use the drive.file scope.
+To allow users to select multiple files at once, use the PickerBuilder and enable the multiselect option.
+The Google Picker API also supports selecting items in Shared Drives. For details around enabling shared drives support and adding shared drives view in the file picker, refer to Google Picker API.
+If your app is a Workspace Add-on, you should use context-specific Drive or Editor Add-on Scopes, which ensure your app only requests access to the necessary resources within the user's active context.

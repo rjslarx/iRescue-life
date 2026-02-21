@@ -1,0 +1,110 @@
+2026-02-20 18:01:00.66
+e81e3a70
+User
+error: column st.organization_name does not exist
+2026-02-20 18:16:22.96
+e81e3a70
+User
+at /home/runner/workspace/node_modules/pg-pool/index.js:45:11
+2026-02-20 18:16:22.96
+e81e3a70
+User
+error: column st.organization_name does not exist
+2026-02-20 18:16:22.96
+e81e3a70
+User
+at async file:///home/runner/workspace/dist/index.js:28293:27
+2026-02-20 18:16:22.96
+e81e3a70
+User
+at async file:///home/runner/workspace/node_modules/drizzle-orm/node-postgres/session.js:83:22
+2026-02-20 18:16:22.96
+e81e3a70
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-02-20 18:16:41.07
+e81e3a70
+User
+at async file:///home/runner/workspace/dist/index.js:28293:27
+2026-02-20 18:16:41.07
+e81e3a70
+User
+at async file:///home/runner/workspace/node_modules/drizzle-orm/node-postgres/session.js:83:22
+2026-02-20 18:16:41.07
+e81e3a70
+User
+at /home/runner/workspace/node_modules/pg-pool/index.js:45:11
+2026-02-20 18:16:41.07
+e81e3a70
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-02-20 18:16:41.07
+e81e3a70
+User
+error: column st.organization_name does not exist
+2026-02-20 18:16:41.33
+e81e3a70
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-02-20 18:16:41.33
+e81e3a70
+User
+error: column st.organization_name does not exist
+2026-02-20 18:16:41.33
+e81e3a70
+User
+at async file:///home/runner/workspace/dist/index.js:28293:27
+2026-02-20 18:16:41.33
+e81e3a70
+User
+at async file:///home/runner/workspace/node_modules/drizzle-orm/node-postgres/session.js:83:22
+2026-02-20 18:16:41.33
+e81e3a70
+User
+at /home/runner/workspace/node_modules/pg-pool/index.js:45:11
+2026-02-20 18:21:46.01
+e81e3a70
+User
+error: column st.organization_name does not exist
+2026-02-20 18:21:46.01
+e81e3a70
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-02-20 18:21:46.01
+e81e3a70
+User
+at async file:///home/runner/workspace/node_modules/drizzle-orm/node-postgres/session.js:83:22
+2026-02-20 18:21:46.01
+e81e3a70
+User
+at async file:///home/runner/workspace/dist/index.js:28293:27
+2026-02-20 18:21:46.01
+e81e3a70
+User
+at /home/runner/workspace/node_modules/pg-pool/index.js:45:11
+2026-02-20 18:21:59.15
+e81e3a70
+User
+at async file:///home/runner/workspace/dist/index.js:28293:27
+2026-02-20 18:21:59.15
+e81e3a70
+User
+at /home/runner/workspace/node_modules/pg-pool/index.js:45:11
+2026-02-20 18:21:59.15
+e81e3a70
+User
+at async file:///home/runner/workspace/node_modules/drizzle-orm/node-postgres/session.js:83:22
+2026-02-20 18:21:59.15
+e81e3a70
+User
+error: column st.organization_name does not exist
+2026-02-20 18:21:59.15
+e81e3a70
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-02-20 18:21:59.26
+e81e3a70
+User
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:33)
+Wrap
+Colors

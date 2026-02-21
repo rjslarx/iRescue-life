@@ -1,0 +1,110 @@
+2026-02-11 15:57:21.75
+a90935a9
+User
+[TENANT DEBUG] GET /objects/3a4c2321-6a54-41a4-acf3-a7f2ffe0c051/animal-photos/0394f969-cfc0-42b4-be41-d45f1273bb8d - hostname: haseyasnewbeginningar.com, x-tenant-id: undefined, session.tenantId: 3a4c2321-6a54-41a4-acf3-a7f2ffe0c051
+2026-02-11 15:57:21.75
+a90935a9
+User
+[TENANT DEBUG] GET /objects/3a4c2321-6a54-41a4-acf3-a7f2ffe0c051/animal-photos/0394f969-cfc0-42b4-be41-d45f1273bb8d - hostname: haseyasnewbeginningar.com, x-tenant-id: undefined, session.tenantId: 3a4c2321-6a54-41a4-acf3-a7f2ffe0c051
+2026-02-11 15:57:21.75
+a90935a9
+User
+[TENANT DEBUG] Custom domain detected: haseyasnewbeginningar.com (original: haseyasnewbeginningar.com)
+2026-02-11 15:57:22.23
+a90935a9
+User
+[TENANT DEBUG] GET /api/notifications/counts - hostname: haseyasnewbeginningar.com, x-tenant-id: undefined, session.tenantId: 3a4c2321-6a54-41a4-acf3-a7f2ffe0c051
+2026-02-11 15:57:22.23
+a90935a9
+User
+[TENANT DEBUG] Custom domain detected: haseyasnewbeginningar.com (original: haseyasnewbeginningar.com)
+2026-02-11 15:57:22.23
+a90935a9
+User
+[TENANT DEBUG] GET /api/notifications/counts - hostname: haseyasnewbeginningar.com, x-tenant-id: undefined, session.tenantId: 3a4c2321-6a54-41a4-acf3-a7f2ffe0c051
+2026-02-11 15:57:22.23
+a90935a9
+User
+[TENANT DEBUG] Custom domain detected: haseyasnewbeginningar.com (original: haseyasnewbeginningar.com)
+2026-02-11 15:57:22.45
+a90935a9
+User
+9:57:22 PM [express] GET /api/notifications/counts 304 in 182ms :: {"counts":{"applications":0,"medi…
+2026-02-11 15:57:22.45
+a90935a9
+User
+9:57:22 PM [express] GET /api/notifications/counts 304 in 182ms :: {"counts":{"applications":0,"medi…
+2026-02-11 15:57:25.34
+a90935a9
+User
+[TENANT DEBUG] POST /api/donation-links/emergency-fund - hostname: haseyasnewbeginningar.com, x-tenant-id: undefined, session.tenantId: 3a4c2321-6a54-41a4-acf3-a7f2ffe0c051
+2026-02-11 15:57:25.34
+a90935a9
+User
+[TENANT DEBUG] Custom domain detected: haseyasnewbeginningar.com (original: haseyasnewbeginningar.com)
+2026-02-11 15:57:25.34
+a90935a9
+User
+[TENANT DEBUG] POST /api/donation-links/emergency-fund - hostname: haseyasnewbeginningar.com, x-tenant-id: undefined, session.tenantId: 3a4c2321-6a54-41a4-acf3-a7f2ffe0c051
+2026-02-11 15:57:25.34
+a90935a9
+User
+[TENANT DEBUG] Custom domain detected: haseyasnewbeginningar.com (original: haseyasnewbeginningar.com)
+2026-02-11 15:57:25.95
+a90935a9
+User
+[EMERGENCY-FUND] Payment link platform fee: 2%
+2026-02-11 15:57:25.95
+a90935a9
+User
+[EMERGENCY-FUND] Payment link platform fee: 2%
+2026-02-11 15:57:27.04
+a90935a9
+User
+9:57:27 PM [express] POST /api/donation-links/emergency-fund 400 in 1658ms :: {"error":"You cannot s…
+2026-02-11 15:57:27.04
+a90935a9
+User
+9:57:27 PM [express] POST /api/donation-links/emergency-fund 400 in 1658ms :: {"error":"You cannot s…
+2026-02-11 15:57:38.45
+a90935a9
+User
+[TENANT DEBUG] Custom domain detected: haseyasnewbeginningar.com (original: haseyasnewbeginningar.com)
+2026-02-11 15:57:38.45
+a90935a9
+User
+[TENANT DEBUG] POST /api/donation-links/emergency-fund - hostname: haseyasnewbeginningar.com, x-tenant-id: undefined, session.tenantId: 3a4c2321-6a54-41a4-acf3-a7f2ffe0c051
+2026-02-11 15:57:38.45
+a90935a9
+User
+[TENANT DEBUG] POST /api/donation-links/emergency-fund - hostname: haseyasnewbeginningar.com, x-tenant-id: undefined, session.tenantId: 3a4c2321-6a54-41a4-acf3-a7f2ffe0c051
+2026-02-11 15:57:38.45
+a90935a9
+User
+[TENANT DEBUG] Custom domain detected: haseyasnewbeginningar.com (original: haseyasnewbeginningar.com)
+2026-02-11 15:57:38.95
+a90935a9
+User
+[EMERGENCY-FUND] Payment link platform fee: 2%
+2026-02-11 15:57:38.95
+a90935a9
+User
+[EMERGENCY-FUND] Payment link platform fee: 2%
+2026-02-11 15:57:40.03
+a90935a9
+User
+9:57:40 PM [express] POST /api/donation-links/emergency-fund 400 in 1533ms :: {"error":"You cannot s…
+2026-02-11 15:57:40.03
+a90935a9
+User
+9:57:40 PM [express] POST /api/donation-links/emergency-fund 400 in 1533ms :: {"error":"You cannot s…
+2026-02-11 15:58:05.27
+a90935a9
+User
+[TENANT DEBUG] GET /platform/integrations - hostname: irescue.life, x-tenant-id: undefined, session.tenantId: undefined
+2026-02-11 15:58:05.27
+a90935a9
+User
+[TENANT DEBUG] GET /platform/integrations - hostname: irescue.life, x-tenant-id: undefined, session.tenantId: undefined
+Wrap
+Colors

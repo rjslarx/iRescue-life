@@ -1,0 +1,26 @@
+I need to implement an automated "Adoption Retention" email system based on the "3-3-3 Rule" (3 Days, 3 Weeks, 3 Months).
+1. Database Schema: Create a new table called scheduled_communications.
+id: Primary Key
+adoption_id: Foreign Key linking to the finalized adoption record.
+adopter_email: String (cached for easy access).
+send_date: Date (The future date this message should be sent).
+message_type: String (Enum: '3_days', '3_weeks', '3_months').
+status: String (Enum: 'pending', 'sent', 'cancelled').
+2. The Trigger (Adoption Finalization): Locate the function where an adoption is marked as "Finalized" or "Completed". Add logic to immediately insert 3 rows into scheduled_communications:
+Row 1: send_date = Today + 3 Days. Type = '3_days'.
+Row 2: send_date = Today + 21 Days. Type = '3_weeks'.
+Row 3: send_date = Today + 90 Days. Type = '3_months'.
+3. The Processor (The Cron Job): Create a new API endpoint (e.g., /api/cron/process-retention-emails) that I can schedule to run once a day.
+Logic:
+Query scheduled_communications for rows where send_date <= Today AND status == 'pending'.
+CRITICAL CHECK: Before sending, check the associated Animal's status. If the animal is no longer marked "Adopted" (e.g., it was returned), mark the message as 'cancelled' and do NOT send.
+If valid, send the email using our email service.
+Update status to 'sent'.
+4. The Content Templates: Create 3 simple email templates:
+Day 3 (Decompression): Subject: "Day 3 Check-in: Don't Panic!" Body: Focus on how the dog might be overwhelmed, sleeping a lot, or not eating. It's normal.
+Week 3 (Routine): Subject: "Week 3: Testing Boundaries." Body: Focus on how the dog is settling in and might start testing rules. Reminder on positive reinforcement.
+Month 3 (Belonging): Subject: "Happy 3 Months!" Body: The dog is now home. Ask for a photo/review.
+Technical Tip for Replit
+Since you are on Replit, you need a way to trigger that "Processor" endpoint every day.
+Replit Scheduled Tasks: Replit has a built-in "Scheduled Tasks" feature in the bottom left sidebar. You can set it to curl https://your-app.replit.app/api/cron/process-retention-emails once every 24 hours.
+Security: Make sure you add a simple "Secret Key" check to that API endpoint (e.g., ?key=MY_SECRET_PASSWORD) so random people on the internet can't trigger your email blasts.

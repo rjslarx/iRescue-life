@@ -1,0 +1,69 @@
+@Workspace Build 'Magic Link' Compliance System
+
+Goal: Create a secure, token-based system that allows fosters to confirm medical tasks (like administering heartworm prevention) via a unique URL, without logging in.
+
+1. Database Schema (action_tokens table)
+
+Create a new table action_tokens to store temporary access keys.
+
+Fields:
+
+token (string/UUID, unique, primary index).
+
+entity_type (string, e.g., 'medical_record').
+
+entity_id (integer, foreign key reference).
+
+action_type (string, e.g., 'confirm_administration').
+
+recipient_phone (string, for verification/logging).
+
+expires_at (timestamp).
+
+used_at (timestamp, nullable).
+
+2. The 'Magic' API Endpoints
+
+Generate Token (Internal Helper): Create a utility function generateActionLink(medicalRecordId, phone) that creates a token expiring in 7 days and returns the full URL (e.g., https://app.url/action/xyz123).
+
+Get Token Data (GET /api/action/:token):
+
+Validate token exists and is not expired.
+
+Return the context without sensitive data: { AnimalName, MedicationName, DueDate, FosterName }.
+
+Execute Action (POST /api/action/:token/complete):
+
+Mark the token as used_at: now().
+
+Crucial: Update the linked medical_record status to 'completed' and set administered_at to now.
+
+Log the confirmation in the history.
+
+3. The Mobile Landing Page (/action/:token)
+
+Create a specific route that does NOT require user authentication (public access, validated by token only).
+
+UI Layout (Mobile First):
+
+Header: Minimal (Logo only).
+
+Hero: Photo of the Animal + "Hi [FosterName], did [AnimalName] get their [Medication]?"
+
+Primary Action: Big, Green, Thumb-friendly button: "✅ YES, MEDS GIVEN".
+
+Secondary Action: Small grey link below: "⚠️ No, report an issue".
+
+Issue Flow: If 'No' is clicked, show a dropdown: "Lost Pill", "Animal Vomited", "Ran Out", "Other".
+
+4. The 'Trojan Horse' Success Screen
+
+Once the user clicks 'YES':
+
+Show a 'Success/Confetti' animation.
+
+The Upsell: Display a card below: "Great job! While you are here, would you like to upload a new photo of [AnimalName]?"
+
+Button: '📸 Upload Photo' -> Redirects to /portal/my-fosters.
+
+Execute this to build the one-click compliance engine.

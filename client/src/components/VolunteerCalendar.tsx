@@ -1,0 +1,189 @@
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Calendar, MapPin, Clock, Users, Edit, Trash2 } from "lucide-react";
+import type { VolunteerOpportunity } from "@shared/schema";
+
+type OpportunityWithSignup = VolunteerOpportunity & { signedUp?: boolean };
+
+interface VolunteerCalendarProps {
+  opportunities: OpportunityWithSignup[];
+  onSignUp?: (opportunityId: string) => void;
+  onCancel?: (opportunityId: string) => void;
+  onEdit?: (opportunity: VolunteerOpportunity) => void;
+  onDelete?: (opportunityId: string) => void;
+  isAdmin?: boolean;
+}
+
+interface Signup {
+  id: string;
+  userName: string;
+  userEmail: string;
+  createdAt: string;
+}
+
+export default function VolunteerCalendar({ 
+  opportunities, 
+  onSignUp, 
+  onCancel, 
+  onEdit, 
+  onDelete,
+  isAdmin = false,
+}: VolunteerCalendarProps) {
+  const [viewingSignups, setViewingSignups] = useState<string | null>(null);
+
+  // Fetch signups for an opportunity when viewing
+  const { data: signupsData } = useQuery<{ signups: Signup[] }>({
+    queryKey: ["/api/volunteer-opportunities", viewingSignups, "signups"],
+    enabled: !!viewingSignups && isAdmin,
+  });
+
+  const signups = signupsData?.signups || [];
+
+  return (
+    <>
+      <div className="space-y-4">
+        {opportunities.map((opp) => {
+          const slotsRemaining = opp.slotsTotal - opp.slotsFilled;
+          const isFull = slotsRemaining === 0;
+          
+          return (
+            <Card key={opp.id} data-testid={`card-opportunity-${opp.id}`}>
+              <CardHeader>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-2 flex-1">
+                    <CardTitle className="text-xl">{opp.title}</CardTitle>
+                    <p className="text-sm text-muted-foreground">{opp.description}</p>
+                  </div>
+                  <Badge variant={opp.signedUp ? "default" : isFull ? "secondary" : "outline"}>
+                    {opp.signedUp ? "Signed Up" : isFull ? "Full" : `${slotsRemaining} spots left`}
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-3 sm:grid-cols-3 text-sm">
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Calendar className="h-4 w-4" />
+                    <span>{opp.date}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Clock className="h-4 w-4" />
+                    <span>{opp.time}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <MapPin className="h-4 w-4" />
+                    <span>{opp.location}</span>
+                  </div>
+                </div>
+                
+                <div className="flex flex-wrap gap-2">
+                  {!isAdmin && (
+                    opp.signedUp ? (
+                      <Button 
+                        variant="outline" 
+                        onClick={() => onCancel?.(opp.id)}
+                        data-testid={`button-cancel-${opp.id}`}
+                      >
+                        Cancel Sign Up
+                      </Button>
+                    ) : (
+                      <Button 
+                        onClick={() => onSignUp?.(opp.id)}
+                        disabled={isFull}
+                        data-testid={`button-signup-${opp.id}`}
+                      >
+                        {isFull ? "Fully Booked" : "Sign Up"}
+                      </Button>
+                    )
+                  )}
+
+                  {isAdmin && (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setViewingSignups(opp.id)}
+                        data-testid={`button-view-signups-${opp.id}`}
+                      >
+                        <Users className="h-4 w-4 mr-2" />
+                        View Signups ({opp.slotsFilled})
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onEdit?.(opp)}
+                        data-testid={`button-edit-${opp.id}`}
+                      >
+                        <Edit className="h-4 w-4 mr-2" />
+                        Edit
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onDelete?.(opp.id)}
+                        data-testid={`button-delete-${opp.id}`}
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
+      {/* Signups Dialog */}
+      <Dialog open={!!viewingSignups} onOpenChange={() => setViewingSignups(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Volunteer Signups</DialogTitle>
+            <DialogDescription>
+              People who have signed up for this opportunity
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-4">
+            {signups.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">
+                No volunteers have signed up yet.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {signups.map((signup) => (
+                  <Card key={signup.id} data-testid={`card-signup-${signup.id}`}>
+                    <CardContent className="p-4">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="font-medium" data-testid={`text-signup-name-${signup.id}`}>
+                            {signup.userName}
+                          </p>
+                          <p className="text-sm text-muted-foreground" data-testid={`text-signup-email-${signup.id}`}>
+                            {signup.userEmail}
+                          </p>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(signup.createdAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}

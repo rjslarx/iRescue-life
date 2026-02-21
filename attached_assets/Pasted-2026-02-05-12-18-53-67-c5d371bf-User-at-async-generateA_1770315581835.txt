@@ -1,0 +1,80 @@
+2026-02-05 12:18:53.67
+c5d371bf
+User
+at async generateAdoptionContractPDF (file:///home/runner/workspace/dist/index.js:13677:19)
+2026-02-05 12:18:53.67
+c5d371bf
+User
+at async captureSignature (file:///home/runner/workspace/dist/index.js:14131:26)
+2026-02-05 12:18:53.67
+c5d371bf
+User
+at ChromeLauncher.resolveExecutablePath (file:///home/runner/workspace/node_modules/puppeteer-core/lib/esm/puppeteer/node/BrowserLauncher.js:297:27)
+2026-02-05 12:18:53.67
+c5d371bf
+User
+2. your cache path is incorrectly configured (which is: /home/runner/.cache/puppeteer).
+2026-02-05 12:18:53.67
+c5d371bf
+User
+at ChromeLauncher.computeLaunchArguments (file:///home/runner/workspace/node_modules/puppeteer-core/lib/esm/puppeteer/node/ChromeLauncher.js:85:24)
+2026-02-05 12:18:53.67
+c5d371bf
+User
+at async ChromeLauncher.launch (file:///home/runner/workspace/node_modules/puppeteer-core/lib/esm/puppeteer/node/BrowserLauncher.js:49:28)
+2026-02-05 12:18:53.67
+c5d371bf
+User
+1. you did not perform an installation before running the script (e.g. `npx puppeteer browsers install chrome`) or
+2026-02-05 12:18:53.67
+c5d371bf
+User
+at async file:///home/runner/workspace/dist/index.js:38831:24
+2026-02-05 12:18:53.67
+c5d371bf
+User
+For (2), check out our guide on configuring puppeteer at https://pptr.dev/guides/configuration.
+2026-02-05 12:18:53.67
+c5d371bf
+User
+Error: Could not find Chrome (ver. 142.0.7444.61). This can occur if either
+2026-02-05 12:19:10.96
+c5d371bf
+User
+For (2), check out our guide on configuring puppeteer at https://pptr.dev/guides/configuration.
+2026-02-05 12:19:10.96
+c5d371bf
+User
+at ChromeLauncher.computeLaunchArguments (file:///home/runner/workspace/node_modules/puppeteer-core/lib/esm/puppeteer/node/ChromeLauncher.js:85:24)
+2026-02-05 12:19:10.96
+c5d371bf
+User
+at async generateAdoptionContractPDF (file:///home/runner/workspace/dist/index.js:13677:19)
+2026-02-05 12:19:10.96
+c5d371bf
+User
+at async captureSignature (file:///home/runner/workspace/dist/index.js:14131:26)
+2026-02-05 12:19:10.96
+c5d371bf
+User
+Error: Could not find Chrome (ver. 142.0.7444.61). This can occur if either
+2026-02-05 12:19:10.96
+c5d371bf
+User
+at async ChromeLauncher.launch (file:///home/runner/workspace/node_modules/puppeteer-core/lib/esm/puppeteer/node/BrowserLauncher.js:49:28)
+2026-02-05 12:19:10.96
+c5d371bf
+User
+at async file:///home/runner/workspace/dist/index.js:38831:24
+2026-02-05 12:19:10.96
+c5d371bf
+User
+at ChromeLauncher.resolveExecutablePath (file:///home/runner/workspace/node_modules/puppeteer-core/lib/esm/puppeteer/node/BrowserLauncher.js:297:27)
+2026-02-05 12:19:10.96
+c5d371bf
+User
+2. your cache path is incorrectly configured (which is: /home/runner/.cache/puppeteer).
+2026-02-05 12:19:10.96
+c5d371bf
+User
+1. you did not perform an installation before running the script (e.g. `npx puppeteer browsers install chrome`) or

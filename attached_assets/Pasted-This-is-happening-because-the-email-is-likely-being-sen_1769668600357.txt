@@ -1,0 +1,47 @@
+This is happening because the email is likely being sent as Plain Text instead of HTML. When you send plain text, Gmail tries to "guess" if something is a link, but it often fails if the link is long or complex.
+
+To fix this, you need to tell the Replit Agent to switch the email format to HTML. This allows you to create a proper "Click Here" link or even a nice-looking button.
+
+The Fix: Switch to HTML Email
+Copy and paste this prompt to the Replit Agent. It instructs the agent to stop using the text field and start using the html field in the email configuration.
+
+"@Workspace Fix Email Link: Send as HTML Button
+
+The Problem: The waiver email is currently sending as plain text, so the link is not clickable for the user.
+
+The Fix: Update the sendEmail function (or the specific transporter.sendMail call for the waiver) to send HTML content.
+
+1. Change the Body Property:
+
+Instead of setting the text: property, set the html: property.
+
+2. Use this HTML Template:
+
+Wrap the message in a simple div.
+
+Create a clear Call-to-Action button using an anchor tag.
+
+Code Example:
+
+JavaScript
+html: \`
+  <div style="font-family: Arial, sans-serif; padding: 20px;">
+    <h2>Action Required: Hold Harmless Agreement</h2>
+    <p>Hi \${volunteerName},</p>
+    <p>Please click the button below to sign your liability waiver electronically so we can move forward with your orientation.</p>
+    <br>
+    <a href="\${waiverLink}" style="background-color: #2563eb; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">
+      Sign Waiver Now
+    </a>
+    <br><br>
+    <p style="color: #666; font-size: 12px;">If the button doesn't work, copy and paste this link: <br> \${waiverLink}</p>
+  </div>
+\`
+Update the waiver email logic to use this HTML format immediately."
+
+Why this works
+HTML: Tells Gmail "render this as a web page," which guarantees the link works.
+
+The Button: The style="..." part creates a blue button that is much easier to tap on a phone than a tiny text link.
+
+The Backup: The small text at the bottom ("If the button doesn't work...") is a safety net for strict email security settings.

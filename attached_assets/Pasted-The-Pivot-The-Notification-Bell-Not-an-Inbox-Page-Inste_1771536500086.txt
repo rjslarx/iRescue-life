@@ -1,0 +1,61 @@
+The Pivot: The "Notification Bell" (Not an Inbox Page)
+Instead of a dedicated Inbox page, you need to use the standard SaaS approach: The Global Notification Bell in your top navigation bar.
+It acts as a signpost, not a workspace.
+Here is how it works:
+1. The Indicator: A small bell icon sits in the top right corner of the screen next to the user's profile picture. If a foster uploads a vet invoice, a little red dot with a "1" appears on it.
+2. The Dropdown (The "Mini-Inbox"): When the staff clicks the bell, a small menu drops down.
+• 🔴 Foster Sarah uploaded a vet invoice for Barnaby.
+• 🟡 Adopter Mark uploaded a Spay certificate for Luna.
+3. The Routing: * If they click Barnaby's alert, it jumps them directly to Medical Pipeline -> In Foster -> Vet Visit Triage.
+• If they click Luna's alert, it jumps them directly to Compliance & Alumni -> Action Required.
+Why this is the ultimate final architecture
+• Medical Staff live in the Medical Pipeline. They see their work right in front of them on their specific tabs.
+• Adoption Staff live in the Compliance Monitor. They see their work on their tabs.
+• The System taps them on the shoulder (via the bell) when something urgent happens, and instantly teleports them to the exact right tab to handle it.
+The Replit Prompt to Build the Notification Bell
+This prompt replaces the old "Inbox Page" idea with a smart navigation component.
+Copy and paste this into Replit Agent:
+
+
+I need to build a "Global Notification Bell" component for the Top Navigation Bar.
+
+1. The Component Structure (`<NotificationBell />`):
+   - Place a Bell icon in the top right of the global layout (header).
+   - Query two specific "Action Required" counts:
+     - Count A: Animals where `medical_review_status === 'pending_vet_review'`.
+     - Count B: Animals where `compliance_status === 'review_requested'`.
+   - If (Count A + Count B) > 0, display a red notification badge with the total number over the Bell icon.
+
+2. The Dropdown Menu:
+   - On clicking the Bell, open a popover/dropdown menu.
+   - List the active alerts with clear, distinct phrasing:
+     - "[X] Foster Vet Visits require medical review."
+     - "[Y] Adopter Compliance documents require approval."
+
+3. The Smart Routing:
+   - Make the alerts clickable.
+   - Clicking the "Foster Vet Visits" alert should navigate the user to `/portal/medical` AND automatically set the location context to 'foster' and the active tab to 'vet_triage'.
+   - Clicking the "Adopter Compliance" alert should navigate the user to `/portal/compliance` AND set the active tab to 'action_required'.
+
+Where it should NOT be
+The only places this bell should not appear are:
+1. Public-Facing Pages: Your public irescue.life homepage, donation pages, or adoption applications.
+2. The Login/Signup Screen.
+3. The Foster Portal: Foster parents should not see the staff's internal notification bell. They have their own simplified view.
+How to build the "Persistent Shell" in Replit
+To make this work, you don't copy and paste the bell onto 50 different pages. You put it in a single "Wrapper" component that hugs all of your internal backend pages.
+Copy and paste this into Replit Agent:
+
+I need to implement the Notification Bell inside the authenticated Global Layout.
+
+1. The Layout Component (`<AppLayout />` or `<DashboardLayout />`):
+   - Locate the main wrapper component that houses the Top Header and the Left Sidebar for authenticated staff users.
+   - Inject the `<NotificationBell />` component into the right side of the Top Header, next to the User Profile Avatar.
+
+2. Global State / Polling:
+   - Ensure the query that counts the active alerts (vet visits and compliance uploads) is called at this layout level, or uses a global state manager (like React Query or Zustand) so it stays synced across all pages.
+   - Set the query to silently poll/refresh every 5 minutes so the red badge updates automatically while the user is working.
+
+3. Z-Index and Positioning:
+   - Ensure the dropdown menu from the bell has a high `z-index` (e.g., `z-50`) so when it opens, it overlays any data tables or charts on the active page below it.
+

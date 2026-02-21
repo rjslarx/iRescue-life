@@ -1,0 +1,39 @@
+Close! You are right on the money regarding the Badges (Booleans), but we need to make a slight correction regarding Status vs. Location.
+If you try to combine "Status" and "Location" into the same database column, your system will eventually break.
+Here is the "Holy Trinity" of animal tracking in shelter software. You need to keep these as three separate concepts in your database:
+1. The Status (Availability / Lifecycle)
+This answers one question: "Can the public adopt this dog right now?"
+This is a single dropdown field. An animal can only have ONE status at a time.
+ * Available
+ * Adoption Pending
+ * Medical Hold
+ * Stray Hold
+ * Adopted
+ * Transferred
+2. The Location (Physical Whereabouts)
+This answers the question: "Where is the dog sleeping tonight?"
+This must be separate from Status. Why? Because a dog can be Status: Available but Location: Foster Home. Or, a dog can be Status: Medical Hold and also Location: Foster Home.
+ * Facility / Kennel #4
+ * Foster: Sarah Jenkins
+ * Vet Clinic: Main St. Animal Hospital
+ * In Transit: Transport TR-8294
+3. The Badges / Flags (Booleans)
+This is exactly what you remembered. These answer the question: "What do I need to be warned about?"
+These must be Booleans (True/False checkboxes) because a dog can have many of these at the exact same time.
+Medical Badges:
+ * is_hw_positive (True/False)
+ * needs_spay_neuter (True/False)
+ * special_diet (True/False)
+Behavioral Badges:
+ * bite_history (True/False)
+ * flight_risk (True/False) -> Escape artist
+ * no_cats / no_dogs / no_kids (True/False)
+Why this architecture saves you from a nightmare
+Imagine a foster parent takes a dog to the vet for a 3-day stay to get Heartworm treatment.
+ * If "Vet" was a Status, the dog would accidentally disappear from your website's "Available Dogs" page.
+ * With the 3-Pillar system, you simply change the Location to "Vet Clinic," but leave the Status as "Available." The website stays accurate, and your staff knows exactly where the dog is.
+How it maps to the Animal Card UI we designed:
+ * Top Right Corner Label: Pulls from Status (e.g., a green "Available" pill).
+ * Bottom Footer Row: Pulls from Location (e.g., 🏠 Foster: Sarah Jenkins).
+ * Middle Icon Grid: Driven by the Badges / Flags (e.g., showing the Red Heart icon if is_hw_positive is True).
+Would you like me to write out the exact Replit Agent prompt to generate this 3-Pillar database schema for the animals table?

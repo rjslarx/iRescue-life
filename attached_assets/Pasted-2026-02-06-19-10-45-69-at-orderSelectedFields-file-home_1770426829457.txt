@@ -1,0 +1,74 @@
+2026-02-06 19:10:45.69
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:17)
+2026-02-06 19:10:45.69
+at PgSelectBase._prepare (file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:683:19)
+2026-02-06 19:10:45.69
+at Function.entries ()
+2026-02-06 19:10:45.69
+Error fetching animals for merge: TypeError: Cannot convert undefined or null to object
+2026-02-06 19:11:07.26
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:17)
+2026-02-06 19:11:07.26
+at file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:708:19
+2026-02-06 19:11:07.26
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:33)
+2026-02-06 19:11:07.26
+at file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:63:22
+2026-02-06 19:11:07.26
+at Object.startActiveSpan (file:///home/runner/workspace/node_modules/drizzle-orm/tracing.js:8:14)
+2026-02-06 19:11:07.26
+at Function.entries ()
+2026-02-06 19:11:07.26
+at Object.startActiveSpan (file:///home/runner/workspace/node_modules/drizzle-orm/tracing.js:8:14)
+2026-02-06 19:11:07.26
+at file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:684:26
+2026-02-06 19:11:07.26
+Error fetching animals for merge: TypeError: Cannot convert undefined or null to object
+2026-02-06 19:11:07.26
+at Array.reduce ()
+2026-02-06 19:11:07.26
+at PgSelectBase._prepare (file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:683:19)
+2026-02-06 19:11:20.71
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:33)
+2026-02-06 19:11:20.71
+at PgSelectBase._prepare (file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:683:19)
+2026-02-06 19:11:20.71
+at Object.startActiveSpan (file:///home/runner/workspace/node_modules/drizzle-orm/tracing.js:8:14)
+2026-02-06 19:11:20.71
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:17)
+2026-02-06 19:11:20.71
+at Function.entries ()
+2026-02-06 19:11:20.71
+at Array.reduce ()
+2026-02-06 19:11:20.71
+at file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:63:22
+2026-02-06 19:11:20.71
+at Object.startActiveSpan (file:///home/runner/workspace/node_modules/drizzle-orm/tracing.js:8:14)
+2026-02-06 19:11:20.71
+at file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:684:26
+2026-02-06 19:11:20.71
+Error fetching animals for merge: TypeError: Cannot convert undefined or null to object
+2026-02-06 19:11:20.71
+at file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:708:19
+2026-02-06 19:11:30.19
+at PgSelectBase._prepare (file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:683:19)
+2026-02-06 19:11:30.19
+at Object.startActiveSpan (file:///home/runner/workspace/node_modules/drizzle-orm/tracing.js:8:14)
+2026-02-06 19:11:30.19
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:33)
+2026-02-06 19:11:30.19
+Error fetching animals for merge: TypeError: Cannot convert undefined or null to object
+2026-02-06 19:11:30.19
+at file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:684:26
+2026-02-06 19:11:30.19
+at Function.entries ()
+2026-02-06 19:11:30.19
+at Object.startActiveSpan (file:///home/runner/workspace/node_modules/drizzle-orm/tracing.js:8:14)
+2026-02-06 19:11:30.19
+at file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:63:22
+2026-02-06 19:11:30.19
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:17)
+2026-02-06 19:11:30.19
+at Array.reduce ()
+2026-02-06 19:11:30.19
+at file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:708:19

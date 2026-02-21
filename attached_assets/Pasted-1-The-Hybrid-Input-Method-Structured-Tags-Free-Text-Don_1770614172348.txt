@@ -1,0 +1,33 @@
+1. The "Hybrid" Input Method (Structured Tags + Free Text)
+Don't just give them a blank box. Volunteers will either write too much (an essay) or too little ("needs meds").
+Instead, use a "Tag & Elaborate" system.
+The UI: A set of quick-toggle "Flags" for common issues.
+The UX: Clicking a flag reveals a specific text field for that topic.
+Example Flags:
+[ ] Medical Needs -> Expands: "Describe dosage/frequency..."
+[ ] Behavioral -> Expands: "Triggers/management..."
+[ ] Diet -> Expands: "Brand/quantity..."
+[ ] Flight Risk -> Expands: "Harness requirements..."
+Why this works:
+Minimalist: If a dog is healthy and normal, the screen remains clean (just 4 unchecked icons).
+Data Integrity: You are capturing structured data. If "Medical Needs" is checked, your system knows to enable the "Medical Reminders" module for the adopter.
+2. "Write Once, Publish Everywhere"
+The true power of your platform is what happens to this text after the staff types it. It shouldn't just sit in a database.
+In the Agreement (Legal): The text automatically populates a specific "Special Provisions" clause in the contract.
+Adopter sees: "I acknowledge that this animal has the following medical needs: [Staff Notes]."
+Why: This prevents returns/lawsuits where adopters say, "You never told me he needed expensive food!"
+In the Welcome Email (Practical): The text is highlighted in a "Care Cheat Sheet" sent immediately after payment.
+In the Dashboard (Functional):
+Adoption: It becomes a "Pinned Note" on their pet profile.
+Foster: It becomes a "Task" (e.g., "Instruction: Keep separated from other pets for 3 days").
+3. Foster vs. Adoption Differences
+While the feature is the same, the content differs. You might want to label the field differently depending on the flow:
+For Adoptions (Permanent): Label it "Lifestyle & Long-term Care."
+Focus: Dietary restrictions, chronic conditions, behavioral quirks (e.g., "Thunderstorm anxiety").
+For Fosters (Transitional): Label it "Management & Observation."
+Focus: "Report if coughing persists," "Socialize slowly with cats," "Use the crate when unsupervised."
+Recommendation for your Dark Teal UI:
+Imagine a section called "Care Priorities".
+It starts as a single line: "Does [Dog Name] have special care instructions?" (Toggle: No / Yes).
+If Yes: It slides open with your dark teal background and slightly lighter input fields.
+Smart Defaults: You could even have a dropdown of "Saved Snippets" for common things like "Needs slow introduction to other dogs" or "Strict crate rest after heartworm treatment" to save the volunteer from typing the same thing 50 times.

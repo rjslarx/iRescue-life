@@ -1,0 +1,111 @@
+Here is a comprehensive guide you can paste directly into the Replit Agent (or use to guide it manually).
+
+This instructs Replit to build the **Stripe Standard Connect OAuth flow**. This is the specific "handshake" protocol that allows a tenant to log in to their existing Stripe account (or create a new one) and grant your platform permission to manage it.
+
+### **The Prompt to Paste into Replit**
+
+> **I need to implement the Stripe Connect "Standard" OAuth flow to allow tenants to connect their Stripe accounts to my platform.**
+> **Here is the architecture:**
+> 1. **Goal:** A user clicks "Connect Stripe" on my frontend. They go to Stripe, authorize my app, and are redirected back. I save their `stripe_user_id` in my database.
+> 2. **Tech Stack:** Node.js/Express backend (PG database) and React frontend.
+> 3. **Stripe Mode:** Standard Connect (The tenant is the Merchant of Record).
+> 
+> 
+> **Please build the following 3 components:**
+> **Step 1: The "Redirect" Endpoint (`GET /api/stripe/connect`)**
+> * This route should generate the Stripe OAuth link using `stripe.oauth.authorizeUrl`.
+> * It must include `client_id` (from env vars), `scope: 'read_write'`, and `response_type: 'code'`.
+> * It should pass a `state` parameter (a random string or the tenant's ID/token) to prevent CSRF attacks.
+> * It should return this URL to the frontend so the browser can redirect there.
+> 
+> 
+> **Step 2: The "Callback" Endpoint (`GET /api/stripe/callback`)**
+> * This is where Stripe redirects the user after success.
+> * Extract the `code` and `state` from the query parameters.
+> * Verify the `state` matches the user's session (for security).
+> * Exchange the authorization code for a connected Account ID using `stripe.oauth.token({ grant_type: 'authorization_code', code })`.
+> * **Database Action:** Update the `tenants` table. Set `stripe_account_id` = the result from Stripe. Set `stripe_connected_at` = NOW().
+> * Finally, redirect the user back to the frontend dashboard `/settings?status=success`.
+> 
+> 
+> **Step 3: The Frontend Button**
+> * Create a React component `<ConnectStripeButton />`.
+> * It should call the backend `/connect` endpoint and `window.location.href` to the URL returned.
+> 
+> 
+
+---
+
+### **Technical "Cheat Sheet" for You (The Developer)**
+
+The Replit Agent will write the code, but **you** have to perform the setup in the Stripe Dashboard for that code to work. The Agent cannot do this part for you.
+
+#### **1. Environment Variables (Add to Replit Secrets)**
+
+You need to find these in your Stripe Dashboard under **Developers > API Keys** and **Settings > Connect > Settings**.
+
+* `STRIPE_SECRET_KEY`: (Starts with `sk_test_...`)
+* `STRIPE_PUBLISHABLE_KEY`: (Starts with `pk_test_...`)
+* `STRIPE_CLIENT_ID`: **Crucial.** This is found in **Connect Settings**. It starts with `ca_...` (for production) or `ca_test_...` (for testing).
+* `BASE_URL`: The URL of your Replit app (e.g., `https://irescue.replit.app`). The code needs this to tell Stripe where to send the user back.
+
+#### **2. The "Redirect URI" Whitelist (Must Match Exactly)**
+
+Stripe blocks any redirect URLs that aren't whitelisted.
+
+1. Go to **Stripe Dashboard > Settings > Connect > Settings**.
+2. Scroll down to "Integration" / "Redirects".
+3. Add your Replit callback URL exactly:
+* `https://[YOUR-REPLIT-URL].replit.app/api/stripe/callback`
+
+
+4. *(Note: If Replit changes your URL, you must update this setting in Stripe).*
+
+#### **3. The Database Schema Update**
+
+Ensure the Replit Agent knows your table structure. If you haven't added the columns yet, ask the Agent to run this SQL:
+
+```sql
+ALTER TABLE tenants 
+ADD COLUMN stripe_account_id TEXT, 
+ADD COLUMN stripe_connected_at TIMESTAMP;
+
+```
+
+### **What the Code Will Look Like (Reference)**
+
+Just so you can verify what the Agent writes, the critical logic in your **Callback Route** should look roughly like this:
+
+```javascript
+// GET /api/stripe/callback
+app.get('/api/stripe/callback', async (req, res) => {
+  const { code, state } = req.query;
+
+  // 1. Verify User (The 'state' usually contains the Tenant ID to identify who this is)
+  if (!state) return res.status(400).send('State parameter missing');
+
+  try {
+    // 2. Exchange the "Auth Code" for the "Account ID"
+    const response = await stripe.oauth.token({
+      grant_type: 'authorization_code',
+      code,
+    });
+
+    const connectedAccountId = response.stripe_user_id; // e.g. "acct_123456789"
+
+    // 3. Save to Database (Pseudo-code)
+    await db.query(
+      "UPDATE tenants SET stripe_account_id = $1, stripe_connected_at = NOW() WHERE id = $2",
+      [connectedAccountId, state] // Assuming 'state' held the tenant ID
+    );
+
+    // 4. Send them back to your app
+    res.redirect('/admin/dashboard?stripe_connected=true');
+
+  } catch (err) {
+    console.error("Stripe Connect Error:", err);
+    res.redirect('/admin/dashboard?error=stripe_connection_failed');
+  }
+});
+
+```

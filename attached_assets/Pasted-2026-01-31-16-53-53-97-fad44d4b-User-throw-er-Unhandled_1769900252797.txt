@@ -1,0 +1,108 @@
+2026-01-31 16:53:53.97
+fad44d4b
+User
+throw er; // Unhandled 'error' event
+2026-01-31 16:53:53.97
+fad44d4b
+User
+application_name: undefined,
+2026-01-31 16:53:53.97
+fad44d4b
+User
+at Client._handleErrorEvent (/home/runner/workspace/node_modules/pg/lib/client.js:350:10)
+2026-01-31 16:53:53.97
+fad44d4b
+User
+severity: 'FATAL',
+2026-01-31 16:53:53.97
+fad44d4b
+User
+hint: undefined,
+2026-01-31 16:53:53.97
+fad44d4b
+User
+table: undefined,
+2026-01-31 16:53:53.97
+fad44d4b
+User
+dataType: undefined,
+2026-01-31 16:53:53.97
+fad44d4b
+User
+internalPosition: undefined,
+2026-01-31 16:53:53.97
+fad44d4b
+User
+replication: undefined,
+2026-01-31 16:53:53.97
+fad44d4b
+User
+_maxListeners: undefined,
+2026-01-31 16:53:53.97
+fad44d4b
+User
+^
+2026-01-31 16:53:53.97
+fad44d4b
+User
+node:events:502
+2026-01-31 16:53:53.97
+fad44d4b
+User
+internalQuery: undefined,
+2026-01-31 16:53:53.97
+fad44d4b
+User
+client_encoding: '',
+2026-01-31 16:53:53.97
+fad44d4b
+User
+column: undefined,
+2026-01-31 16:53:53.97
+fad44d4b
+User
+[Symbol(kWriteCbValue)]: null
+2026-01-31 16:53:53.97
+fad44d4b
+User
+position: undefined,
+2026-01-31 16:53:53.97
+fad44d4b
+User
+at TLSSocket. (/home/runner/workspace/node_modules/pg-protocol/dist/index.js:11:42)
+2026-01-31 16:53:53.97
+fad44d4b
+User
+at TLSSocket. (/home/runner/workspace/node_modules/pg-protocol/dist/index.js:11:42)
+2026-01-31 16:53:53.97
+fad44d4b
+User
+at Readable.push (node:internal/streams/readable:392:5)
+2026-01-31 16:53:53.97
+fad44d4b
+User
+binary: false,
+2026-01-31 16:54:01.87
+fad44d4b
+User
+npm notice
+2026-01-31 16:54:01.87
+fad44d4b
+User
+npm notice To update run: npm install -g npm@11.8.0
+2026-01-31 16:54:01.87
+fad44d4b
+User
+npm notice New major version of npm available! 10.8.2 -> 11.8.0
+2026-01-31 16:54:01.87
+fad44d4b
+User
+npm notice
+2026-01-31 16:54:01.87
+fad44d4b
+User
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.8.0
+2026-01-31 16:54:03.77
+fad44d4b
+System
+command finished with error [npm run start]: exit status 1

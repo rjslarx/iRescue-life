@@ -1,0 +1,42 @@
+Enumerating objects: 9900, done.
+Counting objects: 100% (9900/9900), done.
+Delta compression using up to 8 threads
+Compressing objects: 100% (3887/3887), done.
+Writing objects: 100% (9900/9900), 51.70 MiB | 5.71 MiB/s, done.
+Total 9900 (delta 8037), reused 7224 (delta 5908), pack-reused 0 (from 0)
+remote: Resolving deltas: 100% (8037/8037), done.
+remote: error: GH013: Repository rule violations found for refs/heads/main.
+remote: 
+remote: - GITHUB PUSH PROTECTION
+remote:   —————————————————————————————————————————
+remote:     Resolve the following violations before pushing again
+remote: 
+remote:     - Push cannot contain secrets
+remote: 
+remote:     
+remote:      (?) Learn how to resolve a blocked push
+remote:      https://docs.github.com/code-security/secret-scanning/working-with-secret-scanning-and-push-protection/working-with-push-protection-from-the-command-line#resolving-a-blocked-push
+remote:     
+remote:     
+remote:       —— Stripe Test API Secret Key ————————————————————————
+remote:        locations:
+remote:          - commit: d485b40d4c2a388b4c6b7807e2f14e841ece69ef
+remote:            path: .replit:48
+remote:          - commit: f048f0faa7111cc0c67f5358a54a35b1459a63b5
+remote:            path: .replit:48
+remote:          - commit: 848e6318816d1625b5d4d035134f7bfd84150b05
+remote:            path: .replit:52
+remote:          - commit: 7ae9a33e2722a265059cc4bb2bdac1c2e9bf6c38
+remote:            path: .replit:52
+remote:          - commit: ffce9bf8daaf516b2d39fbe683d2da6f21f717fb
+remote:            path: .replit:52
+remote:     
+remote:        (?) To push, remove secret from commit(s) or follow this URL to allow the secret.
+remote:        https://github.com/rjslarx/iRescue-life/security/secret-scanning/unblock-secret/387Yb8rur5Fv5AEDnX9t4wHVZGw
+remote:     
+remote: 
+remote: 
+To https://github.com/rjslarx/iRescue-life
+ ! [remote rejected] main -> main (push declined due to repository rule violations)
+error: failed to push some refs to 'https://github.com/rjslarx/iRescue-life'
+~/workspace$ 

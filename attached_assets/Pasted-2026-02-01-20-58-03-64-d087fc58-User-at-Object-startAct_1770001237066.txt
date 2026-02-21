@@ -1,0 +1,92 @@
+2026-02-01 20:58:03.64
+d087fc58
+User
+at Object.startActiveSpan (file:///home/runner/workspace/node_modules/drizzle-orm/tracing.js:8:14)
+2026-02-01 20:58:03.64
+d087fc58
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:63:22
+2026-02-01 20:58:03.64
+d087fc58
+User
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:33)
+2026-02-01 20:58:03.64
+d087fc58
+User
+at Object.startActiveSpan (file:///home/runner/workspace/node_modules/drizzle-orm/tracing.js:8:14)
+2026-02-01 20:58:03.64
+d087fc58
+User
+TypeError: Cannot convert undefined or null to object
+2026-02-01 20:58:03.64
+d087fc58
+User
+at Function.entries ()
+2026-02-01 20:58:03.64
+d087fc58
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:684:26
+2026-02-01 20:58:03.64
+d087fc58
+User
+at PgSelectBase._prepare (file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:683:19)
+2026-02-01 20:58:03.64
+d087fc58
+User
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:17)
+2026-02-01 20:58:03.64
+d087fc58
+User
+at Array.reduce ()
+2026-02-01 20:58:03.64
+d087fc58
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:708:19
+2026-02-01 20:58:21.01
+d087fc58
+User
+at Object.startActiveSpan (file:///home/runner/workspace/node_modules/drizzle-orm/tracing.js:8:14)
+2026-02-01 20:58:21.01
+d087fc58
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:684:26
+2026-02-01 20:58:21.01
+d087fc58
+User
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:33)
+2026-02-01 20:58:21.01
+d087fc58
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:708:19
+2026-02-01 20:58:21.01
+d087fc58
+User
+TypeError: Cannot convert undefined or null to object
+2026-02-01 20:58:21.01
+d087fc58
+User
+at PgSelectBase._prepare (file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:683:19)
+2026-02-01 20:59:53.61
+d087fc58
+User
+error: column "type" does not exist
+2026-02-01 20:59:53.61
+d087fc58
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-02-01 20:59:53.61
+d087fc58
+User
+at /home/runner/workspace/node_modules/pg-pool/index.js:45:11
+2026-02-01 20:59:53.61
+d087fc58
+User
+at async file:///home/runner/workspace/node_modules/drizzle-orm/node-postgres/session.js:83:22
+2026-02-01 20:59:53.61
+d087fc58
+User
+at async file:///home/runner/workspace/dist/index.js:50564:21
+2026-02-01 21:00:01.36
+6ffee197
+User
+[2026-02-02T03:00:01.365Z] [PID: 40] [NODE-CRON] [WARN] missed execution at Mon Feb 02 2026 03:00:00 GMT+0000 (Coordinated Universal Time)! Possible blocking IO or high CPU user at the same process used by node-cron.

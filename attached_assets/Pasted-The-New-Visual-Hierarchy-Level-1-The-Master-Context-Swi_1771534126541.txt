@@ -1,0 +1,61 @@
+The New Visual Hierarchy
+Level 1: The Master Context Switch (Top)
+A large, prominent Segmented Control or Toggle: [ 🏢 In Shelter ] | [ 🏠 In Foster ]
+
+Level 2: The Contextual Navigation (Middle)
+The tabs that appear dynamically based on the toggle selected in Level 1.
+
+Level 3: The Data (Bottom)
+The summary cards and the data tables that belong to that specific tab and location.
+
+Tab Mapping: What to Show and Hide
+When you flip that master switch, the navigation tabs should change to match the operational reality of that location.
+
+When [ 🏢 In Shelter ] is selected:
+You are putting on your "Shelter Meds" hat. Show these tabs:
+
+Intake Protocol (Intakes almost always happen at the physical facility).
+
+Surgery Queue (Shelter dogs needing spay/neuter).
+
+Active Treatments (The digital med-cart for kennel techs).
+
+Preventative Care (Routine shelter deworming/vaccines).
+
+HIDDEN: Vet Visit Triage.
+
+When [ 🏠 In Foster ] is selected:
+You are putting on your "Volunteer Logistics" hat. Show these tabs:
+
+Vet Visit Triage (Front and center, because this is where fosters upload their invoices and questions).
+
+Active Treatments (Tracking foster compliance for daily meds).
+
+Surgery Queue (Scheduling foster dogs to come back in for their spay/neuter).
+
+Preventative Care (Tracking which fosters need to pick up more Heartgard).
+
+HIDDEN: Intake Protocol.
+
+The Replit Prompt to Build the Global Context Switch
+This prompt will tell Replit to lift that toggle out of the child component and put it at the very top of the page layout, using it to conditionally render the tabs.
+
+Copy and paste this into Replit Agent:
+
+Plaintext
+I need to refactor the Medical Pipeline dashboard to use a "Global Context Switch" for location.
+
+1. The Master Toggle (Top Level):
+   - Move the location toggle to the very top of the page, directly below the page header ("Medical Pipeline").
+   - State: `const [locationContext, setLocationContext] = useState<'facility' | 'foster'>('facility')`.
+   - UI: Style this as a large segmented control or pill toggle: [ 🏢 In Shelter ] and [ 🏠 In Foster ].
+
+2. Conditional Navigation Tabs:
+   - Make the secondary navigation tabs dependent on the `locationContext`.
+   - IF `locationContext === 'facility'`: Render the tabs for [Intake Protocol, Surgery Queue, Active Treatments, Preventative Care]. Hide 'Vet Visit Triage'.
+   - IF `locationContext === 'foster'`: Render the tabs for [Vet Visit Triage, Active Treatments, Surgery Queue, Preventative Care]. Hide 'Intake Protocol'.
+
+3. Prop Drilling / Context Provider:
+   - Ensure the selected `locationContext` is passed down to whichever tab is currently active.
+   - The Active Treatments table, Summary Cards, and Surgery Queue must filter their underlying database queries to ONLY show animals matching the current `locationContext`.
+This ensures your medical staff's screen is always 100% relevant to the specific mode they are working in, eliminating clutter and preventing them from getting lost.

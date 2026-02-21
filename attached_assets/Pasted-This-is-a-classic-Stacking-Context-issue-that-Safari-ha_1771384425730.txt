@@ -1,0 +1,36 @@
+This is a classic Stacking Context issue that Safari handles more strictly than Chrome or Firefox.
+In Safari, if a parent container (like your dog card) has certain CSS properties (like position: relative, transform, opacity, or overflow: hidden), it creates a "trap" for z-index. No matter how high you set the z-index on your dropdown menu, it will never "escape" that parent card to sit on top of the card below it.
+Here are the most effective ways to fix this in your code:
+1. The "Lift the Active Card" Fix (Recommended)
+The most reliable way to fix this is to give the entire card a higher z-index only when its dropdown is open. This ensures the entire "layer" sits above the subsequent cards.
+ * The Logic: When the "Actions" menu is open, add a class like .is-open to the parent card.
+ * The CSS:
+   /* The container of the individual dog card */
+.card-container {
+  position: relative;
+  z-index: 1; 
+}
+
+/* Apply this when the dropdown is active */
+.card-container:focus-within,
+.card-container.is-open {
+  z-index: 50; /* Higher than other cards */
+}
+
+2. The Safari "Force-to-Front" Hack
+Safari sometimes needs a gentle nudge to recognize 3D layering. Adding a tiny 3D transform can force the dropdown to the top of the rendering stack.
+ * Apply this to your Dropdown Menu element:
+   .dropdown-menu {
+  z-index: 9999;
+  -webkit-transform: translateZ(9999px);
+  transform: translateZ(9999px);
+}
+
+3. Check for overflow: hidden
+Look at the parent elements of the "Edit" button. If any of them have overflow: hidden or overflow: auto, Safari will often clip the dropdown or force it behind siblings.
+ * Fix: Ensure the containers holding the "Actions" and "Edit" buttons are set to overflow: visible;.
+4. Use a "Portal" (The Pro Way)
+If you are using a framework like React, Vue, or Alpine.js, the best architectural fix is to use a Portal. This takes the dropdown menu's HTML and moves it to the very bottom of the <body> tag while visually positioning it near the button. This removes it from the card's stacking context entirely.
+Which one should you try first?
+Tell Replit Agent: "Apply a higher z-index to the parent dog card whenever the dropdown menu is open so it sits on top of the cards below it in Safari."
+Would you like me to write a specific React or CSS snippet if you can share the code for that dropdown?

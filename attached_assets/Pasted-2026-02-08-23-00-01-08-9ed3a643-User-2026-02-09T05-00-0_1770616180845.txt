@@ -1,0 +1,56 @@
+2026-02-08 23:00:01.08
+9ed3a643
+User
+[2026-02-09T05:00:01.083Z] [PID: 39] [NODE-CRON] [WARN] missed execution at Mon Feb 09 2026 05:00:00 GMT+0000 (Coordinated Universal Time)! Possible blocking IO or high CPU user at the same process used by node-cron.
+2026-02-08 23:00:02.98
+9ed3a643
+User
+[2026-02-09T05:00:02.982Z] [PID: 39] [NODE-CRON] [WARN] missed execution at Mon Feb 09 2026 05:00:00 GMT+0000 (Coordinated Universal Time)! Possible blocking IO or high CPU user at the same process used by node-cron.
+2026-02-08 23:30:01.08
+9ed3a643
+User
+[2026-02-09T05:30:01.085Z] [PID: 39] [NODE-CRON] [WARN] missed execution at Mon Feb 09 2026 05:30:00 GMT+0000 (Coordinated Universal Time)! Possible blocking IO or high CPU user at the same process used by node-cron.
+2026-02-08 23:37:33.02
+9ed3a643
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:708:19
+2026-02-08 23:37:33.02
+9ed3a643
+User
+at Object.startActiveSpan (file:///home/runner/workspace/node_modules/drizzle-orm/tracing.js:8:14)
+2026-02-08 23:37:33.02
+9ed3a643
+User
+at Object.startActiveSpan (file:///home/runner/workspace/node_modules/drizzle-orm/tracing.js:8:14)
+2026-02-08 23:37:33.02
+9ed3a643
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:63:22
+2026-02-08 23:37:33.02
+9ed3a643
+User
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:33)
+2026-02-08 23:37:33.02
+9ed3a643
+User
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:17)
+2026-02-08 23:37:33.02
+9ed3a643
+User
+TypeError: Cannot convert undefined or null to object
+2026-02-08 23:37:33.02
+9ed3a643
+User
+at PgSelectBase._prepare (file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:683:19)
+2026-02-08 23:37:33.02
+9ed3a643
+User
+at Array.reduce ()
+2026-02-08 23:37:33.02
+9ed3a643
+User
+at Function.entries ()
+2026-02-08 23:37:33.02
+9ed3a643
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:684:26

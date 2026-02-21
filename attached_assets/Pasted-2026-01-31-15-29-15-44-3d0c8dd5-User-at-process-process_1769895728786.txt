@@ -1,0 +1,108 @@
+2026-01-31 15:29:15.44
+3d0c8dd5
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-01-31 15:30:01.93
+0b8190ae
+User
+[2026-01-31T21:30:01.932Z] [PID: 40] [NODE-CRON] [WARN] missed execution at Sat Jan 31 2026 21:30:00 GMT+0000 (Coordinated Universal Time)! Possible blocking IO or high CPU user at the same process used by node-cron.
+2026-01-31 15:30:15.73
+3d0c8dd5
+User
+at /home/runner/workspace/node_modules/pg-pool/index.js:45:11
+2026-01-31 15:30:15.73
+3d0c8dd5
+User
+at async file:///home/runner/workspace/node_modules/drizzle-orm/node-postgres/session.js:83:22
+2026-01-31 15:30:15.73
+3d0c8dd5
+User
+error: syntax error at or near "="
+2026-01-31 15:30:15.73
+3d0c8dd5
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-01-31 15:30:15.73
+3d0c8dd5
+User
+at async file:///home/runner/workspace/dist/index.js:32371:28
+2026-01-31 15:31:16.00
+3d0c8dd5
+User
+at /home/runner/workspace/node_modules/pg-pool/index.js:45:11
+2026-01-31 15:31:16.00
+3d0c8dd5
+User
+error: syntax error at or near "="
+2026-01-31 15:31:16.00
+3d0c8dd5
+User
+at async file:///home/runner/workspace/dist/index.js:32371:28
+2026-01-31 15:31:16.00
+3d0c8dd5
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-01-31 15:31:16.00
+3d0c8dd5
+User
+at async file:///home/runner/workspace/node_modules/drizzle-orm/node-postgres/session.js:83:22
+2026-01-31 15:32:16.29
+3d0c8dd5
+User
+at async file:///home/runner/workspace/node_modules/drizzle-orm/node-postgres/session.js:83:22
+2026-01-31 15:32:16.29
+3d0c8dd5
+User
+error: syntax error at or near "="
+2026-01-31 15:32:16.29
+3d0c8dd5
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-01-31 15:32:16.29
+3d0c8dd5
+User
+at /home/runner/workspace/node_modules/pg-pool/index.js:45:11
+2026-01-31 15:32:16.29
+3d0c8dd5
+User
+at async file:///home/runner/workspace/dist/index.js:32371:28
+2026-01-31 15:33:16.55
+3d0c8dd5
+User
+at async file:///home/runner/workspace/node_modules/drizzle-orm/node-postgres/session.js:83:22
+2026-01-31 15:33:16.55
+3d0c8dd5
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-01-31 15:33:16.55
+3d0c8dd5
+User
+error: syntax error at or near "="
+2026-01-31 15:33:16.55
+3d0c8dd5
+User
+at async file:///home/runner/workspace/dist/index.js:32371:28
+2026-01-31 15:33:16.55
+3d0c8dd5
+User
+at /home/runner/workspace/node_modules/pg-pool/index.js:45:11
+2026-01-31 15:35:16.80
+3d0c8dd5
+User
+at async file:///home/runner/workspace/node_modules/drizzle-orm/node-postgres/session.js:83:22
+2026-01-31 15:35:16.80
+3d0c8dd5
+User
+at async file:///home/runner/workspace/dist/index.js:32371:28
+2026-01-31 15:35:16.80
+3d0c8dd5
+User
+error: syntax error at or near "="
+2026-01-31 15:35:16.80
+3d0c8dd5
+User
+at /home/runner/workspace/node_modules/pg-pool/index.js:45:11
+2026-01-31 15:35:16.80
+3d0c8dd5
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)

@@ -1,0 +1,43 @@
+help me design and implement a new "Grants Management" feature set. This feature will help rescues track grant applications, store required documents, and pull the data needed to write new grant proposals.
+This task involves 4 key features. Please provide the code and implementation steps for each.
+Feature 1: The "Grant Vault" (Core Module)
+User Story: "As a Rescue Director, I need a central place to track all grant applications (deadlines, status, amount) and store boilerplate documents so my team can access them."
+Your Task:
+1. Mongoose Schema: Create a new Mongoose schema named Grant.js.
+2. API Endpoints: Create a new grantsController.js and grantsRoutes.js file to provide full CRUD (Create, Read, Update, Delete) functionality for the Grant model.
+3. Frontend Component: Create a new React component GrantTracker.js.
+Specifications:
+1. models/Grant.js (Mongoose Schema):
+This schema needs to include:
+• funderName: String, required.
+• grantName: String, required.
+• status: String, Enum (['Researching', 'Drafting', 'Submitted', 'Awarded', 'Denied', 'Reporting Due']), default: 'Researching'.
+• amountRequested: Number.
+• amountAwarded: Number.
+• deadlineApplication: Date.
+• deadlineReport: Date.
+• notes: String (for general notes).
+• boilerplateDocuments: An array of objects, where each object has {fileName: String, fileUrl: String}. (These are for storing the 501(c)(3) letter, board lists, etc.)
+• submittedApplication: An object with {fileName: String, fileUrl: String} (for the PDF of the actual application).
+• grantReport: An object with {fileName: String, fileUrl: String} (for the final report).
+• rescueId: (A reference to the Rescue or User account this grant belongs to).
+2. Backend (Node.js/Express):
+• Create routes/grantRoutes.js with endpoints for:
+• POST /api/grants (Create new grant)
+• GET /api/grants (Get all grants for the logged-in rescue)
+• GET /api/grants/:id (Get a single grant's details)
+• PUT /api/grants/:id (Update a grant's details)
+• DELETE /api/grants/:id (Delete a grant)
+• For file uploads (like boilerplateDocuments), please stub out the logic. Assume we will use a service like AWS S3 or Cloudinary and will just be storing the final URL in the schema.
+3. Frontend (components/GrantTracker.js):
+• Create a data table (using react-table or your recommended component) that lists all grants from GET /api/grants.
+• The table should show columns: Funder, Grant Name, Status, Amount Requested, Application Deadline.
+• Include a "New Grant" button that opens a modal with a form (GrantForm.js) to create a new grant (using the POST endpoint).
+• Clicking a row should open a GrantDetail.js page/modal to edit the grant (using GET /:id and PUT /:id). This page is where the user would also upload the documents.
+Feature 2: The "Grant Reporting Dashboard"
+User Story: "As a Grant Writer, I need a one-click dashboard to see all the key metrics (intakes, adoptions, length of stay) required for grant applications from the last 12 months."
+Your Task:
+1. API Endpoint: Create a new, complex GET endpoint: GET /api/reports/grants.
+2. Frontend Component: Create a new React component GrantDashboard.js.
+Specifications:
+1. Backend (controllers/reportsController.js):

@@ -1,0 +1,56 @@
+The golden rule of rescue software is: Fosters upload the paper; Staff types the data.
+
+Here is how you handle the different categories using that exact same "Triage Queue," plus the one exception to the rule.
+
+The Universal "Vet Visit" Upload
+Instead of giving the foster 5 different buttons for 5 different types of medical events, you give them one big button: "Upload Vet Visit / Records".
+
+When the staff receives that alert in their Triage Queue, the staff member looks at the uploaded invoice and distributes the data to the correct tabs:
+
+Exams: Staff types the vet's notes into the Medical Notes section.
+
+Procedures: Staff updates the Spay/Neuter Status to "Done" based on the surgical discharge paper.
+
+Diagnostics: Staff logs "Fecal: Negative" or "Heartworm: Positive" in the Diagnostics tab.
+
+Vaccines: Staff logs the Rabies vaccine, the expiration date, and the legal Tag Number into the Preventative tab.
+
+The ONE Exception: At-Home Preventatives
+The only time a foster should bypass the Triage Queue is for routine, at-home maintenance (like giving a monthly Heartgard chew or a daily antibiotic pill).
+
+Why: Because the staff already reviewed the prescription, created the medication_plan, and the system automatically generated the schedule.
+
+The Workflow: The foster just clicks the green [ Mark Given ] button on their daily task list. No staff review is needed because the foster isn't changing the medical record; they are just executing a task the staff already approved.
+
+How to Build the "Universal Triage" in Replit
+To make this seamless, the Triage Queue needs to be the central routing hub for your Medical Coordinators.
+
+Copy and paste this into Replit Agent:
+
+Plaintext
+I need to upgrade the "Medical Review Queue" to handle all external vet visits.
+
+1. The Foster Portal ("Log Vet Visit"):
+   - Create a single, simple form for fosters: "Upload Vet Visit".
+   - Fields: 
+     - `visit_date` (Date picker, defaults to today).
+     - `clinic_name` (Optional text).
+     - `reason` (Text area: "Why did they go to the vet?").
+     - `documents` (Multi-file upload for invoices, rabies certificates, discharge papers).
+   - On submit, set the animal's `medical_review_status = 'pending_vet_review'`.
+
+2. The Staff Triage Dashboard:
+   - The "Needs Medical Review" widget should display the Foster's `reason` text alongside the uploaded documents.
+   - Add a "Process Visit" button next to the item in the queue.
+
+3. The "Process Visit" Hub (Staff Side):
+   - When staff clicks "Process Visit", open a full-screen modal or dedicated page.
+   - LEFT SIDE: Display the PDF/Image the foster uploaded (so the staff can read it).
+   - RIGHT SIDE: Provide quick-add buttons to chart the data:
+     - [ + Add Vaccine ]
+     - [ + Add Diagnostic ]
+     - [ + Add Procedure ]
+     - [ + Add Prescription ]
+   - BOTTOM: A final "Mark as Processed" button that clears the `pending_vet_review` flag and removes it from the queue.
+Why this architecture is bulletproof
+By putting the uploaded document on the left side of the screen and the data entry forms on the right side, the Medical Coordinator never has to download the PDF, open it in another window, and toggle back and forth. They just look left, type right, and clear the queue.

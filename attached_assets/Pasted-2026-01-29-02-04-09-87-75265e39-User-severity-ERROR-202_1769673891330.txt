@@ -1,0 +1,88 @@
+2026-01-29 02:04:09.87
+75265e39
+User
+severity: 'ERROR',
+2026-01-29 02:04:09.87
+75265e39
+User
+dataType: undefined,
+2026-01-29 02:04:09.87
+75265e39
+User
+at async file:///home/runner/workspace/dist/index.js:37138:13 {
+2026-01-29 02:04:09.87
+75265e39
+User
+routine: 'ExecConstraints'
+2026-01-29 02:04:09.87
+75265e39
+User
+schema: 'public',
+2026-01-29 02:04:09.87
+75265e39
+User
+internalPosition: undefined,
+2026-01-29 02:04:09.87
+75265e39
+User
+code: '23502',
+2026-01-29 02:04:09.87
+75265e39
+User
+line: '2067',
+2026-01-29 02:04:09.87
+75265e39
+User
+position: undefined,
+2026-01-29 02:04:09.87
+75265e39
+User
+internalQuery: undefined,
+2026-01-29 02:04:09.87
+75265e39
+User
+length: 606,
+2026-01-29 02:04:09.87
+75265e39
+User
+column: 'animal_id',
+2026-01-29 02:04:09.87
+75265e39
+User
+hint: undefined,
+2026-01-29 02:04:09.87
+75265e39
+User
+}
+2026-01-29 02:04:09.87
+75265e39
+User
+where: undefined,
+2026-01-29 02:04:09.87
+75265e39
+User
+[Foster Automation] Error sending foster agreement email: error: null value in column "animal_id" of relation "foster_agreement_sessions" violates not-null constraint
+2026-01-29 02:04:09.87
+75265e39
+User
+detail: 'Failing row contains (8e5e4d1a-18f5-4af2-b639-4796da53eb6d, 3a4c2321-6a54-41a4-acf3-a7f2ffe0c051, 486ece52-c1c7-46a1-acc8-e69810a03c69, null, null, null, null, Robby Test, rstelly3@gmail.com, 3373661660, null, pending, $2b$10$r6qE1Cbl9QnTHN3rX48Ow.Hg7Gu0hUZYy6Q/KxeG0plmulSKVcdl2, 2026-02-12 08:04:09.85, null, null, 2026-01-29 08:04:09.863055, 2026-01-29 08:04:09.863055, 2, null, null, null).',
+2026-01-29 02:04:09.87
+75265e39
+User
+at /home/runner/workspace/node_modules/pg-pool/index.js:45:11
+2026-01-29 02:04:09.87
+75265e39
+User
+table: 'foster_agreement_sessions',
+2026-01-29 02:04:09.87
+75265e39
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-01-29 02:04:09.87
+75265e39
+User
+constraint: undefined,
+2026-01-29 02:04:09.87
+75265e39
+User
+file: 'execMain.c',

@@ -1,0 +1,44 @@
+02-19 00:07:19
+TypeError: Cannot convert undefined or null to object
+02-19 00:07:19
+at file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:684:26
+02-19 00:07:19
+at Function.entries ()
+02-19 00:07:19
+at Array.reduce ()
+02-19 00:07:19
+at file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:63:22
+02-19 00:07:19
+at file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:63:22
+02-19 00:07:19
+at Object.startActiveSpan (file:///home/runner/workspace/node_modules/drizzle-orm/tracing.js:8:14)
+02-19 00:07:19
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:33)
+02-19 00:07:19
+at Array.reduce ()
+02-19 00:07:19
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:17)
+02-19 00:07:19
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:33)
+02-19 01:00:01
+[2026-02-19T07:00:01.491Z] [PID: 39] [NODE-CRON] [WARN] missed execution at Thu Feb 19 2026 07:00:00 GMT+0000 (Coordinated Universal Time)! Possible blocking IO or high CPU user at the same process used by node-cron.
+02-19 01:00:07
+⚠️ Foster compliance errors: Haseya's New Beginning Animal Rescue: value.toISOString is not a function
+02-19 02:00:01
+[2026-02-19T08:00:01.090Z] [PID: 39] [NODE-CRON] [WARN] missed execution at Thu Feb 19 2026 08:00:00 GMT+0000 (Coordinated Universal Time)! Possible blocking IO or high CPU user at the same process used by node-cron.
+02-19 02:00:03
+[2026-02-19T08:00:03.190Z] [PID: 39] [NODE-CRON] [WARN] missed execution at Thu Feb 19 2026 08:00:00 GMT+0000 (Coordinated Universal Time)! Possible blocking IO or high CPU user at the same process used by node-cron.
+02-19 02:19:23
+at Connection.emit (node:events:524:28)
+02-19 02:19:23
+at Connection. (/home/runner/workspace/node_modules/pg/lib/client.js:136:73)
+02-19 02:19:23
+}
+02-19 02:19:23
+at async PGStore._asyncQuery (/home/runner/workspace/node_modules/connect-pg-simple/index.js:322:21) {
+02-19 02:19:23
+Failed to prune sessions: Error: Connection terminated due to connection timeout
+02-19 02:19:23
+[cause]: Error: Connection terminated unexpectedly
+02-19 02:19:23
+at Socket.emit (node:events:536:35)

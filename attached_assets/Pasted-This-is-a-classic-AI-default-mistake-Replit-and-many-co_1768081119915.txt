@@ -1,0 +1,68 @@
+This is a classic "AI default" mistake. Replit (and many coding tutorials) often default to **Express Connect** because it offers a "smoother" UI where the user stays inside your app.
+
+However, for your specific business model (**Vertical SaaS for Non-Profits**), **Stripe Express is a trap.** You should override Replit and insist on **Stripe Standard**.
+
+Here is the breakdown of why Replit is suggesting it, and why you should reject it.
+
+### 1. The "Cost Trap" (The Biggest Reason)
+
+* **Stripe Express:** Costs **YOU** money.
+* Stripe charges the *Platform* (you) roughly **$2 per month per active account** plus extra payout fees.
+* If you have 100 Free Tier tenants, you will pay Stripe **$200/month** out of your own pocket just to let them exist.
+
+
+* **Stripe Standard:** Costs you **$0**.
+* The tenant creates their own relationship with Stripe. You pay nothing to connect to them.
+* **Verdict:** For a bootstrapper offering a "Free Plan," Standard is the only financially viable option.
+
+
+
+### 2. The "Data Trap" (Portability)
+
+* **Stripe Express:** The account is "stubbed" inside your platform.
+* If a rescue decides to leave `iRescue.life` in 2 years, they generally **cannot** take their donor data or recurring subscriptions with them easily. They are held hostage by your platform. Non-profit boards hate this.
+
+
+* **Stripe Standard:** The rescue **owns** the account.
+* If they leave you, they simply disconnect your app, but they keep their Stripe account, their login, and their donor history. This "no lock-in" promise is a huge selling point.
+
+
+
+### 3. The "Liability Trap" (Fraud & Taxes)
+
+* **Stripe Express:** You (the Platform) share more liability.
+* You are often responsible for negative balances (e.g., if a rescue refunds $5,000 but has no money in their account, Stripe might pull that $5,000 from *your* bank account).
+* You have to handle the tax reporting (1099-K forms) for them.
+
+
+* **Stripe Standard:** The Tenant is the sole "Merchant of Record."
+* Stripe handles the losses, the fraud checks, and the tax forms directly with the rescue. You are just the software provider.
+
+
+
+### How to Correct Replit
+
+Replit's AI is trying to build an "Uber-style" marketplace (where drivers are Express users). You are building a "Shopify-style" platform (where merchants are Standard users).
+
+**Paste this prompt into Replit to get it back on track:**
+
+> "I need to switch the architecture from Express to **Stripe Standard Connect**.
+> **Reasoning:**
+> 1. **Cost:** I cannot pay the monthly active account fees associated with Express; I need the Platform to be free to operate.
+> 2. **Liability:** The Tenants (Non-profits) must be the full Merchant of Record and handle their own tax reporting (1099s) and chargeback liability.
+> 3. **Ownership:** The Tenants must own their own Stripe accounts independently of my platform so they retain their donor data if they leave.
+> 
+> 
+> Please rewrite the implementation using **Standard OAuth** (where we redirect the user to Stripe to login/create an account, and they redirect back with an auth code)."
+
+### Summary Comparison
+
+| Feature | **Express** (Replit's idea) | **Standard** (My recommendation) |
+| --- | --- | --- |
+| **Cost to You** | ~$2/month per tenant | **$0** |
+| **User Experience** | White-labeled (Inside your app) | Redirect (They go to Stripe.com) |
+| **Merchant of Record** | Blurry (Platform liable) | **The Tenant** (Platform safe) |
+| **Tax Forms** | You must generate them | Stripe sends them |
+| **Best For...** | Uber Drivers, Doordashers | **SaaS, Shopify, Rescues** |
+
+**Recommendation:** Stick to **Standard**. It saves you money and legal headaches.

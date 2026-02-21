@@ -1,0 +1,42 @@
+{
+  "name": "iRescue.life - Animal Rescue Management",
+  "short_name": "iRescue",
+  "description": "Comprehensive animal rescue management platform for rescue organizations, foster families, and volunteers",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["productivity", "utilities", "lifestyle"],
+  "shortcuts": [
+    {
+      "name": "My Fosters",
+      "short_name": "Fosters",
+      "description": "View your foster animals",
+      "url": "/dashboard/my-fosters",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Log Update",
+      "short_name": "Log Update",
+      "description": "Log a foster update",
+      "url": "/dashboard/my-fosters",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ],
+  "prefer_related_applications": false
+}

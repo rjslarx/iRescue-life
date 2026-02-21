@@ -1,0 +1,333 @@
+I have redesigned the Staff View layout to merge the Header, Kennel Location, and Photo into a single "Hero" section.
+
+Larger Image: The photo now occupies the entire right half of the upper section (approx. 3x larger than before).
+
+Consolidated Info: The Name, ID, and Kennel Location are now grouped in a high-contrast blue block on the left.
+
+Space Efficient: By merging these rows, we actually save vertical space, ensuring it still fits on one page.
+
+1. Update the CSS
+First, update the useEffect style block to ensure the new background colors print correctly and the specific layout adjustments work.
+
+Replace the useEffect that creates the <style> tag (around line 170) with this updated version:
+
+TypeScript
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.textContent = `
+      @media print {
+        .no-print { display: none !important; }
+        
+        html, body {
+          height: 100% !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          print-color-adjust: exact !important;
+          -webkit-print-color-adjust: exact !important;
+          background: white !important;
+        }
+        
+        @page {
+          size: letter portrait;
+          margin: 0.25in;
+        }
+
+        /* Hero Section Print Overrides */
+        .print-hero-section {
+            display: flex !important;
+            height: 250px !important; /* Fixed height for consistency */
+            border: 2px solid black !important;
+            border-radius: 8px !important;
+            overflow: hidden !important;
+            margin-bottom: 1rem !important;
+        }
+
+        .print-hero-left {
+            background-color: #2563eb !important; /* Force blue background */
+            color: white !important;
+            flex: 1 !important;
+            -webkit-print-color-adjust: exact !important; 
+        }
+        
+        /* Force text colors in the blue box to be white */
+        .print-hero-left h1, 
+        .print-hero-left h3, 
+        .print-hero-left p, 
+        .print-hero-left span {
+            color: white !important;
+        }
+
+        .print-hero-right {
+            width: 50% !important;
+            position: relative !important;
+        }
+
+        .print-hero-image {
+            width: 100% !important;
+            height: 100% !important;
+            object-fit: cover !important;
+        }
+
+        /* Ensure Barcode scans */
+        .print-barcode-container {
+            background: white !important;
+            padding: 4px !important;
+            border-radius: 4px !important;
+        }
+
+        /* Adjust content spacing */
+        .kennel-card-content { gap: 0.5rem !important; }
+        
+        /* Standardize borders for print */
+        .border-2 { border-width: 2px !important; }
+      }
+    `;
+    document.head.appendChild(style);
+    return () => {
+      document.head.removeChild(style);
+    };
+  }, []);
+2. Replace the StaffViewCard Component
+Replace the entire StaffViewCard constant with this updated version. This implements the "split card" design seen in your request.
+
+TypeScript
+  // ==================== STAFF/INTERNAL VIEW TEMPLATE ====================
+  const StaffViewCard = () => (
+    <Card className="border-0 shadow-none overflow-hidden kennel-card-print-wrapper h-full flex flex-col">
+      
+      {/* 1. Header Meta Row (QR, Barcode, Date) - Sits above the visual elements for scanning clarity */}
+      <div className="flex items-end justify-between px-1 pb-2">
+         {/* Safety Banner (Now a compact badge at top left) */}
+        <div className={`${safetyConfig.bg} ${safetyConfig.text} ${safetyConfig.className} px-4 py-2 rounded-md inline-flex flex-col`}>
+           <span className="font-bold text-sm uppercase tracking-wider">Handler Safety</span>
+           <span className="font-black text-xl leading-none">{safetyConfig.label}</span>
+        </div>
+
+        {/* Scanning Area */}
+        <div className="flex items-center gap-3">
+            {animal.microchipNumber && (
+              <div className="flex flex-col items-end">
+                <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Microchip</span>
+                <div className="bg-white px-2 py-1 rounded border border-gray-200 print-barcode-container">
+                  <svg ref={barcodeRef} data-testid="barcode-microchip" className="h-8 w-auto"></svg>
+                </div>
+              </div>
+            )}
+            {staffQrCode && (
+              <div className="flex items-center gap-2">
+                <div className="text-right hidden sm:block">
+                  <p className="text-[10px] text-muted-foreground uppercase">Staff Portal</p>
+                </div>
+                <img
+                  src={staffQrCode}
+                  alt="Scan"
+                  className="w-12 h-12 border rounded"
+                  data-testid="img-staff-qr-code"
+                />
+              </div>
+            )}
+            <div className="text-right">
+               <p className="text-[10px] text-muted-foreground">Printed</p>
+               <p className="text-xs font-medium">{format(new Date(), 'MMM d, h:mm a')}</p>
+            </div>
+        </div>
+      </div>
+      
+      <CardContent className="p-1 space-y-4 kennel-card-content flex-1 flex flex-col">
+        
+        {/* 2. HERO SECTION: Name/Location (Left) + Large Photo (Right) */}
+        <div className="flex rounded-xl overflow-hidden border-2 border-primary h-64 print-hero-section">
+            
+            {/* Left Col: Identity & Location */}
+            <div className="flex-1 bg-primary text-primary-foreground p-6 flex flex-col justify-between print-hero-left">
+                <div>
+                    <h1 className={`${getHeadingSizeClass()} font-black leading-tight mb-1`} data-testid="text-kennel-card-name">
+                      {animal.name}
+                    </h1>
+                    <h3 className="text-2xl font-medium opacity-90">
+                      {animal.animalId}
+                    </h3>
+                </div>
+
+                <div className="mt-4">
+                     <p className="text-sm font-semibold uppercase tracking-widest opacity-80 mb-1">Kennel Location</p>
+                     {animal.kennelRowName ? (
+                        <div className="inline-block border-4 border-white/30 bg-black/10 rounded-lg px-4 py-2 backdrop-blur-sm">
+                            <p className="text-5xl font-black leading-none whitespace-nowrap" data-testid="text-kennel-location">
+                                {animal.kennelRowName} <span className="opacity-60 text-4xl">#</span>{animal.kennelPosition !== undefined ? animal.kennelPosition + 1 : '?'}
+                            </p>
+                        </div>
+                     ) : (
+                        <p className="text-3xl font-bold italic opacity-60">No Kennel Assigned</p>
+                     )}
+                </div>
+            </div>
+
+            {/* Right Col: Large Photo */}
+            <div className="w-1/2 relative bg-muted print-hero-right">
+                 {animal.photoUrls && animal.photoUrls.length > 0 ? (
+                    <img
+                        src={animal.photoUrls[0]}
+                        alt={animal.name}
+                        className="absolute inset-0 w-full h-full object-cover print-hero-image"
+                        data-testid="img-kennel-card-photo"
+                    />
+                 ) : (
+                    <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
+                        <div className="text-center">
+                            <Dog className="w-16 h-16 mx-auto opacity-20 mb-2" />
+                            <p>No Photo</p>
+                        </div>
+                    </div>
+                 )}
+            </div>
+        </div>
+
+        {/* 3. Medical Section */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Medications */}
+          <Card className="border-2 border-primary shadow-sm">
+            <CardContent className="p-3">
+              <div className="flex items-center gap-2 mb-2 pb-2 border-b">
+                <Pill className="w-4 h-4 text-primary" />
+                <h2 className="font-bold text-lg uppercase tracking-wide">Medications</h2>
+              </div>
+              {activeMedications.length > 0 ? (
+                <div className="space-y-2">
+                  {activeMedications.map((rx: any) => (
+                    <div key={rx.id} className="flex justify-between items-baseline" data-testid={`medication-${rx.id}`}>
+                      <span className="font-bold text-base">{rx.medicationName}</span>
+                      <span className="text-sm font-medium bg-primary/10 px-2 py-0.5 rounded text-primary">
+                        {rx.dosage} • {getFrequencyDisplay(rx.frequency)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-muted-foreground italic text-sm py-1">No active medications</p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Dietary Restrictions */}
+          <Card className="border-2 border-orange-500 shadow-sm">
+            <CardContent className="p-3">
+              <div className="flex items-center gap-2 mb-2 pb-2 border-b border-orange-100">
+                <Utensils className="w-4 h-4 text-orange-500" />
+                <h2 className="font-bold text-lg uppercase tracking-wide">Diet / Feeding</h2>
+              </div>
+              {animal.dietaryRestrictions ? (
+                <p className={`${getFontSizeClass()} font-medium`}>{animal.dietaryRestrictions}</p>
+              ) : (
+                <p className="text-muted-foreground italic text-sm py-1">No special restrictions</p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* 4. Medical Alert (Unchanged) */}
+        {animal.medicalAlertMemo && (
+          <div className="bg-red-100 border-l-8 border-red-600 p-3 rounded-r-md">
+              <div className="flex items-center gap-3">
+                <AlertTriangle className="w-6 h-6 text-red-600 flex-shrink-0" />
+                <div>
+                  <p className="font-bold text-red-800 uppercase text-xs tracking-wider">Medical Alert</p>
+                  <p className="text-lg font-bold text-red-900 leading-tight">
+                    {animal.medicalAlertMemo}
+                  </p>
+                </div>
+              </div>
+          </div>
+        )}
+
+        {/* 5. Info Grid & Badges */}
+        <div className="animal-info-section flex-grow flex flex-col border rounded-lg p-4 bg-slate-50">
+            {/* Behavior Badges */}
+            <div className="flex gap-3 mb-6 flex-wrap">
+              {/* Kids */}
+              <div className={`flex items-center gap-1.5 border rounded px-2 py-1 bg-white ${animal.childFriendly === false ? 'opacity-50' : ''}`}>
+                <Baby className="w-4 h-4 text-muted-foreground" />
+                <span className="text-sm font-semibold">Kids</span>
+                {animal.childFriendly === true && <Check className="w-4 h-4 text-green-600 ml-1" />}
+                {animal.childFriendly === false && <XIcon className="w-4 h-4 text-red-600 ml-1" />}
+                {animal.childFriendly == null && <span className="text-xs text-muted-foreground ml-1">?</span>}
+              </div>
+              
+              {/* Cats */}
+              <div className={`flex items-center gap-1.5 border rounded px-2 py-1 bg-white ${animal.catFriendly === false ? 'opacity-50' : ''}`}>
+                <Cat className="w-4 h-4 text-muted-foreground" />
+                <span className="text-sm font-semibold">Cats</span>
+                {animal.catFriendly === true && <Check className="w-4 h-4 text-green-600 ml-1" />}
+                {animal.catFriendly === false && <XIcon className="w-4 h-4 text-red-600 ml-1" />}
+                {animal.catFriendly == null && <span className="text-xs text-muted-foreground ml-1">?</span>}
+              </div>
+              
+              {/* Dogs */}
+              <div className={`flex items-center gap-1.5 border rounded px-2 py-1 bg-white ${animal.dogFriendly === false ? 'opacity-50' : ''}`}>
+                <Dog className="w-4 h-4 text-muted-foreground" />
+                <span className="text-sm font-semibold">Dogs</span>
+                {animal.dogFriendly === true && <Check className="w-4 h-4 text-green-600 ml-1" />}
+                {animal.dogFriendly === false && <XIcon className="w-4 h-4 text-red-600 ml-1" />}
+                {animal.dogFriendly == null && <span className="text-xs text-muted-foreground ml-1">?</span>}
+              </div>
+
+              {/* Heartworm */}
+               <div className="flex items-center gap-1.5 border rounded px-2 py-1 bg-white">
+                <Heart className="w-4 h-4 text-muted-foreground" />
+                <span className="text-sm font-semibold">HW</span>
+                {animal.heartwormPositive === true && <span className="text-sm font-black text-red-600 ml-1">POS</span>}
+                {animal.heartwormPositive === false && <span className="text-sm font-black text-green-600 ml-1">NEG</span>}
+              </div>
+
+              {/* Spay/Neuter */}
+              <div className="flex items-center gap-1.5 border rounded px-2 py-1 bg-white">
+                <Activity className="w-4 h-4 text-muted-foreground" />
+                <span className="text-sm font-semibold">
+                  {animal.neuterStatus === 'spayed' ? 'Spayed' : 
+                   animal.neuterStatus === 'neutered' ? 'Neutered' : 
+                   animal.neuterStatus === 'intact' ? 'Intact' : 'Unk'}
+                </span>
+              </div>
+            </div>
+
+            {/* Logistics Grid */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div>
+                <p className="text-xs uppercase text-muted-foreground font-semibold">Intake</p>
+                <p className="font-bold">{animal.intakeDate ? format(new Date(animal.intakeDate), 'MMM d, yyyy') : '-'}</p>
+              </div>
+              <div>
+                <p className="text-xs uppercase text-muted-foreground font-semibold">Weight</p>
+                <p className="font-bold">{animal.weight || '-'}</p>
+              </div>
+              <div>
+                <p className="text-xs uppercase text-muted-foreground font-semibold">Activity</p>
+                <p className="font-bold">{activityInfo.label}</p>
+              </div>
+               <div>
+                <p className="text-xs uppercase text-muted-foreground font-semibold">Source</p>
+                <p className="font-bold truncate">{getIntakeSourceDisplay(animal.intakeSource)}</p>
+              </div>
+            </div>
+            
+            {/* Stray Hold (Conditional) */}
+             {(animal.strayHoldUntil && new Date(animal.strayHoldUntil) > new Date()) && (
+                <div className="mt-4 pt-4 border-t border-dashed border-gray-300">
+                    <div className="flex items-center gap-2 text-orange-700">
+                        <Scale className="w-4 h-4" />
+                        <span className="font-bold">STRAY HOLD UNTIL: {format(new Date(animal.strayHoldUntil), 'MMMM d, yyyy')}</span>
+                    </div>
+                </div>
+             )}
+        </div>
+
+        {/* Additional Comments */}
+        {additionalComments && (
+          <div className="border border-primary/20 bg-primary/5 p-3 rounded-lg">
+            <h3 className="font-bold text-sm uppercase text-primary mb-1">Staff Notes</h3>
+            <p className="whitespace-pre-wrap text-sm">{additionalComments}</p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );

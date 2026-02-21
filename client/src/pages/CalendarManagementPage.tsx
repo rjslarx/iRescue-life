@@ -1,0 +1,1368 @@
+import { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { useAuth } from "@/contexts/AuthContext";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Loader2, CalendarPlus, Edit2, Trash2, UserPlus, X, Palette, Image, Settings2 } from "lucide-react";
+import { ObjectUploader } from "@/components/ObjectUploader";
+import DashboardLayout from "@/components/DashboardLayout";
+import { Switch } from "@/components/ui/switch";
+import type { CalendarThemeSettings, EventFormSettings, FixedDayTime } from "@shared/schema";
+import { DEFAULT_EVENT_FORM_SETTINGS } from "@shared/schema";
+
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
+
+interface Calendar {
+  id: string;
+  name: string;
+  description: string | null;
+  type: "volunteer" | "events" | "fundraising" | "vet_appointments" | "custom";
+  color: string;
+  isActive: boolean;
+  isPublic: boolean;
+  canEdit: boolean;
+  canAdd: boolean;
+  canDelete: boolean;
+  themeSettings?: CalendarThemeSettings;
+  eventFormSettings?: EventFormSettings;
+  minVolunteersRequired?: number;
+}
+
+interface CalendarPermission {
+  id: string;
+  userId: string;
+  calendarId: string;
+  canEdit: boolean;
+  canAdd: boolean;
+  canDelete: boolean;
+  canAssignOthers: boolean;
+  userName: string;
+  userEmail: string;
+}
+
+interface CalendarRolePermission {
+  id: string;
+  calendarId: string;
+  role: "admin" | "staff" | "board_member" | "foster" | "volunteer";
+  canEdit: boolean;
+  canAdd: boolean;
+  canDelete: boolean;
+  canAssignOthers: boolean;
+}
+
+interface User {
+  id: string;
+  email: string;
+  fullName: string;
+}
+
+const ROLES = [
+  { value: "volunteer", label: "Volunteers" },
+  { value: "foster", label: "Fosters" },
+  { value: "staff", label: "Staff" },
+  { value: "board_member", label: "Board Members" },
+] as const;
+
+const CALENDAR_TYPES = [
+  { value: "volunteer", label: "Volunteer Schedule" },
+  { value: "events", label: "Events Calendar" },
+  { value: "fundraising", label: "Fundraising Calendar" },
+  { value: "vet_appointments", label: "Vet Appointments" },
+  { value: "custom", label: "Custom Calendar" },
+] as const;
+
+const CALENDAR_COLORS = [
+  "#3b82f6", // blue
+  "#10b981", // green
+  "#f59e0b", // amber
+  "#ef4444", // red
+  "#8b5cf6", // purple
+  "#ec4899", // pink
+  "#06b6d4", // cyan
+];
+
+export default function CalendarManagementPage() {
+  const { user: currentUser } = useAuth();
+  const { toast } = useToast();
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [editingCalendar, setEditingCalendar] = useState<Calendar | null>(null);
+  const [calendarToDelete, setCalendarToDelete] = useState<Calendar | null>(null);
+  const [managingPermissions, setManagingPermissions] = useState<Calendar | null>(null);
+  const [selectedUserId, setSelectedUserId] = useState<string>("");
+  const [selectedRole, setSelectedRole] = useState<string>("");
+  const [newUserPermissions, setNewUserPermissions] = useState({ canEdit: true, canAdd: true, canDelete: true, canAssignOthers: false });
+  const [newRolePermissions, setNewRolePermissions] = useState({ canEdit: true, canAdd: true, canDelete: true, canAssignOthers: false });
+
+  const [newCalendar, setNewCalendar] = useState({
+    name: "",
+    description: "",
+    type: "custom" as Calendar["type"],
+    color: CALENDAR_COLORS[0],
+    isPublic: false,
+    minVolunteersRequired: 2,
+  });
+
+  const { data: calendarsData, isLoading } = useQuery<{ calendars: Calendar[] }>({
+    queryKey: ['/api/calendars'],
+    enabled: currentUser?.activeRole === 'admin',
+  });
+
+  const { data: usersData } = useQuery<{ users: User[] }>({
+    queryKey: ['/api/users'],
+    enabled: currentUser?.activeRole === 'admin',
+  });
+
+  const { data: permissionsData } = useQuery<{ permissions: CalendarPermission[] }>({
+    queryKey: ['/api/calendars', managingPermissions?.id, 'permissions'],
+    enabled: !!managingPermissions,
+  });
+
+  const { data: rolePermissionsData } = useQuery<{ rolePermissions: CalendarRolePermission[] }>({
+    queryKey: ['/api/calendars', managingPermissions?.id, 'role-permissions'],
+    enabled: !!managingPermissions,
+  });
+
+  const createCalendarMutation = useMutation({
+    mutationFn: async (calendarData: typeof newCalendar) => {
+      return await apiRequest("POST", "/api/calendars", calendarData);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/calendars'] });
+      setCreateDialogOpen(false);
+      setNewCalendar({
+        name: "",
+        description: "",
+        type: "custom",
+        color: CALENDAR_COLORS[0],
+        isPublic: false,
+        minVolunteersRequired: 2,
+      });
+      toast({
+        title: "Calendar Created",
+        description: "The new calendar has been successfully created.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Creation Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateCalendarMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<Calendar> }) => {
+      return await apiRequest("PATCH", `/api/calendars/${id}`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/calendars'] });
+      setEditingCalendar(null);
+      toast({
+        title: "Calendar Updated",
+        description: "The calendar has been successfully updated.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Update Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteCalendarMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await apiRequest("DELETE", `/api/calendars/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/calendars'] });
+      setCalendarToDelete(null);
+      toast({
+        title: "Calendar Deleted",
+        description: "The calendar has been successfully deleted.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Deletion Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const addPermissionMutation = useMutation({
+    mutationFn: async ({ calendarId, userId, permissions }: { 
+      calendarId: string; 
+      userId: string;
+      permissions: { canEdit: boolean; canAdd: boolean; canDelete: boolean; canAssignOthers: boolean };
+    }) => {
+      return await apiRequest("POST", `/api/calendars/${calendarId}/permissions`, {
+        userId,
+        ...permissions,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/calendars', managingPermissions?.id, 'permissions'] });
+      setSelectedUserId("");
+      setNewUserPermissions({ canEdit: true, canAdd: true, canDelete: true, canAssignOthers: false });
+      toast({
+        title: "Permission Granted",
+        description: "User permissions have been configured.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to Grant Permission",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const removePermissionMutation = useMutation({
+    mutationFn: async ({ calendarId, permissionId }: { calendarId: string; permissionId: string }) => {
+      return await apiRequest("DELETE", `/api/calendars/${calendarId}/permissions/${permissionId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/calendars', managingPermissions?.id, 'permissions'] });
+      toast({
+        title: "Permission Revoked",
+        description: "User can no longer edit this calendar.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to Revoke Permission",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const addRolePermissionMutation = useMutation({
+    mutationFn: async ({ calendarId, role, permissions }: { 
+      calendarId: string; 
+      role: string;
+      permissions: { canEdit: boolean; canAdd: boolean; canDelete: boolean; canAssignOthers: boolean };
+    }) => {
+      return await apiRequest("POST", `/api/calendars/${calendarId}/role-permissions`, {
+        role,
+        ...permissions,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/calendars', managingPermissions?.id, 'role-permissions'] });
+      setSelectedRole("");
+      setNewRolePermissions({ canEdit: true, canAdd: true, canDelete: true, canAssignOthers: false });
+      toast({
+        title: "Role Permission Granted",
+        description: "Role permissions have been configured.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to Grant Role Permission",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const removeRolePermissionMutation = useMutation({
+    mutationFn: async ({ calendarId, permissionId }: { calendarId: string; permissionId: string }) => {
+      return await apiRequest("DELETE", `/api/calendars/${calendarId}/role-permissions/${permissionId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/calendars', managingPermissions?.id, 'role-permissions'] });
+      toast({
+        title: "Role Permission Revoked",
+        description: "Role members can no longer edit this calendar.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to Revoke Role Permission",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleCreateCalendar = (e: React.FormEvent) => {
+    e.preventDefault();
+    createCalendarMutation.mutate(newCalendar);
+  };
+
+  const handleUpdateCalendar = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (editingCalendar) {
+      updateCalendarMutation.mutate({
+        id: editingCalendar.id,
+        data: {
+          name: editingCalendar.name,
+          description: editingCalendar.description,
+          type: editingCalendar.type,
+          color: editingCalendar.color,
+          isPublic: editingCalendar.isPublic,
+          themeSettings: editingCalendar.themeSettings,
+          eventFormSettings: editingCalendar.eventFormSettings,
+          minVolunteersRequired: editingCalendar.minVolunteersRequired,
+        },
+      });
+    }
+  };
+
+  const handleAddPermission = () => {
+    if (managingPermissions && selectedUserId) {
+      addPermissionMutation.mutate({
+        calendarId: managingPermissions.id,
+        userId: selectedUserId,
+        permissions: newUserPermissions,
+      });
+    }
+  };
+
+  const handleAddRolePermission = () => {
+    if (managingPermissions && selectedRole) {
+      addRolePermissionMutation.mutate({
+        calendarId: managingPermissions.id,
+        role: selectedRole,
+        permissions: newRolePermissions,
+      });
+    }
+  };
+
+  const getRoleLabel = (role: string) => {
+    return ROLES.find(r => r.value === role)?.label || role;
+  };
+
+  const getTypeLabel = (type: Calendar["type"]) => {
+    return CALENDAR_TYPES.find(t => t.value === type)?.label || type;
+  };
+
+  if (currentUser?.activeRole !== 'admin') {
+    return (
+      <DashboardLayout title="Calendar Management">
+        <div className="p-6">
+          <Card className="p-6">
+            <h2 className="text-xl font-semibold text-destructive">Access Denied</h2>
+            <p className="text-muted-foreground mt-2">
+              Only administrators can manage calendars.
+            </p>
+          </Card>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  return (
+    <DashboardLayout 
+      title="Calendar Management"
+      description="Create and manage your organization's calendars"
+      actions={
+        <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+          <DialogTrigger asChild>
+            <Button data-testid="button-create-calendar">
+              <CalendarPlus className="mr-2 h-4 w-4" />
+              Create Calendar
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Create New Calendar</DialogTitle>
+              <DialogDescription>
+                Create a new calendar for your organization.
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleCreateCalendar} className="space-y-4">
+              <div>
+                <Label htmlFor="calendar-name">Calendar Name</Label>
+                <Input
+                  id="calendar-name"
+                  value={newCalendar.name}
+                  onChange={(e) => setNewCalendar({ ...newCalendar, name: e.target.value })}
+                  placeholder="e.g., Volunteer Schedule"
+                  required
+                  data-testid="input-calendar-name"
+                />
+              </div>
+              <div>
+                <Label htmlFor="calendar-description">Description (Optional)</Label>
+                <Textarea
+                  id="calendar-description"
+                  value={newCalendar.description}
+                  onChange={(e) => setNewCalendar({ ...newCalendar, description: e.target.value })}
+                  placeholder="Brief description of this calendar"
+                  data-testid="input-calendar-description"
+                />
+              </div>
+              <div>
+                <Label htmlFor="calendar-type">Calendar Type</Label>
+                <Select
+                  value={newCalendar.type}
+                  onValueChange={(value: Calendar["type"]) => setNewCalendar({ ...newCalendar, type: value })}
+                >
+                  <SelectTrigger data-testid="select-calendar-type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CALENDAR_TYPES.map((type) => (
+                      <SelectItem key={type.value} value={type.value}>
+                        {type.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Calendar Color</Label>
+                <div className="flex gap-2 mt-2">
+                  {CALENDAR_COLORS.map((color) => (
+                    <button
+                      key={color}
+                      type="button"
+                      className="w-8 h-8 rounded-md border-2 hover-elevate active-elevate-2"
+                      style={{
+                        backgroundColor: color,
+                        borderColor: newCalendar.color === color ? "#000" : "transparent",
+                      }}
+                      onClick={() => setNewCalendar({ ...newCalendar, color })}
+                      data-testid={`button-color-${color}`}
+                    />
+                  ))}
+                </div>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="calendar-public"
+                  checked={newCalendar.isPublic}
+                  onCheckedChange={(checked) => setNewCalendar({ ...newCalendar, isPublic: checked as boolean })}
+                  data-testid="checkbox-calendar-public"
+                />
+                <Label htmlFor="calendar-public" className="cursor-pointer">
+                  Show events on public home page
+                </Label>
+              </div>
+              {newCalendar.type === 'volunteer' && (
+                <div className="space-y-2">
+                  <Label htmlFor="min-volunteers">Minimum Volunteers Required</Label>
+                  <Input
+                    id="min-volunteers"
+                    type="number"
+                    min="1"
+                    value={newCalendar.minVolunteersRequired}
+                    onChange={(e) => setNewCalendar({ ...newCalendar, minVolunteersRequired: parseInt(e.target.value) || 2 })}
+                    data-testid="input-min-volunteers"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Days with fewer volunteers will be highlighted yellow, days with no volunteers will be red
+                  </p>
+                </div>
+              )}
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setCreateDialogOpen(false)}
+                  className="flex-1"
+                  data-testid="button-cancel-create"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={createCalendarMutation.isPending}
+                  className="flex-1"
+                  data-testid="button-submit-create"
+                >
+                  {createCalendarMutation.isPending ? "Creating..." : "Create Calendar"}
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+      }
+    >
+      <div className="flex-1 overflow-auto p-6">
+            {isLoading ? (
+              <div className="flex items-center justify-center h-64">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : calendarsData?.calendars.length === 0 ? (
+              <Card className="p-6">
+                <p className="text-muted-foreground text-center">
+                  No calendars yet. Create your first calendar to get started.
+                </p>
+              </Card>
+            ) : (
+              <Card>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Calendar Name</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Description</TableHead>
+                      <TableHead>Color</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {calendarsData?.calendars.map((calendar) => (
+                      <TableRow 
+                        key={calendar.id} 
+                        data-testid={`row-calendar-${calendar.id}`}
+                        className={
+                          editingCalendar?.id === calendar.id 
+                            ? "bg-primary/10 border-l-4 border-l-primary" 
+                            : managingPermissions?.id === calendar.id
+                            ? "bg-blue-500/10 border-l-4 border-l-blue-500"
+                            : ""
+                        }
+                      >
+                        <TableCell className="font-medium">{calendar.name}</TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">{getTypeLabel(calendar.type)}</Badge>
+                        </TableCell>
+                        <TableCell className="max-w-xs truncate">
+                          {calendar.description || <span className="text-muted-foreground">-</span>}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="w-6 h-6 rounded"
+                              style={{ backgroundColor: calendar.color }}
+                            />
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex gap-2">
+                            <Badge variant={calendar.isActive ? "default" : "secondary"}>
+                              {calendar.isActive ? "Active" : "Inactive"}
+                            </Badge>
+                            {calendar.isPublic && (
+                              <Badge variant="outline" className="bg-green-500/10 text-green-700 dark:text-green-400">
+                                Public
+                              </Badge>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setManagingPermissions(calendar)}
+                              data-testid={`button-manage-permissions-${calendar.id}`}
+                            >
+                              <UserPlus className="h-4 w-4 mr-1" />
+                              Permissions
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setEditingCalendar(calendar)}
+                              data-testid={`button-edit-${calendar.id}`}
+                            >
+                              <Edit2 className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setCalendarToDelete(calendar)}
+                              data-testid={`button-delete-${calendar.id}`}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </Card>
+            )}
+          </div>
+
+      {/* Edit Calendar Dialog */}
+      <Dialog open={!!editingCalendar} onOpenChange={() => setEditingCalendar(null)}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Calendar</DialogTitle>
+            <DialogDescription>
+              Update calendar details.
+            </DialogDescription>
+          </DialogHeader>
+          {editingCalendar && (
+            <form onSubmit={handleUpdateCalendar} className="space-y-4">
+              <div>
+                <Label htmlFor="edit-calendar-name">Calendar Name</Label>
+                <Input
+                  id="edit-calendar-name"
+                  value={editingCalendar.name}
+                  onChange={(e) => setEditingCalendar({ ...editingCalendar, name: e.target.value })}
+                  required
+                  data-testid="input-edit-calendar-name"
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-calendar-description">Description</Label>
+                <Textarea
+                  id="edit-calendar-description"
+                  value={editingCalendar.description || ""}
+                  onChange={(e) => setEditingCalendar({ ...editingCalendar, description: e.target.value })}
+                  data-testid="input-edit-calendar-description"
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-calendar-type">Calendar Type</Label>
+                <Select
+                  value={editingCalendar.type}
+                  onValueChange={(value: Calendar["type"]) => setEditingCalendar({ ...editingCalendar, type: value })}
+                >
+                  <SelectTrigger data-testid="select-edit-calendar-type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CALENDAR_TYPES.map((type) => (
+                      <SelectItem key={type.value} value={type.value}>
+                        {type.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Calendar Color</Label>
+                <div className="flex gap-2 mt-2">
+                  {CALENDAR_COLORS.map((color) => (
+                    <button
+                      key={color}
+                      type="button"
+                      className="w-8 h-8 rounded-md border-2 hover-elevate active-elevate-2"
+                      style={{
+                        backgroundColor: color,
+                        borderColor: editingCalendar.color === color ? "#000" : "transparent",
+                      }}
+                      onClick={() => setEditingCalendar({ ...editingCalendar, color })}
+                    />
+                  ))}
+                </div>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="edit-calendar-public"
+                  checked={editingCalendar.isPublic}
+                  onCheckedChange={(checked) => setEditingCalendar({ ...editingCalendar, isPublic: checked as boolean })}
+                  data-testid="checkbox-edit-calendar-public"
+                />
+                <Label htmlFor="edit-calendar-public" className="cursor-pointer">
+                  Show events on public home page
+                </Label>
+              </div>
+              {editingCalendar.type === 'volunteer' && (
+                <div className="space-y-2">
+                  <Label htmlFor="edit-min-volunteers">Minimum Volunteers Required</Label>
+                  <Input
+                    id="edit-min-volunteers"
+                    type="number"
+                    min="1"
+                    value={editingCalendar.minVolunteersRequired ?? 2}
+                    onChange={(e) => setEditingCalendar({ ...editingCalendar, minVolunteersRequired: parseInt(e.target.value) || 2 })}
+                    data-testid="input-edit-min-volunteers"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Days with fewer volunteers will be highlighted yellow, days with no volunteers will be red
+                  </p>
+                </div>
+              )}
+
+              {/* Theme Customization Section */}
+              <div className="border-t pt-4 mt-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Palette className="h-4 w-4" />
+                  <Label className="font-medium">Theme Customization</Label>
+                </div>
+                
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label htmlFor="header-color" className="text-sm">Header Color</Label>
+                      <div className="flex items-center gap-2 mt-1">
+                        <input
+                          type="color"
+                          id="header-color"
+                          value={editingCalendar.themeSettings?.headerColor || "#3b82f6"}
+                          onChange={(e) => setEditingCalendar({
+                            ...editingCalendar,
+                            themeSettings: {
+                              ...editingCalendar.themeSettings,
+                              headerColor: e.target.value,
+                            },
+                          })}
+                          className="w-8 h-8 rounded cursor-pointer border"
+                          data-testid="input-header-color"
+                        />
+                        <span className="text-xs text-muted-foreground">
+                          {editingCalendar.themeSettings?.headerColor || "Default"}
+                        </span>
+                      </div>
+                    </div>
+                    <div>
+                      <Label htmlFor="header-text-color" className="text-sm">Header Text</Label>
+                      <div className="flex items-center gap-2 mt-1">
+                        <input
+                          type="color"
+                          id="header-text-color"
+                          value={editingCalendar.themeSettings?.headerTextColor || "#ffffff"}
+                          onChange={(e) => setEditingCalendar({
+                            ...editingCalendar,
+                            themeSettings: {
+                              ...editingCalendar.themeSettings,
+                              headerTextColor: e.target.value,
+                            },
+                          })}
+                          className="w-8 h-8 rounded cursor-pointer border"
+                          data-testid="input-header-text-color"
+                        />
+                        <span className="text-xs text-muted-foreground">
+                          {editingCalendar.themeSettings?.headerTextColor || "Default"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="accent-color" className="text-sm">Day Accent Color</Label>
+                    <div className="flex items-center gap-2 mt-1">
+                      <input
+                        type="color"
+                        id="accent-color"
+                        value={editingCalendar.themeSettings?.accentColor || "#3b82f6"}
+                        onChange={(e) => setEditingCalendar({
+                          ...editingCalendar,
+                          themeSettings: {
+                            ...editingCalendar.themeSettings,
+                            accentColor: e.target.value,
+                          },
+                        })}
+                        className="w-8 h-8 rounded cursor-pointer border"
+                        data-testid="input-accent-color"
+                      />
+                      <span className="text-xs text-muted-foreground">
+                        Used for today's date and selected days
+                      </span>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <Image className="h-4 w-4" />
+                      <Label className="text-sm">Header Background Image</Label>
+                    </div>
+                    <p className="text-xs text-muted-foreground mb-2">
+                      Add a background image to the month header area
+                    </p>
+                    {editingCalendar.themeSettings?.headerBackgroundImageUrl ? (
+                      <div className="space-y-2">
+                        <div 
+                          className="relative w-full h-20 rounded-md bg-cover bg-center border overflow-hidden"
+                          style={{ backgroundImage: `url(${editingCalendar.themeSettings.headerBackgroundImageUrl})` }}
+                        >
+                          <div className="absolute inset-0 bg-gradient-to-r from-black/50 to-transparent flex items-center justify-center">
+                            <span className="text-white text-sm font-medium">Preview</span>
+                          </div>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setEditingCalendar({
+                            ...editingCalendar,
+                            themeSettings: {
+                              ...editingCalendar.themeSettings,
+                              headerBackgroundImageUrl: undefined,
+                            },
+                          })}
+                          data-testid="button-remove-header-image"
+                        >
+                          <X className="h-4 w-4 mr-1" />
+                          Remove Image
+                        </Button>
+                      </div>
+                    ) : (
+                      <ObjectUploader
+                        onUploadComplete={(url) => setEditingCalendar({
+                          ...editingCalendar,
+                          themeSettings: {
+                            ...editingCalendar.themeSettings,
+                            headerBackgroundImageUrl: url,
+                          },
+                        })}
+                        accept="image/*"
+                        folder="calendar-themes"
+                        maxSizeMB={2}
+                        data-testid="upload-header-image"
+                      />
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Event Form Settings Section */}
+              <div className="border-t pt-4 mt-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Settings2 className="h-4 w-4" />
+                  <Label className="font-medium">Event Creation Form</Label>
+                </div>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Customize which fields appear when users create events on this calendar.
+                </p>
+                
+                {(() => {
+                  const currentSettings = editingCalendar.eventFormSettings || 
+                    DEFAULT_EVENT_FORM_SETTINGS[editingCalendar.type] || 
+                    DEFAULT_EVENT_FORM_SETTINGS.custom;
+                  
+                  const updateFormSettings = (newSettings: Partial<EventFormSettings>) => {
+                    setEditingCalendar({
+                      ...editingCalendar,
+                      eventFormSettings: { ...currentSettings, ...newSettings },
+                    });
+                  };
+
+                  return (
+                    <div className="space-y-3">
+                      {/* Simplified Volunteer Mode Toggle */}
+                      <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                        <div>
+                          <Label htmlFor="simplified-mode" className="font-medium text-sm">Simplified Volunteer Mode</Label>
+                          <p className="text-xs text-muted-foreground">
+                            Users just check a box to sign up with an optional comment
+                          </p>
+                        </div>
+                        <Switch
+                          id="simplified-mode"
+                          checked={currentSettings.simplifiedVolunteerMode || false}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              updateFormSettings({
+                                simplifiedVolunteerMode: true,
+                                title: { visible: false, required: false },
+                                description: { visible: true, required: false, label: "Comment (optional)" },
+                                location: { visible: false, required: false },
+                                meetLink: { visible: false, required: false },
+                                customPage: { visible: false, required: false },
+                              });
+                            } else {
+                              updateFormSettings({
+                                simplifiedVolunteerMode: false,
+                                title: { visible: true, required: true },
+                              });
+                            }
+                          }}
+                          data-testid="switch-simplified-mode"
+                        />
+                      </div>
+
+                      {/* Fixed Day Times Configuration - only when simplified mode is on */}
+                      {currentSettings.simplifiedVolunteerMode && (
+                        <div className="p-3 bg-muted/50 rounded-lg space-y-3">
+                          <div>
+                            <Label className="font-medium text-sm">Fixed Times Per Day</Label>
+                            <p className="text-xs text-muted-foreground">
+                              Set default start/end times for each day. When configured, users won't need to select times.
+                            </p>
+                          </div>
+                          <div className="space-y-2">
+                            {DAY_NAMES.map((dayName, dayIndex) => {
+                              const dayKey = dayIndex as 0 | 1 | 2 | 3 | 4 | 5 | 6;
+                              const dayConfig = currentSettings.fixedDayTimes?.[dayKey] || { enabled: false, startTime: '09:00', endTime: '17:00' };
+                              
+                              const updateDayTime = (updates: Partial<FixedDayTime>) => {
+                                const currentFixed = currentSettings.fixedDayTimes || {};
+                                updateFormSettings({
+                                  fixedDayTimes: {
+                                    ...currentFixed,
+                                    [dayKey]: { ...dayConfig, ...updates },
+                                  },
+                                });
+                              };
+                              
+                              return (
+                                <div 
+                                  key={dayIndex} 
+                                  className="flex items-center gap-3 p-2 border rounded"
+                                  data-testid={`fixed-time-day-${dayIndex}`}
+                                >
+                                  <div className="flex items-center gap-2 min-w-[120px]">
+                                    <Checkbox
+                                      id={`day-enabled-${dayIndex}`}
+                                      checked={dayConfig.enabled}
+                                      onCheckedChange={(checked) => updateDayTime({ enabled: checked as boolean })}
+                                      data-testid={`checkbox-day-enabled-${dayIndex}`}
+                                    />
+                                    <Label 
+                                      htmlFor={`day-enabled-${dayIndex}`} 
+                                      className="text-sm cursor-pointer"
+                                    >
+                                      {dayName}
+                                    </Label>
+                                  </div>
+                                  <div className="flex items-center gap-2 flex-1">
+                                    <Input
+                                      type="time"
+                                      value={dayConfig.startTime}
+                                      onChange={(e) => updateDayTime({ startTime: e.target.value })}
+                                      disabled={!dayConfig.enabled}
+                                      className="w-32"
+                                      data-testid={`input-start-time-${dayIndex}`}
+                                    />
+                                    <span className="text-muted-foreground text-sm">to</span>
+                                    <Input
+                                      type="time"
+                                      value={dayConfig.endTime}
+                                      onChange={(e) => updateDayTime({ endTime: e.target.value })}
+                                      disabled={!dayConfig.enabled}
+                                      className="w-32"
+                                      data-testid={`input-end-time-${dayIndex}`}
+                                    />
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            Enable days that have fixed volunteer hours. Disabled days will still show time pickers.
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Field Configuration */}
+                      {!currentSettings.simplifiedVolunteerMode && (
+                        <div className="space-y-2">
+                          <Label className="text-sm text-muted-foreground">Field Visibility</Label>
+                          <div className="grid gap-2">
+                            {[
+                              { key: 'title' as const, label: 'Event Title' },
+                              { key: 'description' as const, label: 'Description' },
+                              { key: 'location' as const, label: 'Location' },
+                              { key: 'meetLink' as const, label: 'Virtual Meeting Link' },
+                              { key: 'customPage' as const, label: 'Linked Custom Page' },
+                            ].map(({ key, label }) => (
+                              <div key={key} className="flex items-center justify-between p-2 border rounded">
+                                <span className="text-sm">{label}</span>
+                                <div className="flex items-center gap-3">
+                                  <div className="flex items-center gap-1.5">
+                                    <Checkbox
+                                      id={`field-visible-${key}`}
+                                      checked={currentSettings[key]?.visible ?? true}
+                                      onCheckedChange={(checked) => {
+                                        updateFormSettings({
+                                          [key]: { 
+                                            ...currentSettings[key], 
+                                            visible: checked as boolean,
+                                            required: checked ? currentSettings[key]?.required : false,
+                                          },
+                                        });
+                                      }}
+                                      data-testid={`checkbox-field-visible-${key}`}
+                                    />
+                                    <Label htmlFor={`field-visible-${key}`} className="text-xs cursor-pointer">Show</Label>
+                                  </div>
+                                  <div className="flex items-center gap-1.5">
+                                    <Checkbox
+                                      id={`field-required-${key}`}
+                                      checked={currentSettings[key]?.required ?? false}
+                                      disabled={!currentSettings[key]?.visible}
+                                      onCheckedChange={(checked) => {
+                                        updateFormSettings({
+                                          [key]: { ...currentSettings[key], required: checked as boolean },
+                                        });
+                                      }}
+                                      data-testid={`checkbox-field-required-${key}`}
+                                    />
+                                    <Label 
+                                      htmlFor={`field-required-${key}`} 
+                                      className={`text-xs cursor-pointer ${!currentSettings[key]?.visible ? 'text-muted-foreground' : ''}`}
+                                    >
+                                      Required
+                                    </Label>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-2">
+                            Start/End times are always required and cannot be hidden.
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Reset to Defaults */}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          updateFormSettings(DEFAULT_EVENT_FORM_SETTINGS[editingCalendar.type] || DEFAULT_EVENT_FORM_SETTINGS.custom);
+                        }}
+                        data-testid="button-reset-form-defaults"
+                      >
+                        Reset to Defaults for {CALENDAR_TYPES.find(t => t.value === editingCalendar.type)?.label || 'Custom'}
+                      </Button>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setEditingCalendar(null)}
+                  className="flex-1"
+                  data-testid="button-cancel-edit"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={updateCalendarMutation.isPending}
+                  className="flex-1"
+                  data-testid="button-submit-edit"
+                >
+                  {updateCalendarMutation.isPending ? "Updating..." : "Update Calendar"}
+                </Button>
+              </div>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Manage Permissions Dialog */}
+      <Dialog open={!!managingPermissions} onOpenChange={() => setManagingPermissions(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Manage Calendar Permissions</DialogTitle>
+            <DialogDescription>
+              Configure granular permissions for "{managingPermissions?.name}". You can control who can add, edit, and delete events.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <Tabs defaultValue="users" className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="users">User Permissions</TabsTrigger>
+              <TabsTrigger value="roles">Role Permissions</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="users" className="space-y-4">
+              <div className="space-y-3">
+                <div className="flex gap-2">
+                  <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+                    <SelectTrigger className="flex-1" data-testid="select-user-permission">
+                      <SelectValue placeholder="Select a team member" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {usersData?.users
+                        .filter(user =>
+                          !permissionsData?.permissions?.some(p => p.userId === user.id)
+                        )
+                        .map((user) => (
+                          <SelectItem key={user.id} value={user.id}>
+                            {user.fullName} ({user.email})
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    onClick={handleAddPermission}
+                    disabled={!selectedUserId || addPermissionMutation.isPending}
+                    data-testid="button-add-permission"
+                  >
+                    {addPermissionMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Add"}
+                  </Button>
+                </div>
+                {selectedUserId && (
+                  <div className="flex flex-wrap gap-4 p-3 bg-muted/50 rounded-md">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="user-can-add"
+                        checked={newUserPermissions.canAdd}
+                        onCheckedChange={(checked) => setNewUserPermissions({ ...newUserPermissions, canAdd: checked as boolean })}
+                        data-testid="checkbox-user-can-add"
+                      />
+                      <Label htmlFor="user-can-add" className="text-sm cursor-pointer">Can Add Events</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="user-can-edit"
+                        checked={newUserPermissions.canEdit}
+                        onCheckedChange={(checked) => setNewUserPermissions({ ...newUserPermissions, canEdit: checked as boolean })}
+                        data-testid="checkbox-user-can-edit"
+                      />
+                      <Label htmlFor="user-can-edit" className="text-sm cursor-pointer">Can Edit Events</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="user-can-delete"
+                        checked={newUserPermissions.canDelete}
+                        onCheckedChange={(checked) => setNewUserPermissions({ ...newUserPermissions, canDelete: checked as boolean })}
+                        data-testid="checkbox-user-can-delete"
+                      />
+                      <Label htmlFor="user-can-delete" className="text-sm cursor-pointer">Can Delete Events</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="user-can-assign-others"
+                        checked={newUserPermissions.canAssignOthers}
+                        onCheckedChange={(checked) => setNewUserPermissions({ ...newUserPermissions, canAssignOthers: checked as boolean })}
+                        data-testid="checkbox-user-can-assign-others"
+                      />
+                      <Label htmlFor="user-can-assign-others" className="text-sm cursor-pointer">Can Assign Other Volunteers</Label>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="border rounded-md">
+                {!permissionsData?.permissions?.length ? (
+                  <p className="text-muted-foreground text-center py-8">
+                    No user permissions assigned yet.
+                  </p>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Permissions</TableHead>
+                        <TableHead className="text-right">Action</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {permissionsData?.permissions?.map((permission) => (
+                        <TableRow key={permission.id} data-testid={`row-permission-${permission.id}`}>
+                          <TableCell>
+                            <div>
+                              <div className="font-medium">{permission.userName}</div>
+                              <div className="text-sm text-muted-foreground">{permission.userEmail}</div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap gap-1">
+                              {permission.canAdd && <Badge variant="secondary">Add</Badge>}
+                              {permission.canEdit && <Badge variant="secondary">Edit</Badge>}
+                              {permission.canDelete && <Badge variant="secondary">Delete</Badge>}
+                              {permission.canAssignOthers && <Badge variant="secondary">Assign</Badge>}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => removePermissionMutation.mutate({
+                                calendarId: managingPermissions!.id,
+                                permissionId: permission.id,
+                              })}
+                              disabled={removePermissionMutation.isPending}
+                              data-testid={`button-remove-permission-${permission.id}`}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="roles" className="space-y-4">
+              <div className="space-y-3">
+                <div className="flex gap-2">
+                  <Select value={selectedRole} onValueChange={setSelectedRole}>
+                    <SelectTrigger className="flex-1" data-testid="select-role-permission">
+                      <SelectValue placeholder="Select a role" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ROLES
+                        .filter(role =>
+                          !rolePermissionsData?.rolePermissions?.some(p => p.role === role.value)
+                        )
+                        .map((role) => (
+                          <SelectItem key={role.value} value={role.value}>
+                            {role.label}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    onClick={handleAddRolePermission}
+                    disabled={!selectedRole || addRolePermissionMutation.isPending}
+                    data-testid="button-add-role-permission"
+                  >
+                    {addRolePermissionMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Add"}
+                  </Button>
+                </div>
+                {selectedRole && (
+                  <div className="flex flex-wrap gap-4 p-3 bg-muted/50 rounded-md">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="role-can-add"
+                        checked={newRolePermissions.canAdd}
+                        onCheckedChange={(checked) => setNewRolePermissions({ ...newRolePermissions, canAdd: checked as boolean })}
+                        data-testid="checkbox-role-can-add"
+                      />
+                      <Label htmlFor="role-can-add" className="text-sm cursor-pointer">Can Add Events</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="role-can-edit"
+                        checked={newRolePermissions.canEdit}
+                        onCheckedChange={(checked) => setNewRolePermissions({ ...newRolePermissions, canEdit: checked as boolean })}
+                        data-testid="checkbox-role-can-edit"
+                      />
+                      <Label htmlFor="role-can-edit" className="text-sm cursor-pointer">Can Edit Events</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="role-can-delete"
+                        checked={newRolePermissions.canDelete}
+                        onCheckedChange={(checked) => setNewRolePermissions({ ...newRolePermissions, canDelete: checked as boolean })}
+                        data-testid="checkbox-role-can-delete"
+                      />
+                      <Label htmlFor="role-can-delete" className="text-sm cursor-pointer">Can Delete Events</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="role-can-assign-others"
+                        checked={newRolePermissions.canAssignOthers}
+                        onCheckedChange={(checked) => setNewRolePermissions({ ...newRolePermissions, canAssignOthers: checked as boolean })}
+                        data-testid="checkbox-role-can-assign-others"
+                      />
+                      <Label htmlFor="role-can-assign-others" className="text-sm cursor-pointer">Can Assign Other Volunteers</Label>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="border rounded-md">
+                {!rolePermissionsData?.rolePermissions?.length ? (
+                  <p className="text-muted-foreground text-center py-8">
+                    No role permissions assigned yet. Assign a role to grant all members with that role access to this calendar.
+                  </p>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Role</TableHead>
+                        <TableHead>Permissions</TableHead>
+                        <TableHead className="text-right">Action</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {rolePermissionsData?.rolePermissions?.map((permission) => (
+                        <TableRow key={permission.id} data-testid={`row-role-permission-${permission.id}`}>
+                          <TableCell>{getRoleLabel(permission.role)}</TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap gap-1">
+                              {permission.canAdd && <Badge variant="secondary">Add</Badge>}
+                              {permission.canEdit && <Badge variant="secondary">Edit</Badge>}
+                              {permission.canDelete && <Badge variant="secondary">Delete</Badge>}
+                              {permission.canAssignOthers && <Badge variant="secondary">Assign</Badge>}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => removeRolePermissionMutation.mutate({
+                                calendarId: managingPermissions!.id,
+                                permissionId: permission.id,
+                              })}
+                              disabled={removeRolePermissionMutation.isPending}
+                              data-testid={`button-remove-role-permission-${permission.id}`}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </div>
+            </TabsContent>
+          </Tabs>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!calendarToDelete} onOpenChange={() => setCalendarToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Calendar</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{calendarToDelete?.name}"? This will also delete all events in this calendar. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => calendarToDelete && deleteCalendarMutation.mutate(calendarToDelete.id)}
+              disabled={deleteCalendarMutation.isPending}
+              data-testid="button-confirm-delete"
+            >
+              {deleteCalendarMutation.isPending ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </DashboardLayout>
+  );
+}

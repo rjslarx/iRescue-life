@@ -1,0 +1,81 @@
+Replit Agent Instructions: Building the "Collaboration Hub"We are adding a new communication layer to the iRescue.life platform to allow tenant admins to coordinate transport and animal transfers.Core Technology: Google Chat API & Webhooks.Part 1: Backend Implementation (Node.js)1. Create services/googleChatService.jsWe need a dedicated service to handle Google Workspace interactions.Dependencies:googleapis (for authenticated API calls)node-fetch or axios (for simple webhook POSTs)Function A: createTransportSpace(transportId, routeName)Trigger: Called when a new "Transport" record is created in our database.Logic:Authenticate using the Service Account.Call chat.spaces.create.Set spaceType to SPACE (threaded room).Set displayName to 🚐 Transport: {routeName}.Critical: Return the name (Space ID) and the url (Direct link) so we can save them to the Transport record in the database.Function B: broadcastAlert(alertData)Trigger: Called when an admin clicks "Broadcast Transfer Request."Logic:This does NOT use the googleapis library. It uses a standard fetch POST to a Webhook URL.The Webhook URL should be stored in an Environment Variable (e.g., REGIONAL_RESCUE_WEBHOOK_URL).Construct a Card Message JSON payload (see below).2. Code Reference for BackendUse this logic for the service file:const { google } = require('googleapis');
+// Assumes you have setup authentication in a separate config
+const chat = google.chat({ version: 'v1', auth: yourAuthClient });
+
+// 1. Create a dedicated space for a specific trip
+async function createTransportSpace(routeName) {
+  try {
+    const res = await chat.spaces.create({
+      requestBody: {
+        displayName: `🚐 Transport: ${routeName}`,
+        spaceType: 'SPACE',
+      },
+    });
+    return { 
+      spaceId: res.data.name, 
+      spaceUrl: `https://mail.google.com/chat/u/0/#chat/space/${res.data.name.split('/')[1]}`
+    };
+  } catch (err) {
+    console.error("Failed to create Chat Space:", err);
+    return null;
+  }
+}
+
+// 2. Broadcast an "SOS" card to the regional network
+async function broadcastAlert(rescueName, animalCount, notes, link) {
+  const webhookUrl = process.env.REGIONAL_RESCUE_WEBHOOK_URL;
+  
+  const cardPayload = {
+    cards: [{
+      header: {
+        title: "🚨 URGENT: Transfer Request",
+        subtitle: `${rescueName} is over capacity`,
+        imageUrl: "[https://irescue.life/assets/alert-icon.png](https://irescue.life/assets/alert-icon.png)"
+      },
+      sections: [{
+        widgets: [
+          {
+            keyValue: {
+              topLabel: "Animals Needing Transfer",
+              content: `${animalCount} Animals`,
+              icon: "DESCRIPTION"
+            }
+          },
+          {
+            textParagraph: { text: notes }
+          },
+          {
+            buttons: [{
+              textButton: {
+                text: "View Animals & Help",
+                onClick: {
+                  openLink: { url: link }
+                }
+              }
+            }]
+          }
+        ]
+      }]
+    }]
+  };
+
+  await fetch(webhookUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(cardPayload)
+  });
+}
+
+module.exports = { createTransportSpace, broadcastAlert };
+Part 2: Frontend Implementation (React)1. Update TransportCard.tsx (The Dashboard Widget)When a transport is active, we need a prominent button that opens the chat app.Logic:Check if transport.googleChatUrl exists.If yes, render a primary button.Button Label: "💬 Open Transport Chat"Behavior: target="_blank" (Opens in new tab/app).UI Snippet Idea:{transport.googleChatUrl && (
+  <a 
+    href={transport.googleChatUrl} 
+    target="_blank" 
+    rel="noopener noreferrer"
+    className="btn btn-primary flex items-center gap-2"
+  >
+    <ChatIcon />
+    Open Transport Chat
+  </a>
+)}
+2. Create TransferBroadcastModal.tsx (The SOS Form)A simple modal for admins to request help.Fields:Number of Animals (Number input)Urgency Level (Dropdown: High, Critical)Notes (Textarea)Action:On Submit -> Call your API endpoint which triggers broadcastAlert.Show success message: "Alert sent to Regional Network."Part 3: Database UpdatesTransport Schema:Add field googleChatSpaceId (String)Add field googleChatUrl (String)

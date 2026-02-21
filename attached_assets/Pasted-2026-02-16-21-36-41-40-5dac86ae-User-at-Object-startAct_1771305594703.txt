@@ -1,0 +1,110 @@
+2026-02-16 21:36:41.40
+5dac86ae
+User
+at Object.startActiveSpan (file:///home/runner/workspace/node_modules/drizzle-orm/tracing.js:8:14)
+2026-02-16 21:36:55.44
+5dac86ae
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:684:26
+2026-02-16 21:36:55.44
+5dac86ae
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:708:19
+2026-02-16 21:36:55.44
+5dac86ae
+User
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:33)
+2026-02-16 21:36:55.44
+5dac86ae
+User
+TypeError: Cannot convert undefined or null to object
+2026-02-16 21:36:55.44
+5dac86ae
+User
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:17)
+2026-02-16 21:36:55.44
+5dac86ae
+User
+at Object.startActiveSpan (file:///home/runner/workspace/node_modules/drizzle-orm/tracing.js:8:14)
+2026-02-16 21:36:55.44
+5dac86ae
+User
+at Array.reduce ()
+2026-02-16 21:36:55.44
+5dac86ae
+User
+at PgSelectBase._prepare (file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:683:19)
+2026-02-16 21:36:55.44
+5dac86ae
+User
+at Function.entries ()
+2026-02-16 21:36:55.44
+5dac86ae
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:63:22
+2026-02-16 21:36:55.44
+5dac86ae
+User
+at Object.startActiveSpan (file:///home/runner/workspace/node_modules/drizzle-orm/tracing.js:8:14)
+2026-02-16 22:00:02.44
+5dac86ae
+User
+[2026-02-17T04:00:02.446Z] [PID: 38] [NODE-CRON] [WARN] missed execution at Tue Feb 17 2026 04:00:00 GMT+0000 (Coordinated Universal Time)! Possible blocking IO or high CPU user at the same process used by node-cron.
+2026-02-16 23:17:18.80
+5a71fe69
+User
+constraint: undefined,
+2026-02-16 23:17:18.80
+5a71fe69
+User
+internalPosition: undefined,
+2026-02-16 23:17:18.80
+5a71fe69
+User
+at /home/runner/workspace/node_modules/pg-pool/index.js:45:11
+2026-02-16 23:17:18.80
+5a71fe69
+User
+column: 'entity_type',
+2026-02-16 23:17:18.80
+5a71fe69
+User
+hint: undefined,
+2026-02-16 23:17:18.80
+5a71fe69
+User
+where: undefined,
+2026-02-16 23:17:18.80
+5a71fe69
+User
+code: '23502',
+2026-02-16 23:17:18.80
+5a71fe69
+User
+detail: 'Failing row contains (8deb3fc1-c2b9-4981-b723-c3d5afb258fd, 3a4c2321-6a54-41a4-acf3-a7f2ffe0c051, c9f80047-4456-426b-9ee8-d1b15f7301b9, null, null, null, Merged animal profile "Leah two" into "Leah", null, {"primaryAnimalId": "e9d29ad0-f31a-4607-a3c6-44617743da81", "pri..., 2026-02-17 05:17:18.787325).',
+2026-02-16 23:17:18.80
+5a71fe69
+User
+internalQuery: undefined,
+2026-02-16 23:17:18.80
+5a71fe69
+User
+table: 'activity_logs',
+2026-02-16 23:17:18.80
+5a71fe69
+User
+dataType: undefined,
+2026-02-16 23:17:18.80
+5a71fe69
+User
+schema: 'public',
+2026-02-16 23:17:18.80
+5a71fe69
+User
+position: undefined,
+2026-02-16 23:17:18.80
+5a71fe69
+User
+at async Promise.all (index 1) {
+Wrap
+Colors

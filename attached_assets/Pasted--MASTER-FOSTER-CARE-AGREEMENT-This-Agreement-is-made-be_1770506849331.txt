@@ -1,0 +1,41 @@
+# MASTER FOSTER CARE AGREEMENT
+
+**This Agreement** is made between **{{tenant_name}}** (hereinafter referred to as "The Rescue") and the undersigned Volunteer (hereinafter referred to as "Foster Caretaker").
+
+### 1. OWNERSHIP & CUSTODY
+* **Rescue Property:** I understand that all animals placed in my care are the sole property of **{{tenant_name}}**. I have no ownership rights to any foster animal.
+* **No Unauthorized Transfer:** I agree strictly NOT to give, sell, or transfer custody of the foster animal to any other person, rescue, or shelter without prior written consent from The Rescue's Director.
+* **Return on Demand:** I agree to return the animal to The Rescue immediately upon request. If I refuse, I authorize The Rescue to take legal or other action to recover the animal, and I agree to pay all costs associated with such recovery.
+
+### 2. MEDICAL CARE & VETERINARY PROTOCOLS
+* **Authorization:** I understand that **{{tenant_name}}** covers all medical expenses **ONLY IF** approved in advance and performed at our authorized veterinary partners.
+* **Unauthorized Care:** If I choose to take the animal to my own veterinarian without prior approval, or for a non-emergency, I assume full financial responsibility for the bill. The Rescue will not reimburse me.
+* **Medications:** I agree to administer all medications strictly as directed by The Rescue's medical staff and to document all doses given.
+* **Emergency Protocol:** In the event of a medical emergency, I agree to contact the **{{tenant_name}}** Medical Hotline immediately at **[INSERT EMERGENCY PHONE NUMBER]** before seeking treatment, unless the animal's life is in immediate danger.
+
+### 3. SAFETY & HOME CARE
+* **Indoors Only:** All foster dogs must be kept indoors as family pets. They may not be left outdoors unattended, chained, or used as guard dogs.
+* **Leash Policy:** Foster dogs must be on a leash at all times when outside a securely fenced area. Off-leash dog parks are **strictly prohibited** due to the unknown medical and behavioral history of rescue animals.
+* **Children & Other Pets:** I agree to supervise all interactions between the foster animal and children or other pets. I understand that The Rescue cannot guarantee the behavior of any animal.
+
+### 4. BEHAVIOR & BITE PROTOCOL
+* **Disclosure:** I understand that many rescue animals come with unknown histories. The Rescue makes no representations or warranties regarding the temperament, health, or age of any animal.
+* **Bite Reporting:** If the foster animal bites a human or another animal, I agree to report it to The Rescue **IMMEDIATELY** (within 1 hour). This is critical for insurance and rabies quarantine laws.
+
+### 5. ADOPTION
+* **Priority:** While I may express interest in adopting my foster animal ("Foster Fail"), I understand that The Rescue has the final authority on all placement decisions.
+* **Marketing:** I agree to assist in finding the animal a home by providing updated photos, bios, and making the animal available for meet-and-greets with potential adopters vetted by The Rescue.
+
+### 6. WAIVER OF LIABILITY & INDEMNIFICATION
+I, the undersigned, hereby release, indemnify, and hold harmless **{{tenant_name}}**, its directors, officers, volunteers, and agents from any and all claims, liability, demands, or causes of action arising out of my participation in the Foster Program.
+
+I understand that working with animals carries inherent risks, including but not limited to bites, scratches, property damage, or illness transmission to resident pets. I knowingly assume these risks.
+
+***
+
+**AGREED AND ACCEPTED:**
+
+**Foster Caretaker Name:** {{user.first_name}} {{user.last_name}}
+**Date:** {{date_today}}
+
+**[ DIGITAL SIGNATURE BOX ]**

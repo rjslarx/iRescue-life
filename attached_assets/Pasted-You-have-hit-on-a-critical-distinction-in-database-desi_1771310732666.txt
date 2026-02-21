@@ -1,0 +1,76 @@
+You have hit on a critical distinction in database design.
+While "Foster - Medical Hold" describes the situation perfectly in plain English, using it as a single status in your database is actually a trap.
+If you mix Location (Foster) with Condition (Medical Hold), you will eventually end up with a messy dropdown list like:
+ * kennel_medical_hold
+ * foster_medical_hold
+ * clinic_medical_hold
+ * kennel_available
+ * foster_available
+The "Pro" Approach: Split the Fields
+For a robust platform like irescue.life, you should track these as two separate columns in your animals table. This gives you much better reporting power later (e.g., "Show me all Heartworm dogs, regardless of where they are sleeping").
+1. Location (Where are they?)
+ * In Foster
+ * In Kennel
+ * At Vet Clinic
+ * In Transport
+2. Status (What is their legal/medical state?)
+ * Available (Ready for adoption)
+ * Medical Hold (Sick/Injured)
+ * Behavioral Hold (Needs training/decompression)
+ * Stray Hold (Legal wait time for owners to claim)
+ * Pending Adoption (Deposit paid)
+ * Hospice (Terminal care, not for adoption)
+The 4 Most Common "Non-Adoptable" Fosters
+Here are the specific scenarios your platform needs to handle, and how the "Status" field should control the app's behavior.
+1. Medical Hold (The "Heartworm Dog")
+ * Scenario: A dog is undergoing Immiticide treatment. They are in a foster home to stay calm, but they cannot be adopted yet because the rescue is legally liable for their medical care.
+ * Platform Logic:
+   * Public Profile: Show as "Coming Soon" or "Medical Hold" (disable the "Apply to Adopt" button).
+   * Contract: Block the "Generate Adoption Contract" button. Allow "Foster Agreement" only.
+2. Hospice Foster ("Fospice")
+ * Scenario: An elderly dog with terminal cancer. The rescue is paying for palliative care, but the dog will live out its days in the foster home.
+ * Platform Logic:
+   * Public Profile: HIDDEN. These dogs are not available.
+   * Reminders: Suppress "Vaccine Reminders" (not necessary) but escalate "Quality of Life Check-in" alerts.
+3. Neonatal / Maternity Hold
+ * Scenario: A pregnant mom or bottle-baby kittens. They are in foster because a shelter environment would kill them.
+ * Platform Logic:
+   * Public Profile: Show as "Coming Soon."
+   * Logic: Block adoption until age >= 8 weeks.
+4. Foster-to-Adopt (The "Trial Run")
+ * Scenario: The foster parent wants to adopt, but the dog is on Medical Hold (e.g., hasn't been neutered yet). They are technically fostering, but practically adopting.
+ * Platform Logic:
+   * Status: Pending Adoption (locks the dog so no one else can apply).
+   * Location: Foster.
+The Replit Prompt to Build This Logic
+You need to ensure your animals table supports these states and that the UI reacts to them correctly.
+Copy/Paste this into Replit Agent:
+I need to refine the Animal Status logic to handle "Medical Holds" and "Fospice" cases correctly.
+
+1. Database Schema Update:
+   - Ensure the `animals` table has two distinct columns:
+     - `location_type`: ['kennel', 'foster', 'clinic', 'transport']
+     - `status`: ['available', 'medical_hold', 'behavior_hold', 'stray_hold', 'hospice', 'pending_adoption', 'adopted']
+
+2. UI Logic (The "Adopt Button" Guardrail):
+   - On the Public Animal Profile:
+     - IF `status` is 'available': Show "Apply to Adopt".
+     - IF `status` is 'medical_hold' or 'behavior_hold': Show "Coming Soon" (Disable button).
+     - IF `status` is 'hospice' or 'pending_adoption': Hide the animal from the public list entirely (or show "Adoption Pending" badge).
+
+3. The "Generate Contract" Guardrail (Internal Dashboard):
+   - In the "Generate Contract" modal:
+     - IF `status` == 'medical_hold':
+       - DISABLE the "Adoption Contract" option.
+       - SHOW a warning: "Animal is on Medical Hold. Only Foster or Medical Waiver contracts are allowed."
+
+4. Visual Indicators:
+   - On the Internal Dashboard, color-code the rows:
+     - Green: Available
+     - Red: Medical Hold
+     - Orange: Behavioral Hold
+     - Purple: Hospice
+
+Why this matters for liability
+If a dog is on "Medical Hold" for heartworm, and your system accidentally allows a volunteer to generate a standard "Adoption Contract," the rescue could be sued if the dog dies a week later.
+By separating Status from Location, you create a safety net that prevents paperwork mistakes before they happen.

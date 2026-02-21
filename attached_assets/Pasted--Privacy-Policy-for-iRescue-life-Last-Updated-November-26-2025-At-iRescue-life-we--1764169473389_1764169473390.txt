@@ -1,0 +1,83 @@
+# Privacy Policy for iRescue.life
+
+**Last Updated:** November 26, 2025
+
+At iRescue.life ("we," "us," or "our"), we are committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you visit our website and use our animal rescue management platform (the "Service").
+
+By accessing or using iRescue.life, you agree to the terms of this Privacy Policy. If you do not agree with the terms of this policy, please do not access the site or use our services.
+
+## 1. Information We Collect
+
+We collect information that you provide directly to us when you register for an account, create a rescue profile, or use the management features of the platform.
+
+### A. Personal Information
+When you register for an iRescue.life account (as a Founder, Administrator, Staff, or Volunteer), we may collect personally identifiable information, including but not limited to:
+* Full Name
+* Email Address
+* Phone Number
+* Mailing Address
+* Organization Name and Non-Profit Tax ID (EIN)
+
+### B. Operational Data (Client Data)
+In providing our services, you may upload data regarding your rescue operations ("Operational Data"). While iRescue.life processes and stores this data, **you (the Rescue Organization) retain ownership of this data.** This includes:
+* **Animal Records:** Names, medical history, microchip numbers, intake/outcome data.
+* **Associate Data:** Names, contact info, and notes regarding fosters, volunteers, and adopters.
+* **Files:** Images, PDFs, and documents uploaded to the system.
+
+### C. Usage and Technical Data
+We automatically collect certain information when you visit, use, or navigate the Service. This information does not reveal your specific identity (like your name or contact information) but may include:
+* IP address
+* Browser and device characteristics
+* Operating system
+* Language preferences
+* Referring URLs
+* Information about how and when you use our Service (log data).
+
+## 2. How We Use Your Information
+
+We use the information we collect or receive for the following purposes:
+* **To Provide the Service:** To create accounts, manage logins, and facilitate the features of the platform (e.g., animal tracking, medical records management, foster coordination).
+* **To Process Transactions:** To manage your subscription (if applicable) and account status.
+* **To Communicate:** To send you administrative information, such as product updates, security alerts, and support messages.
+* **To Integrate Services:** To facilitate connections with third-party services (e.g., Google Workspace for Nonprofits) at your specific direction.
+* **To Improve Our Platform:** To analyze usage trends and improve the user experience.
+
+## 3. How We Share Your Information
+
+We do not sell, trade, or rent your personal information to third parties. We may share information in the following situations:
+
+* **Service Providers:** We may share data with third-party vendors, service providers, contractors, or agents who perform services for us or on our behalf and require access to such information to do that work (e.g., payment processing, data hosting, email delivery).
+* **Legal Obligations:** We may disclose your information where we are legally required to do so in order to comply with applicable law, governmental requests, a judicial proceeding, court order, or legal process.
+* **Business Transfers:** If iRescue.life is involved in a merger, acquisition, or sale of all or a portion of its assets, your information may be transferred as part of that transaction.
+
+## 4. Third-Party Integrations
+
+iRescue.life allows you to integrate with third-party services (such as Google Workspace, payment processors, or chip registries) to enhance your rescue operations. If you choose to use these integrations, you grant us permission to share your information with these third parties as necessary to provide the integration. We are not responsible for the privacy practices of these third-party services, and we encourage you to review their privacy policies.
+
+## 5. Data Security
+
+We use administrative, technical, and physical security measures to help protect your personal information and Operational Data. While we have taken reasonable steps to secure the personal information you provide to us, please be aware that no security measures are perfect or impenetrable, and no method of data transmission can be guaranteed against any interception or other type of misuse.
+
+## 6. Your Data Rights
+
+Depending on your location, you may have the following rights regarding your data:
+* **Access and Correction:** You may review or change the information in your account settings at any time.
+* **Data Portability:** You can export your Operational Data through the platform’s export features.
+* **Account Termination:** You may terminate your account at any time. Upon request to terminate your account, we will deactivate or delete your account and information from our active databases, subject to data retention required by law.
+
+## 7. Children's Privacy
+
+Our Service is not directed to children under the age of 13. We do not knowingly collect personal information from children under 13. If you become aware that a child has provided us with personal information, please contact us so that we can delete such information.
+
+## 8. Updates to This Policy
+
+We may update this privacy policy from time to time. The updated version will be indicated by an updated "Revised" date and the updated version will be effective as soon as it is accessible. We encourage you to review this privacy policy frequently to be informed of how we are protecting your information.
+
+## 9. Contact Us
+
+If you have questions or comments about this policy, you may contact us at:
+
+**iRescue.life**
+107 Dumaine St., Lafayette, LA 70506
+[Insert link to contact us form]
+***

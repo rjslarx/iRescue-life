@@ -1,0 +1,68 @@
+2026-01-29 12:29:51.17
+b6fc6597
+User
+error: invalid input syntax for type numeric: ""
+2026-01-29 12:29:51.17
+b6fc6597
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-01-29 12:30:55.75
+b6fc6597
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-01-29 12:30:55.75
+b6fc6597
+User
+at AnimalBackupService.syncMedicalRecords (file:///home/runner/workspace/dist/index.js:10332:38)
+2026-01-29 12:30:55.75
+b6fc6597
+User
+[ANIMAL BACKUP] Failed to sync medical records: TypeError: this.objectStorage.upload is not a function
+2026-01-29 12:31:29.24
+b6fc6597
+User
+at AnimalBackupService.syncMedicalRecords (file:///home/runner/workspace/dist/index.js:10332:38)
+2026-01-29 12:31:29.24
+b6fc6597
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-01-29 12:31:29.24
+b6fc6597
+User
+[ANIMAL BACKUP] Failed to sync medical records: TypeError: this.objectStorage.upload is not a function
+2026-01-29 12:35:20.60
+21454f43
+User
+[ANIMAL BACKUP] Failed to sync medical records: TypeError: this.objectStorage.upload is not a function
+2026-01-29 12:35:20.60
+21454f43
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-01-29 12:35:20.60
+21454f43
+User
+at AnimalBackupService.syncMedicalRecords (file:///home/runner/workspace/dist/index.js:10332:38)
+2026-01-29 12:35:52.20
+21454f43
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-01-29 12:35:52.20
+21454f43
+User
+[ANIMAL BACKUP] Failed to sync medical records: TypeError: this.objectStorage.upload is not a function
+2026-01-29 12:35:52.20
+21454f43
+User
+at AnimalBackupService.syncMedicalRecords (file:///home/runner/workspace/dist/index.js:10332:38)
+2026-01-29 12:36:14.44
+21454f43
+User
+at AnimalBackupService.syncMedicalRecords (file:///home/runner/workspace/dist/index.js:10332:38)
+2026-01-29 12:36:14.44
+21454f43
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-01-29 12:36:14.44
+21454f43
+User
+[ANIMAL BACKUP] Failed to sync medical records: TypeError: this.objectStorage.upload is not a function

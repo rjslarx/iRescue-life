@@ -1,0 +1,49 @@
+Here is how you architect irescue.life to handle this multi-dimensional reality.
+
+1. Decouple "Location" from "Adoption Status"
+You must split the animal's state into independent data points.
+
+Data Point 1: Location/Custody. (e.g., location_type: 'foster', foster_id: 123). This tracks where the dog sleeps.
+
+Data Point 2: Adoption Status. (e.g., status: 'unavailable'). This determines if the public can see them on your website.
+
+Data Point 3: Conditional Flags. (e.g., system_flags: ['medical_hold', 'hw_positive']). This tells the staff why the dog is unavailable.
+
+2. The "Hard Stop" Adoption Guardrail
+If an animal has a "Medical Hold" flag, your software should physically prevent a standard coordinator from clicking the "Finalize Adoption" button.
+
+The Logic: You don't want a junior volunteer accidentally adopting out a dog that still has stitches in its abdomen.
+
+The Override: The system should require a user with admin or medical_lead permissions to either remove the "Medical Hold" flag first, or click a special "Override Hold & Adopt" button (with a required text reason).
+
+3. The Foster Portal UI (The "Special Instructions" Banner)
+Since the foster parent is managing an animal with conditions, their "My Fosters" portal needs to adapt. If the dog has a medical_hold flag, the foster's dashboard should look different.
+
+Red Warning Banner: At the top of the dog's profile in the foster app: "⚠️ MEDICAL HOLD: Do not allow this dog to run or jump. Leash walk only."
+
+Prominent Meds: This ties perfectly into the medication charting we built earlier. The "To-Do" list for meds should be front and center.
+
+Disabled Public Sharing: Normally, you want fosters to share their foster dog on Facebook. If the dog is on a legal or medical hold, the "Share Profile" button in their portal should be disabled or hidden.
+
+The Replit Prompt to Build the "Hold" Architecture
+Copy/Paste this into Replit Agent:
+
+Plaintext
+I need to upgrade the Animal Data Model to support multi-dimensional statuses (e.g., Fostered AND on Medical Hold).
+
+1. Database Updates (`animals` table):
+   - Ensure `location_id` (where the animal is) is strictly separate from `adoption_status` (Available, Pending, Hold).
+   - Add a new column: `conditional_flags` (Array of Strings or JSONB). Valid flags: 'medical_hold', 'behavior_hold', 'spay_neuter_hold', 'legal_hold'.
+
+2. The Staff UI (Animal Profile):
+   - Under the dog's name, display bright, pill-shaped warning badges for any active `conditional_flags` (e.g., a Red badge for "Medical Hold").
+   - Create a "Manage Holds" modal where staff with 'medical' or 'admin' permissions can toggle these flags on and off.
+
+3. The Foster Portal UI:
+   - If `conditional_flags` includes 'medical_hold', render a prominent warning banner at the top of the foster's view for that specific animal.
+   - Hide the "Share for Adoption" button if any hold flags are active.
+
+4. The Adoption Guardrail:
+   - On the "Finalize Adoption" workflow, check the `conditional_flags` array.
+   - If 'medical_hold' or 'legal_hold' is present, disable the "Approve" button and show an alert: "Cannot finalize adoption while animal is on an active hold. A Medical Admin must clear this flag first."
+By structuring it this way, your platform perfectly mirrors the chaotic reality of animal rescue. A dog can be recovering from surgery (Hold), living in a living room (Foster), and getting daily meds charted by the foster parent—all tracked accurately without breaking the system.

@@ -1,0 +1,96 @@
+2026-02-06 21:05:08.65
+6a3936e0
+User
+[MERGE] Post-merge steps failed, attempting rollback: ReferenceError: mergeSelectFields is not defined
+2026-02-06 21:05:08.65
+6a3936e0
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-02-06 21:05:08.65
+6a3936e0
+User
+at file:///home/runner/workspace/dist/index.js:36998:42
+2026-02-06 21:05:08.67
+6a3936e0
+User
+Merge failed: ReferenceError: mergeSelectFields is not defined
+2026-02-06 21:05:08.67
+6a3936e0
+User
+at file:///home/runner/workspace/dist/index.js:36998:42
+2026-02-06 21:05:08.67
+6a3936e0
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-02-06 21:05:08.68
+6a3936e0
+User
+at file:///home/runner/workspace/dist/index.js:36998:42
+2026-02-06 21:05:08.68
+6a3936e0
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-02-06 21:05:08.68
+6a3936e0
+User
+ReferenceError: mergeSelectFields is not defined
+2026-02-06 21:05:24.93
+6a3936e0
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-02-06 21:05:24.93
+6a3936e0
+User
+at file:///home/runner/workspace/dist/index.js:36998:42
+2026-02-06 21:05:24.93
+6a3936e0
+User
+[MERGE] Post-merge steps failed, attempting rollback: ReferenceError: mergeSelectFields is not defined
+2026-02-06 21:05:24.95
+6a3936e0
+User
+at file:///home/runner/workspace/dist/index.js:36998:42
+2026-02-06 21:05:24.95
+6a3936e0
+User
+Merge failed: ReferenceError: mergeSelectFields is not defined
+2026-02-06 21:05:24.95
+6a3936e0
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-02-06 21:05:24.96
+6a3936e0
+User
+at file:///home/runner/workspace/dist/index.js:36998:42
+2026-02-06 21:05:24.96
+6a3936e0
+User
+ReferenceError: mergeSelectFields is not defined
+2026-02-06 21:05:24.96
+6a3936e0
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-02-06 21:05:24.96
+6a3936e0
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-02-06 21:05:24.96
+6a3936e0
+User
+ReferenceError: mergeSelectFields is not defined
+2026-02-06 21:05:24.96
+6a3936e0
+User
+at file:///home/runner/workspace/dist/index.js:36998:42
+2026-02-06 21:05:24.96
+6a3936e0
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-02-06 21:05:24.96
+6a3936e0
+User
+ReferenceError: mergeSelectFields is not defined
+2026-02-06 21:05:24.96
+6a3936e0
+User
+at file:///home/runner/workspace/dist/index.js:36998:42

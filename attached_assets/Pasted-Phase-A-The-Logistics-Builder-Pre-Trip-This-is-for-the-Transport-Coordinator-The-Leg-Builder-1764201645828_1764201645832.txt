@@ -1,0 +1,27 @@
+Phase A: The Logistics Builder (Pre-Trip)
+This is for the Transport Coordinator.
+• The "Leg" Builder: Ability to define stops.
+• Leg 1: Lafayette, LA -> Memphis, TN (Driver: Sarah)
+• Leg 2: Memphis, TN -> Chicago, IL (Driver: Mike)
+• Passenger Selection: A drag-and-drop interface where the admin drags a dog from the "Ready to Transport" list onto the "Truck."
+• CVI Verification (CRITICAL): The system should auto-check if each dog has a valid Certificate of Veterinary Inspection (Health Cert) uploaded. If a dog is missing a Health Cert, the system throws a Red Flag and won't let the manifest be finalized. This prevents the transport from getting fined by the Department of Agriculture.
+Phase B: The "Digital Run Sheet" (Mobile View for Drivers)
+Drivers don't need the full database; they need a simplified mobile view.
+• Digital Roll Call: The driver sees a list of dogs on their truck.
+• Special Instructions: Icons for "Needs Meds during trip," "Do Not Walk (Flight Risk)," or "Aggressive - Handle with Care."
+• Status Updates: The driver can tap a button: "Arrived at Stop 1." This sends a notification to the Receiving Rescue so they know when to meet the truck.
+Phase C: The Collaboration Hub Integration
+This is where the "Network" aspect shines.
+• Shared View: Both the Sending Rescue and the Receiving Rescue can view the same live Manifest.
+• Chat Stream: A dedicated chat thread attached to that specific transport ID.
+• Example: Receiver types: "Running 10 mins late to the meetup spot." Sender sees it instantly in the Hub.
+• Chain of Custody: When the dog is handed over, the Receiver signs digitally on the Driver’s phone/tablet. This timestamped signature is saved to the Collaboration Hub as legal proof of transfer.
+3. Data Fields You Need
+To build this database table, you will need the following fields associated with a Transport_ID:
+• Vehicle/Transport Name: (e.g., "The Northern Express - Nov 26")
+• Date of Departure:
+• Route: (List of Stops/Waypoints)
+• Animal List: (Linked to Animal IDs)
+• Documents: (Link to consolidated PDF of Health Certs + Rabies Certs)
+• Emergency Contact: (Who does the driver call if the van breaks down?)
+• Receiving Organization(s): (Can be multiple if the van is dropping dogs off at different rescues along the way).

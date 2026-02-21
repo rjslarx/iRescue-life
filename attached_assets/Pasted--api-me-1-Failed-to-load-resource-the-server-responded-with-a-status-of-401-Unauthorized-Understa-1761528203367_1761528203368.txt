@@ -1,0 +1,50 @@
+/api/me:1  Failed to load resource: the server responded with a status of 401 (Unauthorized)Understand this error
+/login:1 [DOM] Input elements should have autocomplete attributes (suggested: "current-password"): (More info: https://goo.gl/9p2vKq) null
+chunk-RPCDYKBN.js?v=23b6cb02:521 Warning: `value` prop on `textarea` should not be null. Consider using an empty string to clear the component or `undefined` for uncontrolled components.
+    at textarea
+    at _c (https://be89be9e-6a6a-443f-9996-8bdfc0b79d2c-00-13cespn89a94g.spock.replit.dev/src/components/ui/textarea.tsx:19:43)
+    at https://be89be9e-6a6a-443f-9996-8bdfc0b79d2c-00-13cespn89a94g.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-2K77HOHX.js?v=23b6cb02:79:13
+    at https://be89be9e-6a6a-443f-9996-8bdfc0b79d2c-00-13cespn89a94g.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-2K77HOHX.js?v=23b6cb02:56:13
+    at https://be89be9e-6a6a-443f-9996-8bdfc0b79d2c-00-13cespn89a94g.spock.replit.dev/src/components/ui/form.tsx:124:9
+    at div
+    at https://be89be9e-6a6a-443f-9996-8bdfc0b79d2c-00-13cespn89a94g.spock.replit.dev/src/components/ui/form.tsx:72:6
+    at Controller (https://be89be9e-6a6a-443f-9996-8bdfc0b79d2c-00-13cespn89a94g.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-4BFJKWC4.js?v=23b6cb02:298:35)
+    at FormField (https://be89be9e-6a6a-443f-9996-8bdfc0b79d2c-00-13cespn89a94g.spock.replit.dev/src/components/ui/form.tsx:33:6)
+    at form
+    at FormProvider (https://be89be9e-6a6a-443f-9996-8bdfc0b79d2c-00-13cespn89a94g.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-4BFJKWC4.js?v=23b6cb02:102:11)
+    at div
+    at https://be89be9e-6a6a-443f-9996-8bdfc0b79d2c-00-13cespn89a94g.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-AXMZZQ2X.js?v=23b6cb02:42:13
+    at https://be89be9e-6a6a-443f-9996-8bdfc0b79d2c-00-13cespn89a94g.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-AFLIZ4FI.js?v=23b6cb02:61:7
+    at https://be89be9e-6a6a-443f-9996-8bdfc0b79d2c-00-13cespn89a94g.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-2K77HOHX.js?v=23b6cb02:79:13
+    at https://be89be9e-6a6a-443f-9996-8bdfc0b79d2c-00-13cespn89a94g.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-2K77HOHX.js?v=23b6cb02:56:13
+    at https://be89be9e-6a6a-443f-9996-8bdfc0b79d2c-00-13cespn89a94g.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-AXMZZQ2X.js?v=23b6cb02:42:13
+    at https://be89be9e-6a6a-443f-9996-8bdfc0b79d2c-00-13cespn89a94g.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-HG7P5XMB.js?v=23b6cb02:29:5
+    at https://be89be9e-6a6a-443f-9996-8bdfc0b79d2c-00-13cespn89a94g.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-EOVDRVRR.js?v=23b6cb02:235:13
+    at https://be89be9e-6a6a-443f-9996-8bdfc0b79d2c-00-13cespn89a94g.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-EOVDRVRR.js?v=23b6cb02:158:58
+    at Presence (https://be89be9e-6a6a-443f-9996-8bdfc0b79d2c-00-13cespn89a94g.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-LUE5KDWX.js?v=23b6cb02:24:11)
+    at https://be89be9e-6a6a-443f-9996-8bdfc0b79d2c-00-13cespn89a94g.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-EOVDRVRR.js?v=23b6cb02:149:64
+    at https://be89be9e-6a6a-443f-9996-8bdfc0b79d2c-00-13cespn89a94g.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-2K77HOHX.js?v=23b6cb02:79:13
+    at https://be89be9e-6a6a-443f-9996-8bdfc0b79d2c-00-13cespn89a94g.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-2K77HOHX.js?v=23b6cb02:56:13
+    at https://be89be9e-6a6a-443f-9996-8bdfc0b79d2c-00-13cespn89a94g.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-AXMZZQ2X.js?v=23b6cb02:42:13
+    at https://be89be9e-6a6a-443f-9996-8bdfc0b79d2c-00-13cespn89a94g.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-AFLIZ4FI.js?v=23b6cb02:260:22
+    at Presence (https://be89be9e-6a6a-443f-9996-8bdfc0b79d2c-00-13cespn89a94g.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-LUE5KDWX.js?v=23b6cb02:24:11)
+    at Provider (https://be89be9e-6a6a-443f-9996-8bdfc0b79d2c-00-13cespn89a94g.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-OXZDJRWN.js?v=23b6cb02:38:15)
+    at DialogPortal (https://be89be9e-6a6a-443f-9996-8bdfc0b79d2c-00-13cespn89a94g.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-EOVDRVRR.js?v=23b6cb02:111:11)
+    at _c3 (https://be89be9e-6a6a-443f-9996-8bdfc0b79d2c-00-13cespn89a94g.spock.replit.dev/src/components/ui/dialog.tsx:52:12)
+    at Provider (https://be89be9e-6a6a-443f-9996-8bdfc0b79d2c-00-13cespn89a94g.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-OXZDJRWN.js?v=23b6cb02:38:15)
+    at Dialog (https://be89be9e-6a6a-443f-9996-8bdfc0b79d2c-00-13cespn89a94g.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-EOVDRVRR.js?v=23b6cb02:52:5)
+    at SupplyRequestDialog (https://be89be9e-6a6a-443f-9996-8bdfc0b79d2c-00-13cespn89a94g.spock.replit.dev/src/components/SupplyRequestDialog.tsx:53:3)
+    at div
+    at Provider (https://be89be9e-6a6a-443f-9996-8bdfc0b79d2c-00-13cespn89a94g.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-OXZDJRWN.js?v=23b6cb02:38:15)
+    at TooltipProvider (https://be89be9e-6a6a-443f-9996-8bdfc0b79d2c-00-13cespn89a94g.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=23b6cb02:64:5)
+    at SidebarProvider (https://be89be9e-6a6a-443f-9996-8bdfc0b79d2c-00-13cespn89a94g.spock.replit.dev/src/components/ui/sidebar.tsx:59:3)
+    at MyFostersPage (https://be89be9e-6a6a-443f-9996-8bdfc0b79d2c-00-13cespn89a94g.spock.replit.dev/src/pages/MyFostersPage.tsx:33:20)
+    at Route (https://be89be9e-6a6a-443f-9996-8bdfc0b79d2c-00-13cespn89a94g.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=23b6cb02:191:16)
+    at Switch (https://be89be9e-6a6a-443f-9996-8bdfc0b79d2c-00-13cespn89a94g.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=23b6cb02:247:17)
+    at Router
+    at Provider (https://be89be9e-6a6a-443f-9996-8bdfc0b79d2c-00-13cespn89a94g.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-OXZDJRWN.js?v=23b6cb02:38:15)
+    at TooltipProvider (https://be89be9e-6a6a-443f-9996-8bdfc0b79d2c-00-13cespn89a94g.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=23b6cb02:64:5)
+    at AuthProvider (https://be89be9e-6a6a-443f-9996-8bdfc0b79d2c-00-13cespn89a94g.spock.replit.dev/src/contexts/AuthContext.tsx:27:32)
+    at TenantProvider (https://be89be9e-6a6a-443f-9996-8bdfc0b79d2c-00-13cespn89a94g.spock.replit.dev/src/contexts/TenantContext.tsx:22:34)
+    at QueryClientProvider (https://be89be9e-6a6a-443f-9996-8bdfc0b79d2c-00-13cespn89a94g.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=23b6cb02:2805:3)
+    at App

@@ -1,0 +1,110 @@
+2026-02-16 13:32:49.19
+2704d4fa
+User
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:17)
+2026-02-16 13:32:49.19
+2704d4fa
+User
+at Array.reduce ()
+2026-02-16 13:36:47.51
+2704d4fa
+User
+Unexpected database pool error: terminating connection due to administrator command
+2026-02-16 13:36:47.71
+2704d4fa
+User
+Unexpected database pool error: terminating connection due to administrator command
+2026-02-16 13:36:47.91
+2704d4fa
+User
+Unexpected database pool error: terminating connection due to administrator command
+2026-02-16 13:36:47.91
+2704d4fa
+User
+Unexpected database pool error: terminating connection due to administrator command
+2026-02-16 13:36:47.91
+2704d4fa
+User
+Unexpected database pool error: terminating connection due to administrator command
+2026-02-16 13:36:48.81
+2704d4fa
+User
+at Parser.parse (/home/runner/workspace/node_modules/pg-protocol/dist/parser.js:35:38)
+2026-02-16 13:36:48.81
+2704d4fa
+User
+^
+2026-02-16 13:36:48.81
+2704d4fa
+User
+at Readable.push (node:internal/streams/readable:392:5)
+2026-02-16 13:36:48.81
+2704d4fa
+User
+at addChunk (node:internal/streams/readable:561:12)
+2026-02-16 13:36:48.81
+2704d4fa
+User
+at TLSSocket. (/home/runner/workspace/node_modules/pg-protocol/dist/index.js:11:42)
+2026-02-16 13:36:48.81
+2704d4fa
+User
+at Client.emit (node:events:524:28)
+2026-02-16 13:36:48.81
+2704d4fa
+User
+at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)
+2026-02-16 13:36:48.81
+2704d4fa
+User
+at Client._handleErrorMessage (/home/runner/workspace/node_modules/pg/lib/client.js:361:12)
+2026-02-16 13:36:48.81
+2704d4fa
+User
+authorizationError: null,
+2026-02-16 13:36:48.81
+2704d4fa
+User
+at Parser.parseErrorMessage (/home/runner/workspace/node_modules/pg-protocol/dist/parser.js:285:98)
+2026-02-16 13:36:48.81
+2704d4fa
+User
+node:events:502
+2026-02-16 13:36:48.81
+2704d4fa
+User
+Emitted 'error' event on BoundPool instance at:
+2026-02-16 13:36:48.81
+2704d4fa
+User
+at TLSWrap.onStreamRead (node:internal/stream_base_commons:191:23)
+2026-02-16 13:36:48.81
+2704d4fa
+User
+at TLSSocket.emit (node:events:524:28)
+2026-02-16 13:36:48.81
+2704d4fa
+User
+at Connection.emit (node:events:524:28)
+2026-02-16 13:36:48.81
+2704d4fa
+User
+at Client._handleErrorEvent (/home/runner/workspace/node_modules/pg/lib/client.js:350:10)
+2026-02-16 13:36:48.81
+2704d4fa
+User
+at Parser.handlePacket (/home/runner/workspace/node_modules/pg-protocol/dist/parser.js:122:29)
+2026-02-16 13:36:48.81
+2704d4fa
+User
+at Client.idleListener (/home/runner/workspace/node_modules/pg-pool/index.js:62:10)
+2026-02-16 13:36:48.81
+2704d4fa
+User
+_events: [Object: null prototype] {
+2026-02-16 14:00:01.94
+7404f15a
+User
+[2026-02-16T20:00:01.948Z] [PID: 40] [NODE-CRON] [WARN] missed execution at Mon Feb 16 2026 20:00:00 GMT+0000 (Coordinated Universal Time)! Possible blocking IO or high CPU user at the same process used by node-cron.
+Wrap
+Colors

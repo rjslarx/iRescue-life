@@ -1,0 +1,64 @@
+Here is exactly how to handle the Stripe platform fees and the Facebook integration.
+
+Part 1: Charging the Stripe Platform Fee
+Yes, since you are using Stripe Connect, you have the power to take a percentage or a flat fee out of every transaction before the remainder routes to the rescue.
+
+The Technical Solution: In your Replit code, wherever you create the Stripe Checkout session for the donation, you need to add the payment_intent_data object with an application_fee_amount (calculated in cents).
+
+Here is what the code looks like:
+
+JavaScript
+// Example: If the donation is $100 (10000 cents) and you want a 5% platform fee
+const donationAmount = 10000;
+const platformFee = Math.round(donationAmount * 0.05); // 500 cents ($5.00)
+
+const session = await stripe.checkout.sessions.create({
+  line_items: [{
+    price_data: {
+      currency: 'usd',
+      product_data: { name: 'Emergency Medical Fund' },
+      unit_amount: donationAmount, 
+    },
+    quantity: 1,
+  }],
+  mode: 'payment',
+  payment_intent_data: {
+    application_fee_amount: platformFee, // <--- THIS is your cut
+  },
+  success_url: `${YOUR_DOMAIN}/success`,
+}, {
+  stripeAccount: tenant.stripe_account_id, // Routes the rest to the rescue
+});
+⚠️ A Quick Strategic Warning: In the animal rescue world, taking a mandatory cut of an emergency donation can cause massive backlash if the rescues find out. The standard SaaS play here is the "GoFundMe Model". Instead of taking the fee from the rescue, add a checkbox on the checkout page for the donor: "Add 5% to help keep the iRescue platform running." This covers your costs without angering your tenants.
+
+Part 2: "Embedding" into a Facebook Post
+You cannot embed a functional HTML payment form directly inside a Facebook post. Facebook strictly blocks this for security.
+
+Instead, the industry standard is to use Open Graph (OG) Tags.
+
+When a rescue pastes your link (e.g., irescue.life/donate/campaign-123) into a Facebook post, Facebook's bots scan your page for hidden OG tags. If they find them, Facebook automatically generates a massive, clickable "Card" featuring the dog's photo, the emergency title, and a snippet of the story.
+
+How to build this in Replit: You need to tell the Replit Agent to add dynamic SEO/Meta tags to your public campaign page.
+
+Copy and paste this prompt into Replit Agent:
+
+Plaintext
+I need to make the public Emergency Campaign page highly shareable on social media.
+
+1. Add dynamic Open Graph (OG) meta tags to the `<head>` of the public campaign page (`/portal/campaign/[id]`).
+2. The tags must populate dynamically based on the specific campaign data:
+   - `<meta property="og:title" content="Emergency Fund: {campaign_title}" />`
+   - `<meta property="og:description" content="{first_150_characters_of_description}" />`
+   - `<meta property="og:image" content="{campaign_image_url}" />`
+   - `<meta property="og:url" content="{full_page_url}" />`
+   - `<meta property="og:type" content="website" />`
+   - `<meta name="twitter:card" content="summary_large_image" />`
+
+3. Ensure these tags are rendered server-side so that Facebook and Twitter scrapers can read them instantly without waiting for React/JavaScript to load.
+Once Replit builds this, the workflow for the rescue is incredibly simple:
+
+They create the campaign in your dashboard.
+
+They click "Copy Link".
+
+They paste it into a Facebook post. The beautiful image and title instantly appear, and anyone who clicks it is routed straight to your Stripe Checkout page.

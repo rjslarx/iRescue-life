@@ -1,0 +1,45 @@
+This is where iRescue.life transforms from a "planning tool" into an "operational necessity." You have handled the who (participants) and the what (manifest); now you need to handle the execution.
+The logical flow moves from "Ready to Go" -> "In Transit" -> "The Handshake" -> "Data Settlement."
+Here are the four essential features to complete the cycle, designed to save time and reduce liability.
+1. The "Digital Load-In" (Departure Verification)
+Transports are chaotic. It is surprisingly common for the wrong dog to get loaded, or for a dog to be left behind because they were hiding in the back of a kennel run.
+ * The Feature: A "Load-In Checklist" on the Driver’s mobile view.
+ * The Workflow:
+   * The Driver opens the Manifest on their phone.
+   * As they load each crate, they must tap "Loaded" next to the dog's name.
+   * Crucial Gatekeeper: The system checks one last time: Does this dog have a PDF of their Health Cert (CVI) uploaded?
+   * Blocker: If the CVI is missing, the app throws a RED ALERT and prevents the dog from being marked "Loaded" until the admin uploads the file. This prevents the transport from getting fined at state lines.
+2. "Live Legs" Status Updates (En Route)
+Google Chat is great for conversation ("We are stopping for gas"), but it’s bad for data ("Did Rex get his 2 PM seizure med?").
+ * The Feature: An "Action Feed" for the trip.
+ * The Workflow:
+   * ETA Updates: Driver taps "Delayed 30 mins" button -> System auto-texts the receiving rescue contacts.
+   * Medication & Care Log: If a dog is flagged as "Needs Meds," the driver gets a push notification at the due time. They tap "Administered," and it logs to the dog's medical record instantly.
+   * Potty Breaks: Driver logs a "Walk Break." This calms the nerves of the receiving rescue, knowing the dogs are being cared for.
+3. The "Custody Handshake" (The Transfer)
+This is the most critical moment legally. The "Sender" is giving up ownership, and the "Receiver" is taking liability. Paper run sheets get lost, wet, or torn.
+ * The Feature: QR Code Chain of Custody.
+ * The Workflow:
+   * The Driver arrives at the meeting point (e.g., a parking lot in Tennessee).
+   * The Receiver (Rescue B) meets the truck.
+   * The Scan: The Driver shows a QR Code on their phone (or the Receiver scans the dog's cage card).
+   * The Signature: The Receiver signs on the Driver’s device (finger on glass).
+   * The Result: The system records the precise GPS location and time of the transfer. The legal "Owner" field in the database automatically switches from Sender to Receiver.
+4. The "One-Click" Data Import (The Closing)
+Once the transport is marked "Complete," the administrative nightmare usually begins for the receiving rescue (typing in 20 new dogs).
+ * The Feature: The "Ingest" Button.
+ * The Workflow:
+   * The Receiving Rescue gets a notification: "Transport Complete. 15 Animals waiting for import."
+   * They review the list and click "Import to Roster."
+   * The Magic: iRescue.life copies the photos, bio, microchip, and medical history into the Receiver's account. The Sender's record is archived as "Outcome: Transferred."
+Replit Implementation Strategy
+To make this manageable, I recommend building the "Mobile Driver View" first. This isn't a native app store app; it's just a responsive web page that looks like an app.
+Prompt for Replit:
+> "I need to build the 'Active Transport Mode' for the driver.
+>  * UI: Create a mobile-first view for a specific TransportID.
+>  * View Mode: It should list the stops in chronological order. Under each stop, list the dogs getting off.
+>  * Action: Add a 'Confirm Dropoff' button next to each dog.
+>  * Signature Pad: When 'Confirm Dropoff' is clicked, open a modal with a canvas for a digital signature.
+>  * Logic: When signed and saved, update the database TransportManifestItem status to 'Delivered' and save the signature image URL."
+> 
+Would you like to focus on the "Digital Signature" aspect first, or the "Medical/Meds Alert" for the drivers?
