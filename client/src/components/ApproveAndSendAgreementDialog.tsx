@@ -54,9 +54,13 @@ interface PreventativeCareType {
 interface MedicalDueDates {
   rabiesDueDate: string;
   dhppDueDate: string;
-  bordetellaDueDate: string;
-  heartwormDueDate: string;
-  fleaTickDueDate: string;
+}
+
+interface CustomComplianceItem {
+  obligationType: string;
+  label: string;
+  contractualDueDate: string;
+  notes: string;
 }
 
 const formSchema = z.object({
@@ -86,11 +90,15 @@ interface ApproveAndSendAgreementDialogProps {
 
 const MEDICAL_DATE_FIELDS: { key: keyof MedicalDueDates; label: string; careNames: string[] }[] = [
   { key: "rabiesDueDate", label: "Rabies Vaccine", careNames: ["rabies"] },
-  { key: "dhppDueDate", label: "DHPP Vaccine", careNames: ["dhpp", "da2pp", "dapp", "distemper"] },
-  { key: "bordetellaDueDate", label: "Bordetella Vaccine", careNames: ["bordetella", "kennel cough"] },
-  { key: "heartwormDueDate", label: "Heartworm Prevention", careNames: ["heartworm", "heartgard", "heartguard", "prohart", "proheart"] },
-  { key: "fleaTickDueDate", label: "Flea/Tick Prevention", careNames: ["flea", "tick", "flea/tick", "flea & tick", "nexgard", "bravecto", "simparica", "frontline", "seresto"] },
+  { key: "dhppDueDate", label: "DHPP Booster", careNames: ["dhpp", "da2pp", "dapp", "distemper"] },
 ];
+
+const CUSTOM_OBLIGATION_TYPES = [
+  { value: "heartworm_prevention_proof", label: "Heartworm Prevention Proof" },
+  { value: "obedience_training", label: "Obedience Training" },
+  { value: "fecal_test", label: "Fecal Test" },
+  { value: "custom", label: "Other (Custom)" },
+] as const;
 
 function findMatchingRecord(
   records: PreventativeCareRecord[],
@@ -117,14 +125,19 @@ export function ApproveAndSendAgreementDialog({
   const [medicalDueDates, setMedicalDueDates] = useState<MedicalDueDates>({
     rabiesDueDate: "",
     dhppDueDate: "",
-    bordetellaDueDate: "",
-    heartwormDueDate: "",
-    fleaTickDueDate: "",
   });
   const [medicalDatesLoaded, setMedicalDatesLoaded] = useState(false);
   const [carePriorities, setCarePriorities] = useState<CarePriorities>({
     enabled: false,
     flags: {},
+  });
+  const [customObligations, setCustomObligations] = useState<CustomComplianceItem[]>([]);
+  const [showAddCustom, setShowAddCustom] = useState(false);
+  const [newCustom, setNewCustom] = useState<CustomComplianceItem>({
+    obligationType: "",
+    label: "",
+    contractualDueDate: "",
+    notes: "",
   });
 
   const { data: animalsData } = useQuery<{ animals: Animal[] }>({
@@ -183,11 +196,11 @@ export function ApproveAndSendAgreementDialog({
       setMedicalDueDates({
         rabiesDueDate: "",
         dhppDueDate: "",
-        bordetellaDueDate: "",
-        heartwormDueDate: "",
-        fleaTickDueDate: "",
       });
       setCarePriorities({ enabled: false, flags: {} });
+      setCustomObligations([]);
+      setShowAddCustom(false);
+      setNewCustom({ obligationType: "", label: "", contractualDueDate: "", notes: "" });
     }
   }, [open, animal, form]);
 
@@ -203,9 +216,6 @@ export function ApproveAndSendAgreementDialog({
       const newDates: MedicalDueDates = {
         rabiesDueDate: "",
         dhppDueDate: "",
-        bordetellaDueDate: "",
-        heartwormDueDate: "",
-        fleaTickDueDate: "",
       };
 
       for (const field of MEDICAL_DATE_FIELDS) {
@@ -274,6 +284,7 @@ export function ApproveAndSendAgreementDialog({
         staffConfirmValues: Object.keys(staffConfirmValues).length > 0 ? staffConfirmValues : null,
         medicalDueDates: data.approvalAction === "approve_and_send" ? medicalDueDates : null,
         carePriorities: carePriorities.enabled ? carePriorities : null,
+        customComplianceObligations: data.approvalAction === "approve_and_send" && customObligations.length > 0 ? customObligations : null,
       });
       return response.json();
     },
@@ -597,7 +608,7 @@ export function ApproveAndSendAgreementDialog({
                   <CardContent className="pt-4">
                     <div className="flex items-center gap-2 mb-1">
                       <Shield className="h-4 w-4 text-primary" />
-                      <Label className="text-sm font-medium">Medical Compliance Dates *</Label>
+                      <Label className="text-sm font-medium">Mandatory Compliance Dates *</Label>
                       {!allMedicalDatesFilled && (
                         <Badge variant="destructive" className="text-xs" data-testid="badge-medical-dates-missing">
                           {medicalDatesMissing} missing
@@ -611,7 +622,7 @@ export function ApproveAndSendAgreementDialog({
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground mb-3">
-                      Confirm or update the next due dates for each item. Pre-filled from {animal?.name || "the animal"}'s medical records when available. All dates are required.
+                      These high-stakes items will be tracked in the compliance monitor. Pre-filled from {animal?.name || "the animal"}'s records when available.
                     </p>
                     <div className="space-y-3">
                       {MEDICAL_DATE_FIELDS.map((field) => {
@@ -640,7 +651,140 @@ export function ApproveAndSendAgreementDialog({
                           </div>
                         );
                       })}
+                      {animal?.heartwormPositive && (
+                        <div className="p-2 border border-amber-300/50 bg-amber-50 dark:bg-amber-950/20 rounded-md">
+                          <p className="text-xs font-medium text-amber-700 dark:text-amber-300 mb-1">
+                            {animal.name} is heartworm positive - ongoing treatment will be monitored
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            An ongoing treatment obligation will be created automatically
+                          </p>
+                        </div>
+                      )}
                     </div>
+                  </CardContent>
+                </Card>
+
+                <Card data-testid="card-custom-compliance">
+                  <CardContent className="pt-4">
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <div className="flex items-center gap-2">
+                        <ClipboardCheck className="h-4 w-4 text-primary" />
+                        <Label className="text-sm font-medium">Additional Requirements</Label>
+                        {customObligations.length > 0 && (
+                          <Badge variant="secondary" className="text-xs">{customObligations.length}</Badge>
+                        )}
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowAddCustom(true)}
+                        data-testid="button-add-custom-compliance"
+                      >
+                        + Add Requirement
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground mb-3">
+                      Optional custom compliance requirements (e.g., heartworm prevention proof, obedience training, fecal test)
+                    </p>
+
+                    {customObligations.length > 0 && (
+                      <div className="space-y-2 mb-3">
+                        {customObligations.map((item, idx) => (
+                          <div key={idx} className="flex items-center justify-between gap-2 p-2 border rounded-md" data-testid={`custom-obligation-${idx}`}>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">{item.label}</p>
+                              <p className="text-xs text-muted-foreground">
+                                Due: {new Date(item.contractualDueDate).toLocaleDateString()}
+                                {item.notes && ` - ${item.notes}`}
+                              </p>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setCustomObligations(prev => prev.filter((_, i) => i !== idx))}
+                              data-testid={`button-remove-custom-${idx}`}
+                            >
+                              <AlertCircle className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {showAddCustom && (
+                      <div className="space-y-2 p-3 border border-dashed rounded-md" data-testid="form-add-custom-compliance">
+                        <Select
+                          value={newCustom.obligationType}
+                          onValueChange={(val) => {
+                            const typeObj = CUSTOM_OBLIGATION_TYPES.find(t => t.value === val);
+                            setNewCustom(prev => ({
+                              ...prev,
+                              obligationType: val,
+                              label: val === "custom" ? prev.label : (typeObj?.label || ""),
+                            }));
+                          }}
+                        >
+                          <SelectTrigger data-testid="select-custom-type">
+                            <SelectValue placeholder="Select requirement type" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {CUSTOM_OBLIGATION_TYPES.map(t => (
+                              <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {newCustom.obligationType === "custom" && (
+                          <Input
+                            placeholder="Custom requirement name"
+                            value={newCustom.label}
+                            onChange={(e) => setNewCustom(prev => ({ ...prev, label: e.target.value }))}
+                            data-testid="input-custom-label"
+                          />
+                        )}
+                        <Input
+                          type="date"
+                          value={newCustom.contractualDueDate}
+                          onChange={(e) => setNewCustom(prev => ({ ...prev, contractualDueDate: e.target.value }))}
+                          data-testid="input-custom-due-date"
+                        />
+                        <Input
+                          placeholder="Notes (optional)"
+                          value={newCustom.notes}
+                          onChange={(e) => setNewCustom(prev => ({ ...prev, notes: e.target.value }))}
+                          data-testid="input-custom-notes"
+                        />
+                        <div className="flex gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            disabled={!newCustom.obligationType || !newCustom.label || !newCustom.contractualDueDate}
+                            onClick={() => {
+                              setCustomObligations(prev => [...prev, { ...newCustom }]);
+                              setNewCustom({ obligationType: "", label: "", contractualDueDate: "", notes: "" });
+                              setShowAddCustom(false);
+                            }}
+                            data-testid="button-confirm-add-custom"
+                          >
+                            Add
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setShowAddCustom(false);
+                              setNewCustom({ obligationType: "", label: "", contractualDueDate: "", notes: "" });
+                            }}
+                            data-testid="button-cancel-add-custom"
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
 

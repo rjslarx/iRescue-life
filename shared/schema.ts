@@ -5659,3 +5659,47 @@ export const insertTenantTransferSchema = createInsertSchema(tenantTransfers).om
 });
 export type InsertTenantTransfer = z.infer<typeof insertTenantTransferSchema>;
 export type TenantTransfer = typeof tenantTransfers.$inferSelect;
+
+export const COMPLIANCE_OBLIGATION_TYPES = [
+  'spay_neuter',
+  'rabies',
+  'dhpp_booster',
+  'ongoing_treatment',
+  'heartworm_prevention_proof',
+  'obedience_training',
+  'fecal_test',
+  'custom',
+] as const;
+export type ComplianceObligationType = typeof COMPLIANCE_OBLIGATION_TYPES[number];
+
+export const COMPLIANCE_STATUSES = ['pending', 'completed', 'waived'] as const;
+export type ComplianceStatus = typeof COMPLIANCE_STATUSES[number];
+
+export const complianceObligations = pgTable("compliance_obligations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  animalId: uuid("animal_id").notNull().references(() => animals.id, { onDelete: 'cascade' }),
+  sessionId: uuid("session_id").references(() => adoptionCheckoutSessions.id, { onDelete: 'set null' }),
+  adopterName: text("adopter_name").notNull(),
+  adopterEmail: text("adopter_email").notNull(),
+  adopterPhone: text("adopter_phone"),
+  obligationType: text("obligation_type").notNull().$type<ComplianceObligationType>(),
+  label: text("label").notNull(),
+  suggestedDueDate: text("suggested_due_date"),
+  contractualDueDate: text("contractual_due_date").notNull(),
+  notes: text("notes"),
+  status: text("status").notNull().default("pending").$type<ComplianceStatus>(),
+  completedAt: timestamp("completed_at"),
+  proofDocumentUrl: text("proof_document_url"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertComplianceObligationSchema = createInsertSchema(complianceObligations).omit({
+  id: true,
+  completedAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertComplianceObligation = z.infer<typeof insertComplianceObligationSchema>;
+export type ComplianceObligation = typeof complianceObligations.$inferSelect;

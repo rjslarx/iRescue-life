@@ -10,56 +10,27 @@ import { AlertTriangle, FileText, ClipboardCheck, UserX, Clock, Search, CheckCir
 import { Link } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 
-interface ContractObligation {
-  sessionId: string;
+interface ComplianceObligation {
+  id: string;
   animalId: string;
+  adopterName: string;
+  adopterEmail: string;
+  obligationType: string;
+  label: string;
+  contractualDueDate: string;
+  notes: string | null;
+  status: string;
   animalName: string;
   animalSpecies: string;
-  obligationType: string;
-  dueDate: string;
   daysOverdue: number;
-  adopterName?: string;
-  adopterEmail?: string;
-}
-
-interface MissedConfirmation {
-  id: string;
-  animalId: string;
-  animalName: string;
-  adopterName: string | null;
-  adopterEmail: string;
-  medicationName: string;
-  frequency: string;
-  nextDueDate: string;
-  lastConfirmedDate: string | null;
-  daysOverdue: number;
-}
-
-interface PendingConfirmation {
-  id: string;
-  animalId: string;
-  careCategory: string;
-  careName: string;
-  dateAdministered: string;
-  clinicName: string | null;
-  notes: string | null;
-  createdAt: string;
-  animalName: string;
-  adopterName: string | null;
-  adopterEmail: string;
+  daysUntilDue: number;
 }
 
 interface AtRiskAdopter {
   name: string;
   email: string;
-  userId: string;
-  missedCount: number;
-  items: Array<{
-    animalName: string;
-    medicationName: string;
-    dueDate: string;
-    daysOverdue: number;
-  }>;
+  overdueCount: number;
+  obligations: ComplianceObligation[];
 }
 
 interface AdopterComplianceResponse {
@@ -71,11 +42,13 @@ interface AdopterComplianceResponse {
     atRiskCount: number;
     pendingReviewCount: number;
   };
-  contractObligations: ContractObligation[];
-  missedConfirmations: MissedConfirmation[];
-  pendingConfirmations: PendingConfirmation[];
+  overdue: ComplianceObligation[];
+  upcoming: ComplianceObligation[];
+  ongoingTreatments: ComplianceObligation[];
+  customObligations: ComplianceObligation[];
+  completed: ComplianceObligation[];
+  waived: ComplianceObligation[];
   atRiskAdopters: AtRiskAdopter[];
-  upcomingDeadlines: ContractObligation[];
 }
 
 interface AlumniResult {
@@ -137,7 +110,7 @@ export default function ComplianceWidget() {
   }
 
   const stats = data?.stats;
-  const totalIssues = (stats?.totalOverdue || 0) + (stats?.atRiskCount || 0) + (stats?.pendingReviewCount || 0);
+  const totalIssues = (stats?.totalOverdue || 0) + (stats?.atRiskCount || 0);
   const hasNoIssues = totalIssues === 0;
 
   return (
@@ -184,31 +157,42 @@ export default function ComplianceWidget() {
             {searchTerm && renderAlumniResults(alumniData?.results || [], alumniLoading)}
           </div>
         ) : (
-          <Tabs defaultValue="contracts" className="w-full">
+          <Tabs defaultValue="overdue" className="w-full">
             <TabsList className="w-full grid grid-cols-5 h-auto">
-              <TabsTrigger value="contracts" className="text-xs py-1.5 px-1" data-testid="tab-contract-obligations">
+              <TabsTrigger value="overdue" className="text-xs py-1.5 px-1" data-testid="tab-overdue">
                 <span className="flex items-center gap-0.5">
                   <FileText className="h-3 w-3" />
-                  <span className="hidden sm:inline">Contracts</span>
-                  {(data?.contractObligations.length || 0) > 0 && (
+                  <span className="hidden sm:inline">Overdue</span>
+                  {(data?.overdue.length || 0) > 0 && (
                     <Badge variant="destructive" className="ml-0.5 h-4 min-w-4 px-1 text-xs">
-                      {data?.contractObligations.length}
+                      {data?.overdue.length}
                     </Badge>
                   )}
                 </span>
               </TabsTrigger>
-              <TabsTrigger value="missed" className="text-xs py-1.5 px-1" data-testid="tab-missed-confirmations">
+              <TabsTrigger value="upcoming" className="text-xs py-1.5 px-1" data-testid="tab-upcoming">
+                <span className="flex items-center gap-0.5">
+                  <Clock className="h-3 w-3" />
+                  <span className="hidden sm:inline">Upcoming</span>
+                  {(data?.upcoming.length || 0) > 0 && (
+                    <Badge variant="secondary" className="ml-0.5 h-4 min-w-4 px-1 text-xs">
+                      {data?.upcoming.length}
+                    </Badge>
+                  )}
+                </span>
+              </TabsTrigger>
+              <TabsTrigger value="ongoing" className="text-xs py-1.5 px-1" data-testid="tab-ongoing">
                 <span className="flex items-center gap-0.5">
                   <ClipboardCheck className="h-3 w-3" />
-                  <span className="hidden sm:inline">Missed</span>
-                  {(data?.missedConfirmations.length || 0) > 0 && (
-                    <Badge variant="destructive" className="ml-0.5 h-4 min-w-4 px-1 text-xs">
-                      {data?.missedConfirmations.length}
+                  <span className="hidden sm:inline">Ongoing</span>
+                  {(data?.ongoingTreatments.length || 0) > 0 && (
+                    <Badge variant="secondary" className="ml-0.5 h-4 min-w-4 px-1 text-xs">
+                      {data?.ongoingTreatments.length}
                     </Badge>
                   )}
                 </span>
               </TabsTrigger>
-              <TabsTrigger value="at-risk" className="text-xs py-1.5 px-1" data-testid="tab-at-risk-adopters">
+              <TabsTrigger value="at-risk" className="text-xs py-1.5 px-1" data-testid="tab-at-risk">
                 <span className="flex items-center gap-0.5">
                   <UserX className="h-3 w-3" />
                   <span className="hidden sm:inline">At-Risk</span>
@@ -219,18 +203,7 @@ export default function ComplianceWidget() {
                   )}
                 </span>
               </TabsTrigger>
-              <TabsTrigger value="upcoming" className="text-xs py-1.5 px-1" data-testid="tab-upcoming-deadlines">
-                <span className="flex items-center gap-0.5">
-                  <Clock className="h-3 w-3" />
-                  <span className="hidden sm:inline">Upcoming</span>
-                  {(data?.upcomingDeadlines.length || 0) > 0 && (
-                    <Badge variant="secondary" className="ml-0.5 h-4 min-w-4 px-1 text-xs">
-                      {data?.upcomingDeadlines.length}
-                    </Badge>
-                  )}
-                </span>
-              </TabsTrigger>
-              <TabsTrigger value="alumni" className="text-xs py-1.5 px-1" data-testid="tab-alumni-lookup">
+              <TabsTrigger value="alumni" className="text-xs py-1.5 px-1" data-testid="tab-alumni">
                 <span className="flex items-center gap-0.5">
                   <Search className="h-3 w-3" />
                   <span className="hidden sm:inline">Alumni</span>
@@ -238,60 +211,77 @@ export default function ComplianceWidget() {
               </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="contracts" className="mt-3 space-y-2">
-              {(data?.contractObligations || []).length === 0 ? (
+            <TabsContent value="overdue" className="mt-3 space-y-2">
+              {(data?.overdue || []).length === 0 ? (
                 <div className="flex items-center justify-center py-4 text-center">
                   <CheckCircle className="h-5 w-5 text-green-500 mr-2" />
-                  <span className="text-sm text-muted-foreground">No overdue contract obligations</span>
+                  <span className="text-sm text-muted-foreground">No overdue obligations</span>
                 </div>
               ) : (
-                <>
-                  {data?.pendingConfirmations && data.pendingConfirmations.length > 0 && (
-                    <div className="p-2 border border-blue-300/50 bg-blue-50 dark:bg-blue-950/20 rounded-md mb-2" data-testid="pending-review-notice">
-                      <p className="text-xs text-muted-foreground">
-                        <Badge variant="secondary" className="mr-1">{data.pendingConfirmations.length}</Badge>
-                        compliance submissions awaiting review
-                      </p>
-                    </div>
-                  )}
-                  {(data?.contractObligations || []).slice(0, 3).map((obligation, idx) => (
-                    <div key={`${obligation.sessionId}-${obligation.obligationType}-${idx}`} className="p-2 border border-destructive/30 bg-destructive/5 rounded-md" data-testid={`alert-contract-${obligation.sessionId}-${idx}`}>
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{obligation.obligationType}</p>
-                          <p className="text-xs text-muted-foreground truncate">
-                            {obligation.animalName} {obligation.adopterName ? `- ${obligation.adopterName}` : ''}
-                          </p>
-                        </div>
-                        <Badge variant="destructive" className="shrink-0">
-                          {obligation.daysOverdue}d overdue
-                        </Badge>
-                      </div>
-                    </div>
-                  ))}
-                </>
-              )}
-            </TabsContent>
-
-            <TabsContent value="missed" className="mt-3 space-y-2">
-              {(data?.missedConfirmations || []).length === 0 ? (
-                <div className="flex items-center justify-center py-4 text-center">
-                  <CheckCircle className="h-5 w-5 text-green-500 mr-2" />
-                  <span className="text-sm text-muted-foreground">No missed confirmations</span>
-                </div>
-              ) : (
-                (data?.missedConfirmations || []).slice(0, 3).map((missed) => (
-                  <div key={missed.id} className="p-2 border border-destructive/30 bg-destructive/5 rounded-md" data-testid={`alert-missed-${missed.id}`}>
+                (data?.overdue || []).slice(0, 3).map((obligation, idx) => (
+                  <div key={obligation.id} className="p-2 border border-destructive/30 bg-destructive/5 rounded-md" data-testid={`alert-overdue-${idx}`}>
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{missed.medicationName}</p>
+                        <p className="text-sm font-medium truncate">{obligation.label}</p>
                         <p className="text-xs text-muted-foreground truncate">
-                          {missed.animalName} - {missed.adopterName || missed.adopterEmail}
+                          {obligation.animalName} - {obligation.adopterName}
                         </p>
                       </div>
                       <Badge variant="destructive" className="shrink-0">
-                        {missed.daysOverdue}d overdue
+                        {obligation.daysOverdue}d overdue
                       </Badge>
+                    </div>
+                  </div>
+                ))
+              )}
+            </TabsContent>
+
+            <TabsContent value="upcoming" className="mt-3 space-y-2">
+              {(data?.upcoming || []).length === 0 ? (
+                <div className="flex items-center justify-center py-4 text-center">
+                  <CheckCircle className="h-5 w-5 text-green-500 mr-2" />
+                  <span className="text-sm text-muted-foreground">No upcoming obligations</span>
+                </div>
+              ) : (
+                (data?.upcoming || []).slice(0, 3).map((obligation, idx) => (
+                  <div key={obligation.id} className="p-2 border border-orange-300/50 bg-orange-50 dark:bg-orange-950/20 rounded-md" data-testid={`alert-upcoming-${idx}`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{obligation.label}</p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {obligation.animalName} - {obligation.adopterName}
+                        </p>
+                      </div>
+                      <Badge variant="secondary" className="shrink-0">
+                        {obligation.daysUntilDue}d due
+                      </Badge>
+                    </div>
+                  </div>
+                ))
+              )}
+            </TabsContent>
+
+            <TabsContent value="ongoing" className="mt-3 space-y-2">
+              {(data?.ongoingTreatments || []).length === 0 ? (
+                <div className="flex items-center justify-center py-4 text-center">
+                  <CheckCircle className="h-5 w-5 text-green-500 mr-2" />
+                  <span className="text-sm text-muted-foreground">No ongoing treatments</span>
+                </div>
+              ) : (
+                (data?.ongoingTreatments || []).slice(0, 3).map((obligation, idx) => (
+                  <div key={obligation.id} className="p-2 border border-blue-300/50 bg-blue-50 dark:bg-blue-950/20 rounded-md" data-testid={`alert-ongoing-${idx}`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{obligation.label}</p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {obligation.animalName} - {obligation.adopterName}
+                        </p>
+                      </div>
+                      {obligation.daysUntilDue > 0 && (
+                        <Badge variant="secondary" className="shrink-0">
+                          {obligation.daysUntilDue}d due
+                        </Badge>
+                      )}
                     </div>
                   </div>
                 ))
@@ -312,43 +302,18 @@ export default function ComplianceWidget() {
                         <p className="text-sm font-medium truncate">{adopter.name}</p>
                         <p className="text-xs text-muted-foreground truncate">{adopter.email}</p>
                         <div className="flex flex-wrap gap-1 mt-1">
-                          {adopter.items.slice(0, 2).map((item, i) => (
+                          {adopter.obligations.slice(0, 2).map((obligation, i) => (
                             <Badge key={i} variant="outline" className="text-xs">
-                              {item.animalName}: {item.medicationName}
+                              {obligation.animalName}: {obligation.label}
                             </Badge>
                           ))}
-                          {adopter.items.length > 2 && (
-                            <Badge variant="outline" className="text-xs">+{adopter.items.length - 2} more</Badge>
+                          {adopter.obligations.length > 2 && (
+                            <Badge variant="outline" className="text-xs">+{adopter.obligations.length - 2} more</Badge>
                           )}
                         </div>
                       </div>
                       <Badge variant="destructive" className="shrink-0">
-                        {adopter.missedCount} missed
-                      </Badge>
-                    </div>
-                  </div>
-                ))
-              )}
-            </TabsContent>
-
-            <TabsContent value="upcoming" className="mt-3 space-y-2">
-              {(data?.upcomingDeadlines || []).length === 0 ? (
-                <div className="flex items-center justify-center py-4 text-center">
-                  <CheckCircle className="h-5 w-5 text-green-500 mr-2" />
-                  <span className="text-sm text-muted-foreground">No upcoming deadlines this week</span>
-                </div>
-              ) : (
-                (data?.upcomingDeadlines || []).slice(0, 3).map((deadline, idx) => (
-                  <div key={`${deadline.animalId}-${deadline.obligationType}-${idx}`} className="p-2 border border-orange-300/50 bg-orange-50 dark:bg-orange-950/20 rounded-md" data-testid={`alert-upcoming-${idx}`}>
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{deadline.obligationType}</p>
-                        <p className="text-xs text-muted-foreground truncate">
-                          {deadline.animalName} {deadline.adopterName ? `- ${deadline.adopterName}` : ''}
-                        </p>
-                      </div>
-                      <Badge variant="secondary" className="shrink-0">
-                        {new Date(deadline.dueDate).toLocaleDateString()}
+                        {adopter.overdueCount} overdue
                       </Badge>
                     </div>
                   </div>

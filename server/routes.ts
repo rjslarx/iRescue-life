@@ -3470,494 +3470,6 @@ Crawl-delay: 1
   });
 
   /**
-   * GET /api/dashboard/adopter-compliance
-   * Adopter-focused compliance data for the Command Center widget:
-   * - Contract obligations (overdue spay/neuter deadlines, medical due dates)
-   * - Missed adopter compliance confirmations
-   * - At-risk adopters with multiple missed items
-   * - Upcoming adopter obligation deadlines
-   */
-  app.get('/api/dashboard/adopter-compliance', requireTenant, requireAuth, requireRole('admin', 'staff', 'owner', 'manager'), async (req, res, next) => {
-    try {
-      const { 
-        adoptionCheckoutSessions, adoptionContracts, adoptions, animals, users,
-        adopterMedicationReminders, adopterComplianceConfirmations, adopterMedicationConfirmationLogs,
-        microchipRecords
-      } = await import('@shared/schema');
-      const { lt, sql, isNotNull, isNull, count } = await import('drizzle-orm');
-
-      const now = new Date();
-      const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-
-      // 1. CONTRACT OBLIGATIONS - overdue spay/neuter and medical due dates
-      const completedSessions = await db.select({
-        sessionId: adoptionCheckoutSessions.id,
-        animalId: adoptionCheckoutSessions.animalId,
-        spayNeuterDate: adoptionCheckoutSessions.spayNeuterDate,
-        vetAppointmentDate: adoptionCheckoutSessions.vetAppointmentDate,
-        medicalDueDates: adoptionCheckoutSessions.medicalDueDates,
-        adopterContactId: adoptionCheckoutSessions.adopterContactId,
-        animalName: animals.name,
-        animalSpecies: animals.species,
-        animalPhotoUrls: animals.photoUrls,
-        neuterStatus: animals.neuterStatus,
-      })
-        .from(adoptionCheckoutSessions)
-        .innerJoin(animals, eq(animals.id, adoptionCheckoutSessions.animalId))
-        .where(
-          and(
-            eq(adoptionCheckoutSessions.tenantId, req.tenant!.id),
-            eq(adoptionCheckoutSessions.status, 'completed')
-          )
-        );
-
-      // Find overdue contract obligations
-      interface ContractObligation {
-        sessionId: string;
-        animalId: string;
-        animalName: string;
-        animalSpecies: string;
-        obligationType: string;
-        dueDate: string;
-        daysOverdue: number;
-        adopterName?: string;
-        adopterEmail?: string;
-      }
-
-      const overdueObligations: ContractObligation[] = [];
-      const upcomingDeadlines: ContractObligation[] = [];
-
-      for (const session of completedSessions) {
-        // Check spay/neuter deadline (only if animal is still intact)
-        if (session.spayNeuterDate && session.neuterStatus === 'intact') {
-          const dueDate = new Date(session.spayNeuterDate);
-          const daysOverdue = Math.floor((now.getTime() - dueDate.getTime()) / (24 * 60 * 60 * 1000));
-          const item: ContractObligation = {
-            sessionId: session.sessionId,
-            animalId: session.animalId,
-            animalName: session.animalName,
-            animalSpecies: session.animalSpecies,
-            obligationType: 'Spay/Neuter',
-            dueDate: session.spayNeuterDate,
-            daysOverdue,
-          };
-          if (daysOverdue > 0) {
-            overdueObligations.push(item);
-          } else if (daysOverdue >= -7) {
-            upcomingDeadlines.push(item);
-          }
-        }
-
-        // Check vet appointment date
-        if (session.vetAppointmentDate) {
-          const dueDate = new Date(session.vetAppointmentDate);
-          const daysOverdue = Math.floor((now.getTime() - dueDate.getTime()) / (24 * 60 * 60 * 1000));
-          const item: ContractObligation = {
-            sessionId: session.sessionId,
-            animalId: session.animalId,
-            animalName: session.animalName,
-            animalSpecies: session.animalSpecies,
-            obligationType: 'Vet Appointment',
-            dueDate: session.vetAppointmentDate,
-            daysOverdue,
-          };
-          if (daysOverdue > 0) {
-            upcomingDeadlines.push({ ...item, daysOverdue: Math.abs(daysOverdue) }); // show as upcoming since vet appts are informational
-          } else if (daysOverdue >= -7) {
-            upcomingDeadlines.push(item);
-          }
-        }
-
-        // Check medical due dates
-        if (session.medicalDueDates) {
-          const dueDateLabels: Record<string, string> = {
-            rabiesDueDate: 'Rabies Vaccination',
-            dhppDueDate: 'DHPP Vaccination',
-            bordetellaDueDate: 'Bordetella Vaccination',
-            heartwormDueDate: 'Heartworm Prevention',
-            fleaTickDueDate: 'Flea/Tick Prevention',
-          };
-          for (const [key, label] of Object.entries(dueDateLabels)) {
-            const dateStr = (session.medicalDueDates as any)?.[key];
-            if (dateStr) {
-              const dueDate = new Date(dateStr);
-              const daysOverdue = Math.floor((now.getTime() - dueDate.getTime()) / (24 * 60 * 60 * 1000));
-              const item: ContractObligation = {
-                sessionId: session.sessionId,
-                animalId: session.animalId,
-                animalName: session.animalName,
-                animalSpecies: session.animalSpecies,
-                obligationType: label,
-                dueDate: dateStr,
-                daysOverdue,
-              };
-              if (daysOverdue > 0) {
-                overdueObligations.push(item);
-              } else if (daysOverdue >= -7) {
-                upcomingDeadlines.push(item);
-              }
-            }
-          }
-        }
-      }
-
-      // Enrich with adopter info from adoptions table
-      const adoptedAnimalIds = [...new Set([...overdueObligations, ...upcomingDeadlines].map(o => o.animalId))];
-      let adopterMap: Map<string, { name: string; email: string }> = new Map();
-      if (adoptedAnimalIds.length > 0) {
-        const adoptionRecords = await db.select({
-          animalId: adoptions.animalId,
-          adopterName: adoptions.adopterName,
-          adopterEmail: adoptions.adopterEmail,
-        })
-          .from(adoptions)
-          .where(
-            and(
-              eq(adoptions.tenantId, req.tenant!.id),
-              inArray(adoptions.animalId, adoptedAnimalIds)
-            )
-          );
-        adopterMap = new Map(adoptionRecords.map(a => [a.animalId, { name: a.adopterName, email: a.adopterEmail }]));
-      }
-
-      for (const item of [...overdueObligations, ...upcomingDeadlines]) {
-        const adopter = adopterMap.get(item.animalId);
-        if (adopter) {
-          item.adopterName = adopter.name;
-          item.adopterEmail = adopter.email;
-        }
-      }
-
-      // Sort: most overdue first
-      overdueObligations.sort((a, b) => b.daysOverdue - a.daysOverdue);
-      // Sort upcoming: soonest first
-      upcomingDeadlines.sort((a, b) => a.daysOverdue - b.daysOverdue);
-
-      // 2. MISSED COMPLIANCE CONFIRMATIONS - pending/overdue adopter confirmations
-      const activeReminders = await db.select({
-        id: adopterMedicationReminders.id,
-        animalId: adopterMedicationReminders.animalId,
-        userId: adopterMedicationReminders.userId,
-        medicationName: adopterMedicationReminders.medicationName,
-        frequency: adopterMedicationReminders.frequency,
-        nextDueDate: adopterMedicationReminders.nextDueDate,
-        lastConfirmedDate: adopterMedicationReminders.lastConfirmedDate,
-        animalName: animals.name,
-        adopterName: users.fullName,
-        adopterEmail: users.email,
-      })
-        .from(adopterMedicationReminders)
-        .innerJoin(animals, eq(animals.id, adopterMedicationReminders.animalId))
-        .innerJoin(users, eq(users.id, adopterMedicationReminders.userId))
-        .where(
-          and(
-            eq(adopterMedicationReminders.tenantId, req.tenant!.id),
-            eq(adopterMedicationReminders.isActive, true)
-          )
-        );
-
-      const missedConfirmations = activeReminders
-        .filter(r => new Date(r.nextDueDate) < now)
-        .map(r => ({
-          id: r.id,
-          animalId: r.animalId,
-          animalName: r.animalName,
-          adopterName: r.adopterName,
-          adopterEmail: r.adopterEmail,
-          medicationName: r.medicationName,
-          frequency: r.frequency,
-          nextDueDate: r.nextDueDate,
-          lastConfirmedDate: r.lastConfirmedDate,
-          daysOverdue: Math.floor((now.getTime() - new Date(r.nextDueDate).getTime()) / (24 * 60 * 60 * 1000)),
-        }))
-        .sort((a, b) => b.daysOverdue - a.daysOverdue);
-
-      // Also get pending compliance confirmations awaiting review
-      const pendingConfirmations = await db.select({
-        id: adopterComplianceConfirmations.id,
-        animalId: adopterComplianceConfirmations.animalId,
-        careCategory: adopterComplianceConfirmations.careCategory,
-        careName: adopterComplianceConfirmations.careName,
-        dateAdministered: adopterComplianceConfirmations.dateAdministered,
-        clinicName: adopterComplianceConfirmations.clinicName,
-        notes: adopterComplianceConfirmations.notes,
-        createdAt: adopterComplianceConfirmations.createdAt,
-        animalName: animals.name,
-        adopterName: users.fullName,
-        adopterEmail: users.email,
-      })
-        .from(adopterComplianceConfirmations)
-        .innerJoin(animals, eq(animals.id, adopterComplianceConfirmations.animalId))
-        .innerJoin(users, eq(users.id, adopterComplianceConfirmations.userId))
-        .where(
-          and(
-            eq(adopterComplianceConfirmations.tenantId, req.tenant!.id),
-            eq(adopterComplianceConfirmations.status, 'pending_review')
-          )
-        )
-        .orderBy(desc(adopterComplianceConfirmations.createdAt))
-        .limit(10);
-
-      // 3. AT-RISK ADOPTERS - adopters with multiple missed items
-      const adopterMissedCounts: Map<string, { name: string; email: string; userId: string; missedCount: number; items: Array<{ animalName: string; medicationName: string; dueDate: Date; daysOverdue: number }> }> = new Map();
-      for (const missed of missedConfirmations) {
-        const existing = adopterMissedCounts.get(missed.adopterEmail);
-        if (existing) {
-          existing.missedCount++;
-          existing.items.push({ animalName: missed.animalName, medicationName: missed.medicationName, dueDate: missed.nextDueDate, daysOverdue: missed.daysOverdue });
-        } else {
-          adopterMissedCounts.set(missed.adopterEmail, {
-            name: missed.adopterName || 'Unknown',
-            email: missed.adopterEmail,
-            userId: '',
-            missedCount: 1,
-            items: [{ animalName: missed.animalName, medicationName: missed.medicationName, dueDate: missed.nextDueDate, daysOverdue: missed.daysOverdue }],
-          });
-        }
-      }
-
-      // Also count overdue contract obligations per adopter
-      for (const obligation of overdueObligations) {
-        if (obligation.adopterEmail) {
-          const existing = adopterMissedCounts.get(obligation.adopterEmail);
-          if (existing) {
-            existing.missedCount++;
-            existing.items.push({ animalName: obligation.animalName, medicationName: obligation.obligationType, dueDate: new Date(obligation.dueDate), daysOverdue: obligation.daysOverdue });
-          } else {
-            adopterMissedCounts.set(obligation.adopterEmail, {
-              name: obligation.adopterName || 'Unknown',
-              email: obligation.adopterEmail,
-              userId: '',
-              missedCount: 1,
-              items: [{ animalName: obligation.animalName, medicationName: obligation.obligationType, dueDate: new Date(obligation.dueDate), daysOverdue: obligation.daysOverdue }],
-            });
-          }
-        }
-      }
-
-      const atRiskAdopters = Array.from(adopterMissedCounts.values())
-        .filter(a => a.missedCount >= 2)
-        .sort((a, b) => b.missedCount - a.missedCount);
-
-      // 4. UPCOMING DEADLINES (already computed above from contract obligations)
-      // Also add upcoming medication reminders
-      const upcomingMedReminders = activeReminders
-        .filter(r => {
-          const dueDate = new Date(r.nextDueDate);
-          return dueDate >= now && dueDate <= sevenDaysFromNow;
-        })
-        .map(r => ({
-          sessionId: '',
-          animalId: r.animalId,
-          animalName: r.animalName,
-          animalSpecies: '',
-          obligationType: `Medication: ${r.medicationName}`,
-          dueDate: r.nextDueDate instanceof Date ? r.nextDueDate.toISOString() : String(r.nextDueDate),
-          daysOverdue: Math.floor((new Date(r.nextDueDate).getTime() - now.getTime()) / (24 * 60 * 60 * 1000)),
-          adopterName: r.adopterName || undefined,
-          adopterEmail: r.adopterEmail,
-        }));
-
-      const allUpcoming = [...upcomingDeadlines, ...upcomingMedReminders]
-        .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
-
-      // Summary stats
-      const totalActiveReminders = activeReminders.length;
-      const totalOverdue = missedConfirmations.length + overdueObligations.length;
-      const recentConfirmationCount = await db.select({ count: count() })
-        .from(adopterMedicationConfirmationLogs)
-        .where(
-          and(
-            eq(adopterMedicationConfirmationLogs.tenantId, req.tenant!.id),
-            sql`${adopterMedicationConfirmationLogs.confirmedAt} >= NOW() - INTERVAL '24 hours'`
-          )
-        );
-
-      const confirmedToday = recentConfirmationCount[0]?.count || 0;
-      const complianceRate = totalActiveReminders > 0
-        ? Math.round(((totalActiveReminders - missedConfirmations.length) / totalActiveReminders) * 100)
-        : 100;
-
-      res.json({
-        stats: {
-          totalActiveReminders,
-          totalOverdue,
-          confirmedToday,
-          complianceRate,
-          atRiskCount: atRiskAdopters.length,
-          pendingReviewCount: pendingConfirmations.length,
-        },
-        contractObligations: overdueObligations.slice(0, 10),
-        missedConfirmations: missedConfirmations.slice(0, 10),
-        pendingConfirmations: pendingConfirmations.slice(0, 5),
-        atRiskAdopters: atRiskAdopters.slice(0, 10),
-        upcomingDeadlines: allUpcoming.slice(0, 10),
-      });
-
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  /**
-   * GET /api/dashboard/adopter-compliance/alumni-search?q=
-   * Search adopted animals (alumni) by microchip number, adopter name, animal name, or adoption date
-   * Returns contract details, adoption dates, and animal info
-   */
-  app.get('/api/dashboard/adopter-compliance/alumni-search', requireTenant, requireAuth, requireRole('admin', 'staff', 'owner', 'manager'), async (req, res, next) => {
-    try {
-      const { adoptions, animals, microchipRecords, adoptionCheckoutSessions, adoptionContracts } = await import('@shared/schema');
-      const { ilike, sql } = await import('drizzle-orm');
-
-      const query = (req.query.q as string || '').trim();
-      if (!query || query.length < 2) {
-        return res.json({ results: [] });
-      }
-
-      const searchPattern = `%${query}%`;
-
-      // Search adoptions by adopter name, email, or animal name
-      const adoptionResults = await db.select({
-        adoptionId: adoptions.id,
-        animalId: adoptions.animalId,
-        adopterName: adoptions.adopterName,
-        adopterEmail: adoptions.adopterEmail,
-        adopterPhone: adoptions.adopterPhone,
-        adoptionDate: adoptions.adoptionDate,
-        adoptionFee: adoptions.adoptionFee,
-        animalName: animals.name,
-        animalSpecies: animals.species,
-        animalBreed: animals.breed,
-        animalPhotoUrls: animals.photoUrls,
-        animalAnimalId: animals.animalId,
-        neuterStatus: animals.neuterStatus,
-      })
-        .from(adoptions)
-        .innerJoin(animals, eq(animals.id, adoptions.animalId))
-        .where(
-          and(
-            eq(adoptions.tenantId, req.tenant!.id),
-            or(
-              ilike(adoptions.adopterName, searchPattern),
-              ilike(adoptions.adopterEmail, searchPattern),
-              ilike(animals.name, searchPattern),
-              ilike(sql`CAST(${animals.animalId} AS TEXT)`, searchPattern)
-            )
-          )
-        )
-        .orderBy(desc(adoptions.adoptionDate))
-        .limit(20);
-
-      // Also search by microchip number
-      const microchipResults = await db.select({
-        animalId: microchipRecords.animalId,
-        microchipNumber: microchipRecords.microchipNumber,
-        manufacturer: microchipRecords.manufacturer,
-      })
-        .from(microchipRecords)
-        .where(
-          and(
-            eq(microchipRecords.tenantId, req.tenant!.id),
-            ilike(microchipRecords.microchipNumber, searchPattern)
-          )
-        );
-
-      // For microchip matches, get adoption info
-      const microchipAnimalIds = microchipResults.map(m => m.animalId);
-      let microchipAdoptions: typeof adoptionResults = [];
-      if (microchipAnimalIds.length > 0) {
-        microchipAdoptions = await db.select({
-          adoptionId: adoptions.id,
-          animalId: adoptions.animalId,
-          adopterName: adoptions.adopterName,
-          adopterEmail: adoptions.adopterEmail,
-          adopterPhone: adoptions.adopterPhone,
-          adoptionDate: adoptions.adoptionDate,
-          adoptionFee: adoptions.adoptionFee,
-          animalName: animals.name,
-          animalSpecies: animals.species,
-          animalBreed: animals.breed,
-          animalPhotoUrls: animals.photoUrls,
-          animalAnimalId: animals.animalId,
-          neuterStatus: animals.neuterStatus,
-        })
-          .from(adoptions)
-          .innerJoin(animals, eq(animals.id, adoptions.animalId))
-          .where(
-            and(
-              eq(adoptions.tenantId, req.tenant!.id),
-              inArray(adoptions.animalId, microchipAnimalIds)
-            )
-          );
-      }
-
-      // Merge and deduplicate
-      const allResults = [...adoptionResults, ...microchipAdoptions];
-      const seen = new Set<string>();
-      const uniqueResults = allResults.filter(r => {
-        if (seen.has(r.adoptionId)) return false;
-        seen.add(r.adoptionId);
-        return true;
-      });
-
-      // Get microchip data for all result animals
-      const resultAnimalIds = uniqueResults.map(r => r.animalId);
-      let microchipMap: Map<string, { number: string; manufacturer: string }> = new Map();
-      if (resultAnimalIds.length > 0) {
-        const chips = await db.select({
-          animalId: microchipRecords.animalId,
-          microchipNumber: microchipRecords.microchipNumber,
-          manufacturer: microchipRecords.manufacturer,
-        })
-          .from(microchipRecords)
-          .where(inArray(microchipRecords.animalId, resultAnimalIds));
-        for (const chip of chips) {
-          microchipMap.set(chip.animalId, { number: chip.microchipNumber, manufacturer: chip.manufacturer });
-        }
-      }
-
-      // Get contract details for result animals
-      let contractMap: Map<string, { contractPdfUrl: string | null; signerName: string; signedAt: Date; spayNeuterDate: string | null }> = new Map();
-      if (resultAnimalIds.length > 0) {
-        const contracts = await db.select({
-          animalId: adoptionCheckoutSessions.animalId,
-          contractPdfUrl: adoptionContracts.contractPdfUrl,
-          signerName: adoptionContracts.signerName,
-          signedAt: adoptionContracts.signedAt,
-          spayNeuterDate: adoptionCheckoutSessions.spayNeuterDate,
-        })
-          .from(adoptionCheckoutSessions)
-          .innerJoin(adoptionContracts, eq(adoptionContracts.sessionId, adoptionCheckoutSessions.id))
-          .where(
-            and(
-              eq(adoptionCheckoutSessions.tenantId, req.tenant!.id),
-              inArray(adoptionCheckoutSessions.animalId, resultAnimalIds),
-              eq(adoptionCheckoutSessions.status, 'completed')
-            )
-          );
-        for (const c of contracts) {
-          contractMap.set(c.animalId, {
-            contractPdfUrl: c.contractPdfUrl,
-            signerName: c.signerName,
-            signedAt: c.signedAt,
-            spayNeuterDate: c.spayNeuterDate,
-          });
-        }
-      }
-
-      const enrichedResults = uniqueResults.map(r => ({
-        ...r,
-        microchip: microchipMap.get(r.animalId) || null,
-        contract: contractMap.get(r.animalId) || null,
-      }));
-
-      res.json({ results: enrichedResults });
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  /**
    * GET /api/notifications/counts
    * Returns counts of actionable items for the notification bell:
    * - Pending vet visits needing medical review
@@ -9498,9 +9010,9 @@ Crawl-delay: 1
         medicalDueDates: z.object({
           rabiesDueDate: z.string(),
           dhppDueDate: z.string(),
-          bordetellaDueDate: z.string(),
-          heartwormDueDate: z.string(),
-          fleaTickDueDate: z.string(),
+          bordetellaDueDate: z.string().optional(),
+          heartwormDueDate: z.string().optional(),
+          fleaTickDueDate: z.string().optional(),
         }).optional().nullable(),
         carePriorities: z.object({
           enabled: z.boolean(),
@@ -9511,9 +9023,15 @@ Crawl-delay: 1
             flightRisk: z.object({ checked: z.boolean(), notes: z.string() }).optional(),
           }),
         }).optional().nullable(),
+        customComplianceObligations: z.array(z.object({
+          obligationType: z.string(),
+          label: z.string(),
+          contractualDueDate: z.string(),
+          notes: z.string().optional(),
+        })).optional().nullable(),
       });
       
-      const { applicationId, sendContract, baseFee, grantId, contractTemplateId, vetAppointmentDate, spayNeuterDate, staffConfirmValues, medicalDueDates, carePriorities } = approveSchema.parse(req.body);
+      const { applicationId, sendContract, baseFee, grantId, contractTemplateId, vetAppointmentDate, spayNeuterDate, staffConfirmValues, medicalDueDates, carePriorities, customComplianceObligations } = approveSchema.parse(req.body);
       
       // Get the application details
       const application = await getApplicationById(req.tenant!.id, applicationId);
@@ -9539,17 +9057,16 @@ Crawl-delay: 1
           });
         }
         
-        // Validate medical due dates are present when sending contract
-        if (!medicalDueDates || !medicalDueDates.rabiesDueDate || !medicalDueDates.dhppDueDate || 
-            !medicalDueDates.bordetellaDueDate || !medicalDueDates.heartwormDueDate || !medicalDueDates.fleaTickDueDate) {
+        // Validate mandatory medical due dates are present when sending contract (rabies + DHPP)
+        if (!medicalDueDates || !medicalDueDates.rabiesDueDate || !medicalDueDates.dhppDueDate) {
           return res.status(400).json({ 
             error: 'Medical due dates required', 
-            message: 'All 5 medical due dates (Rabies, DHPP, Bordetella, Heartworm, Flea/Tick) must be provided when sending an agreement' 
+            message: 'Rabies and DHPP due dates must be provided when sending an agreement' 
           });
         }
         
-        // Validate date formats
-        const dateFields = [medicalDueDates.rabiesDueDate, medicalDueDates.dhppDueDate, medicalDueDates.bordetellaDueDate, medicalDueDates.heartwormDueDate, medicalDueDates.fleaTickDueDate];
+        // Validate date formats for mandatory fields
+        const dateFields = [medicalDueDates.rabiesDueDate, medicalDueDates.dhppDueDate].filter(Boolean);
         for (const dateStr of dateFields) {
           if (isNaN(new Date(dateStr).getTime())) {
             return res.status(400).json({
@@ -9584,6 +9101,7 @@ Crawl-delay: 1
           staffConfirmValues: staffConfirmValues || undefined,
           medicalDueDates: medicalDueDates || undefined,
           carePriorities: carePriorities || undefined,
+          customComplianceObligations: customComplianceObligations || undefined,
         });
         checkoutSession = sessionResult.session;
         // Use the token returned by createCheckoutSession - it matches the stored hash
@@ -35573,6 +35091,10 @@ The user asking is a tenant administrator or staff member.`;
   // Register data export routes (full database backup for business continuity)
   const exportRoutes = await import('./routes/export');
   app.use(exportRoutes.default);
+
+  // Register adoption compliance routes (compliance obligations monitor)
+  const adoptionComplianceRoutes = await import('./routes/adoptionCompliance');
+  app.use('/api/dashboard/adopter-compliance', adoptionComplianceRoutes.default);
 
   // Volunteer schedule digest settings
   app.get('/api/tenant/settings/volunteer-digest', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {

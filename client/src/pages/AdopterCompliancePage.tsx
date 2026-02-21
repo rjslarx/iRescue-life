@@ -6,243 +6,412 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { 
-  CheckCircle2, 
-  AlertCircle, 
-  Clock, 
-  Search, 
-  Pill, 
-  TrendingUp, 
+import {
+  CheckCircle2,
+  AlertCircle,
+  Clock,
+  Search,
+  TrendingUp,
   TrendingDown,
   Users,
   PawPrint,
   Mail,
-  RefreshCcw,
   Calendar,
   AlertTriangle,
   Loader2,
-  Syringe
+  Shield,
+  FileCheck,
+  XCircle,
+  ClipboardList,
+  Link as LinkIcon,
 } from "lucide-react";
-import { useTenant } from "@/contexts/TenantContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import DashboardLayout from "@/components/DashboardLayout";
 
-interface ComplianceStats {
-  totalReminders: number;
-  activeReminders: number;
-  confirmedToday: number;
-  overdueReminders: number;
-  complianceRate: number;
+const OBLIGATION_LABELS: Record<string, string> = {
+  spay_neuter: "Spay/Neuter",
+  rabies: "Rabies",
+  dhpp_booster: "DHPP Booster",
+  ongoing_treatment: "Ongoing Treatment",
+  heartworm_prevention_proof: "HW Prevention Proof",
+  obedience_training: "Obedience Training",
+  fecal_test: "Fecal Test",
+  custom: "Custom",
+};
+
+function getObligationLabel(type: string): string {
+  return OBLIGATION_LABELS[type] || type;
 }
 
-interface ReminderWithDetails {
+interface Obligation {
   id: string;
   animalId: string;
-  animalName: string;
+  sessionId: string;
   adopterName: string;
   adopterEmail: string;
-  medicationName: string;
-  dosage?: string;
-  frequency: string;
-  nextDueDate: string;
-  lastConfirmedDate?: string;
-  lastNotifiedDate?: string;
-  isOverdue: boolean;
-  daysSinceConfirmation?: number;
-}
-
-interface ConfirmationLog {
-  id: string;
+  adopterPhone: string | null;
+  obligationType: string;
+  label: string;
+  suggestedDueDate: string | null;
+  contractualDueDate: string;
+  notes: string | null;
+  status: string;
   animalName: string;
-  medicationName: string;
-  confirmedAt: string;
-  confirmationMethod: string;
-  adopterName: string;
-}
-
-interface ExpiringSoonItem {
-  id: string;
-  animalId: string;
-  animalName: string;
-  medicationName: string;
-  nextDueDate: string;
-  adopterName: string;
-  adopterEmail: string;
+  animalSpecies: string;
+  daysOverdue: number;
   daysUntilDue: number;
+  completedAt?: string;
+  proofDocumentUrl?: string;
 }
 
 interface AtRiskAdopter {
-  userId: string;
   name: string;
   email: string;
-  missedCount: number;
-  oldestMissedDate: string;
-  reminders: Array<{
-    id: string;
-    animalName: string;
-    medicationName: string;
-    dueDate: string;
-    daysMissed: number;
-  }>;
+  overdueCount: number;
+  obligations: Obligation[];
+}
+
+interface AdopterComplianceResponse {
+  stats: {
+    totalActiveReminders: number;
+    totalOverdue: number;
+    confirmedToday: number;
+    complianceRate: number;
+    atRiskCount: number;
+    pendingReviewCount: number;
+  };
+  overdue: Obligation[];
+  upcoming: Obligation[];
+  ongoingTreatments: Obligation[];
+  customObligations: Obligation[];
+  completed: Obligation[];
+  waived: Obligation[];
+  atRiskAdopters: AtRiskAdopter[];
+}
+
+interface AlumniResult {
+  adoptionId: string;
+  animalId: string;
+  adopterName: string;
+  adopterEmail: string;
+  adopterPhone: string | null;
+  adoptionDate: string;
+  adoptionFee: string | null;
+  animalName: string;
+  animalSpecies: string;
+  animalBreed: string | null;
+  animalPhotoUrls: string[] | null;
+  animalAnimalId: string | null;
+  neuterStatus: string | null;
+  microchip: { number: string; manufacturer: string } | null;
+  contract: { contractPdfUrl: string | null; signerName: string; signedAt: string; spayNeuterDate: string | null } | null;
 }
 
 export default function AdopterCompliancePage() {
-  const { tenant } = useTenant();
+  const { user } = useAuth();
   const { toast } = useToast();
-  const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState("overview");
-  const [nudgingUserId, setNudgingUserId] = useState<string | null>(null);
+  const [completingId, setCompletingId] = useState<string | null>(null);
+  const [waivingId, setWaivingId] = useState<string | null>(null);
+  const [proofUrl, setProofUrl] = useState("");
+  const [waiveReason, setWaiveReason] = useState("");
+  const [alumniSearch, setAlumniSearch] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
 
-  const { data: stats, isLoading: statsLoading } = useQuery<ComplianceStats>({
-    queryKey: ["/api/adopter/staff/compliance/stats"],
+  const { data, isLoading } = useQuery<AdopterComplianceResponse>({
+    queryKey: ["/api/dashboard/adopter-compliance"],
+    enabled: !!user,
   });
 
-  const { data: reminders, isLoading: remindersLoading } = useQuery<ReminderWithDetails[]>({
-    queryKey: ["/api/adopter/staff/compliance/reminders"],
+  const { data: alumniData, isLoading: alumniLoading } = useQuery<{ results: AlumniResult[] }>({
+    queryKey: ["/api/dashboard/adopter-compliance/alumni-search", searchTerm],
+    queryFn: async () => {
+      const res = await fetch(`/api/dashboard/adopter-compliance/alumni-search?q=${encodeURIComponent(searchTerm)}`);
+      if (!res.ok) throw new Error("Search failed");
+      return res.json();
+    },
+    enabled: !!user && searchTerm.length >= 2,
   });
 
-  const { data: recentConfirmations, isLoading: confirmationsLoading } = useQuery<ConfirmationLog[]>({
-    queryKey: ["/api/adopter/staff/compliance/confirmations"],
-  });
-
-  const { data: expiringSoon, isLoading: expiringSoonLoading } = useQuery<ExpiringSoonItem[]>({
-    queryKey: ["/api/adopter/staff/compliance/expiring-soon"],
-  });
-
-  const { data: atRiskAdopters, isLoading: atRiskLoading } = useQuery<AtRiskAdopter[]>({
-    queryKey: ["/api/adopter/staff/compliance/at-risk"],
-  });
-
-  const nudgeMutation = useMutation({
-    mutationFn: async (userId: string) => {
-      setNudgingUserId(userId);
-      const response = await apiRequest("POST", `/api/adopter/staff/compliance/nudge/${userId}`);
-      return response.json();
+  const completeMutation = useMutation({
+    mutationFn: async ({ id, proofDocumentUrl }: { id: string; proofDocumentUrl?: string }) => {
+      const res = await apiRequest("PATCH", `/api/dashboard/adopter-compliance/${id}/complete`, { proofDocumentUrl });
+      return res.json();
     },
     onSuccess: () => {
-      toast({
-        title: "Nudge sent",
-        description: "A friendly reminder email has been sent to the adopter",
-      });
-      setNudgingUserId(null);
+      toast({ title: "Obligation marked complete" });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/adopter-compliance"] });
+      setCompletingId(null);
+      setProofUrl("");
     },
     onError: (error: any) => {
-      toast({
-        title: "Failed to send nudge",
-        description: error.message || "Please try again",
-        variant: "destructive",
-      });
-      setNudgingUserId(null);
+      toast({ title: "Failed to mark complete", description: error.message, variant: "destructive" });
     },
   });
 
-  const filteredReminders = reminders?.filter(r => 
-    r.animalName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    r.adopterName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    r.medicationName.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const waiveMutation = useMutation({
+    mutationFn: async ({ id, reason }: { id: string; reason?: string }) => {
+      const res = await apiRequest("PATCH", `/api/dashboard/adopter-compliance/${id}/waive`, { reason });
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Obligation waived" });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/adopter-compliance"] });
+      setWaivingId(null);
+      setWaiveReason("");
+    },
+    onError: (error: any) => {
+      toast({ title: "Failed to waive obligation", description: error.message, variant: "destructive" });
+    },
+  });
 
-  const overdueReminders = filteredReminders?.filter(r => r.isOverdue) || [];
-  const upcomingReminders = filteredReminders?.filter(r => !r.isOverdue) || [];
+  const handleAlumniSearch = () => {
+    if (alumniSearch.trim().length >= 2) {
+      setSearchTerm(alumniSearch.trim());
+    }
+  };
 
-  if (statsLoading) {
+  if (isLoading) {
     return (
       <DashboardLayout
-        title="Medication Compliance Dashboard"
-        description="Track adopter medication compliance and follow-ups"
+        title="Adopter Compliance Monitor"
+        description="Track post-adoption compliance obligations"
       >
-        <div className="flex-1 overflow-auto p-6">
-          <div className="grid gap-4 md:grid-cols-4 mb-6">
-            {[1, 2, 3, 4].map(i => (
-              <Card key={i}>
-                <CardContent className="p-6">
-                  <Skeleton className="h-8 w-20 mb-2" />
-                  <Skeleton className="h-4 w-24" />
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+        <div className="grid gap-4 md:grid-cols-4 mb-6">
+          {[1, 2, 3, 4].map((i) => (
+            <Card key={i}>
+              <CardContent className="p-6">
+                <Skeleton className="h-8 w-20 mb-2" />
+                <Skeleton className="h-4 w-24" />
+              </CardContent>
+            </Card>
+          ))}
         </div>
       </DashboardLayout>
     );
   }
 
+  const stats = data?.stats;
+
+  function renderObligationCard(obligation: Obligation, variant: "overdue" | "upcoming" | "neutral") {
+    const isOverdue = variant === "overdue";
+    const borderClass = isOverdue
+      ? "border-destructive/30 bg-destructive/5"
+      : variant === "upcoming"
+        ? "border-orange-300/50 bg-orange-50 dark:bg-orange-950/20"
+        : "border";
+
+    return (
+      <div
+        key={obligation.id}
+        className={`p-4 rounded-md ${borderClass}`}
+        data-testid={`obligation-card-${obligation.id}`}
+      >
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="flex items-start gap-3 flex-1 min-w-0">
+            <PawPrint className={`h-5 w-5 mt-0.5 shrink-0 ${isOverdue ? "text-destructive" : "text-muted-foreground"}`} />
+            <div className="min-w-0">
+              <p className="font-medium" data-testid={`obligation-animal-${obligation.id}`}>{obligation.animalName}</p>
+              <p className="text-sm text-muted-foreground">{obligation.animalSpecies}</p>
+              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                <Badge variant={isOverdue ? "destructive" : "secondary"} data-testid={`obligation-type-${obligation.id}`}>
+                  {getObligationLabel(obligation.obligationType)}
+                </Badge>
+                {obligation.label && obligation.label !== getObligationLabel(obligation.obligationType) && (
+                  <span className="text-xs text-muted-foreground">{obligation.label}</span>
+                )}
+              </div>
+              <p className="text-sm mt-1">
+                <span className="text-muted-foreground">Adopter:</span> {obligation.adopterName}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Due: {new Date(obligation.contractualDueDate).toLocaleDateString()}
+              </p>
+              {isOverdue && obligation.daysOverdue > 0 && (
+                <Badge variant="destructive" className="mt-1">
+                  {obligation.daysOverdue} days overdue
+                </Badge>
+              )}
+              {!isOverdue && obligation.daysUntilDue >= 0 && (
+                <span className="text-xs text-muted-foreground mt-1 block">
+                  {obligation.daysUntilDue} days until due
+                </span>
+              )}
+              {obligation.notes && (
+                <p className="text-xs text-muted-foreground mt-1 italic">{obligation.notes}</p>
+              )}
+            </div>
+          </div>
+          <div className="flex flex-col gap-2 items-end shrink-0">
+            {obligation.status === "pending" && (
+              <>
+                {completingId === obligation.id ? (
+                  <div className="flex flex-col gap-2 items-end" data-testid={`complete-form-${obligation.id}`}>
+                    <Input
+                      placeholder="Proof URL (optional)"
+                      value={proofUrl}
+                      onChange={(e) => setProofUrl(e.target.value)}
+                      className="w-48 text-sm"
+                      data-testid={`input-proof-url-${obligation.id}`}
+                    />
+                    <div className="flex gap-1">
+                      <Button
+                        size="sm"
+                        onClick={() => completeMutation.mutate({ id: obligation.id, proofDocumentUrl: proofUrl || undefined })}
+                        disabled={completeMutation.isPending}
+                        data-testid={`button-confirm-complete-${obligation.id}`}
+                      >
+                        {completeMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirm"}
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => { setCompletingId(null); setProofUrl(""); }} data-testid={`button-cancel-complete-${obligation.id}`}>
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                ) : waivingId === obligation.id ? (
+                  <div className="flex flex-col gap-2 items-end" data-testid={`waive-form-${obligation.id}`}>
+                    <Input
+                      placeholder="Reason (optional)"
+                      value={waiveReason}
+                      onChange={(e) => setWaiveReason(e.target.value)}
+                      className="w-48 text-sm"
+                      data-testid={`input-waive-reason-${obligation.id}`}
+                    />
+                    <div className="flex gap-1">
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => waiveMutation.mutate({ id: obligation.id, reason: waiveReason || undefined })}
+                        disabled={waiveMutation.isPending}
+                        data-testid={`button-confirm-waive-${obligation.id}`}
+                      >
+                        {waiveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Waive"}
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => { setWaivingId(null); setWaiveReason(""); }} data-testid={`button-cancel-waive-${obligation.id}`}>
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex gap-1">
+                    <Button
+                      size="sm"
+                      onClick={() => { setCompletingId(obligation.id); setWaivingId(null); }}
+                      data-testid={`button-mark-complete-${obligation.id}`}
+                    >
+                      <FileCheck className="h-4 w-4 mr-1" />
+                      Mark Complete
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => { setWaivingId(obligation.id); setCompletingId(null); }}
+                      data-testid={`button-waive-${obligation.id}`}
+                    >
+                      <XCircle className="h-4 w-4 mr-1" />
+                      Waive
+                    </Button>
+                  </div>
+                )}
+              </>
+            )}
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => window.open(`mailto:${obligation.adopterEmail}`)}
+              data-testid={`button-contact-${obligation.id}`}
+            >
+              <Mail className="h-4 w-4 mr-1" />
+              Contact
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  function renderObligationList(obligations: Obligation[], variant: "overdue" | "upcoming" | "neutral", emptyMessage: string) {
+    if (obligations.length === 0) {
+      return (
+        <div className="text-center py-8 text-muted-foreground" data-testid="empty-list-message">
+          <CheckCircle2 className="h-10 w-10 mx-auto mb-2 text-green-600" />
+          <p>{emptyMessage}</p>
+        </div>
+      );
+    }
+    return (
+      <div className="space-y-3">
+        {obligations.map((o) => renderObligationCard(o, variant))}
+      </div>
+    );
+  }
+
   return (
     <DashboardLayout
-      title="Medication Compliance Dashboard"
-      description="Track adopter medication compliance and follow-ups"
-      actions={
-        <Button variant="outline" size="sm" data-testid="button-refresh-compliance">
-          <RefreshCcw className="h-4 w-4 mr-2" />
-          Refresh
-        </Button>
-      }
+      title="Adopter Compliance Monitor"
+      description="Track post-adoption compliance obligations"
     >
-      <div className="flex-1 overflow-auto p-6">
-
-      {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-4 mb-6">
-        <Card>
+        <Card data-testid="stat-card-total">
           <CardContent className="p-6">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <div>
-                <p className="text-sm text-muted-foreground">Active Reminders</p>
-                <p className="text-3xl font-bold" data-testid="stat-active-reminders">
-                  {stats?.activeReminders || 0}
+                <p className="text-sm text-muted-foreground">Total Obligations</p>
+                <p className="text-3xl font-bold" data-testid="stat-total-obligations">
+                  {stats?.totalActiveReminders || 0}
                 </p>
               </div>
               <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
-                <Pill className="h-6 w-6 text-primary" />
+                <ClipboardList className="h-6 w-6 text-primary" />
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card data-testid="stat-card-overdue">
           <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Confirmed Today</p>
-                <p className="text-3xl font-bold text-green-600" data-testid="stat-confirmed-today">
-                  {stats?.confirmedToday || 0}
-                </p>
-              </div>
-              <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
-                <CheckCircle2 className="h-6 w-6 text-green-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <div>
                 <p className="text-sm text-muted-foreground">Overdue</p>
-                <p className="text-3xl font-bold text-orange-600" data-testid="stat-overdue">
-                  {stats?.overdueReminders || 0}
+                <p className="text-3xl font-bold text-destructive" data-testid="stat-overdue">
+                  {stats?.totalOverdue || 0}
                 </p>
               </div>
-              <div className="h-12 w-12 rounded-full bg-orange-100 flex items-center justify-center">
-                <AlertCircle className="h-6 w-6 text-orange-600" />
+              <div className="h-12 w-12 rounded-full bg-destructive/10 flex items-center justify-center">
+                <AlertCircle className="h-6 w-6 text-destructive" />
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card data-testid="stat-card-upcoming">
           <CardContent className="p-6">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <p className="text-sm text-muted-foreground">Upcoming</p>
+                <p className="text-3xl font-bold text-orange-600" data-testid="stat-upcoming">
+                  {data?.upcoming?.length || 0}
+                </p>
+              </div>
+              <div className="h-12 w-12 rounded-full bg-orange-100 dark:bg-orange-950/30 flex items-center justify-center">
+                <Clock className="h-6 w-6 text-orange-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card data-testid="stat-card-compliance-rate">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between gap-2">
               <div>
                 <p className="text-sm text-muted-foreground">Compliance Rate</p>
                 <p className="text-3xl font-bold" data-testid="stat-compliance-rate">
                   {stats?.complianceRate || 0}%
                 </p>
               </div>
-              <div className={`h-12 w-12 rounded-full flex items-center justify-center ${
-                (stats?.complianceRate || 0) >= 80 ? 'bg-green-100' : 'bg-orange-100'
-              }`}>
+              <div className={`h-12 w-12 rounded-full flex items-center justify-center ${(stats?.complianceRate || 0) >= 80 ? "bg-green-100 dark:bg-green-950/30" : "bg-orange-100 dark:bg-orange-950/30"}`}>
                 {(stats?.complianceRate || 0) >= 80 ? (
                   <TrendingUp className="h-6 w-6 text-green-600" />
                 ) : (
@@ -254,91 +423,68 @@ export default function AdopterCompliancePage() {
         </Card>
       </div>
 
-      {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="mb-4 flex-wrap gap-1">
           <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
           <TabsTrigger value="overdue" data-testid="tab-overdue">
-            Overdue ({overdueReminders.length})
+            Overdue ({data?.overdue?.length || 0})
           </TabsTrigger>
-          <TabsTrigger value="expiring" data-testid="tab-expiring">
-            Expiring Soon ({expiringSoon?.length || 0})
+          <TabsTrigger value="upcoming" data-testid="tab-upcoming">
+            Upcoming ({data?.upcoming?.length || 0})
           </TabsTrigger>
-          <TabsTrigger value="at-risk" data-testid="tab-at-risk">
-            At-Risk ({atRiskAdopters?.length || 0})
+          <TabsTrigger value="ongoing" data-testid="tab-ongoing">
+            Ongoing Treatments ({data?.ongoingTreatments?.length || 0})
           </TabsTrigger>
-          <TabsTrigger value="upcoming" data-testid="tab-upcoming">Upcoming</TabsTrigger>
-          <TabsTrigger value="activity" data-testid="tab-activity">Activity</TabsTrigger>
+          <TabsTrigger value="custom" data-testid="tab-custom">
+            Custom Requirements ({data?.customObligations?.length || 0})
+          </TabsTrigger>
+          <TabsTrigger value="completed" data-testid="tab-completed">
+            Completed ({data?.completed?.length || 0})
+          </TabsTrigger>
+          <TabsTrigger value="alumni" data-testid="tab-alumni">Alumni</TabsTrigger>
         </TabsList>
-
-        {/* Search */}
-        <div className="relative mb-4">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search by animal, adopter, or medication..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
-            data-testid="input-search-compliance"
-          />
-        </div>
 
         <TabsContent value="overview">
           <div className="grid gap-4 md:grid-cols-2">
-            {/* Overdue Reminders Preview */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
-                  <AlertCircle className="h-5 w-5 text-orange-600" />
-                  Needs Attention
+                  <AlertCircle className="h-5 w-5 text-destructive" />
+                  Overdue Obligations
                 </CardTitle>
-                <CardDescription>
-                  Reminders that are overdue or haven't been confirmed
-                </CardDescription>
+                <CardDescription>Obligations past their due date</CardDescription>
               </CardHeader>
               <CardContent>
-                {remindersLoading ? (
-                  <div className="space-y-3">
-                    {[1, 2, 3].map(i => (
-                      <Skeleton key={i} className="h-16 w-full" />
-                    ))}
-                  </div>
-                ) : overdueReminders.length === 0 ? (
+                {(data?.overdue?.length || 0) === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
                     <CheckCircle2 className="h-8 w-8 mx-auto mb-2 text-green-600" />
-                    <p>All reminders are up to date!</p>
+                    <p>No overdue obligations</p>
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {overdueReminders.slice(0, 5).map((reminder) => (
+                    {data!.overdue.slice(0, 5).map((o) => (
                       <div
-                        key={reminder.id}
-                        className="flex items-center justify-between p-3 rounded-lg border border-orange-200 bg-orange-50 dark:bg-orange-950/20"
-                        data-testid={`reminder-overdue-${reminder.id}`}
+                        key={o.id}
+                        className="flex items-center justify-between gap-3 p-3 rounded-md border border-destructive/30 bg-destructive/5"
+                        data-testid={`overview-overdue-${o.id}`}
                       >
-                        <div className="flex items-center gap-3">
-                          <PawPrint className="h-8 w-8 text-orange-600" />
-                          <div>
-                            <p className="font-medium">{reminder.animalName}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {reminder.medicationName} - {reminder.adopterName}
+                        <div className="flex items-center gap-3 min-w-0">
+                          <PawPrint className="h-5 w-5 text-destructive shrink-0" />
+                          <div className="min-w-0">
+                            <p className="font-medium truncate">{o.animalName}</p>
+                            <p className="text-sm text-muted-foreground truncate">
+                              {getObligationLabel(o.obligationType)} - {o.adopterName}
                             </p>
                           </div>
                         </div>
-                        <div className="text-right">
-                          <Badge variant="destructive" className="text-xs">
-                            {reminder.daysSinceConfirmation} days overdue
-                          </Badge>
-                        </div>
+                        <Badge variant="destructive" className="shrink-0">
+                          {o.daysOverdue}d overdue
+                        </Badge>
                       </div>
                     ))}
-                    {overdueReminders.length > 5 && (
-                      <Button 
-                        variant="ghost" 
-                        className="w-full" 
-                        onClick={() => setActiveTab("overdue")}
-                      >
-                        View all {overdueReminders.length} overdue reminders
+                    {data!.overdue.length > 5 && (
+                      <Button variant="ghost" className="w-full" onClick={() => setActiveTab("overdue")} data-testid="button-view-all-overdue">
+                        View all {data!.overdue.length} overdue
                       </Button>
                     )}
                   </div>
@@ -346,52 +492,45 @@ export default function AdopterCompliancePage() {
               </CardContent>
             </Card>
 
-            {/* Recent Confirmations */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
-                  <CheckCircle2 className="h-5 w-5 text-green-600" />
-                  Recent Confirmations
+                  <AlertTriangle className="h-5 w-5 text-orange-600" />
+                  At-Risk Adopters
                 </CardTitle>
-                <CardDescription>
-                  Medications confirmed in the last 24 hours
-                </CardDescription>
+                <CardDescription>Adopters with multiple overdue obligations</CardDescription>
               </CardHeader>
               <CardContent>
-                {confirmationsLoading ? (
-                  <div className="space-y-3">
-                    {[1, 2, 3].map(i => (
-                      <Skeleton key={i} className="h-16 w-full" />
-                    ))}
-                  </div>
-                ) : (recentConfirmations?.length || 0) === 0 ? (
+                {(data?.atRiskAdopters?.length || 0) === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
-                    <Clock className="h-8 w-8 mx-auto mb-2" />
-                    <p>No recent confirmations</p>
+                    <CheckCircle2 className="h-8 w-8 mx-auto mb-2 text-green-600" />
+                    <p>No at-risk adopters</p>
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {recentConfirmations?.slice(0, 5).map((log) => (
+                    {data!.atRiskAdopters.slice(0, 5).map((adopter, idx) => (
                       <div
-                        key={log.id}
-                        className="flex items-center justify-between p-3 rounded-lg border"
-                        data-testid={`confirmation-${log.id}`}
+                        key={adopter.email || idx}
+                        className="p-3 rounded-md border border-orange-300/50 bg-orange-50 dark:bg-orange-950/20"
+                        data-testid={`at-risk-adopter-${idx}`}
                       >
-                        <div className="flex items-center gap-3">
-                          <CheckCircle2 className="h-8 w-8 text-green-600" />
-                          <div>
-                            <p className="font-medium">{log.animalName}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {log.medicationName} - {log.adopterName}
-                            </p>
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="font-medium truncate">{adopter.name}</p>
+                            <p className="text-xs text-muted-foreground truncate">{adopter.email}</p>
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {adopter.obligations.slice(0, 2).map((o, i) => (
+                                <Badge key={i} variant="outline" className="text-xs">
+                                  {o.animalName}: {getObligationLabel(o.obligationType)}
+                                </Badge>
+                              ))}
+                              {adopter.obligations.length > 2 && (
+                                <Badge variant="outline" className="text-xs">+{adopter.obligations.length - 2} more</Badge>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-xs text-muted-foreground">
-                            {new Date(log.confirmedAt).toLocaleTimeString()}
-                          </p>
-                          <Badge variant="secondary" className="text-xs">
-                            {log.confirmationMethod}
+                          <Badge variant="destructive" className="shrink-0">
+                            {adopter.overdueCount} overdue
                           </Badge>
                         </div>
                       </div>
@@ -406,59 +545,11 @@ export default function AdopterCompliancePage() {
         <TabsContent value="overdue">
           <Card>
             <CardHeader>
-              <CardTitle>Overdue Reminders</CardTitle>
-              <CardDescription>
-                These adopters haven't confirmed their pet's medication
-              </CardDescription>
+              <CardTitle>Overdue Obligations</CardTitle>
+              <CardDescription>These obligations are past their contractual due date</CardDescription>
             </CardHeader>
             <CardContent>
-              {overdueReminders.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <CheckCircle2 className="h-12 w-12 mx-auto mb-4 text-green-600" />
-                  <p className="text-lg">No overdue reminders!</p>
-                  <p className="text-sm">All adopters are up to date with medications.</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {overdueReminders.map((reminder) => (
-                    <div
-                      key={reminder.id}
-                      className="flex items-center justify-between p-4 rounded-lg border border-orange-200 bg-orange-50 dark:bg-orange-950/20"
-                      data-testid={`reminder-detail-${reminder.id}`}
-                    >
-                      <div className="flex items-center gap-4">
-                        <PawPrint className="h-10 w-10 text-orange-600" />
-                        <div>
-                          <p className="font-semibold text-lg">{reminder.animalName}</p>
-                          <p className="text-muted-foreground">
-                            {reminder.medicationName}
-                            {reminder.dosage && ` - ${reminder.dosage}`}
-                          </p>
-                          <p className="text-sm mt-1">
-                            <span className="font-medium">Adopter:</span> {reminder.adopterName}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="text-right flex flex-col gap-2 items-end">
-                        <Badge variant="destructive">
-                          {reminder.daysSinceConfirmation} days overdue
-                        </Badge>
-                        <p className="text-xs text-muted-foreground">
-                          Due: {new Date(reminder.nextDueDate).toLocaleDateString()}
-                        </p>
-                        <Button 
-                          size="sm" 
-                          variant="outline"
-                          onClick={() => window.open(`mailto:${reminder.adopterEmail}`)}
-                        >
-                          <Mail className="h-4 w-4 mr-1" />
-                          Contact
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+              {renderObligationList(data?.overdue || [], "overdue", "No overdue obligations!")}
             </CardContent>
           </Card>
         </TabsContent>
@@ -466,192 +557,83 @@ export default function AdopterCompliancePage() {
         <TabsContent value="upcoming">
           <Card>
             <CardHeader>
-              <CardTitle>Upcoming Reminders</CardTitle>
-              <CardDescription>
-                Medications due soon
-              </CardDescription>
+              <CardTitle>Upcoming Obligations</CardTitle>
+              <CardDescription>Obligations due soon</CardDescription>
             </CardHeader>
             <CardContent>
-              {upcomingReminders.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Clock className="h-12 w-12 mx-auto mb-4" />
-                  <p>No upcoming reminders</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {upcomingReminders.map((reminder) => (
-                    <div
-                      key={reminder.id}
-                      className="flex items-center justify-between p-3 rounded-lg border"
-                      data-testid={`reminder-upcoming-${reminder.id}`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <Clock className="h-8 w-8 text-primary" />
-                        <div>
-                          <p className="font-medium">{reminder.animalName}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {reminder.medicationName} - {reminder.adopterName}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-medium">
-                          Due: {new Date(reminder.nextDueDate).toLocaleDateString()}
-                        </p>
-                        <Badge variant="secondary" className="text-xs">
-                          {reminder.frequency}
-                        </Badge>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+              {renderObligationList(data?.upcoming || [], "upcoming", "No upcoming obligations")}
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="expiring">
+        <TabsContent value="ongoing">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Syringe className="h-5 w-5 text-blue-600" />
-                Expiring in Next 30 Days
-              </CardTitle>
-              <CardDescription>
-                Vaccine boosters and preventatives coming due soon
-              </CardDescription>
+              <CardTitle>Ongoing Treatments</CardTitle>
+              <CardDescription>Recurring treatment obligations</CardDescription>
             </CardHeader>
             <CardContent>
-              {expiringSoonLoading ? (
-                <div className="space-y-3">
-                  {[1, 2, 3, 4, 5].map(i => (
-                    <Skeleton key={i} className="h-16 w-full" />
-                  ))}
-                </div>
-              ) : (expiringSoon?.length || 0) === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Calendar className="h-12 w-12 mx-auto mb-4 text-green-600" />
-                  <p className="text-lg">No upcoming expirations</p>
-                  <p className="text-sm">All boosters are scheduled beyond 30 days</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {expiringSoon?.map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex items-center justify-between p-4 rounded-lg border"
-                      data-testid={`expiring-${item.id}`}
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className={`h-10 w-10 rounded-full flex items-center justify-center ${
-                          item.daysUntilDue <= 7 ? 'bg-orange-100' : 'bg-blue-100'
-                        }`}>
-                          <Syringe className={`h-5 w-5 ${
-                            item.daysUntilDue <= 7 ? 'text-orange-600' : 'text-blue-600'
-                          }`} />
-                        </div>
-                        <div>
-                          <p className="font-semibold">{item.animalName}</p>
-                          <p className="text-muted-foreground">{item.medicationName}</p>
-                          <p className="text-sm">Adopter: {item.adopterName}</p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <Badge variant={item.daysUntilDue <= 7 ? "destructive" : "secondary"}>
-                          {item.daysUntilDue} days
-                        </Badge>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Due: {new Date(item.nextDueDate).toLocaleDateString()}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+              {renderObligationList(data?.ongoingTreatments || [], "neutral", "No ongoing treatment obligations")}
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="at-risk">
+        <TabsContent value="custom">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5 text-red-600" />
-                At-Risk Adopters
-              </CardTitle>
-              <CardDescription>
-                Adopters who have missed 2 or more consecutive medication confirmations
-              </CardDescription>
+              <CardTitle>Custom Requirements</CardTitle>
+              <CardDescription>Custom compliance obligations</CardDescription>
             </CardHeader>
             <CardContent>
-              {atRiskLoading ? (
-                <div className="space-y-3">
-                  {[1, 2, 3].map(i => (
-                    <Skeleton key={i} className="h-24 w-full" />
-                  ))}
-                </div>
-              ) : (atRiskAdopters?.length || 0) === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <CheckCircle2 className="h-12 w-12 mx-auto mb-4 text-green-600" />
-                  <p className="text-lg">No at-risk adopters</p>
-                  <p className="text-sm">All adopters are staying on top of their pet's health</p>
+              {renderObligationList(data?.customObligations || [], "neutral", "No custom obligations")}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="completed">
+          <Card>
+            <CardHeader>
+              <CardTitle>Completed Obligations</CardTitle>
+              <CardDescription>Obligations that have been fulfilled</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {(data?.completed?.length || 0) === 0 ? (
+                <div className="text-center py-8 text-muted-foreground" data-testid="empty-completed">
+                  <Clock className="h-10 w-10 mx-auto mb-2" />
+                  <p>No completed obligations yet</p>
                 </div>
               ) : (
-                <div className="space-y-4">
-                  {atRiskAdopters?.map((adopter) => (
-                    <div
-                      key={adopter.userId}
-                      className="p-4 rounded-lg border border-red-200 bg-red-50 dark:bg-red-950/20"
-                      data-testid={`at-risk-${adopter.userId}`}
-                    >
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex items-center gap-3">
-                          <div className="h-10 w-10 rounded-full bg-red-100 flex items-center justify-center">
-                            <Users className="h-5 w-5 text-red-600" />
-                          </div>
-                          <div>
-                            <p className="font-semibold">{adopter.name}</p>
-                            <p className="text-sm text-muted-foreground">{adopter.email}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Badge variant="destructive">
-                            {adopter.missedCount} missed
-                          </Badge>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => nudgeMutation.mutate(adopter.userId)}
-                            disabled={nudgingUserId === adopter.userId}
-                            data-testid={`button-nudge-${adopter.userId}`}
-                          >
-                            {nudgingUserId === adopter.userId ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <>
-                                <Mail className="h-4 w-4 mr-1" />
-                                Nudge
-                              </>
+                <div className="space-y-3">
+                  {data!.completed.map((o) => (
+                    <div key={o.id} className="p-4 rounded-md border" data-testid={`completed-card-${o.id}`}>
+                      <div className="flex items-start justify-between gap-4 flex-wrap">
+                        <div className="flex items-start gap-3 min-w-0">
+                          <CheckCircle2 className="h-5 w-5 mt-0.5 text-green-600 shrink-0" />
+                          <div className="min-w-0">
+                            <p className="font-medium">{o.animalName}</p>
+                            <Badge variant="secondary">{getObligationLabel(o.obligationType)}</Badge>
+                            <p className="text-sm mt-1">
+                              <span className="text-muted-foreground">Adopter:</span> {o.adopterName}
+                            </p>
+                            {o.completedAt && (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Completed: {new Date(o.completedAt).toLocaleDateString()}
+                              </p>
                             )}
-                          </Button>
-                        </div>
-                      </div>
-                      <div className="ml-13 space-y-1">
-                        {adopter.reminders.slice(0, 3).map((r) => (
-                          <div key={r.id} className="flex items-center gap-2 text-sm">
-                            <PawPrint className="h-4 w-4 text-muted-foreground" />
-                            <span className="font-medium">{r.animalName}:</span>
-                            <span className="text-muted-foreground">{r.medicationName}</span>
-                            <Badge variant="outline" className="text-xs">
-                              {r.daysMissed} days overdue
-                            </Badge>
+                            {o.proofDocumentUrl && (
+                              <a
+                                href={o.proofDocumentUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-primary hover:underline flex items-center gap-1 mt-1"
+                                data-testid={`link-proof-${o.id}`}
+                              >
+                                <LinkIcon className="h-3 w-3" />
+                                View Proof
+                              </a>
+                            )}
                           </div>
-                        ))}
-                        {adopter.reminders.length > 3 && (
-                          <p className="text-xs text-muted-foreground">
-                            +{adopter.reminders.length - 3} more missed reminders
-                          </p>
-                        )}
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -661,52 +643,64 @@ export default function AdopterCompliancePage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="activity">
+        <TabsContent value="alumni">
           <Card>
             <CardHeader>
-              <CardTitle>Confirmation Activity</CardTitle>
-              <CardDescription>
-                Recent medication confirmations from adopters
-              </CardDescription>
+              <CardTitle>Alumni Search</CardTitle>
+              <CardDescription>Search adopted animals by name, email, or microchip</CardDescription>
             </CardHeader>
             <CardContent>
-              {confirmationsLoading ? (
-                <div className="space-y-3">
-                  {[1, 2, 3, 4, 5].map(i => (
-                    <Skeleton key={i} className="h-16 w-full" />
-                  ))}
+              <div className="flex items-center gap-2 mb-4">
+                <Input
+                  placeholder="Search by name, microchip, or email..."
+                  value={alumniSearch}
+                  onChange={(e) => setAlumniSearch(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleAlumniSearch()}
+                  data-testid="input-alumni-search"
+                />
+                <Button size="icon" variant="ghost" onClick={handleAlumniSearch} data-testid="button-alumni-search">
+                  <Search className="h-4 w-4" />
+                </Button>
+              </div>
+              {alumniLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
-              ) : (recentConfirmations?.length || 0) === 0 ? (
+              ) : searchTerm.length < 2 ? (
                 <div className="text-center py-8 text-muted-foreground">
-                  <Clock className="h-12 w-12 mx-auto mb-4" />
-                  <p>No confirmation activity yet</p>
+                  <Search className="h-10 w-10 mx-auto mb-2" />
+                  <p>Enter at least 2 characters to search</p>
                 </div>
+              ) : (alumniData?.results?.length || 0) === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">No alumni found. Try a different search.</p>
               ) : (
                 <div className="space-y-3">
-                  {recentConfirmations?.map((log) => (
-                    <div
-                      key={log.id}
-                      className="flex items-center justify-between p-3 rounded-lg border"
-                      data-testid={`activity-${log.id}`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <CheckCircle2 className="h-8 w-8 text-green-600" />
-                        <div>
-                          <p className="font-medium">
-                            {log.adopterName} confirmed {log.medicationName}
+                  {alumniData!.results.map((result) => (
+                    <div key={result.adoptionId} className="p-3 border rounded-md" data-testid={`alumni-result-${result.adoptionId}`}>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium truncate">{result.animalName}</p>
+                          <p className="text-sm text-muted-foreground truncate">
+                            Adopted by {result.adopterName} on {new Date(result.adoptionDate).toLocaleDateString()}
                           </p>
-                          <p className="text-sm text-muted-foreground">
-                            {log.animalName}
-                          </p>
+                          {result.microchip && (
+                            <p className="text-xs text-muted-foreground">Microchip: {result.microchip.number}</p>
+                          )}
                         </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm">
-                          {new Date(log.confirmedAt).toLocaleString()}
-                        </p>
-                        <Badge variant="outline" className="text-xs">
-                          via {log.confirmationMethod}
-                        </Badge>
+                        <div className="flex flex-col items-end gap-1 shrink-0">
+                          <Badge variant="secondary">{result.animalSpecies}</Badge>
+                          {result.contract?.contractPdfUrl && (
+                            <a
+                              href={result.contract.contractPdfUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-primary hover:underline"
+                              data-testid={`link-contract-pdf-${result.adoptionId}`}
+                            >
+                              View Contract
+                            </a>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -716,7 +710,6 @@ export default function AdopterCompliancePage() {
           </Card>
         </TabsContent>
       </Tabs>
-      </div>
     </DashboardLayout>
   );
 }

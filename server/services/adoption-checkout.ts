@@ -19,6 +19,7 @@ import {
   adopterMagicTokens,
   preventativeCareRecords,
   preventativeCareTypes,
+  complianceObligations,
   type InsertAdoptionCheckoutSession,
   type InsertAdoptionContract,
   type InsertAdoptionPayment,
@@ -211,6 +212,12 @@ export async function createCheckoutSession(
         flightRisk?: { checked: boolean; notes: string };
       };
     };
+    customComplianceObligations?: Array<{
+      obligationType: string;
+      label: string;
+      contractualDueDate: string;
+      notes?: string;
+    }>;
   }
 ): Promise<{ session: AdoptionCheckoutSession; token: string }> {
   // Validate application belongs to tenant
@@ -316,6 +323,7 @@ export async function createCheckoutSession(
         sendAttempts: 0,
         createdBy: data.staffInitiatedBy,
         createdAt: new Date().toISOString(),
+        customComplianceObligations: data.customComplianceObligations || null,
       },
     })
     .returning();
@@ -1367,6 +1375,107 @@ export async function finalizeAdoption(sessionId: string): Promise<void> {
     }
   } catch (error) {
     console.error('Failed to persist care priorities to animal record:', error);
+  }
+
+  // Create compliance obligations from medical due dates and custom obligations
+  try {
+    const adopterName = contract?.signerName || 'Adopter';
+    const adopterEmail = contract?.signerEmail || '';
+    const obligationsToInsert: any[] = [];
+
+    // Mandatory: Rabies and DHPP from medical due dates
+    const medDatesForCompliance = session.medicalDueDates as any;
+    if (medDatesForCompliance && typeof medDatesForCompliance === 'object') {
+      if (medDatesForCompliance.rabiesDueDate) {
+        obligationsToInsert.push({
+          tenantId: session.tenantId,
+          animalId: session.animalId,
+          sessionId: session.id,
+          adopterName,
+          adopterEmail,
+          obligationType: 'rabies',
+          label: 'Rabies Vaccine',
+          suggestedDueDate: medDatesForCompliance.rabiesDueDate,
+          contractualDueDate: medDatesForCompliance.rabiesDueDate,
+          status: 'pending',
+        });
+      }
+      if (medDatesForCompliance.dhppDueDate) {
+        obligationsToInsert.push({
+          tenantId: session.tenantId,
+          animalId: session.animalId,
+          sessionId: session.id,
+          adopterName,
+          adopterEmail,
+          obligationType: 'dhpp_booster',
+          label: 'DHPP Booster',
+          suggestedDueDate: medDatesForCompliance.dhppDueDate,
+          contractualDueDate: medDatesForCompliance.dhppDueDate,
+          status: 'pending',
+        });
+      }
+    }
+
+    // Mandatory: Spay/Neuter if animal is intact
+    if (animal && animal.neuterStatus === 'intact' && session.spayNeuterDate && session.spayNeuterDate !== 'not_applicable') {
+      obligationsToInsert.push({
+        tenantId: session.tenantId,
+        animalId: session.animalId,
+        sessionId: session.id,
+        adopterName,
+        adopterEmail,
+        obligationType: 'spay_neuter',
+        label: 'Spay/Neuter',
+        contractualDueDate: session.spayNeuterDate,
+        status: 'pending',
+      });
+    }
+
+    // Mandatory: Ongoing treatment for heartworm-positive animals
+    if (animal?.heartwormPositive) {
+      const threeMonthsFromNow = new Date();
+      threeMonthsFromNow.setMonth(threeMonthsFromNow.getMonth() + 3);
+      obligationsToInsert.push({
+        tenantId: session.tenantId,
+        animalId: session.animalId,
+        sessionId: session.id,
+        adopterName,
+        adopterEmail,
+        obligationType: 'ongoing_treatment',
+        label: 'Heartworm Treatment (HW+)',
+        contractualDueDate: threeMonthsFromNow.toISOString().split('T')[0],
+        notes: 'Heartworm positive - ongoing treatment required',
+        status: 'pending',
+      });
+    }
+
+    // Custom compliance obligations from checkout form (stored in metadata)
+    const customObligations = (session.metadata as any)?.customComplianceObligations as any[];
+    if (Array.isArray(customObligations)) {
+      for (const custom of customObligations) {
+        if (custom.obligationType && custom.label && custom.contractualDueDate) {
+          obligationsToInsert.push({
+            tenantId: session.tenantId,
+            animalId: session.animalId,
+            sessionId: session.id,
+            adopterName,
+            adopterEmail,
+            obligationType: custom.obligationType,
+            label: custom.label,
+            contractualDueDate: custom.contractualDueDate,
+            notes: custom.notes || null,
+            status: 'pending',
+          });
+        }
+      }
+    }
+
+    if (obligationsToInsert.length > 0) {
+      await db.insert(complianceObligations).values(obligationsToInsert);
+      console.log(`[Adoption] Created ${obligationsToInsert.length} compliance obligations for animal ${session.animalId}`);
+    }
+  } catch (error) {
+    console.error('Failed to create compliance obligations:', error);
   }
 
   // Send staff notification email about completed adoption
