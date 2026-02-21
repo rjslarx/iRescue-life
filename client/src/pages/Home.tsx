@@ -471,11 +471,11 @@ export default function Home() {
         backgroundImage={activeCampaign?.imageUrl || rescueHeroImage}
         mobileBackgroundImage={activeCampaign ? null : rescueMobileHeroImage}
         onViewAnimals={activeCampaign
-          ? () => { window.location.href = `${basePath}/donate#campaign-${activeCampaign.id}`; }
+          ? () => { window.location.href = `${basePath}/campaigns/${activeCampaign.id}`; }
           : () => document.getElementById('animals')?.scrollIntoView({ behavior: 'smooth' })
         }
         onDonate={activeCampaign
-          ? () => { window.location.href = `${basePath}/donate#campaign-${activeCampaign.id}`; }
+          ? () => { window.location.href = `${basePath}/campaigns/${activeCampaign.id}`; }
           : () => setDonationDialogOpen(true)
         }
         actionCircle={activeCampaign ? undefined : (tenant?.actionCircle as any)}

@@ -143,7 +143,7 @@ export default function PublicHeader({ rescueName, logoUrl }: PublicHeaderProps)
                 {activeCampaigns.map((campaign) => (
                   <DropdownMenuItem key={campaign.id} asChild>
                     <Link 
-                      href={`/donate#campaign-${campaign.id}`}
+                      href={`/campaigns/${campaign.id}`}
                       className="cursor-pointer w-full flex items-center gap-2"
                       data-testid={`link-nav-campaign-${campaign.id}`}
                     >
@@ -276,7 +276,7 @@ export default function PublicHeader({ rescueName, logoUrl }: PublicHeaderProps)
                     </Link>
                   )}
                   {activeCampaigns.map((campaign) => (
-                    <Link key={campaign.id} href={`/donate#campaign-${campaign.id}`}>
+                    <Link key={campaign.id} href={`/campaigns/${campaign.id}`}>
                       <Button 
                         variant="ghost" 
                         className="w-full justify-start"
