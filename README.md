@@ -48,7 +48,18 @@ In my career, I saw how software like **Epic** revolutionized patient safety and
 **Live Stats:**
 * **Active Fosters Managed:** 20+
 * **Medical Records Tracked:** 200+
-* **Uptime:** 99.9%  
+* **Uptime:** 99.9%
+
+* ## 🚀 Getting Started
+
+The easiest way to test or contribute to iRescue.life is directly in your browser using Replit. 
+
+[![Run on Replit](https://replit.com/badge/github/rjslarx/iRescue-life)](https://replit.com/github/rjslarx/iRescue-life)
+
+1. Click the button above to clone this project into your own free Replit workspace.
+2. Open the **Secrets** panel in Replit (the padlock icon).
+3. Add your API keys (see the `.env.example` file in the code for the list of required keys).
+4. Hit the big **Run** button at the top! Replit will automatically install the database and start the server.
 
 ## 🤝 Contributing
 We are actively looking for contributors! Whether you are a frontend wizard or a backend architect, help us save time for rescuers so they can save more lives.
