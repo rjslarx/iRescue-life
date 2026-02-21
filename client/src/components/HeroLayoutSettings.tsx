@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Switch } from '@/components/ui/switch';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Circle, LayoutGrid, Ban, Layers } from 'lucide-react';
+import { Loader2, Circle, LayoutGrid, Ban, Layers, Heart } from 'lucide-react';
 import { ActionCircleSettings } from './ActionCircleSettings';
 import { ThreeDoorsSettings } from './ThreeDoorsSettings';
 import type { Tenant } from '@shared/schema';
@@ -20,12 +21,55 @@ export function HeroLayoutSettings({ tenant }: HeroLayoutSettingsProps) {
   const [layoutType, setLayoutType] = useState<HeroLayoutType>(
     (tenant?.heroLayoutType as HeroLayoutType) || 'none'
   );
+  const [campaignHeroEnabled, setCampaignHeroEnabled] = useState(
+    (tenant as any)?.showEmergencyCampaignHero || false
+  );
 
   useEffect(() => {
     if (tenant?.heroLayoutType) {
       setLayoutType(tenant.heroLayoutType as HeroLayoutType);
     }
-  }, [tenant?.heroLayoutType]);
+    setCampaignHeroEnabled((tenant as any)?.showEmergencyCampaignHero || false);
+  }, [tenant?.heroLayoutType, (tenant as any)?.showEmergencyCampaignHero]);
+
+  const { data: campaignsData } = useQuery<{ campaigns: Array<{ id: string; title: string }> }>({
+    queryKey: ['/api/public-emergency-campaigns'],
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const hasActiveCampaigns = (campaignsData?.campaigns?.length || 0) > 0;
+
+  const campaignHeroMutation = useMutation({
+    mutationFn: async (enabled: boolean) => {
+      const response = await apiRequest('PATCH', '/api/tenant/settings/branding', {
+        showEmergencyCampaignHero: enabled,
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/tenant/settings'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/tenant'] });
+      toast({
+        title: campaignHeroEnabled ? "Campaign hero enabled" : "Campaign hero disabled",
+        description: campaignHeroEnabled
+          ? "Your active emergency campaign will now appear as the hero section."
+          : "The hero section has been restored to its default layout.",
+      });
+    },
+    onError: (error) => {
+      setCampaignHeroEnabled(!campaignHeroEnabled);
+      toast({
+        title: "Error updating setting",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleCampaignHeroToggle = (checked: boolean) => {
+    setCampaignHeroEnabled(checked);
+    campaignHeroMutation.mutate(checked);
+  };
 
   const updateMutation = useMutation({
     mutationFn: async (heroLayoutType: HeroLayoutType) => {
@@ -58,6 +102,34 @@ export function HeroLayoutSettings({ tenant }: HeroLayoutSettingsProps) {
 
   return (
     <div className="space-y-6">
+      {hasActiveCampaigns && (
+        <div className="space-y-3 p-4 border rounded-lg">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <Heart className="h-4 w-4 text-destructive" />
+              <Label htmlFor="campaign-hero-toggle" className="font-medium cursor-pointer">
+                Feature Emergency Campaign in Hero
+              </Label>
+            </div>
+            <Switch
+              id="campaign-hero-toggle"
+              checked={campaignHeroEnabled}
+              onCheckedChange={handleCampaignHeroToggle}
+              disabled={campaignHeroMutation.isPending}
+              data-testid="switch-campaign-hero"
+            />
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Replace the hero section with your active emergency fund campaign. The campaign image, title, and description will be shown with a "Help Now" button linking to the donation page.
+          </p>
+          {campaignHeroEnabled && (
+            <p className="text-sm text-muted-foreground/80 italic">
+              Currently featuring: {campaignsData?.campaigns?.[0]?.title}
+            </p>
+          )}
+        </div>
+      )}
+
       <div className="space-y-4">
         <Label>Layout Type</Label>
         <RadioGroup

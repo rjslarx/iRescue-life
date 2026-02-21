@@ -98,6 +98,7 @@ export const tenants = pgTable("tenants", {
   heroButton2Text: text("hero_button2_text"), // Secondary CTA text (default: "Donate Now")
   heroMobileImageUrl: text("hero_mobile_image_url"), // Optional mobile-optimized hero image
   heroFocalPoint: text("hero_focal_point").$type<"center" | "top" | "bottom" | "left" | "right" | "top-left" | "top-right" | "bottom-left" | "bottom-right">(), // Focal point for mobile cropping if no mobile image
+  showEmergencyCampaignHero: boolean("show_emergency_campaign_hero").default(false), // Toggle to replace hero with active emergency campaign
   // Announcement bar (urgent banner above hero)
   announcementBar: jsonb("announcement_bar").$type<{
     enabled?: boolean;

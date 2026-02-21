@@ -263,6 +263,11 @@ export default function Home() {
     queryKey: ['/api/content-modules', tenantId],
   });
 
+  const { data: emergencyCampaignsData } = useQuery<{ campaigns: Array<{ id: string; title: string; description: string | null; imageUrl: string | null; goalAmount: number | null }> }>({
+    queryKey: ['/api/public-emergency-campaigns', tenantId],
+    staleTime: 1000 * 60 * 5,
+  });
+
   const animals = animalsData?.animals || [];
   const tenant = tenantData?.tenant;
   const publishedPages = customPagesData?.pages?.filter(page => page.isPublished) || [];
@@ -416,6 +421,11 @@ export default function Home() {
   const rescueHeroImage = tenant?.heroImageUrl || heroImage;
   const rescueMobileHeroImage = tenant?.heroMobileImageUrl || null;
 
+  // Emergency campaign hero override
+  const activeCampaign = (tenant as any)?.showEmergencyCampaignHero
+    ? emergencyCampaignsData?.campaigns?.[0]
+    : null;
+
   // SEO configuration
   useSEO({
     title: `${rescueName} - Adopt, Volunteer, Donate | Animal Rescue`,
@@ -457,23 +467,29 @@ export default function Home() {
 
       <Hero 
         rescueName={rescueName}
-        tagline={rescueTagline}
-        backgroundImage={rescueHeroImage}
-        mobileBackgroundImage={rescueMobileHeroImage}
-        onViewAnimals={() => document.getElementById('animals')?.scrollIntoView({ behavior: 'smooth' })}
-        onDonate={() => setDonationDialogOpen(true)}
-        actionCircle={tenant?.actionCircle as any}
-        heroLayoutType={(tenant?.heroLayoutType as 'none' | 'action_circle' | 'three_doors') || 'none'}
-        threeDoorsConfig={tenant?.threeDoorsConfig as any}
+        tagline={activeCampaign ? (activeCampaign.description || rescueTagline) : rescueTagline}
+        backgroundImage={activeCampaign?.imageUrl || rescueHeroImage}
+        mobileBackgroundImage={activeCampaign ? null : rescueMobileHeroImage}
+        onViewAnimals={activeCampaign
+          ? () => { window.location.href = `${basePath}/donate#campaign-${activeCampaign.id}`; }
+          : () => document.getElementById('animals')?.scrollIntoView({ behavior: 'smooth' })
+        }
+        onDonate={activeCampaign
+          ? () => { window.location.href = `${basePath}/donate#campaign-${activeCampaign.id}`; }
+          : () => setDonationDialogOpen(true)
+        }
+        actionCircle={activeCampaign ? undefined : (tenant?.actionCircle as any)}
+        heroLayoutType={activeCampaign ? 'none' : ((tenant?.heroLayoutType as 'none' | 'action_circle' | 'three_doors') || 'none')}
+        threeDoorsConfig={activeCampaign ? undefined : (tenant?.threeDoorsConfig as any)}
         basePath={basePath}
-        heroHeadline={tenant?.heroHeadline}
-        heroButtonText={tenant?.heroButtonText}
-        heroButton2Text={tenant?.heroButton2Text}
-        heroFocalPoint={tenant?.heroFocalPoint as any}
+        heroHeadline={activeCampaign ? activeCampaign.title : tenant?.heroHeadline}
+        heroButtonText={activeCampaign ? "Help Now" : tenant?.heroButtonText}
+        heroButton2Text={activeCampaign ? "Donate Now" : tenant?.heroButton2Text}
+        heroFocalPoint={activeCampaign ? 'center' : (tenant?.heroFocalPoint as any)}
       />
       
       {/* Spacer for Three Doors that extend below hero - only needed on larger screens */}
-      {tenant?.heroLayoutType === 'three_doors' && (
+      {!activeCampaign && tenant?.heroLayoutType === 'three_doors' && (
         <div className="hidden sm:block h-32 bg-background" />
       )}
 

@@ -21413,6 +21413,7 @@ Submitted: ${new Date().toLocaleString()}
         heroHeadline: z.string().optional(),
         heroButtonText: z.string().optional(),
         heroButton2Text: z.string().optional(),
+        showEmergencyCampaignHero: z.boolean().optional(),
         announcementBarEnabled: z.boolean().optional(),
         announcementBarText: z.string().optional(),
         announcementBarLinkText: z.string().optional(),
@@ -21453,6 +21454,7 @@ Submitted: ${new Date().toLocaleString()}
       if (settings.heroHeadline !== undefined) updateData.heroHeadline = settings.heroHeadline || null;
       if (settings.heroButtonText !== undefined) updateData.heroButtonText = settings.heroButtonText || null;
       if (settings.heroButton2Text !== undefined) updateData.heroButton2Text = settings.heroButton2Text || null;
+      if (settings.showEmergencyCampaignHero !== undefined) updateData.showEmergencyCampaignHero = settings.showEmergencyCampaignHero;
       if (settings.contactEmail !== undefined) updateData.contactEmail = settings.contactEmail || null;
       if (settings.contactPhone !== undefined) updateData.contactPhone = settings.contactPhone || null;
       if (settings.formNotificationsEnabled !== undefined) updateData.formNotificationsEnabled = settings.formNotificationsEnabled;
