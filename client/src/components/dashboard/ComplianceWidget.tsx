@@ -121,7 +121,7 @@ export default function ComplianceWidget() {
             <AlertTriangle className={`h-4 w-4 ${hasNoIssues ? 'text-green-500' : 'text-destructive'}`} />
             Adopter Compliance
           </CardTitle>
-          {stats && (
+          {stats && !hasNoIssues && (
             <Badge variant={stats.complianceRate >= 90 ? "secondary" : "destructive"}>
               {stats.complianceRate}%
             </Badge>
