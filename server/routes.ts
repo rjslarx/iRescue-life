@@ -7272,7 +7272,22 @@ Crawl-delay: 1
                 eq(fosterAnimals.status, 'active')
               ));
 
-            console.log(`Terminal status "${data.status}" applied to ${animal.name}: cancelled pending medical tasks and foster assignments`);
+            if (data.status === 'deceased' || data.status === 'transported') {
+              const { complianceObligations } = await import('@shared/schema');
+              await db.update(complianceObligations)
+                .set({
+                  status: 'waived' as const,
+                  notes: `Auto-waived: animal status changed to ${data.status}`,
+                  updatedAt: new Date(),
+                })
+                .where(and(
+                  eq(complianceObligations.animalId, animal.id),
+                  eq(complianceObligations.tenantId, req.tenant!.id),
+                  eq(complianceObligations.status, 'pending')
+                ));
+            }
+
+            console.log(`Terminal status "${data.status}" applied to ${animal.name}: cancelled pending medical tasks, foster assignments, and compliance obligations`);
           } catch (terminalErr) {
             console.error('Failed to process terminal status cleanup:', terminalErr);
           }

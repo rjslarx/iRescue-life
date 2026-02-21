@@ -13,6 +13,7 @@ import {
   medicationPlans,
   fosterAnimals,
   users,
+  complianceObligations,
 } from '@shared/schema';
 import { eq, and, or, desc, ne, sql, inArray } from 'drizzle-orm';
 import { z } from 'zod';
@@ -534,6 +535,18 @@ router.patch('/:id/accept', requireTenant, requireAuth, requireRole('admin', 'ow
           eq(medicationPlans.isActive, true),
         ));
     }
+
+    await db.update(complianceObligations)
+      .set({
+        status: 'waived' as const,
+        notes: 'Auto-waived: animal transferred to another organization',
+        updatedAt: new Date(),
+      })
+      .where(and(
+        eq(complianceObligations.animalId, sourceAnimal.id),
+        eq(complianceObligations.tenantId, transfer.sendingTenantId),
+        eq(complianceObligations.status, 'pending')
+      ));
 
     await db.update(tenantTransfers).set({
       status: 'accepted',

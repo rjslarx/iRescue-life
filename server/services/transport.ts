@@ -34,6 +34,7 @@ import {
   type InsertTransportManifestItem,
   type InsertTransportTimelineEvent,
   type InsertPendingTransfer,
+  complianceObligations,
 } from "@shared/schema";
 import { eq, and, desc, sql, or, gte, lte, inArray, isNull, asc } from "drizzle-orm";
 import { EmailService } from "../lib/email-service";
@@ -165,6 +166,18 @@ export class TransportService {
         .where(and(
           eq(animals.id, animalId),
           eq(animals.tenantId, tenantId)
+        ));
+
+      await executor.update(complianceObligations)
+        .set({
+          status: 'waived' as const,
+          notes: 'Auto-waived: animal transported to another organization',
+          updatedAt: new Date(),
+        })
+        .where(and(
+          eq(complianceObligations.animalId, animalId),
+          eq(complianceObligations.tenantId, tenantId),
+          eq(complianceObligations.status, 'pending')
         ));
 
       const noteLines = [
