@@ -7,10 +7,17 @@ import { runRetentionEmailsJob } from "./retention-emails";
 import { VolunteerThresholdAlertService } from "../services/volunteer-threshold-alerts";
 import { VolunteerScheduleDigestService } from "../services/volunteer-schedule-digest";
 
+let schedulerInitialized = false;
+
 /**
  * Initialize scheduled jobs
  */
 export function initializeScheduler() {
+  if (schedulerInitialized) {
+    console.log("[Scheduler] Already initialized, skipping duplicate init");
+    return;
+  }
+  schedulerInitialized = true;
   console.log("🕐 Initializing scheduled jobs...");
 
   // Schedule demo reset daily at midnight (00:00)

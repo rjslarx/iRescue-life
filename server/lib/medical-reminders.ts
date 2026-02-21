@@ -497,6 +497,24 @@ export async function sendMedicalReminders(tenantId: string): Promise<{
       return { success: true, emailsSent: 0, errors: [] };
     }
     
+    // Same-day deduplication: check if we already sent digest emails today for this tenant
+    const todayStart = new Date();
+    todayStart.setUTCHours(0, 0, 0, 0);
+    const alreadySentToday = await db
+      .select({ recipientEmail: medicalReminderLogs.recipientEmail })
+      .from(medicalReminderLogs)
+      .where(and(
+        eq(medicalReminderLogs.tenantId, tenantId),
+        eq(medicalReminderLogs.emailType, "digest"),
+        eq(medicalReminderLogs.status, "sent"),
+        gte(medicalReminderLogs.sentAt, todayStart)
+      ));
+    const alreadySentEmails = new Set(alreadySentToday.map(r => r.recipientEmail.toLowerCase()));
+    
+    if (alreadySentEmails.size > 0) {
+      console.log(`[MedicalReminders] Dedup: ${alreadySentEmails.size} digest(s) already sent today for tenant ${tenantId}, skipping those recipients`);
+    }
+    
     // Get email service
     const emailService = await EmailService.forTenant(tenantId);
     if (!emailService) {
@@ -536,6 +554,10 @@ export async function sendMedicalReminders(tenantId: string): Promise<{
     // Send digest emails to staff/admins
     if (settings.sendDailyDigest && recipients.length > 0) {
       for (const recipient of recipients) {
+        if (alreadySentEmails.has(recipient.email.toLowerCase())) {
+          console.log(`[MedicalReminders] Skipping duplicate digest for ${recipient.email} (already sent today)`);
+          continue;
+        }
         try {
           const { subject, html } = await generateMedicalReminderEmail(
             tenantId,
@@ -590,8 +612,24 @@ export async function sendMedicalReminders(tenantId: string): Promise<{
         }
       }
       
+      // Check foster dedup separately (foster_confirmation type)
+      const fosterSentToday = await db
+        .select({ recipientEmail: medicalReminderLogs.recipientEmail })
+        .from(medicalReminderLogs)
+        .where(and(
+          eq(medicalReminderLogs.tenantId, tenantId),
+          eq(medicalReminderLogs.emailType, "foster_confirmation"),
+          eq(medicalReminderLogs.status, "sent"),
+          gte(medicalReminderLogs.sentAt, todayStart)
+        ));
+      const fosterAlreadySent = new Set(fosterSentToday.map(r => r.recipientEmail.toLowerCase()));
+
       // Send email to each foster
       for (const [fosterId, fosterData] of fosterItems) {
+        if (fosterAlreadySent.has(fosterData.email.toLowerCase())) {
+          console.log(`[MedicalReminders] Skipping duplicate foster reminder for ${fosterData.email} (already sent today)`);
+          continue;
+        }
         try {
           const { subject, html } = await generateFosterReminderEmail(
             tenantId,
