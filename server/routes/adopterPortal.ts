@@ -32,6 +32,61 @@ const router = Router();
 const SALT_ROUNDS = 10;
 const TOKEN_EXPIRY_HOURS = 24;
 
+interface VaccineRecord {
+  id: string;
+  vaccineName: string;
+  dateAdministered: string | Date | null;
+  expirationDate: string | Date | null;
+  veterinarian: string | null;
+}
+
+function normalizeVaccineName(name: string): string {
+  const n = name.toLowerCase().trim();
+  if (n.includes('rabies')) return 'rabies';
+  if (n.includes('dhpp') || n.includes('da2pp') || n.includes('dapp') || n.includes('dappl')) return 'dhpp';
+  if (n.includes('bordetella')) return 'bordetella';
+  if (n.includes('lepto')) return 'leptospirosis';
+  if (n.includes('canine influenza') || n.includes('civ')) return 'canine_influenza';
+  if (n.includes('parvo')) return 'parvovirus';
+  return n;
+}
+
+function deduplicateVaccineRecords(records: VaccineRecord[]): VaccineRecord[] {
+  const grouped = new Map<string, VaccineRecord[]>();
+  for (const rec of records) {
+    const key = normalizeVaccineName(rec.vaccineName);
+    const group = grouped.get(key) || [];
+    group.push(rec);
+    grouped.set(key, group);
+  }
+
+  const result: VaccineRecord[] = [];
+  for (const [, group] of grouped) {
+    if (group.length === 1) {
+      result.push(group[0]);
+      continue;
+    }
+    const withVet = group.filter(r => r.veterinarian && r.veterinarian.trim() !== '' && r.veterinarian !== 'Set at adoption');
+    const best = withVet.length > 0 ? withVet : group;
+    best.sort((a, b) => {
+      const expA = a.expirationDate ? new Date(a.expirationDate).getTime() : 0;
+      const expB = b.expirationDate ? new Date(b.expirationDate).getTime() : 0;
+      if (expA !== expB) return expB - expA;
+      const dA = a.dateAdministered ? new Date(a.dateAdministered).getTime() : 0;
+      const dB = b.dateAdministered ? new Date(b.dateAdministered).getTime() : 0;
+      return dB - dA;
+    });
+    result.push(best[0]);
+  }
+
+  result.sort((a, b) => {
+    const dA = a.dateAdministered ? new Date(a.dateAdministered).getTime() : 0;
+    const dB = b.dateAdministered ? new Date(b.dateAdministered).getTime() : 0;
+    return dB - dA;
+  });
+  return result;
+}
+
 function getAppBaseUrl(): string {
   if (process.env.REPLIT_DEV_DOMAIN) {
     return `https://${process.env.REPLIT_DEV_DOMAIN}`;
@@ -418,10 +473,10 @@ router.get('/pets/:animalId/vaccinations', async (req: Request, res: Response) =
       ))
       .orderBy(desc(vaccineRecords.dateGiven));
 
-    const combined = [...careRecords, ...legacyVaccines]
-      .sort((a, b) => new Date(b.dateAdministered).getTime() - new Date(a.dateAdministered).getTime());
+    const combined = [...careRecords, ...legacyVaccines] as VaccineRecord[];
+    const deduplicated = deduplicateVaccineRecords(combined);
 
-    res.json(combined);
+    res.json(deduplicated);
   } catch (error) {
     console.error('[Adopter Portal] Error fetching vaccinations:', error);
     res.status(500).json({ error: 'Failed to load vaccinations' });
@@ -1533,10 +1588,10 @@ router.get('/admin/adopter-preview/:adopterId/pets/:animalId/vaccinations', asyn
       ))
       .orderBy(desc(vaccineRecords.dateGiven));
 
-    const combined = [...careRecords, ...legacyVaccines]
-      .sort((a, b) => new Date(b.dateAdministered).getTime() - new Date(a.dateAdministered).getTime());
+    const combined = [...careRecords, ...legacyVaccines] as VaccineRecord[];
+    const deduplicated = deduplicateVaccineRecords(combined);
 
-    res.json(combined);
+    res.json(deduplicated);
   } catch (error) {
     console.error('[Adopter Portal Admin] Error fetching vaccinations:', error);
     res.status(500).json({ error: 'Failed to load vaccinations' });
