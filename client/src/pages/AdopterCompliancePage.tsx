@@ -6,6 +6,24 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   CheckCircle2,
   AlertCircle,
@@ -24,6 +42,7 @@ import {
   XCircle,
   ClipboardList,
   Link as LinkIcon,
+  Plus,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -107,6 +126,263 @@ interface AlumniResult {
   neuterStatus: string | null;
   microchip: { number: string; manufacturer: string } | null;
   contract: { contractPdfUrl: string | null; signerName: string; signedAt: string; spayNeuterDate: string | null } | null;
+}
+
+function AddObligationDialog({ onCreated }: { onCreated: () => void }) {
+  const { toast } = useToast();
+  const [open, setOpen] = useState(false);
+  const [animalSearch, setAnimalSearch] = useState("");
+  const [animalSearchTerm, setAnimalSearchTerm] = useState("");
+  const [selectedAnimal, setSelectedAnimal] = useState<AlumniResult | null>(null);
+  const [obligationType, setObligationType] = useState("");
+  const [customLabel, setCustomLabel] = useState("");
+  const [dueDate, setDueDate] = useState("");
+  const [notes, setNotes] = useState("");
+
+  const { data: searchResults, isLoading: searching } = useQuery<{ results: AlumniResult[] }>({
+    queryKey: ["/api/dashboard/adopter-compliance/alumni-search", animalSearchTerm],
+    queryFn: async () => {
+      const res = await fetch(`/api/dashboard/adopter-compliance/alumni-search?q=${encodeURIComponent(animalSearchTerm)}`);
+      if (!res.ok) throw new Error("Search failed");
+      return res.json();
+    },
+    enabled: animalSearchTerm.length >= 2,
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async (body: {
+      animalId: string;
+      adopterName: string;
+      adopterEmail: string;
+      adopterPhone: string | null;
+      obligationType: string;
+      label: string;
+      contractualDueDate: string;
+      notes: string | null;
+    }) => {
+      const res = await apiRequest("POST", "/api/dashboard/adopter-compliance", body);
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Compliance obligation created" });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/adopter-compliance"] });
+      onCreated();
+      resetForm();
+      setOpen(false);
+    },
+    onError: (error: any) => {
+      toast({ title: "Failed to create obligation", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const resetForm = () => {
+    setAnimalSearch("");
+    setAnimalSearchTerm("");
+    setSelectedAnimal(null);
+    setObligationType("");
+    setCustomLabel("");
+    setDueDate("");
+    setNotes("");
+  };
+
+  const handleSearch = () => {
+    if (animalSearch.trim().length >= 2) {
+      setAnimalSearchTerm(animalSearch.trim());
+    }
+  };
+
+  const handleSubmit = () => {
+    if (!selectedAnimal || !obligationType || !dueDate) return;
+
+    const label = obligationType === "custom"
+      ? customLabel || "Custom Obligation"
+      : OBLIGATION_LABELS[obligationType] || obligationType;
+
+    createMutation.mutate({
+      animalId: selectedAnimal.animalId,
+      adopterName: selectedAnimal.adopterName,
+      adopterEmail: selectedAnimal.adopterEmail,
+      adopterPhone: selectedAnimal.adopterPhone,
+      obligationType,
+      label,
+      contractualDueDate: dueDate,
+      notes: notes || null,
+    });
+  };
+
+  const canSubmit = selectedAnimal && obligationType && dueDate && (obligationType !== "custom" || customLabel.trim());
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
+      <DialogTrigger asChild>
+        <Button data-testid="button-add-obligation">
+          <Plus className="h-4 w-4 mr-1" />
+          Add Obligation
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Add Compliance Obligation</DialogTitle>
+          <DialogDescription>
+            Create a compliance obligation for a previously adopted animal that didn't go through the standard checkout process.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          {!selectedAnimal ? (
+            <div className="space-y-3">
+              <Label>Search for Adopted Animal</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  placeholder="Search by animal name, adopter name, or email..."
+                  value={animalSearch}
+                  onChange={(e) => setAnimalSearch(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                  data-testid="input-add-obligation-search"
+                />
+                <Button size="icon" variant="ghost" onClick={handleSearch} data-testid="button-add-obligation-search">
+                  <Search className="h-4 w-4" />
+                </Button>
+              </div>
+
+              {searching && (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                </div>
+              )}
+
+              {searchResults && searchResults.results.length > 0 && (
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {searchResults.results.map((result) => (
+                    <div
+                      key={`${result.adoptionId}-${result.animalId}`}
+                      className="p-3 rounded-md border hover-elevate cursor-pointer"
+                      onClick={() => setSelectedAnimal(result)}
+                      data-testid={`search-result-${result.animalId}`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="font-medium truncate">{result.animalName}</p>
+                          <p className="text-sm text-muted-foreground truncate">
+                            {result.animalSpecies} {result.animalBreed ? `- ${result.animalBreed}` : ""}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Adopter: {result.adopterName} ({result.adopterEmail})
+                          </p>
+                        </div>
+                        <Badge variant="secondary">
+                          {new Date(result.adoptionDate).toLocaleDateString()}
+                        </Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {searchResults && searchResults.results.length === 0 && animalSearchTerm.length >= 2 && (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  No adopted animals found matching your search.
+                </p>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div>
+                <Label className="text-xs text-muted-foreground">Selected Animal & Adopter</Label>
+                <div className="p-3 rounded-md border mt-1 flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-medium">{selectedAnimal.animalName}</p>
+                    <p className="text-sm text-muted-foreground">
+                      Adopter: {selectedAnimal.adopterName} ({selectedAnimal.adopterEmail})
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => { setSelectedAnimal(null); setAnimalSearch(""); setAnimalSearchTerm(""); }}
+                    data-testid="button-change-animal"
+                  >
+                    Change
+                  </Button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="obligationType">Obligation Type</Label>
+                <Select value={obligationType} onValueChange={setObligationType}>
+                  <SelectTrigger data-testid="select-obligation-type">
+                    <SelectValue placeholder="Select obligation type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="spay_neuter">Spay/Neuter</SelectItem>
+                    <SelectItem value="rabies">Rabies Vaccine</SelectItem>
+                    <SelectItem value="dhpp_booster">DHPP Booster</SelectItem>
+                    <SelectItem value="ongoing_treatment">Ongoing Medical Treatment</SelectItem>
+                    <SelectItem value="heartworm_prevention_proof">Heartworm Prevention Proof</SelectItem>
+                    <SelectItem value="obedience_training">Obedience Training</SelectItem>
+                    <SelectItem value="fecal_test">Fecal Test</SelectItem>
+                    <SelectItem value="custom">Custom Obligation</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {obligationType === "custom" && (
+                <div className="space-y-2">
+                  <Label htmlFor="customLabel">Custom Label</Label>
+                  <Input
+                    id="customLabel"
+                    placeholder="e.g., Annual wellness exam, heartworm test..."
+                    value={customLabel}
+                    onChange={(e) => setCustomLabel(e.target.value)}
+                    data-testid="input-custom-label"
+                  />
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <Label htmlFor="dueDate">Due Date</Label>
+                <Input
+                  id="dueDate"
+                  type="date"
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                  data-testid="input-due-date"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="notes">Notes (optional)</Label>
+                <Textarea
+                  id="notes"
+                  placeholder="Additional notes about this obligation..."
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  className="resize-none"
+                  data-testid="input-obligation-notes"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {selectedAnimal && (
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { resetForm(); setOpen(false); }} data-testid="button-cancel-add-obligation">
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSubmit}
+              disabled={!canSubmit || createMutation.isPending}
+              data-testid="button-submit-obligation"
+            >
+              {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+              Create Obligation
+            </Button>
+          </DialogFooter>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 export default function AdopterCompliancePage() {
@@ -348,10 +624,13 @@ export default function AdopterCompliancePage() {
     );
   }
 
+  const isAdminOrOwner = user?.activeRole === "admin" || user?.activeRole === "owner" || user?.activeRole === "manager";
+
   return (
     <DashboardLayout
       title="Adopter Compliance Monitor"
       description="Track post-adoption compliance obligations"
+      actions={isAdminOrOwner ? <AddObligationDialog onCreated={() => {}} /> : undefined}
     >
       <div className="grid gap-4 md:grid-cols-4 mb-6">
         <Card data-testid="stat-card-total">

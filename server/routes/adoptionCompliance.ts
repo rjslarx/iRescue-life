@@ -9,8 +9,10 @@ import {
   adoptionCheckoutSessions,
   adoptionContracts,
   microchipRecords,
+  COMPLIANCE_OBLIGATION_TYPES,
 } from '@shared/schema';
 import { eq, and, or, ilike, desc, sql, inArray } from 'drizzle-orm';
+import { z } from 'zod';
 
 const router = Router();
 
@@ -594,6 +596,68 @@ router.post(
       }
 
       res.json({ backfilledCount, skippedCount });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+const createObligationSchema = z.object({
+  animalId: z.string().uuid(),
+  adopterName: z.string().min(1, 'Adopter name is required'),
+  adopterEmail: z.string().email('Valid email is required'),
+  adopterPhone: z.string().nullable().optional(),
+  obligationType: z.enum(COMPLIANCE_OBLIGATION_TYPES as unknown as [string, ...string[]]),
+  label: z.string().min(1, 'Label is required'),
+  contractualDueDate: z.string().min(1, 'Due date is required'),
+  notes: z.string().nullable().optional(),
+});
+
+router.post(
+  '/',
+  requireTenant,
+  requireAuth,
+  requireRole('admin', 'owner', 'manager'),
+  async (req, res, next) => {
+    try {
+      const tenantId = req.tenant!.id;
+
+      const parsed = createObligationSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.errors.map(e => e.message).join(', ') });
+      }
+
+      const { animalId, adopterName, adopterEmail, adopterPhone, obligationType, label, contractualDueDate, notes } = parsed.data;
+
+      const [animal] = await db
+        .select({ id: animals.id })
+        .from(animals)
+        .where(and(eq(animals.id, animalId), eq(animals.tenantId, tenantId)))
+        .limit(1);
+
+      if (!animal) {
+        return res.status(404).json({ error: 'Animal not found in this organization' });
+      }
+
+      const [created] = await db
+        .insert(complianceObligations)
+        .values({
+          tenantId,
+          animalId,
+          sessionId: null,
+          adopterName,
+          adopterEmail,
+          adopterPhone: adopterPhone || null,
+          obligationType,
+          label,
+          contractualDueDate,
+          notes: notes || null,
+          status: 'pending',
+          proofDocumentUrl: null,
+        })
+        .returning();
+
+      res.status(201).json({ obligation: created });
     } catch (error) {
       next(error);
     }
