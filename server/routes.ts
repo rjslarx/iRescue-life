@@ -12240,6 +12240,71 @@ ${renderedHtml}
   });
 
   /**
+   * POST /api/adoption-form-fields/load-template
+   * Load a pre-built adoption form template, replacing all existing fields (admin only)
+   */
+  app.post('/api/adoption-form-fields/load-template', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+    try {
+      const { adoptionFormFields } = await import('@shared/schema');
+      const { ADOPTION_FORM_TEMPLATES, resolveTemplatePlaceholders } = await import('./lib/adoption-form-templates');
+
+      const schema = z.object({
+        templateId: z.string().min(1),
+      });
+      const { templateId } = schema.parse(req.body);
+
+      const template = ADOPTION_FORM_TEMPLATES[templateId];
+      if (!template) {
+        return res.status(404).json({ error: `Template '${templateId}' not found` });
+      }
+
+      const tenantName = req.tenant!.name;
+
+      await db.delete(adoptionFormFields)
+        .where(eq(adoptionFormFields.tenantId, req.tenant!.id));
+
+      const fieldsToInsert = template.fields.map((f) => ({
+        tenantId: req.tenant!.id,
+        label: resolveTemplatePlaceholders(f.label, tenantName),
+        fieldType: f.fieldType,
+        options: f.options || null,
+        required: f.required,
+        placeholder: resolveTemplatePlaceholders(f.placeholder, tenantName) || null,
+        helpText: resolveTemplatePlaceholders(f.helpText, tenantName) || null,
+        textAbove: resolveTemplatePlaceholders(f.textAbove, tenantName) || null,
+        textBelow: resolveTemplatePlaceholders(f.textBelow, tenantName) || null,
+        order: f.order,
+        isActive: true,
+      }));
+
+      await db.insert(adoptionFormFields).values(fieldsToInsert);
+
+      res.json({ success: true, fieldCount: fieldsToInsert.length });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/adoption-form-templates
+   * List available adoption form templates
+   */
+  app.get('/api/adoption-form-templates', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+    try {
+      const { ADOPTION_FORM_TEMPLATES } = await import('./lib/adoption-form-templates');
+      const templates = Object.entries(ADOPTION_FORM_TEMPLATES).map(([id, t]) => ({
+        id,
+        name: t.name,
+        description: t.description,
+        fieldCount: t.fields.length,
+      }));
+      res.json({ templates });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * POST /api/adoption-form-fields/reorder
    * Reorder form fields (admin only)
    */

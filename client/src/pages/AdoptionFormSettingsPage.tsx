@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, Edit, Trash2, GripVertical, Save, FileText, MessageSquare } from "lucide-react";
+import { Plus, Edit, Trash2, GripVertical, Save, FileText, MessageSquare, Download, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   DndContext,
@@ -171,6 +171,7 @@ export default function AdoptionFormSettingsPage() {
   const [editingField, setEditingField] = useState<AdoptionFormField | null>(null);
   const [introText, setIntroText] = useState("");
   const [showCustomText, setShowCustomText] = useState(false);
+  const [isTemplateDialogOpen, setIsTemplateDialogOpen] = useState(false);
 
   const { data, isLoading } = useQuery<{ fields: AdoptionFormField[] }>({
     queryKey: ['/api/adoption-form-fields'],
@@ -178,6 +179,28 @@ export default function AdoptionFormSettingsPage() {
 
   const { data: settingsData } = useQuery<{ setting: { introText: string | null } }>({
     queryKey: ['/api/form-settings', 'adoption'],
+  });
+
+  const { data: templatesData } = useQuery<{ templates: Array<{ id: string; name: string; description: string; fieldCount: number }> }>({
+    queryKey: ['/api/adoption-form-templates'],
+  });
+
+  const loadTemplateMutation = useMutation({
+    mutationFn: async (templateId: string) => {
+      return await apiRequest('POST', '/api/adoption-form-fields/load-template', { templateId });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/adoption-form-fields'] });
+      toast({ title: "Success", description: "Template loaded successfully. Your form questions have been replaced." });
+      setIsTemplateDialogOpen(false);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to load template",
+        variant: "destructive",
+      });
+    },
   });
 
   useEffect(() => {
@@ -398,7 +421,11 @@ export default function AdoptionFormSettingsPage() {
         </CardContent>
       </Card>
 
-      <div className="flex items-center justify-end">
+      <div className="flex items-center justify-end gap-2 flex-wrap">
+        <Button variant="outline" onClick={() => setIsTemplateDialogOpen(true)} data-testid="button-load-template">
+          <Download className="w-4 h-4 mr-2" />
+          Load Template
+        </Button>
         <Button onClick={() => handleOpenDialog()} data-testid="button-add-field">
           <Plus className="w-4 h-4 mr-2" />
           Add Question
@@ -676,6 +703,51 @@ export default function AdoptionFormSettingsPage() {
               </DialogFooter>
             </form>
           </Form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isTemplateDialogOpen} onOpenChange={setIsTemplateDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Load Form Template</DialogTitle>
+            <DialogDescription>
+              Choose a pre-built adoption application template. Your organization name will be automatically inserted where needed.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {templatesData?.templates?.map((template) => (
+              <Card key={template.id} className="hover-elevate">
+                <CardContent className="p-4 space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <h4 className="font-medium">{template.name}</h4>
+                      <p className="text-sm text-muted-foreground mt-1">{template.description}</p>
+                      <Badge variant="secondary" className="mt-2">{template.fieldCount} questions</Badge>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2 p-3 rounded-md bg-muted/50 text-sm">
+                    <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+                    <span className="text-muted-foreground">This will replace all existing form questions.</span>
+                  </div>
+                  <Button
+                    className="w-full"
+                    onClick={() => {
+                      if (confirm('Are you sure? This will replace all your existing adoption form questions with this template.')) {
+                        loadTemplateMutation.mutate(template.id);
+                      }
+                    }}
+                    disabled={loadTemplateMutation.isPending}
+                    data-testid={`button-use-template-${template.id}`}
+                  >
+                    {loadTemplateMutation.isPending ? 'Loading...' : 'Use This Template'}
+                  </Button>
+                </CardContent>
+              </Card>
+            ))}
+            {(!templatesData?.templates || templatesData.templates.length === 0) && (
+              <p className="text-center text-muted-foreground py-4">No templates available.</p>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>
