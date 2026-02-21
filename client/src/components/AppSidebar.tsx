@@ -73,6 +73,7 @@ import {
   UserCog,
   Search,
   ArrowRightLeft,
+  HardDrive,
 } from "lucide-react";
 
 interface AppSidebarProps {
@@ -308,6 +309,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
         { title: "Analytics & Reports", url: "/dashboard/analytics", icon: BarChart3 },
         { title: "Adopter Portal Preview", url: "/dashboard/adopter-portal-preview", icon: Eye, proOnly: true },
         { title: "Settings", url: "/dashboard/settings", icon: Settings },
+        { title: "Data & Backups", url: "/dashboard/data-backups", icon: HardDrive },
       ],
       defaultOpen: false,
     },

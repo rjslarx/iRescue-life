@@ -35570,6 +35570,10 @@ The user asking is a tenant administrator or staff member.`;
   const medicationRoutes = await import('./routes/medicationRoutes');
   app.use('/api/medications', requireTenant, medicationRoutes.default);
 
+  // Register data export routes (full database backup for business continuity)
+  const exportRoutes = await import('./routes/export');
+  app.use(exportRoutes.default);
+
   // Volunteer schedule digest settings
   app.get('/api/tenant/settings/volunteer-digest', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
     try {

@@ -45,6 +45,7 @@ import ContractTemplatesPage from "@/pages/ContractTemplatesPage";
 import CustomFormsPage from "@/pages/CustomFormsPage";
 import FormTestingPage from "@/pages/FormTestingPage";
 import SettingsPage from "@/pages/SettingsPage";
+import DataBackupsPage from "@/pages/DataBackupsPage";
 import MyAccountPage from "@/pages/MyAccountPage";
 import ContentPagesPage from "@/pages/ContentPagesPage";
 import ContentModulesPage from "@/pages/ContentModulesPage";
@@ -294,6 +295,7 @@ function RouterSwitch() {
       <ProtectedRoute path="/dashboard/content-modules" pageId="content-modules" component={ContentModulesPage} />
       <Route path="/dashboard/my-account" component={MyAccountPage} />
       <ProtectedRoute path="/dashboard/settings" pageId="branding" component={SettingsPage} />
+      <ProtectedRoute path="/dashboard/data-backups" pageId="data-backups" component={DataBackupsPage} />
       <ProtectedRoute path="/dashboard/platform-integrations" pageId="platform-integrations" component={PlatformIntegrationsPage} />
       <ProtectedRoute path="/dashboard/compliance" pageId="compliance" component={ComplianceSettingsPage} proOnly proFeatureName="Compliance & Watchdog" />
       <ProtectedRoute path="/dashboard/audit-logs" pageId="audit-logs" component={TenantAuditLogsPage} />
