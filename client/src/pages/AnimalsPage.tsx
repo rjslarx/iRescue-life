@@ -79,6 +79,7 @@ const animalFormSchema = insertAnimalSchema.omit({ tenantId: true }).extend({
   behaviorColor: behaviorColorEnum.default("green"),
   behaviorRestrictionReason: z.string().optional(),
   // Physical/Intake fields
+  colors: z.array(z.string()).optional().default([]),
   weight: z.string().optional(),
   intakeSource: z.enum(["stray", "owner_surrender", "transfer", "born_in_care", "other"]).optional(),
   intakeDate: z.date().optional().nullable(),
@@ -114,6 +115,14 @@ const animalFormSchema = insertAnimalSchema.omit({ tenantId: true }).extend({
 });
 
 type AnimalFormData = z.infer<typeof animalFormSchema>;
+
+const STANDARD_ANIMAL_COLORS = [
+  "Black", "White", "Brown", "Tan", "Red", "Orange", "Yellow", "Cream",
+  "Gray", "Blue", "Silver", "Gold", "Fawn", "Sable", "Brindle", "Merle",
+  "Tuxedo", "Bicolor", "Tricolor", "Calico", "Tortoiseshell", "Tabby",
+  "Spotted", "Ticked", "Harlequin", "Seal Point", "Chocolate", "Lilac",
+  "Buff", "Apricot", "Cinnamon", "Liver", "Rust",
+] as const;
 
 const mapSexToPetfinderGender = (sex: string | null | undefined): "Male" | "Female" | "Unknown" | undefined => {
   if (!sex) return undefined;
@@ -333,6 +342,7 @@ function AnimalForm({
       medicalAlertMemo: initialData.medicalAlertMemo || "",
       behaviorColor: initialData.behaviorColor || "green",
       behaviorRestrictionReason: initialData.behaviorRestrictionReason || "",
+      colors: initialData.colors || [],
       weight: initialData.weight || "",
       intakeSource: initialData.intakeSource || undefined,
       intakeDate: initialData.intakeDate ? new Date(initialData.intakeDate) : null,
@@ -374,6 +384,7 @@ function AnimalForm({
       bio: "",
       behaviorColor: "green",
       behaviorRestrictionReason: "",
+      colors: [],
       weight: "",
       intakeSource: undefined,
       intakeDate: null,
@@ -437,6 +448,7 @@ function AnimalForm({
         neuterStatus: a.neuterStatus || undefined,
         dateOfBirth: a.dateOfBirth ? new Date(a.dateOfBirth) : null,
         microchipNumber: a.microchipNumber || "",
+        colors: a.colors || [],
         weight: a.weight || "",
         intakeSource: a.intakeSource || 'owner_surrender',
         intakeDate: null,
@@ -1279,6 +1291,43 @@ function AnimalForm({
                   <FormMessage />
                 </FormItem>
               )}
+            />
+
+            <FormField
+              control={form.control}
+              name="colors"
+              render={({ field }) => {
+                const selectedColors: string[] = field.value || [];
+                return (
+                  <FormItem className="sm:col-span-2 md:col-span-3">
+                    <FormLabel>Color(s)</FormLabel>
+                    <div className="flex flex-wrap gap-2" data-testid="color-selector">
+                      {STANDARD_ANIMAL_COLORS.map((color) => {
+                        const isSelected = selectedColors.includes(color);
+                        return (
+                          <Badge
+                            key={color}
+                            variant={isSelected ? "default" : "outline"}
+                            className={`cursor-pointer select-none ${isSelected ? "toggle-elevate toggle-elevated" : "toggle-elevate"}`}
+                            onClick={() => {
+                              const next = isSelected
+                                ? selectedColors.filter((c) => c !== color)
+                                : [...selectedColors, color];
+                              field.onChange(next);
+                            }}
+                            data-testid={`badge-color-${color.toLowerCase().replace(/\s+/g, '-')}`}
+                          >
+                            {isSelected && <Check className="h-3 w-3 mr-1" />}
+                            {color}
+                          </Badge>
+                        );
+                      })}
+                    </div>
+                    <FormDescription>Select all colors that apply to this animal.</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                );
+              }}
             />
             
             <FormField
