@@ -2368,8 +2368,8 @@ export default function SettingsPage() {
                   </CardContent>
                 </Card>
 
-                {/* Legacy Stripe API Keys - for tenants who prefer direct integration */}
-                <Card>
+                {/* Legacy Stripe API Keys - only visible to platform admins */}
+                {user?.roles?.includes('platform_admin') && (<Card>
                   <CardHeader>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
@@ -2506,7 +2506,7 @@ export default function SettingsPage() {
                       </form>
                     </Form>
                   </CardContent>
-                </Card>
+                </Card>)}
 
                 <Card>
                   <CardHeader>
