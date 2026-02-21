@@ -23095,7 +23095,13 @@ Submitted: ${new Date().toLocaleString()}
       
       console.log('[STRIPE-WEBHOOK] Received webhook event');
 
-      const payload = JSON.parse(req.body.toString('utf8'));
+      const rawBody = (req as any).rawBody;
+      if (!rawBody || !Buffer.isBuffer(rawBody)) {
+        console.error('[STRIPE-WEBHOOK] ERROR: rawBody not available or not a Buffer');
+        return res.status(400).send('Webhook raw body not available');
+      }
+      const bodyStr = rawBody.toString('utf8');
+      const payload = JSON.parse(bodyStr);
       console.log(`[STRIPE-WEBHOOK] Event type: ${payload.type}, event ID: ${payload.id}`);
       
       let metadata = payload.data?.object?.metadata || {};
@@ -23143,7 +23149,7 @@ Submitted: ${new Date().toLocaleString()}
       let event;
       try {
         event = await stripeService.handleWebhook(
-          req.body,
+          rawBody,
           signature,
           webhookSecret
         );
@@ -31740,7 +31746,11 @@ Email: ${application.applicantEmail || ''}`
         });
       }
       
-      const data = insertMedicalBillSchema.parse(req.body);
+      const data = insertMedicalBillSchema.omit({
+        animalId: true,
+        tenantId: true,
+        createdBy: true,
+      }).parse(req.body);
 
       // Security: Validate grantId belongs to this tenant if provided
       if (data.grantId) {
