@@ -23204,16 +23204,29 @@ Submitted: ${new Date().toLocaleString()}
         .where(eq(tenants.id, tenantId))
         .limit(1);
 
-      if (!tenant || !tenant.stripeEnabled || !tenant.stripeWebhookSecretEncrypted) {
-        console.error('[STRIPE-WEBHOOK] ERROR: Tenant not found or not configured:', tenantId);
-        console.error(`[STRIPE-WEBHOOK]   tenant found: ${!!tenant}, stripeEnabled: ${tenant?.stripeEnabled}, webhookSecretSet: ${!!tenant?.stripeWebhookSecretEncrypted}`);
+      if (!tenant || !tenant.stripeEnabled) {
+        console.error('[STRIPE-WEBHOOK] ERROR: Tenant not found or Stripe not enabled:', tenantId);
+        console.error(`[STRIPE-WEBHOOK]   tenant found: ${!!tenant}, stripeEnabled: ${tenant?.stripeEnabled}`);
+        return res.status(400).send('Webhook not configured for this tenant');
+      }
+
+      let webhookSecret: string | undefined;
+      if (tenant.stripeWebhookSecretEncrypted) {
+        webhookSecret = decrypt(tenant.stripeWebhookSecretEncrypted);
+        console.log(`[STRIPE-WEBHOOK] Using tenant-specific webhook secret for ${tenant.name}`);
+      } else if (tenant.stripeConnectedAccountId && process.env.PLATFORM_STRIPE_WEBHOOK_SECRET) {
+        webhookSecret = process.env.PLATFORM_STRIPE_WEBHOOK_SECRET;
+        console.log(`[STRIPE-WEBHOOK] Using platform webhook secret for Connect tenant ${tenant.name} (account: ${tenant.stripeConnectedAccountId})`);
+      } else {
+        const reason = !tenant.stripeConnectedAccountId
+          ? 'Tenant uses direct API keys but has no webhook secret configured'
+          : 'Connect tenant but PLATFORM_STRIPE_WEBHOOK_SECRET env var is not set';
+        console.error(`[STRIPE-WEBHOOK] ERROR: No webhook secret available for tenant ${tenant.name}: ${reason}`);
         return res.status(400).send('Webhook not configured for this tenant');
       }
       
       console.log(`[STRIPE-WEBHOOK] Tenant ${tenant.name} (${tenant.subdomain}) has Stripe configured`);
 
-      const webhookSecret = decrypt(tenant.stripeWebhookSecretEncrypted);
-      
       let event;
       try {
         event = await stripeService.handleWebhook(
