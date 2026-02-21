@@ -348,7 +348,7 @@ export default function FosterAnimalProfilePage() {
         <div className="flex-1">
           <h1 className="text-xl sm:text-2xl font-semibold">{animal.name}</h1>
           <p className="text-sm text-muted-foreground">
-            {animal.species} • {animal.breed}
+            {animal.species} • {animal.breed}{animal.colors?.length > 0 ? ` • ${animal.colors.join(', ')}` : ''}
           </p>
         </div>
         <Button variant="default" onClick={() => setLocation(`/dashboard/my-fosters/${animal.id}/medical`)} data-testid="button-view-medical">
@@ -416,6 +416,12 @@ export default function FosterAnimalProfilePage() {
                             <dt className="text-muted-foreground">Breed:</dt>
                             <dd className="font-medium">{animal.breed}</dd>
                           </div>
+                          {animal.colors?.length > 0 && (
+                            <div className="flex justify-between">
+                              <dt className="text-muted-foreground">Color(s):</dt>
+                              <dd className="font-medium" data-testid="text-animal-colors">{animal.colors.join(', ')}</dd>
+                            </div>
+                          )}
                           <div className="flex justify-between">
                             <dt className="text-muted-foreground">Age:</dt>
                             <dd className="font-medium">{animal.age}</dd>

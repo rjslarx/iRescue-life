@@ -263,6 +263,9 @@ export default function PublicAnimalProfilePage() {
                       <div className="flex flex-wrap gap-2 mt-2">
                         <Badge variant="secondary">{animal.species}</Badge>
                         <Badge variant="outline">{animal.breed}</Badge>
+                        {animal.colors?.length > 0 && (
+                          <Badge variant="outline" data-testid="badge-animal-colors">{animal.colors.join(', ')}</Badge>
+                        )}
                         <Badge variant="outline">{animal.age} years old</Badge>
                         {animal.status === 'adoption_pending' && (
                           <Badge variant="default" className="bg-amber-500">Adoption Pending</Badge>

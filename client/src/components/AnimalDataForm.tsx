@@ -12,7 +12,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertAnimalSchema, type Animal, PETFINDER_TYPES, PETFINDER_AGES, PETFINDER_SIZES, PETFINDER_GENDERS } from "@shared/schema";
+import { insertAnimalSchema, type Animal, PETFINDER_TYPES, PETFINDER_AGES, PETFINDER_SIZES, PETFINDER_GENDERS, ANIMAL_COLORS } from "@shared/schema";
 import { PETFINDER_BREEDS, getBreedsForType, mapSpeciesToPetfinderType } from "@shared/petfinder-breeds";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -48,6 +48,7 @@ const animalFormSchema = insertAnimalSchema.omit({ tenantId: true }).extend({
   behaviorColor: behaviorColorEnum.default("green"),
   behaviorRestrictionReason: z.string().optional(),
   weight: z.string().optional(),
+  colors: z.array(z.string()).optional().default([]),
   intakeSource: z.enum(["stray", "owner_surrender", "transfer", "born_in_care", "other"]).optional(),
   intakeDate: z.date().optional().nullable(),
   activityLevel: z.enum(["low", "moderate", "high"]).optional(),
@@ -246,6 +247,7 @@ export function AnimalDataForm({ animalId, initialData, onSuccess, onCancel }: A
       behaviorColor: "green",
       behaviorRestrictionReason: "",
       weight: "",
+      colors: [],
       intakeSource: undefined,
       intakeDate: null,
       activityLevel: undefined,
@@ -294,6 +296,7 @@ export function AnimalDataForm({ animalId, initialData, onSuccess, onCancel }: A
         behaviorColor: animalData.behaviorColor || "green",
         behaviorRestrictionReason: animalData.behaviorRestrictionReason || "",
         weight: animalData.weight || "",
+        colors: animalData.colors || [],
         intakeSource: animalData.intakeSource || undefined,
         intakeDate: animalData.intakeDate ? new Date(animalData.intakeDate) : null,
         activityLevel: animalData.activityLevel || undefined,
@@ -1187,6 +1190,84 @@ export function AnimalDataForm({ animalId, initialData, onSuccess, onCancel }: A
               )}
             />
             
+            <FormField
+              control={form.control}
+              name="colors"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Color(s)</FormLabel>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <FormControl>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          className={cn(
+                            "w-full justify-between font-normal",
+                            (!field.value || field.value.length === 0) && "text-muted-foreground"
+                          )}
+                          data-testid="select-animal-colors"
+                        >
+                          {field.value && field.value.length > 0
+                            ? field.value.join(", ")
+                            : "Select color(s)..."}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </FormControl>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[300px] p-0" align="start">
+                      <Command>
+                        <CommandInput placeholder="Search colors..." />
+                        <CommandList>
+                          <CommandEmpty>No color found.</CommandEmpty>
+                          <CommandGroup>
+                            {ANIMAL_COLORS.map((color) => (
+                              <CommandItem
+                                key={color}
+                                value={color}
+                                onSelect={() => {
+                                  const current = field.value || [];
+                                  const updated = current.includes(color)
+                                    ? current.filter((c: string) => c !== color)
+                                    : [...current, color];
+                                  field.onChange(updated);
+                                }}
+                                data-testid={`color-option-${color.toLowerCase().replace(/\s/g, '-')}`}
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4",
+                                    field.value?.includes(color) ? "opacity-100" : "opacity-0"
+                                  )}
+                                />
+                                {color}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                  {field.value && field.value.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {field.value.map((color: string) => (
+                        <Badge
+                          key={color}
+                          variant="secondary"
+                          className="cursor-pointer"
+                          onClick={() => field.onChange(field.value?.filter((c: string) => c !== color))}
+                          data-testid={`color-badge-${color.toLowerCase().replace(/\s/g, '-')}`}
+                        >
+                          {color} &times;
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             <FormField
               control={form.control}
               name="intakeSource"

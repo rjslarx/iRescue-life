@@ -511,6 +511,7 @@ export const animals = pgTable("animals", {
   locationFound: text("location_found"), // Where the stray animal was found (address or intersection)
   strayHoldUntil: timestamp("stray_hold_until"), // Date when stray hold expires
   weight: text("weight"), // Current weight (e.g., "25 lbs", "4.2 kg")
+  colors: text("colors").array(), // Standardized color(s) for the animal (e.g., ["Black", "Tan"])
   activityLevel: text("activity_level").$type<"low" | "moderate" | "high">(), // Energy/activity level
   dietaryRestrictions: text("dietary_restrictions"), // Special diet notes
   adoptionDate: timestamp("adoption_date"),
@@ -562,6 +563,39 @@ export type AnimalStatus = Animal["status"];
 
 export const TERMINAL_STATUSES: AnimalStatus[] = ["adopted", "transported", "deceased"] as const;
 export const ACTIVE_STATUSES: AnimalStatus[] = ["available", "adoption_pending", "transfer_pending", "medical_hold", "stray_hold"] as const;
+
+export const ANIMAL_COLORS = [
+  "Black",
+  "White",
+  "Brown",
+  "Tan",
+  "Red",
+  "Golden",
+  "Cream",
+  "Gray",
+  "Blue",
+  "Silver",
+  "Fawn",
+  "Sable",
+  "Brindle",
+  "Merle",
+  "Calico",
+  "Tabby",
+  "Tortoiseshell",
+  "Tuxedo",
+  "Spotted",
+  "Tricolor",
+  "Bicolor",
+  "Orange",
+  "Chocolate",
+  "Liver",
+  "Apricot",
+  "Buff",
+  "Lilac",
+  "Seal Point",
+  "Blue Point",
+] as const;
+export type AnimalColor = typeof ANIMAL_COLORS[number];
 
 // Animal Notes table - staff notes about animals
 export const animalNotes = pgTable("animal_notes", {
