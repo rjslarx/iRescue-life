@@ -1321,4 +1321,359 @@ router.post('/photos/upload', async (req: Request, res: Response) => {
   }
 });
 
+// ===== ADMIN PREVIEW ROUTES =====
+// These routes let admins/owners preview the adopter portal as if they were a specific adopter
+
+function requireAdmin(req: Request, res: Response): { tenantId: string } | null {
+  if (!req.user || !req.user.roles?.some((r: string) => ['admin', 'owner'].includes(r))) {
+    res.status(403).json({ error: 'Admin access required' });
+    return null;
+  }
+  if (!req.tenant?.id) {
+    res.status(400).json({ error: 'Tenant required' });
+    return null;
+  }
+  return { tenantId: req.tenant.id };
+}
+
+/**
+ * GET /api/adopter/admin/adopters
+ * Returns deduplicated list of adopters from completed adoption applications
+ */
+router.get('/admin/adopters', async (req: Request, res: Response) => {
+  try {
+    const auth = requireAdmin(req, res);
+    if (!auth) return;
+
+    const adoptedApps = await db
+      .select({
+        applicantName: applications.applicantName,
+        applicantEmail: applications.applicantEmail,
+        applicantPhone: applications.applicantPhone,
+        animalId: applications.animalId,
+        animalName: animals.name,
+        adoptedAt: animals.adoptionDate,
+      })
+      .from(applications)
+      .innerJoin(animals, eq(animals.id, applications.animalId))
+      .where(and(
+        eq(applications.tenantId, auth.tenantId),
+        eq(applications.stage, 'adopted')
+      ))
+      .orderBy(desc(animals.adoptionDate));
+
+    const adoptersMap = new Map<string, {
+      id: string;
+      email: string;
+      fullName: string;
+      phone: string | null;
+      adoptedAnimals: Array<{ id: string; name: string; adoptedAt: string }>;
+    }>();
+
+    for (const app of adoptedApps) {
+      const key = app.applicantEmail.toLowerCase();
+      const existing = adoptersMap.get(key);
+      const animalEntry = {
+        id: app.animalId,
+        name: app.animalName || 'Unknown',
+        adoptedAt: app.adoptedAt || new Date().toISOString(),
+      };
+
+      if (existing) {
+        if (!existing.adoptedAnimals.find(a => a.id === app.animalId)) {
+          existing.adoptedAnimals.push(animalEntry);
+        }
+      } else {
+        adoptersMap.set(key, {
+          id: key,
+          email: app.applicantEmail,
+          fullName: app.applicantName || app.applicantEmail,
+          phone: app.applicantPhone || null,
+          adoptedAnimals: [animalEntry],
+        });
+      }
+    }
+
+    res.json(Array.from(adoptersMap.values()));
+  } catch (error) {
+    console.error('[Adopter Portal Admin] Error fetching adopters:', error);
+    res.status(500).json({ error: 'Failed to load adopters' });
+  }
+});
+
+/**
+ * GET /api/adopter/admin/adopter-preview/:adopterId/pets
+ * Returns adopted animals for a specific adopter (adopterId is the lowercased email)
+ */
+router.get('/admin/adopter-preview/:adopterId/pets', async (req: Request, res: Response) => {
+  try {
+    const auth = requireAdmin(req, res);
+    if (!auth) return;
+
+    const adopterEmail = decodeURIComponent(req.params.adopterId).toLowerCase();
+
+    const adoptedAnimals = await db
+      .select({
+        id: animals.id,
+        name: animals.name,
+        species: animals.species,
+        breed: animals.breed,
+        photoUrls: animals.photoUrls,
+        adoptedAt: animals.adoptionDate,
+        microchipNumber: animals.microchipNumber,
+      })
+      .from(animals)
+      .innerJoin(
+        applications,
+        and(
+          eq(applications.animalId, animals.id),
+          eq(applications.tenantId, auth.tenantId),
+          eq(applications.stage, 'adopted'),
+          sql`LOWER(${applications.applicantEmail}) = ${adopterEmail}`
+        )
+      )
+      .where(eq(animals.tenantId, auth.tenantId))
+      .orderBy(desc(animals.adoptionDate));
+
+    res.json(adoptedAnimals);
+  } catch (error) {
+    console.error('[Adopter Portal Admin] Error fetching adopter pets:', error);
+    res.status(500).json({ error: 'Failed to load adopter pets' });
+  }
+});
+
+/**
+ * GET /api/adopter/admin/adopter-preview/:adopterId/pets/:animalId
+ * Returns a single adopted animal detail for the admin preview
+ */
+router.get('/admin/adopter-preview/:adopterId/pets/:animalId', async (req: Request, res: Response) => {
+  try {
+    const auth = requireAdmin(req, res);
+    if (!auth) return;
+
+    const adopterEmail = decodeURIComponent(req.params.adopterId).toLowerCase();
+    const { animalId } = req.params;
+
+    const [animal] = await db
+      .select({
+        id: animals.id,
+        name: animals.name,
+        species: animals.species,
+        breed: animals.breed,
+        photoUrls: animals.photoUrls,
+        adoptedAt: animals.adoptionDate,
+        microchipNumber: animals.microchipNumber,
+        weight: animals.weight,
+      })
+      .from(animals)
+      .innerJoin(
+        applications,
+        and(
+          eq(applications.animalId, animals.id),
+          eq(applications.tenantId, auth.tenantId),
+          eq(applications.stage, 'adopted'),
+          sql`LOWER(${applications.applicantEmail}) = ${adopterEmail}`
+        )
+      )
+      .where(and(
+        eq(animals.id, animalId),
+        eq(animals.tenantId, auth.tenantId)
+      ))
+      .limit(1);
+
+    if (!animal) {
+      return res.status(404).json({ error: 'Pet not found' });
+    }
+
+    res.json(animal);
+  } catch (error) {
+    console.error('[Adopter Portal Admin] Error fetching pet detail:', error);
+    res.status(500).json({ error: 'Failed to load pet details' });
+  }
+});
+
+/**
+ * GET /api/adopter/admin/adopter-preview/:adopterId/pets/:animalId/vaccinations
+ */
+router.get('/admin/adopter-preview/:adopterId/pets/:animalId/vaccinations', async (req: Request, res: Response) => {
+  try {
+    const auth = requireAdmin(req, res);
+    if (!auth) return;
+
+    const { animalId } = req.params;
+
+    const careRecords = await db
+      .select({
+        id: preventativeCareRecords.id,
+        vaccineName: preventativeCareRecords.careName,
+        dateAdministered: preventativeCareRecords.dateAdministered,
+        expirationDate: preventativeCareRecords.nextDueDate,
+        veterinarian: preventativeCareRecords.administeredBy,
+      })
+      .from(preventativeCareRecords)
+      .where(and(
+        eq(preventativeCareRecords.animalId, animalId),
+        eq(preventativeCareRecords.tenantId, auth.tenantId),
+        eq(preventativeCareRecords.careCategory, 'vaccine')
+      ))
+      .orderBy(desc(preventativeCareRecords.dateAdministered));
+
+    const legacyVaccines = await db
+      .select({
+        id: vaccineRecords.id,
+        vaccineName: vaccineRecords.itemName,
+        dateAdministered: vaccineRecords.dateGiven,
+        expirationDate: vaccineRecords.dateDue,
+        veterinarian: vaccineRecords.administeredBy,
+      })
+      .from(vaccineRecords)
+      .where(and(
+        eq(vaccineRecords.animalId, animalId),
+        eq(vaccineRecords.tenantId, auth.tenantId)
+      ))
+      .orderBy(desc(vaccineRecords.dateGiven));
+
+    const combined = [...careRecords, ...legacyVaccines]
+      .sort((a, b) => new Date(b.dateAdministered).getTime() - new Date(a.dateAdministered).getTime());
+
+    res.json(combined);
+  } catch (error) {
+    console.error('[Adopter Portal Admin] Error fetching vaccinations:', error);
+    res.status(500).json({ error: 'Failed to load vaccinations' });
+  }
+});
+
+/**
+ * GET /api/adopter/admin/adopter-preview/:adopterId/pets/:animalId/medical-exams
+ */
+router.get('/admin/adopter-preview/:adopterId/pets/:animalId/medical-exams', async (req: Request, res: Response) => {
+  try {
+    const auth = requireAdmin(req, res);
+    if (!auth) return;
+
+    const { animalId } = req.params;
+
+    const exams = await db
+      .select({
+        id: medicalExams.id,
+        examType: medicalExams.examType,
+        examDate: medicalExams.examDate,
+        findings: medicalExams.assessment,
+        veterinarian: medicalExams.performedBy,
+      })
+      .from(medicalExams)
+      .where(and(
+        eq(medicalExams.animalId, animalId),
+        eq(medicalExams.tenantId, auth.tenantId)
+      ))
+      .orderBy(desc(medicalExams.examDate));
+
+    res.json(exams);
+  } catch (error) {
+    console.error('[Adopter Portal Admin] Error fetching medical exams:', error);
+    res.status(500).json({ error: 'Failed to load medical exams' });
+  }
+});
+
+/**
+ * GET /api/adopter/admin/adopter-preview/:adopterId/pets/:animalId/weight-logs
+ */
+router.get('/admin/adopter-preview/:adopterId/pets/:animalId/weight-logs', async (req: Request, res: Response) => {
+  try {
+    const auth = requireAdmin(req, res);
+    if (!auth) return;
+
+    const { animalId } = req.params;
+
+    const logs = await db
+      .select({
+        id: adopterWeightLogs.id,
+        weight: adopterWeightLogs.weight,
+        weightUnit: adopterWeightLogs.weightUnit,
+        loggedAt: adopterWeightLogs.loggedAt,
+        notes: adopterWeightLogs.notes,
+      })
+      .from(adopterWeightLogs)
+      .where(and(
+        eq(adopterWeightLogs.animalId, animalId),
+        eq(adopterWeightLogs.tenantId, auth.tenantId)
+      ))
+      .orderBy(desc(adopterWeightLogs.loggedAt));
+
+    res.json(logs);
+  } catch (error) {
+    console.error('[Adopter Portal Admin] Error fetching weight logs:', error);
+    res.status(500).json({ error: 'Failed to load weight logs' });
+  }
+});
+
+/**
+ * GET /api/adopter/admin/adopter-preview/:adopterId/pets/:animalId/medication-reminders
+ */
+router.get('/admin/adopter-preview/:adopterId/pets/:animalId/medication-reminders', async (req: Request, res: Response) => {
+  try {
+    const auth = requireAdmin(req, res);
+    if (!auth) return;
+
+    const { animalId } = req.params;
+
+    const reminders = await db
+      .select({
+        id: adopterMedicationReminders.id,
+        medicationName: adopterMedicationReminders.medicationName,
+        frequency: adopterMedicationReminders.frequency,
+        nextDueDate: adopterMedicationReminders.nextDueDate,
+        lastConfirmedDate: adopterMedicationReminders.lastConfirmedDate,
+      })
+      .from(adopterMedicationReminders)
+      .where(and(
+        eq(adopterMedicationReminders.animalId, animalId),
+        eq(adopterMedicationReminders.tenantId, auth.tenantId)
+      ))
+      .orderBy(asc(adopterMedicationReminders.nextDueDate));
+
+    res.json(reminders);
+  } catch (error) {
+    console.error('[Adopter Portal Admin] Error fetching medication reminders:', error);
+    res.status(500).json({ error: 'Failed to load medication reminders' });
+  }
+});
+
+/**
+ * GET /api/adopter/admin/adopter-preview/:adopterId/pets/:animalId/happy-tails
+ */
+router.get('/admin/adopter-preview/:adopterId/pets/:animalId/happy-tails', async (req: Request, res: Response) => {
+  try {
+    const auth = requireAdmin(req, res);
+    if (!auth) return;
+
+    const { animalId } = req.params;
+
+    const updates = await db
+      .select({
+        id: happyTails.id,
+        photoUrl: happyTails.photoUrl,
+        message: happyTails.story,
+        isApproved: happyTails.isPublished,
+        createdAt: happyTails.createdAt,
+      })
+      .from(happyTails)
+      .where(and(
+        eq(happyTails.animalId, animalId),
+        eq(happyTails.tenantId, auth.tenantId)
+      ))
+      .orderBy(desc(happyTails.createdAt));
+
+    const mapped = updates.map(u => ({
+      ...u,
+      photoUrls: u.photoUrl ? [u.photoUrl] : [],
+    }));
+
+    res.json(mapped);
+  } catch (error) {
+    console.error('[Adopter Portal Admin] Error fetching happy tails:', error);
+    res.status(500).json({ error: 'Failed to load updates' });
+  }
+});
+
 export default router;

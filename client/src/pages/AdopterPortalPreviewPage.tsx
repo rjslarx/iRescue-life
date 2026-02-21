@@ -95,8 +95,8 @@ export default function AdopterPortalPreviewPage() {
   const [selectedAnimalId, setSelectedAnimalId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("compliance");
 
-  // Frontend admin check - API also enforces this
-  const isAdmin = user?.roles?.includes("admin");
+  // Frontend admin check - API also enforces this (admin or owner)
+  const isAdmin = user?.roles?.some((r: string) => ['admin', 'owner'].includes(r));
   
   if (!isAdmin) {
     return (
