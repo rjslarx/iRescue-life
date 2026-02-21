@@ -153,7 +153,7 @@ function EmergencyCampaignCard({ campaign, summary }: {
   };
 
   return (
-    <Card className="overflow-visible mb-8" data-testid={`public-emergency-card-${campaign.id}`}>
+    <Card id={`campaign-${campaign.id}`} className="overflow-visible mb-8" data-testid={`public-emergency-card-${campaign.id}`}>
       {campaign.imageUrl && (
         <div className="relative h-56 sm:h-72 w-full overflow-hidden rounded-t-md">
           <img

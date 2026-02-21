@@ -9,8 +9,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Menu, ChevronDown, Package } from "lucide-react";
+import { Menu, ChevronDown, Package, Heart } from "lucide-react";
 import type { CustomPage, SupplyItem, Tenant } from "@shared/schema";
+
+interface ActiveCampaign {
+  id: string;
+  title: string;
+}
 import { useTenant } from "@/contexts/TenantContext";
 
 const DEFAULT_LOGO = "/icon-192.png";
@@ -47,11 +52,17 @@ export default function PublicHeader({ rescueName, logoUrl }: PublicHeaderProps)
     staleTime: 1000 * 60 * 5,
   });
   
+  const { data: campaignsData } = useQuery<{ campaigns: ActiveCampaign[] }>({
+    queryKey: ['/api/public-emergency-campaigns'],
+    staleTime: 1000 * 60 * 5,
+  });
+
   const navigationPages = pagesData?.pages || [];
   const hasWishlistItems = (supplyData?.items?.length || 0) > 0;
+  const activeCampaigns = campaignsData?.campaigns || [];
   
-  // Show "More" dropdown if there are custom pages OR wishlist items
-  const showMoreDropdown = navigationPages.length > 0 || hasWishlistItems;
+  // Show "More" dropdown if there are custom pages, wishlist items, or active campaigns
+  const showMoreDropdown = navigationPages.length > 0 || hasWishlistItems || activeCampaigns.length > 0;
   
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -129,6 +140,18 @@ export default function PublicHeader({ rescueName, logoUrl }: PublicHeaderProps)
                     </Link>
                   </DropdownMenuItem>
                 )}
+                {activeCampaigns.map((campaign) => (
+                  <DropdownMenuItem key={campaign.id} asChild>
+                    <Link 
+                      href={`/donate#campaign-${campaign.id}`}
+                      className="cursor-pointer w-full flex items-center gap-2"
+                      data-testid={`link-nav-campaign-${campaign.id}`}
+                    >
+                      <Heart className="h-4 w-4" />
+                      {campaign.title}
+                    </Link>
+                  </DropdownMenuItem>
+                ))}
                 {navigationPages.map((page) => (
                   <DropdownMenuItem key={page.id} asChild>
                     <Link 
@@ -235,7 +258,7 @@ export default function PublicHeader({ rescueName, logoUrl }: PublicHeaderProps)
                 </Link>
               )}
               
-              {/* Custom Navigation Pages & Wishlist - in mobile menu */}
+              {/* Custom Navigation Pages, Campaigns & Wishlist - in mobile menu */}
               {showMoreDropdown && (
                 <>
                   <div className="border-t my-2" />
@@ -252,6 +275,19 @@ export default function PublicHeader({ rescueName, logoUrl }: PublicHeaderProps)
                       </Button>
                     </Link>
                   )}
+                  {activeCampaigns.map((campaign) => (
+                    <Link key={campaign.id} href={`/donate#campaign-${campaign.id}`}>
+                      <Button 
+                        variant="ghost" 
+                        className="w-full justify-start"
+                        data-testid={`button-nav-campaign-${campaign.id}-mobile`}
+                        onClick={() => setMobileMenuOpen(false)}
+                      >
+                        <Heart className="h-4 w-4 mr-2" />
+                        {campaign.title}
+                      </Button>
+                    </Link>
+                  ))}
                   {navigationPages.map((page) => (
                     <Link key={page.id} href={`/${page.slug}`}>
                       <Button 
