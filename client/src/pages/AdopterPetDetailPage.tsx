@@ -428,7 +428,7 @@ export default function AdopterPetDetailPage() {
                   </div>
                   <Button variant="outline" size="sm" asChild>
                     <a 
-                      href="https://www.petmicrochiplookup.org/" 
+                      href={`https://www.petmicrochiplookup.org/?microchip_id=${encodeURIComponent(pet.microchipNumber || '')}`}
                       target="_blank" 
                       rel="noopener noreferrer"
                     >

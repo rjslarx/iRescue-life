@@ -250,7 +250,7 @@ export function AddMicrochipDialog({ animalId, open, onOpenChange, microchip }: 
                     </FormControl>
                     <FormDescription>
                       <a 
-                        href="https://www.petmicrochiplookup.org/" 
+                        href={`https://www.petmicrochiplookup.org/${field.value ? `?microchip_id=${encodeURIComponent(field.value)}` : ''}`}
                         target="_blank" 
                         rel="noopener noreferrer"
                         className="text-primary hover:underline flex items-center gap-1 text-xs"

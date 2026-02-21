@@ -10,7 +10,7 @@ import {
   Stethoscope, Users, Pencil, ClipboardList, FileText, Camera,
   MapPin, Home, Building2, Truck, Cat, Dog, Baby, Heart,
   Scissors, AlertTriangle, Shield, ShieldAlert, ShieldX,
-  Send, X, Wand2, Sparkles, FileUp, History, PawPrint,
+  Send, X, Wand2, Sparkles, FileUp, History, PawPrint, Search,
   Calendar as CalendarIcon, Check, ExternalLink, ArrowRightLeft, Mail, Phone
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -378,11 +378,25 @@ export function AnimalHudCard({
           </CollapsibleTrigger>
           <CollapsibleContent>
             <div className="pt-2 space-y-2">
-              {animal.microchipNumber && (
-                <div className="text-xs text-muted-foreground flex items-center gap-1">
-                  <PawPrint className="h-3 w-3" />
-                  Chip: {animal.microchipNumber}
-                </div>
+              {animal.microchipNumber ? (
+                <a
+                  href={`https://www.petmicrochiplookup.org/?microchip_id=${encodeURIComponent(animal.microchipNumber)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-900 cursor-pointer transition-colors"
+                  data-testid={`badge-microchip-${animal.id}`}
+                >
+                  <Search className="h-3 w-3" />
+                  {animal.microchipNumber}
+                  <ExternalLink className="h-2.5 w-2.5" />
+                </a>
+              ) : (
+                <span
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-500"
+                  data-testid={`badge-no-microchip-${animal.id}`}
+                >
+                  No Microchip
+                </span>
               )}
               {animal.intakeDate && (
                 <div className="text-xs text-muted-foreground flex items-center gap-1">
