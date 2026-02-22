@@ -7615,15 +7615,37 @@ Crawl-delay: 1
       // Save RTO documents (government ID, vet records, signature) as medical files linked to the animal
       try {
         const { medicalFiles } = await import('@shared/schema');
-        const allDocs: { url: string; desc: string }[] = [];
+        const { ObjectStorageService } = await import('./objectStorage');
+        const objectStorage = new ObjectStorageService();
+        const allDocs: { url: string; desc: string; mimeType: string }[] = [];
         if (data.governmentIdUrls && data.governmentIdUrls.length > 0) {
-          data.governmentIdUrls.forEach((url, i) => allDocs.push({ url, desc: `RTO - Owner Government ID ${i + 1}` }));
+          data.governmentIdUrls.forEach((url, i) => allDocs.push({ url, desc: `RTO - Owner Government ID ${i + 1}`, mimeType: 'application/octet-stream' }));
         }
         if (data.vetRecordUrls && data.vetRecordUrls.length > 0) {
-          data.vetRecordUrls.forEach((url, i) => allDocs.push({ url, desc: `RTO - Owner Vet Records / Proof of Ownership ${i + 1}` }));
+          data.vetRecordUrls.forEach((url, i) => allDocs.push({ url, desc: `RTO - Owner Vet Records / Proof of Ownership ${i + 1}`, mimeType: 'application/octet-stream' }));
         }
         if (data.signatureData) {
-          allDocs.push({ url: data.signatureData, desc: 'RTO - Owner Signature on Waiver' });
+          try {
+            const base64Match = data.signatureData.match(/^data:image\/\w+;base64,(.+)$/);
+            if (base64Match) {
+              const imageBuffer = Buffer.from(base64Match[1], 'base64');
+              const sigFilename = `rto-signature-${animal.id}-${Date.now()}.png`;
+              const result = await objectStorage.uploadTenantFile(
+                req.tenant!.id,
+                'rto-documents',
+                imageBuffer,
+                'image/png',
+                sigFilename,
+              );
+              allDocs.push({ url: result.objectPath, desc: 'RTO - Owner Signature on Waiver', mimeType: 'image/png' });
+              console.log(`RTO: Uploaded signature to object storage: ${result.objectPath}`);
+            } else {
+              allDocs.push({ url: data.signatureData, desc: 'RTO - Owner Signature on Waiver', mimeType: 'image/png' });
+            }
+          } catch (sigErr: any) {
+            console.error('Failed to upload RTO signature to object storage, saving inline:', sigErr.message);
+            allDocs.push({ url: data.signatureData, desc: 'RTO - Owner Signature on Waiver', mimeType: 'image/png' });
+          }
         }
         for (const doc of allDocs) {
           await db.insert(medicalFiles).values({
@@ -7631,7 +7653,7 @@ Crawl-delay: 1
             tenantId: req.tenant!.id,
             fileName: doc.desc,
             fileUrl: doc.url,
-            mimeType: doc.url.startsWith('data:') ? 'image/png' : 'application/octet-stream',
+            mimeType: doc.mimeType,
             description: doc.desc,
             uploadedBy: req.user!.id,
           });
