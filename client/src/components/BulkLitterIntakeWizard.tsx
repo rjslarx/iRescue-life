@@ -67,8 +67,6 @@ export function BulkLitterIntakeWizard({ open, onOpenChange, onSuccess }: BulkLi
       applyProtocol: true,
       animals: [
         { name: "", sex: "unknown", colors: [], weight: "" },
-        { name: "", sex: "unknown", colors: [], weight: "" },
-        { name: "", sex: "unknown", colors: [], weight: "" },
       ],
     },
   });
@@ -81,12 +79,14 @@ export function BulkLitterIntakeWizard({ open, onOpenChange, onSuccess }: BulkLi
   const watchedType = form.watch("petfinderType");
   const availableBreeds = getBreedsForType(watchedType as any) || [];
 
-  const { data: existingAnimals } = useQuery<any[]>({
+  const { data: existingAnimalsData } = useQuery<{ animals: any[] }>({
     queryKey: ['/api/animals'],
     enabled: open,
   });
 
-  const femaleAnimals = (existingAnimals || []).filter(
+  const existingAnimals = Array.isArray(existingAnimalsData) ? existingAnimalsData : (existingAnimalsData?.animals || []);
+
+  const femaleAnimals = existingAnimals.filter(
     (a: any) => (a.sex === 'female' || a.petfinderGender === 'Female') && !['adopted', 'transported', 'deceased'].includes(a.status)
   );
 
