@@ -23228,34 +23228,43 @@ Submitted: ${new Date().toLocaleString()}
         return res.status(400).send('Webhook not configured for this tenant');
       }
 
-      let webhookSecret: string | undefined;
+      const secretsToTry: { secret: string; label: string }[] = [];
       if (tenant.stripeWebhookSecretEncrypted) {
-        webhookSecret = decrypt(tenant.stripeWebhookSecretEncrypted);
-        console.log(`[STRIPE-WEBHOOK] Using tenant-specific webhook secret for ${tenant.name}`);
-      } else if (tenant.stripeConnectedAccountId && process.env.PLATFORM_STRIPE_WEBHOOK_SECRET) {
-        webhookSecret = process.env.PLATFORM_STRIPE_WEBHOOK_SECRET;
-        console.log(`[STRIPE-WEBHOOK] Using platform webhook secret for Connect tenant ${tenant.name} (account: ${tenant.stripeConnectedAccountId})`);
-      } else {
-        const reason = !tenant.stripeConnectedAccountId
-          ? 'Tenant uses direct API keys but has no webhook secret configured'
-          : 'Connect tenant but PLATFORM_STRIPE_WEBHOOK_SECRET env var is not set';
-        console.error(`[STRIPE-WEBHOOK] ERROR: No webhook secret available for tenant ${tenant.name}: ${reason}`);
+        secretsToTry.push({ secret: decrypt(tenant.stripeWebhookSecretEncrypted), label: `tenant-specific (${tenant.name})` });
+      }
+      if (process.env.PLATFORM_STRIPE_WEBHOOK_SECRET) {
+        secretsToTry.push({ secret: process.env.PLATFORM_STRIPE_WEBHOOK_SECRET, label: 'PLATFORM_STRIPE_WEBHOOK_SECRET (Connected accounts)' });
+      }
+      if (process.env.STRIPE_WEBHOOK_SECRET_PLATFORM) {
+        secretsToTry.push({ secret: process.env.STRIPE_WEBHOOK_SECRET_PLATFORM, label: 'STRIPE_WEBHOOK_SECRET_PLATFORM (Your account)' });
+      }
+      if (process.env.STRIPE_WEBHOOK_SECRET) {
+        secretsToTry.push({ secret: process.env.STRIPE_WEBHOOK_SECRET, label: 'STRIPE_WEBHOOK_SECRET (legacy)' });
+      }
+
+      if (secretsToTry.length === 0) {
+        console.error(`[STRIPE-WEBHOOK] ERROR: No webhook secrets available for tenant ${tenant.name}`);
         return res.status(400).send('Webhook not configured for this tenant');
       }
-      
-      console.log(`[STRIPE-WEBHOOK] Tenant ${tenant.name} (${tenant.subdomain}) has Stripe configured`);
+
+      console.log(`[STRIPE-WEBHOOK] Tenant ${tenant.name} (${tenant.subdomain}) has Stripe configured, ${secretsToTry.length} secret(s) to try`);
 
       let event;
-      try {
-        event = await stripeService.handleWebhook(
-          rawBody,
-          signature,
-          webhookSecret
-        );
-        console.log(`[STRIPE-WEBHOOK] Event verified successfully: ${event.type}`);
-      } catch (verifyError: any) {
-        console.error('[STRIPE-WEBHOOK] ERROR: Failed to verify webhook signature:', verifyError.message);
-        return res.status(400).send(`Webhook signature verification failed: ${verifyError.message}`);
+      let verified = false;
+      for (const { secret, label } of secretsToTry) {
+        try {
+          event = await stripeService.handleWebhook(rawBody, signature, secret);
+          console.log(`[STRIPE-WEBHOOK] Event verified successfully with ${label}: ${event.type}`);
+          verified = true;
+          break;
+        } catch (err: any) {
+          console.log(`[STRIPE-WEBHOOK] Verification failed with ${label}: ${err.message}`);
+        }
+      }
+
+      if (!verified || !event) {
+        console.error(`[STRIPE-WEBHOOK] ERROR: Failed to verify webhook signature with any of ${secretsToTry.length} secrets`);
+        return res.status(400).send('Webhook signature verification failed');
       }
 
       switch (event.type) {
