@@ -76,23 +76,23 @@ export default function DashboardLayout({ children, title, description, actions,
           userRole={(user?.activeRole || "staff") as "admin" | "board_member" | "staff" | "foster" | "volunteer"}
         />
         <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-          <header className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2 lg:gap-4 border-b p-4">
-            <div className="flex items-center gap-2 lg:gap-4 flex-1 min-w-0">
+          <header className="flex flex-col gap-3 border-b p-4 lg:flex-row lg:items-center lg:justify-between lg:gap-4">
+            <div className="flex items-center gap-2 lg:gap-4 min-w-0 shrink-0">
               <SidebarTrigger data-testid="button-sidebar-toggle" />
               {breadcrumbs && breadcrumbs.length > 0 ? (
-                <div className="flex-1 min-w-0">
+                <div className="min-w-0">
                   <Breadcrumbs items={breadcrumbs} />
                 </div>
               ) : title ? (
-                <div className="flex-1 min-w-0">
-                  <h1 className="text-2xl font-semibold">{title}</h1>
+                <div className="min-w-0">
+                  <h1 className="text-xl sm:text-2xl font-semibold truncate">{title}</h1>
                   {description && (
-                    <p className="text-sm text-muted-foreground">{description}</p>
+                    <p className="text-sm text-muted-foreground truncate">{description}</p>
                   )}
                 </div>
               ) : null}
             </div>
-            <div className="flex items-center gap-2 flex-wrap justify-start lg:justify-end w-full lg:w-auto">
+            <div className="flex items-center gap-2 flex-wrap justify-start lg:justify-end shrink-0">
               {publicUrl && (
                 <Button
                   variant="outline"

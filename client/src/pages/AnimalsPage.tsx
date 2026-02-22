@@ -2698,16 +2698,16 @@ export default function AnimalsPage() {
       title="Animals Management"
       description="Manage your rescue's animals"
       actions={
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Link href="/dashboard/animals/duplicates">
             <Button variant="outline" data-testid="button-find-duplicates">
-              <GitMerge className="h-4 w-4 mr-2" />
-              Find Duplicates
+              <GitMerge className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Find Duplicates</span>
             </Button>
           </Link>
           <Button variant="outline" onClick={() => setBulkIntakeOpen(true)} data-testid="button-bulk-litter-intake">
-            <Baby className="h-4 w-4 mr-2" />
-            Litter Intake
+            <Baby className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">Litter Intake</span>
           </Button>
           <Dialog open={dialogOpen} onOpenChange={(open) => {
             setDialogOpen(open);
@@ -2715,8 +2715,8 @@ export default function AnimalsPage() {
           }}>
             <DialogTrigger asChild>
               <Button data-testid="button-add-animal">
-                <PawPrint className="h-4 w-4 mr-2" />
-                Add Animal
+                <PawPrint className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Add Animal</span>
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-5xl w-[95vw] max-h-[90vh] overflow-y-auto">
