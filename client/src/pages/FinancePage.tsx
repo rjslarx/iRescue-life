@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import FinanceTable from "@/components/FinanceTable";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePagePermissions } from "@/hooks/usePagePermissions";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Wallet, ArrowDownToLine, CreditCard, RefreshCw, ExternalLink, AlertCircle, CreditCard as CardIcon } from "lucide-react";
@@ -140,6 +141,10 @@ function getTransactionStatusBadge(status: string, refunded: boolean) {
 export default function FinancePage() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { canAccessPage } = usePagePermissions();
+
+  const isPrivilegedRole = user?.activeRole === 'admin' || user?.activeRole === 'board_member' || user?.activeRole === 'owner';
+  const hasFinanceAccess = isPrivilegedRole || canAccessPage('finance');
 
   const { data, isLoading } = useQuery<FinanceData>({
     queryKey: ['/api/finance'],
@@ -151,30 +156,30 @@ export default function FinancePage() {
 
   const { data: stripeBalance, isLoading: isLoadingBalance, isError: isErrorBalance, refetch: refetchBalance } = useQuery<StripeBalanceData>({
     queryKey: ['/api/stripe/balance'],
-    enabled: user?.activeRole === 'admin' || user?.activeRole === 'board_member' || user?.activeRole === 'owner',
+    enabled: hasFinanceAccess,
     retry: false,
   });
 
   const { data: stripePayouts, isLoading: isLoadingPayouts, isError: isErrorPayouts } = useQuery<{ configured: boolean; payouts: StripePayout[]; error?: string; message?: string }>({
     queryKey: ['/api/stripe/payouts'],
-    enabled: user?.activeRole === 'admin' || user?.activeRole === 'board_member' || user?.activeRole === 'owner',
+    enabled: hasFinanceAccess,
     retry: false,
   });
 
   const { data: stripeTransactions, isLoading: isLoadingTransactions, isError: isErrorTransactions } = useQuery<{ configured: boolean; transactions: StripeTransaction[]; error?: string; message?: string }>({
     queryKey: ['/api/stripe/transactions'],
-    enabled: user?.activeRole === 'admin' || user?.activeRole === 'board_member' || user?.activeRole === 'staff' || user?.activeRole === 'owner',
+    enabled: hasFinanceAccess,
     retry: false,
   });
 
   const { data: grantsData } = useQuery<{ grants: any[] }>({
     queryKey: ['/api/grants'],
-    enabled: user?.activeRole === 'admin' || user?.activeRole === 'board_member' || user?.activeRole === 'staff',
+    enabled: hasFinanceAccess,
   });
 
   const { data: paymentLedger, isLoading: isLoadingLedger, isError: isErrorLedger } = useQuery<{ configured: boolean; payments: LedgerPayment[]; error?: string }>({
     queryKey: ['/api/stripe/payment-ledger'],
-    enabled: user?.activeRole === 'admin' || user?.activeRole === 'board_member' || user?.activeRole === 'staff' || user?.activeRole === 'owner',
+    enabled: hasFinanceAccess,
     retry: false,
   });
 
@@ -474,7 +479,7 @@ export default function FinancePage() {
       description="Track donations and expenditures"
     >
       <div className="flex-1 overflow-auto p-6 space-y-6">
-        {(user?.activeRole === 'admin' || user?.activeRole === 'board_member' || user?.activeRole === 'owner') && (
+        {hasFinanceAccess && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Card data-testid="card-balance-available">
               <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
@@ -559,7 +564,7 @@ export default function FinancePage() {
           </div>
         )}
 
-        {(user?.activeRole === 'admin' || user?.activeRole === 'board_member' || user?.activeRole === 'owner') && stripeConfigured && (
+        {hasFinanceAccess && stripeConfigured && (
           <StripeConnectProvider
             fallback={null}
           >
@@ -569,7 +574,7 @@ export default function FinancePage() {
           </StripeConnectProvider>
         )}
 
-        {!stripeConfigured && !stripeBalanceError && !isLoadingBalance && (user?.activeRole === 'admin' || user?.activeRole === 'owner') && (
+        {!stripeConfigured && !stripeBalanceError && !isLoadingBalance && isPrivilegedRole && (
           <Alert data-testid="alert-stripe-not-configured">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
@@ -581,13 +586,13 @@ export default function FinancePage() {
         <Tabs defaultValue="records" className="w-full">
           <TabsList data-testid="tabs-finance">
             <TabsTrigger value="records" data-testid="tab-records">Records</TabsTrigger>
-            {(user?.activeRole === 'admin' || user?.activeRole === 'board_member' || user?.activeRole === 'staff' || user?.activeRole === 'owner') && (
+            {hasFinanceAccess && (
               <TabsTrigger value="stripe" data-testid="tab-stripe"><BookOpen className="h-4 w-4 mr-1" />Payment Ledger</TabsTrigger>
             )}
-            {(user?.activeRole === 'admin' || user?.activeRole === 'board_member' || user?.activeRole === 'owner') && (
+            {hasFinanceAccess && (
               <TabsTrigger value="payouts" data-testid="tab-payouts">Bank Payouts</TabsTrigger>
             )}
-            {(user?.activeRole === 'admin' || user?.activeRole === 'owner') && (
+            {isPrivilegedRole && (
               <TabsTrigger value="documents" data-testid="tab-documents">Documents</TabsTrigger>
             )}
           </TabsList>
@@ -610,7 +615,7 @@ export default function FinancePage() {
             )}
           </TabsContent>
 
-          {(user?.activeRole === 'admin' || user?.activeRole === 'board_member' || user?.activeRole === 'staff' || user?.activeRole === 'owner') && (
+          {hasFinanceAccess && (
             <TabsContent value="stripe" className="mt-4">
               <Card>
                 <CardHeader>
@@ -746,7 +751,7 @@ export default function FinancePage() {
             </TabsContent>
           )}
 
-          {(user?.activeRole === 'admin' || user?.activeRole === 'board_member' || user?.activeRole === 'owner') && (
+          {hasFinanceAccess && (
             <TabsContent value="payouts" className="mt-4">
               <div className="space-y-6">
                 <Card>

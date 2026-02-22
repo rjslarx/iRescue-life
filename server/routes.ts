@@ -13627,7 +13627,7 @@ ${renderedHtml}
    * GET /api/finance
    * Get financial data (staff only)
    */
-  app.get('/api/finance', requireTenant, requireAuth, requireRole('admin', 'board_member', 'staff'), async (req, res, next) => {
+  app.get('/api/finance', requireTenant, requireAuth, requireRoleOrPageAccess('finance', 'admin', 'board_member', 'staff'), async (req, res, next) => {
     try {
       const { getDonationsByTenant, getExpendituresByTenant, getFinancialSummary } = await import('./services/donations');
       
@@ -13777,7 +13777,7 @@ ${renderedHtml}
    * GET /api/grants
    * Get all grants for tenant (admin/staff only)
    */
-  app.get('/api/grants', requireTenant, requireAuth, requireRole('admin', 'board_member', 'staff'), async (req, res, next) => {
+  app.get('/api/grants', requireTenant, requireAuth, requireRoleOrPageAccess('finance', 'admin', 'board_member', 'staff'), async (req, res, next) => {
     try {
       const { grants } = await import('@shared/schema');
       
@@ -22650,7 +22650,7 @@ Submitted: ${new Date().toLocaleString()}
    * GET /api/stripe/balance
    * Get the tenant's Stripe balance (pending and available)
    */
-  app.get('/api/stripe/balance', requireTenant, requireAuth, requireRole('admin', 'board_member', 'owner'), async (req, res, next) => {
+  app.get('/api/stripe/balance', requireTenant, requireAuth, requireRoleOrPageAccess('finance', 'admin', 'board_member', 'owner'), async (req, res, next) => {
     try {
       const { stripeService } = await import('./lib/stripe-service');
       
@@ -22773,7 +22773,7 @@ Submitted: ${new Date().toLocaleString()}
    * GET /api/stripe/payouts
    * Get recent payouts (transfers to bank account) for the tenant
    */
-  app.get('/api/stripe/payouts', requireTenant, requireAuth, requireRole('admin', 'board_member', 'owner'), async (req, res, next) => {
+  app.get('/api/stripe/payouts', requireTenant, requireAuth, requireRoleOrPageAccess('finance', 'admin', 'board_member', 'owner'), async (req, res, next) => {
     try {
       const { stripeService } = await import('./lib/stripe-service');
       
@@ -22841,7 +22841,7 @@ Submitted: ${new Date().toLocaleString()}
    * GET /api/stripe/transactions
    * Get recent payment transactions (charges) for the tenant
    */
-  app.get('/api/stripe/transactions', requireTenant, requireAuth, requireRole('admin', 'board_member', 'staff', 'owner'), async (req, res, next) => {
+  app.get('/api/stripe/transactions', requireTenant, requireAuth, requireRoleOrPageAccess('finance', 'admin', 'board_member', 'staff', 'owner'), async (req, res, next) => {
     try {
       const { stripeService } = await import('./lib/stripe-service');
       
@@ -22915,7 +22915,7 @@ Submitted: ${new Date().toLocaleString()}
    * GET /api/stripe/payment-ledger
    * Get all Stripe payments with type classification and details
    */
-  app.get('/api/stripe/payment-ledger', requireTenant, requireAuth, requireRole('admin', 'board_member', 'staff', 'owner'), async (req, res, next) => {
+  app.get('/api/stripe/payment-ledger', requireTenant, requireAuth, requireRoleOrPageAccess('finance', 'admin', 'board_member', 'staff', 'owner'), async (req, res, next) => {
     try {
       const { stripeService } = await import('./lib/stripe-service');
       const { adoptionCheckoutSessions, applications: applicationsTable, animals: animalsTable, customFormSubmissions, customForms, shopOrders } = await import('@shared/schema');
