@@ -27876,6 +27876,26 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
         })
         .returning();
 
+
+      // Clear date_due on older records of the same vaccine type for this animal.
+      // When a new dose is recorded, previous booster due dates are superseded.
+      // Only runs when dateGiven is known so we can determine which records are older.
+      if (vaccine.itemName && vaccine.dateGiven) {
+        await db
+          .update(vaccineRecords)
+          .set({ dateDue: null })
+          .where(and(
+            eq(vaccineRecords.animalId, req.params.animalId),
+            eq(vaccineRecords.tenantId, req.tenant!.id),
+            eq(vaccineRecords.itemName, vaccine.itemName),
+            ne(vaccineRecords.id, vaccine.id),
+            isNotNull(vaccineRecords.dateDue),
+            or(
+              lt(vaccineRecords.dateGiven, vaccine.dateGiven),
+              isNull(vaccineRecords.dateGiven)
+            )
+          ));
+      }
       // Sync medical records to backup (non-blocking)
       try {
         const { syncAnimalMedicalRecords } = await import('./lib/animalBackupService');

@@ -14,7 +14,7 @@ import {
   type MedicalReminderSettings,
   type MedicalReminder,
 } from "@shared/schema";
-import { eq, and, gte, lte, lt, isNull, or, inArray, desc } from "drizzle-orm";
+import { eq, and, gte, lte, lt, isNull, isNotNull, or, inArray, desc } from "drizzle-orm";
 import { EmailService } from "./email-service";
 
 interface MedicalItem {
@@ -123,22 +123,46 @@ export async function getUpcomingMedicalItems(tenantId: string, daysAhead: numbe
   
   const fosterMap = new Map(fosterPlacementsData.map(f => [f.animalId, f]));
   
-  // Get vaccines with upcoming due dates
+  // Get vaccines with upcoming due dates (only non-null date_due)
   const vaccines = await db
     .select({
       id: vaccineRecords.id,
       animalId: vaccineRecords.animalId,
       itemName: vaccineRecords.itemName,
       dateDue: vaccineRecords.dateDue,
+      dateGiven: vaccineRecords.dateGiven,
+      createdAt: vaccineRecords.createdAt,
     })
     .from(vaccineRecords)
     .where(and(
       eq(vaccineRecords.tenantId, tenantId),
       inArray(vaccineRecords.animalId, animalIds),
+      isNotNull(vaccineRecords.dateDue),
       lte(vaccineRecords.dateDue, futureDate)
     ));
   
+  // Only keep the most recent vaccine record per animal+type combo.
+  // Older records of the same vaccine type are superseded by newer doses.
+  // Priority: dateGiven (newest wins), then createdAt for same-date tiebreaker.
+  const latestVaccineMap = new Map<string, typeof vaccines[0]>();
   for (const v of vaccines) {
+    if (!v.dateDue) continue;
+    const key = `${v.animalId}::${v.itemName}`;
+    const existing = latestVaccineMap.get(key);
+    if (!existing) {
+      latestVaccineMap.set(key, v);
+    } else {
+      const vGiven = v.dateGiven ? new Date(v.dateGiven).getTime() : 0;
+      const existGiven = existing.dateGiven ? new Date(existing.dateGiven).getTime() : 0;
+      const vCreated = v.createdAt ? new Date(v.createdAt).getTime() : 0;
+      const existCreated = existing.createdAt ? new Date(existing.createdAt).getTime() : 0;
+      if (vGiven > existGiven || (vGiven === existGiven && vCreated > existCreated)) {
+        latestVaccineMap.set(key, v);
+      }
+    }
+  }
+
+  for (const v of latestVaccineMap.values()) {
     if (!v.dateDue) continue;
     const animal = animalMap.get(v.animalId);
     const foster = fosterMap.get(v.animalId);
