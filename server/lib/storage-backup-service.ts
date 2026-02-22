@@ -585,13 +585,11 @@ export class StorageBackupService {
     fileName: string,
     progress: BackupProgress
   ): Promise<void> {
-    // Validate objectUrl before processing
     if (!objectUrl || typeof objectUrl !== 'string') {
       throw new Error('Invalid object URL: null or undefined');
     }
 
     try {
-      // Check if file already exists in the folder (deduplication)
       const exists = await this.fileExistsInFolder(driveService, fileName, folderId);
       if (exists) {
         progress.filesSkipped++;
@@ -600,11 +598,37 @@ export class StorageBackupService {
       }
 
       const objectStorage = new ObjectStorageService();
-      const file = await objectStorage.getObjectEntityFile(objectUrl);
-      
-      const [content] = await file.download();
-      const [metadata] = await file.getMetadata();
-      const mimeType = metadata.contentType || 'application/octet-stream';
+      let file;
+      try {
+        file = await objectStorage.getObjectEntityFile(objectUrl);
+      } catch (fileErr: any) {
+        throw new Error(`Object not found or inaccessible (${objectUrl}): ${fileErr.message}`);
+      }
+
+      if (!file) {
+        throw new Error(`Object file is null for ${objectUrl}`);
+      }
+
+      let content: Buffer;
+      try {
+        const downloadResult = await file.download();
+        if (!downloadResult || !downloadResult[0]) {
+          throw new Error('Download returned empty result');
+        }
+        content = downloadResult[0];
+      } catch (dlErr: any) {
+        throw new Error(`Download failed for ${objectUrl}: ${dlErr.message}`);
+      }
+
+      let mimeType = 'application/octet-stream';
+      try {
+        const metadataResult = await file.getMetadata();
+        if (metadataResult && metadataResult[0]) {
+          mimeType = (metadataResult[0] as any).contentType || 'application/octet-stream';
+        }
+      } catch (metaErr: any) {
+        console.warn(`[STORAGE BACKUP] Could not get metadata for ${objectUrl}, using default mime type: ${metaErr.message}`);
+      }
 
       const result = await driveService.uploadFile({
         name: fileName,

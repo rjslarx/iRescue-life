@@ -134,13 +134,15 @@ export async function createRemindersForDuePreventativeCare(tenantId: string): P
         ? record.nextDueDate
         : new Date(record.nextDueDate);
 
+      const dueDateStr = safeDueDate.toISOString().split('T')[0];
+
       const existingReminder = await db
         .select({ id: complianceReminders.id })
         .from(complianceReminders)
         .where(and(
           eq(complianceReminders.tenantId, tenantId),
           eq(complianceReminders.preventativeCareRecordId, record.id),
-          eq(complianceReminders.dueDate, safeDueDate),
+          eq(complianceReminders.dueDate, dueDateStr),
           or(
             eq(complianceReminders.state, 'pending'),
             eq(complianceReminders.state, 'notified_3day'),
@@ -168,7 +170,7 @@ export async function createRemindersForDuePreventativeCare(tenantId: string): P
           preventativeCareRecordId: record.id,
           reminderType: 'preventative_care',
           careName: record.careName,
-          dueDate: safeDueDate,
+          dueDate: dueDateStr,
           state: 'pending',
           magicLinkToken: magicToken,
           magicLinkExpiresAt: expiresAt,
