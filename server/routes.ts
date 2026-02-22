@@ -7458,33 +7458,31 @@ Crawl-delay: 1
         return res.status(404).json({ error: 'Animal not found' });
       }
 
-      // Try to create a Stripe PaymentIntent if Stripe is configured
-      if (req.tenant!.stripeEnabled) {
-        try {
-          const { stripeService } = await import('./lib/stripe-service');
-          const paymentIntent = await stripeService.createPaymentIntent(req.tenant!, {
-            amount: data.amount,
-            description: data.description || `Reclaim fee for ${animal.name}`,
-            receiptEmail: data.ownerEmail,
-            metadata: {
-              type: 'reclaim_fee',
-              animalId: animal.id,
-              animalName: animal.name || 'Unknown',
-            },
-            connectedAccountId: req.tenant!.stripeConnectedAccountId || undefined,
-          });
+      const hasStripeConnect = !!req.tenant!.stripeConnectedAccountId;
+      const hasOwnStripeKeys = req.tenant!.stripeEnabled && !!req.tenant!.stripeSecretKeyEncrypted;
+      const stripeConfigured = hasStripeConnect || hasOwnStripeKeys;
 
-          return res.json({
-            paymentIntentId: paymentIntent.id,
-            clientSecret: paymentIntent.client_secret,
-            status: paymentIntent.status,
-          });
-        } catch (stripeErr: any) {
-          console.error('Stripe payment intent creation failed, falling back to manual:', stripeErr.message);
-        }
+      if (stripeConfigured) {
+        const { stripeService } = await import('./lib/stripe-service');
+        const paymentIntent = await stripeService.createPaymentIntent(req.tenant!, {
+          amount: data.amount,
+          description: data.description || `Reclaim fee for ${animal.name}`,
+          receiptEmail: data.ownerEmail,
+          metadata: {
+            type: 'reclaim_fee',
+            animalId: animal.id,
+            animalName: animal.name || 'Unknown',
+          },
+          connectedAccountId: req.tenant!.stripeConnectedAccountId || undefined,
+        });
+
+        return res.json({
+          paymentIntentId: paymentIntent.id,
+          clientSecret: paymentIntent.client_secret,
+          status: paymentIntent.status,
+        });
       }
 
-      // Manual payment record (no Stripe)
       const manualPaymentId = `manual_rto_${Date.now()}_${animal.id.slice(0, 8)}`;
       res.json({
         paymentIntentId: manualPaymentId,
