@@ -30,6 +30,15 @@ import {
   AlertCircle,
 } from "lucide-react";
 import type { Animal } from "@shared/schema";
+import { Elements, CardElement, useStripe, useElements } from "@stripe/react-stripe-js";
+import { loadStripe } from "@stripe/stripe-js";
+
+const isDevelopment = import.meta.env.DEV;
+const stripePublicKey = isDevelopment
+  ? (import.meta.env.TESTING_VITE_STRIPE_PUBLIC_KEY || import.meta.env.VITE_STRIPE_PUBLIC_KEY)
+  : import.meta.env.VITE_STRIPE_PUBLIC_KEY;
+
+const stripePromise = stripePublicKey ? loadStripe(stripePublicKey) : null;
 
 interface ReclaimWizardDialogProps {
   open: boolean;
@@ -113,6 +122,7 @@ export function ReclaimWizardDialog({ open, onOpenChange, animal, tenantName = "
   const [waiveFee, setWaiveFee] = useState(false);
   const [paymentComplete, setPaymentComplete] = useState(false);
   const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [isCreatingPayment, setIsCreatingPayment] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
 
@@ -139,6 +149,7 @@ export function ReclaimWizardDialog({ open, onOpenChange, animal, tenantName = "
       setWaiveFee(false);
       setPaymentComplete(false);
       setPaymentIntentId(null);
+      setClientSecret(null);
       setPaymentError(null);
       setSignatureData(null);
       setWaiverRead(false);
@@ -197,8 +208,12 @@ export function ReclaimWizardDialog({ open, onOpenChange, animal, tenantName = "
       const data = await res.json();
       if (data.paymentIntentId) {
         setPaymentIntentId(data.paymentIntentId);
-        setPaymentComplete(true);
-        toast({ title: "Payment recorded", description: `Reclaim fee of $${amount.toFixed(2)} has been recorded.` });
+        if (data.clientSecret) {
+          setClientSecret(data.clientSecret);
+        } else {
+          setPaymentComplete(true);
+          toast({ title: "Payment recorded", description: `Reclaim fee of $${amount.toFixed(2)} has been recorded.` });
+        }
       } else {
         throw new Error(data.error || "Failed to create payment");
       }
@@ -207,6 +222,18 @@ export function ReclaimWizardDialog({ open, onOpenChange, animal, tenantName = "
     } finally {
       setIsCreatingPayment(false);
     }
+  };
+
+  const handleStripePaymentSuccess = (intentId: string) => {
+    setPaymentIntentId(intentId);
+    setPaymentComplete(true);
+    toast({ title: "Payment confirmed", description: `Reclaim fee of $${parseFloat(feeAmount).toFixed(2)} has been charged successfully.` });
+  };
+
+  const handleCancelStripeSetup = () => {
+    setClientSecret(null);
+    setPaymentIntentId(null);
+    setPaymentError(null);
   };
 
   const reclaimMutation = useMutation({
@@ -326,6 +353,9 @@ export function ReclaimWizardDialog({ open, onOpenChange, animal, tenantName = "
                 isCreatingPayment={isCreatingPayment}
                 stripeEnabled={stripeEnabled}
                 onCreatePayment={handleCreatePayment}
+                onStripePaymentSuccess={handleStripePaymentSuccess}
+                onCancelStripeSetup={handleCancelStripeSetup}
+                clientSecret={clientSecret}
                 animalName={animal.name}
               />
             )}
@@ -550,6 +580,92 @@ function OwnerInfoStep({
   );
 }
 
+function StripeCardForm({
+  feeAmount,
+  clientSecret,
+  onSuccess,
+  onError,
+}: {
+  feeAmount: string;
+  clientSecret: string;
+  onSuccess: (paymentIntentId: string) => void;
+  onError: (message: string) => void;
+}) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [processing, setProcessing] = useState(false);
+
+  const handleConfirmPayment = async () => {
+    if (!stripe || !elements) return;
+
+    const cardElement = elements.getElement(CardElement);
+    if (!cardElement) {
+      onError("Card element not found. Please try again.");
+      return;
+    }
+
+    setProcessing(true);
+    try {
+      const { error, paymentIntent } = await stripe.confirmCardPayment(
+        clientSecret,
+        { payment_method: { card: cardElement } }
+      );
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      if (paymentIntent?.status === "succeeded") {
+        onSuccess(paymentIntent.id);
+      } else {
+        throw new Error(`Payment not completed. Status: ${paymentIntent?.status}`);
+      }
+    } catch (err: any) {
+      onError(err.message || "Payment failed. Please try again.");
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const feeNum = parseFloat(feeAmount);
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Label className="text-sm">Card Details</Label>
+        <div className="border rounded-md p-3 bg-background">
+          <CardElement
+            options={{
+              style: {
+                base: {
+                  fontSize: "14px",
+                  color: "hsl(var(--foreground))",
+                  "::placeholder": { color: "hsl(var(--muted-foreground))" },
+                },
+              },
+            }}
+          />
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Enter the card details to charge ${!isNaN(feeNum) ? feeNum.toFixed(2) : "0.00"}
+        </p>
+      </div>
+      <Button
+        onClick={handleConfirmPayment}
+        disabled={processing || !stripe}
+        className="w-full"
+        data-testid="button-confirm-stripe-payment"
+      >
+        {processing ? (
+          <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Confirming Payment...</>
+        ) : (
+          <><CreditCard className="h-4 w-4 mr-2" /> Confirm Payment - ${!isNaN(feeNum) ? feeNum.toFixed(2) : "0.00"}</>
+        )}
+      </Button>
+    </div>
+  );
+}
+
 function PaymentStep({
   feeAmount,
   setFeeAmount,
@@ -560,6 +676,9 @@ function PaymentStep({
   isCreatingPayment,
   stripeEnabled,
   onCreatePayment,
+  onStripePaymentSuccess,
+  onCancelStripeSetup,
+  clientSecret,
   animalName,
 }: {
   feeAmount: string;
@@ -571,8 +690,12 @@ function PaymentStep({
   isCreatingPayment: boolean;
   stripeEnabled: boolean;
   onCreatePayment: () => void;
+  onStripePaymentSuccess: (paymentIntentId: string) => void;
+  onCancelStripeSetup: () => void;
+  clientSecret: string | null;
   animalName: string;
 }) {
+  const [stripePaymentError, setStripePaymentError] = useState<string | null>(null);
   const feeNum = parseFloat(feeAmount);
   const isValidFee = !isNaN(feeNum) && feeNum > 0;
 
@@ -593,7 +716,7 @@ function PaymentStep({
               min="0"
               value={feeAmount}
               onChange={e => setFeeAmount(e.target.value)}
-              disabled={waiveFee || paymentComplete}
+              disabled={waiveFee || paymentComplete || !!clientSecret}
               data-testid="input-reclaim-fee"
             />
           </div>
@@ -605,7 +728,7 @@ function PaymentStep({
             onCheckedChange={(checked) => {
               setWaiveFee(checked);
             }}
-            disabled={paymentComplete}
+            disabled={paymentComplete || !!clientSecret}
             data-testid="switch-waive-fee"
           />
           <div>
@@ -621,18 +744,52 @@ function PaymentStep({
             <div className="flex items-center gap-3 p-4 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-md">
               <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400 shrink-0" />
               <div>
-                <p className="text-sm font-medium text-green-700 dark:text-green-300">Payment Recorded</p>
+                <p className="text-sm font-medium text-green-700 dark:text-green-300">Payment Confirmed</p>
                 <p className="text-xs text-green-600 dark:text-green-400">
-                  ${parseFloat(feeAmount).toFixed(2)} reclaim fee has been recorded for {animalName}
+                  ${parseFloat(feeAmount).toFixed(2)} reclaim fee has been charged for {animalName}
                 </p>
               </div>
+            </div>
+          ) : clientSecret && stripePromise ? (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-2 p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-md">
+                <div className="flex items-center gap-2">
+                  <CreditCard className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                  <p className="text-xs text-blue-700 dark:text-blue-300">
+                    Enter card details below to process the ${isValidFee ? feeNum.toFixed(2) : "0.00"} reclaim fee.
+                  </p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onCancelStripeSetup}
+                  className="text-xs text-blue-600 dark:text-blue-400 shrink-0"
+                  data-testid="button-cancel-stripe-setup"
+                >
+                  Change Amount
+                </Button>
+              </div>
+              <Elements stripe={stripePromise}>
+                <StripeCardForm
+                  feeAmount={feeAmount}
+                  clientSecret={clientSecret}
+                  onSuccess={onStripePaymentSuccess}
+                  onError={setStripePaymentError}
+                />
+              </Elements>
+              {stripePaymentError && (
+                <div className="flex items-start gap-2 p-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-md">
+                  <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
+                  <p className="text-xs text-red-700 dark:text-red-300">{stripePaymentError}</p>
+                </div>
+              )}
             </div>
           ) : (
             <>
               {stripeEnabled ? (
                 <div className="space-y-3">
                   <p className="text-xs text-muted-foreground">
-                    Click below to record the reclaim fee payment via Stripe. The payment will be processed through your connected Stripe account.
+                    Click below to set up card payment for the reclaim fee via Stripe.
                   </p>
                   <Button
                     onClick={onCreatePayment}
@@ -641,9 +798,9 @@ function PaymentStep({
                     data-testid="button-process-payment"
                   >
                     {isCreatingPayment ? (
-                      <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Processing Payment...</>
+                      <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Setting Up Payment...</>
                     ) : (
-                      <><CreditCard className="h-4 w-4 mr-2" /> Record Payment - ${isValidFee ? feeNum.toFixed(2) : "0.00"}</>
+                      <><CreditCard className="h-4 w-4 mr-2" /> Set Up Payment - ${isValidFee ? feeNum.toFixed(2) : "0.00"}</>
                     )}
                   </Button>
                 </div>
