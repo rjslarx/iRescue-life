@@ -7616,13 +7616,14 @@ Crawl-delay: 1
       try {
         const { medicalFiles } = await import('@shared/schema');
         const { ObjectStorageService } = await import('./objectStorage');
+        const { documents } = await import('@shared/schema');
         const objectStorage = new ObjectStorageService();
-        const allDocs: { url: string; desc: string; mimeType: string }[] = [];
+        const allDocs: { url: string; desc: string; mimeType: string; fileSize: number }[] = [];
         if (data.governmentIdUrls && data.governmentIdUrls.length > 0) {
-          data.governmentIdUrls.forEach((url, i) => allDocs.push({ url, desc: `RTO - Owner Government ID ${i + 1}`, mimeType: 'application/octet-stream' }));
+          data.governmentIdUrls.forEach((url, i) => allDocs.push({ url, desc: `RTO - Owner Government ID ${i + 1}`, mimeType: 'application/octet-stream', fileSize: 0 }));
         }
         if (data.vetRecordUrls && data.vetRecordUrls.length > 0) {
-          data.vetRecordUrls.forEach((url, i) => allDocs.push({ url, desc: `RTO - Owner Vet Records / Proof of Ownership ${i + 1}`, mimeType: 'application/octet-stream' }));
+          data.vetRecordUrls.forEach((url, i) => allDocs.push({ url, desc: `RTO - Owner Vet Records / Proof of Ownership ${i + 1}`, mimeType: 'application/octet-stream', fileSize: 0 }));
         }
         if (data.signatureData) {
           try {
@@ -7637,16 +7638,30 @@ Crawl-delay: 1
                 'image/png',
                 sigFilename,
               );
-              allDocs.push({ url: result.objectPath, desc: 'RTO - Owner Signature on Waiver', mimeType: 'image/png' });
+              allDocs.push({ url: result.objectPath, desc: 'RTO - Owner Signature on Waiver', mimeType: 'image/png', fileSize: imageBuffer.length });
               console.log(`RTO: Uploaded signature to object storage: ${result.objectPath}`);
             } else {
-              allDocs.push({ url: data.signatureData, desc: 'RTO - Owner Signature on Waiver', mimeType: 'image/png' });
+              allDocs.push({ url: data.signatureData, desc: 'RTO - Owner Signature on Waiver', mimeType: 'image/png', fileSize: data.signatureData.length });
             }
           } catch (sigErr: any) {
             console.error('Failed to upload RTO signature to object storage, saving inline:', sigErr.message);
-            allDocs.push({ url: data.signatureData, desc: 'RTO - Owner Signature on Waiver', mimeType: 'image/png' });
+            allDocs.push({ url: data.signatureData, desc: 'RTO - Owner Signature on Waiver', mimeType: 'image/png', fileSize: data.signatureData.length });
           }
         }
+
+        // Attempt to resolve file sizes for uploaded docs from object storage metadata
+        for (const doc of allDocs) {
+          if (doc.fileSize === 0 && doc.url.startsWith('/objects/')) {
+            try {
+              const objFile = await objectStorage.getObjectEntityFile(doc.url);
+              const [metadata] = await objFile.getMetadata();
+              doc.fileSize = parseInt(String(metadata.size || '0'), 10);
+            } catch {
+              doc.fileSize = 0;
+            }
+          }
+        }
+
         for (const doc of allDocs) {
           await db.insert(medicalFiles).values({
             animalId: animal.id,
@@ -7658,8 +7673,29 @@ Crawl-delay: 1
             uploadedBy: req.user!.id,
           });
         }
+
+        // Also save to tenant documents page
+        const reclaimDate = new Date().toISOString().split('T')[0];
+        for (const doc of allDocs) {
+          try {
+            await db.insert(documents).values({
+              tenantId: req.tenant!.id,
+              title: `${doc.desc} - ${animal.name} (${reclaimDate})`,
+              description: `Return to Owner document for ${animal.name}, processed on ${reclaimDate}`,
+              category: 'forms' as const,
+              fileUrl: doc.url,
+              fileSize: doc.fileSize || 0,
+              fileName: doc.desc,
+              uploadedBy: req.user!.id,
+              storageType: doc.url.startsWith('/objects/') ? 'replit_object_storage' as const : null,
+            });
+          } catch (tenantDocErr: any) {
+            console.error(`Failed to save RTO document to tenant documents: ${tenantDocErr.message}`);
+          }
+        }
+
         if (allDocs.length > 0) {
-          console.log(`RTO: Saved ${allDocs.length} documents for ${animal.name}`);
+          console.log(`RTO: Saved ${allDocs.length} documents for ${animal.name} (medical files + tenant documents)`);
         }
       } catch (docErr) {
         console.error('Failed to save RTO documents:', docErr);
