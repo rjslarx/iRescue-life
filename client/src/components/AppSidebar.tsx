@@ -146,7 +146,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
   const { toast } = useToast();
   const [isSwitching, setIsSwitching] = useState(false);
   const [showDonationDialog, setShowDonationDialog] = useState(false);
-  const { canAccessPage } = usePagePermissions();
+  const { canAccessPage, getAccessiblePages } = usePagePermissions();
   
   const { data: tenantData } = useQuery<{ tenant: { subscriptionTier: string } }>({
     queryKey: ['/api/tenant'],
@@ -515,6 +515,33 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
     effectiveRole === "foster" ? fosterGroups :
     volunteerGroups;
 
+  // Master mapping of pageId to nav item definition for injecting granted pages
+  const pageIdToNavItem: Record<string, NavItem> = {
+    'dashboard': { title: "Command Center", url: "/dashboard", icon: LayoutDashboard },
+    'animals': { title: "Animals", url: "/dashboard/animals", icon: Heart },
+    'medical-tasks': { title: "Medical Pipeline", url: "/dashboard/medical-pipeline", icon: Stethoscope },
+    'applications': { title: "Adoption Applications", url: "/dashboard/applications", icon: FileText },
+    'foster-management': { title: "Foster Management", url: "/dashboard/foster-management", icon: PawPrint },
+    'team': { title: "Team", url: "/dashboard/team", icon: Users },
+    'finance': { title: "Finance", url: "/dashboard/finance", icon: DollarSign },
+    'grants': { title: "Grants", url: "/dashboard/grants", icon: Briefcase },
+    'donors': { title: "Contacts", url: "/dashboard/contacts", icon: UserCircle },
+    'supply-registry': { title: "Supply Registry", url: "/dashboard/supplies", icon: ShoppingCart },
+    'volunteers': { title: "Volunteer Management", url: "/dashboard/volunteers", icon: UserCircle },
+    'calendar': { title: "Calendar", url: "/dashboard/calendar", icon: Calendar },
+    'documents': { title: "Documents", url: "/dashboard/documents", icon: FolderOpen },
+    'custom-pages': { title: "Website Builder", url: "/dashboard/website-builder", icon: FileText },
+    'analytics': { title: "Analytics & Reports", url: "/dashboard/analytics", icon: BarChart3 },
+    'compliance': { title: "Compliance & Watchdog", url: "/dashboard/compliance", icon: Shield },
+    'audit-logs': { title: "Audit Logs", url: "/dashboard/audit-logs", icon: FileText },
+    'platform-integrations': { title: "Platform Integrations", url: "/dashboard/platform-integrations", icon: Plug2 },
+    'branding': { title: "Settings", url: "/dashboard/settings", icon: Settings },
+    'collaboration': { title: "Collaboration Hub", url: "/dashboard/collaboration", icon: Truck },
+    'tutorials': { title: "Video Tutorials", url: "/dashboard/tutorials", icon: Video },
+    'volunteer-pipeline': { title: "Volunteer Pipeline", url: "/dashboard/volunteer-pipeline", icon: Kanban },
+    'foster-pipeline': { title: "Foster Pipeline", url: "/dashboard/foster-pipeline", icon: Kanban },
+  };
+
   // Filter groups and items based on permissions and tier
   const filteredGroups = navigationGroups
     .map(group => ({
@@ -525,6 +552,21 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
       })
     }))
     .filter(group => group.items.length > 0);
+
+  // Inject additional granted pages not already in the role's nav list
+  const existingUrls = new Set(filteredGroups.flatMap(g => g.items.map(i => i.url)));
+  const accessiblePages = getAccessiblePages();
+  const additionalItems: NavItem[] = accessiblePages
+    .map(pageId => pageIdToNavItem[pageId])
+    .filter((item): item is NavItem => !!item && !existingUrls.has(item.url));
+
+  if (additionalItems.length > 0) {
+    filteredGroups.push({
+      title: "Additional Access",
+      items: additionalItems,
+      defaultOpen: true,
+    });
+  }
 
   const getRoleBadgeVariant = (role: string) => {
     if (role === "admin") return "default";
