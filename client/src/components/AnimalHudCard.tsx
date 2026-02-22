@@ -446,8 +446,8 @@ export function AnimalHudCard({
                       className="justify-center"
                       data-testid={`button-view-details-${animal.id}`}
                     >
-                      <Users className="w-3.5 h-3.5 mr-1.5" />
-                      Profile
+                      <Home className="w-3.5 h-3.5 mr-1.5" />
+                      Foster
                     </Button>
 
                     <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
@@ -561,19 +561,6 @@ export function AnimalHudCard({
                         )}
                       </DropdownMenuContent>
                     </DropdownMenu>
-
-                    {onChangeLocation && (
-                      <Button
-                        onClick={() => onChangeLocation(animal)}
-                        variant="outline"
-                        size="sm"
-                        className="justify-center"
-                        data-testid={`button-change-location-${animal.id}`}
-                      >
-                        <ArrowRightLeft className="w-3.5 h-3.5 mr-1.5" />
-                        Move
-                      </Button>
-                    )}
 
                     <Button
                       onClick={() => navigate(`/dashboard/animals/${animal.id}/medical`)}

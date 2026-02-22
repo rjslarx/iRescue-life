@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -77,8 +77,15 @@ interface AnimalDetailsDialogProps {
 }
 
 export function AnimalDetailsDialog({ animal, open, onOpenChange }: AnimalDetailsDialogProps) {
-  const [activeTab, setActiveTab] = useState("find-fosters");
+  const isInFoster = animal.locationType === "foster";
+  const [activeTab, setActiveTab] = useState(isInFoster ? "foster-updates" : "find-fosters");
   const [sendingFosterId, setSendingFosterId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (open) {
+      setActiveTab(animal.locationType === "foster" ? "foster-updates" : "find-fosters");
+    }
+  }, [open, animal.id, animal.locationType]);
   const { toast } = useToast();
 
   const { data: fosterHistoryData, isLoading: isLoadingHistory } = useQuery<{ fosterHistory: FosterHistoryItem[] }>({
@@ -196,9 +203,19 @@ export function AnimalDetailsDialog({ animal, open, onOpenChange }: AnimalDetail
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 h-auto gap-1">
             <TabsTrigger value="find-fosters" className="text-xs sm:text-sm px-2 sm:px-3 py-2 gap-1" data-testid="tab-find-fosters">
-              <Search className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
-              <span className="hidden sm:inline">Find Fosters</span>
-              <span className="sm:hidden">Find</span>
+              {isInFoster ? (
+                <>
+                  <Home className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+                  <span className="hidden sm:inline">Current Placement</span>
+                  <span className="sm:hidden">Placement</span>
+                </>
+              ) : (
+                <>
+                  <Search className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+                  <span className="hidden sm:inline">Find Fosters</span>
+                  <span className="sm:hidden">Find</span>
+                </>
+              )}
             </TabsTrigger>
             <TabsTrigger value="foster-history" className="text-xs sm:text-sm px-2 sm:px-3 py-2 gap-1" data-testid="tab-foster-history">
               <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
