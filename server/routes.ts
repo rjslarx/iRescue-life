@@ -23189,12 +23189,28 @@ Submitted: ${new Date().toLocaleString()}
           .then(rows => rows[0]);
         if (subscription) {
           tenantId = subscription.tenantId;
+          console.log(`[STRIPE-WEBHOOK] Resolved tenantId from subscription: ${tenantId}`);
+        }
+      }
+
+      if (!tenantId && payload.account) {
+        console.log(`[STRIPE-WEBHOOK] Attempting tenant resolution from Connect account: ${payload.account}`);
+        const connectTenant = await db
+          .select({ id: tenants.id, name: tenants.name })
+          .from(tenants)
+          .where(eq(tenants.stripeConnectedAccountId, payload.account))
+          .limit(1)
+          .then(rows => rows[0]);
+        if (connectTenant) {
+          tenantId = connectTenant.id;
+          console.log(`[STRIPE-WEBHOOK] Resolved tenantId from Connect account ${payload.account}: ${tenantId} (${connectTenant.name})`);
         }
       }
 
       if (!tenantId) {
-        console.error('[STRIPE-WEBHOOK] ERROR: Missing tenantId in metadata and could not resolve from subscription');
+        console.error('[STRIPE-WEBHOOK] ERROR: Missing tenantId - could not resolve from metadata, subscription, or Connect account');
         console.error('[STRIPE-WEBHOOK] Full payload metadata:', JSON.stringify(metadata));
+        console.error('[STRIPE-WEBHOOK] Connect account:', payload.account || 'none');
         return res.status(400).send('Missing tenant information');
       }
       
