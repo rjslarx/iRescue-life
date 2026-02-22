@@ -7433,6 +7433,146 @@ Crawl-delay: 1
   });
 
   /**
+   * POST /api/animals/:id/reclaim
+   * Process a Return to Owner (RTO) - link owner contact, record fee, change status
+   */
+  app.post('/api/animals/:id/reclaim', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      const { animals, contacts, fosterAnimals, medicationTasks, medicationPlans, complianceObligations } = await import('@shared/schema');
+      const { z } = await import('zod');
+
+      const reclaimSchema = z.object({
+        contactId: z.string().uuid().optional(),
+        newContact: z.object({
+          name: z.string().min(1),
+          email: z.string().email().optional().or(z.literal('')),
+          phone: z.string().optional().or(z.literal('')),
+          address: z.string().optional().or(z.literal('')),
+        }).optional(),
+        reclaimFeePaid: z.string().optional(),
+        waiveFee: z.boolean().optional(),
+        ownershipVerified: z.boolean(),
+      });
+
+      const data = reclaimSchema.parse(req.body);
+
+      if (!data.ownershipVerified) {
+        return res.status(400).json({ error: 'Ownership verification is required to process a reclaim.' });
+      }
+
+      const [existingAnimal] = await db.select()
+        .from(animals)
+        .where(and(eq(animals.id, req.params.id), eq(animals.tenantId, req.tenant!.id)))
+        .limit(1);
+
+      if (!existingAnimal) {
+        return res.status(404).json({ error: 'Animal not found' });
+      }
+
+      let ownerContactId = data.contactId || null;
+
+      if (!ownerContactId && data.newContact) {
+        const contactEmail = data.newContact.email || `rto-${Date.now()}@placeholder.local`;
+        const existingContacts = await db.select()
+          .from(contacts)
+          .where(and(
+            eq(contacts.tenantId, req.tenant!.id),
+            eq(contacts.email, contactEmail)
+          ))
+          .limit(1);
+
+        if (existingContacts.length > 0 && data.newContact.email) {
+          ownerContactId = existingContacts[0].id;
+          await db.update(contacts)
+            .set({
+              name: data.newContact.name,
+              phone: data.newContact.phone || existingContacts[0].phone,
+              address: data.newContact.address || existingContacts[0].address,
+              updatedAt: new Date(),
+            })
+            .where(eq(contacts.id, ownerContactId));
+        } else {
+          const [newContact] = await db.insert(contacts)
+            .values({
+              tenantId: req.tenant!.id,
+              name: data.newContact.name,
+              email: contactEmail,
+              phone: data.newContact.phone || null,
+              address: data.newContact.address || null,
+              source: ['manual'],
+              tags: ['rto-owner'],
+            })
+            .returning();
+          ownerContactId = newContact.id;
+        }
+      }
+
+      const feeAmount = data.waiveFee ? '0.00' : (data.reclaimFeePaid || '0.00');
+
+      const [animal] = await db.update(animals)
+        .set({
+          status: 'returned_to_owner',
+          reclaimedByContactId: ownerContactId,
+          reclaimFeePaid: feeAmount,
+          reclaimDate: new Date(),
+          locationType: null,
+          locationName: null,
+          kennelBuildingId: null,
+          kennelRowId: null,
+          kennelPosition: null,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(animals.id, req.params.id), eq(animals.tenantId, req.tenant!.id)))
+        .returning();
+
+      try {
+        const { logAnimalAudit } = await import('./lib/animal-audit-logger');
+        await logAnimalAudit({
+          tenantId: req.tenant!.id,
+          animalId: animal.id,
+          previousStatus: existingAnimal.status,
+          newStatus: 'returned_to_owner',
+          previousLocationType: existingAnimal.locationType,
+          newLocationType: null,
+          previousLocationName: existingAnimal.locationName,
+          newLocationName: null,
+          changedBy: req.user!.id,
+          changedByName: req.user!.fullName || req.user!.email,
+          notes: `Returned to owner (RTO). Fee: $${feeAmount}`,
+        });
+      } catch (auditErr) {
+        console.error('Failed to log animal audit:', auditErr);
+      }
+
+      try {
+        await db.update(fosterAnimals)
+          .set({ status: 'completed', actualReturnDate: new Date(), notes: 'Animal returned to owner (RTO)', updatedAt: new Date() })
+          .where(and(eq(fosterAnimals.animalId, animal.id), eq(fosterAnimals.tenantId, req.tenant!.id), eq(fosterAnimals.status, 'active')));
+
+        await db.update(medicationTasks)
+          .set({ status: 'skipped', skipReason: 'Animal returned to owner' })
+          .where(and(eq(medicationTasks.animalId, animal.id), eq(medicationTasks.status, 'pending')));
+
+        await db.update(medicationPlans)
+          .set({ active: false })
+          .where(and(eq(medicationPlans.animalId, animal.id), eq(medicationPlans.active, true)));
+
+        await db.update(complianceObligations)
+          .set({ status: 'waived' as const, notes: 'Auto-waived: animal returned to owner', updatedAt: new Date() })
+          .where(and(eq(complianceObligations.animalId, animal.id), eq(complianceObligations.tenantId, req.tenant!.id), eq(complianceObligations.status, 'pending')));
+
+        console.log(`RTO processed for ${animal.name}: cancelled pending tasks, foster assignments, and compliance obligations`);
+      } catch (cleanupErr) {
+        console.error('Failed to process RTO cleanup:', cleanupErr);
+      }
+
+      res.json({ success: true, animal });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * POST /api/animals/:id/re-intake
    * Re-intake a previously adopted or deceased animal that has returned to the rescue
    * Resets status to intake and creates a new intake record

@@ -506,7 +506,7 @@ export const animals = pgTable("animals", {
   specialDiet: boolean("special_diet").notNull().default(false),
   needsSpayNeuter: boolean("needs_spay_neuter").notNull().default(false),
   isFlightRisk: boolean("is_flight_risk").notNull().default(false),
-  status: text("status").notNull().default("available").$type<"available" | "adoption_pending" | "transfer_pending" | "medical_hold" | "stray_hold" | "adopted" | "transported" | "deceased">(),
+  status: text("status").notNull().default("available").$type<"available" | "adoption_pending" | "transfer_pending" | "medical_hold" | "stray_hold" | "adopted" | "transported" | "deceased" | "returned_to_owner">(),
   intakeDate: timestamp("intake_date").notNull().defaultNow(),
   intakeSource: text("intake_source").$type<"stray" | "owner_surrender" | "transfer" | "born_in_care" | "other">(), // How the animal came to the rescue
   locationFound: text("location_found"), // Where the stray animal was found (address or intersection)
@@ -548,6 +548,9 @@ export const animals = pgTable("animals", {
   sourceContactId: uuid("source_contact_id"),
   surrenderRequestId: text("surrender_request_id"),
   motherId: uuid("mother_id"), // Self-reference to mother animal (for litter tracking)
+  reclaimedByContactId: uuid("reclaimed_by_contact_id").references(() => contacts.id, { onDelete: 'set null' }),
+  reclaimFeePaid: decimal("reclaim_fee_paid", { precision: 10, scale: 2 }),
+  reclaimDate: timestamp("reclaim_date"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -563,7 +566,7 @@ export type Animal = typeof animals.$inferSelect;
 
 export type AnimalStatus = Animal["status"];
 
-export const TERMINAL_STATUSES: AnimalStatus[] = ["adopted", "transported", "deceased"] as const;
+export const TERMINAL_STATUSES: AnimalStatus[] = ["adopted", "transported", "deceased", "returned_to_owner"] as const;
 export const ACTIVE_STATUSES: AnimalStatus[] = ["available", "adoption_pending", "transfer_pending", "medical_hold", "stray_hold"] as const;
 
 export const ANIMAL_COLORS = [

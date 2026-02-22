@@ -165,8 +165,9 @@ function formatDate(dateStr: string | null | undefined) {
   }
 }
 
-function getHudVariant(status: string): "active" | "adopted" | "transported" | "deceased" {
+function getHudVariant(status: string): "active" | "adopted" | "transported" | "deceased" | "returned_to_owner" {
   if (status === "adopted") return "adopted";
+  if (status === "returned_to_owner") return "returned_to_owner";
   if (status === "transported") return "transported";
   if (status === "deceased") return "deceased";
   return "active";

@@ -87,7 +87,7 @@ export function BulkLitterIntakeWizard({ open, onOpenChange, onSuccess }: BulkLi
   const existingAnimals = Array.isArray(existingAnimalsData) ? existingAnimalsData : (existingAnimalsData?.animals || []);
 
   const femaleAnimals = existingAnimals.filter(
-    (a: any) => (a.sex === 'female' || a.petfinderGender === 'Female') && !['adopted', 'transported', 'deceased'].includes(a.status)
+    (a: any) => (a.sex === 'female' || a.petfinderGender === 'Female') && !['adopted', 'transported', 'deceased', 'returned_to_owner'].includes(a.status)
   );
 
   const bulkIntakeMutation = useMutation({

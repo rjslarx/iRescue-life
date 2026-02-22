@@ -90,7 +90,7 @@ const animalFormSchema = insertAnimalSchema.omit({ tenantId: true }).extend({
   dogFriendly: friendlyStatusEnum.optional(),
   childFriendly: friendlyStatusEnum.optional(),
   photoUrls: z.array(z.string()).optional().default([]),
-  status: z.enum(["available", "adoption_pending", "transfer_pending", "medical_hold", "stray_hold", "adopted", "transported", "deceased"]).default("available"),
+  status: z.enum(["available", "adoption_pending", "transfer_pending", "medical_hold", "stray_hold", "adopted", "transported", "deceased", "returned_to_owner"]).default("available"),
   postedToPetfinder: z.boolean().default(false),
   petfinderUrl: z.string().optional().refine((val) => !val || val === '' || z.string().url().safeParse(val).success, {
     message: "Must be a valid URL"
@@ -924,6 +924,7 @@ function AnimalForm({
                     <SelectItem value="medical_hold">Medical Hold</SelectItem>
                     <SelectItem value="stray_hold">Stray Hold</SelectItem>
                     <SelectItem value="adopted">Adopted</SelectItem>
+                    <SelectItem value="returned_to_owner">Returned to Owner</SelectItem>
                     <SelectItem value="transported">Transported</SelectItem>
                     <SelectItem value="deceased">Deceased</SelectItem>
                   </SelectContent>
@@ -2012,6 +2013,7 @@ function formatStatusLabel(status: string | null): string {
     medical_hold: "Medical Hold",
     stray_hold: "Stray Hold",
     adopted: "Adopted",
+    returned_to_owner: "Returned to Owner",
     transported: "Transported",
     deceased: "Deceased",
   };
@@ -2819,6 +2821,7 @@ export default function AnimalsPage() {
                               {showArchived ? (
                                 <>
                                   {(statusCounts["adopted"] ?? 0) > 0 && <SelectItem value="adopted">Adopted ({statusCounts["adopted"]})</SelectItem>}
+                                  {(statusCounts["returned_to_owner"] ?? 0) > 0 && <SelectItem value="returned_to_owner">Returned to Owner ({statusCounts["returned_to_owner"]})</SelectItem>}
                                   {(statusCounts["transported"] ?? 0) > 0 && <SelectItem value="transported">Transported ({statusCounts["transported"]})</SelectItem>}
                                   {(statusCounts["deceased"] ?? 0) > 0 && <SelectItem value="deceased">Deceased ({statusCounts["deceased"]})</SelectItem>}
                                 </>

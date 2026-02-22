@@ -57,7 +57,7 @@ const animalFormSchema = insertAnimalSchema.omit({ tenantId: true }).extend({
   dogFriendly: friendlyStatusEnum.optional(),
   childFriendly: friendlyStatusEnum.optional(),
   photoUrls: z.array(z.string()).optional().default([]),
-  status: z.enum(["available", "adoption_pending", "transfer_pending", "medical_hold", "stray_hold", "adopted", "transported", "deceased"]).default("available"),
+  status: z.enum(["available", "adoption_pending", "transfer_pending", "medical_hold", "stray_hold", "adopted", "transported", "deceased", "returned_to_owner"]).default("available"),
   biteHistory: z.boolean().default(false),
   specialDiet: z.boolean().default(false),
   needsSpayNeuter: z.boolean().default(false),
@@ -842,6 +842,7 @@ export function AnimalDataForm({ animalId, initialData, onSuccess, onCancel }: A
                     <SelectItem value="medical_hold">Medical Hold</SelectItem>
                     <SelectItem value="stray_hold">Stray Hold</SelectItem>
                     <SelectItem value="adopted">Adopted</SelectItem>
+                    <SelectItem value="returned_to_owner">Returned to Owner</SelectItem>
                     <SelectItem value="transported">Transported</SelectItem>
                     <SelectItem value="deceased">Deceased</SelectItem>
                   </SelectContent>
