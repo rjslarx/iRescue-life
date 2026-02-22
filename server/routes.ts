@@ -7433,6 +7433,70 @@ Crawl-delay: 1
   });
 
   /**
+   * POST /api/animals/:id/reclaim-payment
+   * Create a Stripe PaymentIntent or record a manual payment for a reclaim fee
+   */
+  app.post('/api/animals/:id/reclaim-payment', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      const { animals } = await import('@shared/schema');
+      const { z } = await import('zod');
+
+      const paymentSchema = z.object({
+        amount: z.number().positive(),
+        description: z.string().optional(),
+        ownerEmail: z.string().email().optional(),
+      });
+
+      const data = paymentSchema.parse(req.body);
+
+      const [animal] = await db.select()
+        .from(animals)
+        .where(and(eq(animals.id, req.params.id), eq(animals.tenantId, req.tenant!.id)))
+        .limit(1);
+
+      if (!animal) {
+        return res.status(404).json({ error: 'Animal not found' });
+      }
+
+      // Try to create a Stripe PaymentIntent if Stripe is configured
+      if (req.tenant!.stripeEnabled) {
+        try {
+          const { stripeService } = await import('./lib/stripe-service');
+          const paymentIntent = await stripeService.createPaymentIntent(req.tenant!, {
+            amount: data.amount,
+            description: data.description || `Reclaim fee for ${animal.name}`,
+            receiptEmail: data.ownerEmail,
+            metadata: {
+              type: 'reclaim_fee',
+              animalId: animal.id,
+              animalName: animal.name || 'Unknown',
+            },
+            connectedAccountId: req.tenant!.stripeConnectedAccountId || undefined,
+          });
+
+          return res.json({
+            paymentIntentId: paymentIntent.id,
+            clientSecret: paymentIntent.client_secret,
+            status: paymentIntent.status,
+          });
+        } catch (stripeErr: any) {
+          console.error('Stripe payment intent creation failed, falling back to manual:', stripeErr.message);
+        }
+      }
+
+      // Manual payment record (no Stripe)
+      const manualPaymentId = `manual_rto_${Date.now()}_${animal.id.slice(0, 8)}`;
+      res.json({
+        paymentIntentId: manualPaymentId,
+        status: 'manual',
+        message: 'Payment recorded manually (Stripe not configured)',
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * POST /api/animals/:id/reclaim
    * Process a Return to Owner (RTO) - link owner contact, record fee, change status
    */
@@ -7452,6 +7516,10 @@ Crawl-delay: 1
         reclaimFeePaid: z.string().optional(),
         waiveFee: z.boolean().optional(),
         ownershipVerified: z.boolean(),
+        governmentIdUrls: z.array(z.string()).optional(),
+        vetRecordUrls: z.array(z.string()).optional(),
+        signatureData: z.string().optional(),
+        paymentIntentId: z.string().optional(),
       });
 
       const data = reclaimSchema.parse(req.body);
@@ -7542,6 +7610,37 @@ Crawl-delay: 1
         });
       } catch (auditErr) {
         console.error('Failed to log animal audit:', auditErr);
+      }
+
+      // Save RTO documents (government ID, vet records, signature) as medical files linked to the animal
+      try {
+        const { medicalFiles } = await import('@shared/schema');
+        const allDocs: { url: string; desc: string }[] = [];
+        if (data.governmentIdUrls && data.governmentIdUrls.length > 0) {
+          data.governmentIdUrls.forEach((url, i) => allDocs.push({ url, desc: `RTO - Owner Government ID ${i + 1}` }));
+        }
+        if (data.vetRecordUrls && data.vetRecordUrls.length > 0) {
+          data.vetRecordUrls.forEach((url, i) => allDocs.push({ url, desc: `RTO - Owner Vet Records / Proof of Ownership ${i + 1}` }));
+        }
+        if (data.signatureData) {
+          allDocs.push({ url: data.signatureData, desc: 'RTO - Owner Signature on Waiver' });
+        }
+        for (const doc of allDocs) {
+          await db.insert(medicalFiles).values({
+            animalId: animal.id,
+            tenantId: req.tenant!.id,
+            fileName: doc.desc,
+            fileUrl: doc.url,
+            mimeType: doc.url.startsWith('data:') ? 'image/png' : 'application/octet-stream',
+            description: doc.desc,
+            uploadedBy: req.user!.id,
+          });
+        }
+        if (allDocs.length > 0) {
+          console.log(`RTO: Saved ${allDocs.length} documents for ${animal.name}`);
+        }
+      } catch (docErr) {
+        console.error('Failed to save RTO documents:', docErr);
       }
 
       try {

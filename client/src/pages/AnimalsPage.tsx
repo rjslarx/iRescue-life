@@ -46,6 +46,7 @@ import { MedicalFundDialog } from "@/components/MedicalFundDialog";
 import { HeartwormTreatmentModal } from "@/components/HeartwormTreatmentModal";
 import { AnimalHudCard } from "@/components/AnimalHudCard";
 import { TransferAnimalDialog } from "@/components/TransferAnimalDialog";
+import { ReclaimWizardDialog } from "@/components/ReclaimWizardDialog";
 
 const MAX_PHOTOS = 6;
 const MAX_PHOTO_SIZE_MB = 25;
@@ -2377,6 +2378,8 @@ export default function AnimalsPage() {
   const [animalForChangeLocation, setAnimalForChangeLocation] = useState<Animal | null>(null);
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
   const [animalForTransfer, setAnimalForTransfer] = useState<Animal | null>(null);
+  const [reclaimDialogOpen, setReclaimDialogOpen] = useState(false);
+  const [animalForReclaim, setAnimalForReclaim] = useState<Animal | null>(null);
   const [surrenderPrefill, setSurrenderPrefill] = useState<any>(null);
 
   const { data, isLoading } = useQuery<{ animals: AnimalWithKennel[] }>({
@@ -2655,6 +2658,11 @@ export default function AnimalsPage() {
     setTransferDialogOpen(true);
   };
 
+  const handleReturnToOwner = (animal: Animal) => {
+    setAnimalForReclaim(animal);
+    setReclaimDialogOpen(true);
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case "available":
@@ -2885,6 +2893,7 @@ export default function AnimalsPage() {
                           onQuickPhoto={handleQuickPhoto}
                           onChangeLocation={handleChangeLocation}
                           onTransferAnimal={handleTransferAnimal}
+                          onReturnToOwner={handleReturnToOwner}
                           calculateDaysInCare={calculateDaysInCare}
                           basePath={basePath}
                           navigate={navigate}
@@ -3094,6 +3103,18 @@ export default function AnimalsPage() {
         }}
         animal={animalForTransfer}
       />
+
+      {/* Return to Owner (RTO) Reclaim Wizard */}
+      {animalForReclaim && (
+        <ReclaimWizardDialog
+          open={reclaimDialogOpen}
+          onOpenChange={(open) => {
+            setReclaimDialogOpen(open);
+            if (!open) setAnimalForReclaim(null);
+          }}
+          animal={animalForReclaim}
+        />
+      )}
       <BulkLitterIntakeWizard
         open={bulkIntakeOpen}
         onOpenChange={setBulkIntakeOpen}

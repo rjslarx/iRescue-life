@@ -10,7 +10,7 @@ import {
   Stethoscope, Users, Pencil, ClipboardList, FileText, Camera,
   MapPin, Home, Building2, Truck, Cat, Dog, Baby, Heart,
   Scissors, AlertTriangle, Shield, ShieldAlert, ShieldX,
-  Send, X, Wand2, Sparkles, FileUp, History, PawPrint, Search,
+  Send, X, Wand2, Sparkles, FileUp, History, PawPrint, Search, Undo2,
   Calendar as CalendarIcon, Check, ExternalLink, ArrowRightLeft, Mail, Phone
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -70,6 +70,7 @@ interface AnimalHudCardProps {
   onQuickPhoto?: (animal: Animal) => void;
   onChangeLocation?: (animal: Animal) => void;
   onTransferAnimal?: (animal: Animal) => void;
+  onReturnToOwner?: (animal: Animal) => void;
   calculateDaysInCare: (animal: Animal) => number;
   basePath: string;
   navigate: (path: string) => void;
@@ -93,6 +94,7 @@ export function AnimalHudCard({
   onQuickPhoto,
   onChangeLocation,
   onTransferAnimal,
+  onReturnToOwner,
   calculateDaysInCare,
   basePath,
   navigate,
@@ -528,6 +530,15 @@ export function AnimalHudCard({
                           >
                             <Send className="w-4 h-4 mr-2" />
                             Transfer to Network Rescue
+                          </DropdownMenuItem>
+                        )}
+                        {onReturnToOwner && variant === "active" && (
+                          <DropdownMenuItem
+                            onClick={() => onReturnToOwner(animal)}
+                            data-testid={`menu-return-to-owner-${animal.id}`}
+                          >
+                            <Undo2 className="w-4 h-4 mr-2" />
+                            Return to Owner
                           </DropdownMenuItem>
                         )}
                       </DropdownMenuContent>
