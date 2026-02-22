@@ -29,7 +29,8 @@ import QuickActionsSettings from "@/components/QuickActionsSettings";
 import { GoveeSettings } from "@/components/GoveeSettings";
 import { StripeConnectBanner } from "@/components/StripeConnectBanner";
 import { JotFormSettings } from "@/components/JotFormSettings";
-import { Save, Loader2, DollarSign, CreditCard, AlertCircle, CheckCircle2, Mail, Palette, Globe, ExternalLink, Copy, Inbox, HelpCircle, Check, Info, MessageSquare, Phone, FileSignature, Heart, Shield, Star, Users, Home, HandHeart, PawPrint, Upload, FileUp, X, Plus } from "lucide-react";
+import { Save, Loader2, DollarSign, CreditCard, AlertCircle, CheckCircle2, Mail, Palette, Globe, ExternalLink, Copy, Inbox, HelpCircle, Check, Info, MessageSquare, Phone, FileSignature, Heart, Shield, Star, Users, Home, HandHeart, PawPrint, Upload, FileUp, X, Plus, Download, FileSpreadsheet } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { z } from "zod";
@@ -3441,10 +3442,51 @@ function EmailCopyRecipientsManager({ tenant }: { tenant?: Tenant }) {
   );
 }
 
+function ImportResultAlert({ importResult }: { importResult: { imported: number; duplicates: number; imageErrors: number; totalRows: number; errors: string[] } }) {
+  return (
+    <Alert variant={importResult.errors.length > 0 ? "destructive" : "default"}>
+      <CheckCircle2 className="h-4 w-4" />
+      <AlertDescription className="space-y-2">
+        <p className="font-medium">
+          Import Complete: {importResult.imported} animals imported
+        </p>
+        {importResult.duplicates > 0 && (
+          <p className="text-sm">
+            {importResult.duplicates} duplicates skipped (already in database)
+          </p>
+        )}
+        {importResult.imageErrors > 0 && (
+          <p className="text-sm text-muted-foreground">
+            {importResult.imageErrors} images could not be downloaded
+          </p>
+        )}
+        {importResult.errors.length > 0 && (
+          <div className="text-sm">
+            <p className="font-medium">Errors:</p>
+            <ul className="list-disc list-inside">
+              {importResult.errors.slice(0, 5).map((error, i) => (
+                <li key={i}>{error}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </AlertDescription>
+    </Alert>
+  );
+}
+
 function RescueGroupsImporter() {
   const { toast } = useToast();
-  const [isUploading, setIsUploading] = useState(false);
-  const [importResult, setImportResult] = useState<{
+  const [isUploadingRG, setIsUploadingRG] = useState(false);
+  const [isUploadingSimple, setIsUploadingSimple] = useState(false);
+  const [rgResult, setRgResult] = useState<{
+    imported: number;
+    duplicates: number;
+    imageErrors: number;
+    totalRows: number;
+    errors: string[];
+  } | null>(null);
+  const [simpleResult, setSimpleResult] = useState<{
     imported: number;
     duplicates: number;
     imageErrors: number;
@@ -3452,85 +3494,71 @@ function RescueGroupsImporter() {
     errors: string[];
   } | null>(null);
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+    endpoint: string,
+    setLoading: (v: boolean) => void,
+    setResult: (v: any) => void,
+    label: string,
+  ) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     if (!file.name.endsWith('.csv')) {
-      toast({
-        title: "Invalid file type",
-        description: "Please upload a CSV file exported from RescueGroups.org",
-        variant: "destructive",
-      });
+      toast({ title: "Invalid file type", description: "Please upload a .csv file", variant: "destructive" });
       return;
     }
 
-    setIsUploading(true);
-    setImportResult(null);
+    setLoading(true);
+    setResult(null);
 
     try {
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch('/api/import/rescuegroups', {
+      const response = await fetch(endpoint, {
         method: 'POST',
         body: formData,
         credentials: 'include',
       });
 
       const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Import failed');
 
-      if (!response.ok) {
-        throw new Error(result.error || 'Import failed');
-      }
-
-      setImportResult(result);
+      setResult(result);
       queryClient.invalidateQueries({ queryKey: ['/api/animals'] });
 
       const hasWarnings = result.errors.length > 0 || result.imageErrors > 0 || result.duplicates > 0;
-      
       toast({
         title: hasWarnings ? "Import Complete with Warnings" : "Import Complete",
-        description: hasWarnings 
-          ? `Imported ${result.imported} animals. ${result.duplicates} duplicates skipped, ${result.imageErrors} images failed.`
-          : `Successfully imported ${result.imported} animals`,
+        description: hasWarnings
+          ? `Imported ${result.imported} animals. ${result.duplicates} duplicates skipped.`
+          : `Successfully imported ${result.imported} animals from ${label}`,
         variant: result.errors.length > 0 ? "destructive" : "default",
       });
     } catch (error) {
-      toast({
-        title: "Import Failed",
-        description: error instanceof Error ? error.message : "Please try again",
-        variant: "destructive",
-      });
+      toast({ title: "Import Failed", description: error instanceof Error ? error.message : "Please try again", variant: "destructive" });
     } finally {
-      setIsUploading(false);
+      setLoading(false);
       event.target.value = '';
     }
   };
 
-  const downloadTemplate = async () => {
+  const downloadTemplate = async (endpoint: string, filename: string) => {
     try {
-      const response = await fetch('/api/import/rescuegroups/template', {
-        credentials: 'include',
-      });
-      
+      const response = await fetch(endpoint, { credentials: 'include' });
       if (!response.ok) throw new Error('Failed to download template');
-      
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'rescuegroups_import_template.csv';
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
     } catch (error) {
-      toast({
-        title: "Download Failed",
-        description: "Could not download template",
-        variant: "destructive",
-      });
+      toast({ title: "Download Failed", description: "Could not download template", variant: "destructive" });
     }
   };
 
@@ -3542,103 +3570,155 @@ function RescueGroupsImporter() {
           <CardTitle>Import Data</CardTitle>
         </div>
         <CardDescription>
-          Import your animal data from RescueGroups.org or other platforms
+          Import your animal data from a spreadsheet or from RescueGroups.org
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="space-y-2">
-          <Label>RescueGroups.org Import</Label>
-          <p className="text-sm text-muted-foreground">
-            Export your animals from RescueGroups.org as a CSV file, then upload it here to import all your data including photos.
-          </p>
-        </div>
+      <CardContent>
+        <Tabs defaultValue="simple" className="space-y-4">
+          <TabsList className="grid w-full grid-cols-2" data-testid="tabs-import-type">
+            <TabsTrigger value="simple" data-testid="tab-simple-import">
+              <FileSpreadsheet className="h-4 w-4 mr-2" />
+              Import from Spreadsheet
+            </TabsTrigger>
+            <TabsTrigger value="rescuegroups" data-testid="tab-rescuegroups-import">
+              <Upload className="h-4 w-4 mr-2" />
+              RescueGroups.org
+            </TabsTrigger>
+          </TabsList>
 
-        <div className="flex flex-col gap-4 p-4 border-2 border-dashed rounded-lg bg-muted/30">
-          <div className="flex items-center justify-center gap-2 text-muted-foreground">
-            <FileUp className="h-8 w-8" />
-            <div className="text-center">
-              <p className="font-medium">Upload RescueGroups CSV</p>
-              <p className="text-xs">Photos will be automatically downloaded and stored</p>
+          <TabsContent value="simple" className="space-y-4">
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">
+                Use our simple template to import animals from any spreadsheet or paper records. Download the blank template, fill in your data, then upload it here.
+              </p>
             </div>
-          </div>
 
-          <div className="flex flex-wrap justify-center gap-2">
             <Button
               variant="outline"
-              size="sm"
-              onClick={downloadTemplate}
-              data-testid="button-download-template"
+              onClick={() => downloadTemplate('/api/import/simple/template', 'animal_import_template.csv')}
+              className="w-full"
+              data-testid="button-download-simple-template"
             >
-              Download Template
+              <Download className="h-4 w-4 mr-2" />
+              Download Blank Template (.csv)
             </Button>
-            
-            <input
-              id="csv-upload"
-              type="file"
-              accept=".csv"
-              onChange={handleFileUpload}
-              disabled={isUploading}
-              className="hidden"
-              data-testid="input-csv-upload"
-            />
-            <Button
-              onClick={() => document.getElementById('csv-upload')?.click()}
-              disabled={isUploading}
-              data-testid="button-upload-csv"
-            >
-              {isUploading ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Processing...
-                </>
-              ) : (
-                <>
-                  <Upload className="h-4 w-4 mr-2" />
-                  Upload CSV
-                </>
-              )}
-            </Button>
-          </div>
-        </div>
 
-        {importResult && (
-          <Alert variant={importResult.errors.length > 0 ? "destructive" : "default"}>
-            <CheckCircle2 className="h-4 w-4" />
-            <AlertDescription className="space-y-2">
-              <p className="font-medium">
-                Import Complete: {importResult.imported} animals imported
-              </p>
-              {importResult.duplicates > 0 && (
-                <p className="text-sm">
-                  {importResult.duplicates} duplicates skipped (already in database)
-                </p>
-              )}
-              {importResult.imageErrors > 0 && (
-                <p className="text-sm text-muted-foreground">
-                  {importResult.imageErrors} images could not be downloaded
-                </p>
-              )}
-              {importResult.errors.length > 0 && (
-                <div className="text-sm">
-                  <p className="font-medium">Errors:</p>
-                  <ul className="list-disc list-inside">
-                    {importResult.errors.slice(0, 5).map((error, i) => (
-                      <li key={i}>{error}</li>
-                    ))}
-                  </ul>
+            <div className="flex flex-col gap-4 p-4 border-2 border-dashed rounded-md bg-muted/30">
+              <div className="flex items-center justify-center gap-2 text-muted-foreground">
+                <FileUp className="h-8 w-8" />
+                <div className="text-center">
+                  <p className="font-medium">Upload Your Completed Spreadsheet</p>
+                  <p className="text-xs">Accepts .csv files</p>
                 </div>
-              )}
-            </AlertDescription>
-          </Alert>
-        )}
+              </div>
 
-        <Alert>
-          <Info className="h-4 w-4" />
-          <AlertDescription>
-            <strong>Supported fields:</strong> Animal ID, Name, Breed, Sex, Birthdate, Description, Status, Species, Size, Age, and more. 
-            Photos are automatically downloaded from RescueGroups URLs.
-          </AlertDescription>
-        </Alert>
+              <div className="flex justify-center">
+                <input
+                  id="simple-csv-upload"
+                  type="file"
+                  accept=".csv"
+                  onChange={(e) => handleUpload(e, '/api/import/simple', setIsUploadingSimple, setSimpleResult, 'spreadsheet')}
+                  disabled={isUploadingSimple}
+                  className="hidden"
+                  data-testid="input-simple-csv-upload"
+                />
+                <Button
+                  onClick={() => document.getElementById('simple-csv-upload')?.click()}
+                  disabled={isUploadingSimple}
+                  data-testid="button-upload-simple-csv"
+                >
+                  {isUploadingSimple ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Importing...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="h-4 w-4 mr-2" />
+                      Upload CSV
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            {simpleResult && <ImportResultAlert importResult={simpleResult} />}
+
+            <Alert>
+              <Info className="h-4 w-4" />
+              <AlertDescription>
+                <strong>Template columns:</strong> name, breed, sex, age, color, microchip, intake_date, status.
+                The template includes an example row to guide you.
+              </AlertDescription>
+            </Alert>
+          </TabsContent>
+
+          <TabsContent value="rescuegroups" className="space-y-4">
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">
+                Export your animals from RescueGroups.org as a CSV file, then upload it here to import all your data including photos.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-4 p-4 border-2 border-dashed rounded-md bg-muted/30">
+              <div className="flex items-center justify-center gap-2 text-muted-foreground">
+                <FileUp className="h-8 w-8" />
+                <div className="text-center">
+                  <p className="font-medium">Upload RescueGroups CSV</p>
+                  <p className="text-xs">Photos will be automatically downloaded and stored</p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap justify-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => downloadTemplate('/api/import/rescuegroups/template', 'rescuegroups_import_template.csv')}
+                  data-testid="button-download-rg-template"
+                >
+                  Download Template
+                </Button>
+
+                <input
+                  id="rg-csv-upload"
+                  type="file"
+                  accept=".csv"
+                  onChange={(e) => handleUpload(e, '/api/import/rescuegroups', setIsUploadingRG, setRgResult, 'RescueGroups')}
+                  disabled={isUploadingRG}
+                  className="hidden"
+                  data-testid="input-rg-csv-upload"
+                />
+                <Button
+                  onClick={() => document.getElementById('rg-csv-upload')?.click()}
+                  disabled={isUploadingRG}
+                  data-testid="button-upload-rg-csv"
+                >
+                  {isUploadingRG ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="h-4 w-4 mr-2" />
+                      Upload CSV
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            {rgResult && <ImportResultAlert importResult={rgResult} />}
+
+            <Alert>
+              <Info className="h-4 w-4" />
+              <AlertDescription>
+                <strong>Supported fields:</strong> Animal ID, Name, Breed, Sex, Birthdate, Description, Status, Species, Size, Age, and more.
+                Photos are automatically downloaded from RescueGroups URLs.
+              </AlertDescription>
+            </Alert>
+          </TabsContent>
+        </Tabs>
       </CardContent>
     </Card>
   );

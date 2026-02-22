@@ -1,7 +1,4 @@
 import { Router } from 'express';
-import { db } from '../db';
-import { animals } from '@shared/schema';
-import { eq, and } from 'drizzle-orm';
 import multer from 'multer';
 import { requireAuth } from '../middleware/auth';
 import { requireTenant } from '../middleware/tenant';
@@ -9,6 +6,22 @@ import { Readable } from 'stream';
 import csvParser from 'csv-parser';
 import axios from 'axios';
 import { ObjectStorageService } from '../objectStorage';
+import {
+  AnimalInsertDTO,
+  generateAnimalId,
+  parseGender,
+  parsePetfinderGender,
+  parseStatus,
+  parseDate,
+  parseBoolean,
+  parseNeuterStatus,
+  parsePetfinderAge,
+  parsePetfinderSize,
+  parsePetfinderType,
+  checkDuplicateByExternalId,
+  checkDuplicateByNameSpeciesSex,
+  insertAnimalFromDTO,
+} from '../services/animalImport';
 
 const router = Router();
 
@@ -59,103 +72,6 @@ interface RescueGroupsRow {
   AnimalPhoto2?: string;
   AnimalPhoto3?: string;
   [key: string]: string | undefined;
-}
-
-function parseGender(sex: string | undefined): 'male' | 'female' | 'unknown' {
-  if (!sex) return 'unknown';
-  const normalized = sex.toLowerCase().trim();
-  if (normalized === 'male' || normalized === 'm') return 'male';
-  if (normalized === 'female' || normalized === 'f') return 'female';
-  return 'unknown';
-}
-
-function parsePetfinderGender(sex: string | undefined): 'Male' | 'Female' | 'Unknown' {
-  if (!sex) return 'Unknown';
-  const normalized = sex.toLowerCase().trim();
-  if (normalized === 'male' || normalized === 'm') return 'Male';
-  if (normalized === 'female' || normalized === 'f') return 'Female';
-  return 'Unknown';
-}
-
-interface ParsedAnimalStatus {
-  status: 'available' | 'adoption_pending' | 'transfer_pending' | 'medical_hold' | 'stray_hold' | 'adopted' | 'transported' | 'deceased';
-  locationType?: 'foster';
-}
-
-function parseStatus(status: string | undefined): ParsedAnimalStatus {
-  if (!status) return { status: 'available' };
-  const normalized = status.toLowerCase().trim();
-  if (normalized === 'available' || normalized === 'adoptable' || normalized === 'active') return { status: 'available' };
-  if (normalized === 'adopted' || normalized === 'alumni' || normalized === 'closed' || normalized === 'placed') return { status: 'adopted' };
-  if (normalized === 'pending' || normalized === 'hold' || normalized === 'on hold' || normalized === 'application' || normalized === 'reserved') return { status: 'adoption_pending' };
-  if (normalized === 'foster' || normalized === 'fostered' || normalized === 'in foster' || normalized === 'foster care') return { status: 'available', locationType: 'foster' };
-  if (normalized === 'medical' || normalized === 'medical_hold' || normalized === 'medical hold' || normalized === 'quarantine' || normalized === 'treatment') return { status: 'medical_hold' };
-  if (normalized === 'deceased' || normalized === 'passed' || normalized === 'died' || normalized === 'euthanized' || normalized === 'rainbow bridge') return { status: 'deceased' };
-  if (normalized === 'stray' || normalized === 'intake') return { status: 'stray_hold' };
-  return { status: 'available' };
-}
-
-function parseDate(dateStr: string | undefined): Date | null {
-  if (!dateStr) return null;
-  try {
-    const date = new Date(dateStr);
-    if (isNaN(date.getTime())) return null;
-    return date;
-  } catch {
-    return null;
-  }
-}
-
-function parseBoolean(value: string | undefined): boolean | null {
-  if (!value) return null;
-  const normalized = value.toLowerCase().trim();
-  if (normalized === 'yes' || normalized === 'true' || normalized === '1') return true;
-  if (normalized === 'no' || normalized === 'false' || normalized === '0') return false;
-  return null;
-}
-
-function parseNeuterStatus(altered: string | undefined, sex: string | undefined): 'intact' | 'neutered' | 'spayed' | 'unknown' {
-  const isAltered = parseBoolean(altered);
-  if (isAltered === null) return 'unknown';
-  if (!isAltered) return 'intact';
-  const gender = parseGender(sex);
-  if (gender === 'male') return 'neutered';
-  if (gender === 'female') return 'spayed';
-  return 'unknown';
-}
-
-function parsePetfinderAge(age: string | undefined): 'Baby' | 'Young' | 'Adult' | 'Senior' | undefined {
-  if (!age) return undefined;
-  const normalized = age.toLowerCase().trim();
-  if (normalized === 'baby' || normalized === 'kitten' || normalized === 'puppy') return 'Baby';
-  if (normalized === 'young' || normalized === 'junior') return 'Young';
-  if (normalized === 'adult') return 'Adult';
-  if (normalized === 'senior') return 'Senior';
-  return undefined;
-}
-
-function parsePetfinderSize(size: string | undefined): 'Small' | 'Medium' | 'Large' | 'Extra Large' | undefined {
-  if (!size) return undefined;
-  const normalized = size.toLowerCase().trim();
-  if (normalized === 'small' || normalized === 's') return 'Small';
-  if (normalized === 'medium' || normalized === 'm') return 'Medium';
-  if (normalized === 'large' || normalized === 'l') return 'Large';
-  if (normalized === 'extra large' || normalized === 'xl' || normalized === 'xlarge') return 'Extra Large';
-  return undefined;
-}
-
-function parsePetfinderType(species: string | undefined): 'Dog' | 'Cat' | 'Rabbit' | 'Small & Furry' | 'Horse' | 'Bird' | 'Scales, Fins & Other' | 'Barnyard' | undefined {
-  if (!species) return undefined;
-  const normalized = species.toLowerCase().trim();
-  if (normalized === 'dog' || normalized === 'canine') return 'Dog';
-  if (normalized === 'cat' || normalized === 'feline') return 'Cat';
-  if (normalized === 'rabbit' || normalized === 'bunny') return 'Rabbit';
-  if (normalized === 'horse' || normalized === 'equine') return 'Horse';
-  if (normalized === 'bird') return 'Bird';
-  if (normalized.includes('small') || normalized === 'hamster' || normalized === 'guinea pig' || normalized === 'ferret') return 'Small & Furry';
-  if (normalized === 'fish' || normalized === 'reptile' || normalized === 'amphibian' || normalized === 'snake') return 'Scales, Fins & Other';
-  if (normalized === 'pig' || normalized === 'goat' || normalized === 'sheep' || normalized === 'cow' || normalized === 'llama') return 'Barnyard';
-  return undefined;
 }
 
 interface DownloadedImage {
@@ -218,10 +134,47 @@ async function uploadImageToStorage(
   }
 }
 
-function generateAnimalId(): string {
-  const timestamp = Date.now().toString(36).toUpperCase();
-  const random = Math.random().toString(36).substring(2, 6).toUpperCase();
-  return `A${timestamp}${random}`;
+function mapRescueGroupsRowToDTO(row: RescueGroupsRow): { dto: AnimalInsertDTO; externalId?: string; photoUrls: string[] } | null {
+  const name = row.AnimalName || row['Animal Name'] || row['Name'];
+  if (!name) return null;
+
+  const breed = row.AnimalBreed || row.AnimalBreedPrimary || row['Breed'] || 'Unknown';
+  const species = row.AnimalSpecies || row['Species'] || 'Dog';
+  const sexRaw = row.AnimalSex || row['Sex'];
+  const description = row.AnimalDescription || row.AnimalDescriptionPlain || row['Description'] || '';
+  const statusResult = parseStatus(row.AnimalStatus || row['Status']);
+
+  const dto: AnimalInsertDTO = {
+    name,
+    species,
+    breed,
+    age: row.AnimalGeneralAge || 'Unknown',
+    sex: parseGender(sexRaw),
+    bio: description,
+    status: statusResult.status,
+    locationType: statusResult.locationType || 'shelter',
+    neuterStatus: parseNeuterStatus(row.AnimalAltered, sexRaw),
+    dateOfBirth: parseDate(row.AnimalBirthdate || row['Birthdate']),
+    petfinderType: parsePetfinderType(species) || null,
+    petfinderBreed: breed,
+    petfinderBreedSecondary: row.AnimalBreedSecondary || undefined,
+    petfinderAge: parsePetfinderAge(row.AnimalGeneralAge) || null,
+    petfinderSize: parsePetfinderSize(row.AnimalSize || row['Size']) || null,
+    petfinderGender: parsePetfinderGender(sexRaw) || null,
+    houseTrained: parseBoolean(row.AnimalHousetrained),
+    declawed: parseBoolean(row.AnimalDeclawed),
+    specialNeeds: parseBoolean(row.AnimalSpecialNeeds),
+    shotsCurrent: parseBoolean(row.AnimalCurrentShotsUptodate),
+    childFriendly: parseBoolean(row.AnimalOKWithKids),
+    catFriendly: parseBoolean(row.AnimalOKWithCats),
+    dogFriendly: parseBoolean(row.AnimalOKWithDogs),
+    externalId: row.AnimalID || row['Animal ID'] || row['ID'] || undefined,
+    externalSource: 'rescuegroups',
+    intakeDate: new Date(),
+    intakeSource: 'transfer',
+  };
+
+  return { dto, externalId: dto.externalId, photoUrls: [] };
 }
 
 router.post('/rescuegroups', requireTenant, requireAuth, upload.single('file'), async (req, res, next) => {
@@ -257,50 +210,28 @@ router.post('/rescuegroups', requireTenant, requireAuth, upload.single('file'), 
 
     for (const row of results) {
       try {
-        const externalId = row.AnimalID || row['Animal ID'] || row['ID'];
-        const name = row.AnimalName || row['Animal Name'] || row['Name'];
-        
-        if (!name) {
+        const mapped = mapRescueGroupsRowToDTO(row);
+        if (!mapped) {
           errors.push(`Skipped row: Missing animal name`);
           continue;
         }
 
-        const breed = row.AnimalBreed || row.AnimalBreedPrimary || row['Breed'] || 'Unknown';
-        const species = row.AnimalSpecies || row['Species'] || 'Dog';
-        const sex = parseGender(row.AnimalSex || row['Sex']);
-        
-        if (externalId) {
-          const existing = await db.query.animals.findFirst({
-            where: and(
-              eq(animals.tenantId, tenantId),
-              eq(animals.externalId, externalId)
-            ),
-          });
+        const { dto } = mapped;
 
-          if (existing) {
+        if (dto.externalId) {
+          if (await checkDuplicateByExternalId(tenantId, dto.externalId)) {
             duplicates++;
             continue;
           }
         } else {
-          const existingByName = await db.query.animals.findFirst({
-            where: and(
-              eq(animals.tenantId, tenantId),
-              eq(animals.name, name),
-              eq(animals.species, species),
-              eq(animals.sex, sex)
-            ),
-          });
-
-          if (existingByName) {
+          if (await checkDuplicateByNameSpeciesSex(tenantId, dto.name, dto.species, dto.sex || 'unknown')) {
             duplicates++;
-            errors.push(`Possible duplicate: "${name}" (${species}, ${sex}) - skipped (no external ID to verify)`);
+            errors.push(`Possible duplicate: "${dto.name}" (${dto.species}, ${dto.sex}) - skipped (no external ID to verify)`);
             continue;
           }
         }
 
-        const description = row.AnimalDescription || row.AnimalDescriptionPlain || row['Description'] || '';
-        
-        const animalId = generateAnimalId();
+        const tempAnimalId = generateAnimalId();
         const photoUrls: string[] = [];
         
         const photoUrl = row.AnimalPrimaryPhotoUrl || row.AnimalPhoto1 || row['Photo'] || row['Photo URL'];
@@ -310,7 +241,7 @@ router.post('/rescuegroups', requireTenant, requireAuth, upload.single('file'), 
           if (imageData) {
             const storagePath = await uploadImageToStorage(
               imageData.buffer, 
-              animalId, 
+              tempAnimalId, 
               tenantId, 
               imageData.mimeType
             );
@@ -331,7 +262,7 @@ router.post('/rescuegroups', requireTenant, requireAuth, upload.single('file'), 
             if (imageData) {
               const storagePath = await uploadImageToStorage(
                 imageData.buffer,
-                animalId,
+                tempAnimalId,
                 tenantId,
                 imageData.mimeType
               );
@@ -342,39 +273,11 @@ router.post('/rescuegroups', requireTenant, requireAuth, upload.single('file'), 
           }
         }
 
-        const animalData = {
-          tenantId,
-          animalId,
-          name,
-          species,
-          breed,
-          age: row.AnimalGeneralAge || 'Unknown',
-          sex,
-          neuterStatus: parseNeuterStatus(row.AnimalAltered, row.AnimalSex),
-          dateOfBirth: parseDate(row.AnimalBirthdate || row['Birthdate']),
-          bio: description,
-          ...parseStatus(row.AnimalStatus || row['Status']),
-          photoUrls: photoUrls.length > 0 ? photoUrls : undefined,
-          petfinderType: parsePetfinderType(species),
-          petfinderBreed: breed,
-          petfinderBreedSecondary: row.AnimalBreedSecondary || undefined,
-          petfinderAge: parsePetfinderAge(row.AnimalGeneralAge),
-          petfinderSize: parsePetfinderSize(row.AnimalSize || row['Size']),
-          petfinderGender: parsePetfinderGender(row.AnimalSex || row['Sex']),
-          houseTrained: parseBoolean(row.AnimalHousetrained),
-          declawed: parseBoolean(row.AnimalDeclawed),
-          specialNeeds: parseBoolean(row.AnimalSpecialNeeds),
-          shotsCurrent: parseBoolean(row.AnimalCurrentShotsUptodate),
-          childFriendly: parseBoolean(row.AnimalOKWithKids),
-          catFriendly: parseBoolean(row.AnimalOKWithCats),
-          dogFriendly: parseBoolean(row.AnimalOKWithDogs),
-          externalId: externalId || undefined,
-          externalSource: 'rescuegroups' as const,
-          intakeDate: new Date(),
-          intakeSource: 'transfer' as const,
-        };
+        if (photoUrls.length > 0) {
+          dto.photoUrls = photoUrls;
+        }
 
-        await db.insert(animals).values(animalData);
+        await insertAnimalFromDTO(tenantId, dto, tempAnimalId);
         imported++;
         
       } catch (rowError) {

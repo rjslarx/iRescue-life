@@ -35119,6 +35119,9 @@ The user asking is a tenant administrator or staff member.`;
   const rescuegroupsImportRoutes = await import('./routes/rescuegroupsImport');
   app.use('/api/import', rescuegroupsImportRoutes.default);
 
+  const simpleImportRoutes = await import('./routes/simpleImport');
+  app.use('/api/import', simpleImportRoutes.default);
+
   // Register medical file upload routes (for transport CVI documents)
   const medicalFileUploadRoutes = await import('./routes/medicalFileUpload');
   app.use('/api/animals', medicalFileUploadRoutes.default);
