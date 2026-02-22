@@ -7463,24 +7463,37 @@ Crawl-delay: 1
       const stripeConfigured = hasStripeConnect || hasOwnStripeKeys;
 
       if (stripeConfigured) {
-        const { stripeService } = await import('./lib/stripe-service');
-        const paymentIntent = await stripeService.createPaymentIntent(req.tenant!, {
-          amount: data.amount,
-          description: data.description || `Reclaim fee for ${animal.name}`,
-          receiptEmail: data.ownerEmail,
-          metadata: {
-            type: 'reclaim_fee',
-            animalId: animal.id,
-            animalName: animal.name || 'Unknown',
-          },
-          connectedAccountId: req.tenant!.stripeConnectedAccountId || undefined,
-        });
+        try {
+          const { stripeService } = await import('./lib/stripe-service');
+          const { calculatePlatformFee } = await import('./config/platform');
+          const platformFeeAmount = hasStripeConnect
+            ? calculatePlatformFee(data.amount, req.tenant!.subscriptionTier || 'free', req.tenant!.platformFeePercent)
+            : 0;
 
-        return res.json({
-          paymentIntentId: paymentIntent.id,
-          clientSecret: paymentIntent.client_secret,
-          status: paymentIntent.status,
-        });
+          const paymentIntent = await stripeService.createPaymentIntent(req.tenant! as any, {
+            amount: data.amount,
+            description: data.description || `Reclaim fee for ${animal.name}`,
+            receiptEmail: data.ownerEmail,
+            metadata: {
+              type: 'reclaim_fee',
+              animalId: animal.id,
+              animalName: animal.name || 'Unknown',
+            },
+            connectedAccountId: req.tenant!.stripeConnectedAccountId || undefined,
+            platformFeeAmount: platformFeeAmount > 0 ? platformFeeAmount : undefined,
+          });
+
+          return res.json({
+            paymentIntentId: paymentIntent.id,
+            clientSecret: paymentIntent.client_secret,
+            status: paymentIntent.status,
+          });
+        } catch (stripeErr: any) {
+          console.error('Stripe payment intent creation failed for RTO:', stripeErr.message);
+          return res.status(500).json({
+            error: `Stripe payment failed: ${stripeErr.message}. You can try again or use manual payment recording.`,
+          });
+        }
       }
 
       const manualPaymentId = `manual_rto_${Date.now()}_${animal.id.slice(0, 8)}`;

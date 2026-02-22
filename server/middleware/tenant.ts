@@ -27,6 +27,9 @@ export interface TenantContext {
   stripeLink?: string | null;
   stripeEnabled?: boolean;
   stripePublishableKey?: string | null;
+  stripeConnectedAccountId?: string | null;
+  stripeSecretKeyEncrypted?: string | null;
+  platformFeePercent?: number | null;
   resendEnabled?: boolean;
   resendFromEmail?: string | null;
   resendFromName?: string | null;
@@ -462,6 +465,9 @@ export async function resolveTenant(req: Request, res: Response, next: NextFunct
         stripeLink: tenant.stripeLink,
         stripeEnabled: tenant.stripeEnabled,
         stripePublishableKey: tenant.stripePublishableKey,
+        stripeConnectedAccountId: tenant.stripeConnectedAccountId,
+        stripeSecretKeyEncrypted: tenant.stripeSecretKeyEncrypted,
+        platformFeePercent: tenant.platformFeePercent,
         resendEnabled: tenant.resendEnabled,
         resendFromEmail: tenant.resendFromEmail,
         resendFromName: tenant.resendFromName,
