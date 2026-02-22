@@ -7829,21 +7829,17 @@ Crawl-delay: 1
       const multer = (await import('multer')).default;
       const { TenantFileStorage } = await import('./lib/tenantFileStorage');
       
-      // Allowed image extensions (for HEIC/HEIF files that may have incorrect MIME types)
       const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'heic', 'heif', 'bmp', 'ico', 'avif'];
       
-      // Configure multer for memory storage
       const upload = multer({
         storage: multer.memoryStorage(),
         limits: {
           fileSize: 10 * 1024 * 1024, // 10MB
         },
         fileFilter: (_req, file, cb) => {
-          // Check MIME type first
           if (file.mimetype.startsWith('image/')) {
             cb(null, true);
           } else {
-            // Fallback to extension check for HEIC/HEIF files (often have incorrect MIME types)
             const ext = file.originalname.toLowerCase().split('.').pop();
             if (ext && imageExtensions.includes(ext)) {
               cb(null, true);
@@ -7852,7 +7848,7 @@ Crawl-delay: 1
             }
           }
         },
-      }).array('files', 10); // Accept up to 10 files
+      }).array('files', 10);
 
       // Process upload
       upload(req, res, async (err) => {
@@ -7948,6 +7944,90 @@ Crawl-delay: 1
         } catch (error: any) {
           console.error('Error uploading files:', error);
           return res.status(500).json({ error: 'Failed to upload files' });
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/documents/upload
+   * Dedicated endpoint for uploading document files (PDF, DOC, DOCX, etc.)
+   * Used by RTO reclaim flow for vet records and other document uploads
+   */
+  app.post('/api/documents/upload', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      const multer = (await import('multer')).default;
+      const { TenantFileStorage } = await import('./lib/tenantFileStorage');
+
+      const allowedExtensions = ['pdf', 'doc', 'docx', 'txt', 'rtf', 'jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif'];
+      const allowedMimeTypes = [
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'text/plain',
+        'application/rtf',
+      ];
+
+      const upload = multer({
+        storage: multer.memoryStorage(),
+        limits: {
+          fileSize: 15 * 1024 * 1024,
+        },
+        fileFilter: (_req, file, cb) => {
+          if (file.mimetype.startsWith('image/') || allowedMimeTypes.includes(file.mimetype)) {
+            cb(null, true);
+          } else {
+            const ext = file.originalname.toLowerCase().split('.').pop();
+            if (ext && allowedExtensions.includes(ext)) {
+              cb(null, true);
+            } else {
+              cb(new Error('Only document files (PDF, DOC, DOCX) and images are allowed'));
+            }
+          }
+        },
+      }).array('files', 10);
+
+      upload(req, res, async (err) => {
+        if (err) {
+          return res.status(400).json({ error: err.message });
+        }
+
+        const files = req.files as Express.Multer.File[];
+        if (!files || files.length === 0) {
+          return res.status(400).json({ error: 'No files uploaded' });
+        }
+
+        try {
+          const tenantId = req.tenant!.id;
+          const userId = req.session.userId!;
+          const storage = await TenantFileStorage.forTenant(tenantId);
+          const uploadedPaths: string[] = [];
+          const category = (req.query.category as string) || 'documents';
+
+          for (const file of files) {
+            const result = await storage.uploadFile({
+              tenantId,
+              userId,
+              category,
+              visibility: 'private',
+              fileName: file.originalname,
+              mimeType: file.mimetype,
+              content: file.buffer,
+            });
+
+            if (result.success) {
+              uploadedPaths.push(result.fileUrl);
+            } else {
+              console.error('Failed to upload document:', result.error);
+            }
+          }
+
+          res.json({ uploadedPaths });
+        } catch (error: any) {
+          console.error('Error uploading documents:', error);
+          return res.status(500).json({ error: 'Failed to upload documents' });
         }
       });
     } catch (error) {

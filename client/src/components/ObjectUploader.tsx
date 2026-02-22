@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Upload, X, Loader2 } from "lucide-react";
+import { Upload, X, Loader2, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { buildTenantUrl, getTenantHeaders } from "@/lib/tenantApi";
 import heic2any from "heic2any";
@@ -173,16 +173,24 @@ export function ObjectUploader({
 
     setSelectedFiles(prev => [...prev, ...filesToAdd]);
 
-    // Generate previews (with HEIC conversion for browser compatibility)
+    const docExtensions = ['.pdf', '.doc', '.docx', '.txt', '.rtf'];
     filesToAdd.forEach(async (file) => {
       const fileName = file.name.toLowerCase();
       const isHeic = fileName.endsWith('.heic') || fileName.endsWith('.heif') || 
                      file.type === 'image/heic' || file.type === 'image/heif';
+      const isDocument = docExtensions.some(ext => fileName.endsWith(ext)) || 
+                         file.type === 'application/pdf' || 
+                         file.type === 'application/msword' ||
+                         file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
+      if (isDocument) {
+        setPreviews(prev => [...prev, `__doc__:${file.name}`]);
+        return;
+      }
       
       try {
         let previewBlob: Blob = file;
         
-        // Convert HEIC/HEIF to JPEG for preview in browsers that don't support it
         if (isHeic) {
           try {
             const convertedBlob = await heic2any({
@@ -193,7 +201,6 @@ export function ObjectUploader({
             previewBlob = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
           } catch (heicError) {
             console.warn('HEIC preview conversion failed, using placeholder:', heicError);
-            // Use a placeholder preview for HEIC files that can't be converted
             setPreviews(prev => [...prev, 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMDAiIGhlaWdodD0iMjAwIiB2aWV3Qm94PSIwIDAgMjAwIDIwMCI+PHJlY3QgZmlsbD0iI2U1ZTdlYiIgd2lkdGg9IjIwMCIgaGVpZ2h0PSIyMDAiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZG9taW5hbnQtYmFzZWxpbmU9Im1pZGRsZSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzZiNzI4MCIgZm9udC1mYW1pbHk9InN5c3RlbS11aSIgZm9udC1zaXplPSIxNCI+SEVJQyBJbWFnZTwvdGV4dD48L3N2Zz4=']);
             return;
           }
@@ -206,7 +213,6 @@ export function ObjectUploader({
         reader.readAsDataURL(previewBlob);
       } catch (error) {
         console.error('Error generating preview:', error);
-        // Fallback to standard preview attempt
         const reader = new FileReader();
         reader.onloadend = () => {
           setPreviews(prev => [...prev, reader.result as string]);
@@ -300,16 +306,25 @@ export function ObjectUploader({
 
   return (
     <div className={`space-y-3 ${className || ''}`}>
-      {/* Display existing images */}
+      {/* Display existing uploads */}
       {showPreview && value.length > 0 && (
         <div className="flex flex-wrap gap-2">
-          {value.map((url, index) => (
+          {value.map((url, index) => {
+            const isDocUrl = /\.(pdf|doc|docx|txt|rtf)$/i.test(url) || url.includes('rto-documents');
+            return (
             <div key={index} className={`relative group ${previewSizeClasses[previewSize]} rounded-md overflow-hidden border`}>
-              <img
-                src={url}
-                alt={`Uploaded ${index + 1}`}
-                className="w-full h-full object-cover"
-              />
+              {isDocUrl ? (
+                <div className="w-full h-full flex flex-col items-center justify-center gap-1 bg-muted">
+                  <FileText className="h-6 w-6 text-muted-foreground" />
+                  <span className="text-[10px] text-muted-foreground">Doc</span>
+                </div>
+              ) : (
+                <img
+                  src={url}
+                  alt={`Uploaded ${index + 1}`}
+                  className="w-full h-full object-cover"
+                />
+              )}
               <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                 <Button
                   type="button"
@@ -323,7 +338,7 @@ export function ObjectUploader({
                 </Button>
               </div>
             </div>
-          ))}
+          );})}
         </div>
       )}
 
@@ -403,11 +418,18 @@ export function ObjectUploader({
                 <div className="grid grid-cols-2 gap-3">
                   {previews.map((preview, index) => (
                     <div key={index} className="relative group rounded-md overflow-hidden border bg-muted">
-                      <img
-                        src={preview}
-                        alt={`Preview ${index + 1}`}
-                        className="w-full h-40 object-cover"
-                      />
+                      {preview.startsWith('__doc__:') ? (
+                        <div className="w-full h-40 flex flex-col items-center justify-center gap-2 bg-muted">
+                          <FileText className="h-10 w-10 text-muted-foreground" />
+                          <span className="text-xs text-muted-foreground px-2 text-center truncate max-w-full">{preview.replace('__doc__:', '')}</span>
+                        </div>
+                      ) : (
+                        <img
+                          src={preview}
+                          alt={`Preview ${index + 1}`}
+                          className="w-full h-40 object-cover"
+                        />
+                      )}
                       <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                         <Button
                           type="button"

@@ -541,7 +541,7 @@ function OwnerInfoStep({
           onChange={(urls) => setOwnerData(prev => ({ ...prev, vetRecordUrls: urls }))}
           maxFiles={5}
           accept="image/*,.pdf,.doc,.docx"
-          uploadEndpoint="/api/animals/photos/upload"
+          uploadEndpoint="/api/documents/upload?category=rto-documents"
           buttonText="Upload Vet Records / Proof"
           data-testid="button-upload-vet-records"
         />
