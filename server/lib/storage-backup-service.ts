@@ -144,6 +144,15 @@ export class StorageBackupService {
         return progress;
       }
 
+      // Pre-flight check: verify object storage is accessible
+      const objectStorageAvailable = await this.checkObjectStorageConnectivity();
+      if (!objectStorageAvailable) {
+        progress.status = 'failed';
+        progress.errors.push('Object storage is not accessible (credential or connectivity issue). Skipping backup.');
+        progress.completedAt = new Date();
+        return progress;
+      }
+
       // Ensure root backup folder exists
       const backupFolderResult = await this.getOrCreateFolder(driveService, ROOT_FOLDERS.BACKUPS);
       if (!backupFolderResult.success || !backupFolderResult.folderId) {
@@ -688,6 +697,30 @@ export class StorageBackupService {
       }
     } catch (error: any) {
       throw new Error(`Failed to upload ${fileName}: ${error.message}`);
+    }
+  }
+
+  /**
+   * Pre-flight check: verify object storage credentials and connectivity
+   */
+  private async checkObjectStorageConnectivity(): Promise<boolean> {
+    try {
+      const privateDir = process.env.PRIVATE_OBJECT_DIR;
+      if (!privateDir) {
+        console.error('[STORAGE BACKUP] PRIVATE_OBJECT_DIR not set, object storage unavailable');
+        return false;
+      }
+      const { bucketName } = parseObjectPath(privateDir);
+      const bucket = objectStorageClient.bucket(bucketName);
+      const [exists] = await bucket.exists();
+      if (!exists) {
+        console.error(`[STORAGE BACKUP] Bucket ${bucketName} does not exist or is not accessible`);
+        return false;
+      }
+      return true;
+    } catch (error: any) {
+      console.error(`[STORAGE BACKUP] Object storage connectivity check failed: ${error.message}`);
+      return false;
     }
   }
 

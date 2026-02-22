@@ -119,7 +119,7 @@ export async function createRemindersForDuePreventativeCare(tenantId: string): P
       .where(and(
         eq(preventativeCareRecords.tenantId, tenantId),
         inArray(preventativeCareRecords.animalId, animalIds),
-        lte(preventativeCareRecords.nextDueDate, threeDaysFromNow.toISOString().split('T')[0]),
+        lte(preventativeCareRecords.nextDueDate, threeDaysFromNow),
         or(
           isNull(preventativeCareRecords.dateGiven),
           lt(preventativeCareRecords.dateGiven, preventativeCareRecords.nextDueDate)
