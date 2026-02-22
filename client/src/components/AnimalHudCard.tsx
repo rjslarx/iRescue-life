@@ -3,7 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   ChevronLeft, ChevronRight, ChevronDown, ChevronUp,
@@ -173,25 +173,26 @@ export function AnimalHudCard({
               <PawPrint className="h-10 w-10 text-muted-foreground/30" />
             </div>
           )}
-          <div className="absolute top-1.5 left-1.5" data-testid={`indicator-behavior-${animal.id}`}>
-            <div
-              className={cn(
-                "w-4 h-4 rounded-full border border-white/50 shadow-sm",
-                animal.behaviorColor === "green" && "bg-green-500",
-                animal.behaviorColor === "yellow" && "bg-yellow-500",
-                animal.behaviorColor === "red" && "bg-red-500",
-                animal.behaviorColor === "purple" && "bg-purple-500",
-                !animal.behaviorColor && "bg-green-500"
-              )}
-              title={
-                animal.behaviorColor === "green" ? "Safe for All" :
-                animal.behaviorColor === "yellow" ? `Caution: ${animal.behaviorRestrictionReason || "Trained Volunteers Only"}` :
-                animal.behaviorColor === "red" ? `DANGER: ${animal.behaviorRestrictionReason || "Staff Only"}` :
-                animal.behaviorColor === "purple" ? "Medical Isolation" :
-                "Safe for All"
-              }
-            />
-          </div>
+          {animal.behaviorColor && (
+            <div className="absolute top-1.5 left-1.5" data-testid={`indicator-behavior-${animal.id}`}>
+              <div
+                className={cn(
+                  "w-4 h-4 rounded-full border border-white/50 shadow-sm",
+                  animal.behaviorColor === "green" && "bg-green-500",
+                  animal.behaviorColor === "yellow" && "bg-yellow-500",
+                  animal.behaviorColor === "red" && "bg-red-500",
+                  animal.behaviorColor === "purple" && "bg-purple-500"
+                )}
+                title={
+                  animal.behaviorColor === "green" ? "Safe for All" :
+                  animal.behaviorColor === "yellow" ? `Caution: ${animal.behaviorRestrictionReason || "Trained Volunteers Only"}` :
+                  animal.behaviorColor === "red" ? `DANGER: ${animal.behaviorRestrictionReason || "Staff Only"}` :
+                  animal.behaviorColor === "purple" ? "Medical Isolation" :
+                  ""
+                }
+              />
+            </div>
+          )}
           <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-2 pb-1.5 pt-5">
             <h3 className="font-bold text-white text-sm leading-tight truncate drop-shadow-sm" data-testid={`text-animal-name-${animal.id}`}>
               {animal.name}
@@ -446,7 +447,7 @@ export function AnimalHudCard({
                       data-testid={`button-view-details-${animal.id}`}
                     >
                       <Users className="w-3.5 h-3.5 mr-1.5" />
-                      Foster
+                      Profile
                     </Button>
 
                     <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
@@ -458,11 +459,12 @@ export function AnimalHudCard({
                           data-testid={`button-edit-${animal.id}`}
                         >
                           <Pencil className="w-3.5 h-3.5 mr-1.5" />
-                          Edit
+                          Manage
                           <ChevronDown className="w-3 h-3 ml-1" />
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="start" sideOffset={4} avoidCollisions={false}>
+                        <DropdownMenuLabel className="text-xs text-muted-foreground">Profile</DropdownMenuLabel>
                         <DropdownMenuItem
                           onClick={() => onEditAnimal(animal)}
                           data-testid={`menu-edit-details-${animal.id}`}
@@ -470,13 +472,38 @@ export function AnimalHudCard({
                           <Pencil className="w-4 h-4 mr-2" />
                           Edit Details
                         </DropdownMenuItem>
-                        {onMarkDeceased && (
+                        {onMedicalImport && (
                           <DropdownMenuItem
-                            onClick={() => onMarkDeceased(animal)}
-                            data-testid={`menu-mark-deceased-${animal.id}`}
+                            onClick={() => onMedicalImport(animal)}
+                            data-testid={`menu-import-medical-${animal.id}`}
                           >
-                            Mark Deceased
+                            <FileUp className="w-4 h-4 mr-2" />
+                            Import Vet Records
                           </DropdownMenuItem>
+                        )}
+                        {onQuickPhoto && (
+                          <DropdownMenuItem
+                            onClick={() => onQuickPhoto(animal)}
+                            data-testid={`menu-quick-photo-${animal.id}`}
+                          >
+                            <Camera className="w-4 h-4 mr-2" />
+                            Quick Photo
+                          </DropdownMenuItem>
+                        )}
+                        {onHeartwormTreatment && animal.heartwormPositive && ["adoption_pending", "adopted"].includes(animal.status) && (
+                          <DropdownMenuItem
+                            onClick={() => onHeartwormTreatment(animal)}
+                            data-testid={`menu-heartworm-treatment-${animal.id}`}
+                          >
+                            <Heart className="w-4 h-4 mr-2" />
+                            Heartworm Treatment Plan
+                          </DropdownMenuItem>
+                        )}
+                        {(onGenerateBio || onGenerateAdCopy) && (
+                          <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuLabel className="text-xs text-muted-foreground">Marketing Tools</DropdownMenuLabel>
+                          </>
                         )}
                         {onGenerateBio && (
                           <DropdownMenuItem
@@ -496,55 +523,57 @@ export function AnimalHudCard({
                             Generate Ad Copy
                           </DropdownMenuItem>
                         )}
-                        {onMedicalImport && (
-                          <DropdownMenuItem
-                            onClick={() => onMedicalImport(animal)}
-                            data-testid={`menu-import-medical-${animal.id}`}
-                          >
-                            <FileUp className="w-4 h-4 mr-2" />
-                            Import Vet Records
-                          </DropdownMenuItem>
-                        )}
-                        {onHeartwormTreatment && animal.heartwormPositive && ["adoption_pending", "adopted"].includes(animal.status) && (
-                          <DropdownMenuItem
-                            onClick={() => onHeartwormTreatment(animal)}
-                            data-testid={`menu-heartworm-treatment-${animal.id}`}
-                          >
-                            <Heart className="w-4 h-4 mr-2" />
-                            Heartworm Treatment Plan
-                          </DropdownMenuItem>
-                        )}
-                        {onChangeLocation && (
-                          <DropdownMenuItem
-                            onClick={() => onChangeLocation(animal)}
-                            data-testid={`menu-change-location-${animal.id}`}
-                          >
-                            <ArrowRightLeft className="w-4 h-4 mr-2" />
-                            Change Location
-                          </DropdownMenuItem>
-                        )}
-                        {onTransferAnimal && variant === "active" && (
-                          <DropdownMenuItem
-                            onClick={() => onTransferAnimal(animal)}
-                            data-testid={`menu-transfer-animal-${animal.id}`}
-                          >
-                            <Send className="w-4 h-4 mr-2" />
-                            Transfer to Network Rescue
-                          </DropdownMenuItem>
+                        {(onMarkDeceased || (onTransferAnimal && variant === "active") || (onReturnToOwner && variant === "active")) && (
+                          <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuLabel className="text-xs text-muted-foreground">Outcomes</DropdownMenuLabel>
+                          </>
                         )}
                         {onReturnToOwner && variant === "active" && (
                           <DropdownMenuItem
                             onClick={() => onReturnToOwner(animal)}
+                            className="text-destructive focus:text-destructive"
                             data-testid={`menu-return-to-owner-${animal.id}`}
                           >
                             <Undo2 className="w-4 h-4 mr-2" />
                             Return to Owner
                           </DropdownMenuItem>
                         )}
+                        {onTransferAnimal && variant === "active" && (
+                          <DropdownMenuItem
+                            onClick={() => onTransferAnimal(animal)}
+                            className="text-destructive focus:text-destructive"
+                            data-testid={`menu-transfer-animal-${animal.id}`}
+                          >
+                            <Send className="w-4 h-4 mr-2" />
+                            Transfer to Network
+                          </DropdownMenuItem>
+                        )}
+                        {onMarkDeceased && (
+                          <DropdownMenuItem
+                            onClick={() => onMarkDeceased(animal)}
+                            className="text-destructive focus:text-destructive"
+                            data-testid={`menu-mark-deceased-${animal.id}`}
+                          >
+                            <X className="w-4 h-4 mr-2" />
+                            Mark Deceased
+                          </DropdownMenuItem>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
 
-                    <MedicalFundDialog animal={animal} />
+                    {onChangeLocation && (
+                      <Button
+                        onClick={() => onChangeLocation(animal)}
+                        variant="outline"
+                        size="sm"
+                        className="justify-center"
+                        data-testid={`button-change-location-${animal.id}`}
+                      >
+                        <ArrowRightLeft className="w-3.5 h-3.5 mr-1.5" />
+                        Move
+                      </Button>
+                    )}
 
                     <Button
                       onClick={() => navigate(`/dashboard/animals/${animal.id}/medical`)}
@@ -568,6 +597,8 @@ export function AnimalHudCard({
                       Apps
                     </Button>
 
+                    <MedicalFundDialog animal={animal} />
+
                     {auditSlot}
 
                     <Button
@@ -584,22 +615,8 @@ export function AnimalHudCard({
                       data-testid={`button-kennel-card-${animal.id}`}
                     >
                       <FileText className="w-3.5 h-3.5 mr-1.5" />
-                      Kennel
+                      Kennel Card
                     </Button>
-
-                    {onQuickPhoto && (
-                      <Button
-                        onClick={() => onQuickPhoto(animal)}
-                        variant="outline"
-                        size="sm"
-                        className="justify-center"
-                        data-testid={`button-quick-photo-${animal.id}`}
-                        title="Quick Photo"
-                      >
-                        <Camera className="w-3.5 h-3.5 mr-1.5" />
-                        Photo
-                      </Button>
-                    )}
                   </>
                 )}
 
@@ -613,7 +630,7 @@ export function AnimalHudCard({
                       data-testid={`button-view-details-${animal.id}`}
                     >
                       <Users className="w-3.5 h-3.5 mr-1.5" />
-                      Foster
+                      Profile
                     </Button>
                     <Button
                       onClick={() => onEditAnimal(animal)}
@@ -623,7 +640,7 @@ export function AnimalHudCard({
                       data-testid={`button-edit-${animal.id}`}
                     >
                       <Pencil className="w-3.5 h-3.5 mr-1.5" />
-                      Edit
+                      Edit Details
                     </Button>
                     <Button
                       onClick={() => navigate(`/dashboard/animals/${animal.id}/medical`)}
@@ -674,7 +691,7 @@ export function AnimalHudCard({
                       data-testid={`button-view-details-${animal.id}`}
                     >
                       <Users className="w-3.5 h-3.5 mr-1.5" />
-                      Foster
+                      Profile
                     </Button>
                     <Button
                       onClick={() => onEditAnimal(animal)}
@@ -684,7 +701,7 @@ export function AnimalHudCard({
                       data-testid={`button-edit-${animal.id}`}
                     >
                       <Pencil className="w-3.5 h-3.5 mr-1.5" />
-                      Edit
+                      Edit Details
                     </Button>
                     <Button
                       onClick={() => navigate(`/dashboard/animals/${animal.id}/medical`)}
@@ -709,7 +726,7 @@ export function AnimalHudCard({
                       data-testid={`button-view-details-${animal.id}`}
                     >
                       <Users className="w-3.5 h-3.5 mr-1.5" />
-                      Foster
+                      Profile
                     </Button>
                     <Button
                       onClick={() => navigate(`/dashboard/animals/${animal.id}/medical`)}
