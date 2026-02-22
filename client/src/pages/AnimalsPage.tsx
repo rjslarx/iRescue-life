@@ -24,7 +24,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTenant } from "@/contexts/TenantContext";
-import { Plus, Loader2, ExternalLink, Check, Stethoscope, Upload, X, ChevronLeft, ChevronRight, FileText, Pencil, ClipboardList, Calendar as CalendarIcon, ChevronDown, ChevronUp, Cat, Dog, Camera, Sparkles, Palette, ChevronsUpDown, AlertCircle, Wand2, FileUp, MapPin, Users, PawPrint, GitMerge, Heart, Send, ArrowUpDown, Home, Building2, Truck, History, ArrowRightLeft, Archive } from "lucide-react";
+import { Plus, Loader2, ExternalLink, Check, Stethoscope, Upload, X, ChevronLeft, ChevronRight, FileText, Pencil, ClipboardList, Calendar as CalendarIcon, ChevronDown, ChevronUp, Cat, Dog, Camera, Sparkles, Palette, ChevronsUpDown, AlertCircle, Wand2, FileUp, MapPin, Users, PawPrint, GitMerge, Heart, Send, ArrowUpDown, Home, Building2, Truck, History, ArrowRightLeft, Archive, Baby } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { Link } from "wouter";
@@ -37,6 +37,7 @@ import { FinalizeAdoptionDialog } from "@/components/FinalizeAdoptionDialog";
 import MarkDeceasedDialog from "@/components/MarkDeceasedDialog";
 import { AnimalDetailsDialog } from "@/components/AnimalDetailsDialog";
 import QuickAnimalPhoto from "@/components/QuickAnimalPhoto";
+import { BulkLitterIntakeWizard } from "@/components/BulkLitterIntakeWizard";
 import DashboardLayout from "@/components/DashboardLayout";
 import { AdCopyGeneratorDialog } from "@/components/AdCopyGeneratorDialog";
 import { AiBioGeneratorDialog } from "@/components/AiBioGeneratorDialog";
@@ -2334,6 +2335,7 @@ export default function AnimalsPage() {
   const { toast } = useToast();
   const [, navigate] = useLocation();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [bulkIntakeOpen, setBulkIntakeOpen] = useState(false);
   const [locationTab, setLocationTab] = useState<"all" | "facility" | "foster">("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [sortOrder, setSortOrder] = useState<string>("recent");
@@ -2703,6 +2705,10 @@ export default function AnimalsPage() {
               Find Duplicates
             </Button>
           </Link>
+          <Button variant="outline" onClick={() => setBulkIntakeOpen(true)} data-testid="button-bulk-litter-intake">
+            <Baby className="h-4 w-4 mr-2" />
+            Litter Intake
+          </Button>
           <Dialog open={dialogOpen} onOpenChange={(open) => {
             setDialogOpen(open);
             if (!open) setSurrenderPrefill(null);
@@ -3084,6 +3090,13 @@ export default function AnimalsPage() {
           if (!open) setAnimalForTransfer(null);
         }}
         animal={animalForTransfer}
+      />
+      <BulkLitterIntakeWizard
+        open={bulkIntakeOpen}
+        onOpenChange={setBulkIntakeOpen}
+        onSuccess={(animalIds) => {
+          queryClient.invalidateQueries({ queryKey: ['/api/animals'] });
+        }}
       />
     </DashboardLayout>
   );

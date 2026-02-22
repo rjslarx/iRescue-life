@@ -547,6 +547,7 @@ export const animals = pgTable("animals", {
   locationName: text("location_name"),
   sourceContactId: uuid("source_contact_id"),
   surrenderRequestId: text("surrender_request_id"),
+  motherId: uuid("mother_id"), // Self-reference to mother animal (for litter tracking)
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

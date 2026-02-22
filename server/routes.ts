@@ -35204,6 +35204,10 @@ The user asking is a tenant administrator or staff member.`;
   const adoptionComplianceRoutes = await import('./routes/adoptionCompliance');
   app.use('/api/dashboard/adopter-compliance', adoptionComplianceRoutes.default);
 
+  // Register bulk litter intake routes
+  const bulkIntakeRoutes = await import('./routes/bulkIntake');
+  app.use('/api/animals/bulk-intake', bulkIntakeRoutes.default);
+
   // Volunteer schedule digest settings
   app.get('/api/tenant/settings/volunteer-digest', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
     try {
