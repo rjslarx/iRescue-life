@@ -177,7 +177,7 @@ export default function FinancePage() {
     enabled: hasFinanceAccess,
   });
 
-  const { data: paymentLedger, isLoading: isLoadingLedger, isError: isErrorLedger } = useQuery<{ configured: boolean; payments: LedgerPayment[]; error?: string }>({
+  const { data: paymentLedger, isLoading: isLoadingLedger, isFetching: isFetchingLedger, isError: isErrorLedger } = useQuery<{ configured: boolean; payments: LedgerPayment[]; error?: string }>({
     queryKey: ['/api/stripe/payment-ledger'],
     enabled: hasFinanceAccess,
     retry: false,
@@ -620,11 +620,22 @@ export default function FinancePage() {
               <Card>
                 <CardHeader>
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div>
-                      <CardTitle>Payment Ledger</CardTitle>
-                      <CardDescription>
-                        Every payment categorized by type - donations, event tickets, adoption fees, and more
-                      </CardDescription>
+                    <div className="flex items-start gap-2">
+                      <div className="flex-1 min-w-0">
+                        <CardTitle>Payment Ledger</CardTitle>
+                        <CardDescription>
+                          Every payment categorized by type - donations, event tickets, adoption fees, and more
+                        </CardDescription>
+                      </div>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => queryClient.invalidateQueries({ queryKey: ['/api/stripe/payment-ledger'] })}
+                        disabled={isFetchingLedger}
+                        data-testid="button-refresh-ledger"
+                      >
+                        <RefreshCw className={`h-4 w-4 ${isFetchingLedger ? 'animate-spin' : ''}`} />
+                      </Button>
                     </div>
                     <div className="flex items-center gap-2 flex-wrap" data-testid="ledger-filters">
                       <Filter className="h-4 w-4 text-muted-foreground" />
