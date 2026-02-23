@@ -307,13 +307,13 @@ export function AddMedicalOrderDialog({ animalId, animalSpecies = 'Dog', open, o
   });
 
   const activeOrders = activeOrdersData?.activeOrders || [];
-  const catalogItems = catalogData || [];
-  const orderSets = orderSetsData || [];
+  const catalogItems = Array.isArray(catalogData) ? catalogData : [];
+  const orderSets = (Array.isArray(orderSetsData) ? orderSetsData : []).filter(os => os && Array.isArray(os.items));
 
   const activeNameSet = useMemo(() => {
     const set = new Set<string>();
     for (const ao of activeOrders) {
-      set.add(ao.name.toLowerCase());
+      if (ao?.name) set.add(ao.name.toLowerCase());
     }
     return set;
   }, [activeOrders]);
@@ -626,7 +626,7 @@ export function AddMedicalOrderDialog({ animalId, animalSpecies = 'Dog', open, o
                           {catalogItems.length > 0 && (
                             <CommandGroup heading="Catalog Items">
                               {catalogItems
-                                .filter(ci => ci.name.toLowerCase().includes(searchValue.toLowerCase()))
+                                .filter(ci => ci?.name && ci.name.toLowerCase().includes(searchValue.toLowerCase()))
                                 .map(ci => {
                                   const isDuplicate = activeNameSet.has(ci.name.toLowerCase());
                                   const Icon = categoryIcons[ci.category] || Pill;
@@ -732,9 +732,9 @@ export function AddMedicalOrderDialog({ animalId, animalSpecies = 'Dog', open, o
                 <div className="border-t pt-4">
                   <div className="space-y-1.5" data-testid="container-orderset-items">
                     <p className="text-sm font-medium">Items in this order set:</p>
-                    {selectedOrderSet.items.map(osi => {
+                    {selectedOrderSet.items.filter(osi => osi?.catalogItem).map(osi => {
                       const Icon = categoryIcons[osi.catalogItem.category] || Pill;
-                      const isDuplicate = activeNameSet.has(osi.catalogItem.name.toLowerCase());
+                      const isDuplicate = activeNameSet.has((osi.catalogItem.name || '').toLowerCase());
                       return (
                         <div key={osi.id} className="flex items-center gap-2 p-2 border rounded-md text-sm">
                           <Icon className="w-4 h-4 shrink-0 text-muted-foreground" />
