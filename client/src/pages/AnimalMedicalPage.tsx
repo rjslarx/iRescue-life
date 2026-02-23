@@ -48,7 +48,11 @@ import {
   MapPin,
   ClipboardCheck,
   X,
-  RotateCcw
+  RotateCcw,
+  HeartPulse,
+  Bug,
+  CheckCircle2,
+  AlertTriangle
 } from "lucide-react";
 import { useGooglePicker, PickerDocument } from "@/hooks/useGooglePicker";
 import { format } from "date-fns";
@@ -1681,6 +1685,75 @@ export default function AnimalMedicalPage() {
 
           {/* Preventative Care Tab */}
           <TabsContent value="preventative" className="space-y-4">
+            {/* Compliance Coverage Badges */}
+            {(() => {
+              const dueDates = (animal?.medicalDueDates as any) || {};
+              const now = new Date();
+
+              const getStatus = (dueDate: string | null | undefined) => {
+                if (!dueDate) return 'none';
+                const due = new Date(dueDate);
+                if (due < now) return 'overdue';
+                const daysUntil = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                if (daysUntil <= 7) return 'due_soon';
+                return 'current';
+              };
+
+              const hwStatus = getStatus(dueDates.heartwormDueDate);
+              const ftStatus = getStatus(dueDates.fleaTickDueDate);
+
+              const statusConfig = {
+                current: { variant: 'outline' as const, className: 'border-green-500 text-green-700 dark:text-green-400', icon: CheckCircle2, label: 'Current' },
+                due_soon: { variant: 'outline' as const, className: 'border-amber-500 text-amber-700 dark:text-amber-400', icon: AlertTriangle, label: 'Due Soon' },
+                overdue: { variant: 'destructive' as const, className: '', icon: AlertTriangle, label: 'Overdue' },
+                none: { variant: 'outline' as const, className: 'border-muted-foreground/30 text-muted-foreground', icon: AlertTriangle, label: 'No Record' },
+              };
+
+              const hwConfig = statusConfig[hwStatus];
+              const ftConfig = statusConfig[ftStatus];
+              const HwIcon = hwConfig.icon;
+              const FtIcon = ftConfig.icon;
+
+              return (
+                <div className="flex flex-wrap gap-3" data-testid="preventative-compliance-badges">
+                  <div className="flex items-center gap-2 rounded-md border p-3 flex-1 min-w-[200px]">
+                    <HeartPulse className="w-5 h-5 text-red-500 shrink-0" />
+                    <div className="flex flex-col gap-1 min-w-0">
+                      <span className="text-sm font-medium">Heartworm Prevention</span>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Badge variant={hwConfig.variant} className={hwConfig.className} data-testid="badge-heartworm-status">
+                          <HwIcon className="w-3 h-3 mr-1" />
+                          {hwConfig.label}
+                        </Badge>
+                        {dueDates.heartwormDueDate && (
+                          <span className="text-xs text-muted-foreground">
+                            Due: {formatDateOnly(dueDates.heartwormDueDate)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 rounded-md border p-3 flex-1 min-w-[200px]">
+                    <Bug className="w-5 h-5 text-orange-500 shrink-0" />
+                    <div className="flex flex-col gap-1 min-w-0">
+                      <span className="text-sm font-medium">Flea & Tick Prevention</span>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Badge variant={ftConfig.variant} className={ftConfig.className} data-testid="badge-flea-tick-status">
+                          <FtIcon className="w-3 h-3 mr-1" />
+                          {ftConfig.label}
+                        </Badge>
+                        {dueDates.fleaTickDueDate && (
+                          <span className="text-xs text-muted-foreground">
+                            Due: {formatDateOnly(dueDates.fleaTickDueDate)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* Medical Setup Card - Quick Protocol Application */}
             <Card className="bg-muted/50" data-testid="card-medical-setup">
               <CardHeader className="pb-3">

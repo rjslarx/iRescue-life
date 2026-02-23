@@ -1,13 +1,14 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { X } from "lucide-react";
+import { X, AlertTriangle } from "lucide-react";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -111,9 +112,30 @@ export function AddPrescriptionDialog({ animalId, open, onOpenChange, prescripti
     name: "frequency",
     defaultValue: "",
   });
+  const watchedMedicationName = useWatch({
+    control: form.control,
+    name: "medicationName",
+    defaultValue: "",
+  });
   const today = new Date().toISOString().split('T')[0];
   const isStartDateInPast = watchedStartDate && watchedStartDate < today;
   const isOneTime = watchedFrequency === "ONCE";
+
+  const PREVENTATIVE_MED_PATTERNS = [
+    'simparica', 'nexgard', 'heartgard', 'prohart', 'proheart', 'bravecto',
+    'revolution', 'seresto', 'frontline', 'advantix', 'advantage',
+    'sentinel', 'trifexis', 'interceptor', 'credelio', 'iverhart',
+  ];
+
+  const preventativeMedWarning = useMemo(() => {
+    if (!watchedMedicationName) return null;
+    const lower = watchedMedicationName.toLowerCase().trim();
+    const match = PREVENTATIVE_MED_PATTERNS.find(p => lower.includes(p));
+    if (match) {
+      return `"${watchedMedicationName}" looks like a preventative care product. Please use the Preventative tab instead so heartworm/flea-tick due dates are tracked automatically.`;
+    }
+    return null;
+  }, [watchedMedicationName]);
 
   // Reset form when prescription changes (for editing)
   const { reset } = form;
@@ -300,6 +322,15 @@ export function AddPrescriptionDialog({ animalId, open, onOpenChange, prescripti
                 </FormItem>
               )}
             />
+
+            {preventativeMedWarning && (
+              <Alert variant="destructive" data-testid="alert-preventative-med-warning">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription className="text-sm">
+                  {preventativeMedWarning}
+                </AlertDescription>
+              </Alert>
+            )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormField
