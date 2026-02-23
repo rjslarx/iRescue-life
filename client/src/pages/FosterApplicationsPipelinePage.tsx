@@ -73,7 +73,7 @@ export default function FosterApplicationsPipelinePage() {
 
   const updateStageMutation = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const response = await apiRequest('PATCH', `/api/foster-applications/${id}/status`, { status });
+      const response = await apiRequest('PATCH', `/api/foster-applications/${id}`, { pipelineStatus: status });
       return response.json();
     },
     onSuccess: () => {
