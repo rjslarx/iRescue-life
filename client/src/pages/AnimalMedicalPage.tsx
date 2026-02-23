@@ -139,6 +139,13 @@ export default function AnimalMedicalPage() {
   const [editingDiagnostic, setEditingDiagnostic] = useState<any>(null);
   const [procedureDialogOpen, setProcedureDialogOpen] = useState(false);
   const [editingProcedure, setEditingProcedure] = useState<any>(null);
+  const [completingProcedure, setCompletingProcedure] = useState<any>(null);
+  const [completingExam, setCompletingExam] = useState<any>(null);
+  const [completionForm, setCompletionForm] = useState({
+    completedDate: new Date().toISOString().split('T')[0],
+    actualCost: "",
+    notes: "",
+  });
   const [prescriptionDialogOpen, setPrescriptionDialogOpen] = useState(false);
   const [editingPrescription, setEditingPrescription] = useState<any>(null);
   const [reorderInitialValues, setReorderInitialValues] = useState<any>(null);
@@ -470,6 +477,46 @@ export default function AnimalMedicalPage() {
     },
     onError: () => {
       toast({ title: "Error", description: "Failed to mark prescription as completed.", variant: "destructive" });
+    },
+  });
+
+  const completeProcedureMutation = useMutation({
+    mutationFn: async ({ procedureId, data }: { procedureId: string; data: any }) => {
+      await apiRequest('PATCH', `/api/medical/procedures/${procedureId}`, {
+        status: 'completed',
+        completedDate: data.completedDate,
+        completionNotes: data.notes || null,
+        billAmount: data.actualCost || null,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/animals/${animalId}/medical/procedures`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/animals/${animalId}/medical/active-orders`] });
+      setCompletingProcedure(null);
+      toast({ title: "Procedure completed", description: "The procedure has been marked as completed." });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to mark procedure as completed.", variant: "destructive" });
+    },
+  });
+
+  const completeExamMutation = useMutation({
+    mutationFn: async ({ examId, data }: { examId: string; data: any }) => {
+      await apiRequest('PATCH', `/api/medical/exams/${examId}`, {
+        status: 'completed',
+        completedDate: data.completedDate,
+        completionNotes: data.notes || null,
+        billAmount: data.actualCost || null,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/animals/${animalId}/medical/exams`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/animals/${animalId}/medical/active-orders`] });
+      setCompletingExam(null);
+      toast({ title: "Exam completed", description: "The exam has been marked as completed." });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to mark exam as completed.", variant: "destructive" });
     },
   });
 
@@ -1166,19 +1213,59 @@ export default function AnimalMedicalPage() {
               <h2 className="text-xl font-semibold">Medical Exams</h2>
             </div>
             <div className="grid gap-4">
-              {exams.map((exam: any) => (
-                <Card key={exam.id}>
+              {[...exams].sort((a: any, b: any) => {
+                if (a.status === 'pending' && b.status !== 'pending') return -1;
+                if (a.status !== 'pending' && b.status === 'pending') return 1;
+                return new Date(b.examDate).getTime() - new Date(a.examDate).getTime();
+              }).map((exam: any) => (
+                <Card key={exam.id} className={exam.status === 'pending' ? "border-amber-400 dark:border-amber-600" : ""}>
                   <CardHeader>
-                    <div className="flex justify-between items-start">
+                    <div className="flex justify-between items-start gap-2">
                       <div>
-                        <CardTitle className="text-lg">
-                          {formatDateOnly(exam.examDate, 'MMMM d, yyyy')}
-                        </CardTitle>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <CardTitle className="text-lg">
+                            {formatDateOnly(exam.examDate, 'MMMM d, yyyy')}
+                          </CardTitle>
+                          {exam.status === 'pending' ? (
+                            <Badge variant="outline" className="text-amber-600 border-amber-500" data-testid={`badge-exam-pending-${exam.id}`}>
+                              <Clock className="w-3 h-3 mr-1" />
+                              Pending
+                            </Badge>
+                          ) : (
+                            <Badge variant="secondary" data-testid={`badge-exam-completed-${exam.id}`}>
+                              <CheckCircle2 className="w-3 h-3 mr-1" />
+                              Completed
+                            </Badge>
+                          )}
+                        </div>
                         <p className="text-sm text-muted-foreground mt-1">
-                          Veterinarian: {exam.veterinarian || 'Not specified'}
+                          Veterinarian: {exam.performedBy || exam.veterinarian || 'Not specified'}
                         </p>
+                        {exam.reason && (
+                          <p className="text-sm text-muted-foreground mt-0.5">
+                            Reason: {exam.reason}
+                          </p>
+                        )}
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 flex-wrap">
+                        {exam.status === 'pending' && (
+                          <Button
+                            variant="default"
+                            size="sm"
+                            onClick={() => {
+                              setCompletingExam(exam);
+                              setCompletionForm({
+                                completedDate: new Date().toISOString().split('T')[0],
+                                actualCost: "",
+                                notes: "",
+                              });
+                            }}
+                            data-testid={`button-complete-exam-${exam.id}`}
+                          >
+                            <CheckCircle2 className="w-4 h-4 mr-1" />
+                            Mark Completed
+                          </Button>
+                        )}
                         <Button 
                           variant="ghost" 
                           size="sm" 
@@ -1197,6 +1284,12 @@ export default function AnimalMedicalPage() {
                     </div>
                   </CardHeader>
                   <CardContent>
+                    {exam.completionNotes && (
+                      <div className="mb-3 p-3 rounded-md bg-muted/50">
+                        <p className="font-medium text-sm mb-1">Completion Notes:</p>
+                        <p className="text-sm text-muted-foreground">{exam.completionNotes}</p>
+                      </div>
+                    )}
                     {exam.soapFields && (
                       <div className="space-y-3">
                         {exam.soapFields.subjective && (
@@ -1483,17 +1576,52 @@ export default function AnimalMedicalPage() {
               <h2 className="text-xl font-semibold">Procedures</h2>
             </div>
             <div className="grid gap-4">
-              {procedures.map((proc: any) => (
-                <Card key={proc.id}>
+              {[...procedures].sort((a: any, b: any) => {
+                if (a.status === 'pending' && b.status !== 'pending') return -1;
+                if (a.status !== 'pending' && b.status === 'pending') return 1;
+                return new Date(b.procedureDate).getTime() - new Date(a.procedureDate).getTime();
+              }).map((proc: any) => (
+                <Card key={proc.id} className={proc.status === 'pending' ? "border-amber-400 dark:border-amber-600" : ""}>
                   <CardHeader>
-                    <div className="flex justify-between items-start">
+                    <div className="flex justify-between items-start gap-2">
                       <div>
-                        <CardTitle className="text-lg">{proc.procedureName}</CardTitle>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <CardTitle className="text-lg">{proc.procedureName}</CardTitle>
+                          {proc.status === 'pending' ? (
+                            <Badge variant="outline" className="text-amber-600 border-amber-500" data-testid={`badge-procedure-pending-${proc.id}`}>
+                              <Clock className="w-3 h-3 mr-1" />
+                              Pending
+                            </Badge>
+                          ) : (
+                            <Badge variant="secondary" data-testid={`badge-procedure-completed-${proc.id}`}>
+                              <CheckCircle2 className="w-3 h-3 mr-1" />
+                              Completed
+                            </Badge>
+                          )}
+                        </div>
                         <p className="text-sm text-muted-foreground mt-1">
-                          {formatDateOnly(proc.procedureDate)}
+                          {proc.status === 'pending' ? 'Scheduled: ' : ''}{formatDateOnly(proc.procedureDate)}
                         </p>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 flex-wrap">
+                        {proc.status === 'pending' && (
+                          <Button
+                            variant="default"
+                            size="sm"
+                            onClick={() => {
+                              setCompletingProcedure(proc);
+                              setCompletionForm({
+                                completedDate: new Date().toISOString().split('T')[0],
+                                actualCost: proc.billAmount || "",
+                                notes: "",
+                              });
+                            }}
+                            data-testid={`button-complete-procedure-${proc.id}`}
+                          >
+                            <CheckCircle2 className="w-4 h-4 mr-1" />
+                            Mark Completed
+                          </Button>
+                        )}
                         <Button 
                           variant="ghost" 
                           size="sm" 
@@ -1518,16 +1646,28 @@ export default function AnimalMedicalPage() {
                         <span className="font-medium">{proc.veterinarian}</span>
                       </div>
                     )}
-                    {proc.cost && (
+                    {(proc.cost || proc.billAmount) && (
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">Cost:</span>
-                        <span className="font-medium">${proc.cost}</span>
+                        <span className="font-medium">${proc.cost || proc.billAmount}</span>
+                      </div>
+                    )}
+                    {proc.completionNotes && (
+                      <div className="p-3 rounded-md bg-muted/50">
+                        <p className="font-medium text-sm mb-1">Completion Notes:</p>
+                        <p className="text-sm text-muted-foreground">{proc.completionNotes}</p>
                       </div>
                     )}
                     {proc.outcome && (
                       <div>
                         <p className="font-medium text-sm mb-1">Outcome:</p>
                         <p className="text-sm text-muted-foreground">{proc.outcome}</p>
+                      </div>
+                    )}
+                    {proc.notes && !proc.completionNotes && (
+                      <div>
+                        <p className="font-medium text-sm mb-1">Notes:</p>
+                        <p className="text-sm text-muted-foreground">{proc.notes}</p>
                       </div>
                     )}
                   </CardContent>
@@ -2607,6 +2747,141 @@ export default function AnimalMedicalPage() {
             open={addMedicalOrderOpen}
             onOpenChange={setAddMedicalOrderOpen}
           />
+
+          <Dialog open={!!completingProcedure} onOpenChange={(open) => { if (!open) setCompletingProcedure(null); }}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Complete Procedure: {completingProcedure?.procedureName}</DialogTitle>
+                <DialogDescription>
+                  Record the completion details for this procedure.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 pt-2">
+                <div className="space-y-1.5">
+                  <Label>Completion Date</Label>
+                  <Input
+                    type="date"
+                    value={completionForm.completedDate}
+                    onChange={e => setCompletionForm(p => ({ ...p, completedDate: e.target.value }))}
+                    data-testid="input-procedure-completion-date"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Actual Cost (optional)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={completionForm.actualCost}
+                    onChange={e => setCompletionForm(p => ({ ...p, actualCost: e.target.value }))}
+                    placeholder="e.g., 350.00"
+                    data-testid="input-procedure-completion-cost"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Vet Notes / Findings (optional)</Label>
+                  <Textarea
+                    value={completionForm.notes}
+                    onChange={e => setCompletionForm(p => ({ ...p, notes: e.target.value }))}
+                    placeholder="e.g., Procedure went well, no complications"
+                    rows={3}
+                    className="resize-none"
+                    data-testid="input-procedure-completion-notes"
+                  />
+                </div>
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button variant="outline" onClick={() => setCompletingProcedure(null)} data-testid="button-cancel-complete-procedure">
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      if (completingProcedure) {
+                        completeProcedureMutation.mutate({
+                          procedureId: completingProcedure.id,
+                          data: completionForm,
+                        });
+                      }
+                    }}
+                    disabled={completeProcedureMutation.isPending}
+                    data-testid="button-submit-complete-procedure"
+                  >
+                    {completeProcedureMutation.isPending ? (
+                      <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Saving...</>
+                    ) : (
+                      <><CheckCircle2 className="w-4 h-4 mr-1" /> Mark Completed</>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={!!completingExam} onOpenChange={(open) => { if (!open) setCompletingExam(null); }}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Complete Exam</DialogTitle>
+                <DialogDescription>
+                  Record the completion details for this exam ({completingExam ? formatDateOnly(completingExam.examDate) : ''}).
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 pt-2">
+                <div className="space-y-1.5">
+                  <Label>Completion Date</Label>
+                  <Input
+                    type="date"
+                    value={completionForm.completedDate}
+                    onChange={e => setCompletionForm(p => ({ ...p, completedDate: e.target.value }))}
+                    data-testid="input-exam-completion-date"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Actual Cost (optional)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={completionForm.actualCost}
+                    onChange={e => setCompletionForm(p => ({ ...p, actualCost: e.target.value }))}
+                    placeholder="e.g., 75.00"
+                    data-testid="input-exam-completion-cost"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Vet Notes / Findings (optional)</Label>
+                  <Textarea
+                    value={completionForm.notes}
+                    onChange={e => setCompletionForm(p => ({ ...p, notes: e.target.value }))}
+                    placeholder="e.g., Healthy, no concerns noted"
+                    rows={3}
+                    className="resize-none"
+                    data-testid="input-exam-completion-notes"
+                  />
+                </div>
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button variant="outline" onClick={() => setCompletingExam(null)} data-testid="button-cancel-complete-exam">
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      if (completingExam) {
+                        completeExamMutation.mutate({
+                          examId: completingExam.id,
+                          data: completionForm,
+                        });
+                      }
+                    }}
+                    disabled={completeExamMutation.isPending}
+                    data-testid="button-submit-complete-exam"
+                  >
+                    {completeExamMutation.isPending ? (
+                      <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Saving...</>
+                    ) : (
+                      <><CheckCircle2 className="w-4 h-4 mr-1" /> Mark Completed</>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+
           <AddMedicalBillDialog
             animalId={animalId}
             open={billDialogOpen}

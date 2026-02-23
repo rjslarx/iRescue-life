@@ -4,7 +4,7 @@ import { eq, and } from 'drizzle-orm';
 
 interface CatalogSeedItem {
   name: string;
-  category: 'Medication' | 'Vaccine' | 'Lab' | 'Procedure' | 'Preventative';
+  category: 'Medication' | 'Vaccine' | 'Lab' | 'Procedure' | 'Preventative' | 'Exam';
   defaultDose?: string;
   defaultFrequency?: string;
 }
@@ -23,8 +23,11 @@ const DEFAULT_CATALOG_ITEMS: CatalogSeedItem[] = [
   { name: 'Spay', category: 'Procedure' },
   { name: 'Neuter', category: 'Procedure' },
   { name: 'Microchip Implant', category: 'Procedure' },
+  { name: 'Dental Cleaning', category: 'Procedure' },
   { name: 'Simparica Trio', category: 'Preventative', defaultFrequency: 'Monthly' },
   { name: 'Heartgard Plus', category: 'Preventative', defaultFrequency: 'Monthly' },
+  { name: 'Intake Exam', category: 'Exam' },
+  { name: 'Sick Visit', category: 'Exam' },
 ];
 
 const DEFAULT_ORDER_SETS = [

@@ -11,7 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { AlertTriangle, Pill, Syringe, FlaskConical, Stethoscope, ShieldCheck, Package, Loader2, Clock, CheckCircle2, AlertCircle } from "lucide-react";
+import { AlertTriangle, Pill, Syringe, FlaskConical, Stethoscope, ShieldCheck, ClipboardCheck, Package, Loader2, Clock, CheckCircle2, AlertCircle } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
 
 interface ActiveOrder {
   id: string;
@@ -25,7 +26,7 @@ interface ActiveOrder {
 interface CatalogItem {
   id: string;
   name: string;
-  category: 'Medication' | 'Vaccine' | 'Lab' | 'Procedure' | 'Preventative';
+  category: 'Medication' | 'Vaccine' | 'Lab' | 'Procedure' | 'Preventative' | 'Exam';
   defaultDose: string | null;
   defaultFrequency: string | null;
 }
@@ -51,6 +52,7 @@ const categoryIcons: Record<string, typeof Pill> = {
   Lab: FlaskConical,
   Procedure: Stethoscope,
   Preventative: ShieldCheck,
+  Exam: ClipboardCheck,
 };
 
 const categoryColors: Record<string, string> = {
@@ -58,6 +60,7 @@ const categoryColors: Record<string, string> = {
   Vaccine: "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300",
   Lab: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
   Procedure: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300",
+  Exam: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300",
   Preventative: "bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300",
 };
 
@@ -135,6 +138,9 @@ export function AddMedicalOrderDialog({ animalId, open, onOpenChange }: AddMedic
         dueDate: new Date().toISOString().split('T')[0],
         scheduledDate: new Date().toISOString().split('T')[0],
         clinicLocation: "In-House",
+        estimatedCost: "",
+        notes: "",
+        examReason: "",
       });
     }
   }, [open]);
@@ -185,6 +191,7 @@ export function AddMedicalOrderDialog({ animalId, open, onOpenChange }: AddMedic
       queryClient.invalidateQueries({ queryKey: [`/api/animals/${animalId}/medical/vaccines`] });
       queryClient.invalidateQueries({ queryKey: [`/api/animals/${animalId}/medical/diagnostics`] });
       queryClient.invalidateQueries({ queryKey: [`/api/animals/${animalId}/medical/procedures`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/animals/${animalId}/medical/exams`] });
       queryClient.invalidateQueries({ queryKey: [`/api/animals/${animalId}/preventative-care`] });
       queryClient.invalidateQueries({ queryKey: [`/api/animals/${animalId}/medical/active-orders`] });
       queryClient.invalidateQueries({ queryKey: [`/api/animals/${animalId}/medical/history`] });
@@ -284,9 +291,8 @@ export function AddMedicalOrderDialog({ animalId, open, onOpenChange }: AddMedic
           </div>
         );
       case 'Lab':
-      case 'Procedure':
         return (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" data-testid="form-lab-procedure">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" data-testid="form-lab">
             <div className="space-y-1.5">
               <Label>Scheduled Date</Label>
               <Input
@@ -303,6 +309,85 @@ export function AddMedicalOrderDialog({ animalId, open, onOpenChange }: AddMedic
                 onChange={e => setFormData(p => ({ ...p, clinicLocation: e.target.value }))}
                 placeholder="e.g., In-House, VCA"
                 data-testid="input-clinic-location"
+              />
+            </div>
+          </div>
+        );
+      case 'Procedure':
+        return (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" data-testid="form-procedure">
+            <div className="space-y-1.5">
+              <Label>Scheduled Date</Label>
+              <Input
+                type="date"
+                value={formData.scheduledDate}
+                onChange={e => setFormData(p => ({ ...p, scheduledDate: e.target.value }))}
+                data-testid="input-procedure-date"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Clinic / Vet Name</Label>
+              <Input
+                value={formData.clinicLocation}
+                onChange={e => setFormData(p => ({ ...p, clinicLocation: e.target.value }))}
+                placeholder="e.g., Dr. Smith, VCA Animal Hospital"
+                data-testid="input-procedure-clinic"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Estimated Cost (optional)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                value={formData.estimatedCost}
+                onChange={e => setFormData(p => ({ ...p, estimatedCost: e.target.value }))}
+                placeholder="e.g., 350.00"
+                data-testid="input-procedure-cost"
+              />
+            </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label>Notes (optional)</Label>
+              <Textarea
+                value={formData.notes}
+                onChange={e => setFormData(p => ({ ...p, notes: e.target.value }))}
+                placeholder="e.g., Requires drop-off at 7 AM"
+                rows={2}
+                className="resize-none text-sm"
+                data-testid="input-procedure-notes"
+              />
+            </div>
+          </div>
+        );
+      case 'Exam':
+        return (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" data-testid="form-exam">
+            <div className="space-y-1.5">
+              <Label>Scheduled Date</Label>
+              <Input
+                type="date"
+                value={formData.scheduledDate}
+                onChange={e => setFormData(p => ({ ...p, scheduledDate: e.target.value }))}
+                data-testid="input-exam-date"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Clinic / Vet Name</Label>
+              <Input
+                value={formData.clinicLocation}
+                onChange={e => setFormData(p => ({ ...p, clinicLocation: e.target.value }))}
+                placeholder="e.g., Dr. Smith"
+                data-testid="input-exam-clinic"
+              />
+            </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label>Reason for Exam</Label>
+              <Textarea
+                value={formData.examReason}
+                onChange={e => setFormData(p => ({ ...p, examReason: e.target.value }))}
+                placeholder="e.g., Intake wellness check, limping on right rear leg"
+                rows={2}
+                className="resize-none text-sm"
+                data-testid="input-exam-reason"
               />
             </div>
           </div>

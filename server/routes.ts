@@ -38199,7 +38199,7 @@ The user asking is a tenant administrator or staff member.`;
       const {
         animals, medicalCatalog, orderSets, orderSetItems,
         vaccineRecords, preventativeCareRecords, medicalPrescriptions,
-        diagnosticTests, procedureLogs
+        diagnosticTests, procedureLogs, medicalExams
       } = await import('@shared/schema');
 
       const tenantId = req.tenant!.id;
@@ -38290,9 +38290,26 @@ The user asking is a tenant administrator or staff member.`;
               tenantId,
               procedureName: item.name,
               procedureDate: new Date(fd.scheduledDate || todayStr),
+              status: 'pending',
+              notes: fd.notes || null,
+              billAmount: fd.estimatedCost ? String(fd.estimatedCost) : null,
+              veterinarian: fd.clinicLocation || null,
               createdBy: userId,
             });
             return { name: item.name, category: item.category, table: 'procedure_logs' };
+          }
+          case 'Exam': {
+            await tx.insert(medicalExams).values({
+              animalId,
+              tenantId,
+              examType: 'other',
+              examDate: new Date(fd.scheduledDate || todayStr),
+              performedBy: fd.clinicLocation || 'Staff',
+              reason: fd.examReason || null,
+              status: 'pending',
+              createdBy: userId,
+            });
+            return { name: item.name, category: item.category, table: 'medical_exams' };
           }
           default:
             throw new Error('Unknown catalog category: ' + item.category);
