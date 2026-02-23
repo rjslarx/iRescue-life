@@ -11,6 +11,7 @@ import { validateEnvironment } from "./config/env-validation";
 import { helmetConfig, getCorsConfig, configureTrustProxy, apiLimiter } from "./config/security";
 import { initializeScheduler } from "./lib/scheduler";
 import { backfillNewPagePermissions } from "./services/page-permissions-seeding";
+import { seedPlatformPreventativeProtocols } from "./services/preventative-protocols-seeding";
 
 // Validate environment variables before starting
 validateEnvironment();
@@ -138,5 +139,8 @@ app.use((req, res, next) => {
     
     // Backfill any new page permissions for existing tenants
     backfillNewPagePermissions();
+    
+    // Seed platform default preventative protocols
+    seedPlatformPreventativeProtocols();
   });
 })();
