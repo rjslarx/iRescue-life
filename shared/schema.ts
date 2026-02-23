@@ -36,6 +36,7 @@ export const tenants = pgTable("tenants", {
   stripeConnectedAt: timestamp("stripe_connected_at"), // When Stripe was connected via OAuth
   // Adoption fee settings
   passFeesToAdopter: boolean("pass_fees_to_adopter").notNull().default(false), // Whether to add processing + platform fees to adoption fee (paid by adopter)
+  defaultSurrenderFee: decimal("default_surrender_fee", { precision: 10, scale: 2 }), // Default owner surrender fee amount (null = no fee)
   // Email service settings (encrypted API keys per tenant)
   resendApiKeyEncrypted: text("resend_api_key_encrypted"), // Resend API key for transactional emails
   resendFromEmail: text("resend_from_email"), // From email address (e.g., noreply@rescue.org)
@@ -1149,6 +1150,9 @@ export const surrenderRequests = pgTable("surrender_requests", {
   assignedUserId: uuid("assigned_user_id").references(() => users.id),
   declinedReason: text("declined_reason"),
   declinedAt: timestamp("declined_at"),
+  surrenderFeePaid: decimal("surrender_fee_paid", { precision: 10, scale: 2 }),
+  surrenderFeeWaived: boolean("surrender_fee_waived").notNull().default(false),
+  paymentIntentId: text("payment_intent_id"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -1160,6 +1164,9 @@ export const insertSurrenderRequestSchema = createInsertSchema(surrenderRequests
   assignedUserId: true,  // Server-only
   declinedReason: true,  // Server-only
   declinedAt: true,  // Server-only
+  surrenderFeePaid: true,  // Server-only
+  surrenderFeeWaived: true,  // Server-only
+  paymentIntentId: true,  // Server-only
   createdAt: true,
   updatedAt: true,
 });

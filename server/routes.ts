@@ -17148,6 +17148,117 @@ Submitted: ${new Date().toLocaleString()}
   });
 
   /**
+   * POST /api/surrender-requests/:id/payment
+   * Create a Stripe PaymentIntent or record a manual payment for a surrender fee
+   */
+  app.post('/api/surrender-requests/:id/payment', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      const paymentSchema = z.object({
+        amount: z.number().positive(),
+        description: z.string().optional(),
+        ownerEmail: z.string().email().optional(),
+      });
+
+      const data = paymentSchema.parse(req.body);
+
+      const [request] = await db.select()
+        .from(surrenderRequests)
+        .where(and(eq(surrenderRequests.id, req.params.id), eq(surrenderRequests.tenantId, req.tenant!.id)))
+        .limit(1);
+
+      if (!request) {
+        return res.status(404).json({ error: 'Surrender request not found' });
+      }
+
+      const hasStripeConnect = !!req.tenant!.stripeConnectedAccountId;
+      const hasOwnStripeKeys = req.tenant!.stripeEnabled && !!req.tenant!.stripeSecretKeyEncrypted;
+      const stripeConfigured = hasStripeConnect || hasOwnStripeKeys;
+
+      if (stripeConfigured) {
+        try {
+          const { stripeService } = await import('./lib/stripe-service');
+          const { calculatePlatformFee } = await import('./config/platform');
+          const platformFeeAmount = hasStripeConnect
+            ? calculatePlatformFee(data.amount, req.tenant!.subscriptionTier || 'free', req.tenant!.platformFeePercent)
+            : 0;
+
+          const paymentIntent = await stripeService.createPaymentIntent(req.tenant! as any, {
+            amount: data.amount,
+            description: data.description || `Owner surrender fee for ${request.dogName}`,
+            receiptEmail: data.ownerEmail || request.ownerEmail || undefined,
+            metadata: {
+              type: 'surrender_fee',
+              surrenderRequestId: request.id,
+              dogName: request.dogName || 'Unknown',
+            },
+            connectedAccountId: req.tenant!.stripeConnectedAccountId || undefined,
+            platformFeeAmount: platformFeeAmount > 0 ? platformFeeAmount : undefined,
+          });
+
+          return res.json({
+            paymentIntentId: paymentIntent.id,
+            clientSecret: paymentIntent.client_secret,
+            status: paymentIntent.status,
+          });
+        } catch (stripeErr: any) {
+          console.error('Stripe payment intent creation failed for surrender fee:', stripeErr.message);
+          return res.status(500).json({
+            error: `Stripe payment failed: ${stripeErr.message}. You can try again or use manual payment recording.`,
+          });
+        }
+      }
+
+      const manualPaymentId = `manual_surrender_${Date.now()}_${request.id.slice(0, 8)}`;
+      res.json({
+        paymentIntentId: manualPaymentId,
+        status: 'manual',
+        message: 'Payment recorded manually (Stripe not configured)',
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * PATCH /api/surrender-requests/:id/fee
+   * Record surrender fee payment result on a surrender request
+   */
+  app.patch('/api/surrender-requests/:id/fee', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      const feeSchema = z.object({
+        surrenderFeePaid: z.string().optional(),
+        surrenderFeeWaived: z.boolean().optional(),
+        paymentIntentId: z.string().optional(),
+      });
+
+      const data = feeSchema.parse(req.body);
+
+      const feeAmount = data.surrenderFeeWaived ? '0.00' : (data.surrenderFeePaid || '0.00');
+
+      const [updated] = await db.update(surrenderRequests)
+        .set({
+          surrenderFeePaid: feeAmount,
+          surrenderFeeWaived: data.surrenderFeeWaived || false,
+          paymentIntentId: data.paymentIntentId || null,
+          updatedAt: new Date(),
+        })
+        .where(and(
+          eq(surrenderRequests.id, req.params.id),
+          eq(surrenderRequests.tenantId, req.tenant!.id)
+        ))
+        .returning();
+
+      if (!updated) {
+        return res.status(404).json({ error: 'Surrender request not found' });
+      }
+
+      res.json(updated);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * PATCH /api/surrender-requests/:id/status
    * Update a surrender request's status (admin, board_member, or staff)
    */
@@ -20475,15 +20586,15 @@ Submitted: ${new Date().toLocaleString()}
       const settingsSchema = z.object({
         stripeLink: z.string().url().optional().or(z.literal("")),
         passFeesToAdopter: z.boolean().optional(),
+        defaultSurrenderFee: z.string().optional().nullable(),
       });
 
       const parsedSettings = settingsSchema.parse(req.body);
       
-      // Only include fields that are actually provided (not undefined)
-      // This prevents overwriting existing values with null
       const settingsToUpdate: Record<string, any> = {};
       if (parsedSettings.stripeLink !== undefined) settingsToUpdate.stripeLink = parsedSettings.stripeLink;
       if (parsedSettings.passFeesToAdopter !== undefined) settingsToUpdate.passFeesToAdopter = parsedSettings.passFeesToAdopter;
+      if (parsedSettings.defaultSurrenderFee !== undefined) settingsToUpdate.defaultSurrenderFee = parsedSettings.defaultSurrenderFee;
 
       const [updatedTenant] = await db
         .update(tenants)

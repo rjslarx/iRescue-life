@@ -420,6 +420,46 @@ export default function SettingsPage() {
     },
   });
 
+  const [surrenderFeeInput, setSurrenderFeeInput] = useState("");
+  const [surrenderFeeEnabled, setSurrenderFeeEnabled] = useState(false);
+
+  useEffect(() => {
+    if (data?.tenant) {
+      const fee = data.tenant.defaultSurrenderFee;
+      if (fee && parseFloat(fee) > 0) {
+        setSurrenderFeeEnabled(true);
+        setSurrenderFeeInput(parseFloat(fee).toFixed(2));
+      } else {
+        setSurrenderFeeEnabled(false);
+        setSurrenderFeeInput("");
+      }
+    }
+  }, [data?.tenant?.defaultSurrenderFee]);
+
+  const updateSurrenderFeeMutation = useMutation({
+    mutationFn: async (fee: string | null) => {
+      const response = await apiRequest('PATCH', '/api/tenant/settings', { defaultSurrenderFee: fee });
+      return response.json();
+    },
+    onSuccess: (_, fee) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/tenant/settings'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/tenant'] });
+      toast({
+        title: fee ? "Surrender fee updated" : "Surrender fee disabled",
+        description: fee
+          ? `Default surrender fee set to $${parseFloat(fee).toFixed(2)}`
+          : "No surrender fee will be charged by default.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to update surrender fee",
+        description: error.message || "Please try again later.",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Require spay/neuter contract toggle mutation
   const updateRequireSpayNeuterContractMutation = useMutation({
     mutationFn: async (requireSpayNeuterContract: boolean) => {
@@ -2335,6 +2375,72 @@ export default function SettingsPage() {
                         </AlertDescription>
                       </Alert>
                     )}
+
+                    <Separator />
+
+                    {/* Owner Surrender Fee */}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="space-y-0.5">
+                          <Label htmlFor="surrender-fee-toggle" className="text-base font-medium">
+                            Owner Surrender Fee
+                          </Label>
+                          <p className="text-sm text-muted-foreground">
+                            When enabled, staff will be prompted to collect a surrender fee during the intake process.
+                            The fee can be waived on a case-by-case basis.
+                          </p>
+                        </div>
+                        <Switch
+                          id="surrender-fee-toggle"
+                          checked={surrenderFeeEnabled}
+                          disabled={updateSurrenderFeeMutation.isPending || !canEdit}
+                          onCheckedChange={(checked) => {
+                            setSurrenderFeeEnabled(checked);
+                            if (!checked) {
+                              setSurrenderFeeInput("");
+                              updateSurrenderFeeMutation.mutate(null);
+                            }
+                          }}
+                          data-testid="switch-surrender-fee"
+                        />
+                      </div>
+                      {surrenderFeeEnabled && (
+                        <div className="flex items-end gap-2">
+                          <div className="flex-1 space-y-1.5">
+                            <Label htmlFor="surrender-fee-amount" className="text-sm">Default Fee Amount ($)</Label>
+                            <Input
+                              id="surrender-fee-amount"
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              placeholder="e.g. 75.00"
+                              value={surrenderFeeInput}
+                              onChange={(e) => setSurrenderFeeInput(e.target.value)}
+                              disabled={updateSurrenderFeeMutation.isPending || !canEdit}
+                              data-testid="input-default-surrender-fee"
+                            />
+                          </div>
+                          <Button
+                            onClick={() => {
+                              const val = parseFloat(surrenderFeeInput);
+                              if (!isNaN(val) && val > 0) {
+                                updateSurrenderFeeMutation.mutate(val.toFixed(2));
+                              } else {
+                                toast({ title: "Invalid amount", description: "Please enter a valid fee amount greater than 0.", variant: "destructive" });
+                              }
+                            }}
+                            disabled={updateSurrenderFeeMutation.isPending || !canEdit}
+                            data-testid="button-save-surrender-fee"
+                          >
+                            {updateSurrenderFeeMutation.isPending ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              "Save"
+                            )}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
 
                     <Separator />
 

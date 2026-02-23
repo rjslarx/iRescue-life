@@ -74,6 +74,7 @@ import {
 import { formatDistanceToNow } from "date-fns";
 import type { SurrenderRequest, SurrenderFormField } from "@shared/schema";
 import IntakeInterceptorDialog from "@/components/IntakeInterceptorDialog";
+import { SurrenderFeeDialog } from "@/components/SurrenderFeeDialog";
 
 const staffIntakeSchema = z.object({
   isStray: z.boolean().default(false),
@@ -891,12 +892,7 @@ function SurrenderDetailsDialog({ request, open, onOpenChange, formFields }: Sur
   const queryClient = useQueryClient();
   const [declineDialogOpen, setDeclineDialogOpen] = useState(false);
   const [declineReason, setDeclineReason] = useState<string>("");
-  
-  // Debug logging for custom responses
-  console.log('[DEBUG SurrenderDetailsDialog] request:', request?.dogName);
-  console.log('[DEBUG SurrenderDetailsDialog] customResponses:', request?.customResponses);
-  console.log('[DEBUG SurrenderDetailsDialog] customResponses type:', typeof request?.customResponses);
-  console.log('[DEBUG SurrenderDetailsDialog] formFields count:', formFields?.length);
+  const [feeDialogOpen, setFeeDialogOpen] = useState(false);
   
   const prepareIntakeMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -1234,7 +1230,7 @@ function SurrenderDetailsDialog({ request, open, onOpenChange, formFields }: Sur
             )}
             {canPromote && (
               <Button
-                onClick={() => prepareIntakeMutation.mutate(request.id)}
+                onClick={() => setFeeDialogOpen(true)}
                 disabled={prepareIntakeMutation.isPending}
                 className="w-full sm:w-auto"
                 data-testid="button-approve-intake"
@@ -1255,6 +1251,22 @@ function SurrenderDetailsDialog({ request, open, onOpenChange, formFields }: Sur
           </DialogFooter>
         )}
       </DialogContent>
+
+      <SurrenderFeeDialog
+        open={feeDialogOpen}
+        onOpenChange={setFeeDialogOpen}
+        surrenderRequestId={request.id}
+        dogName={request.dogName}
+        ownerEmail={request.ownerEmail}
+        onFeeComplete={() => {
+          setFeeDialogOpen(false);
+          prepareIntakeMutation.mutate(request.id);
+        }}
+        onSkip={() => {
+          setFeeDialogOpen(false);
+          prepareIntakeMutation.mutate(request.id);
+        }}
+      />
 
       <AlertDialog open={declineDialogOpen} onOpenChange={setDeclineDialogOpen}>
         <AlertDialogContent>
