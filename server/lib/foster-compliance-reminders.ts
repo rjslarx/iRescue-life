@@ -121,8 +121,8 @@ export async function createRemindersForDuePreventativeCare(tenantId: string): P
         inArray(preventativeCareRecords.animalId, animalIds),
         lte(preventativeCareRecords.nextDueDate, threeDaysFromNow),
         or(
-          isNull(preventativeCareRecords.dateGiven),
-          lt(preventativeCareRecords.dateGiven, preventativeCareRecords.nextDueDate)
+          isNull(preventativeCareRecords.dateAdministered),
+          lt(preventativeCareRecords.dateAdministered, preventativeCareRecords.nextDueDate)
         )
       ));
 
