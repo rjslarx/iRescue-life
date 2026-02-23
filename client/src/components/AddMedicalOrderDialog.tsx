@@ -76,6 +76,182 @@ const categoryColors: Record<string, string> = {
   Preventative: "bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300",
 };
 
+const vetMedications = new Set([
+  'doxycycline', 'amoxicillin', 'clavamox', 'amoxicillin-clavulanate', 'metronidazole', 'flagyl',
+  'cephalexin', 'keflex', 'gabapentin', 'trazodone', 'prednisone', 'prednisolone', 'dexamethasone',
+  'carprofen', 'rimadyl', 'meloxicam', 'metacam', 'cerenia', 'maropitant', 'famotidine', 'pepcid',
+  'omeprazole', 'prilosec', 'sucralfate', 'carafate', 'enrofloxacin', 'baytril', 'clindamycin',
+  'antirobe', 'apoquel', 'oclacitinib', 'cytopoint', 'simparica', 'simparica trio', 'bravecto',
+  'nexgard', 'heartgard', 'heartgard plus', 'interceptor', 'interceptor plus', 'sentinel',
+  'revolution', 'revolution plus', 'advantage', 'advantage multi', 'frontline', 'frontline plus',
+  'seresto', 'denamarin', 'ursodiol', 'methimazole', 'tapazole', 'phenobarbital', 'luminal',
+  'potassium bromide', 'kbr', 'zonisamide', 'zonegran', 'levetiracetam', 'keppra',
+  'fluoxetine', 'prozac', 'reconcile', 'acepromazine', 'butorphanol', 'torbugesic',
+  'tramadol', 'ondansetron', 'zofran', 'metoclopramide', 'reglan', 'cisapride', 'propulsid',
+  'lactulose', 'miralax', 'polyethylene glycol', 'proviable', 'fortiflora',
+  'diphenhydramine', 'benadryl', 'cetirizine', 'zyrtec', 'chlorpheniramine',
+  'furosemide', 'lasix', 'enalapril', 'benazepril', 'pimobendan', 'vetmedin',
+  'spironolactone', 'atenolol', 'diltiazem', 'amlodipine', 'sildenafil',
+  'insulin', 'vetsulin', 'glargine', 'lantus', 'prozinc',
+  'methotrexate', 'cyclophosphamide', 'vincristine', 'doxorubicin', 'palladia', 'toceranib',
+  'cyclosporine', 'atopica', 'azathioprine', 'mycophenolate',
+  'ketoconazole', 'fluconazole', 'itraconazole', 'terbinafine',
+  'ivermectin', 'milbemycin', 'fenbendazole', 'panacur', 'pyrantel', 'strongid', 'praziquantel', 'drontal',
+  'metaflumizone', 'fipronil', 'imidacloprid', 'selamectin', 'moxidectin',
+  'tobramycin', 'gentamicin', 'neomycin', 'polymyxin b', 'ofloxacin',
+  'erythromycin', 'tetracycline', 'minocycline', 'marbofloxacin', 'pradofloxacin', 'veraflox',
+  'sulfamethoxazole', 'trimethoprim', 'smz-tmp', 'tmp-smx',
+  'hydroxyzine', 'maropitant citrate', 'capromorelin', 'entyce', 'mirtazapine', 'mirataz',
+  'methocarbamol', 'robaxin', 'diazepam', 'valium', 'midazolam',
+  'buprenorphine', 'simbadol', 'hydromorphone', 'fentanyl',
+  'adequan', 'polysulfated glycosaminoglycan', 'librela', 'solensia', 'galliprant', 'grapiprant',
+  'thyro-tabs', 'levothyroxine', 'soloxine',
+  'cefpodoxime', 'simplicef', 'convenia', 'cefovecin',
+  'chlorambucil', 'leukeran', 'lomustine', 'ccnu',
+  'maelstrom', 'trilostane', 'vetoryl',
+  'succinylcholine', 'propofol', 'alfaxalone', 'alfaxan', 'ketamine', 'telazol', 'tiletamine',
+  'atropine', 'glycopyrrolate',
+]);
+
+const vetVaccines = new Set([
+  'rabies', 'dhpp', 'dhlpp', 'dapp', 'da2pp', 'da2ppc', 'distemper', 'parvovirus', 'parvo',
+  'parainfluenza', 'adenovirus', 'bordetella', 'kennel cough',
+  'leptospirosis', 'lepto', 'lyme', 'lyme disease',
+  'canine influenza', 'civ', 'h3n2', 'h3n8',
+  'rattlesnake vaccine', 'crotalus atrox',
+  'fvrcp', 'feline distemper', 'panleukopenia', 'calicivirus', 'rhinotracheitis',
+  'felv', 'feline leukemia', 'fiv', 'feline immunodeficiency',
+  'chlamydia', 'feline chlamydia',
+  'intranasal bordetella',
+]);
+
+const vetLabs = new Set([
+  'cbc', 'complete blood count', 'chemistry', 'chemistry panel', 'chem panel',
+  'urinalysis', 'ua', 'fecal', 'fecal float', 'fecal test', 'ova and parasite',
+  'heartworm test', 'hw test', '4dx', 'snap 4dx', 'snap test',
+  't4', 'total t4', 'free t4', 'thyroid', 'thyroid panel', 'tsh',
+  'cytology', 'biopsy', 'histopathology', 'histopath',
+  'culture', 'culture and sensitivity', 'c&s',
+  'felv/fiv', 'felv fiv', 'fiv felv', 'felv/fiv test', 'combo test',
+  'parvo test', 'parvo snap',
+  'blood panel', 'blood work', 'bloodwork',
+  'metabolic panel', 'bmp', 'cmp', 'comprehensive metabolic',
+  'coagulation', 'coag panel', 'pt', 'ptt', 'pt/ptt', 'aptt',
+  'blood gas', 'abg', 'venous blood gas',
+  'electrolytes', 'lytes',
+  'lipase', 'amylase', 'spec cpl', 'cpli', 'fpli', 'snap cpli',
+  'bile acids', 'pre and post bile acids',
+  'cortisol', 'acth stimulation', 'acth stim', 'ldds', 'low dose dex',
+  'upc', 'urine protein creatinine',
+  'pcr', 'pcr panel', 'respiratory pcr',
+  'blood smear', 'reticulocyte count', 'retic count',
+  'cross match', 'crossmatch', 'blood type', 'blood typing',
+  'progesterone',
+]);
+
+const vetProcedures = new Set([
+  'spay', 'ovariohysterectomy', 'ove', 'neuter', 'castration', 'orchiectomy',
+  'dental', 'dental cleaning', 'dental prophylaxis', 'prophy',
+  'extraction', 'tooth extraction', 'dental extraction',
+  'mass removal', 'lump removal', 'tumor removal', 'mass excision',
+  'laceration repair', 'wound repair', 'wound closure', 'suture',
+  'foreign body removal', 'foreign body', 'fb removal', 'exploratory',
+  'exploratory laparotomy', 'exploratory surgery',
+  'amputation', 'leg amputation', 'tail amputation',
+  'enucleation', 'eye removal',
+  'cystotomy', 'bladder surgery', 'bladder stone removal',
+  'gastropexy', 'gdv', 'bloat surgery',
+  'pyometra', 'pyometra surgery',
+  'c-section', 'cesarean', 'caesarean', 'cesarean section',
+  'cherry eye repair', 'cherry eye',
+  'entropion', 'entropion repair', 'ectropion', 'ectropion repair',
+  'cruciate repair', 'tplo', 'tta', 'mpo', 'acl repair',
+  'fho', 'femoral head ostectomy',
+  'patella luxation', 'mppl', 'lppl',
+  'aural hematoma', 'ear hematoma',
+  'perineal urethrostomy', 'pu surgery',
+  'hernia repair', 'inguinal hernia', 'umbilical hernia',
+  'liver biopsy', 'skin biopsy',
+  'rhinoscopy', 'endoscopy', 'colonoscopy', 'bronchoscopy',
+  'ct scan', 'mri', 'ultrasound', 'radiograph', 'x-ray', 'xray',
+]);
+
+const vetPreventatives = new Set([
+  'flea/tick', 'flea tick', 'flea and tick', 'flea prevention', 'tick prevention',
+  'deworming', 'deworm', 'dewormer',
+  'microchip', 'microchipping',
+  'nail trim', 'nail trimming', 'nail clip',
+  'ear cleaning', 'ear clean', 'ear flush',
+  'anal gland', 'anal gland expression', 'anal glands',
+  'dental cleaning', 'teeth cleaning',
+  'weight check', 'weight management',
+  'flea comb', 'flea bath', 'medicated bath', 'lime sulfur dip',
+  'heartworm prevention', 'hw prevention',
+  'grooming', 'sanitary trim', 'mat removal',
+]);
+
+const vetExams = new Set([
+  'intake exam', 'intake', 'intake evaluation',
+  'wellness exam', 'wellness', 'wellness check', 'annual exam', 'yearly exam',
+  'recheck', 'recheck exam', 'follow up', 'follow-up', 'followup',
+  'sick visit', 'sick exam', 'illness exam',
+  'emergency exam', 'emergency', 'urgent exam',
+  'pre-surgical exam', 'pre-op', 'pre-operative', 'pre surgical',
+  'adoption exam', 'adoption evaluation',
+  'new patient exam', 'initial exam',
+  'geriatric exam', 'senior exam', 'senior wellness',
+  'behavioral consult', 'behavior evaluation',
+  'orthopedic exam', 'lameness exam',
+  'dermatology exam', 'skin exam',
+  'ophthalmologic exam', 'eye exam',
+  'cardiology consult', 'cardiac exam',
+]);
+
+function classifyVeterinaryItem(name: string): { category: 'Medication' | 'Vaccine' | 'Lab' | 'Procedure' | 'Preventative' | 'Exam'; confidence: 'high' | 'medium' } | null {
+  const normalized = name.toLowerCase().trim();
+  if (!normalized) return null;
+
+  const exactChecks: Array<[Set<string>, 'Medication' | 'Vaccine' | 'Lab' | 'Procedure' | 'Preventative' | 'Exam']> = [
+    [vetMedications, 'Medication'],
+    [vetVaccines, 'Vaccine'],
+    [vetLabs, 'Lab'],
+    [vetProcedures, 'Procedure'],
+    [vetPreventatives, 'Preventative'],
+    [vetExams, 'Exam'],
+  ];
+
+  for (const [dict, category] of exactChecks) {
+    if (dict.has(normalized)) return { category, confidence: 'high' };
+  }
+
+  for (const [dict, category] of exactChecks) {
+    for (const term of dict) {
+      if (normalized.includes(term) || term.includes(normalized)) {
+        return { category, confidence: 'medium' };
+      }
+    }
+  }
+
+  const suffixHints: Array<[string[], 'Medication' | 'Vaccine' | 'Lab' | 'Procedure' | 'Preventative' | 'Exam']> = [
+    [['cillin', 'cycline', 'floxacin', 'azole', 'prazole', 'olol', 'pril', 'sartan', 'statin', 'dipine', 'pamide', 'sone', 'olone', 'nib', 'mab', 'parin', 'afil', 'barb', 'zepam', 'etam', 'pam', 'oxacin', 'mycin', 'micin'], 'Medication'],
+    [['vaccine', 'vaccination', 'vax', 'booster'], 'Vaccine'],
+    [['test', 'panel', 'screen', 'assay', 'titer', 'titre'], 'Lab'],
+    [['surgery', 'ectomy', 'otomy', 'ostomy', 'plasty', 'pexy', 'rrhaphy', 'scopy', 'tomy'], 'Procedure'],
+    [['prevention', 'preventive', 'prophylaxis'], 'Preventative'],
+    [['exam', 'examination', 'evaluation', 'consult', 'visit', 'checkup', 'check-up'], 'Exam'],
+  ];
+
+  for (const [suffixes, category] of suffixHints) {
+    for (const suffix of suffixes) {
+      if (normalized.includes(suffix)) {
+        return { category, confidence: 'medium' };
+      }
+    }
+  }
+
+  return null;
+}
+
 function mapExamType(name: string): string {
   const lower = name.toLowerCase();
   if (lower.includes('intake')) return 'intake';
@@ -174,7 +350,8 @@ export function AddMedicalOrderDialog({ animalId, animalSpecies = 'Dog', open, o
   }
 
   function startCreateNew(name: string) {
-    setCreatingNew({ name, category: "", defaultDose: "", defaultFrequency: "" });
+    const detected = classifyVeterinaryItem(name);
+    setCreatingNew({ name, category: detected?.category || "", defaultDose: "", defaultFrequency: "" });
     setSearchValue("");
   }
 
@@ -497,14 +674,33 @@ export function AddMedicalOrderDialog({ animalId, animalSpecies = 'Dog', open, o
                           )}
                         </CommandList>
                       </Command>
-                      <button
-                        onClick={() => startCreateNew(searchValue)}
-                        className="flex items-center gap-2 w-full p-2.5 text-sm border rounded-md text-left hover-elevate active-elevate-2 transition-colors text-primary"
-                        data-testid="button-create-new-from-search"
-                      >
-                        <Plus className="w-4 h-4 shrink-0" />
-                        <span>Create "<strong>{searchValue}</strong>" as new catalog item</span>
-                      </button>
+                      {(() => {
+                        const detected = classifyVeterinaryItem(searchValue);
+                        const DetectedIcon = detected ? categoryIcons[detected.category] || Pill : null;
+                        return (
+                          <button
+                            onClick={() => startCreateNew(searchValue)}
+                            className="flex items-center gap-2 w-full p-2.5 text-sm border rounded-md text-left hover-elevate active-elevate-2 transition-colors text-primary"
+                            data-testid="button-create-new-from-search"
+                          >
+                            <Plus className="w-4 h-4 shrink-0" />
+                            <span className="flex-1">
+                              Create "<strong>{searchValue}</strong>"
+                              {detected ? (
+                                <> as {detected.category}</>
+                              ) : (
+                                <> as new catalog item</>
+                              )}
+                            </span>
+                            {detected && (
+                              <Badge variant="secondary" className={`text-[10px] shrink-0 ${categoryColors[detected.category] || ""}`}>
+                                {DetectedIcon && <DetectedIcon className="w-3 h-3 mr-1" />}
+                                {detected.category}
+                              </Badge>
+                            )}
+                          </button>
+                        );
+                      })()}
                     </div>
                   )}
                 </div>
