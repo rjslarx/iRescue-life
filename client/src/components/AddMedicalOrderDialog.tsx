@@ -329,7 +329,7 @@ export function AddMedicalOrderDialog({ animalId, animalSpecies = 'Dog', open, o
   }, [open, pendingOrder]);
 
   function handleSelectCatalogItem(item: CatalogItem) {
-    const isDuplicate = activeNameSet.has(item.name.toLowerCase());
+    const isDuplicate = activeNameSet.has((item.name || '').toLowerCase());
     if (isDuplicate) {
       setDuplicateConfirm({ item, existingName: item.name });
       return;
@@ -574,7 +574,7 @@ export function AddMedicalOrderDialog({ animalId, animalSpecies = 'Dog', open, o
                         <div className="flex flex-wrap gap-2">
                           {catalogItems.slice(0, 5).map(ci => {
                             const Icon = categoryIcons[ci.category] || Pill;
-                            const isDuplicate = activeNameSet.has(ci.name.toLowerCase());
+                            const isDuplicate = activeNameSet.has((ci.name || '').toLowerCase());
                             return (
                               <button
                                 key={ci.id}
@@ -628,7 +628,7 @@ export function AddMedicalOrderDialog({ animalId, animalSpecies = 'Dog', open, o
                               {catalogItems
                                 .filter(ci => ci?.name && ci.name.toLowerCase().includes(searchValue.toLowerCase()))
                                 .map(ci => {
-                                  const isDuplicate = activeNameSet.has(ci.name.toLowerCase());
+                                  const isDuplicate = activeNameSet.has((ci.name || '').toLowerCase());
                                   const Icon = categoryIcons[ci.category] || Pill;
                                   return (
                                     <CommandItem
@@ -656,7 +656,7 @@ export function AddMedicalOrderDialog({ animalId, animalSpecies = 'Dog', open, o
                           {orderSets.length > 0 && (
                             <CommandGroup heading="Order Sets">
                               {orderSets
-                                .filter(os => os.setName.toLowerCase().includes(searchValue.toLowerCase()))
+                                .filter(os => (os.setName || '').toLowerCase().includes(searchValue.toLowerCase()))
                                 .map(os => (
                                   <CommandItem
                                     key={os.id}
