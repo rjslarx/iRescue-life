@@ -26,6 +26,7 @@ import {
   ChevronUp,
 } from "lucide-react";
 import { queryClient } from "@/lib/queryClient";
+import DashboardLayout from "@/components/DashboardLayout";
 
 interface TicketSale {
   id: string;
@@ -131,36 +132,41 @@ export default function EventTicketSalesPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-full p-8">
-        <div className="flex flex-col items-center gap-3">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">Loading ticket sales...</p>
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-full p-8">
+          <div className="flex flex-col items-center gap-3">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">Loading ticket sales...</p>
+          </div>
         </div>
-      </div>
+      </DashboardLayout>
     );
   }
 
   if (!data?.configured) {
     return (
-      <div className="flex items-center justify-center h-full p-8">
-        <Card className="max-w-md w-full">
-          <CardContent className="flex flex-col items-center gap-4 p-8">
-            <AlertCircle className="h-12 w-12 text-muted-foreground" />
-            <div className="text-center">
-              <h3 className="font-semibold text-lg">Stripe Not Configured</h3>
-              <p className="text-sm text-muted-foreground mt-1">
-                Event ticket sales require Stripe to be configured. Please set up Stripe in your Settings to view ticket purchase data.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-full p-8">
+          <Card className="max-w-md w-full">
+            <CardContent className="flex flex-col items-center gap-4 p-8">
+              <AlertCircle className="h-12 w-12 text-muted-foreground" />
+              <div className="text-center">
+                <h3 className="font-semibold text-lg">Stripe Not Configured</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Event ticket sales require Stripe to be configured. Please set up Stripe in your Settings to view ticket purchase data.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </DashboardLayout>
     );
   }
 
   const { sales, summary, events } = data;
 
   return (
+    <DashboardLayout>
     <div className="flex flex-col h-full overflow-auto" data-testid="event-ticket-sales-page">
       <div className="sticky top-0 z-10 bg-background border-b px-4 py-3">
         <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -387,5 +393,6 @@ export default function EventTicketSalesPage() {
         </div>
       </div>
     </div>
+    </DashboardLayout>
   );
 }
