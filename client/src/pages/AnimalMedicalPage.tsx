@@ -160,6 +160,9 @@ export default function AnimalMedicalPage() {
   const [doseAdministeredAt, setDoseAdministeredAt] = useState('');
   const [doseNotes, setDoseNotes] = useState('');
   const [expandedPrescriptionId, setExpandedPrescriptionId] = useState<string | null>(null);
+  const [enterResultsId, setEnterResultsId] = useState<string | null>(null);
+  const [labResultValue, setLabResultValue] = useState('');
+  const [labResultNotes, setLabResultNotes] = useState('');
   const [isUnableDialogOpen, setIsUnableDialogOpen] = useState(false);
   const [unablePrescription, setUnablePrescription] = useState<any>(null);
   const [unableReason, setUnableReason] = useState<"animal_sick" | "unable_to_swallow" | "other">("animal_sick");
@@ -402,6 +405,71 @@ export default function AnimalMedicalPage() {
         description: "Failed to delete the record. Please try again.",
         variant: "destructive",
       });
+    },
+  });
+
+  const markPreventativeGivenMutation = useMutation({
+    mutationFn: async (recordId: string) => {
+      await apiRequest('PATCH', `/api/medical/preventative-care/records/${recordId}`, {
+        status: 'given',
+        dateAdministered: new Date().toISOString().split('T')[0],
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/animals/${animalId}/preventative-care`] });
+      queryClient.invalidateQueries({ queryKey: ['/api/medical/preventative-care/coming-due'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/animals', animalId] });
+      toast({ title: "Marked as given", description: "The preventative care record has been updated." });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to update the record.", variant: "destructive" });
+    },
+  });
+
+  const skipPreventativeMutation = useMutation({
+    mutationFn: async (recordId: string) => {
+      await apiRequest('PATCH', `/api/medical/preventative-care/records/${recordId}`, {
+        status: 'skipped',
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/animals/${animalId}/preventative-care`] });
+      queryClient.invalidateQueries({ queryKey: ['/api/medical/preventative-care/coming-due'] });
+      toast({ title: "Skipped", description: "The preventative care record has been skipped." });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to skip the record.", variant: "destructive" });
+    },
+  });
+
+  const enterLabResultMutation = useMutation({
+    mutationFn: async ({ diagnosticId, result, notes }: { diagnosticId: string; result: string; notes?: string }) => {
+      await apiRequest('PATCH', `/api/medical/diagnostics/${diagnosticId}`, {
+        result,
+        notes,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/animals/${animalId}/medical/diagnostics`] });
+      toast({ title: "Results entered", description: "The lab results have been saved." });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to save lab results.", variant: "destructive" });
+    },
+  });
+
+  const markPrescriptionCompletedMutation = useMutation({
+    mutationFn: async (prescriptionId: string) => {
+      await apiRequest('PATCH', `/api/medical/prescriptions/${prescriptionId}`, {
+        endDate: new Date().toISOString().split('T')[0],
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/animals/${animalId}/medical/prescriptions`] });
+      toast({ title: "Prescription completed", description: "The medication has been marked as completed." });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to mark prescription as completed.", variant: "destructive" });
     },
   });
 
@@ -1096,10 +1164,6 @@ export default function AnimalMedicalPage() {
           <TabsContent value="exams" className="space-y-4">
             <div className="flex justify-between items-center">
               <h2 className="text-xl font-semibold">Medical Exams</h2>
-              <Button onClick={() => { setEditingExam(null); setExamDialogOpen(true); }} data-testid="button-add-exam">
-                <Stethoscope className="w-4 h-4 mr-2" />
-                Add Exam
-              </Button>
             </div>
             <div className="grid gap-4">
               {exams.map((exam: any) => (
@@ -1178,10 +1242,6 @@ export default function AnimalMedicalPage() {
           <TabsContent value="vaccines" className="space-y-4">
             <div className="flex justify-between items-center">
               <h2 className="text-xl font-semibold">Vaccine Records</h2>
-              <Button onClick={() => { setEditingVaccine(null); setVaccineDialogOpen(true); }} data-testid="button-add-vaccine">
-                <Syringe className="w-4 h-4 mr-2" />
-                Add Vaccine
-              </Button>
             </div>
             <div className="grid gap-4">
               {vaccines.map((vaccine: any) => {
@@ -1266,23 +1326,47 @@ export default function AnimalMedicalPage() {
           <TabsContent value="diagnostics" className="space-y-4">
             <div className="flex justify-between items-center">
               <h2 className="text-xl font-semibold">Diagnostic Tests</h2>
-              <Button onClick={() => { setEditingDiagnostic(null); setDiagnosticDialogOpen(true); }} data-testid="button-add-diagnostic">
-                <TestTube className="w-4 h-4 mr-2" />
-                Add Test
-              </Button>
             </div>
             <div className="grid gap-4">
-              {diagnostics.map((test: any) => (
-                <Card key={test.id}>
+              {diagnostics.map((test: any) => {
+                const isPendingResult = !test.result || test.result === 'Pending' || !test.results || test.results === 'Pending';
+                const isEnteringResults = enterResultsId === test.id;
+                return (
+                <Card key={test.id} className={isPendingResult ? "border-dashed" : ""}>
                   <CardHeader>
                     <div className="flex justify-between items-start">
                       <div>
-                        <CardTitle className="text-lg">{test.testName}</CardTitle>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <CardTitle className="text-lg">{test.testName}</CardTitle>
+                          {isPendingResult ? (
+                            <Badge variant="secondary">Pending</Badge>
+                          ) : (
+                            <Badge variant="outline" className="border-green-500 text-green-700 dark:text-green-400">
+                              <CheckCircle2 className="w-3 h-3 mr-1" />
+                              Results In
+                            </Badge>
+                          )}
+                        </div>
                         <p className="text-sm text-muted-foreground mt-1">
-                          {test.testType} • {formatDateOnly(test.testDate)}
+                          {test.testType} {test.testType ? '•' : ''} {formatDateOnly(test.testDate)}
                         </p>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 flex-wrap">
+                        {isPendingResult && !isEnteringResults && (
+                          <Button
+                            variant="default"
+                            size="sm"
+                            onClick={() => {
+                              setEnterResultsId(test.id);
+                              setLabResultValue('');
+                              setLabResultNotes('');
+                            }}
+                            data-testid={`button-enter-results-${test.id}`}
+                          >
+                            <ClipboardCheck className="w-4 h-4 mr-1" />
+                            Enter Results
+                          </Button>
+                        )}
                         <Button 
                           variant="ghost" 
                           size="sm" 
@@ -1301,10 +1385,76 @@ export default function AnimalMedicalPage() {
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-2">
-                    {test.results && (
+                    {isEnteringResults ? (
+                      <div className="space-y-3 rounded-md border p-3">
+                        <p className="font-medium text-sm">Enter Lab Results</p>
+                        <div className="flex gap-2 flex-wrap">
+                          {['Positive', 'Negative', 'Inconclusive'].map((val) => (
+                            <Button
+                              key={val}
+                              variant={labResultValue === val ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => setLabResultValue(val)}
+                              data-testid={`button-result-${val.toLowerCase()}-${test.id}`}
+                            >
+                              {val}
+                            </Button>
+                          ))}
+                        </div>
+                        <Textarea
+                          placeholder="Notes (optional)"
+                          value={labResultNotes}
+                          onChange={(e) => setLabResultNotes(e.target.value)}
+                          className="resize-none text-sm"
+                          rows={2}
+                          data-testid={`input-result-notes-${test.id}`}
+                        />
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            disabled={!labResultValue || enterLabResultMutation.isPending}
+                            onClick={() => {
+                              enterLabResultMutation.mutate({
+                                diagnosticId: test.id,
+                                result: labResultValue,
+                                notes: labResultNotes || undefined,
+                              }, {
+                                onSuccess: () => setEnterResultsId(null),
+                              });
+                            }}
+                            data-testid={`button-submit-results-${test.id}`}
+                          >
+                            {enterLabResultMutation.isPending ? (
+                              <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                            ) : (
+                              <CheckCircle2 className="w-4 h-4 mr-1" />
+                            )}
+                            Save Results
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setEnterResultsId(null)}
+                            data-testid={`button-cancel-results-${test.id}`}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        {(test.results || test.result) && !isPendingResult && (
+                          <div>
+                            <p className="font-medium text-sm mb-1">Results:</p>
+                            <p className="text-sm text-muted-foreground">{test.results || test.result}</p>
+                          </div>
+                        )}
+                      </>
+                    )}
+                    {test.notes && (
                       <div>
-                        <p className="font-medium text-sm mb-1">Results:</p>
-                        <p className="text-sm text-muted-foreground">{test.results}</p>
+                        <p className="font-medium text-sm mb-1">Notes:</p>
+                        <p className="text-sm text-muted-foreground">{test.notes}</p>
                       </div>
                     )}
                     {test.veterinarian && (
@@ -1315,7 +1465,8 @@ export default function AnimalMedicalPage() {
                     )}
                   </CardContent>
                 </Card>
-              ))}
+                );
+              })}
               {diagnostics.length === 0 && (
                 <Card>
                   <CardContent className="py-8 text-center text-muted-foreground">
@@ -1330,10 +1481,6 @@ export default function AnimalMedicalPage() {
           <TabsContent value="procedures" className="space-y-4">
             <div className="flex justify-between items-center">
               <h2 className="text-xl font-semibold">Procedures</h2>
-              <Button onClick={() => { setEditingProcedure(null); setProcedureDialogOpen(true); }} data-testid="button-add-procedure">
-                <Scissors className="w-4 h-4 mr-2" />
-                Add Procedure
-              </Button>
             </div>
             <div className="grid gap-4">
               {procedures.map((proc: any) => (
@@ -1400,10 +1547,6 @@ export default function AnimalMedicalPage() {
           <TabsContent value="medications" className="space-y-4">
             <div className="flex justify-between items-center">
               <h2 className="text-xl font-semibold">Medications & Prescriptions</h2>
-              <Button onClick={() => { setEditingPrescription(null); setPrescriptionDialogOpen(true); }} data-testid="button-add-prescription">
-                <Pill className="w-4 h-4 mr-2" />
-                Add Prescription
-              </Button>
             </div>
             <div className="grid gap-4">
               {prescriptions.map((rx: any) => {
@@ -1450,6 +1593,35 @@ export default function AnimalMedicalPage() {
                               <X className="w-4 h-4 mr-1" />
                               Unable
                             </Button>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  data-testid={`button-complete-prescription-${rx.id}`}
+                                >
+                                  <CheckCircle2 className="w-4 h-4 mr-1" />
+                                  Complete
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Mark Medication as Completed</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    This will set the end date for "{rx.medicationName}" to today and mark it as completed. No further doses will be scheduled.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => markPrescriptionCompletedMutation.mutate(rx.id)}
+                                    data-testid={`button-confirm-complete-prescription-${rx.id}`}
+                                  >
+                                    Mark Completed
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
                             <Button 
                               variant="ghost" 
                               size="sm" 
@@ -1957,16 +2129,6 @@ export default function AnimalMedicalPage() {
                 <Shield className="w-5 h-5" />
                 Preventative Care Records
               </h3>
-              <Button
-                onClick={() => {
-                  setEditingPreventativeCare(null);
-                  setPreventativeCareDialogOpen(true);
-                }}
-                data-testid="button-add-preventative-care"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Add Record
-              </Button>
             </div>
             
             <div className="space-y-4">
@@ -2040,6 +2202,38 @@ export default function AnimalMedicalPage() {
                           )}
                           {careType && (
                             <Badge variant="outline">{careType.category}</Badge>
+                          )}
+                          {isPending && (
+                            <>
+                              <Button
+                                variant="default"
+                                size="sm"
+                                disabled={markPreventativeGivenMutation.isPending}
+                                onClick={() => markPreventativeGivenMutation.mutate(record.id)}
+                                data-testid={`button-mark-given-preventative-${record.id}`}
+                              >
+                                {markPreventativeGivenMutation.isPending ? (
+                                  <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                                ) : (
+                                  <CheckCircle2 className="w-4 h-4 mr-1" />
+                                )}
+                                Mark Given
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={skipPreventativeMutation.isPending}
+                                onClick={() => skipPreventativeMutation.mutate(record.id)}
+                                data-testid={`button-skip-preventative-${record.id}`}
+                              >
+                                {skipPreventativeMutation.isPending ? (
+                                  <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                                ) : (
+                                  <X className="w-4 h-4 mr-1" />
+                                )}
+                                Skip
+                              </Button>
+                            </>
                           )}
                           <Button
                             variant="ghost"
