@@ -152,6 +152,7 @@ export default function AnimalMedicalPage() {
   const [selectedProtocol, setSelectedProtocol] = useState('');
   const [applyingProtocol, setApplyingProtocol] = useState(false);
   const [markInitialAsGiven, setMarkInitialAsGiven] = useState(true);
+  const [applyingPuppyProtocol, setApplyingPuppyProtocol] = useState(false);
   const [doseChartDialogOpen, setDoseChartDialogOpen] = useState(false);
   const [chartingPrescription, setChartingPrescription] = useState<any>(null);
   const [doseAdministeredAt, setDoseAdministeredAt] = useState('');
@@ -1754,6 +1755,92 @@ export default function AnimalMedicalPage() {
               );
             })()}
 
+            {/* Puppy Protocol Quick Action - only for dogs under 6 months with DOB */}
+            {animal?.species === 'Dog' && animal?.dateOfBirth && (() => {
+              const dobDate = new Date(animal.dateOfBirth);
+              const now = new Date();
+              const ageWeeks = Math.floor((now.getTime() - dobDate.getTime()) / (7 * 24 * 60 * 60 * 1000));
+              if (ageWeeks >= 26) return null;
+              return (
+                <Card className="border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/30" data-testid="card-puppy-protocol">
+                  <CardContent className="flex flex-col sm:flex-row items-start sm:items-center gap-3 pt-4 pb-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Star className="w-4 h-4 text-blue-500 shrink-0" />
+                        <span className="text-sm font-medium">Puppy Protocol Automation</span>
+                        <Badge variant="outline" className="text-xs border-blue-300 text-blue-700 dark:text-blue-300">
+                          {ageWeeks}w old
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Age-aware scheduling with DHPP series catch-up and 16-week completion rule. Skips past-due tasks automatically.
+                      </p>
+                    </div>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          variant="default"
+                          disabled={applyingPuppyProtocol}
+                          data-testid="button-run-puppy-protocol"
+                        >
+                          {applyingPuppyProtocol ? (
+                            <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Running...</>
+                          ) : (
+                            <><Zap className="w-4 h-4 mr-2" />Run Puppy Protocol</>
+                          )}
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Run Puppy Protocol for {animal.name}?</AlertDialogTitle>
+                          <AlertDialogDescription className="space-y-2">
+                            <span className="block">This will create an age-aware preventative care schedule based on {animal.name}'s date of birth ({formatDateOnly(animal.dateOfBirth)}, ~{ageWeeks} weeks old):</span>
+                            <span className="block">
+                              <strong>DHPP Series:</strong> Dose 1 starts today, then every 3 weeks until the 16-week mark.
+                            </span>
+                            <span className="block">
+                              <strong>Other items:</strong> Dewormer, flea/tick, heartworm, bordetella, and rabies are scheduled at their target age or skipped if already past.
+                            </span>
+                            <span className="block text-muted-foreground">Existing records will not be duplicated.</span>
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel data-testid="button-cancel-puppy-protocol">Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            data-testid="button-confirm-puppy-protocol"
+                            onClick={async () => {
+                              setApplyingPuppyProtocol(true);
+                              try {
+                                const res = await apiRequest('POST', `/api/animals/${animalId}/preventative-care/apply-puppy-protocol`);
+                                const response = await res.json();
+                                queryClient.invalidateQueries({ queryKey: [`/api/animals/${animalId}/preventative-care`] });
+                                queryClient.invalidateQueries({ queryKey: ['/api/medical/preventative-care/coming-due'] });
+                                queryClient.invalidateQueries({ queryKey: [`/api/animals/${animalId}`] });
+                                toast({
+                                  title: 'Puppy Protocol Applied',
+                                  description: response.message || `Scheduled ${response.scheduled} tasks, ${response.catchUp} catch-up, ${response.skipped} skipped.`,
+                                });
+                              } catch (err: any) {
+                                toast({
+                                  title: 'Protocol Failed',
+                                  description: err.message || 'Failed to apply puppy protocol',
+                                  variant: 'destructive',
+                                });
+                              } finally {
+                                setApplyingPuppyProtocol(false);
+                              }
+                            }}
+                          >
+                            Run Protocol
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </CardContent>
+                </Card>
+              );
+            })()}
+
             {/* Medical Setup Card - Quick Protocol Application */}
             <Card className="bg-muted/50" data-testid="card-medical-setup">
               <CardHeader className="pb-3">
@@ -1777,7 +1864,6 @@ export default function AnimalMedicalPage() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="adult_dog">Adult Dog Standard (Rabies, DHPP, Heartworm, Flea/Tick, Bordetella)</SelectItem>
-                        <SelectItem value="puppy">Puppy Protocol (Dewormer, DHPP, Flea/Tick, Heartworm)</SelectItem>
                         <SelectItem value="adult_cat">Adult Cat Standard (Rabies, FVRCP, Heartworm, Flea/Tick)</SelectItem>
                         <SelectItem value="kitten">Kitten Protocol (Dewormer, FVRCP, Flea/Tick, Heartworm)</SelectItem>
                         <SelectItem value="intake_dog">Intake Default - Dog (Dewormer, Flea/Tick, HW Test, Microchip)</SelectItem>

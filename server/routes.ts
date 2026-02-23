@@ -31529,6 +31529,48 @@ Email: ${application.applicantEmail || ''}`
   });
 
   /**
+   * POST /api/animals/:animalId/preventative-care/apply-puppy-protocol
+   * Apply age-aware puppy protocol with DHPP series catch-up and 16-week completion rule
+   */
+  app.post('/api/animals/:animalId/preventative-care/apply-puppy-protocol', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { animals } = await import('@shared/schema');
+      const { applyPuppyProtocol } = await import('./services/puppy-protocol');
+      const { animalId } = req.params;
+
+      const [animal] = await db
+        .select({ species: animals.species, name: animals.name, dateOfBirth: animals.dateOfBirth })
+        .from(animals)
+        .where(and(
+          eq(animals.id, animalId),
+          eq(animals.tenantId, req.tenant!.id)
+        ))
+        .limit(1);
+
+      if (!animal) {
+        return res.status(404).json({ error: 'Animal not found' });
+      }
+
+      if (animal.species !== 'Dog') {
+        return res.status(400).json({ error: 'Puppy protocol is only available for dogs' });
+      }
+
+      if (!animal.dateOfBirth) {
+        return res.status(400).json({ error: 'Date of birth is required for puppy protocol. Please set the animal\'s DOB first.' });
+      }
+
+      const result = await applyPuppyProtocol(animalId, req.tenant!.id, req.user!.id, new Date(animal.dateOfBirth));
+
+      res.status(201).json({
+        message: `Puppy Protocol applied for ${animal.name}: ${result.scheduled} scheduled, ${result.catchUp} catch-up, ${result.skipped} skipped.`,
+        ...result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+    /**
    * POST /api/preventative-care/backfill-all
    * Bulk backfill: Scan all active animals and create missing core preventative care records
    * This is the "Generate Missing Tasks" scheduler engine
