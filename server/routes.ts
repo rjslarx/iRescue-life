@@ -38967,7 +38967,7 @@ The user asking is a tenant administrator or staff member.`;
       const { seedMedicalCatalog } = await import('./services/medical-catalog-seeding');
       const result = await seedMedicalCatalog(req.tenant!.id);
       res.status(201).json({
-        message: `Seeded ${result.catalogCreated} catalog items and ${result.orderSetsCreated} order sets.`,
+        message: `Seeded ${result.catalogCreated} new catalog items (${result.catalogSkipped} already existed) and ${result.orderSetsCreated} order sets.`,
         ...result,
       });
     } catch (error) {

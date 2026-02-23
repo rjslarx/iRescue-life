@@ -207,6 +207,12 @@ export async function createTenantWithAdmin(data: SignupData) {
     console.error('Page permissions seeding failed, but signup succeeded:', err);
   });
 
+  // Seed default medical catalog for new tenant (async, non-blocking)
+  const { seedMedicalCatalog } = await import('./medical-catalog-seeding');
+  seedMedicalCatalog(result.tenant.id).catch(err => {
+    console.error('Medical catalog seeding failed, but signup succeeded:', err);
+  });
+
   // Send welcome email immediately on signup (async, non-blocking)
   const { EmailService } = await import('../lib/email-service');
   EmailService.sendSignupWelcomeEmail({
