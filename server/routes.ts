@@ -23762,60 +23762,6 @@ Submitted: ${new Date().toLocaleString()}
           }
           console.log(`[STRIPE-WEBHOOK] Payment classified as: ${paymentTypeLabel}`);
 
-          // Send event ticket purchase notification email
-          if (isPaymentComplete && isEventTicket) {
-            console.log(`[STRIPE-WEBHOOK] EVENT TICKET NOTIFICATION: Starting dispatch for tenant "${tenant.name}" (${tenant.id}), event: ${sessionMetadata.eventName || 'Unknown'}`);
-            try {
-              const { dispatchEventNotification } = await import('./services/notification-dispatcher');
-              const amountDollars = ((session.amount_total || 0) / 100).toFixed(2);
-              const quantity = escapeHtml(sessionMetadata.quantity || '1');
-              const eventName = escapeHtml(sessionMetadata.eventName || 'Unknown Event');
-              const safeCustomerName = escapeHtml(customerName || 'N/A');
-              const safeCustomerEmail = escapeHtml(customerEmail || 'N/A');
-
-              const result = await dispatchEventNotification({
-                tenantId: tenant.id,
-                eventKey: 'event_ticket_purchased',
-                subject: `Event Ticket Purchased: ${eventName}`,
-                htmlBody: `
-                  <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                    <h2 style="color: #333;">Event Ticket Purchase</h2>
-                    <p>A new event ticket purchase has been completed:</p>
-                    <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
-                      <tr style="border-bottom: 1px solid #eee;">
-                        <td style="padding: 8px 0; font-weight: bold; color: #555;">Event</td>
-                        <td style="padding: 8px 0;">${eventName}</td>
-                      </tr>
-                      <tr style="border-bottom: 1px solid #eee;">
-                        <td style="padding: 8px 0; font-weight: bold; color: #555;">Buyer</td>
-                        <td style="padding: 8px 0;">${safeCustomerName}</td>
-                      </tr>
-                      <tr style="border-bottom: 1px solid #eee;">
-                        <td style="padding: 8px 0; font-weight: bold; color: #555;">Email</td>
-                        <td style="padding: 8px 0;">${safeCustomerEmail}</td>
-                      </tr>
-                      <tr style="border-bottom: 1px solid #eee;">
-                        <td style="padding: 8px 0; font-weight: bold; color: #555;">Quantity</td>
-                        <td style="padding: 8px 0;">${quantity} ticket(s)</td>
-                      </tr>
-                      <tr style="border-bottom: 1px solid #eee;">
-                        <td style="padding: 8px 0; font-weight: bold; color: #555;">Amount</td>
-                        <td style="padding: 8px 0; font-size: 18px; font-weight: bold; color: #2563eb;">${amountDollars}</td>
-                      </tr>
-                    </table>
-                    <p style="color: #888; font-size: 12px;">This is an automated notification from your iRescue platform.</p>
-                  </div>
-                `,
-                textBody: `Event Ticket Purchase - Event: ${eventName}, Buyer: ${safeCustomerName}, Email: ${safeCustomerEmail}, Quantity: ${quantity} ticket(s), Amount: ${amountDollars}`,
-              });
-              console.log(`[STRIPE-WEBHOOK] EVENT TICKET NOTIFICATION: Dispatch complete - sent=${result.sent}, recipientCount=${result.recipientCount}, event="${eventName}", tenant="${tenant.name}"`);
-            } catch (notifError) {
-              console.error(`[STRIPE-WEBHOOK] EVENT TICKET NOTIFICATION FAILED for tenant "${tenant.name}" (${tenant.id}):`, notifError);
-            }
-          } else if (isEventTicket && !isPaymentComplete) {
-            console.log(`[STRIPE-WEBHOOK] EVENT TICKET: Skipping notification - payment not complete (status: ${session.payment_status}), tenant "${tenant.name}", event: ${sessionMetadata.eventName || 'Unknown'}`);
-          }
-
           // Create donation record only for actual donations
           if (isPaymentComplete && isDonation) {
             const [donationRecord] = await db.insert(donations).values({

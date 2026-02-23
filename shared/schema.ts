@@ -5582,7 +5582,6 @@ export const NOTIFICATION_EVENT_KEYS = [
   "expense_recorded",
   "volunteer_shift_signup",
   "transport_created",
-  "event_ticket_purchased",
   "contract_signed",
   "animal_transfer_received",
   "animal_transfer_accepted",
@@ -5609,7 +5608,6 @@ export const NOTIFICATION_EVENT_LABELS: Record<NotificationEventKey, { label: st
   volunteer_shift_signup: { label: "New volunteer shift signup", category: "Operations" },
   transport_created: { label: "Transport assignment created", category: "Operations" },
   contract_signed: { label: "Contract/agreement signed", category: "Operations" },
-  event_ticket_purchased: { label: "Event ticket purchased", category: "Financial" },
   animal_transfer_received: { label: "Incoming animal transfer request", category: "Animal Management" },
   animal_transfer_accepted: { label: "Animal transfer accepted", category: "Animal Management" },
 };
