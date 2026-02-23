@@ -31073,12 +31073,13 @@ Email: ${application.applicantEmail || ''}`
    */
   app.post('/api/medical/preventative-care/records', requireTenant, requireAuth, async (req, res, next) => {
     try {
-      const { preventativeCareRecords, preventativeCareTypes, insertPreventativeCareRecordSchema } = await import('@shared/schema');
+      const { preventativeCareRecords, preventativeCareTypes, insertPreventativeCareRecordSchema, animals } = await import('@shared/schema');
 
       const data = insertPreventativeCareRecordSchema.parse(req.body);
 
-      // Get care type info for interval calculation
+      // Get care type info for interval calculation and coverage flags
       let intervalDays: number | null = null;
+      let careTypeInfo: { coversHeartworm: boolean; coversFleaTick: boolean } | null = null;
       if (data.careTypeId) {
         const [careType] = await db
           .select()
@@ -31087,6 +31088,7 @@ Email: ${application.applicantEmail || ''}`
           .limit(1);
         if (careType) {
           intervalDays = careType.defaultIntervalDays;
+          careTypeInfo = { coversHeartworm: careType.coversHeartworm, coversFleaTick: careType.coversFleaTick };
         }
       }
 
@@ -31097,15 +31099,53 @@ Email: ${application.applicantEmail || ''}`
         nextDueDate.setDate(nextDueDate.getDate() + intervalDays);
       }
 
+      const effectiveNextDueDate = data.nextDueDate || nextDueDate;
+
       const [record] = await db
         .insert(preventativeCareRecords)
         .values({
           ...data,
           tenantId: req.tenant!.id,
-          nextDueDate: data.nextDueDate || nextDueDate,
+          nextDueDate: effectiveNextDueDate,
           createdBy: req.user!.id,
         })
         .returning();
+
+      // Update animal's medicalDueDates cache if the care type covers heartworm or flea/tick
+      if (careTypeInfo && effectiveNextDueDate && data.animalId && (careTypeInfo.coversHeartworm || careTypeInfo.coversFleaTick)) {
+        try {
+          const [animal] = await db
+            .select({ medicalDueDates: animals.medicalDueDates })
+            .from(animals)
+            .where(eq(animals.id, data.animalId))
+            .limit(1);
+
+          const currentDueDates = (animal?.medicalDueDates as any) || {};
+          const dueDateStr = effectiveNextDueDate instanceof Date
+            ? effectiveNextDueDate.toISOString()
+            : new Date(effectiveNextDueDate as any).toISOString();
+
+          const updatedDueDates = { ...currentDueDates };
+
+          if (careTypeInfo.coversHeartworm) {
+            if (!updatedDueDates.heartwormDueDate || new Date(dueDateStr) > new Date(updatedDueDates.heartwormDueDate)) {
+              updatedDueDates.heartwormDueDate = dueDateStr;
+            }
+          }
+          if (careTypeInfo.coversFleaTick) {
+            if (!updatedDueDates.fleaTickDueDate || new Date(dueDateStr) > new Date(updatedDueDates.fleaTickDueDate)) {
+              updatedDueDates.fleaTickDueDate = dueDateStr;
+            }
+          }
+
+          await db
+            .update(animals)
+            .set({ medicalDueDates: updatedDueDates })
+            .where(eq(animals.id, data.animalId));
+        } catch (cacheError) {
+          console.error('[PreventativeCare] Failed to update medicalDueDates cache:', cacheError);
+        }
+      }
 
       res.status(201).json({ record });
     } catch (error) {
@@ -31196,6 +31236,35 @@ Email: ${application.applicantEmail || ''}`
         .insert(preventativeCareRecords)
         .values(recordsToInsert)
         .returning();
+
+      // Update animal's medicalDueDates cache based on coverage flags
+      try {
+        const dueDates: Record<string, string> = {};
+        for (let i = 0; i < typesToCreate.length; i++) {
+          const type = typesToCreate[i];
+          const record = createdRecords[i];
+          if (record?.nextDueDate) {
+            const dueStr = new Date(record.nextDueDate).toISOString();
+            if (type.coversHeartworm && (!dueDates.heartwormDueDate || new Date(dueStr) > new Date(dueDates.heartwormDueDate))) {
+              dueDates.heartwormDueDate = dueStr;
+            }
+            if (type.coversFleaTick && (!dueDates.fleaTickDueDate || new Date(dueStr) > new Date(dueDates.fleaTickDueDate))) {
+              dueDates.fleaTickDueDate = dueStr;
+            }
+          }
+        }
+        if (Object.keys(dueDates).length > 0) {
+          const [existingAnimal] = await db
+            .select({ medicalDueDates: animals.medicalDueDates })
+            .from(animals)
+            .where(eq(animals.id, animalId))
+            .limit(1);
+          const merged = { ...((existingAnimal?.medicalDueDates as any) || {}), ...dueDates };
+          await db.update(animals).set({ medicalDueDates: merged }).where(eq(animals.id, animalId));
+        }
+      } catch (cacheError) {
+        console.error('[PreventativeCare] Failed to update medicalDueDates cache (batch):', cacheError);
+      }
 
       res.status(201).json({
         message: `Created ${createdRecords.length} core preventative care records`,
@@ -31314,6 +31383,8 @@ Email: ${application.applicantEmail || ''}`
           category: preventativeCareTypes.category,
           targetSpecies: preventativeCareTypes.targetSpecies,
           defaultIntervalDays: preventativeCareTypes.defaultIntervalDays,
+          coversHeartworm: preventativeCareTypes.coversHeartworm,
+          coversFleaTick: preventativeCareTypes.coversFleaTick,
         })
         .from(preventativeCareTypes)
         .where(and(
@@ -31406,6 +31477,35 @@ Email: ${application.applicantEmail || ''}`
         .insert(preventativeCareRecords)
         .values(recordsToInsert)
         .returning();
+
+      // Update animal's medicalDueDates cache based on coverage flags
+      try {
+        const protocolDueDates: Record<string, string> = {};
+        for (let i = 0; i < typesToCreate.length; i++) {
+          const type = typesToCreate[i];
+          const record = createdRecords[i];
+          if (record?.nextDueDate) {
+            const dueStr = new Date(record.nextDueDate).toISOString();
+            if (type.coversHeartworm && (!protocolDueDates.heartwormDueDate || new Date(dueStr) > new Date(protocolDueDates.heartwormDueDate))) {
+              protocolDueDates.heartwormDueDate = dueStr;
+            }
+            if (type.coversFleaTick && (!protocolDueDates.fleaTickDueDate || new Date(dueStr) > new Date(protocolDueDates.fleaTickDueDate))) {
+              protocolDueDates.fleaTickDueDate = dueStr;
+            }
+          }
+        }
+        if (Object.keys(protocolDueDates).length > 0) {
+          const [existingAnimal] = await db
+            .select({ medicalDueDates: animals.medicalDueDates })
+            .from(animals)
+            .where(eq(animals.id, animalId))
+            .limit(1);
+          const merged = { ...((existingAnimal?.medicalDueDates as any) || {}), ...protocolDueDates };
+          await db.update(animals).set({ medicalDueDates: merged }).where(eq(animals.id, animalId));
+        }
+      } catch (cacheError) {
+        console.error('[PreventativeCare] Failed to update medicalDueDates cache (protocol):', cacheError);
+      }
 
       const givenCount = recordsToInsert.filter(r => r.status === 'given').length;
       const scheduledCount = recordsToInsert.filter(r => r.status === 'pending').length;

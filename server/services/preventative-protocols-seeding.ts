@@ -120,6 +120,24 @@ export async function seedPlatformPreventativeProtocols() {
     if (inserted > 0) {
       console.log(`[PreventativeProtocols] Seeded ${inserted} platform default protocol(s)`);
     }
+
+    // Backfill coverage flags on pre-existing generic types
+    const COVERAGE_BACKFILL = [
+      { name: 'Heartworm Prevention', coversHeartworm: true, coversFleaTick: false },
+      { name: 'Flea & Tick Prevention', coversHeartworm: false, coversFleaTick: true },
+    ];
+
+    for (const entry of COVERAGE_BACKFILL) {
+      await db
+        .update(preventativeCareTypes)
+        .set({ coversHeartworm: entry.coversHeartworm, coversFleaTick: entry.coversFleaTick })
+        .where(and(
+          isNull(preventativeCareTypes.tenantId),
+          eq(preventativeCareTypes.name, entry.name),
+          eq(preventativeCareTypes.coversHeartworm, false),
+          eq(preventativeCareTypes.coversFleaTick, false),
+        ));
+    }
   } catch (error) {
     console.error('[PreventativeProtocols] Seeding failed:', error);
   }
