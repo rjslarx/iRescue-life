@@ -38191,6 +38191,97 @@ The user asking is a tenant administrator or staff member.`;
   });
 
   /**
+   * GET /api/animals/:animalId/medical/active-orders
+   * Fetch active/pending medical orders for context display in the Add Medical Order modal
+   */
+  app.get('/api/animals/:animalId/medical/active-orders', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { medicalPrescriptions, preventativeCareRecords, vaccineRecords } = await import('@shared/schema');
+      const { animalId } = req.params;
+      const tenantId = req.tenant!.id;
+      const now = new Date();
+
+      const activeOrders: { id: string; name: string; category: string; status: string; dueDate: string | null; source: string }[] = [];
+
+      // Active prescriptions (no endDate or endDate in the future)
+      const prescriptions = await db
+        .select()
+        .from(medicalPrescriptions)
+        .where(and(
+          eq(medicalPrescriptions.animalId, animalId),
+          eq(medicalPrescriptions.tenantId, tenantId)
+        ));
+
+      for (const rx of prescriptions) {
+        const isActive = !rx.endDate || new Date(rx.endDate) >= now;
+        if (isActive) {
+          activeOrders.push({
+            id: rx.id,
+            name: rx.medicationName,
+            category: 'Medication',
+            status: 'active',
+            dueDate: rx.nextScheduledDose ? new Date(rx.nextScheduledDose).toISOString() : null,
+            source: 'prescription',
+          });
+        }
+      }
+
+      // Pending preventative care records
+      const prevCare = await db
+        .select()
+        .from(preventativeCareRecords)
+        .where(and(
+          eq(preventativeCareRecords.animalId, animalId),
+          eq(preventativeCareRecords.tenantId, tenantId)
+        ));
+
+      for (const pc of prevCare) {
+        const isPending = pc.status === 'pending';
+        const hasFutureDue = pc.nextDueDate && new Date(pc.nextDueDate) >= now;
+        if (isPending || hasFutureDue) {
+          activeOrders.push({
+            id: pc.id,
+            name: pc.careName,
+            category: 'Preventative',
+            status: pc.status === 'pending' ? 'pending' : 'scheduled',
+            dueDate: pc.nextDueDate ? new Date(pc.nextDueDate).toISOString() : (pc.dateAdministered ? new Date(pc.dateAdministered).toISOString() : null),
+            source: 'preventative_care',
+          });
+        }
+      }
+
+      // Recent or upcoming vaccines
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      const vaccines = await db
+        .select()
+        .from(vaccineRecords)
+        .where(and(
+          eq(vaccineRecords.animalId, animalId),
+          eq(vaccineRecords.tenantId, tenantId)
+        ));
+
+      for (const vax of vaccines) {
+        const isRecent = new Date(vax.dateGiven) >= thirtyDaysAgo;
+        const hasFutureDue = vax.nextDueDate && new Date(vax.nextDueDate) >= now;
+        if (isRecent || hasFutureDue) {
+          activeOrders.push({
+            id: vax.id,
+            name: vax.vaccineName,
+            category: 'Vaccine',
+            status: hasFutureDue ? 'scheduled' : 'recent',
+            dueDate: vax.nextDueDate ? new Date(vax.nextDueDate).toISOString() : null,
+            source: 'vaccine',
+          });
+        }
+      }
+
+      res.json({ activeOrders });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+    /**
    * GET /api/medical-catalog
    * List catalog items for current tenant, with optional category filter
    */

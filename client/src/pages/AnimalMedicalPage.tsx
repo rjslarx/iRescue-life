@@ -61,6 +61,7 @@ import { AddDiagnosticDialog } from "@/components/AddDiagnosticDialog";
 import { AddProcedureDialog } from "@/components/AddProcedureDialog";
 import { AddPrescriptionDialog } from "@/components/AddPrescriptionDialog";
 import { AddMedicalBillDialog } from "@/components/AddMedicalBillDialog";
+import { AddMedicalOrderDialog } from "@/components/AddMedicalOrderDialog";
 import { AddExamDialog } from "@/components/AddExamDialog";
 import { MedicalFileUploadDialog } from "@/components/MedicalFileUploadDialog";
 import { AddMicrochipDialog } from "@/components/AddMicrochipDialog";
@@ -153,6 +154,7 @@ export default function AnimalMedicalPage() {
   const [applyingProtocol, setApplyingProtocol] = useState(false);
   const [markInitialAsGiven, setMarkInitialAsGiven] = useState(true);
   const [applyingPuppyProtocol, setApplyingPuppyProtocol] = useState(false);
+  const [addMedicalOrderOpen, setAddMedicalOrderOpen] = useState(false);
   const [doseChartDialogOpen, setDoseChartDialogOpen] = useState(false);
   const [chartingPrescription, setChartingPrescription] = useState<any>(null);
   const [doseAdministeredAt, setDoseAdministeredAt] = useState('');
@@ -652,6 +654,14 @@ export default function AnimalMedicalPage() {
               </div>
             </div>
             <div className="flex flex-col md:flex-row gap-2">
+              <Button
+                onClick={() => setAddMedicalOrderOpen(true)}
+                data-testid="button-add-medical-order"
+                className="w-full md:w-auto"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Add Medical Order
+              </Button>
               <MedicalTransferPacket 
                 animalId={animalId} 
                 animalName={animal?.name || 'Animal'}
@@ -2397,6 +2407,11 @@ export default function AnimalMedicalPage() {
             }}
             prescription={editingPrescription}
             initialValues={reorderInitialValues}
+          />
+          <AddMedicalOrderDialog
+            animalId={animalId}
+            open={addMedicalOrderOpen}
+            onOpenChange={setAddMedicalOrderOpen}
           />
           <AddMedicalBillDialog
             animalId={animalId}
