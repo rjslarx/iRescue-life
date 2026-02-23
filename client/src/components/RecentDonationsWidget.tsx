@@ -63,10 +63,16 @@ export function RecentDonationsWidget({ tenantSubdomain, className }: RecentDona
   };
 
   const handleDonateClick = () => {
-    const donationSection = document.getElementById('donation-section');
-    if (donationSection) {
-      donationSection.scrollIntoView({ behavior: 'smooth' });
-    }
+    setIsVisible(false);
+    setTimeout(() => {
+      setIsDismissed(true);
+      const donationSection = document.getElementById('donation-section');
+      if (donationSection) {
+        donationSection.scrollIntoView({ behavior: 'smooth' });
+      } else {
+        window.location.href = '/donate';
+      }
+    }, 300);
   };
 
   if (isDismissed || isLoading || donations.length === 0) {
