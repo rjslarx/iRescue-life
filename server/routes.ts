@@ -38191,6 +38191,175 @@ The user asking is a tenant administrator or staff member.`;
   });
 
   /**
+   * POST /api/medical-orders/dispatch
+   * Unified CPOE dispatch endpoint - routes catalog items to correct tables in a transaction
+   */
+  app.post('/api/medical-orders/dispatch', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const {
+        animals, medicalCatalog, orderSets, orderSetItems,
+        vaccineRecords, preventativeCareRecords, medicalPrescriptions,
+        diagnosticTests, procedureLogs
+      } = await import('@shared/schema');
+
+      const tenantId = req.tenant!.id;
+      const userId = req.user!.id;
+      const { animalId, catalogItemId, orderSetId, formData = {} } = req.body;
+
+      if (!animalId) {
+        return res.status(400).json({ error: 'animalId is required' });
+      }
+      if (!catalogItemId && !orderSetId) {
+        return res.status(400).json({ error: 'Either catalogItemId or orderSetId is required' });
+      }
+
+      const [animal] = await db
+        .select({ id: animals.id })
+        .from(animals)
+        .where(and(eq(animals.id, animalId), eq(animals.tenantId, tenantId)))
+        .limit(1);
+
+      if (!animal) {
+        return res.status(404).json({ error: 'Animal not found' });
+      }
+
+      const today = new Date();
+      const todayStr = today.toISOString().split('T')[0];
+
+      async function dispatchItem(
+        tx: any,
+        item: { name: string; category: string; defaultDose: string | null; defaultFrequency: string | null },
+        fd: any
+      ): Promise<{ name: string; category: string; table: string }> {
+        const dose = fd.dose || item.defaultDose || 'See notes';
+        const frequency = fd.frequency || item.defaultFrequency || 'Once';
+        const route = fd.route || 'PO';
+
+        switch (item.category) {
+          case 'Vaccine': {
+            await tx.insert(vaccineRecords).values({
+              animalId,
+              tenantId,
+              itemName: item.name,
+              dateGiven: new Date(fd.dueDate || todayStr),
+              clinicName: fd.clinicLocation || 'In-House',
+              createdBy: userId,
+            });
+            return { name: item.name, category: item.category, table: 'vaccine_records' };
+          }
+          case 'Preventative': {
+            await tx.insert(preventativeCareRecords).values({
+              animalId,
+              tenantId,
+              careName: item.name,
+              careCategory: 'parasite_prevention',
+              dateAdministered: new Date(fd.dueDate || todayStr),
+              status: 'pending',
+              createdBy: userId,
+            });
+            return { name: item.name, category: item.category, table: 'preventative_care_records' };
+          }
+          case 'Medication': {
+            await tx.insert(medicalPrescriptions).values({
+              animalId,
+              tenantId,
+              medicationName: item.name,
+              dosage: dose,
+              route: route as any,
+              frequency,
+              startDate: new Date(fd.startDate || todayStr),
+              endDate: fd.endDate ? new Date(fd.endDate) : null,
+              createdBy: userId,
+            });
+            return { name: item.name, category: item.category, table: 'medical_prescriptions' };
+          }
+          case 'Lab': {
+            await tx.insert(diagnosticTests).values({
+              animalId,
+              tenantId,
+              testName: item.name,
+              testDate: new Date(fd.scheduledDate || todayStr),
+              result: 'Pending',
+              createdBy: userId,
+            });
+            return { name: item.name, category: item.category, table: 'diagnostic_tests' };
+          }
+          case 'Procedure': {
+            await tx.insert(procedureLogs).values({
+              animalId,
+              tenantId,
+              procedureName: item.name,
+              procedureDate: new Date(fd.scheduledDate || todayStr),
+              createdBy: userId,
+            });
+            return { name: item.name, category: item.category, table: 'procedure_logs' };
+          }
+          default:
+            throw new Error('Unknown catalog category: ' + item.category);
+        }
+      }
+
+      const result = await db.transaction(async (tx) => {
+        const dispatched: { name: string; category: string; table: string }[] = [];
+
+        if (catalogItemId) {
+          const [catalogItem] = await tx
+            .select()
+            .from(medicalCatalog)
+            .where(and(eq(medicalCatalog.id, catalogItemId), eq(medicalCatalog.tenantId, tenantId)))
+            .limit(1);
+
+          if (!catalogItem) {
+            throw new Error('Catalog item not found');
+          }
+
+          const entry = await dispatchItem(tx, catalogItem, formData);
+          dispatched.push(entry);
+        } else if (orderSetId) {
+          const [os] = await tx
+            .select()
+            .from(orderSets)
+            .where(and(eq(orderSets.id, orderSetId), eq(orderSets.tenantId, tenantId)))
+            .limit(1);
+
+          if (!os) {
+            throw new Error('Order set not found');
+          }
+
+          const items = await tx
+            .select({
+              catalogItem: {
+                name: medicalCatalog.name,
+                category: medicalCatalog.category,
+                defaultDose: medicalCatalog.defaultDose,
+                defaultFrequency: medicalCatalog.defaultFrequency,
+              },
+            })
+            .from(orderSetItems)
+            .innerJoin(medicalCatalog, eq(orderSetItems.catalogItemId, medicalCatalog.id))
+            .where(eq(orderSetItems.orderSetId, orderSetId))
+            .orderBy(orderSetItems.sortOrder);
+
+          for (const row of items) {
+            const entry = await dispatchItem(tx, row.catalogItem, {});
+            dispatched.push(entry);
+          }
+        }
+
+        return dispatched;
+      });
+
+      res.status(201).json({
+        success: true,
+        dispatched: result.length,
+        items: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+    /**
    * GET /api/animals/:animalId/medical/active-orders
    * Fetch active/pending medical orders for context display in the Add Medical Order modal
    */

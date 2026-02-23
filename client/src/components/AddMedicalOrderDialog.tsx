@@ -168,129 +168,36 @@ export function AddMedicalOrderDialog({ animalId, open, onOpenChange }: AddMedic
     setSubmitting(true);
 
     try {
+      const payload: Record<string, any> = { animalId };
+
       if (selected.type === 'catalog') {
-        const { item } = selected;
-        switch (item.category) {
-          case 'Medication': {
-            await apiRequest('POST', `/api/animals/${animalId}/medical/prescriptions`, {
-              medicationName: item.name,
-              dosage: formData.dose || "See notes",
-              route: formData.route,
-              frequency: formData.frequency || "Once",
-              startDate: formData.startDate,
-              endDate: formData.endDate || undefined,
-            });
-            queryClient.invalidateQueries({ queryKey: [`/api/animals/${animalId}/medical/prescriptions`] });
-            break;
-          }
-          case 'Vaccine': {
-            await apiRequest('POST', `/api/animals/${animalId}/medical/vaccines`, {
-              vaccineName: item.name,
-              dateGiven: formData.dueDate,
-              manufacturer: "",
-              lotNumber: "",
-            });
-            queryClient.invalidateQueries({ queryKey: [`/api/animals/${animalId}/medical/vaccines`] });
-            break;
-          }
-          case 'Preventative': {
-            await apiRequest('POST', `/api/medical/preventative-care/records`, {
-              animalId,
-              careName: item.name,
-              careCategory: "parasite_prevention",
-              dateAdministered: formData.dueDate,
-              status: "given",
-            });
-            queryClient.invalidateQueries({ queryKey: [`/api/animals/${animalId}/preventative-care`] });
-            break;
-          }
-          case 'Lab': {
-            await apiRequest('POST', `/api/animals/${animalId}/medical/diagnostics`, {
-              testName: item.name,
-              testDate: formData.scheduledDate,
-              clinicName: formData.clinicLocation,
-              status: "pending",
-            });
-            queryClient.invalidateQueries({ queryKey: [`/api/animals/${animalId}/medical/diagnostics`] });
-            break;
-          }
-          case 'Procedure': {
-            await apiRequest('POST', `/api/animals/${animalId}/medical/procedures`, {
-              procedureName: item.name,
-              procedureDate: formData.scheduledDate,
-              clinicName: formData.clinicLocation,
-              status: "scheduled",
-            });
-            queryClient.invalidateQueries({ queryKey: [`/api/animals/${animalId}/medical/procedures`] });
-            break;
-          }
-        }
-        toast({ title: "Order Created", description: `${item.name} has been added.` });
+        payload.catalogItemId = selected.item.id;
+        payload.formData = { ...formData };
       } else {
-        const { orderSet } = selected;
-        let created = 0;
-        for (const osi of orderSet.items) {
-          const ci = osi.catalogItem;
-          try {
-            switch (ci.category) {
-              case 'Medication':
-                await apiRequest('POST', `/api/animals/${animalId}/medical/prescriptions`, {
-                  medicationName: ci.name,
-                  dosage: ci.defaultDose || "See notes",
-                  route: "PO",
-                  frequency: ci.defaultFrequency || "Once",
-                  startDate: new Date().toISOString().split('T')[0],
-                });
-                break;
-              case 'Vaccine':
-                await apiRequest('POST', `/api/animals/${animalId}/medical/vaccines`, {
-                  vaccineName: ci.name,
-                  dateGiven: new Date().toISOString().split('T')[0],
-                  manufacturer: "",
-                  lotNumber: "",
-                });
-                break;
-              case 'Lab':
-                await apiRequest('POST', `/api/animals/${animalId}/medical/diagnostics`, {
-                  testName: ci.name,
-                  testDate: new Date().toISOString().split('T')[0],
-                  clinicName: "In-House",
-                  status: "pending",
-                });
-                break;
-              case 'Procedure':
-                await apiRequest('POST', `/api/animals/${animalId}/medical/procedures`, {
-                  procedureName: ci.name,
-                  procedureDate: new Date().toISOString().split('T')[0],
-                  clinicName: "In-House",
-                  status: "scheduled",
-                });
-                break;
-              case 'Preventative':
-                await apiRequest('POST', `/api/medical/preventative-care/records`, {
-                  animalId,
-                  careName: ci.name,
-                  careCategory: "parasite_prevention",
-                  dateAdministered: new Date().toISOString().split('T')[0],
-                  status: "given",
-                });
-                break;
-            }
-            created++;
-          } catch {
-            // continue with remaining items
-          }
-        }
-        queryClient.invalidateQueries({ queryKey: [`/api/animals/${animalId}/medical/prescriptions`] });
-        queryClient.invalidateQueries({ queryKey: [`/api/animals/${animalId}/medical/vaccines`] });
-        queryClient.invalidateQueries({ queryKey: [`/api/animals/${animalId}/medical/diagnostics`] });
-        queryClient.invalidateQueries({ queryKey: [`/api/animals/${animalId}/medical/procedures`] });
-        queryClient.invalidateQueries({ queryKey: [`/api/animals/${animalId}/preventative-care`] });
-        toast({ title: "Order Set Applied", description: `${created} of ${orderSet.items.length} items from "${orderSet.setName}" created.` });
+        payload.orderSetId = selected.orderSet.id;
+        payload.formData = {};
       }
 
+      const res = await apiRequest('POST', '/api/medical-orders/dispatch', payload);
+      const result = await res.json();
+
+      queryClient.invalidateQueries({ queryKey: [`/api/animals/${animalId}/medical/prescriptions`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/animals/${animalId}/medical/vaccines`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/animals/${animalId}/medical/diagnostics`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/animals/${animalId}/medical/procedures`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/animals/${animalId}/preventative-care`] });
       queryClient.invalidateQueries({ queryKey: [`/api/animals/${animalId}/medical/active-orders`] });
       queryClient.invalidateQueries({ queryKey: [`/api/animals/${animalId}/medical/history`] });
+
+      if (selected.type === 'catalog') {
+        toast({ title: "Order Created", description: `${selected.item.name} has been added.` });
+      } else {
+        toast({
+          title: "Order Set Applied",
+          description: `${result.dispatched} items from "${selected.orderSet.setName}" created.`,
+        });
+      }
+
       onOpenChange(false);
     } catch (err: any) {
       toast({ title: "Failed to create order", description: err.message || "An error occurred", variant: "destructive" });
