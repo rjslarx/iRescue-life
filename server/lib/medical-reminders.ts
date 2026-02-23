@@ -575,9 +575,17 @@ export async function sendMedicalReminders(tenantId: string): Promise<{
       }
     }
     
-    // Send digest emails to staff/admins
-    if (settings.sendDailyDigest && recipients.length > 0) {
-      for (const recipient of recipients) {
+    // Send digest emails to staff/admins (deduplicate recipients by email)
+    const seenEmails = new Set<string>();
+    const uniqueRecipients = recipients.filter(r => {
+      const key = r.email.toLowerCase();
+      if (seenEmails.has(key)) return false;
+      seenEmails.add(key);
+      return true;
+    });
+
+    if (settings.sendDailyDigest && uniqueRecipients.length > 0) {
+      for (const recipient of uniqueRecipients) {
         if (alreadySentEmails.has(recipient.email.toLowerCase())) {
           console.log(`[MedicalReminders] Skipping duplicate digest for ${recipient.email} (already sent today)`);
           continue;
@@ -597,8 +605,8 @@ export async function sendMedicalReminders(tenantId: string): Promise<{
           
           if (result.success) {
             emailsSent++;
+            alreadySentEmails.add(recipient.email.toLowerCase());
             
-            // Log the email
             await db.insert(medicalReminderLogs).values({
               tenantId,
               recipientEmail: recipient.email,
@@ -669,6 +677,7 @@ export async function sendMedicalReminders(tenantId: string): Promise<{
           
           if (result.success) {
             emailsSent++;
+            fosterAlreadySent.add(fosterData.email.toLowerCase());
             
             await db.insert(medicalReminderLogs).values({
               tenantId,
