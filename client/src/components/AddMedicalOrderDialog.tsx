@@ -807,11 +807,7 @@ export function AddMedicalOrderDialog({ animalId, animalSpecies = 'Dog', open, o
           animalId={animalId}
           open={true}
           onOpenChange={handleCategoryDialogClose}
-          initialValues={{
-            medicationName: pendingOrder.name,
-            dosage: pendingOrder.defaultDose || "",
-            frequency: pendingOrder.defaultFrequency || "",
-          }}
+          defaultMedicationName={pendingOrder.name}
         />
       )}
 

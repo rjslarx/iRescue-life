@@ -64,9 +64,10 @@ interface AddPrescriptionDialogProps {
   onOpenChange: (open: boolean) => void;
   prescription?: Prescription | null;
   initialValues?: Partial<PrescriptionFormData> | null;
+  defaultMedicationName?: string;
 }
 
-export function AddPrescriptionDialog({ animalId, open, onOpenChange, prescription, initialValues }: AddPrescriptionDialogProps) {
+export function AddPrescriptionDialog({ animalId, open, onOpenChange, prescription, initialValues, defaultMedicationName }: AddPrescriptionDialogProps) {
   const { toast } = useToast();
   const isEditing = !!prescription;
   const isReorder = !isEditing && !!initialValues;
@@ -162,7 +163,7 @@ export function AddPrescriptionDialog({ animalId, open, onOpenChange, prescripti
       });
     } else if (!prescription && open) {
       reset({
-        medicationName: initialValues?.medicationName || "",
+        medicationName: initialValues?.medicationName || defaultMedicationName || "",
         dosage: initialValues?.dosage || "",
         frequency: initialValues?.frequency || "",
         route: initialValues?.route || "",
@@ -181,7 +182,7 @@ export function AddPrescriptionDialog({ animalId, open, onOpenChange, prescripti
         grantId: "",
       });
     }
-  }, [prescription, initialValues, open, reset]);
+  }, [prescription, initialValues, defaultMedicationName, open, reset]);
   
   // When frequency is "ONCE": auto-set endDate = startDate
   useEffect(() => {
