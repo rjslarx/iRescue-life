@@ -38190,5 +38190,141 @@ The user asking is a tenant administrator or staff member.`;
     }
   });
 
-  return httpServer;
+  /**
+   * GET /api/medical-catalog
+   * List catalog items for current tenant, with optional category filter
+   */
+  app.get('/api/medical-catalog', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { medicalCatalog } = await import('@shared/schema');
+      const tenantId = req.tenant!.id;
+      const category = req.query.category as string | undefined;
+
+      let conditions = [eq(medicalCatalog.tenantId, tenantId), eq(medicalCatalog.isActive, true)];
+      if (category) {
+        conditions.push(eq(medicalCatalog.category, category as any));
+      }
+
+      const items = await db
+        .select()
+        .from(medicalCatalog)
+        .where(and(...conditions))
+        .orderBy(medicalCatalog.category, medicalCatalog.name);
+
+      res.json(items);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/medical-catalog
+   * Create a new catalog item
+   */
+  app.post('/api/medical-catalog', requireTenant, requireAuth, requireRole('admin', 'owner', 'staff'), async (req, res, next) => {
+    try {
+      const { medicalCatalog, insertMedicalCatalogSchema } = await import('@shared/schema');
+      const tenantId = req.tenant!.id;
+
+      const parsed = insertMedicalCatalogSchema.parse({ ...req.body, tenantId });
+      const [created] = await db.insert(medicalCatalog).values(parsed).returning();
+      res.status(201).json(created);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/medical-catalog/seed
+   * Seed the catalog with default items for the current tenant
+   */
+  app.post('/api/medical-catalog/seed', requireTenant, requireAuth, requireRole('admin', 'owner'), async (req, res, next) => {
+    try {
+      const { seedMedicalCatalog } = await import('./services/medical-catalog-seeding');
+      const result = await seedMedicalCatalog(req.tenant!.id);
+      res.status(201).json({
+        message: `Seeded ${result.catalogCreated} catalog items and ${result.orderSetsCreated} order sets.`,
+        ...result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/order-sets
+   * List order sets for current tenant with their items populated
+   */
+  app.get('/api/order-sets', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { orderSets, orderSetItems, medicalCatalog } = await import('@shared/schema');
+      const tenantId = req.tenant!.id;
+
+      const sets = await db
+        .select()
+        .from(orderSets)
+        .where(and(eq(orderSets.tenantId, tenantId), eq(orderSets.isActive, true)))
+        .orderBy(orderSets.setName);
+
+      const result = await Promise.all(sets.map(async (set) => {
+        const items = await db
+          .select({
+            id: orderSetItems.id,
+            sortOrder: orderSetItems.sortOrder,
+            catalogItem: {
+              id: medicalCatalog.id,
+              name: medicalCatalog.name,
+              category: medicalCatalog.category,
+              defaultDose: medicalCatalog.defaultDose,
+              defaultFrequency: medicalCatalog.defaultFrequency,
+            },
+          })
+          .from(orderSetItems)
+          .innerJoin(medicalCatalog, eq(orderSetItems.catalogItemId, medicalCatalog.id))
+          .where(eq(orderSetItems.orderSetId, set.id))
+          .orderBy(orderSetItems.sortOrder);
+
+        return { ...set, items };
+      }));
+
+      res.json(result);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/order-sets
+   * Create an order set with items
+   */
+  app.post('/api/order-sets', requireTenant, requireAuth, requireRole('admin', 'owner', 'staff'), async (req, res, next) => {
+    try {
+      const { orderSets, orderSetItems } = await import('@shared/schema');
+      const tenantId = req.tenant!.id;
+      const { setName, description, catalogItemIds } = req.body;
+
+      if (!setName || !Array.isArray(catalogItemIds) || catalogItemIds.length === 0) {
+        return res.status(400).json({ error: 'setName and catalogItemIds (non-empty array) are required' });
+      }
+
+      const [createdSet] = await db
+        .insert(orderSets)
+        .values({ tenantId, setName, description: description || null })
+        .returning();
+
+      const itemRows = catalogItemIds.map((catId: string, idx: number) => ({
+        orderSetId: createdSet.id,
+        catalogItemId: catId,
+        sortOrder: idx,
+      }));
+
+      await db.insert(orderSetItems).values(itemRows);
+
+      res.status(201).json(createdSet);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+    return httpServer;
 }

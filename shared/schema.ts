@@ -5750,3 +5750,50 @@ export const insertComplianceObligationSchema = createInsertSchema(complianceObl
 });
 export type InsertComplianceObligation = z.infer<typeof insertComplianceObligationSchema>;
 export type ComplianceObligation = typeof complianceObligations.$inferSelect;
+
+export const medicalCatalog = pgTable("medical_catalog", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  name: text("name").notNull(),
+  category: text("category").notNull().$type<'Medication' | 'Vaccine' | 'Lab' | 'Procedure' | 'Preventative'>(),
+  defaultDose: text("default_dose"),
+  defaultFrequency: text("default_frequency"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertMedicalCatalogSchema = createInsertSchema(medicalCatalog).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertMedicalCatalog = z.infer<typeof insertMedicalCatalogSchema>;
+export type MedicalCatalog = typeof medicalCatalog.$inferSelect;
+
+export const orderSets = pgTable("order_sets", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  setName: text("set_name").notNull(),
+  description: text("description"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertOrderSetSchema = createInsertSchema(orderSets).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertOrderSet = z.infer<typeof insertOrderSetSchema>;
+export type OrderSet = typeof orderSets.$inferSelect;
+
+export const orderSetItems = pgTable("order_set_items", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  orderSetId: uuid("order_set_id").notNull().references(() => orderSets.id, { onDelete: 'cascade' }),
+  catalogItemId: uuid("catalog_item_id").notNull().references(() => medicalCatalog.id, { onDelete: 'cascade' }),
+  sortOrder: integer("sort_order").notNull().default(0),
+});
+
+export const insertOrderSetItemSchema = createInsertSchema(orderSetItems).omit({
+  id: true,
+});
+export type InsertOrderSetItem = z.infer<typeof insertOrderSetItemSchema>;
+export type OrderSetItem = typeof orderSetItems.$inferSelect;
