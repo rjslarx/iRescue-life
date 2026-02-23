@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { AlertTriangle, Pill, Syringe, FlaskConical, Stethoscope, ShieldCheck, ClipboardCheck, Package, Loader2, Clock, CheckCircle2, AlertCircle, ArrowLeft, Search, Zap } from "lucide-react";
+import { AlertTriangle, Pill, Syringe, FlaskConical, Stethoscope, ShieldCheck, ClipboardCheck, Package, Loader2, Clock, CheckCircle2, AlertCircle, ArrowLeft, Search, Zap, Plus } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 
 interface ActiveOrder {
@@ -85,6 +85,8 @@ export function AddMedicalOrderDialog({ animalId, open, onOpenChange }: AddMedic
   const [searchValue, setSearchValue] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [duplicateConfirm, setDuplicateConfirm] = useState<{ item: CatalogItem; existingName: string } | null>(null);
+  const [creatingNew, setCreatingNew] = useState<{ name: string; category: string; defaultDose: string; defaultFrequency: string } | null>(null);
+  const [creatingNewLoading, setCreatingNewLoading] = useState(false);
 
   const [formData, setFormData] = useState({
     dose: "",
@@ -129,6 +131,8 @@ export function AddMedicalOrderDialog({ animalId, open, onOpenChange }: AddMedic
       setSelected(null);
       setSearchValue("");
       setDuplicateConfirm(null);
+      setCreatingNew(null);
+      setCreatingNewLoading(false);
       setFormData({
         dose: "",
         frequency: "",
@@ -167,6 +171,33 @@ export function AddMedicalOrderDialog({ animalId, open, onOpenChange }: AddMedic
   function handleSelectOrderSet(os: OrderSetWithItems) {
     setSelected({ type: 'orderSet', orderSet: os });
     setSearchValue("");
+  }
+
+  function startCreateNew(name: string) {
+    setCreatingNew({ name, category: "", defaultDose: "", defaultFrequency: "" });
+    setSearchValue("");
+  }
+
+  async function handleCreateAndContinue() {
+    if (!creatingNew || !creatingNew.category) return;
+    setCreatingNewLoading(true);
+    try {
+      const res = await apiRequest('POST', '/api/medical-catalog', {
+        name: creatingNew.name,
+        category: creatingNew.category,
+        defaultDose: creatingNew.defaultDose || null,
+        defaultFrequency: creatingNew.defaultFrequency || null,
+      });
+      const newItem: CatalogItem = await res.json();
+      queryClient.invalidateQueries({ queryKey: ['/api/medical-catalog'] });
+      confirmSelectItem(newItem);
+      setCreatingNew(null);
+      toast({ title: "Catalog Item Created", description: `"${newItem.name}" added to your catalog.` });
+    } catch (err: any) {
+      toast({ title: "Failed to create item", description: err.message || "An error occurred", variant: "destructive" });
+    } finally {
+      setCreatingNewLoading(false);
+    }
   }
 
   async function handleSubmit() {
@@ -439,140 +470,238 @@ export function AddMedicalOrderDialog({ animalId, open, onOpenChange }: AddMedic
               )}
             </div>
 
-            {/* Step 1: Search & Quick Picks */}
+            {/* Step 1: Search & Quick Picks (or Create New Item form) */}
             {!selected ? (
-              <div className="space-y-3">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-                  <Input
-                    placeholder="Search medications, vaccines, labs..."
-                    value={searchValue}
-                    onChange={e => setSearchValue(e.target.value)}
-                    className="pl-9"
-                    data-testid="input-search-catalog"
-                    autoFocus
-                  />
-                </div>
+              creatingNew ? (
+                <div className="space-y-4" data-testid="container-create-new-item">
+                  <div className="flex items-center gap-3">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setCreatingNew(null)}
+                      data-testid="button-back-from-create"
+                    >
+                      <ArrowLeft className="w-4 h-4" />
+                    </Button>
+                    <span className="font-medium">Create New Catalog Item</span>
+                  </div>
 
-                {!searchValue ? (
-                  <div className="space-y-4" data-testid="container-quick-picks">
-                    <div>
-                      <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
-                        <Zap className="w-3.5 h-3.5" />
-                        Quick Picks
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {catalogItems.slice(0, 5).map(ci => {
-                          const Icon = categoryIcons[ci.category] || Pill;
-                          const isDuplicate = activeNameSet.has(ci.name.toLowerCase());
-                          return (
-                            <button
-                              key={ci.id}
-                              onClick={() => handleSelectCatalogItem(ci)}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border rounded-md hover-elevate active-elevate-2 transition-colors"
-                              data-testid={`quick-pick-${ci.id}`}
-                            >
-                              <Icon className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                              <span className={isDuplicate ? "text-amber-600 dark:text-amber-400" : ""}>{ci.name}</span>
-                              {isDuplicate && <AlertTriangle className="w-3 h-3 text-amber-500 shrink-0" />}
-                            </button>
-                          );
-                        })}
-                      </div>
+                  <div className="space-y-3 border-t pt-4">
+                    <div className="space-y-1.5">
+                      <Label>Item Name</Label>
+                      <Input
+                        value={creatingNew.name}
+                        onChange={e => setCreatingNew(prev => prev ? { ...prev, name: e.target.value } : prev)}
+                        placeholder="e.g., Doxycycline"
+                        data-testid="input-new-item-name"
+                      />
                     </div>
-
-                    {orderSets.length > 0 && (
-                      <div>
-                        <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
-                          <Package className="w-3.5 h-3.5" />
-                          Order Sets
-                        </p>
-                        <div className="space-y-1">
-                          {orderSets.map(os => (
-                            <button
-                              key={os.id}
-                              onClick={() => handleSelectOrderSet(os)}
-                              className="flex items-center gap-2 w-full p-2.5 text-sm border rounded-md text-left hover-elevate active-elevate-2 transition-colors"
-                              data-testid={`quick-pick-orderset-${os.id}`}
-                            >
-                              <Package className="w-4 h-4 shrink-0 text-muted-foreground" />
-                              <span className="font-medium flex-1">{os.setName}</span>
-                              <Badge variant="secondary" className="text-[10px] shrink-0">
-                                {os.items.length} items
-                              </Badge>
-                            </button>
-                          ))}
+                    <div className="space-y-1.5">
+                      <Label>Category <span className="text-destructive">*</span></Label>
+                      <Select
+                        value={creatingNew.category}
+                        onValueChange={v => setCreatingNew(prev => prev ? { ...prev, category: v } : prev)}
+                      >
+                        <SelectTrigger data-testid="select-new-item-category">
+                          <SelectValue placeholder="Select a category..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Medication">Medication</SelectItem>
+                          <SelectItem value="Vaccine">Vaccine</SelectItem>
+                          <SelectItem value="Lab">Lab</SelectItem>
+                          <SelectItem value="Procedure">Procedure</SelectItem>
+                          <SelectItem value="Preventative">Preventative</SelectItem>
+                          <SelectItem value="Exam">Exam</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {(creatingNew.category === 'Medication' || !creatingNew.category) && (
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                          <Label>Default Dose (optional)</Label>
+                          <Input
+                            value={creatingNew.defaultDose}
+                            onChange={e => setCreatingNew(prev => prev ? { ...prev, defaultDose: e.target.value } : prev)}
+                            placeholder="e.g., 100mg"
+                            data-testid="input-new-item-dose"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label>Default Frequency (optional)</Label>
+                          <Input
+                            value={creatingNew.defaultFrequency}
+                            onChange={e => setCreatingNew(prev => prev ? { ...prev, defaultFrequency: e.target.value } : prev)}
+                            placeholder="e.g., BID"
+                            data-testid="input-new-item-frequency"
+                          />
                         </div>
                       </div>
                     )}
                   </div>
-                ) : (
-                  <Command className="border rounded-md" data-testid="command-search">
-                    <CommandList className="max-h-64">
-                      <CommandEmpty>No results found.</CommandEmpty>
-                      {catalogItems.length > 0 && (
-                        <CommandGroup heading="Catalog Items">
-                          {catalogItems
-                            .filter(ci => ci.name.toLowerCase().includes(searchValue.toLowerCase()))
-                            .map(ci => {
-                              const isDuplicate = activeNameSet.has(ci.name.toLowerCase());
-                              const Icon = categoryIcons[ci.category] || Pill;
-                              return (
-                                <CommandItem
-                                  key={ci.id}
-                                  value={ci.name}
-                                  onSelect={() => handleSelectCatalogItem(ci)}
-                                  className="flex items-center gap-2"
-                                  data-testid={`item-catalog-${ci.id}`}
-                                >
-                                  <Icon className="w-4 h-4 shrink-0 text-muted-foreground" />
-                                  <span className={isDuplicate ? "text-amber-600 dark:text-amber-400" : ""}>
-                                    {ci.name}
-                                  </span>
-                                  <Badge variant="secondary" className={`ml-auto text-[10px] px-1.5 py-0 ${categoryColors[ci.category] || ""}`}>
-                                    {ci.category}
-                                  </Badge>
-                                  {ci.defaultDose && (
-                                    <span className="text-xs text-muted-foreground">{ci.defaultDose}</span>
-                                  )}
-                                  {isDuplicate && (
-                                    <span className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400 shrink-0">
-                                      <AlertTriangle className="w-3.5 h-3.5" />
-                                      Active
-                                    </span>
-                                  )}
-                                </CommandItem>
-                              );
-                            })}
-                        </CommandGroup>
+
+                  <div className="flex items-center justify-between gap-2 pt-2 border-t">
+                    <Button variant="outline" onClick={() => setCreatingNew(null)} data-testid="button-cancel-create">
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={handleCreateAndContinue}
+                      disabled={!creatingNew.name.trim() || !creatingNew.category || creatingNewLoading}
+                      data-testid="button-create-and-continue"
+                    >
+                      {creatingNewLoading ? (
+                        <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Creating...</>
+                      ) : (
+                        <><Plus className="w-4 h-4 mr-1.5" />Create & Continue</>
                       )}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                    <Input
+                      placeholder="Search medications, vaccines, labs..."
+                      value={searchValue}
+                      onChange={e => setSearchValue(e.target.value)}
+                      className="pl-9"
+                      data-testid="input-search-catalog"
+                      autoFocus
+                    />
+                  </div>
+
+                  {!searchValue ? (
+                    <div className="space-y-4" data-testid="container-quick-picks">
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+                          <Zap className="w-3.5 h-3.5" />
+                          Quick Picks
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {catalogItems.slice(0, 5).map(ci => {
+                            const Icon = categoryIcons[ci.category] || Pill;
+                            const isDuplicate = activeNameSet.has(ci.name.toLowerCase());
+                            return (
+                              <button
+                                key={ci.id}
+                                onClick={() => handleSelectCatalogItem(ci)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border rounded-md hover-elevate active-elevate-2 transition-colors"
+                                data-testid={`quick-pick-${ci.id}`}
+                              >
+                                <Icon className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                                <span className={isDuplicate ? "text-amber-600 dark:text-amber-400" : ""}>{ci.name}</span>
+                                {isDuplicate && <AlertTriangle className="w-3 h-3 text-amber-500 shrink-0" />}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
                       {orderSets.length > 0 && (
-                        <CommandGroup heading="Order Sets">
-                          {orderSets
-                            .filter(os => os.setName.toLowerCase().includes(searchValue.toLowerCase()))
-                            .map(os => (
-                              <CommandItem
+                        <div>
+                          <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+                            <Package className="w-3.5 h-3.5" />
+                            Order Sets
+                          </p>
+                          <div className="space-y-1">
+                            {orderSets.map(os => (
+                              <button
                                 key={os.id}
-                                value={os.setName}
-                                onSelect={() => handleSelectOrderSet(os)}
-                                className="flex items-center gap-2"
-                                data-testid={`item-orderset-${os.id}`}
+                                onClick={() => handleSelectOrderSet(os)}
+                                className="flex items-center gap-2 w-full p-2.5 text-sm border rounded-md text-left hover-elevate active-elevate-2 transition-colors"
+                                data-testid={`quick-pick-orderset-${os.id}`}
                               >
                                 <Package className="w-4 h-4 shrink-0 text-muted-foreground" />
-                                <div className="flex-1 min-w-0">
-                                  <span className="font-medium">{os.setName}</span>
-                                  <span className="text-xs text-muted-foreground ml-2">
-                                    ({os.items.length} items)
-                                  </span>
-                                </div>
-                              </CommandItem>
+                                <span className="font-medium flex-1">{os.setName}</span>
+                                <Badge variant="secondary" className="text-[10px] shrink-0">
+                                  {os.items.length} items
+                                </Badge>
+                              </button>
                             ))}
-                        </CommandGroup>
+                          </div>
+                        </div>
                       )}
-                    </CommandList>
-                  </Command>
-                )}
-              </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <Command className="border rounded-md" data-testid="command-search">
+                        <CommandList className="max-h-64">
+                          <CommandEmpty>
+                            <span className="text-muted-foreground">No matching items in catalog.</span>
+                          </CommandEmpty>
+                          {catalogItems.length > 0 && (
+                            <CommandGroup heading="Catalog Items">
+                              {catalogItems
+                                .filter(ci => ci.name.toLowerCase().includes(searchValue.toLowerCase()))
+                                .map(ci => {
+                                  const isDuplicate = activeNameSet.has(ci.name.toLowerCase());
+                                  const Icon = categoryIcons[ci.category] || Pill;
+                                  return (
+                                    <CommandItem
+                                      key={ci.id}
+                                      value={ci.name}
+                                      onSelect={() => handleSelectCatalogItem(ci)}
+                                      className="flex items-center gap-2"
+                                      data-testid={`item-catalog-${ci.id}`}
+                                    >
+                                      <Icon className="w-4 h-4 shrink-0 text-muted-foreground" />
+                                      <span className={isDuplicate ? "text-amber-600 dark:text-amber-400" : ""}>
+                                        {ci.name}
+                                      </span>
+                                      <Badge variant="secondary" className={`ml-auto text-[10px] px-1.5 py-0 ${categoryColors[ci.category] || ""}`}>
+                                        {ci.category}
+                                      </Badge>
+                                      {ci.defaultDose && (
+                                        <span className="text-xs text-muted-foreground">{ci.defaultDose}</span>
+                                      )}
+                                      {isDuplicate && (
+                                        <span className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400 shrink-0">
+                                          <AlertTriangle className="w-3.5 h-3.5" />
+                                          Active
+                                        </span>
+                                      )}
+                                    </CommandItem>
+                                  );
+                                })}
+                            </CommandGroup>
+                          )}
+                          {orderSets.length > 0 && (
+                            <CommandGroup heading="Order Sets">
+                              {orderSets
+                                .filter(os => os.setName.toLowerCase().includes(searchValue.toLowerCase()))
+                                .map(os => (
+                                  <CommandItem
+                                    key={os.id}
+                                    value={os.setName}
+                                    onSelect={() => handleSelectOrderSet(os)}
+                                    className="flex items-center gap-2"
+                                    data-testid={`item-orderset-${os.id}`}
+                                  >
+                                    <Package className="w-4 h-4 shrink-0 text-muted-foreground" />
+                                    <div className="flex-1 min-w-0">
+                                      <span className="font-medium">{os.setName}</span>
+                                      <span className="text-xs text-muted-foreground ml-2">
+                                        ({os.items.length} items)
+                                      </span>
+                                    </div>
+                                  </CommandItem>
+                                ))}
+                            </CommandGroup>
+                          )}
+                        </CommandList>
+                      </Command>
+                      <button
+                        onClick={() => startCreateNew(searchValue)}
+                        className="flex items-center gap-2 w-full p-2.5 text-sm border rounded-md text-left hover-elevate active-elevate-2 transition-colors text-primary"
+                        data-testid="button-create-new-from-search"
+                      >
+                        <Plus className="w-4 h-4 shrink-0" />
+                        <span>Create "<strong>{searchValue}</strong>" as new catalog item</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )
             ) : (
               /* Step 2: Order Form */
               <div className="space-y-4">
