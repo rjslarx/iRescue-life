@@ -14,7 +14,7 @@ import { z } from "zod";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
-import { Loader2, Send, Link as LinkIcon, X, CheckCircle2, FileText, Star } from "lucide-react";
+import { Loader2, Send, Link as LinkIcon, X, CheckCircle2, FileText, Star, Download, Mail } from "lucide-react";
 import type { Animal, Application, Grant, Tenant } from "@shared/schema";
 
 interface ContractTemplate {
@@ -48,6 +48,8 @@ export function FinalizeAdoptionDialog({ open, onOpenChange, animal }: FinalizeA
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [checkoutToken, setCheckoutToken] = useState<string | null>(null);
   const [sessionCreated, setSessionCreated] = useState(false);
+  const [downloadingPacket, setDownloadingPacket] = useState(false);
+  const [emailingPacket, setEmailingPacket] = useState(false);
 
   const { data: tenantData } = useQuery<{ tenant: Tenant }>({
     queryKey: ['/api/tenant'],
@@ -212,6 +214,50 @@ export function FinalizeAdoptionDialog({ open, onOpenChange, animal }: FinalizeA
         title: "Link copied!",
         description: "Checkout link has been copied to clipboard",
       });
+    }
+  };
+
+  const handleDownloadPacket = async () => {
+    setDownloadingPacket(true);
+    try {
+      const response = await fetch(`/api/animals/${animal.id}/adoption-packet/download`, {
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error('Failed to generate vaccination record');
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `vaccination-record-${animal.name.replace(/\s+/g, '-').toLowerCase()}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      toast({ title: "Downloaded", description: "Vaccination record PDF downloaded successfully" });
+    } catch (error: any) {
+      toast({ title: "Download failed", description: error.message || "Please try again", variant: "destructive" });
+    } finally {
+      setDownloadingPacket(false);
+    }
+  };
+
+  const handleEmailPacket = async () => {
+    const selectedApp = approvedApplications.find(app => app.id === form.getValues('applicationId'));
+    if (!selectedApp?.applicantEmail) {
+      toast({ title: "No email address", description: "Could not determine adopter email", variant: "destructive" });
+      return;
+    }
+    setEmailingPacket(true);
+    try {
+      await apiRequest('POST', `/api/animals/${animal.id}/adoption-packet/email`, {
+        email: selectedApp.applicantEmail,
+        recipientName: selectedApp.applicantName,
+      });
+      toast({ title: "Sent", description: `Vaccination record emailed to ${selectedApp.applicantEmail}` });
+    } catch (error: any) {
+      toast({ title: "Email failed", description: error.message || "Please try again", variant: "destructive" });
+    } finally {
+      setEmailingPacket(false);
     }
   };
 
@@ -483,6 +529,46 @@ export function FinalizeAdoptionDialog({ open, onOpenChange, animal }: FinalizeA
                 </CardContent>
               </Card>
             )}
+
+            <Card>
+              <CardContent className="pt-6">
+                <h4 className="text-sm font-medium mb-3">Vaccination Record</h4>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Download or email {animal.name}'s official vaccination and preventative care record.
+                  This will also be automatically included in the adoption confirmation email.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleDownloadPacket}
+                    disabled={downloadingPacket}
+                    data-testid="button-download-vaccination-record"
+                  >
+                    {downloadingPacket ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Download className="mr-2 h-4 w-4" />
+                    )}
+                    Download PDF
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleEmailPacket}
+                    disabled={emailingPacket}
+                    data-testid="button-email-vaccination-record"
+                  >
+                    {emailingPacket ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Mail className="mr-2 h-4 w-4" />
+                    )}
+                    Email to Adopter
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
 
             <DialogFooter className="flex-col sm:flex-row gap-2">
               <Button

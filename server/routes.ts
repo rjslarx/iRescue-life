@@ -37629,6 +37629,101 @@ The user asking is a tenant administrator or staff member.`;
       next(error);
     }
   });
+  /**
+   * GET /api/animals/:animalId/adoption-packet/download
+   * Generate and download the adoption packet PDF for an animal
+   */
+  app.get('/api/animals/:animalId/adoption-packet/download', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { animalId } = req.params;
+      const tenantId = req.tenant!.id;
+
+      const [animal] = await db
+        .select({ name: animals.name })
+        .from(animals)
+        .where(and(eq(animals.id, animalId), eq(animals.tenantId, tenantId)))
+        .limit(1);
+
+      if (!animal) {
+        return res.status(404).json({ error: 'Animal not found' });
+      }
+
+      const { generateAdoptionPacketPDF } = await import('./services/adoption-packet-pdf');
+      const pdfBuffer = await generateAdoptionPacketPDF(animalId, tenantId);
+
+      const safeName = animal.name.replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase();
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="vaccination-record-${safeName}.pdf"`);
+      res.send(pdfBuffer);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/animals/:animalId/adoption-packet/email
+   * Generate the adoption packet PDF and email it to a specified address
+   */
+  app.post('/api/animals/:animalId/adoption-packet/email', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { animalId } = req.params;
+      const tenantId = req.tenant!.id;
+
+      const schema = z.object({
+        email: z.string().email(),
+        recipientName: z.string().optional(),
+      });
+      const { email, recipientName } = schema.parse(req.body);
+
+      const [animal] = await db
+        .select({ name: animals.name })
+        .from(animals)
+        .where(and(eq(animals.id, animalId), eq(animals.tenantId, tenantId)))
+        .limit(1);
+
+      if (!animal) {
+        return res.status(404).json({ error: 'Animal not found' });
+      }
+
+      const { generateAdoptionPacketPDF } = await import('./services/adoption-packet-pdf');
+      const pdfBuffer = await generateAdoptionPacketPDF(animalId, tenantId);
+
+      const { EmailService } = await import('./lib/email-service');
+      const emailService = await EmailService.forTenant(tenantId);
+
+      if (!emailService) {
+        return res.status(500).json({ error: 'Email service not configured for this organization' });
+      }
+
+      const safeName = animal.name.replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase();
+      const greeting = recipientName ? `Hi ${recipientName},` : 'Hello,';
+
+      await emailService.send({
+        to: email,
+        subject: `Vaccination Record for ${animal.name}`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2>Vaccination Record for ${escapeHtml(animal.name)}</h2>
+            <p>${greeting}</p>
+            <p>Please find attached the official vaccination and medical record for <strong>${escapeHtml(animal.name)}</strong>.</p>
+            <p>This document contains the complete vaccination history, preventative care records, and microchip information. Please present this record to your veterinarian at your next visit.</p>
+            <p>Best regards,<br/>${escapeHtml(req.tenant!.name)}</p>
+          </div>
+        `,
+        attachments: [
+          {
+            filename: `vaccination-record-${safeName}.pdf`,
+            content: pdfBuffer,
+          },
+        ],
+      });
+
+      res.json({ success: true, message: `Vaccination record emailed to ${email}` });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   const httpServer = createServer(app);
 
 

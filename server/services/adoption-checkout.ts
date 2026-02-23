@@ -35,6 +35,7 @@ import { EmailService } from '../lib/email-service';
 import { stripeService } from '../lib/stripe-service';
 import { generatePaymentReceiptPDF } from './payment-receipt-pdf';
 import { generateMedicalHistoryPDF } from './medical-history-pdf';
+import { generateAdoptionPacketPDF } from './adoption-packet-pdf';
 import { objectStorageClient, parseObjectPath } from '../objectStorage';
 import { calculatePlatformFee } from '../config/platform';
 
@@ -1838,6 +1839,65 @@ export async function finalizeAdoption(sessionId: string): Promise<void> {
         attachedDocNames.push(`<li><strong>Medical History</strong> - ${animal.name}'s complete medical records</li>`);
       } catch (error) {
         console.error('Failed to generate medical history PDF:', error);
+      }
+
+      // 4. Vaccination & Preventative Care Record PDF (Adoption Packet)
+      try {
+        const adoptionPacketPdf = await generateAdoptionPacketPDF(session.animalId, session.tenantId);
+        const packetFilename = `vaccination-record-${animal.name.replace(/\s+/g, '-').toLowerCase()}.pdf`;
+        attachments.push({
+          filename: packetFilename,
+          content: adoptionPacketPdf,
+          contentType: 'application/pdf',
+        });
+        attachedDocNames.push(`<li><strong>Vaccination Record</strong> - ${animal.name}'s official vaccination and preventative care certificate</li>`);
+
+        // Save vaccination record to animal's medical files
+        try {
+          await db.insert(medicalFiles).values({
+            animalId: session.animalId,
+            tenantId: session.tenantId,
+            fileName: `Vaccination Record - ${new Date().toLocaleDateString()}`,
+            fileUrl: '',
+            mimeType: 'application/pdf',
+            description: `Official vaccination and preventative care record generated at adoption on ${new Date().toLocaleDateString()}.`,
+          });
+          console.log(`[Adoption] Saved vaccination record to animal ${session.animalId} medical files`);
+        } catch (saveError) {
+          console.error('Failed to save vaccination record to animal files:', saveError);
+        }
+
+        // Save vaccination record to adopter's person documents
+        try {
+          if (session.adopterContactId) {
+            const [contractForPacket] = await db
+              .select({ signerEmail: adoptionContracts.signerEmail })
+              .from(adoptionContracts)
+              .where(eq(adoptionContracts.sessionId, session.id))
+              .limit(1);
+
+            await db.insert(personDocuments).values({
+              tenantId: session.tenantId,
+              personType: 'contact',
+              personId: session.adopterContactId,
+              personEmail: contractForPacket?.signerEmail || null,
+              documentType: 'uploaded',
+              documentSubtype: 'other',
+              title: `Vaccination Record - ${animal.name}`,
+              description: `Official vaccination and preventative care record for ${animal.name}. Generated at adoption on ${new Date().toLocaleDateString()}.`,
+              objectPath: '',
+              sourceId: session.id,
+              sourceTable: 'adoption_contracts',
+              fileName: packetFilename,
+              contentType: 'application/pdf',
+            });
+            console.log(`[Adoption] Saved vaccination record to adopter's person documents`);
+          }
+        } catch (saveError) {
+          console.error('Failed to save vaccination record to adopter documents:', saveError);
+        }
+      } catch (error) {
+        console.error('Failed to generate adoption packet PDF:', error);
       }
 
       // Build dynamic attachments section for the email
