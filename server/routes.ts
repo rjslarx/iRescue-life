@@ -22191,6 +22191,7 @@ Submitted: ${new Date().toLocaleString()}
       const mascotSchema = z.object({
         enabled: z.boolean().optional(),
         speechText: z.string().max(120).optional(),
+        videoUrl: z.string().optional().nullable(),
       });
 
       const settings = mascotSchema.parse(req.body);
@@ -22203,6 +22204,96 @@ Submitted: ${new Date().toLocaleString()}
       };
 
       // Update tenant settings
+      const [updatedTenant] = await db
+        .update(tenants)
+        .set({ mascot: updatedMascot })
+        .where(eq(tenants.id, req.tenant!.id))
+        .returning();
+
+      res.json({ success: true, tenant: updatedTenant });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/tenant/settings/mascot/video
+   * Upload a mascot video file (admin only)
+   */
+  app.post('/api/tenant/settings/mascot/video', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+    try {
+      const multer = (await import('multer')).default;
+      const upload = multer({
+        storage: multer.memoryStorage(),
+        limits: { fileSize: 20 * 1024 * 1024 },
+        fileFilter: (_req, file, cb) => {
+          const allowed = ['video/mp4', 'video/webm', 'video/quicktime'];
+          if (allowed.includes(file.mimetype)) {
+            cb(null, true);
+          } else {
+            cb(new Error('Only MP4, WebM, and MOV video files are allowed'));
+          }
+        },
+      }).single('video');
+
+      upload(req, res, async (err) => {
+        if (err) {
+          return res.status(400).json({ error: err.message });
+        }
+        if (!req.file) {
+          return res.status(400).json({ error: 'No video file provided' });
+        }
+
+        try {
+          const { ObjectStorageService } = await import('./objectStorage');
+          const objectStorage = new ObjectStorageService();
+          const tenantId = req.tenant!.id;
+
+          const ext = req.file.originalname.split('.').pop() || 'mp4';
+          const filename = `mascot-video.${ext}`;
+
+          const result = await objectStorage.uploadTenantFile(
+            tenantId,
+            'mascot',
+            req.file.buffer,
+            req.file.mimetype,
+            filename
+          );
+
+          const currentMascot = req.tenant!.mascot || {};
+          const updatedMascot = {
+            ...currentMascot,
+            videoUrl: result.objectPath,
+          };
+
+          const [updatedTenant] = await db
+            .update(tenants)
+            .set({ mascot: updatedMascot })
+            .where(eq(tenants.id, tenantId))
+            .returning();
+
+          res.json({ success: true, videoUrl: result.objectPath, tenant: updatedTenant });
+        } catch (uploadError) {
+          next(uploadError);
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * DELETE /api/tenant/settings/mascot/video
+   * Remove the mascot video (admin only)
+   */
+  app.delete('/api/tenant/settings/mascot/video', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+    try {
+      const currentMascot = req.tenant!.mascot || {};
+      const updatedMascot = {
+        ...currentMascot,
+        videoUrl: undefined,
+      };
+
       const [updatedTenant] = await db
         .update(tenants)
         .set({ mascot: updatedMascot })

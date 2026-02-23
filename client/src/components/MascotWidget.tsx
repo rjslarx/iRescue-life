@@ -8,6 +8,7 @@ interface MascotWidgetProps {
   speechText?: string;
   enabled?: boolean;
   tenantId?: string;
+  videoUrl?: string;
 }
 
 const DISMISS_STORAGE_KEY = 'mascot-dismissed';
@@ -17,7 +18,8 @@ export default function MascotWidget({
   rescueName, 
   speechText, 
   enabled = false,
-  tenantId = 'default'
+  tenantId = 'default',
+  videoUrl
 }: MascotWidgetProps) {
   const [isDismissed, setIsDismissed] = useState(true);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -92,7 +94,7 @@ export default function MascotWidget({
               data-testid="mascot-video-container"
             >
               <video
-                src="/mascot-dog.mp4"
+                src={videoUrl || "/mascot-dog.mp4"}
                 autoPlay
                 loop
                 muted

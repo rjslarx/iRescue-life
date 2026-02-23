@@ -987,6 +987,7 @@ export default function Home() {
         speechText={(tenant?.mascot as { speechText?: string } | undefined)?.speechText}
         enabled={(tenant?.mascot as { enabled?: boolean } | undefined)?.enabled}
         tenantId={tenant?.id}
+        videoUrl={(tenant?.mascot as { videoUrl?: string } | undefined)?.videoUrl}
       />
 
       {/* Recent Donations Widget - Fixed in bottom-left corner */}

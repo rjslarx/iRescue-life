@@ -1969,7 +1969,7 @@ export default function SettingsPage() {
 
                 {/* Mascot Widget Settings */}
                 <MascotSettings 
-                  mascot={data?.tenant?.mascot as { enabled?: boolean; speechText?: string } | undefined}
+                  mascot={data?.tenant?.mascot as { enabled?: boolean; speechText?: string; videoUrl?: string } | undefined}
                   rescueName={data?.tenant?.name || 'Your Rescue'}
                 />
 

@@ -383,6 +383,7 @@ export default function AvailableAnimalsPage() {
         speechText={(tenant?.mascot as { speechText?: string } | undefined)?.speechText}
         enabled={(tenant?.mascot as { enabled?: boolean } | undefined)?.enabled}
         tenantId={tenant?.id}
+        videoUrl={(tenant?.mascot as { videoUrl?: string } | undefined)?.videoUrl}
       />
     </div>
   );

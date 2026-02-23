@@ -152,6 +152,7 @@ export const tenants = pgTable("tenants", {
   mascot: jsonb("mascot").$type<{
     enabled?: boolean;
     speechText?: string; // Custom speech bubble text (default: "[Rescue Name] needs you!")
+    videoUrl?: string; // Custom mascot video URL (uploaded to object storage)
   }>(),
   // Donation section customization
   donationSection: jsonb("donation_section").$type<{
