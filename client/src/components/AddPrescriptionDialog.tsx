@@ -62,11 +62,13 @@ interface AddPrescriptionDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   prescription?: Prescription | null;
+  initialValues?: Partial<PrescriptionFormData> | null;
 }
 
-export function AddPrescriptionDialog({ animalId, open, onOpenChange, prescription }: AddPrescriptionDialogProps) {
+export function AddPrescriptionDialog({ animalId, open, onOpenChange, prescription, initialValues }: AddPrescriptionDialogProps) {
   const { toast } = useToast();
   const isEditing = !!prescription;
+  const isReorder = !isEditing && !!initialValues;
 
   // Fetch available grants for this tenant
   const { data: grantsData } = useQuery({
@@ -138,16 +140,16 @@ export function AddPrescriptionDialog({ animalId, open, onOpenChange, prescripti
       });
     } else if (!prescription && open) {
       reset({
-        medicationName: "",
-        dosage: "",
-        frequency: "",
-        route: "",
-        startDate: new Date().toISOString().split('T')[0],
+        medicationName: initialValues?.medicationName || "",
+        dosage: initialValues?.dosage || "",
+        frequency: initialValues?.frequency || "",
+        route: initialValues?.route || "",
+        startDate: initialValues?.startDate || new Date().toISOString().split('T')[0],
         nextScheduledDose: "",
         endDate: "",
-        isControlledSubstance: false,
-        requiresRefill: false,
-        notes: "",
+        isControlledSubstance: initialValues?.isControlledSubstance || false,
+        requiresRefill: initialValues?.requiresRefill || false,
+        notes: initialValues?.notes || "",
         billVendor: "",
         billAmount: "",
         billInvoiceNumber: "",
@@ -157,7 +159,7 @@ export function AddPrescriptionDialog({ animalId, open, onOpenChange, prescripti
         grantId: "",
       });
     }
-  }, [prescription, open, reset]);
+  }, [prescription, initialValues, open, reset]);
   
   // When frequency is "ONCE": auto-set endDate = startDate
   useEffect(() => {
@@ -278,9 +280,9 @@ export function AddPrescriptionDialog({ animalId, open, onOpenChange, prescripti
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{isEditing ? 'Edit Prescription' : 'Add Medication Prescription'}</DialogTitle>
+          <DialogTitle>{isEditing ? 'Edit Prescription' : isReorder ? 'Reorder Medication' : 'Add Medication Prescription'}</DialogTitle>
           <DialogDescription>
-            {isEditing ? 'Update prescription details' : 'Create a prescription and automatically schedule medication doses'}
+            {isEditing ? 'Update prescription details' : isReorder ? 'Create a new prescription based on a previous order. Review and adjust the start date as needed.' : 'Create a prescription and automatically schedule medication doses'}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>

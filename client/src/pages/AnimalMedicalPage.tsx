@@ -47,7 +47,8 @@ import {
   Zap,
   MapPin,
   ClipboardCheck,
-  X
+  X,
+  RotateCcw
 } from "lucide-react";
 import { useGooglePicker, PickerDocument } from "@/hooks/useGooglePicker";
 import { format } from "date-fns";
@@ -135,6 +136,7 @@ export default function AnimalMedicalPage() {
   const [editingProcedure, setEditingProcedure] = useState<any>(null);
   const [prescriptionDialogOpen, setPrescriptionDialogOpen] = useState(false);
   const [editingPrescription, setEditingPrescription] = useState<any>(null);
+  const [reorderInitialValues, setReorderInitialValues] = useState<any>(null);
   const [billDialogOpen, setBillDialogOpen] = useState(false);
   const [editingBill, setEditingBill] = useState<any>(null);
   const [documentDialogOpen, setDocumentDialogOpen] = useState(false);
@@ -1413,59 +1415,96 @@ export default function AnimalMedicalPage() {
                         </p>
                       </div>
                       <div className="flex gap-2 flex-wrap">
-                        <Button
-                          variant="default"
-                          size="sm"
-                          onClick={() => openDoseChartDialog(rx)}
-                          data-testid={`button-chart-dose-${rx.id}`}
-                        >
-                          <Plus className="w-4 h-4 mr-1" />
-                          Administer
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => openUnableDialog(rx)}
-                          data-testid={`button-unable-dose-${rx.id}`}
-                        >
-                          <X className="w-4 h-4 mr-1" />
-                          Unable
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          onClick={() => {
-                            setEditingPrescription(rx);
-                            setPrescriptionDialogOpen(true);
-                          }}
-                          data-testid={`button-edit-prescription-${rx.id}`}
-                        >
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="sm" data-testid={`button-delete-prescription-${rx.id}`}>
-                              <Trash2 className="w-4 h-4" />
+                        {isActive ? (
+                          <>
+                            <Button
+                              variant="default"
+                              size="sm"
+                              onClick={() => openDoseChartDialog(rx)}
+                              data-testid={`button-chart-dose-${rx.id}`}
+                            >
+                              <Plus className="w-4 h-4 mr-1" />
+                              Administer
                             </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Delete Medication</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Are you sure you want to delete "{rx.medicationName}"? This will also remove all associated dose records. This action cannot be undone.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() => deletePrescriptionMutation.mutate(rx.id)}
-                                data-testid={`button-confirm-delete-prescription-${rx.id}`}
-                              >
-                                Delete
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => openUnableDialog(rx)}
+                              data-testid={`button-unable-dose-${rx.id}`}
+                            >
+                              <X className="w-4 h-4 mr-1" />
+                              Unable
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => {
+                                setEditingPrescription(rx);
+                                setPrescriptionDialogOpen(true);
+                              }}
+                              data-testid={`button-edit-prescription-${rx.id}`}
+                            >
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="ghost" size="sm" data-testid={`button-delete-prescription-${rx.id}`}>
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete Medication</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Are you sure you want to delete "{rx.medicationName}"? This will also remove all associated dose records. This action cannot be undone.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => deletePrescriptionMutation.mutate(rx.id)}
+                                    data-testid={`button-confirm-delete-prescription-${rx.id}`}
+                                  >
+                                    Delete
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              let newStartDate = new Date().toISOString().split('T')[0];
+                              if (rx.lastGivenAt) {
+                                const lastDate = new Date(rx.lastGivenAt);
+                                const freqDaysMap: Record<string, number> = { SID: 1, BID: 1, TID: 1, QID: 1, 'Every 12 hours': 1, 'Every 8 hours': 1, 'Every 6 hours': 1, ONCE: 0 };
+                                const daysToAdd = freqDaysMap[rx.frequency] ?? 1;
+                                if (daysToAdd > 0) {
+                                  lastDate.setDate(lastDate.getDate() + daysToAdd);
+                                  newStartDate = lastDate.toISOString().split('T')[0];
+                                }
+                              }
+                              setReorderInitialValues({
+                                medicationName: rx.medicationName,
+                                dosage: rx.dosage,
+                                route: rx.route,
+                                frequency: rx.frequency,
+                                isControlledSubstance: rx.isControlledSubstance || rx.controlledSubstance || false,
+                                requiresRefill: rx.requiresRefill || false,
+                                notes: rx.notes || "",
+                                startDate: newStartDate,
+                              });
+                              setEditingPrescription(null);
+                              setPrescriptionDialogOpen(true);
+                            }}
+                            data-testid={`button-reorder-prescription-${rx.id}`}
+                          >
+                            <RotateCcw className="w-4 h-4 mr-1" />
+                            Reorder
+                          </Button>
+                        )}
                       </div>
                     </div>
                   </CardHeader>
@@ -2192,9 +2231,13 @@ export default function AnimalMedicalPage() {
             open={prescriptionDialogOpen}
             onOpenChange={(open) => {
               setPrescriptionDialogOpen(open);
-              if (!open) setEditingPrescription(null);
+              if (!open) {
+                setEditingPrescription(null);
+                setReorderInitialValues(null);
+              }
             }}
             prescription={editingPrescription}
+            initialValues={reorderInitialValues}
           />
           <AddMedicalBillDialog
             animalId={animalId}

@@ -1,0 +1,42 @@
+In the rescue software world, medications like Simparica (and Simparica Trio) and ProHeart 6 are the textbook definition of "Preventatives" and should be handled with that exact "Event + Trigger" model.
+In fact, comparing those two specific drugs perfectly highlights why a rigid recurring calendar fails and the Event + Trigger model wins.
+Here is how your system will handle them effortlessly:
+The Math (Duration is Key)
+The only difference between Simparica and ProHeart 6 in your database is the duration_days integer.
+Simparica (Oral): The volunteer logs it. The system looks up the drug, sees duration_days = 30. It sets the next due date for 30 days from today.
+ProHeart 6 (Injectable): The vet tech logs it. The system looks up the drug, sees duration_days = 180. It pushes the next due date out 6 months.
+Because the "Next Due Date" is attached to the animal's profile (not a recurring script), the dashboard simply waits. For the dog with ProHeart 6, they will quietly sit off the "Due Today" radar for half a year, which is exactly what the shelter manager wants.
+The "Coverage Category" Concept
+To make iRescue.life truly bulletproof, you need to add one more layer to this logic: Categories Covered.
+Some preventatives do one thing; combination drugs do multiple.
+Regular Simparica = Flea/Tick
+ProHeart 6 = Heartworm
+Simparica Trio = Flea/Tick AND Heartworm
+To prevent the system from yelling at a volunteer that a dog needs Heartworm meds when they just took Simparica Trio, your PreventativeProtocols table needs to map to the categories it satisfies.
+The Replit Agent Prompt
+Here is how to instruct Replit to build out this specific dictionary of preventatives so the math works perfectly every time.
+COPY AND PASTE BELOW:
+Let's refine the Preventatives tracker to handle different dosing intervals and combination medications (like Simparica vs. ProHeart 6).
+1. Database Schema Update (PreventativeProtocols):
+Ensure the table has these columns:
+id, name (String)
+covers_heartworm (Boolean)
+covers_flea_tick (Boolean)
+duration_days (Integer)
+2. Seed Data (Pre-populate the table): Create a script to insert these common standard protocols:
+Name: "Simparica", HW: False, FT: True, Days: 30
+Name: "Simparica Trio", HW: True, FT: True, Days: 30
+Name: "ProHeart 6", HW: True, FT: False, Days: 180
+Name: "ProHeart 12", HW: True, FT: False, Days: 365
+Name: "NexGard", HW: False, FT: True, Days: 30
+Name: "Heartgard Plus", HW: True, FT: False, Days: 30
+3. The Compliance Logic (Animal Profile):
+On the Animals table, ensure we have two separate tracked dates: next_heartworm_due and next_flea_tick_due.
+When a Preventative is logged: > * If the logged protocol has covers_heartworm == true, update the animal's next_heartworm_due to (Administration Date + duration_days).
+If the logged protocol has covers_flea_tick == true, update the animal's next_flea_tick_due to (Administration Date + duration_days).
+4. The UI Dashboard:
+On the animal's medical tab, show two clear status badges:
+🫀 Heartworm: [Green/Red based on next_heartworm_due vs Today]
+🦟 Flea/Tick: [Green/Red based on next_flea_tick_due vs Today]
+By setting it up this way, you remove all the clinical guesswork for the volunteers. They just select the box they pulled off the shelf, and the software handles the compliance tracking automatically.
+
