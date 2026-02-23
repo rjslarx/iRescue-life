@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { AlertTriangle, Pill, Syringe, FlaskConical, Stethoscope, ShieldCheck, ClipboardCheck, Package, Loader2, Clock, CheckCircle2, AlertCircle } from "lucide-react";
+import { AlertTriangle, Pill, Syringe, FlaskConical, Stethoscope, ShieldCheck, ClipboardCheck, Package, Loader2, Clock, CheckCircle2, AlertCircle, ArrowLeft, Search, Zap } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 
 interface ActiveOrder {
@@ -439,145 +439,213 @@ export function AddMedicalOrderDialog({ animalId, open, onOpenChange }: AddMedic
               )}
             </div>
 
-            {/* Search / Selection */}
+            {/* Step 1: Search & Quick Picks */}
             {!selected ? (
-              <Command className="border rounded-md" data-testid="command-search">
-                <CommandInput
-                  placeholder="Search catalog or order sets..."
-                  value={searchValue}
-                  onValueChange={setSearchValue}
-                  data-testid="input-search-catalog"
-                />
-                <CommandList className="max-h-64">
-                  <CommandEmpty>No results found.</CommandEmpty>
-                  {catalogItems.length > 0 && (
-                    <CommandGroup heading="Catalog Items">
-                      {catalogItems
-                        .filter(ci => ci.name.toLowerCase().includes(searchValue.toLowerCase()) || !searchValue)
-                        .map(ci => {
-                          const isDuplicate = activeNameSet.has(ci.name.toLowerCase());
-                          const Icon = categoryIcons[ci.category] || Pill;
-                          return (
-                            <CommandItem
-                              key={ci.id}
-                              value={ci.name}
-                              onSelect={() => handleSelectCatalogItem(ci)}
-                              className="flex items-center gap-2"
-                              data-testid={`item-catalog-${ci.id}`}
-                            >
-                              <Icon className="w-4 h-4 shrink-0 text-muted-foreground" />
-                              <span className={isDuplicate ? "text-amber-600 dark:text-amber-400" : ""}>
-                                {ci.name}
-                              </span>
-                              <Badge variant="secondary" className={`ml-auto text-[10px] px-1.5 py-0 ${categoryColors[ci.category] || ""}`}>
-                                {ci.category}
-                              </Badge>
-                              {ci.defaultDose && (
-                                <span className="text-xs text-muted-foreground">{ci.defaultDose}</span>
-                              )}
-                              {isDuplicate && (
-                                <span className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400 shrink-0">
-                                  <AlertTriangle className="w-3.5 h-3.5" />
-                                  Active
-                                </span>
-                              )}
-                            </CommandItem>
-                          );
-                        })}
-                    </CommandGroup>
-                  )}
-                  {orderSets.length > 0 && (
-                    <CommandGroup heading="Order Sets">
-                      {orderSets
-                        .filter(os => os.setName.toLowerCase().includes(searchValue.toLowerCase()) || !searchValue)
-                        .map(os => (
-                          <CommandItem
-                            key={os.id}
-                            value={os.setName}
-                            onSelect={() => handleSelectOrderSet(os)}
-                            className="flex items-center gap-2"
-                            data-testid={`item-orderset-${os.id}`}
-                          >
-                            <Package className="w-4 h-4 shrink-0 text-muted-foreground" />
-                            <div className="flex-1 min-w-0">
-                              <span className="font-medium">{os.setName}</span>
-                              <span className="text-xs text-muted-foreground ml-2">
-                                ({os.items.length} items)
-                              </span>
-                            </div>
-                          </CommandItem>
-                        ))}
-                    </CommandGroup>
-                  )}
-                </CommandList>
-              </Command>
-            ) : (
-              <div className="space-y-4">
-                {/* Selected Item Header */}
-                <div className="flex items-center justify-between gap-2 p-3 border rounded-md bg-muted/30">
-                  {selected.type === 'catalog' ? (
-                    <div className="flex items-center gap-2 min-w-0">
-                      {(() => { const Icon = categoryIcons[selected.item.category] || Pill; return <Icon className="w-4 h-4 shrink-0" />; })()}
-                      <span className="font-medium truncate">{selected.item.name}</span>
-                      <Badge variant="secondary" className={`text-[10px] shrink-0 ${categoryColors[selected.item.category] || ""}`}>
-                        {selected.item.category}
-                      </Badge>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2 min-w-0">
-                      <Package className="w-4 h-4 shrink-0" />
-                      <span className="font-medium truncate">{selected.orderSet.setName}</span>
-                      <Badge variant="secondary" className="text-[10px] shrink-0">
-                        {selected.orderSet.items.length} items
-                      </Badge>
-                    </div>
-                  )}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setSelected(null)}
-                    data-testid="button-change-selection"
-                  >
-                    Change
-                  </Button>
+              <div className="space-y-3">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                  <Input
+                    placeholder="Search medications, vaccines, labs..."
+                    value={searchValue}
+                    onChange={e => setSearchValue(e.target.value)}
+                    className="pl-9"
+                    data-testid="input-search-catalog"
+                    autoFocus
+                  />
                 </div>
 
-                {/* Dynamic Form for catalog items */}
-                {selected.type === 'catalog' && renderCategoryForm()}
+                {!searchValue ? (
+                  <div className="space-y-4" data-testid="container-quick-picks">
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+                        <Zap className="w-3.5 h-3.5" />
+                        Quick Picks
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {catalogItems.slice(0, 5).map(ci => {
+                          const Icon = categoryIcons[ci.category] || Pill;
+                          const isDuplicate = activeNameSet.has(ci.name.toLowerCase());
+                          return (
+                            <button
+                              key={ci.id}
+                              onClick={() => handleSelectCatalogItem(ci)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border rounded-md hover-elevate active-elevate-2 transition-colors"
+                              data-testid={`quick-pick-${ci.id}`}
+                            >
+                              <Icon className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                              <span className={isDuplicate ? "text-amber-600 dark:text-amber-400" : ""}>{ci.name}</span>
+                              {isDuplicate && <AlertTriangle className="w-3 h-3 text-amber-500 shrink-0" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
 
-                {/* Order Set item list */}
-                {selected.type === 'orderSet' && (
-                  <div className="space-y-1.5" data-testid="container-orderset-items">
-                    <p className="text-sm font-medium">Items in this order set:</p>
-                    {selected.orderSet.items.map(osi => {
-                      const Icon = categoryIcons[osi.catalogItem.category] || Pill;
-                      const isDuplicate = activeNameSet.has(osi.catalogItem.name.toLowerCase());
-                      return (
-                        <div key={osi.id} className="flex items-center gap-2 p-2 border rounded-md text-sm">
-                          <Icon className="w-4 h-4 shrink-0 text-muted-foreground" />
-                          <span className={isDuplicate ? "text-amber-600 dark:text-amber-400" : ""}>{osi.catalogItem.name}</span>
-                          <Badge variant="secondary" className={`text-[10px] ml-auto shrink-0 ${categoryColors[osi.catalogItem.category] || ""}`}>
-                            {osi.catalogItem.category}
-                          </Badge>
-                          {isDuplicate && (
-                            <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                          )}
+                    {orderSets.length > 0 && (
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+                          <Package className="w-3.5 h-3.5" />
+                          Order Sets
+                        </p>
+                        <div className="space-y-1">
+                          {orderSets.map(os => (
+                            <button
+                              key={os.id}
+                              onClick={() => handleSelectOrderSet(os)}
+                              className="flex items-center gap-2 w-full p-2.5 text-sm border rounded-md text-left hover-elevate active-elevate-2 transition-colors"
+                              data-testid={`quick-pick-orderset-${os.id}`}
+                            >
+                              <Package className="w-4 h-4 shrink-0 text-muted-foreground" />
+                              <span className="font-medium flex-1">{os.setName}</span>
+                              <Badge variant="secondary" className="text-[10px] shrink-0">
+                                {os.items.length} items
+                              </Badge>
+                            </button>
+                          ))}
                         </div>
-                      );
-                    })}
+                      </div>
+                    )}
                   </div>
+                ) : (
+                  <Command className="border rounded-md" data-testid="command-search">
+                    <CommandList className="max-h-64">
+                      <CommandEmpty>No results found.</CommandEmpty>
+                      {catalogItems.length > 0 && (
+                        <CommandGroup heading="Catalog Items">
+                          {catalogItems
+                            .filter(ci => ci.name.toLowerCase().includes(searchValue.toLowerCase()))
+                            .map(ci => {
+                              const isDuplicate = activeNameSet.has(ci.name.toLowerCase());
+                              const Icon = categoryIcons[ci.category] || Pill;
+                              return (
+                                <CommandItem
+                                  key={ci.id}
+                                  value={ci.name}
+                                  onSelect={() => handleSelectCatalogItem(ci)}
+                                  className="flex items-center gap-2"
+                                  data-testid={`item-catalog-${ci.id}`}
+                                >
+                                  <Icon className="w-4 h-4 shrink-0 text-muted-foreground" />
+                                  <span className={isDuplicate ? "text-amber-600 dark:text-amber-400" : ""}>
+                                    {ci.name}
+                                  </span>
+                                  <Badge variant="secondary" className={`ml-auto text-[10px] px-1.5 py-0 ${categoryColors[ci.category] || ""}`}>
+                                    {ci.category}
+                                  </Badge>
+                                  {ci.defaultDose && (
+                                    <span className="text-xs text-muted-foreground">{ci.defaultDose}</span>
+                                  )}
+                                  {isDuplicate && (
+                                    <span className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400 shrink-0">
+                                      <AlertTriangle className="w-3.5 h-3.5" />
+                                      Active
+                                    </span>
+                                  )}
+                                </CommandItem>
+                              );
+                            })}
+                        </CommandGroup>
+                      )}
+                      {orderSets.length > 0 && (
+                        <CommandGroup heading="Order Sets">
+                          {orderSets
+                            .filter(os => os.setName.toLowerCase().includes(searchValue.toLowerCase()))
+                            .map(os => (
+                              <CommandItem
+                                key={os.id}
+                                value={os.setName}
+                                onSelect={() => handleSelectOrderSet(os)}
+                                className="flex items-center gap-2"
+                                data-testid={`item-orderset-${os.id}`}
+                              >
+                                <Package className="w-4 h-4 shrink-0 text-muted-foreground" />
+                                <div className="flex-1 min-w-0">
+                                  <span className="font-medium">{os.setName}</span>
+                                  <span className="text-xs text-muted-foreground ml-2">
+                                    ({os.items.length} items)
+                                  </span>
+                                </div>
+                              </CommandItem>
+                            ))}
+                        </CommandGroup>
+                      )}
+                    </CommandList>
+                  </Command>
                 )}
+              </div>
+            ) : (
+              /* Step 2: Order Form */
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setSelected(null)}
+                    data-testid="button-back-to-search"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                  </Button>
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    {selected.type === 'catalog' ? (
+                      <>
+                        {(() => { const Icon = categoryIcons[selected.item.category] || Pill; return <Icon className="w-4 h-4 shrink-0 text-muted-foreground" />; })()}
+                        <span className="font-medium truncate">Order Details: {selected.item.name}</span>
+                        <Badge variant="secondary" className={`text-[10px] shrink-0 ${categoryColors[selected.item.category] || ""}`}>
+                          {selected.item.category}
+                        </Badge>
+                      </>
+                    ) : (
+                      <>
+                        <Package className="w-4 h-4 shrink-0 text-muted-foreground" />
+                        <span className="font-medium truncate">Order Details: {selected.orderSet.setName}</span>
+                        <Badge variant="secondary" className="text-[10px] shrink-0">
+                          {selected.orderSet.items.length} items
+                        </Badge>
+                      </>
+                    )}
+                  </div>
+                </div>
 
-                {/* Submit */}
-                <div className="flex justify-end gap-2 pt-2">
-                  <Button variant="outline" onClick={() => onOpenChange(false)} data-testid="button-cancel-order">
-                    Cancel
+                <div className="border-t pt-4">
+                  {selected.type === 'catalog' && renderCategoryForm()}
+
+                  {selected.type === 'orderSet' && (
+                    <div className="space-y-1.5" data-testid="container-orderset-items">
+                      <p className="text-sm font-medium">Items in this order set:</p>
+                      {selected.orderSet.items.map(osi => {
+                        const Icon = categoryIcons[osi.catalogItem.category] || Pill;
+                        const isDuplicate = activeNameSet.has(osi.catalogItem.name.toLowerCase());
+                        return (
+                          <div key={osi.id} className="flex items-center gap-2 p-2 border rounded-md text-sm">
+                            <Icon className="w-4 h-4 shrink-0 text-muted-foreground" />
+                            <span className={isDuplicate ? "text-amber-600 dark:text-amber-400" : ""}>{osi.catalogItem.name}</span>
+                            <Badge variant="secondary" className={`text-[10px] ml-auto shrink-0 ${categoryColors[osi.catalogItem.category] || ""}`}>
+                              {osi.catalogItem.category}
+                            </Badge>
+                            {isDuplicate && (
+                              <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between gap-2 pt-2 border-t">
+                  <Button
+                    variant="outline"
+                    onClick={() => setSelected(null)}
+                    data-testid="button-back-order"
+                  >
+                    <ArrowLeft className="w-4 h-4 mr-1.5" />
+                    Back
                   </Button>
                   <Button onClick={handleSubmit} disabled={submitting} data-testid="button-submit-order">
                     {submitting ? (
                       <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Submitting...</>
                     ) : (
-                      selected.type === 'orderSet' ? `Apply ${selected.orderSet.items.length} Items` : 'Create Order'
+                      selected.type === 'orderSet' ? `Apply ${selected.orderSet.items.length} Items` : 'Save Order'
                     )}
                   </Button>
                 </div>
