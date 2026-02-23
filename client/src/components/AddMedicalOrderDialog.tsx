@@ -174,12 +174,13 @@ const vetProcedures = new Set([
   'liver biopsy', 'skin biopsy',
   'rhinoscopy', 'endoscopy', 'colonoscopy', 'bronchoscopy',
   'ct scan', 'mri', 'ultrasound', 'radiograph', 'x-ray', 'xray',
+  'microchip', 'microchipping',
+  'euthanasia', 'humane euthanasia',
 ]);
 
 const vetPreventatives = new Set([
   'flea/tick', 'flea tick', 'flea and tick', 'flea prevention', 'tick prevention',
   'deworming', 'deworm', 'dewormer',
-  'microchip', 'microchipping',
   'nail trim', 'nail trimming', 'nail clip',
   'ear cleaning', 'ear clean', 'ear flush',
   'anal gland', 'anal gland expression', 'anal glands',
