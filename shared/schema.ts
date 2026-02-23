@@ -36,6 +36,7 @@ export const tenants = pgTable("tenants", {
   stripeConnectedAt: timestamp("stripe_connected_at"), // When Stripe was connected via OAuth
   // Adoption fee settings
   passFeesToAdopter: boolean("pass_fees_to_adopter").notNull().default(false), // Whether to add processing + platform fees to adoption fee (paid by adopter)
+  requireSpayNeuterContract: boolean("require_spay_neuter_contract").notNull().default(false), // Whether adopters of unaltered animals must sign a spay/neuter agreement
   defaultSurrenderFee: decimal("default_surrender_fee", { precision: 10, scale: 2 }), // Default owner surrender fee amount (null = no fee)
   // Email service settings (encrypted API keys per tenant)
   resendApiKeyEncrypted: text("resend_api_key_encrypted"), // Resend API key for transactional emails

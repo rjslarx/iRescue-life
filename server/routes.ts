@@ -20586,6 +20586,7 @@ Submitted: ${new Date().toLocaleString()}
       const settingsSchema = z.object({
         stripeLink: z.string().url().optional().or(z.literal("")),
         passFeesToAdopter: z.boolean().optional(),
+        requireSpayNeuterContract: z.boolean().optional(),
         defaultSurrenderFee: z.string().optional().nullable(),
       });
 
@@ -20594,6 +20595,7 @@ Submitted: ${new Date().toLocaleString()}
       const settingsToUpdate: Record<string, any> = {};
       if (parsedSettings.stripeLink !== undefined) settingsToUpdate.stripeLink = parsedSettings.stripeLink;
       if (parsedSettings.passFeesToAdopter !== undefined) settingsToUpdate.passFeesToAdopter = parsedSettings.passFeesToAdopter;
+      if (parsedSettings.requireSpayNeuterContract !== undefined) settingsToUpdate.requireSpayNeuterContract = parsedSettings.requireSpayNeuterContract;
       if (parsedSettings.defaultSurrenderFee !== undefined) settingsToUpdate.defaultSurrenderFee = parsedSettings.defaultSurrenderFee;
 
       const [updatedTenant] = await db

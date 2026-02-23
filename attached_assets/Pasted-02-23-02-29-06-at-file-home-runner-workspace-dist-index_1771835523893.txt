@@ -1,0 +1,56 @@
+02-23 02:29:06
+at file:///home/runner/workspace/dist/index.js:54156:56
+02-23 02:29:06
+at Layer.handle [as handle_request] (/home/runner/workspace/node_modules/express/lib/router/layer.js:95:5)
+02-23 02:29:06
+at next (/home/runner/workspace/node_modules/express/lib/router/route.js:149:13)
+02-23 02:29:06
+at requireAuth (file:///home/runner/workspace/dist/index.js:5772:3)
+02-23 02:29:06
+at Layer.handle [as handle_request] (/home/runner/workspace/node_modules/express/lib/router/layer.js:95:5)
+02-23 02:29:06
+at Layer.handle [as handle_request] (/home/runner/workspace/node_modules/express/lib/router/layer.js:95:5)
+02-23 02:30:13
+at file:///home/runner/workspace/dist/index.js:5780:14
+02-23 02:30:13
+at next (/home/runner/workspace/node_modules/express/lib/router/route.js:149:13)
+02-23 02:30:13
+at Layer.handle [as handle_request] (/home/runner/workspace/node_modules/express/lib/router/layer.js:95:5)
+02-23 02:30:13
+at mapUpdateSet (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:90:11)
+02-23 02:30:13
+at PgUpdateBuilder.set (file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/update.js:30:7)
+02-23 02:30:13
+at requireAuth (file:///home/runner/workspace/dist/index.js:5772:3)
+02-23 02:30:13
+at Layer.handle [as handle_request] (/home/runner/workspace/node_modules/express/lib/router/layer.js:95:5)
+02-23 02:30:13
+at next (/home/runner/workspace/node_modules/express/lib/router/route.js:149:13)
+02-23 02:30:13
+at Layer.handle [as handle_request] (/home/runner/workspace/node_modules/express/lib/router/layer.js:95:5)
+02-23 02:30:13
+at file:///home/runner/workspace/dist/index.js:54156:56
+02-23 02:30:13
+Error: No values to set
+02-23 02:30:13
+Error: No values to set
+02-23 02:30:13
+at file:///home/runner/workspace/dist/index.js:54156:56
+02-23 02:30:13
+at Layer.handle [as handle_request] (/home/runner/workspace/node_modules/express/lib/router/layer.js:95:5)
+02-23 02:30:13
+at next (/home/runner/workspace/node_modules/express/lib/router/route.js:149:13)
+02-23 02:30:13
+at Layer.handle [as handle_request] (/home/runner/workspace/node_modules/express/lib/router/layer.js:95:5)
+02-23 02:30:13
+at requireAuth (file:///home/runner/workspace/dist/index.js:5772:3)
+02-23 02:30:13
+at PgUpdateBuilder.set (file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/update.js:30:7)
+02-23 02:30:13
+at mapUpdateSet (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:90:11)
+02-23 02:30:13
+at Layer.handle [as handle_request] (/home/runner/workspace/node_modules/express/lib/router/layer.js:95:5)
+02-23 02:30:13
+at next (/home/runner/workspace/node_modules/express/lib/router/route.js:149:13)
+02-23 02:30:13
+at file:///home/runner/workspace/dist/index.js:5780:14
