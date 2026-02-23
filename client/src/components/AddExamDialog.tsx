@@ -54,9 +54,10 @@ interface AddExamDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   exam?: Exam | null;
+  initialValues?: { examType?: string } | null;
 }
 
-export function AddExamDialog({ animalId, open, onOpenChange, exam }: AddExamDialogProps) {
+export function AddExamDialog({ animalId, open, onOpenChange, exam, initialValues }: AddExamDialogProps) {
   const { toast } = useToast();
   const isEditing = !!exam;
 
@@ -99,7 +100,7 @@ export function AddExamDialog({ animalId, open, onOpenChange, exam }: AddExamDia
       });
     } else if (!exam && open) {
       reset({
-        examType: "",
+        examType: initialValues?.examType || "",
         examDate: new Date().toISOString().split('T')[0],
         performedBy: "",
         subjective: "",
@@ -114,7 +115,7 @@ export function AddExamDialog({ animalId, open, onOpenChange, exam }: AddExamDia
         billNotes: "",
       });
     }
-  }, [exam, open, reset]);
+  }, [exam, initialValues, open, reset]);
 
   const createMutation = useMutation({
     mutationFn: async (data: ExamFormData) => {
@@ -192,9 +193,9 @@ export function AddExamDialog({ animalId, open, onOpenChange, exam }: AddExamDia
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Exam Type *</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value || ""}>
+                    <Select onValueChange={field.onChange} value={field.value || ""} disabled={!!initialValues?.examType}>
                       <FormControl>
-                        <SelectTrigger data-testid="select-exam-type">
+                        <SelectTrigger data-testid="select-exam-type" className={initialValues?.examType ? "opacity-70" : ""}>
                           <SelectValue placeholder="Select exam type" />
                         </SelectTrigger>
                       </FormControl>

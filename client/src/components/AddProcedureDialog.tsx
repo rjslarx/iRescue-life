@@ -48,9 +48,10 @@ interface AddProcedureDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   procedure?: Procedure | null;
+  initialValues?: { procedureName?: string } | null;
 }
 
-export function AddProcedureDialog({ animalId, open, onOpenChange, procedure }: AddProcedureDialogProps) {
+export function AddProcedureDialog({ animalId, open, onOpenChange, procedure, initialValues }: AddProcedureDialogProps) {
   const { toast } = useToast();
   const isEditing = !!procedure;
 
@@ -87,7 +88,7 @@ export function AddProcedureDialog({ animalId, open, onOpenChange, procedure }: 
       });
     } else if (!procedure && open) {
       reset({
-        procedureName: "",
+        procedureName: initialValues?.procedureName || "",
         procedureDate: new Date().toISOString().split('T')[0],
         veterinarian: "",
         notes: "",
@@ -99,7 +100,7 @@ export function AddProcedureDialog({ animalId, open, onOpenChange, procedure }: 
         billNotes: "",
       });
     }
-  }, [procedure, open, reset]);
+  }, [procedure, initialValues, open, reset]);
 
   const createMutation = useMutation({
     mutationFn: async (data: ProcedureFormData) => {
@@ -177,7 +178,7 @@ export function AddProcedureDialog({ animalId, open, onOpenChange, procedure }: 
                 <FormItem>
                   <FormLabel>Procedure Name *</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., Spay, Neuter, Dental Cleaning" {...field} data-testid="input-procedure-name" />
+                    <Input placeholder="e.g., Spay, Neuter, Dental Cleaning" {...field} disabled={!!initialValues?.procedureName} className={initialValues?.procedureName ? "opacity-70" : ""} data-testid="input-procedure-name" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

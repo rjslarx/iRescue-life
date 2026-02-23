@@ -2744,6 +2744,7 @@ export default function AnimalMedicalPage() {
           />
           <AddMedicalOrderDialog
             animalId={animalId}
+            animalSpecies={animal?.species || 'Dog'}
             open={addMedicalOrderOpen}
             onOpenChange={setAddMedicalOrderOpen}
           />

@@ -52,6 +52,7 @@ interface AddPreventativeCareDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   record?: PreventativeCareRecord | null;
+  initialValues?: { careName?: string } | null;
 }
 
 export function AddPreventativeCareDialog({ 
@@ -59,7 +60,8 @@ export function AddPreventativeCareDialog({
   animalSpecies, 
   open, 
   onOpenChange, 
-  record 
+  record,
+  initialValues 
 }: AddPreventativeCareDialogProps) {
   const { toast } = useToast();
   const isEditing = !!record;
@@ -134,6 +136,15 @@ export function AddPreventativeCareDialog({
       });
     }
   }, [record, open, form]);
+
+  useEffect(() => {
+    if (initialValues?.careName && careTypes.length > 0 && open && !record) {
+      const match = careTypes.find(t => t.name.toLowerCase() === initialValues.careName!.toLowerCase());
+      if (match) {
+        form.setValue("careTypeId", match.id);
+      }
+    }
+  }, [initialValues, careTypes, open, record, form]);
 
   const createMutation = useMutation({
     mutationFn: async (data: PreventativeCareFormData) => {
@@ -237,9 +248,9 @@ export function AddPreventativeCareDialog({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Care Type *</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value || ""}>
+                  <Select onValueChange={field.onChange} value={field.value || ""} disabled={!!initialValues?.careName}>
                     <FormControl>
-                      <SelectTrigger data-testid="select-care-type">
+                      <SelectTrigger data-testid="select-care-type" className={initialValues?.careName ? "opacity-70" : ""}>
                         <SelectValue placeholder="Select care type..." />
                       </SelectTrigger>
                     </FormControl>

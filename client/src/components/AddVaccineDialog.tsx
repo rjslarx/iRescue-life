@@ -56,9 +56,10 @@ interface AddVaccineDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   vaccine?: Vaccine | null;
+  initialValues?: { itemName?: string } | null;
 }
 
-export function AddVaccineDialog({ animalId, open, onOpenChange, vaccine }: AddVaccineDialogProps) {
+export function AddVaccineDialog({ animalId, open, onOpenChange, vaccine, initialValues }: AddVaccineDialogProps) {
   const { toast } = useToast();
   const isEditing = !!vaccine;
 
@@ -120,7 +121,7 @@ export function AddVaccineDialog({ animalId, open, onOpenChange, vaccine }: AddV
       });
     } else if (!vaccine && open) {
       reset({
-        itemName: "",
+        itemName: initialValues?.itemName || "",
         dateGiven: new Date().toISOString().split('T')[0],
         validDurationMonths: "",
         dateDue: "",
@@ -137,7 +138,7 @@ export function AddVaccineDialog({ animalId, open, onOpenChange, vaccine }: AddV
         billNotes: "",
       });
     }
-  }, [vaccine, open, reset]);
+  }, [vaccine, initialValues, open, reset]);
 
   const createMutation = useMutation({
     mutationFn: async (data: VaccineFormData) => {
@@ -222,7 +223,7 @@ export function AddVaccineDialog({ animalId, open, onOpenChange, vaccine }: AddV
                 <FormItem>
                   <FormLabel>Vaccine Name *</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., Rabies, DHPP" {...field} data-testid="input-vaccine-name" />
+                    <Input placeholder="e.g., Rabies, DHPP" {...field} disabled={!!initialValues?.itemName} className={initialValues?.itemName ? "opacity-70" : ""} data-testid="input-vaccine-name" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

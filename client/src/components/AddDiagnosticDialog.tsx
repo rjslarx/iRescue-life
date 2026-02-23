@@ -47,9 +47,10 @@ interface AddDiagnosticDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   diagnostic?: Diagnostic | null;
+  initialValues?: { testName?: string } | null;
 }
 
-export function AddDiagnosticDialog({ animalId, open, onOpenChange, diagnostic }: AddDiagnosticDialogProps) {
+export function AddDiagnosticDialog({ animalId, open, onOpenChange, diagnostic, initialValues }: AddDiagnosticDialogProps) {
   const { toast } = useToast();
   const isEditing = !!diagnostic;
 
@@ -86,7 +87,7 @@ export function AddDiagnosticDialog({ animalId, open, onOpenChange, diagnostic }
       });
     } else if (!diagnostic && open) {
       reset({
-        testName: "",
+        testName: initialValues?.testName || "",
         testDate: new Date().toISOString().split('T')[0],
         result: "",
         notes: "",
@@ -98,7 +99,7 @@ export function AddDiagnosticDialog({ animalId, open, onOpenChange, diagnostic }
         billNotes: "",
       });
     }
-  }, [diagnostic, open, reset]);
+  }, [diagnostic, initialValues, open, reset]);
 
   const createMutation = useMutation({
     mutationFn: async (data: DiagnosticFormData) => {
@@ -176,7 +177,7 @@ export function AddDiagnosticDialog({ animalId, open, onOpenChange, diagnostic }
                 <FormItem>
                   <FormLabel>Test Name *</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., CBC, Heartworm Test, X-ray" {...field} data-testid="input-test-name" />
+                    <Input placeholder="e.g., CBC, Heartworm Test, X-ray" {...field} disabled={!!initialValues?.testName} className={initialValues?.testName ? "opacity-70" : ""} data-testid="input-test-name" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

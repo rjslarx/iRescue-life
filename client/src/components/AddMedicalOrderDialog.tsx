@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,7 +12,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { AlertTriangle, Pill, Syringe, FlaskConical, Stethoscope, ShieldCheck, ClipboardCheck, Package, Loader2, Clock, CheckCircle2, AlertCircle, ArrowLeft, Search, Zap, Plus } from "lucide-react";
-import { Textarea } from "@/components/ui/textarea";
+
+import { AddPrescriptionDialog } from "@/components/AddPrescriptionDialog";
+import { AddVaccineDialog } from "@/components/AddVaccineDialog";
+import { AddDiagnosticDialog } from "@/components/AddDiagnosticDialog";
+import { AddProcedureDialog } from "@/components/AddProcedureDialog";
+import { AddExamDialog } from "@/components/AddExamDialog";
+import { AddPreventativeCareDialog } from "@/components/AddPreventativeCareDialog";
 
 interface ActiveOrder {
   id: string;
@@ -38,10 +44,16 @@ interface OrderSetWithItems {
   items: { id: string; sortOrder: number; catalogItem: CatalogItem }[];
 }
 
-type SelectedItem = { type: 'catalog'; item: CatalogItem } | { type: 'orderSet'; orderSet: OrderSetWithItems };
+interface PendingOrder {
+  category: string;
+  name: string;
+  defaultDose?: string | null;
+  defaultFrequency?: string | null;
+}
 
 interface AddMedicalOrderDialogProps {
   animalId: string;
+  animalSpecies?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
@@ -64,6 +76,16 @@ const categoryColors: Record<string, string> = {
   Preventative: "bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300",
 };
 
+function mapExamType(name: string): string {
+  const lower = name.toLowerCase();
+  if (lower.includes('intake')) return 'intake';
+  if (lower.includes('recheck')) return 'recheck';
+  if (lower.includes('wellness')) return 'wellness';
+  if (lower.includes('emergency')) return 'emergency';
+  if (lower.includes('adoption')) return 'adoption';
+  return 'other';
+}
+
 function getStatusBadgeInfo(order: ActiveOrder) {
   const now = new Date();
   if (order.dueDate) {
@@ -79,29 +101,19 @@ function getStatusBadgeInfo(order: ActiveOrder) {
   return { label: "Pending", className: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300", icon: Clock };
 }
 
-export function AddMedicalOrderDialog({ animalId, open, onOpenChange }: AddMedicalOrderDialogProps) {
+export function AddMedicalOrderDialog({ animalId, animalSpecies = 'Dog', open, onOpenChange }: AddMedicalOrderDialogProps) {
   const { toast } = useToast();
-  const [selected, setSelected] = useState<SelectedItem | null>(null);
   const [searchValue, setSearchValue] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [duplicateConfirm, setDuplicateConfirm] = useState<{ item: CatalogItem; existingName: string } | null>(null);
   const [creatingNew, setCreatingNew] = useState<{ name: string; category: string; defaultDose: string; defaultFrequency: string } | null>(null);
   const [creatingNewLoading, setCreatingNewLoading] = useState(false);
-
-  const [formData, setFormData] = useState({
-    dose: "",
-    frequency: "",
-    route: "PO" as string,
-    startDate: new Date().toISOString().split('T')[0],
-    endDate: "",
-    dueDate: new Date().toISOString().split('T')[0],
-    scheduledDate: new Date().toISOString().split('T')[0],
-    clinicLocation: "In-House",
-  });
+  const [pendingOrder, setPendingOrder] = useState<PendingOrder | null>(null);
+  const [selectedOrderSet, setSelectedOrderSet] = useState<OrderSetWithItems | null>(null);
 
   const { data: activeOrdersData, isLoading: loadingActive } = useQuery<{ activeOrders: ActiveOrder[] }>({
     queryKey: [`/api/animals/${animalId}/medical/active-orders`],
-    enabled: open,
+    enabled: open || !!pendingOrder,
   });
 
   const { data: catalogData } = useQuery<CatalogItem[]>({
@@ -127,27 +139,14 @@ export function AddMedicalOrderDialog({ animalId, open, onOpenChange }: AddMedic
   }, [activeOrders]);
 
   useEffect(() => {
-    if (!open) {
-      setSelected(null);
+    if (!open && !pendingOrder) {
       setSearchValue("");
       setDuplicateConfirm(null);
       setCreatingNew(null);
       setCreatingNewLoading(false);
-      setFormData({
-        dose: "",
-        frequency: "",
-        route: "PO",
-        startDate: new Date().toISOString().split('T')[0],
-        endDate: "",
-        dueDate: new Date().toISOString().split('T')[0],
-        scheduledDate: new Date().toISOString().split('T')[0],
-        clinicLocation: "In-House",
-        estimatedCost: "",
-        notes: "",
-        examReason: "",
-      });
+      setSelectedOrderSet(null);
     }
-  }, [open]);
+  }, [open, pendingOrder]);
 
   function handleSelectCatalogItem(item: CatalogItem) {
     const isDuplicate = activeNameSet.has(item.name.toLowerCase());
@@ -159,17 +158,18 @@ export function AddMedicalOrderDialog({ animalId, open, onOpenChange }: AddMedic
   }
 
   function confirmSelectItem(item: CatalogItem) {
-    setSelected({ type: 'catalog', item });
-    setFormData(prev => ({
-      ...prev,
-      dose: item.defaultDose || "",
-      frequency: item.defaultFrequency || "",
-    }));
+    setPendingOrder({
+      category: item.category,
+      name: item.name,
+      defaultDose: item.defaultDose,
+      defaultFrequency: item.defaultFrequency,
+    });
     setSearchValue("");
+    onOpenChange(false);
   }
 
   function handleSelectOrderSet(os: OrderSetWithItems) {
-    setSelected({ type: 'orderSet', orderSet: os });
+    setSelectedOrderSet(os);
     setSearchValue("");
   }
 
@@ -200,20 +200,16 @@ export function AddMedicalOrderDialog({ animalId, open, onOpenChange }: AddMedic
     }
   }
 
-  async function handleSubmit() {
-    if (!selected) return;
+  async function handleOrderSetSubmit() {
+    if (!selectedOrderSet) return;
     setSubmitting(true);
 
     try {
-      const payload: Record<string, any> = { animalId };
-
-      if (selected.type === 'catalog') {
-        payload.catalogItemId = selected.item.id;
-        payload.formData = { ...formData };
-      } else {
-        payload.orderSetId = selected.orderSet.id;
-        payload.formData = {};
-      }
+      const payload: Record<string, any> = {
+        animalId,
+        orderSetId: selectedOrderSet.id,
+        formData: {},
+      };
 
       const res = await apiRequest('POST', '/api/medical-orders/dispatch', payload);
       const result = await res.json();
@@ -227,14 +223,10 @@ export function AddMedicalOrderDialog({ animalId, open, onOpenChange }: AddMedic
       queryClient.invalidateQueries({ queryKey: [`/api/animals/${animalId}/medical/active-orders`] });
       queryClient.invalidateQueries({ queryKey: [`/api/animals/${animalId}/medical/history`] });
 
-      if (selected.type === 'catalog') {
-        toast({ title: "Order Created", description: `${selected.item.name} has been added.` });
-      } else {
-        toast({
-          title: "Order Set Applied",
-          description: `${result.dispatched} items from "${selected.orderSet.setName}" created.`,
-        });
-      }
+      toast({
+        title: "Order Set Applied",
+        description: `${result.dispatched} items from "${selectedOrderSet.setName}" created.`,
+      });
 
       onOpenChange(false);
     } catch (err: any) {
@@ -244,193 +236,16 @@ export function AddMedicalOrderDialog({ animalId, open, onOpenChange }: AddMedic
     }
   }
 
-  function renderCategoryForm() {
-    if (!selected || selected.type !== 'catalog') return null;
-    const { category } = selected.item;
-
-    switch (category) {
-      case 'Medication':
-        return (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" data-testid="form-medication">
-            <div className="space-y-1.5">
-              <Label>Dose</Label>
-              <Input
-                value={formData.dose}
-                onChange={e => setFormData(p => ({ ...p, dose: e.target.value }))}
-                placeholder="e.g., 250mg"
-                data-testid="input-dose"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Frequency</Label>
-              <Input
-                value={formData.frequency}
-                onChange={e => setFormData(p => ({ ...p, frequency: e.target.value }))}
-                placeholder="e.g., BID x 7 days"
-                data-testid="input-frequency"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Route</Label>
-              <Select value={formData.route} onValueChange={v => setFormData(p => ({ ...p, route: v }))}>
-                <SelectTrigger data-testid="select-route">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="PO">PO (Oral)</SelectItem>
-                  <SelectItem value="SQ">SQ (Subcutaneous)</SelectItem>
-                  <SelectItem value="IM">IM (Intramuscular)</SelectItem>
-                  <SelectItem value="IV">IV (Intravenous)</SelectItem>
-                  <SelectItem value="Topical">Topical</SelectItem>
-                  <SelectItem value="Other">Other</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Start Date</Label>
-              <Input
-                type="date"
-                value={formData.startDate}
-                onChange={e => setFormData(p => ({ ...p, startDate: e.target.value }))}
-                data-testid="input-start-date"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>End Date (optional)</Label>
-              <Input
-                type="date"
-                value={formData.endDate}
-                onChange={e => setFormData(p => ({ ...p, endDate: e.target.value }))}
-                data-testid="input-end-date"
-              />
-            </div>
-          </div>
-        );
-      case 'Vaccine':
-      case 'Preventative':
-        return (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" data-testid="form-vaccine-preventative">
-            <div className="space-y-1.5">
-              <Label>{category === 'Vaccine' ? 'Date Given' : 'Date Administered'}</Label>
-              <Input
-                type="date"
-                value={formData.dueDate}
-                onChange={e => setFormData(p => ({ ...p, dueDate: e.target.value }))}
-                data-testid="input-due-date"
-              />
-            </div>
-          </div>
-        );
-      case 'Lab':
-        return (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" data-testid="form-lab">
-            <div className="space-y-1.5">
-              <Label>Scheduled Date</Label>
-              <Input
-                type="date"
-                value={formData.scheduledDate}
-                onChange={e => setFormData(p => ({ ...p, scheduledDate: e.target.value }))}
-                data-testid="input-scheduled-date"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Clinic / Location</Label>
-              <Input
-                value={formData.clinicLocation}
-                onChange={e => setFormData(p => ({ ...p, clinicLocation: e.target.value }))}
-                placeholder="e.g., In-House, VCA"
-                data-testid="input-clinic-location"
-              />
-            </div>
-          </div>
-        );
-      case 'Procedure':
-        return (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" data-testid="form-procedure">
-            <div className="space-y-1.5">
-              <Label>Scheduled Date</Label>
-              <Input
-                type="date"
-                value={formData.scheduledDate}
-                onChange={e => setFormData(p => ({ ...p, scheduledDate: e.target.value }))}
-                data-testid="input-procedure-date"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Clinic / Vet Name</Label>
-              <Input
-                value={formData.clinicLocation}
-                onChange={e => setFormData(p => ({ ...p, clinicLocation: e.target.value }))}
-                placeholder="e.g., Dr. Smith, VCA Animal Hospital"
-                data-testid="input-procedure-clinic"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Estimated Cost (optional)</Label>
-              <Input
-                type="number"
-                step="0.01"
-                value={formData.estimatedCost}
-                onChange={e => setFormData(p => ({ ...p, estimatedCost: e.target.value }))}
-                placeholder="e.g., 350.00"
-                data-testid="input-procedure-cost"
-              />
-            </div>
-            <div className="space-y-1.5 sm:col-span-2">
-              <Label>Notes (optional)</Label>
-              <Textarea
-                value={formData.notes}
-                onChange={e => setFormData(p => ({ ...p, notes: e.target.value }))}
-                placeholder="e.g., Requires drop-off at 7 AM"
-                rows={2}
-                className="resize-none text-sm"
-                data-testid="input-procedure-notes"
-              />
-            </div>
-          </div>
-        );
-      case 'Exam':
-        return (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" data-testid="form-exam">
-            <div className="space-y-1.5">
-              <Label>Scheduled Date</Label>
-              <Input
-                type="date"
-                value={formData.scheduledDate}
-                onChange={e => setFormData(p => ({ ...p, scheduledDate: e.target.value }))}
-                data-testid="input-exam-date"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Clinic / Vet Name</Label>
-              <Input
-                value={formData.clinicLocation}
-                onChange={e => setFormData(p => ({ ...p, clinicLocation: e.target.value }))}
-                placeholder="e.g., Dr. Smith"
-                data-testid="input-exam-clinic"
-              />
-            </div>
-            <div className="space-y-1.5 sm:col-span-2">
-              <Label>Reason for Exam</Label>
-              <Textarea
-                value={formData.examReason}
-                onChange={e => setFormData(p => ({ ...p, examReason: e.target.value }))}
-                placeholder="e.g., Intake wellness check, limping on right rear leg"
-                rows={2}
-                className="resize-none text-sm"
-                data-testid="input-exam-reason"
-              />
-            </div>
-          </div>
-        );
-      default:
-        return null;
+  function handleCategoryDialogClose(didOpen: boolean) {
+    if (!didOpen) {
+      setPendingOrder(null);
+      queryClient.invalidateQueries({ queryKey: [`/api/animals/${animalId}/medical/active-orders`] });
     }
   }
 
   return (
     <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
+      <Dialog open={open && !pendingOrder} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto" data-testid="dialog-add-medical-order">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -443,7 +258,6 @@ export function AddMedicalOrderDialog({ animalId, open, onOpenChange }: AddMedic
           </DialogHeader>
 
           <div className="space-y-4">
-            {/* Active Orders Context Badges */}
             <div>
               <p className="text-xs font-medium text-muted-foreground mb-2">Active / Pending Orders</p>
               {loadingActive ? (
@@ -470,8 +284,7 @@ export function AddMedicalOrderDialog({ animalId, open, onOpenChange }: AddMedic
               )}
             </div>
 
-            {/* Step 1: Search & Quick Picks (or Create New Item form) */}
-            {!selected ? (
+            {!selectedOrderSet ? (
               creatingNew ? (
                 <div className="space-y-4" data-testid="container-create-new-item">
                   <div className="flex items-center gap-3">
@@ -648,17 +461,11 @@ export function AddMedicalOrderDialog({ animalId, open, onOpenChange }: AddMedic
                                       <span className={isDuplicate ? "text-amber-600 dark:text-amber-400" : ""}>
                                         {ci.name}
                                       </span>
-                                      <Badge variant="secondary" className={`ml-auto text-[10px] px-1.5 py-0 ${categoryColors[ci.category] || ""}`}>
+                                      <Badge variant="secondary" className={`text-[10px] ml-auto shrink-0 ${categoryColors[ci.category] || ""}`}>
                                         {ci.category}
                                       </Badge>
-                                      {ci.defaultDose && (
-                                        <span className="text-xs text-muted-foreground">{ci.defaultDose}</span>
-                                      )}
                                       {isDuplicate && (
-                                        <span className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400 shrink-0">
-                                          <AlertTriangle className="w-3.5 h-3.5" />
-                                          Active
-                                        </span>
+                                        <span className="text-xs text-amber-600 dark:text-amber-400 shrink-0">(active)</span>
                                       )}
                                     </CommandItem>
                                   );
@@ -703,78 +510,61 @@ export function AddMedicalOrderDialog({ animalId, open, onOpenChange }: AddMedic
                 </div>
               )
             ) : (
-              /* Step 2: Order Form */
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => setSelected(null)}
+                    onClick={() => setSelectedOrderSet(null)}
                     data-testid="button-back-to-search"
                   >
                     <ArrowLeft className="w-4 h-4" />
                   </Button>
                   <div className="flex items-center gap-2 min-w-0 flex-1">
-                    {selected.type === 'catalog' ? (
-                      <>
-                        {(() => { const Icon = categoryIcons[selected.item.category] || Pill; return <Icon className="w-4 h-4 shrink-0 text-muted-foreground" />; })()}
-                        <span className="font-medium truncate">Order Details: {selected.item.name}</span>
-                        <Badge variant="secondary" className={`text-[10px] shrink-0 ${categoryColors[selected.item.category] || ""}`}>
-                          {selected.item.category}
-                        </Badge>
-                      </>
-                    ) : (
-                      <>
-                        <Package className="w-4 h-4 shrink-0 text-muted-foreground" />
-                        <span className="font-medium truncate">Order Details: {selected.orderSet.setName}</span>
-                        <Badge variant="secondary" className="text-[10px] shrink-0">
-                          {selected.orderSet.items.length} items
-                        </Badge>
-                      </>
-                    )}
+                    <Package className="w-4 h-4 shrink-0 text-muted-foreground" />
+                    <span className="font-medium truncate">Order Details: {selectedOrderSet.setName}</span>
+                    <Badge variant="secondary" className="text-[10px] shrink-0">
+                      {selectedOrderSet.items.length} items
+                    </Badge>
                   </div>
                 </div>
 
                 <div className="border-t pt-4">
-                  {selected.type === 'catalog' && renderCategoryForm()}
-
-                  {selected.type === 'orderSet' && (
-                    <div className="space-y-1.5" data-testid="container-orderset-items">
-                      <p className="text-sm font-medium">Items in this order set:</p>
-                      {selected.orderSet.items.map(osi => {
-                        const Icon = categoryIcons[osi.catalogItem.category] || Pill;
-                        const isDuplicate = activeNameSet.has(osi.catalogItem.name.toLowerCase());
-                        return (
-                          <div key={osi.id} className="flex items-center gap-2 p-2 border rounded-md text-sm">
-                            <Icon className="w-4 h-4 shrink-0 text-muted-foreground" />
-                            <span className={isDuplicate ? "text-amber-600 dark:text-amber-400" : ""}>{osi.catalogItem.name}</span>
-                            <Badge variant="secondary" className={`text-[10px] ml-auto shrink-0 ${categoryColors[osi.catalogItem.category] || ""}`}>
-                              {osi.catalogItem.category}
-                            </Badge>
-                            {isDuplicate && (
-                              <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                  <div className="space-y-1.5" data-testid="container-orderset-items">
+                    <p className="text-sm font-medium">Items in this order set:</p>
+                    {selectedOrderSet.items.map(osi => {
+                      const Icon = categoryIcons[osi.catalogItem.category] || Pill;
+                      const isDuplicate = activeNameSet.has(osi.catalogItem.name.toLowerCase());
+                      return (
+                        <div key={osi.id} className="flex items-center gap-2 p-2 border rounded-md text-sm">
+                          <Icon className="w-4 h-4 shrink-0 text-muted-foreground" />
+                          <span className={isDuplicate ? "text-amber-600 dark:text-amber-400" : ""}>{osi.catalogItem.name}</span>
+                          <Badge variant="secondary" className={`text-[10px] ml-auto shrink-0 ${categoryColors[osi.catalogItem.category] || ""}`}>
+                            {osi.catalogItem.category}
+                          </Badge>
+                          {isDuplicate && (
+                            <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 <div className="flex items-center justify-between gap-2 pt-2 border-t">
                   <Button
                     variant="outline"
-                    onClick={() => setSelected(null)}
+                    onClick={() => setSelectedOrderSet(null)}
                     data-testid="button-back-order"
                   >
                     <ArrowLeft className="w-4 h-4 mr-1.5" />
                     Back
                   </Button>
-                  <Button onClick={handleSubmit} disabled={submitting} data-testid="button-submit-order">
+                  <Button onClick={handleOrderSetSubmit} disabled={submitting} data-testid="button-submit-order">
                     {submitting ? (
                       <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Submitting...</>
                     ) : (
-                      selected.type === 'orderSet' ? `Apply ${selected.orderSet.items.length} Items` : 'Save Order'
+                      `Apply ${selectedOrderSet.items.length} Items`
                     )}
                   </Button>
                 </div>
@@ -784,7 +574,6 @@ export function AddMedicalOrderDialog({ animalId, open, onOpenChange }: AddMedic
         </DialogContent>
       </Dialog>
 
-      {/* Duplicate Confirmation Dialog */}
       <AlertDialog open={!!duplicateConfirm} onOpenChange={(o) => { if (!o) setDuplicateConfirm(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -812,6 +601,65 @@ export function AddMedicalOrderDialog({ animalId, open, onOpenChange }: AddMedic
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {pendingOrder?.category === 'Medication' && (
+        <AddPrescriptionDialog
+          animalId={animalId}
+          open={true}
+          onOpenChange={handleCategoryDialogClose}
+          initialValues={{
+            medicationName: pendingOrder.name,
+            dosage: pendingOrder.defaultDose || "",
+            frequency: pendingOrder.defaultFrequency || "",
+          }}
+        />
+      )}
+
+      {pendingOrder?.category === 'Vaccine' && (
+        <AddVaccineDialog
+          animalId={animalId}
+          open={true}
+          onOpenChange={handleCategoryDialogClose}
+          initialValues={{ itemName: pendingOrder.name }}
+        />
+      )}
+
+      {pendingOrder?.category === 'Lab' && (
+        <AddDiagnosticDialog
+          animalId={animalId}
+          open={true}
+          onOpenChange={handleCategoryDialogClose}
+          initialValues={{ testName: pendingOrder.name }}
+        />
+      )}
+
+      {pendingOrder?.category === 'Procedure' && (
+        <AddProcedureDialog
+          animalId={animalId}
+          open={true}
+          onOpenChange={handleCategoryDialogClose}
+          initialValues={{ procedureName: pendingOrder.name }}
+        />
+      )}
+
+      {pendingOrder?.category === 'Exam' && (
+        <AddExamDialog
+          animalId={animalId}
+          open={true}
+          onOpenChange={handleCategoryDialogClose}
+          initialValues={{ examType: mapExamType(pendingOrder.name) }}
+        />
+      )}
+
+      {pendingOrder?.category === 'Preventative' && (
+        <AddPreventativeCareDialog
+          animalId={animalId}
+          animalSpecies={animalSpecies}
+          open={true}
+          onOpenChange={handleCategoryDialogClose}
+          initialValues={{ careName: pendingOrder.name }}
+        />
+      )}
     </>
   );
 }
