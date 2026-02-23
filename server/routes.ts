@@ -38138,6 +38138,8 @@ The user asking is a tenant administrator or staff member.`;
 
       let successCount = 0;
       const now = new Date();
+      const todayEnd = new Date();
+      todayEnd.setHours(23, 59, 59, 999);
 
       if (doseIds.length > 0) {
         const result = await db.update(medicalDoses)
@@ -38146,8 +38148,9 @@ The user asking is a tenant administrator or staff member.`;
             eq(medicalDoses.tenantId, tenantId),
             inArray(medicalDoses.id, doseIds),
             eq(medicalDoses.status, 'due'),
+            lte(medicalDoses.dueDate, todayEnd),
           ));
-        successCount += (result as any).rowCount || doseIds.length;
+        successCount += (result as any).rowCount || 0;
       }
 
       if (preventativeIds.length > 0) {
@@ -38157,8 +38160,13 @@ The user asking is a tenant administrator or staff member.`;
             eq(preventativeCareRecords.tenantId, tenantId),
             inArray(preventativeCareRecords.id, preventativeIds),
             eq(preventativeCareRecords.status, 'pending'),
+            lte(preventativeCareRecords.dateAdministered, todayEnd),
           ));
-        successCount += (result as any).rowCount || preventativeIds.length;
+        successCount += (result as any).rowCount || 0;
+      }
+
+      if (successCount === 0 && parsed.items.length > 0) {
+        return res.status(400).json({ error: 'Cannot mark future orders as given. Items must be due today or earlier.' });
       }
 
       res.json({ success: true, count: successCount });

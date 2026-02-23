@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -35,6 +36,7 @@ import {
   FlaskConical,
   CheckCircle2,
   ClipboardList,
+  Calendar as CalendarIcon,
 } from "lucide-react";
 import { format, isSameDay, parse } from "date-fns";
 
@@ -118,6 +120,9 @@ export default function DailyRosterPage() {
 
   const dateStr = format(selectedDate, "yyyy-MM-dd");
   const monthStr = format(calendarMonth, "yyyy-MM");
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const isFutureDate = selectedDate > today;
 
   const { data: roster, isLoading: rosterLoading } = useQuery<RosterData>({
     queryKey: ["/api/daily-roster", dateStr],
@@ -330,6 +335,12 @@ export default function DailyRosterPage() {
             </div>
           ) : (
             <>
+              {isFutureDate && (
+                <div className="flex items-center gap-2 rounded-md border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-sm text-amber-800 dark:text-amber-300" data-testid="banner-future-date">
+                  <CalendarIcon className="h-4 w-4 shrink-0" />
+                  <span>Viewing future date — items cannot be completed until their scheduled date.</span>
+                </div>
+              )}
               {medsAndPreventatives.length > 0 && (
                 <Card data-testid="card-meds-section">
                   <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 space-y-0 pb-3">
@@ -343,18 +354,38 @@ export default function DailyRosterPage() {
                         <Checkbox
                           checked={selectedItems.size === medsAndPreventatives.length && medsAndPreventatives.length > 0}
                           onCheckedChange={toggleAll}
+                          disabled={isFutureDate}
                           data-testid="checkbox-select-all"
                         />
                         <span className="text-xs text-muted-foreground">All</span>
                       </div>
-                      <Button
-                        size="sm"
-                        onClick={handleBulkMark}
-                        disabled={selectedItems.size === 0 || bulkMarkMutation.isPending}
-                        data-testid="button-bulk-mark-given"
-                      >
-                        {bulkMarkMutation.isPending ? "Updating..." : `Mark Given (${selectedItems.size})`}
-                      </Button>
+                      {isFutureDate ? (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span>
+                              <Button
+                                size="sm"
+                                disabled
+                                data-testid="button-bulk-mark-given"
+                              >
+                                Mark Given (0)
+                              </Button>
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Future orders cannot be marked as given until their scheduled date</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      ) : (
+                        <Button
+                          size="sm"
+                          onClick={handleBulkMark}
+                          disabled={selectedItems.size === 0 || bulkMarkMutation.isPending}
+                          data-testid="button-bulk-mark-given"
+                        >
+                          {bulkMarkMutation.isPending ? "Updating..." : `Mark Given (${selectedItems.size})`}
+                        </Button>
+                      )}
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-1">
@@ -365,6 +396,7 @@ export default function DailyRosterPage() {
                           <Checkbox
                             checked={selectedItems.has(key)}
                             onCheckedChange={() => toggleItem(key)}
+                            disabled={isFutureDate}
                             className="mt-0.5 shrink-0"
                             data-testid={`checkbox-med-${item.id}`}
                           />
@@ -442,9 +474,10 @@ export default function DailyRosterPage() {
                               setCompletionItem({ type: "procedure", item: item as RosterProcedure & { itemType: "procedure" } });
                             }
                           }}
+                          disabled={isFutureDate}
                           data-testid={`button-complete-${item.id}`}
                         >
-                          Log Completion
+                          {isFutureDate ? "Scheduled" : "Log Completion"}
                         </Button>
                       </div>
                     ))}
@@ -482,9 +515,10 @@ export default function DailyRosterPage() {
                           variant="outline"
                           className="shrink-0"
                           onClick={() => setResultsItem(item)}
+                          disabled={isFutureDate}
                           data-testid={`button-results-${item.id}`}
                         >
-                          Enter Results
+                          {isFutureDate ? "Scheduled" : "Enter Results"}
                         </Button>
                       </div>
                     ))}
