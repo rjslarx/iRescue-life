@@ -5488,6 +5488,39 @@ Crawl-delay: 1
   });
 
   /**
+   * PATCH /api/invitations/:id
+   * Update the email on a pending invitation (admin only)
+   */
+  app.patch('/api/invitations/:id', requireTenant, requireAuth, requireRole('owner', 'admin'), async (req, res, next) => {
+    try {
+      const { updateInvitationEmail, sendInvitationEmail } = await import('./services/invitations');
+      const { users } = await import('@shared/schema');
+      const { z } = await import('zod');
+
+      const schema = z.object({ email: z.string().email('Invalid email address') });
+      const { email } = schema.parse(req.body);
+
+      const updated = await updateInvitationEmail(req.params.id, req.tenant!.id, email);
+
+      const [inviter] = await db.select({
+        id: users.id,
+        fullName: users.fullName,
+      }).from(users).where(eq(users.id, req.user!.id)).limit(1);
+
+      await sendInvitationEmail(
+        req.tenant!.id,
+        updated,
+        inviter.fullName,
+        req.tenant!.name
+      );
+
+      res.json({ success: true });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * POST /api/invitations/:id/resend
    * Resend an invitation (admin only)
    */

@@ -432,6 +432,78 @@ export async function acceptInvitation(
 }
 
 /**
+ * Update the email address on a pending invitation
+ * Generates a new token since the old link should no longer work
+ */
+export async function updateInvitationEmail(
+  invitationId: string,
+  tenantId: string,
+  newEmail: string
+) {
+  // Verify invitation exists and is still pending
+  const [invitation] = await db
+    .select()
+    .from(userInvitations)
+    .where(and(
+      eq(userInvitations.id, invitationId),
+      eq(userInvitations.tenantId, tenantId),
+      isNull(userInvitations.acceptedAt)
+    ))
+    .limit(1);
+
+  if (!invitation) {
+    throw new Error('Invitation not found or already accepted');
+  }
+
+  // Check if a user already exists with the new email
+  const [existingUser] = await db
+    .select()
+    .from(users)
+    .where(and(
+      eq(users.tenantId, tenantId),
+      eq(users.email, newEmail)
+    ))
+    .limit(1);
+
+  if (existingUser) {
+    throw new Error('A user with this email already exists in your organization');
+  }
+
+  // Check if there's already a pending invitation for the new email
+  const [existingInvitation] = await db
+    .select()
+    .from(userInvitations)
+    .where(and(
+      eq(userInvitations.tenantId, tenantId),
+      eq(userInvitations.email, newEmail),
+      isNull(userInvitations.acceptedAt),
+      gt(userInvitations.expiresAt, new Date())
+    ))
+    .limit(1);
+
+  if (existingInvitation) {
+    throw new Error('An invitation has already been sent to this email');
+  }
+
+  // Generate new token and extend expiration
+  const newToken = generateInvitationToken();
+  const newExpiresAt = new Date();
+  newExpiresAt.setDate(newExpiresAt.getDate() + 7);
+
+  const [updated] = await db
+    .update(userInvitations)
+    .set({
+      email: newEmail,
+      token: newToken,
+      expiresAt: newExpiresAt,
+    })
+    .where(eq(userInvitations.id, invitationId))
+    .returning();
+
+  return updated;
+}
+
+/**
  * Cancel/delete an invitation
  */
 export async function cancelInvitation(invitationId: string, tenantId: string) {

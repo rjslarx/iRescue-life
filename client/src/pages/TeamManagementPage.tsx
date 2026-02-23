@@ -93,6 +93,7 @@ export default function TeamManagementPage() {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
   const [invitationToCancel, setInvitationToCancel] = useState<Invitation | null>(null);
+  const [editingInvitationEmail, setEditingInvitationEmail] = useState<{ id: string; email: string } | null>(null);
   const [selectedRoleTab, setSelectedRoleTab] = useState<string>("all");
 
   const [newInvitation, setNewInvitation] = useState({
@@ -190,6 +191,27 @@ export default function TeamManagementPage() {
     onError: (error: Error) => {
       toast({
         title: "Cancellation Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateInvitationEmailMutation = useMutation({
+    mutationFn: async ({ id, email }: { id: string; email: string }) => {
+      return await apiRequest("PATCH", `/api/invitations/${id}`, { email });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/invitations'] });
+      setEditingInvitationEmail(null);
+      toast({
+        title: "Email Updated",
+        description: "The invitation email has been updated and a new invitation sent.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Update Failed",
         description: error.message,
         variant: "destructive",
       });
@@ -458,7 +480,68 @@ export default function TeamManagementPage() {
                   <TableBody>
                     {invitations.map((invitation) => (
                       <TableRow key={invitation.id} data-testid={`row-invitation-${invitation.id}`}>
-                        <TableCell className="font-medium">{invitation.email}</TableCell>
+                        <TableCell className="font-medium">
+                          {editingInvitationEmail?.id === invitation.id ? (
+                            <form
+                              className="flex items-center gap-2"
+                              onSubmit={(e) => {
+                                e.preventDefault();
+                                if (editingInvitationEmail.email && editingInvitationEmail.email !== invitation.email) {
+                                  updateInvitationEmailMutation.mutate({
+                                    id: invitation.id,
+                                    email: editingInvitationEmail.email,
+                                  });
+                                } else {
+                                  setEditingInvitationEmail(null);
+                                }
+                              }}
+                            >
+                              <Input
+                                type="email"
+                                value={editingInvitationEmail.email}
+                                onChange={(e) => setEditingInvitationEmail({ ...editingInvitationEmail, email: e.target.value })}
+                                className="h-8 w-56"
+                                autoFocus
+                                data-testid={`input-edit-invitation-email-${invitation.id}`}
+                              />
+                              <Button
+                                type="submit"
+                                size="sm"
+                                disabled={updateInvitationEmailMutation.isPending || !editingInvitationEmail.email || editingInvitationEmail.email === invitation.email}
+                                data-testid={`button-save-invitation-email-${invitation.id}`}
+                              >
+                                {updateInvitationEmailMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save"}
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => setEditingInvitationEmail(null)}
+                                data-testid={`button-cancel-edit-email-${invitation.id}`}
+                              >
+                                Cancel
+                              </Button>
+                            </form>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <span>{invitation.email}</span>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-6 w-6"
+                                    onClick={() => setEditingInvitationEmail({ id: invitation.id, email: invitation.email })}
+                                    data-testid={`button-edit-email-${invitation.id}`}
+                                  >
+                                    <Pencil className="h-3 w-3" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Edit email address</TooltipContent>
+                              </Tooltip>
+                            </div>
+                          )}
+                        </TableCell>
                         <TableCell>{invitation.fullName || "-"}</TableCell>
                         <TableCell>
                           <div className="flex flex-wrap gap-1">
