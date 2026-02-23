@@ -1,5 +1,6 @@
 import { db } from '../db';
-import { pagePermissions } from '@shared/schema';
+import { pagePermissions, tenants } from '@shared/schema';
+import { eq, and } from 'drizzle-orm';
 
 /**
  * Seed default page permissions for a new tenant
@@ -145,6 +146,18 @@ export async function seedDefaultPagePermissions(tenantId: string) {
       description: 'Configure integrations with adoption platforms',
       allowedRoles: ['admin'],
     },
+    {
+      pageId: 'event-ticket-sales',
+      displayName: 'Event Ticket Sales',
+      description: 'Monitor live event ticket purchases and revenue',
+      allowedRoles: ['admin', 'board_member'],
+    },
+    {
+      pageId: 'network-transfers',
+      displayName: 'Network Transfers',
+      description: 'Transfer animals between rescue organizations',
+      allowedRoles: ['admin', 'board_member', 'staff'],
+    },
   ];
 
   try {
@@ -164,5 +177,62 @@ export async function seedDefaultPagePermissions(tenantId: string) {
   } catch (error) {
     console.error('Failed to seed page permissions:', error);
     throw error;
+  }
+}
+
+const NEW_PAGE_PERMISSIONS = [
+  {
+    pageId: 'event-ticket-sales',
+    displayName: 'Event Ticket Sales',
+    description: 'Monitor live event ticket purchases and revenue',
+    allowedRoles: ['admin', 'board_member'] as ('admin' | 'board_member' | 'staff' | 'foster' | 'volunteer')[],
+  },
+  {
+    pageId: 'network-transfers',
+    displayName: 'Network Transfers',
+    description: 'Transfer animals between rescue organizations',
+    allowedRoles: ['admin', 'board_member', 'staff'] as ('admin' | 'board_member' | 'staff' | 'foster' | 'volunteer')[],
+  },
+];
+
+export async function backfillNewPagePermissions() {
+  try {
+    const activeTenants = await db
+      .select({ id: tenants.id })
+      .from(tenants)
+      .where(eq(tenants.isActive, true));
+
+    let totalInserted = 0;
+
+    for (const tenant of activeTenants) {
+      for (const perm of NEW_PAGE_PERMISSIONS) {
+        const existing = await db
+          .select({ id: pagePermissions.id })
+          .from(pagePermissions)
+          .where(and(
+            eq(pagePermissions.tenantId, tenant.id),
+            eq(pagePermissions.pageId, perm.pageId)
+          ))
+          .limit(1);
+
+        if (existing.length === 0) {
+          await db.insert(pagePermissions).values({
+            tenantId: tenant.id,
+            pageId: perm.pageId,
+            displayName: perm.displayName,
+            description: perm.description,
+            allowedRoles: perm.allowedRoles,
+            isActive: true,
+          });
+          totalInserted++;
+        }
+      }
+    }
+
+    if (totalInserted > 0) {
+      console.log(`[PagePermissions] Backfilled ${totalInserted} new page permission(s) across ${activeTenants.length} tenants`);
+    }
+  } catch (error) {
+    console.error('[PagePermissions] Backfill failed:', error);
   }
 }

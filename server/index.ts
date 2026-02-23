@@ -10,6 +10,7 @@ import { injectOGTags } from "./middleware/og-tags";
 import { validateEnvironment } from "./config/env-validation";
 import { helmetConfig, getCorsConfig, configureTrustProxy, apiLimiter } from "./config/security";
 import { initializeScheduler } from "./lib/scheduler";
+import { backfillNewPagePermissions } from "./services/page-permissions-seeding";
 
 // Validate environment variables before starting
 validateEnvironment();
@@ -134,5 +135,8 @@ app.use((req, res, next) => {
     
     // Initialize scheduled jobs (demo reset, etc.)
     initializeScheduler();
+    
+    // Backfill any new page permissions for existing tenants
+    backfillNewPagePermissions();
   });
 })();
