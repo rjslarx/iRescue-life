@@ -1,0 +1,108 @@
+2026-02-23 10:51:22.05
+dbb706d3
+User
+[TENANT DEBUG] Custom domain detected: haseyasnewbeginningar.com (original: haseyasnewbeginningar.com)
+2026-02-23 10:51:22.05
+dbb706d3
+User
+[TENANT DEBUG] HEAD /old/ - hostname: haseyasnewbeginningar.com, x-tenant-id: undefined, session.tenantId: undefined
+2026-02-23 10:51:22.12
+dbb706d3
+User
+[TENANT DEBUG] HEAD / - hostname: haseyasnewbeginningar.com, x-tenant-id: undefined, session.tenantId: undefined
+2026-02-23 10:51:22.12
+dbb706d3
+User
+[TENANT DEBUG] Custom domain detected: haseyasnewbeginningar.com (original: haseyasnewbeginningar.com)
+2026-02-23 10:51:22.21
+dbb706d3
+User
+[TENANT DEBUG] Custom domain detected: haseyasnewbeginningar.com (original: haseyasnewbeginningar.com)
+2026-02-23 10:51:22.21
+dbb706d3
+User
+[TENANT DEBUG] HEAD /blog/ - hostname: haseyasnewbeginningar.com, x-tenant-id: undefined, session.tenantId: undefined
+2026-02-23 10:51:22.28
+dbb706d3
+User
+[TENANT DEBUG] Custom domain detected: haseyasnewbeginningar.com (original: haseyasnewbeginningar.com)
+2026-02-23 10:51:22.28
+dbb706d3
+User
+[TENANT DEBUG] HEAD /wp/ - hostname: haseyasnewbeginningar.com, x-tenant-id: undefined, session.tenantId: undefined
+2026-02-23 10:52:00.10
+dbb706d3
+User
+[TENANT DEBUG] Custom domain detected: southernpetsanimalrescue.com (original: southernpetsanimalrescue.com)
+2026-02-23 10:52:00.10
+dbb706d3
+User
+[TENANT DEBUG] POST /api/webhook/resend - hostname: southernpetsanimalrescue.com, x-tenant-id: undefined, session.tenantId: undefined
+2026-02-23 10:52:00.10
+dbb706d3
+User
+[TENANT DEBUG] POST /api/webhook/resend - hostname: southernpetsanimalrescue.com, x-tenant-id: undefined, session.tenantId: undefined
+2026-02-23 10:52:00.10
+dbb706d3
+User
+[TENANT DEBUG] Custom domain detected: southernpetsanimalrescue.com (original: southernpetsanimalrescue.com)
+2026-02-23 10:52:00.28
+dbb706d3
+User
+4:52:00 PM [express] POST /api/webhook/resend 200 in 3ms
+2026-02-23 10:52:00.31
+dbb706d3
+User
+4:52:00 PM [express] POST /api/webhook/resend 200 in 11ms
+2026-02-23 10:53:00.14
+dbb706d3
+User
+[TENANT DEBUG] Custom domain detected: southernpetsanimalrescue.com (original: southernpetsanimalrescue.com)
+2026-02-23 10:53:00.14
+dbb706d3
+User
+[TENANT DEBUG] POST /api/webhook/resend - hostname: southernpetsanimalrescue.com, x-tenant-id: undefined, session.tenantId: undefined
+2026-02-23 10:53:00.14
+dbb706d3
+User
+[TENANT DEBUG] Custom domain detected: southernpetsanimalrescue.com (original: southernpetsanimalrescue.com)
+2026-02-23 10:53:00.14
+dbb706d3
+User
+[TENANT DEBUG] POST /api/webhook/resend - hostname: southernpetsanimalrescue.com, x-tenant-id: undefined, session.tenantId: undefined
+2026-02-23 10:53:00.33
+dbb706d3
+User
+4:53:00 PM [express] POST /api/webhook/resend 200 in 2ms
+2026-02-23 10:53:00.34
+dbb706d3
+User
+4:53:00 PM [express] POST /api/webhook/resend 200 in 2ms
+2026-02-23 10:53:55.44
+dbb706d3
+User
+[TENANT DEBUG] GET /platform/contact - hostname: irescue.life, x-tenant-id: undefined, session.tenantId: undefined
+2026-02-23 10:54:00.13
+dbb706d3
+User
+[TENANT DEBUG] POST /api/webhook/resend - hostname: southernpetsanimalrescue.com, x-tenant-id: undefined, session.tenantId: undefined
+2026-02-23 10:54:00.13
+dbb706d3
+User
+[TENANT DEBUG] Custom domain detected: southernpetsanimalrescue.com (original: southernpetsanimalrescue.com)
+2026-02-23 10:54:00.13
+dbb706d3
+User
+[TENANT DEBUG] POST /api/webhook/resend - hostname: southernpetsanimalrescue.com, x-tenant-id: undefined, session.tenantId: undefined
+2026-02-23 10:54:00.13
+dbb706d3
+User
+[TENANT DEBUG] Custom domain detected: southernpetsanimalrescue.com (original: southernpetsanimalrescue.com)
+2026-02-23 10:54:00.29
+dbb706d3
+User
+4:54:00 PM [express] POST /api/webhook/resend 200 in 2ms
+2026-02-23 10:54:00.29
+dbb706d3
+User
+4:54:00 PM [express] POST /api/webhook/resend 200 in 1ms

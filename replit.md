@@ -42,6 +42,7 @@ Core functionalities include:
 - Age-Aware Puppy Protocol Automation for intelligent scheduling of puppy vaccinations and preventative care based on DOB.
 - Automated Adoption Packet Generator for professional, certificate-style PDFs of vaccination history, preventative care, and microchip information, generated during adoption finalization.
 - Tenant-to-Tenant Animal Transfers for sharing animal records between iRescue network organizations, including deep cloning of profiles and medical data.
+- **Unified Daily Medical Roster:** Aggregated daily view of all pending medical tasks across 5 tables (medication doses, preventative care, exams, procedures, diagnostics). Two-column layout with month-view calendar (badge dots on days with pending items) and categorized roster. Three action sections: (A) In-House Meds & Preventatives with checkbox bulk "Mark Given", (B) Vet Visits & Surgeries with "Log Completion" dialog (cost, notes), (C) Labs & Diagnostics with "Enter Results" dialog (Positive/Negative/Inconclusive). API: `GET /api/daily-roster`, `GET /api/daily-roster/calendar`, `POST /api/daily-roster/bulk-mark-given`. Page: `DailyRosterPage.tsx`. Sidebar: Operations > Daily Roster.
 
 ## External Dependencies
 - **Stripe:** Payment processing and financial management.

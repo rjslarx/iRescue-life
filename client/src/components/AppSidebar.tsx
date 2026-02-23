@@ -75,6 +75,7 @@ import {
   ArrowRightLeft,
   HardDrive,
   Ticket,
+  ClipboardList,
 } from "lucide-react";
 
 interface AppSidebarProps {
@@ -255,6 +256,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
         { title: "Kennels", url: "/dashboard/kennels", icon: Home },
         { title: "Network Transfers", url: "/dashboard/transfers", icon: ArrowRightLeft, notificationKey: "pendingTransfers" },
         { title: "Medical Pipeline", url: "/dashboard/medical-pipeline", icon: Stethoscope, notificationKey: "medicalTasks", usesGoogleDrive: true, proOnly: true },
+        { title: "Daily Roster", url: "/dashboard/daily-roster", icon: ClipboardList },
         { title: "Adoption Applications", url: "/dashboard/applications", icon: FileText, notificationKey: "applications", proOnly: true },
         { title: "Intake Manager", url: "/dashboard/intake", icon: Inbox, proOnly: true },
       ],
@@ -342,6 +344,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
         { title: "Kennels", url: "/dashboard/kennels", icon: Home },
         { title: "Network Transfers", url: "/dashboard/transfers", icon: ArrowRightLeft, notificationKey: "pendingTransfers" },
         { title: "Medical Pipeline", url: "/dashboard/medical-pipeline", icon: Stethoscope, notificationKey: "medicalTasks", usesGoogleDrive: true, proOnly: true },
+        { title: "Daily Roster", url: "/dashboard/daily-roster", icon: ClipboardList },
         { title: "Adoption Applications", url: "/dashboard/applications", icon: FileText, notificationKey: "applications", proOnly: true },
         { title: "Intake Manager", url: "/dashboard/intake", icon: Inbox, proOnly: true },
       ],
@@ -409,6 +412,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
         { title: "Kennels", url: "/dashboard/kennels", icon: Home },
         { title: "Network Transfers", url: "/dashboard/transfers", icon: ArrowRightLeft, notificationKey: "pendingTransfers" },
         { title: "Medical Pipeline", url: "/dashboard/medical-pipeline", icon: Stethoscope, notificationKey: "medicalTasks", usesGoogleDrive: true, proOnly: true },
+        { title: "Daily Roster", url: "/dashboard/daily-roster", icon: ClipboardList },
         { title: "Adoption Applications", url: "/dashboard/applications", icon: FileText, notificationKey: "applications", proOnly: true },
         { title: "Intake Manager", url: "/dashboard/intake", icon: Inbox, proOnly: true },
         { title: "Supply Registry", url: "/dashboard/supplies", icon: ShoppingCart },
@@ -466,6 +470,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
     '/dashboard/kennels': 'animals',
     '/dashboard/transfers': 'animals',
     '/dashboard/medical-pipeline': 'medical-tasks',
+    '/dashboard/daily-roster': 'daily-roster',
     '/dashboard/applications': 'applications',
     '/dashboard/foster-management': 'foster-management',
     '/dashboard/team': 'team',
@@ -525,6 +530,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
     'dashboard': { title: "Command Center", url: "/dashboard", icon: LayoutDashboard },
     'animals': { title: "Animals", url: "/dashboard/animals", icon: Heart },
     'medical-tasks': { title: "Medical Pipeline", url: "/dashboard/medical-pipeline", icon: Stethoscope },
+    'daily-roster': { title: "Daily Roster", url: "/dashboard/daily-roster", icon: ClipboardList },
     'applications': { title: "Adoption Applications", url: "/dashboard/applications", icon: FileText },
     'foster-management': { title: "Foster Management", url: "/dashboard/foster-management", icon: PawPrint },
     'team': { title: "Team", url: "/dashboard/team", icon: Users },

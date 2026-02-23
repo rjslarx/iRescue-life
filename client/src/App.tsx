@@ -59,6 +59,7 @@ import AnimalApplicationsPage from "@/pages/AnimalApplicationsPage";
 import SitePermissionsPage from "@/pages/SitePermissionsPage";
 import MedicalTasksPage from "@/pages/MedicalTasksPage";
 import MedicalPipelinePage from "@/pages/MedicalPipelinePage";
+import DailyRosterPage from "@/pages/DailyRosterPage";
 import PrintableHealthRecordPage from "@/pages/PrintableHealthRecordPage";
 import KennelCardPage from "@/pages/KennelCardPage";
 import KennelManagementPage from "@/pages/KennelManagementPage";
@@ -311,6 +312,7 @@ function RouterSwitch() {
       <ProtectedRoute path="/dashboard/animals/:animalId/kennel-card" pageId="animals" component={KennelCardPage} />
       <ProtectedRoute path="/dashboard/medical-pipeline" pageId="medical-tasks" component={MedicalPipelinePage} proOnly proFeatureName="Medical Pipeline" />
       <ProtectedRoute path="/dashboard/medical-tasks" pageId="medical-tasks" component={MedicalPipelinePage} proOnly proFeatureName="Medical Pipeline" />
+      <ProtectedRoute path="/dashboard/daily-roster" pageId="daily-roster" component={DailyRosterPage} />
       <ProtectedRoute path="/dashboard/volunteer-medications" pageId="volunteers" component={MedicalTasksPage} />
       <ProtectedRoute path="/dashboard/supplies" pageId="supply-registry" component={SupplyManagementPage} />
       <ProtectedRoute path="/dashboard/happy-tails" pageId="happy-tails" component={HappyTailsPage} />
