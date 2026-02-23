@@ -3,6 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
+import DashboardLayout from "@/components/DashboardLayout";
 import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -257,6 +258,7 @@ export default function DailyRosterPage() {
   }
 
   return (
+    <DashboardLayout title="Daily Medical Roster" description="Aggregated daily view of all pending medical tasks">
     <div className="flex flex-col h-full overflow-auto" data-testid="page-daily-roster">
       <div className="border-b px-4 py-3 lg:px-6">
         <div className="flex items-center gap-2 flex-wrap">
@@ -602,5 +604,6 @@ export default function DailyRosterPage() {
         }
       `}</style>
     </div>
+    </DashboardLayout>
   );
 }
