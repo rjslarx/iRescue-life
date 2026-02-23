@@ -23545,6 +23545,119 @@ Submitted: ${new Date().toLocaleString()}
   });
 
   /**
+   * GET /api/event-ticket-sales
+   * Get event ticket purchase data from Stripe checkout sessions
+   * Filtered to event_ticket type only, with optional event name and date range filters
+   * Designed for real-time monitoring at live events from mobile devices
+   */
+  app.get('/api/event-ticket-sales', requireTenant, requireAuth, requireRoleOrPageAccess('event-ticket-sales', 'admin', 'board_member', 'staff', 'owner'), async (req, res, next) => {
+    try {
+      const { stripeService } = await import('./lib/stripe-service');
+      const { eventTickets: eventTicketsTable } = await import('@shared/schema');
+
+      const [tenant] = await db
+        .select()
+        .from(tenants)
+        .where(eq(tenants.id, req.tenant!.id))
+        .limit(1);
+
+      if (!tenant) {
+        return res.status(404).json({ error: 'Tenant not found' });
+      }
+
+      const hasStripe = tenant.stripeConnectedAccountId || (tenant.stripeEnabled && tenant.stripeSecretKeyEncrypted);
+      if (!hasStripe) {
+        return res.json({ configured: false, sales: [], summary: { totalRevenue: 0, totalTickets: 0, eventBreakdown: [] } });
+      }
+
+      const result = await stripeService.getCheckoutSessions(tenant, 100);
+      if (!result.sessions) {
+        return res.json({ configured: true, sales: [], summary: { totalRevenue: 0, totalTickets: 0, eventBreakdown: [] }, error: result.error });
+      }
+
+      const eventFilter = req.query.eventName as string | undefined;
+      const dateFrom = req.query.dateFrom ? new Date(req.query.dateFrom as string) : null;
+      const dateTo = req.query.dateTo ? new Date(req.query.dateTo as string) : null;
+
+      const sales = result.sessions
+        .filter(s => s.status === 'complete' && s.payment_status === 'paid')
+        .map(session => {
+          const meta = session.metadata || {};
+          if (!meta.eventTicketId && !meta.eventName) return null;
+
+          const qty = parseInt(meta.quantity || '1', 10);
+          const eventName = meta.eventName || 'Unknown Event';
+          const created = new Date(session.created * 1000);
+
+          return {
+            id: session.id,
+            eventName,
+            eventTicketId: meta.eventTicketId || null,
+            customerName: session.customer_details?.name || 'Anonymous',
+            customerEmail: session.customer_details?.email || session.customer_email || '',
+            quantity: qty,
+            amount: session.amount_total || 0,
+            baseAmount: meta.baseAmount ? parseInt(meta.baseAmount, 10) : null,
+            donorCoveredFees: meta.donorCoveredFees === 'true' || meta.donorCoversFees === 'true',
+            currency: session.currency || 'usd',
+            created: created.toISOString(),
+          };
+        })
+        .filter((sale): sale is NonNullable<typeof sale> => {
+          if (!sale) return false;
+          if (eventFilter && sale.eventName.toLowerCase() !== eventFilter.toLowerCase()) return false;
+          if (dateFrom && new Date(sale.created) < dateFrom) return false;
+          if (dateTo) {
+            const endOfDay = new Date(dateTo);
+            endOfDay.setHours(23, 59, 59, 999);
+            if (new Date(sale.created) > endOfDay) return false;
+          }
+          return true;
+        });
+
+      sales.sort((a, b) => new Date(b.created).getTime() - new Date(a.created).getTime());
+
+      const eventBreakdownMap = new Map<string, { eventName: string; totalRevenue: number; totalTickets: number; purchaseCount: number }>();
+      let totalRevenue = 0;
+      let totalTickets = 0;
+
+      for (const sale of sales) {
+        totalRevenue += sale.amount;
+        totalTickets += sale.quantity;
+        const existing = eventBreakdownMap.get(sale.eventName);
+        if (existing) {
+          existing.totalRevenue += sale.amount;
+          existing.totalTickets += sale.quantity;
+          existing.purchaseCount += 1;
+        } else {
+          eventBreakdownMap.set(sale.eventName, {
+            eventName: sale.eventName,
+            totalRevenue: sale.amount,
+            totalTickets: sale.quantity,
+            purchaseCount: 1,
+          });
+        }
+      }
+
+      const summary = {
+        totalRevenue,
+        totalTickets,
+        eventBreakdown: Array.from(eventBreakdownMap.values()),
+      };
+
+      const allEvents = await db
+        .select({ id: eventTicketsTable.id, eventName: eventTicketsTable.eventName, isActive: eventTicketsTable.isActive })
+        .from(eventTicketsTable)
+        .where(eq(eventTicketsTable.tenantId, req.tenant!.id))
+        .orderBy(eventTicketsTable.eventName);
+
+      res.json({ configured: true, sales, summary, events: allEvents });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * POST /api/stripe/create-checkout-session
    * Create a Stripe checkout session for donations
    */

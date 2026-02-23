@@ -74,6 +74,7 @@ import {
   Search,
   ArrowRightLeft,
   HardDrive,
+  Ticket,
 } from "lucide-react";
 
 interface AppSidebarProps {
@@ -137,6 +138,7 @@ const iconMap: Record<string, any> = {
   Video,
   Kanban,
   UserCog,
+  Ticket,
 };
 
 
@@ -294,6 +296,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
       title: "Administration",
       items: [
         { title: "Finance", url: "/dashboard/finance", icon: DollarSign },
+        { title: "Event Ticket Sales", url: "/dashboard/event-ticket-sales", icon: Ticket },
         { title: "Donation Links", url: "/dashboard/donation-links", icon: DollarSign },
         { title: "Grants", url: "/dashboard/grants", icon: Briefcase, proOnly: true },
         { title: "Calendar", url: "/dashboard/calendar", icon: Calendar },
@@ -362,6 +365,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
       title: "Content & Reports",
       items: [
         { title: "Finance", url: "/dashboard/finance", icon: DollarSign },
+        { title: "Event Ticket Sales", url: "/dashboard/event-ticket-sales", icon: Ticket },
         { title: "Donation Links", url: "/dashboard/donation-links", icon: DollarSign },
         { title: "Grants", url: "/dashboard/grants", icon: Briefcase, proOnly: true },
         { title: "Supply Registry", url: "/dashboard/supplies", icon: ShoppingCart },
@@ -492,6 +496,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
     '/dashboard/website-builder': 'custom-pages',
     '/dashboard/collaboration': 'collaboration',
     '/dashboard/tutorials': 'tutorials',
+    '/dashboard/event-ticket-sales': 'event-ticket-sales',
     '/dashboard/volunteer-pipeline': 'volunteer-pipeline',
     '/dashboard/foster-pipeline': 'foster-pipeline',
   };
@@ -540,6 +545,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
     'tutorials': { title: "Video Tutorials", url: "/dashboard/tutorials", icon: Video },
     'volunteer-pipeline': { title: "Volunteer Pipeline", url: "/dashboard/volunteer-pipeline", icon: Kanban },
     'foster-pipeline': { title: "Foster Pipeline", url: "/dashboard/foster-pipeline", icon: Kanban },
+    'event-ticket-sales': { title: "Event Ticket Sales", url: "/dashboard/event-ticket-sales", icon: Ticket },
   };
 
   // Filter groups and items based on permissions and tier

@@ -130,6 +130,7 @@ import PlatformLoginPage from "@/pages/platform/PlatformLoginPage";
 import PlatformForgotPasswordPage from "@/pages/platform/PlatformForgotPasswordPage";
 import PlatformResetPasswordPage from "@/pages/platform/PlatformResetPasswordPage";
 import TransfersPage from "@/pages/TransfersPage";
+import EventTicketSalesPage from "@/pages/EventTicketSalesPage";
 import TenantAuditLogsPage from "@/pages/TenantAuditLogsPage";
 import TenantSignupPage from "@/pages/TenantSignupPage";
 import SignupSuccessPage from "@/pages/platform/SignupSuccessPage";
@@ -314,6 +315,7 @@ function RouterSwitch() {
       <ProtectedRoute path="/dashboard/supplies" pageId="supply-registry" component={SupplyManagementPage} />
       <ProtectedRoute path="/dashboard/happy-tails" pageId="happy-tails" component={HappyTailsPage} />
       <ProtectedRoute path="/dashboard/tutorials" pageId="tutorials" component={TutorialsPage} />
+      <ProtectedRoute path="/dashboard/event-ticket-sales" pageId="event-ticket-sales" component={EventTicketSalesPage} />
       <ProtectedRoute path="/dashboard/transfers" pageId="animals" component={TransfersPage} />
       <ProtectedRoute path="/dashboard/kennels" pageId="animals" component={KennelManagementPage} />
       <ProtectedRoute path="/dashboard/shop" pageId="shop" component={ShopManagementPage} />
