@@ -111,6 +111,8 @@ const vetMedications = new Set([
   'maelstrom', 'trilostane', 'vetoryl',
   'succinylcholine', 'propofol', 'alfaxalone', 'alfaxan', 'ketamine', 'telazol', 'tiletamine',
   'atropine', 'glycopyrrolate',
+  'ponazuril', 'marquis', 'capstar', 'nitenpyram',
+  'erythromycin ophthalmic',
 ]);
 
 const vetVaccines = new Set([
@@ -147,6 +149,7 @@ const vetLabs = new Set([
   'blood smear', 'reticulocyte count', 'retic count',
   'cross match', 'crossmatch', 'blood type', 'blood typing',
   'progesterone',
+  'skin scrape', 'skin scraping',
 ]);
 
 const vetProcedures = new Set([

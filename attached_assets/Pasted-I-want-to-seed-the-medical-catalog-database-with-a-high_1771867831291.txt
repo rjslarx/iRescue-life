@@ -1,0 +1,61 @@
+I want to seed the `medical_catalog` database with a highly curated list of standard rescue medications, vaccines, and procedures. 
+
+Please create a database seeder script that runs when a new Tenant is created. It should insert the following JSON array of objects into the `medical_catalog` table, automatically attaching the new `tenant_id` to each row.
+
+Here is the JSON seed data:
+
+[
+  // VACCINES
+  { name: 'DHPP (Distemper/Parvo)', category: 'Vaccine' },
+  { name: 'DA2PP', category: 'Vaccine' },
+  { name: 'Rabies (1-Year)', category: 'Vaccine' },
+  { name: 'Rabies (3-Year)', category: 'Vaccine' },
+  { name: 'Bordetella (Intranasal)', category: 'Vaccine' },
+  { name: 'Bordetella (Oral)', category: 'Vaccine' },
+  { name: 'FVRCP (Feline)', category: 'Vaccine' },
+  { name: 'FeLV (Feline Leukemia)', category: 'Vaccine' },
+
+  // PREVENTATIVES & DEWORMERS
+  { name: 'Pyrantel Pamoate (Strongid)', category: 'Preventative' },
+  { name: 'Fenbendazole (Panacur)', category: 'Preventative' },
+  { name: 'Ponazuril (Marquis)', category: 'Preventative' },
+  { name: 'Heartgard Plus', category: 'Preventative' },
+  { name: 'Simparica Trio', category: 'Preventative' },
+  { name: 'NexGard', category: 'Preventative' },
+  { name: 'Bravecto', category: 'Preventative' },
+  { name: 'Revolution (Feline)', category: 'Preventative' },
+  { name: 'Capstar', category: 'Preventative' },
+
+  // MEDICATIONS
+  { name: 'Doxycycline', category: 'Medication' },
+  { name: 'Amoxicillin', category: 'Medication' },
+  { name: 'Clavamox', category: 'Medication' },
+  { name: 'Metronidazole', category: 'Medication' },
+  { name: 'Carprofen (Rimadyl)', category: 'Medication' },
+  { name: 'Meloxicam (Metacam)', category: 'Medication' },
+  { name: 'Gabapentin', category: 'Medication' },
+  { name: 'Trazodone', category: 'Medication' },
+  { name: 'Erythromycin Ophthalmic', category: 'Medication' },
+
+  // LABS & DIAGNOSTICS
+  { name: 'Fecal Float', category: 'Lab' },
+  { name: 'SNAP 4Dx (Heartworm/Tick)', category: 'Lab' },
+  { name: 'SNAP FIV/FeLV', category: 'Lab' },
+  { name: 'Parvo SNAP Test', category: 'Lab' },
+  { name: 'Skin Scrape', category: 'Lab' },
+  { name: 'Bloodwork (CBC/Chem)', category: 'Lab' },
+
+  // PROCEDURES
+  { name: 'Spay', category: 'Procedure' },
+  { name: 'Neuter', category: 'Procedure' },
+  { name: 'Microchip Implantation', category: 'Procedure' },
+  { name: 'Dental Cleaning', category: 'Procedure' },
+  { name: 'Euthanasia', category: 'Procedure' },
+
+  // EXAMS
+  { name: 'Intake Exam', category: 'Exam' },
+  { name: 'General Vet Consult', category: 'Exam' },
+  { name: 'Post-Op Recheck', category: 'Exam' }
+]
+
+Please ensure the seeder logic is idempotent (it checks if these already exist for the tenant before inserting) so we don't accidentally create duplicates if the seed script runs twice!
