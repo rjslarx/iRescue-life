@@ -11,6 +11,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { Clock } from "lucide-react";
 
 const procedureSchema = z.object({
   procedureName: z.string().min(1, "Procedure name is required"),
@@ -152,11 +153,22 @@ export function AddProcedureDialog({ animalId, open, onOpenChange, procedure, in
     },
   });
 
+  const procDateValue = form.watch("procedureDate");
+  const isProcFutureDate = (() => {
+    if (!procDateValue) return false;
+    const today = new Date().toISOString().split('T')[0];
+    return procDateValue > today;
+  })();
+
   const onSubmit = (data: ProcedureFormData) => {
+    const submitData = {
+      ...data,
+      status: isProcFutureDate ? 'pending' : 'completed',
+    };
     if (isEditing) {
       updateMutation.mutate(data);
     } else {
-      createMutation.mutate(data);
+      createMutation.mutate(submitData as any);
     }
   };
 
@@ -194,6 +206,12 @@ export function AddProcedureDialog({ animalId, open, onOpenChange, procedure, in
                   <FormControl>
                     <Input type="date" {...field} data-testid="input-procedure-date" />
                   </FormControl>
+                  {!isEditing && isProcFutureDate && (
+                    <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1" data-testid="text-future-date-notice">
+                      <Clock className="w-3 h-3" />
+                      Status: Pending — scheduled for a future date
+                    </p>
+                  )}
                   <FormMessage />
                 </FormItem>
               )}

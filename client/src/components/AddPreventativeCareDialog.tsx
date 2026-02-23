@@ -12,7 +12,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Shield, Star, Loader2 } from "lucide-react";
+import { Shield, Star, Loader2, Clock } from "lucide-react";
 
 const preventativeCareSchema = z.object({
   careTypeId: z.string().min(1, "Care type is required"),
@@ -148,6 +148,9 @@ export function AddPreventativeCareDialog({
 
   const createMutation = useMutation({
     mutationFn: async (data: PreventativeCareFormData) => {
+      const today = new Date().toISOString().split('T')[0];
+      const isFuture = data.dateAdministered > today;
+
       return apiRequest(`/api/medical/preventative-care/records`, {
         method: "POST",
         body: JSON.stringify({
@@ -158,6 +161,7 @@ export function AddPreventativeCareDialog({
           notes: data.notes || null,
           lotNumber: data.lotNumber || null,
           manufacturer: data.manufacturer || null,
+          status: isFuture ? 'pending' : 'given',
         }),
       });
     },
@@ -214,6 +218,13 @@ export function AddPreventativeCareDialog({
       });
     },
   });
+
+  const dateAdminValue = form.watch("dateAdministered");
+  const isPrevFutureDate = (() => {
+    if (!dateAdminValue) return false;
+    const today = new Date().toISOString().split('T')[0];
+    return dateAdminValue > today;
+  })();
 
   const onSubmit = (data: PreventativeCareFormData) => {
     if (isEditing) {
@@ -310,6 +321,12 @@ export function AddPreventativeCareDialog({
                   <FormControl>
                     <Input type="date" {...field} data-testid="input-date-administered" />
                   </FormControl>
+                  {!isEditing && isPrevFutureDate && (
+                    <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1" data-testid="text-future-date-notice">
+                      <Clock className="w-3 h-3" />
+                      Status: Pending — scheduled for a future date
+                    </p>
+                  )}
                   {calculatedNextDue && (
                     <FormDescription className="text-green-600">
                       Next due: {new Date(calculatedNextDue).toLocaleDateString()}

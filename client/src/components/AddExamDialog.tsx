@@ -11,6 +11,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { Clock } from "lucide-react";
 
 const examSchema = z.object({
   examType: z.string().min(1, "Exam type is required"),
@@ -167,11 +168,22 @@ export function AddExamDialog({ animalId, open, onOpenChange, exam, initialValue
     },
   });
 
+  const examDateValue = form.watch("examDate");
+  const isExamFutureDate = (() => {
+    if (!examDateValue) return false;
+    const today = new Date().toISOString().split('T')[0];
+    return examDateValue > today;
+  })();
+
   const onSubmit = (data: ExamFormData) => {
+    const submitData = {
+      ...data,
+      status: isExamFutureDate ? 'pending' : 'completed',
+    };
     if (isEditing) {
       updateMutation.mutate(data);
     } else {
-      createMutation.mutate(data);
+      createMutation.mutate(submitData as any);
     }
   };
 
@@ -222,6 +234,12 @@ export function AddExamDialog({ animalId, open, onOpenChange, exam, initialValue
                     <FormControl>
                       <Input type="date" {...field} data-testid="input-exam-date" />
                     </FormControl>
+                    {!isEditing && isExamFutureDate && (
+                      <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1" data-testid="text-future-date-notice">
+                        <Clock className="w-3 h-3" />
+                        Status: Pending — scheduled for a future date
+                      </p>
+                    )}
                     <FormMessage />
                   </FormItem>
                 )}

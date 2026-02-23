@@ -27949,12 +27949,18 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
         billId = bill.id;
       }
 
+      // Auto-set status to pending for future-dated orders
+      const examTodayEnd = new Date();
+      examTodayEnd.setHours(23, 59, 59, 999);
+      const isExamFutureDate = new Date(data.examDate) > examTodayEnd;
+
       // Convert empty billing fields to null for database insertion
       const examData: any = {
         ...data,
         animalId: req.params.animalId,
         tenantId: req.tenant!.id,
         createdBy: req.user!.id,
+        status: isExamFutureDate ? 'pending' : (data.status || 'completed'),
         billId,
         billVendor: data.billVendor || null,
         billAmount: data.billAmount || null,
@@ -29133,6 +29139,11 @@ Email: ${application.applicantEmail || ''}`
         billId = bill.id;
       }
 
+      // Auto-set status to pending for future-dated orders
+      const procTodayEnd = new Date();
+      procTodayEnd.setHours(23, 59, 59, 999);
+      const isProcFutureDate = new Date(data.procedureDate) > procTodayEnd;
+
       const [procedure] = await db
         .insert(procedureLogs)
         .values({
@@ -29143,6 +29154,7 @@ Email: ${application.applicantEmail || ''}`
           animalId: req.params.animalId,
           tenantId: req.tenant!.id,
           createdBy: req.user!.id,
+          status: isProcFutureDate ? 'pending' : (data.status || 'completed'),
         })
         .returning();
 
@@ -31192,6 +31204,11 @@ Email: ${application.applicantEmail || ''}`
 
       const effectiveNextDueDate = data.nextDueDate || nextDueDate;
 
+      // Auto-set status to pending for future-dated orders
+      const prevTodayEnd = new Date();
+      prevTodayEnd.setHours(23, 59, 59, 999);
+      const isPrevFutureDate = new Date(data.dateAdministered) > prevTodayEnd;
+
       const [record] = await db
         .insert(preventativeCareRecords)
         .values({
@@ -31199,6 +31216,7 @@ Email: ${application.applicantEmail || ''}`
           tenantId: req.tenant!.id,
           nextDueDate: effectiveNextDueDate,
           createdBy: req.user!.id,
+          status: isPrevFutureDate ? 'pending' : (data.status || 'given'),
         })
         .returning();
 
