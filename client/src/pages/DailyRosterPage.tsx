@@ -330,8 +330,8 @@ export default function DailyRosterPage() {
             <>
               {medsAndPreventatives.length > 0 && (
                 <Card data-testid="card-meds-section">
-                  <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-3">
-                    <div className="flex items-center gap-2">
+                  <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 space-y-0 pb-3">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <Pill className="h-4 w-4 text-muted-foreground" />
                       <CardTitle className="text-base">In-House Meds & Preventatives</CardTitle>
                       <Badge variant="secondary">{medsAndPreventatives.length}</Badge>
@@ -359,31 +359,36 @@ export default function DailyRosterPage() {
                     {medsAndPreventatives.map((item) => {
                       const key = `${item._type}:${item.id}`;
                       return (
-                        <div key={key} className="flex items-center gap-3 py-2 px-2 rounded-md hover-elevate" data-testid={`row-med-${item.id}`}>
+                        <div key={key} className="flex items-start gap-3 py-2 px-2 rounded-md hover-elevate" data-testid={`row-med-${item.id}`}>
                           <Checkbox
                             checked={selectedItems.has(key)}
                             onCheckedChange={() => toggleItem(key)}
+                            className="mt-0.5 shrink-0"
                             data-testid={`checkbox-med-${item.id}`}
                           />
-                          <Avatar className="h-7 w-7">
+                          <Avatar className="h-7 w-7 shrink-0">
                             {item.animalPhoto ? <AvatarImage src={item.animalPhoto} alt={item.animalName} /> : null}
                             <AvatarFallback className="text-xs">{item.animalName.charAt(0)}</AvatarFallback>
                           </Avatar>
-                          <Link href={`/dashboard/animals/${item.animalId}/medical`} className="font-medium text-sm hover:underline" data-testid={`link-animal-${item.animalId}`}>
-                            {item.animalName}
-                          </Link>
-                          <span className="text-muted-foreground text-sm">—</span>
-                          <span className="text-sm" data-testid={`text-drug-${item.id}`}>
-                            {item._type === "dose" ? (item as TaggedMedication).medicationName : (item as TaggedPreventative).careName}
-                          </span>
-                          {item._type === "dose" && (
-                            <span className="text-xs text-muted-foreground">
-                              {(item as TaggedMedication).dosage} {(item as TaggedMedication).route}
-                            </span>
-                          )}
-                          {item._type === "preventative" && (item as TaggedPreventative).careCategory && (
-                            <Badge variant="outline" className="text-xs">{(item as TaggedPreventative).careCategory}</Badge>
-                          )}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <Link href={`/dashboard/animals/${item.animalId}/medical`} className="font-medium text-sm hover:underline" data-testid={`link-animal-${item.animalId}`}>
+                                {item.animalName}
+                              </Link>
+                              <span className="text-muted-foreground text-sm hidden sm:inline">—</span>
+                              <span className="text-sm" data-testid={`text-drug-${item.id}`}>
+                                {item._type === "dose" ? (item as TaggedMedication).medicationName : (item as TaggedPreventative).careName}
+                              </span>
+                            </div>
+                            {item._type === "dose" && (
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                {(item as TaggedMedication).dosage} {(item as TaggedMedication).route}
+                              </p>
+                            )}
+                            {item._type === "preventative" && (item as TaggedPreventative).careCategory && (
+                              <Badge variant="outline" className="text-xs mt-0.5">{(item as TaggedPreventative).careCategory}</Badge>
+                            )}
+                          </div>
                         </div>
                       );
                     })}
@@ -394,7 +399,7 @@ export default function DailyRosterPage() {
               {vetAndSurgery.length > 0 && (
                 <Card data-testid="card-vet-section">
                   <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-3">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <Stethoscope className="h-4 w-4 text-muted-foreground" />
                       <CardTitle className="text-base">Vet Visits & Surgeries</CardTitle>
                       <Badge variant="secondary">{vetAndSurgery.length}</Badge>
@@ -402,40 +407,43 @@ export default function DailyRosterPage() {
                   </CardHeader>
                   <CardContent className="space-y-1">
                     {vetAndSurgery.map((item) => (
-                      <div key={`${item.itemType}-${item.id}`} className="flex items-center gap-3 py-2 px-2 rounded-md hover-elevate" data-testid={`row-vet-${item.id}`}>
-                        <Avatar className="h-7 w-7">
+                      <div key={`${item.itemType}-${item.id}`} className="flex items-start gap-3 py-2 px-2 rounded-md hover-elevate" data-testid={`row-vet-${item.id}`}>
+                        <Avatar className="h-7 w-7 shrink-0">
                           {item.animalPhoto ? <AvatarImage src={item.animalPhoto} alt={item.animalName} /> : null}
                           <AvatarFallback className="text-xs">{item.animalName.charAt(0)}</AvatarFallback>
                         </Avatar>
-                        <Link href={`/dashboard/animals/${item.animalId}/medical`} className="font-medium text-sm hover:underline" data-testid={`link-vet-animal-${item.animalId}`}>
-                          {item.animalName}
-                        </Link>
-                        <span className="text-muted-foreground text-sm">—</span>
-                        <span className="text-sm" data-testid={`text-visit-${item.id}`}>
-                          {item.itemType === "exam" ? `${formatExamType((item as RosterExam & { itemType: "exam" }).examType)} Exam` : (item as RosterProcedure & { itemType: "procedure" }).procedureName}
-                        </span>
-                        {item.itemType === "exam" && (item as RosterExam & { itemType: "exam" }).performedBy && (
-                          <span className="text-xs text-muted-foreground">with {(item as RosterExam & { itemType: "exam" }).performedBy}</span>
-                        )}
-                        {item.itemType === "procedure" && (item as RosterProcedure & { itemType: "procedure" }).veterinarian && (
-                          <span className="text-xs text-muted-foreground">Dr. {(item as RosterProcedure & { itemType: "procedure" }).veterinarian}</span>
-                        )}
-                        <div className="ml-auto">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              if (item.itemType === "exam") {
-                                setCompletionItem({ type: "exam", item: item as RosterExam & { itemType: "exam" } });
-                              } else {
-                                setCompletionItem({ type: "procedure", item: item as RosterProcedure & { itemType: "procedure" } });
-                              }
-                            }}
-                            data-testid={`button-complete-${item.id}`}
-                          >
-                            Log Completion
-                          </Button>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <Link href={`/dashboard/animals/${item.animalId}/medical`} className="font-medium text-sm hover:underline" data-testid={`link-vet-animal-${item.animalId}`}>
+                              {item.animalName}
+                            </Link>
+                            <span className="text-muted-foreground text-sm hidden sm:inline">—</span>
+                            <span className="text-sm" data-testid={`text-visit-${item.id}`}>
+                              {item.itemType === "exam" ? `${formatExamType((item as RosterExam & { itemType: "exam" }).examType)} Exam` : (item as RosterProcedure & { itemType: "procedure" }).procedureName}
+                            </span>
+                          </div>
+                          {item.itemType === "exam" && (item as RosterExam & { itemType: "exam" }).performedBy && (
+                            <p className="text-xs text-muted-foreground mt-0.5">with {(item as RosterExam & { itemType: "exam" }).performedBy}</p>
+                          )}
+                          {item.itemType === "procedure" && (item as RosterProcedure & { itemType: "procedure" }).veterinarian && (
+                            <p className="text-xs text-muted-foreground mt-0.5">Dr. {(item as RosterProcedure & { itemType: "procedure" }).veterinarian}</p>
+                          )}
                         </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="shrink-0"
+                          onClick={() => {
+                            if (item.itemType === "exam") {
+                              setCompletionItem({ type: "exam", item: item as RosterExam & { itemType: "exam" } });
+                            } else {
+                              setCompletionItem({ type: "procedure", item: item as RosterProcedure & { itemType: "procedure" } });
+                            }
+                          }}
+                          data-testid={`button-complete-${item.id}`}
+                        >
+                          Log Completion
+                        </Button>
                       </div>
                     ))}
                   </CardContent>
@@ -445,7 +453,7 @@ export default function DailyRosterPage() {
               {roster!.diagnostics.length > 0 && (
                 <Card data-testid="card-labs-section">
                   <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-3">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <FlaskConical className="h-4 w-4 text-muted-foreground" />
                       <CardTitle className="text-base">Labs & Diagnostics</CardTitle>
                       <Badge variant="secondary">{roster!.diagnostics.length}</Badge>
@@ -453,26 +461,29 @@ export default function DailyRosterPage() {
                   </CardHeader>
                   <CardContent className="space-y-1">
                     {roster!.diagnostics.map((item) => (
-                      <div key={item.id} className="flex items-center gap-3 py-2 px-2 rounded-md hover-elevate" data-testid={`row-lab-${item.id}`}>
-                        <Avatar className="h-7 w-7">
+                      <div key={item.id} className="flex items-start gap-3 py-2 px-2 rounded-md hover-elevate" data-testid={`row-lab-${item.id}`}>
+                        <Avatar className="h-7 w-7 shrink-0">
                           {item.animalPhoto ? <AvatarImage src={item.animalPhoto} alt={item.animalName} /> : null}
                           <AvatarFallback className="text-xs">{item.animalName.charAt(0)}</AvatarFallback>
                         </Avatar>
-                        <Link href={`/dashboard/animals/${item.animalId}/medical`} className="font-medium text-sm hover:underline" data-testid={`link-lab-animal-${item.animalId}`}>
-                          {item.animalName}
-                        </Link>
-                        <span className="text-muted-foreground text-sm">—</span>
-                        <span className="text-sm" data-testid={`text-lab-${item.id}`}>{item.testName}</span>
-                        <div className="ml-auto">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setResultsItem(item)}
-                            data-testid={`button-results-${item.id}`}
-                          >
-                            Enter Results
-                          </Button>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <Link href={`/dashboard/animals/${item.animalId}/medical`} className="font-medium text-sm hover:underline" data-testid={`link-lab-animal-${item.animalId}`}>
+                              {item.animalName}
+                            </Link>
+                            <span className="text-muted-foreground text-sm hidden sm:inline">—</span>
+                            <span className="text-sm" data-testid={`text-lab-${item.id}`}>{item.testName}</span>
+                          </div>
                         </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="shrink-0"
+                          onClick={() => setResultsItem(item)}
+                          data-testid={`button-results-${item.id}`}
+                        >
+                          Enter Results
+                        </Button>
                       </div>
                     ))}
                   </CardContent>

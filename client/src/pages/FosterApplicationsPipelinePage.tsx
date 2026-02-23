@@ -321,7 +321,7 @@ export default function FosterApplicationsPipelinePage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6 p-6">
+      <div className="space-y-4 sm:space-y-6 p-4 sm:p-6">
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div>
             <h1 className="text-2xl font-bold">Foster Pipeline</h1>
@@ -371,12 +371,12 @@ export default function FosterApplicationsPipelinePage() {
                     <UserCheck className="h-5 w-5" />
                     Active Foster Roster
                   </CardTitle>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
                     <Input
                       placeholder="Search fosters..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-64"
+                      className="w-full sm:w-64"
                       data-testid="input-search-fosters"
                     />
                     <Popover>
