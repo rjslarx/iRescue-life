@@ -26636,6 +26636,69 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
   });
 
   /**
+   * GET /api/compliance/public/recent-donations
+   * Get recent monetary donations for the public donation pop-up widget (no auth required)
+   * Returns donor first name + last initial for privacy, amount, and optional location
+   */
+  app.get('/api/compliance/public/recent-donations', requireTenant, async (req, res, next) => {
+    try {
+      const { donations } = await import('@shared/schema');
+
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+      const recentDonations = await db
+        .select({
+          id: donations.id,
+          donorName: donations.donorName,
+          amount: donations.amount,
+          donorCity: donations.donorCity,
+          donorState: donations.donorState,
+          createdAt: donations.createdAt,
+        })
+        .from(donations)
+        .where(
+          and(
+            eq(donations.tenantId, req.tenant!.id),
+            gte(donations.createdAt, thirtyDaysAgo),
+            isNotNull(donations.amount),
+            inArray(donations.donationType, ['cash', 'check', 'online', 'stripe']),
+          )
+        )
+        .orderBy(desc(donations.createdAt))
+        .limit(10);
+
+      const formatted = recentDonations.map((d) => {
+        const nameParts = (d.donorName || '').trim().split(/\s+/);
+        const firstName = nameParts[0] || 'Anonymous';
+        const lastInitial = nameParts.length > 1 ? ` ${nameParts[nameParts.length - 1][0]}.` : '';
+        const displayName = `${firstName}${lastInitial}`;
+
+        let location: string | null = null;
+        if (d.donorCity && d.donorState) {
+          location = `${d.donorCity}, ${d.donorState}`;
+        } else if (d.donorCity) {
+          location = d.donorCity;
+        } else if (d.donorState) {
+          location = d.donorState;
+        }
+
+        return {
+          id: d.id,
+          displayName,
+          amount: d.amount,
+          location,
+          createdAt: d.createdAt,
+        };
+      });
+
+      res.json(formatted);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * GET /api/public-events
    * Get upcoming public events (no auth required) for homepage display
    * Only returns events from public calendars of type "events" or "fundraising"

@@ -24,7 +24,7 @@ export function RecentDonationsWidget({ tenantSubdomain, className }: RecentDona
   const [isAnimating, setIsAnimating] = useState(false);
 
   const { data: donations = [], isLoading } = useQuery<RecentDonation[]>({
-    queryKey: [`/api/compliance/public/recent-donations`, tenantSubdomain],
+    queryKey: ['/api/compliance/public/recent-donations'],
     enabled: !isDismissed && !!tenantSubdomain,
     staleTime: 60 * 1000,
     refetchInterval: 5 * 60 * 1000,
@@ -94,7 +94,7 @@ export function RecentDonationsWidget({ tenantSubdomain, className }: RecentDona
         <Button
           variant="ghost"
           size="icon"
-          className="absolute top-1 right-1 h-6 w-6 opacity-60 hover:opacity-100"
+          className="absolute top-1 right-1 opacity-60"
           onClick={handleDismiss}
           data-testid="button-dismiss-widget"
         >
@@ -131,7 +131,7 @@ export function RecentDonationsWidget({ tenantSubdomain, className }: RecentDona
               <Button
                 variant="outline"
                 size="sm"
-                className="text-primary border-primary hover:bg-primary/10"
+                className="text-primary border-primary"
                 onClick={handleDonateClick}
                 data-testid="button-donate-widget"
               >
