@@ -24,7 +24,8 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTenant } from "@/contexts/TenantContext";
-import { Plus, Loader2, ExternalLink, Check, Stethoscope, Upload, X, ChevronLeft, ChevronRight, FileText, Pencil, ClipboardList, Calendar as CalendarIcon, ChevronDown, ChevronUp, Cat, Dog, Camera, Sparkles, Palette, ChevronsUpDown, AlertCircle, Wand2, FileUp, MapPin, Users, PawPrint, GitMerge, Heart, Send, ArrowUpDown, Home, Building2, Truck, History, ArrowRightLeft, Archive, Baby } from "lucide-react";
+import { Plus, Loader2, ExternalLink, Check, Stethoscope, Upload, X, ChevronLeft, ChevronRight, FileText, Pencil, ClipboardList, Calendar as CalendarIcon, ChevronDown, ChevronUp, Cat, Dog, Camera, Sparkles, Palette, ChevronsUpDown, AlertCircle, Wand2, FileUp, MapPin, Users, PawPrint, GitMerge, Heart, Send, ArrowUpDown, Home, Building2, Truck, History, ArrowRightLeft, Archive } from "lucide-react";
+import { LitterPawsIcon } from "@/components/icons/LitterPawsIcon";
 import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { Link } from "wouter";
@@ -2716,7 +2717,7 @@ export default function AnimalsPage() {
             </Button>
           </Link>
           <Button variant="outline" onClick={() => setBulkIntakeOpen(true)} data-testid="button-bulk-litter-intake">
-            <Baby className="h-4 w-4 sm:mr-2" />
+            <LitterPawsIcon className="h-4 w-4 sm:mr-2" />
             <span className="hidden sm:inline">Litter Intake</span>
           </Button>
           <Dialog open={dialogOpen} onOpenChange={(open) => {

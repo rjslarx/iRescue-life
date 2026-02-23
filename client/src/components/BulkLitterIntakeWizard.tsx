@@ -12,7 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Plus, Trash2, ArrowRight, ArrowLeft, Loader2, Check, Baby } from "lucide-react";
+import { Plus, Trash2, ArrowRight, ArrowLeft, Loader2, Check } from "lucide-react";
+import { LitterPawsIcon } from "@/components/icons/LitterPawsIcon";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { ANIMAL_COLORS, PETFINDER_TYPES, PETFINDER_AGES, PETFINDER_SIZES } from "@shared/schema";
@@ -148,7 +149,7 @@ export function BulkLitterIntakeWizard({ open, onOpenChange, onSuccess }: BulkLi
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2" data-testid="text-bulk-intake-title">
-            <Baby className="h-5 w-5" />
+            <LitterPawsIcon className="h-5 w-5" />
             Bulk Litter Intake {step === 1 ? "- Shared Data" : "- Speed Grid"}
           </DialogTitle>
         </DialogHeader>
