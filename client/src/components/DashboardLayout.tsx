@@ -18,6 +18,7 @@ import {
 import { Plus, ExternalLink, HelpCircle, MessageSquare } from "lucide-react";
 import { useQuickActions } from "@/hooks/useQuickActions";
 import NotificationBell from "@/components/NotificationBell";
+import { AddMedicalOrderDialog } from "@/components/AddMedicalOrderDialog";
 import { useState } from "react";
 
 interface BreadcrumbItem {
@@ -46,7 +47,10 @@ interface Tenant {
 export default function DashboardLayout({ children, title, description, actions, breadcrumbs }: DashboardLayoutProps) {
   const { user } = useAuth();
   const [, navigate] = useLocation();
-  const { actions: quickActions, handleAction } = useQuickActions();
+  const [cpoeOpen, setCpoeOpen] = useState(false);
+  const { actions: quickActions, handleAction } = useQuickActions({
+    onAddMedicalOrder: () => setCpoeOpen(true),
+  });
   const [helpOpen, setHelpOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [fabOpen, setFabOpen] = useState(false);
@@ -195,6 +199,11 @@ export default function DashboardLayout({ children, title, description, actions,
           </div>
         </>
       )}
+
+      <AddMedicalOrderDialog
+        open={cpoeOpen}
+        onOpenChange={setCpoeOpen}
+      />
     </SidebarProvider>
   );
 }

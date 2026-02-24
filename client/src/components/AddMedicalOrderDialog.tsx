@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { AlertTriangle, Pill, Syringe, FlaskConical, Stethoscope, ShieldCheck, ClipboardCheck, Package, Loader2, Clock, CheckCircle2, AlertCircle, ArrowLeft, Search, Zap, Plus } from "lucide-react";
+import { AlertTriangle, Pill, Syringe, FlaskConical, Stethoscope, ShieldCheck, ClipboardCheck, Package, Loader2, Clock, CheckCircle2, AlertCircle, ArrowLeft, Search, Zap, Plus, PawPrint } from "lucide-react";
 
 import { AddPrescriptionDialog } from "@/components/AddPrescriptionDialog";
 import { AddVaccineDialog } from "@/components/AddVaccineDialog";
@@ -51,8 +51,17 @@ interface PendingOrder {
   defaultFrequency?: string | null;
 }
 
+interface AnimalSummary {
+  id: string;
+  name: string;
+  species: string;
+  breed?: string | null;
+  status: string;
+  photoUrl?: string | null;
+}
+
 interface AddMedicalOrderDialogProps {
-  animalId: string;
+  animalId?: string;
   animalSpecies?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -314,7 +323,7 @@ function getStatusBadgeInfo(order: ActiveOrder) {
   return { label: "Pending", className: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300", icon: Clock };
 }
 
-export function AddMedicalOrderDialog({ animalId, animalSpecies = 'Dog', open, onOpenChange }: AddMedicalOrderDialogProps) {
+export function AddMedicalOrderDialog({ animalId: propsAnimalId, animalSpecies: propsAnimalSpecies = 'Dog', open, onOpenChange }: AddMedicalOrderDialogProps) {
   const { toast } = useToast();
   const [searchValue, setSearchValue] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -324,9 +333,33 @@ export function AddMedicalOrderDialog({ animalId, animalSpecies = 'Dog', open, o
   const [pendingOrder, setPendingOrder] = useState<PendingOrder | null>(null);
   const [selectedOrderSet, setSelectedOrderSet] = useState<OrderSetWithItems | null>(null);
 
+  const [selectedAnimal, setSelectedAnimal] = useState<AnimalSummary | null>(null);
+  const [animalSearchValue, setAnimalSearchValue] = useState("");
+
+  const needsAnimalSearch = !propsAnimalId;
+  const animalId = propsAnimalId || selectedAnimal?.id || "";
+  const animalSpecies = selectedAnimal?.species || propsAnimalSpecies;
+
+  const { data: animalsData, isLoading: loadingAnimals } = useQuery<{ animals: AnimalSummary[] }>({
+    queryKey: ['/api/animals'],
+    enabled: open && needsAnimalSearch,
+    staleTime: 30 * 1000,
+  });
+
+  const filteredAnimals = useMemo(() => {
+    const list = animalsData?.animals || [];
+    if (!animalSearchValue.trim()) return list.slice(0, 20);
+    const q = animalSearchValue.toLowerCase();
+    return list.filter(a =>
+      a.name?.toLowerCase().includes(q) ||
+      a.species?.toLowerCase().includes(q) ||
+      a.breed?.toLowerCase().includes(q)
+    ).slice(0, 20);
+  }, [animalsData, animalSearchValue]);
+
   const { data: activeOrdersData, isLoading: loadingActive } = useQuery<{ activeOrders: ActiveOrder[] }>({
     queryKey: [`/api/animals/${animalId}/medical/active-orders`],
-    enabled: open || !!pendingOrder,
+    enabled: !!animalId && (open || !!pendingOrder),
   });
 
   const { data: catalogData } = useQuery<CatalogItem[]>({
@@ -358,8 +391,12 @@ export function AddMedicalOrderDialog({ animalId, animalSpecies = 'Dog', open, o
       setCreatingNew(null);
       setCreatingNewLoading(false);
       setSelectedOrderSet(null);
+      if (needsAnimalSearch) {
+        setSelectedAnimal(null);
+        setAnimalSearchValue("");
+      }
     }
-  }, [open, pendingOrder]);
+  }, [open, pendingOrder, needsAnimalSearch]);
 
   function handleSelectCatalogItem(item: CatalogItem) {
     const isDuplicate = activeNameSet.has((item.name || '').toLowerCase());
@@ -461,10 +498,79 @@ export function AddMedicalOrderDialog({ animalId, animalSpecies = 'Dog', open, o
     <>
       <Dialog open={open && !pendingOrder} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto" data-testid="dialog-add-medical-order">
+          {needsAnimalSearch && !selectedAnimal ? (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <PawPrint className="w-5 h-5" />
+                  Select Animal
+                </DialogTitle>
+                <DialogDescription>
+                  Search for the animal you want to place a medical order for.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                  <Input
+                    placeholder="Search by name, species, or breed..."
+                    value={animalSearchValue}
+                    onChange={e => setAnimalSearchValue(e.target.value)}
+                    className="pl-9"
+                    data-testid="input-search-animal"
+                    autoFocus
+                  />
+                </div>
+                <div className="max-h-72 overflow-y-auto space-y-1" data-testid="container-animal-results">
+                  {loadingAnimals ? (
+                    <div className="space-y-2 py-2">
+                      <Skeleton className="h-10 w-full" />
+                      <Skeleton className="h-10 w-full" />
+                      <Skeleton className="h-10 w-full" />
+                    </div>
+                  ) : filteredAnimals.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-6">
+                      {animalSearchValue ? "No animals match your search" : "No animals found"}
+                    </p>
+                  ) : (
+                    filteredAnimals.map(animal => (
+                      <button
+                        key={animal.id}
+                        onClick={() => {
+                          setSelectedAnimal(animal);
+                          setAnimalSearchValue("");
+                        }}
+                        className="flex items-center gap-3 w-full p-2.5 text-sm border rounded-md text-left hover-elevate active-elevate-2 transition-colors"
+                        data-testid={`animal-option-${animal.id}`}
+                      >
+                        <PawPrint className="w-4 h-4 shrink-0 text-muted-foreground" />
+                        <div className="flex-1 min-w-0">
+                          <span className="font-medium">{animal.name}</span>
+                          <span className="text-muted-foreground ml-1.5">
+                            {animal.species}{animal.breed ? ` \u00b7 ${animal.breed}` : ""}
+                          </span>
+                        </div>
+                        <Badge variant="outline" className="text-[10px] shrink-0 capitalize">
+                          {animal.status?.replace(/_/g, ' ')}
+                        </Badge>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Stethoscope className="w-5 h-5" />
               Add Medical Order
+              {selectedAnimal && (
+                <Badge variant="secondary" className="text-xs ml-1 gap-1">
+                  <PawPrint className="w-3 h-3" />
+                  {selectedAnimal.name}
+                </Badge>
+              )}
             </DialogTitle>
             <DialogDescription>
               Search for a medication, vaccine, lab, procedure, or apply an order set.
@@ -472,6 +578,18 @@ export function AddMedicalOrderDialog({ animalId, animalSpecies = 'Dog', open, o
           </DialogHeader>
 
           <div className="space-y-4">
+            {needsAnimalSearch && selectedAnimal && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-1.5 -mt-2"
+                onClick={() => { setSelectedAnimal(null); setSearchValue(""); }}
+                data-testid="button-change-animal"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                Change Animal
+              </Button>
+            )}
             <div>
               <p className="text-xs font-medium text-muted-foreground mb-2">Active / Pending Orders</p>
               {loadingActive ? (
@@ -816,6 +934,8 @@ export function AddMedicalOrderDialog({ animalId, animalSpecies = 'Dog', open, o
               </div>
             )}
           </div>
+          </>
+          )}
         </DialogContent>
       </Dialog>
 

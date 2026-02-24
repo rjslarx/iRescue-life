@@ -201,12 +201,22 @@ export const ALL_QUICK_ACTIONS: QuickAction[] = [
     actionType: "navigate",
     pageId: "collaboration",
   },
+  {
+    id: "add-medical-order",
+    label: "Add Medical Order",
+    description: "Place a medical order for any animal",
+    icon: Stethoscope,
+    actionType: "callback",
+    callbackName: "onAddMedicalOrder",
+    pageId: "medical-tasks",
+  },
 ];
 
 export const DEFAULT_QUICK_ACTIONS = [
   "add-animal",
   "intake-manager",
   "medical-task",
+  "add-medical-order",
   "invite-team-member",
   "record-donation",
   "new-application",
