@@ -20550,18 +20550,21 @@ Submitted: ${new Date().toLocaleString()}
           ));
       }
       
-      // Flag any microchip records as needing transfer (non-blocking)
+      // Set microchip records to 'transferred' status upon adoption (non-blocking)
+      // Only updates chips that are 'unregistered' or 'registered_rescue'; leaves 'found_unknown' intact
       try {
         const { microchipRecords } = await import('@shared/schema');
+        const { inArray } = await import('drizzle-orm');
         await db.update(microchipRecords)
           .set({
-            registrationStatus: sql`CASE WHEN ${microchipRecords.registrationStatus} != 'transferred' THEN 'registered_rescue' ELSE ${microchipRecords.registrationStatus} END`,
+            registrationStatus: 'transferred' as const,
+            transferredAt: new Date(),
             updatedAt: new Date(),
           })
           .where(and(
             eq(microchipRecords.animalId, validatedData.animalId),
             eq(microchipRecords.tenantId, req.tenant!.id),
-            ne(microchipRecords.registrationStatus, 'transferred')
+            inArray(microchipRecords.registrationStatus, ['unregistered', 'registered_rescue'])
           ));
       } catch (microchipError) {
         console.error('Failed to update microchip records for adoption:', microchipError);

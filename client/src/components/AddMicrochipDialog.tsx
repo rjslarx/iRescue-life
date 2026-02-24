@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,25 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, AlertTriangle } from "lucide-react";
+
+const STANDARD_CHIP_LENGTHS = [9, 10, 15];
+
+function getDigitLengthWarning(value: string): string | null {
+  const digitsOnly = value.replace(/\D/g, '');
+  if (!digitsOnly || digitsOnly.length === 0) return null;
+  if (STANDARD_CHIP_LENGTHS.includes(digitsOnly.length)) return null;
+  return `Microchip numbers are typically 9, 10, or 15 digits. This number has ${digitsOnly.length} digits.`;
+}
+
+function detectManufacturerFromPrefix(value: string): string | null {
+  const digitsOnly = value.replace(/\D/g, '');
+  if (digitsOnly.startsWith('981')) return 'foundanimals';
+  if (digitsOnly.startsWith('982')) return 'avid';
+  if (digitsOnly.startsWith('985')) return '24petwatch';
+  if (digitsOnly.startsWith('956')) return 'homeagain';
+  return null;
+}
 
 const microchipSchema = z.object({
   microchipNumber: z.string().min(9, "Microchip number must be at least 9 digits").max(50, "Microchip number cannot exceed 50 characters"),
@@ -78,6 +96,7 @@ const REGISTRATION_STATUSES = [
 export function AddMicrochipDialog({ animalId, open, onOpenChange, microchip }: AddMicrochipDialogProps) {
   const { toast } = useToast();
   const isEditing = !!microchip;
+  const [chipLengthWarning, setChipLengthWarning] = useState<string | null>(null);
 
   const form = useForm<MicrochipFormData>({
     resolver: zodResolver(microchipSchema),
@@ -118,6 +137,7 @@ export function AddMicrochipDialog({ animalId, open, onOpenChange, microchip }: 
         registeredToEmail: microchip.registeredToEmail || "",
         notes: microchip.notes || "",
       });
+      setChipLengthWarning(getDigitLengthWarning(microchip.microchipNumber || ""));
     } else {
       form.reset({
         microchipNumber: "",
@@ -132,6 +152,7 @@ export function AddMicrochipDialog({ animalId, open, onOpenChange, microchip }: 
         registeredToEmail: "",
         notes: "",
       });
+      setChipLengthWarning(null);
     }
   }, [microchip, form, open]);
 
@@ -243,11 +264,32 @@ export function AddMicrochipDialog({ animalId, open, onOpenChange, microchip }: 
                     <FormLabel>Microchip Number *</FormLabel>
                     <FormControl>
                       <Input 
-                        {...field} 
-                        placeholder="Enter 9-15 digit number"
+                        {...field}
+                        placeholder="Enter or scan 9-15 digit number"
                         data-testid="input-microchip-number"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            (e.target as HTMLInputElement).blur();
+                          }
+                        }}
+                        onChange={(e) => {
+                          field.onChange(e);
+                          const val = e.target.value;
+                          setChipLengthWarning(getDigitLengthWarning(val));
+                          const detected = detectManufacturerFromPrefix(val);
+                          if (detected && !form.getValues('manufacturer')) {
+                            form.setValue('manufacturer', detected as any);
+                          }
+                        }}
                       />
                     </FormControl>
+                    {chipLengthWarning && (
+                      <p className="text-xs text-yellow-600 dark:text-yellow-400 flex items-center gap-1 mt-1" data-testid="text-chip-length-warning">
+                        <AlertTriangle className="w-3 h-3 shrink-0" />
+                        {chipLengthWarning}
+                      </p>
+                    )}
                     <FormDescription>
                       <a 
                         href={`https://www.petmicrochiplookup.org/${field.value ? `?microchip_id=${encodeURIComponent(field.value)}` : ''}`}
