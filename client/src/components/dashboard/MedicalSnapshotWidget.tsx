@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
-import { Stethoscope, ChevronRight, Syringe, ClipboardCheck, Pill, FileSearch, Building2, Home } from "lucide-react";
+import { ChevronRight, Syringe, ClipboardCheck, Pill, FileSearch, Building2, Home } from "lucide-react";
 
 interface LocationCount {
   shelter: number;
@@ -40,7 +40,7 @@ function KpiTile({ icon: Icon, label, counts, href, activeColor, activeTextColor
   return (
     <Link href={href}>
       <div
-        className={`flex flex-col items-center justify-center p-2.5 rounded-md cursor-pointer hover-elevate min-h-[5.5rem] ${
+        className={`flex flex-col items-center justify-center p-2.5 rounded-md cursor-pointer hover-elevate ${
           active ? activeColor : "bg-muted/50"
         }`}
         data-testid={testId}
@@ -50,22 +50,16 @@ function KpiTile({ icon: Icon, label, counts, href, activeColor, activeTextColor
           {counts.total}
         </div>
         <p className="text-xs text-muted-foreground text-center">{label}</p>
-        {counts.total > 0 && (counts.shelter > 0 || counts.foster > 0) && (
-          <div className="flex items-center gap-2 mt-1.5" data-testid={`text-${testId}-breakdown`}>
-            {counts.shelter > 0 && (
-              <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
-                <Building2 className="h-2.5 w-2.5" />
-                {counts.shelter}
-              </span>
-            )}
-            {counts.foster > 0 && (
-              <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
-                <Home className="h-2.5 w-2.5" />
-                {counts.foster}
-              </span>
-            )}
-          </div>
-        )}
+        <div className={`flex items-center gap-2 mt-1.5 ${counts.total > 0 && (counts.shelter > 0 || counts.foster > 0) ? "" : "invisible"}`} data-testid={`text-${testId}-breakdown`}>
+          <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
+            <Building2 className="h-2.5 w-2.5" />
+            {counts.shelter}
+          </span>
+          <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
+            <Home className="h-2.5 w-2.5" />
+            {counts.foster}
+          </span>
+        </div>
       </div>
     </Link>
   );
@@ -81,10 +75,10 @@ export default function MedicalSnapshotWidget() {
       <Card data-testid="card-medical-snapshot-widget">
         <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
           <CardTitle className="text-sm font-medium">Medical Pipeline</CardTitle>
-          <Stethoscope className="h-4 w-4 text-muted-foreground" />
+          <Skeleton className="h-6 w-16" />
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <Skeleton className="h-24 w-full" />
             <Skeleton className="h-24 w-full" />
             <Skeleton className="h-24 w-full" />
@@ -109,10 +103,15 @@ export default function MedicalSnapshotWidget() {
     <Card data-testid="card-medical-snapshot-widget">
       <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
         <CardTitle className="text-sm font-medium">Medical Pipeline</CardTitle>
-        <Stethoscope className="h-4 w-4 text-muted-foreground" />
+        <Link href="/dashboard/medical-pipeline">
+          <Button variant="ghost" size="sm" className="gap-1 text-xs text-muted-foreground" data-testid="link-view-medical">
+            View All
+            <ChevronRight className="h-3.5 w-3.5" />
+          </Button>
+        </Link>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <KpiTile
             icon={Pill}
             label="Meds Due Today"
@@ -150,13 +149,6 @@ export default function MedicalSnapshotWidget() {
             testId="tile-vet-visits-review"
           />
         </div>
-
-        <Link href="/dashboard/medical-pipeline">
-          <Button variant="ghost" size="sm" className="w-full" data-testid="link-view-medical">
-            View Medical Pipeline
-            <ChevronRight className="h-4 w-4 ml-1" />
-          </Button>
-        </Link>
       </CardContent>
     </Card>
   );
