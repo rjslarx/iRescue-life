@@ -1,0 +1,30 @@
+1. The Global Header (The "Anywhere" Button)
+You already have that excellent "+ Quick Actions" button in your top navigation bar (from your Command Center screenshot).
+The Action: Add "Add Medical Order" to this dropdown.
+The Magic: Because the system doesn't know which dog you are looking at when you click this global button, the modal simply adds "Step 1: Select Animal" before showing the search bar.
+2. The List View / Pipeline Boards (The "Inline" Button)
+When staff are looking at the main "Shelter Roster" table or the Medical Pipeline Kanban board, they shouldn't have to open a dog's profile to interact with them.
+The Action: Add a small "Stethoscope" or "Pill" icon button directly on the animal's row or card.
+The Magic: Clicking this instantly pops open the CPOE modal, already pre-filled with that specific dog's ID.
+The Replit Prompt for "Shortcut Orders"
+To make this work seamlessly, we just need to tell your Replit Agent to make the CPOE modal "context-aware"—meaning it checks if an animal is already selected, and if not, it asks for one.
+Copy and paste this directly into Replit Agent:
+Plaintext
+I want to reduce "click fatigue" by allowing staff to open the CPOE "Add Medical Order" modal from anywhere in the application, not just the Animal Profile.
+
+1. Make the CPOE Modal Context-Aware:
+   - Update the `<CPOEModal />` (or whatever the order modal is named) to accept an optional `animalId` prop.
+   - IF `animalId` is passed in (e.g., opened from an animal profile): Bypass patient selection and immediately show the Catalog Search bar.
+   - IF `animalId` is NULL or undefined (e.g., opened from the global header): The modal must first display an "Animal Search" autocomplete dropdown (Step 1). Once an animal is selected, it proceeds to the Catalog Search (Step 2).
+
+2. Integrate the Global Shortcut:
+   - Open the main navigation header component.
+   - Inside the "+ Quick Actions" dropdown, add a new menu item: "🩺 Add Medical Order".
+   - Clicking this opens the CPOE Modal without an `animalId`.
+
+3. Integrate Inline Shortcuts (Data Tables & Cards):
+   - On the main "Animals" list view (table) and the Medical Pipeline Kanban cards, add a small Quick Action icon (e.g., a stethoscope or pill icon) next to the animal's name or in the actions column.
+   - Clicking this icon opens the CPOE modal and passes in that specific row's `animalId`, allowing instant order entry without opening the full profile.
+Why this is a massive workflow upgrade
+Imagine a vet walking down the kennel aisle diagnosing three dogs with Kennel Cough. The tech following them just clicks the global "+ Quick Actions -> Add Medical Order," types "Fido", types "Doxycycline", hits save. Opens it again, types "Spot", types "Doxycycline", hits save.
+They never leave the dashboard. It takes seconds instead of minutes.
