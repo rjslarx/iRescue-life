@@ -7466,6 +7466,50 @@ Crawl-delay: 1
   });
 
   /**
+   * PATCH /api/animals/:id/quarantine
+   * Set or clear quarantine status for an animal
+   */
+  app.patch('/api/animals/:id/quarantine', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      const { animals } = await import('@shared/schema');
+      const { z } = await import('zod');
+
+      const quarantineSchema = z.object({
+        isQuarantined: z.boolean(),
+        quarantineReason: z.string().nullable().optional(),
+      });
+
+      const data = quarantineSchema.parse(req.body);
+
+      const updateData: Record<string, any> = {
+        isQuarantined: data.isQuarantined,
+        quarantineReason: data.isQuarantined ? (data.quarantineReason || null) : null,
+        quarantineStartDate: data.isQuarantined ? new Date() : null,
+        updatedAt: new Date(),
+      };
+
+      const [animal] = await db
+        .update(animals)
+        .set(updateData)
+        .where(
+          and(
+            eq(animals.id, req.params.id),
+            eq(animals.tenantId, req.tenant!.id)
+          )
+        )
+        .returning();
+
+      if (!animal) {
+        return res.status(404).json({ error: 'Animal not found' });
+      }
+
+      res.json({ success: true, animal });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * POST /api/animals/:id/reclaim-payment
    * Create a Stripe PaymentIntent or record a manual payment for a reclaim fee
    */
@@ -37892,6 +37936,8 @@ The user asking is a tenant administrator or staff member.`;
           animalId: medicalPrescriptions.animalId,
           animalName: animals.name,
           animalPhoto: animals.photoUrls,
+          isQuarantined: animals.isQuarantined,
+          quarantineReason: animals.quarantineReason,
         })
         .from(medicalDoses)
         .innerJoin(medicalPrescriptions, eq(medicalDoses.prescriptionId, medicalPrescriptions.id))
@@ -37914,6 +37960,8 @@ The user asking is a tenant administrator or staff member.`;
           animalId: preventativeCareRecords.animalId,
           animalName: animals.name,
           animalPhoto: animals.photoUrls,
+          isQuarantined: animals.isQuarantined,
+          quarantineReason: animals.quarantineReason,
         })
         .from(preventativeCareRecords)
         .innerJoin(animals, eq(preventativeCareRecords.animalId, animals.id))
@@ -37934,6 +37982,8 @@ The user asking is a tenant administrator or staff member.`;
           animalId: medicalExams.animalId,
           animalName: animals.name,
           animalPhoto: animals.photoUrls,
+          isQuarantined: animals.isQuarantined,
+          quarantineReason: animals.quarantineReason,
         })
         .from(medicalExams)
         .innerJoin(animals, eq(medicalExams.animalId, animals.id))
@@ -37955,6 +38005,8 @@ The user asking is a tenant administrator or staff member.`;
           animalId: procedureLogs.animalId,
           animalName: animals.name,
           animalPhoto: animals.photoUrls,
+          isQuarantined: animals.isQuarantined,
+          quarantineReason: animals.quarantineReason,
         })
         .from(procedureLogs)
         .innerJoin(animals, eq(procedureLogs.animalId, animals.id))
@@ -37974,6 +38026,8 @@ The user asking is a tenant administrator or staff member.`;
           animalId: diagnosticTests.animalId,
           animalName: animals.name,
           animalPhoto: animals.photoUrls,
+          isQuarantined: animals.isQuarantined,
+          quarantineReason: animals.quarantineReason,
         })
         .from(diagnosticTests)
         .innerJoin(animals, eq(diagnosticTests.animalId, animals.id))
@@ -37995,6 +38049,8 @@ The user asking is a tenant administrator or staff member.`;
         route: m.route,
         dueDate: m.dueDate,
         prescriptionId: m.prescriptionId,
+        isQuarantined: m.isQuarantined,
+        quarantineReason: m.quarantineReason,
       }));
 
       const formattedPreventatives = preventatives.map(p => ({
@@ -38006,6 +38062,8 @@ The user asking is a tenant administrator or staff member.`;
         careCategory: p.careCategory,
         dateAdministered: p.dateAdministered,
         clinicName: p.clinicName,
+        isQuarantined: p.isQuarantined,
+        quarantineReason: p.quarantineReason,
       }));
 
       const formattedExams = exams.map(e => ({
@@ -38017,6 +38075,8 @@ The user asking is a tenant administrator or staff member.`;
         examDate: e.examDate,
         performedBy: e.performedBy,
         reason: e.reason,
+        isQuarantined: e.isQuarantined,
+        quarantineReason: e.quarantineReason,
       }));
 
       const formattedProcedures = procedures.map(p => ({
@@ -38028,6 +38088,8 @@ The user asking is a tenant administrator or staff member.`;
         procedureDate: p.procedureDate,
         veterinarian: p.veterinarian,
         billAmount: p.billAmount,
+        isQuarantined: p.isQuarantined,
+        quarantineReason: p.quarantineReason,
       }));
 
       const formattedDiagnostics = diagnostics.map(d => ({
@@ -38037,6 +38099,8 @@ The user asking is a tenant administrator or staff member.`;
         animalPhoto: Array.isArray(d.animalPhoto) && d.animalPhoto.length > 0 ? d.animalPhoto[0] : null,
         testName: d.testName,
         testDate: d.testDate,
+        isQuarantined: d.isQuarantined,
+        quarantineReason: d.quarantineReason,
       }));
 
       res.json({

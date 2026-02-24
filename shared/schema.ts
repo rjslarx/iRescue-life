@@ -554,6 +554,9 @@ export const animals = pgTable("animals", {
   reclaimedByContactId: uuid("reclaimed_by_contact_id").references(() => contacts.id, { onDelete: 'set null' }),
   reclaimFeePaid: decimal("reclaim_fee_paid", { precision: 10, scale: 2 }),
   reclaimDate: timestamp("reclaim_date"),
+  isQuarantined: boolean("is_quarantined").notNull().default(false),
+  quarantineReason: text("quarantine_reason"),
+  quarantineStartDate: timestamp("quarantine_start_date"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

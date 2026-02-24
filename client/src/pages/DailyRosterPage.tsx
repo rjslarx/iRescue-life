@@ -37,6 +37,7 @@ import {
   CheckCircle2,
   ClipboardList,
   Calendar as CalendarIcon,
+  AlertTriangle,
 } from "lucide-react";
 import { format, isSameDay, parse } from "date-fns";
 
@@ -49,6 +50,8 @@ interface RosterMedication {
   dosage: string;
   route: string;
   prescriptionId: string;
+  isQuarantined: boolean;
+  quarantineReason: string | null;
 }
 
 interface RosterPreventative {
@@ -59,6 +62,8 @@ interface RosterPreventative {
   careName: string;
   careCategory: string;
   clinicName: string | null;
+  isQuarantined: boolean;
+  quarantineReason: string | null;
 }
 
 type TaggedMedication = RosterMedication & { _type: "dose" };
@@ -73,6 +78,8 @@ interface RosterExam {
   examType: string;
   performedBy: string;
   reason: string | null;
+  isQuarantined: boolean;
+  quarantineReason: string | null;
 }
 
 interface RosterProcedure {
@@ -82,6 +89,8 @@ interface RosterProcedure {
   animalPhoto: string | null;
   procedureName: string;
   veterinarian: string | null;
+  isQuarantined: boolean;
+  quarantineReason: string | null;
 }
 
 interface RosterDiagnostic {
@@ -90,6 +99,8 @@ interface RosterDiagnostic {
   animalName: string;
   animalPhoto: string | null;
   testName: string;
+  isQuarantined: boolean;
+  quarantineReason: string | null;
 }
 
 interface RosterData {
@@ -392,7 +403,7 @@ export default function DailyRosterPage() {
                     {medsAndPreventatives.map((item) => {
                       const key = `${item._type}:${item.id}`;
                       return (
-                        <div key={key} className="flex items-start gap-3 py-2 px-2 rounded-md hover-elevate" data-testid={`row-med-${item.id}`}>
+                        <div key={key} className={`flex items-start gap-3 py-2 px-2 rounded-md hover-elevate ${item.isQuarantined ? "bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/40" : ""}`} data-testid={`row-med-${item.id}`}>
                           <Checkbox
                             checked={selectedItems.has(key)}
                             onCheckedChange={() => toggleItem(key)}
@@ -406,6 +417,14 @@ export default function DailyRosterPage() {
                           </Avatar>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5 flex-wrap">
+                              {item.isQuarantined && (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-red-600 dark:text-red-400" data-testid={`icon-quarantine-${item.id}`} />
+                                  </TooltipTrigger>
+                                  <TooltipContent><p>Quarantine: {item.quarantineReason || "Active"}</p></TooltipContent>
+                                </Tooltip>
+                              )}
                               <Link href={`/dashboard/animals/${item.animalId}/medical`} className="font-medium text-sm hover:underline" data-testid={`link-animal-${item.animalId}`}>
                                 {item.animalName}
                               </Link>
@@ -441,13 +460,21 @@ export default function DailyRosterPage() {
                   </CardHeader>
                   <CardContent className="space-y-1">
                     {vetAndSurgery.map((item) => (
-                      <div key={`${item.itemType}-${item.id}`} className="flex items-start gap-3 py-2 px-2 rounded-md hover-elevate" data-testid={`row-vet-${item.id}`}>
+                      <div key={`${item.itemType}-${item.id}`} className={`flex items-start gap-3 py-2 px-2 rounded-md hover-elevate ${item.isQuarantined ? "bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/40" : ""}`} data-testid={`row-vet-${item.id}`}>
                         <Avatar className="h-7 w-7 shrink-0">
                           {item.animalPhoto ? <AvatarImage src={item.animalPhoto} alt={item.animalName} /> : null}
                           <AvatarFallback className="text-xs">{item.animalName.charAt(0)}</AvatarFallback>
                         </Avatar>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5 flex-wrap">
+                            {item.isQuarantined && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-red-600 dark:text-red-400" data-testid={`icon-quarantine-vet-${item.id}`} />
+                                </TooltipTrigger>
+                                <TooltipContent><p>Quarantine: {item.quarantineReason || "Active"}</p></TooltipContent>
+                              </Tooltip>
+                            )}
                             <Link href={`/dashboard/animals/${item.animalId}/medical`} className="font-medium text-sm hover:underline" data-testid={`link-vet-animal-${item.animalId}`}>
                               {item.animalName}
                             </Link>
@@ -496,13 +523,21 @@ export default function DailyRosterPage() {
                   </CardHeader>
                   <CardContent className="space-y-1">
                     {roster!.diagnostics.map((item) => (
-                      <div key={item.id} className="flex items-start gap-3 py-2 px-2 rounded-md hover-elevate" data-testid={`row-lab-${item.id}`}>
+                      <div key={item.id} className={`flex items-start gap-3 py-2 px-2 rounded-md hover-elevate ${item.isQuarantined ? "bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/40" : ""}`} data-testid={`row-lab-${item.id}`}>
                         <Avatar className="h-7 w-7 shrink-0">
                           {item.animalPhoto ? <AvatarImage src={item.animalPhoto} alt={item.animalName} /> : null}
                           <AvatarFallback className="text-xs">{item.animalName.charAt(0)}</AvatarFallback>
                         </Avatar>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5 flex-wrap">
+                            {item.isQuarantined && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-red-600 dark:text-red-400" data-testid={`icon-quarantine-lab-${item.id}`} />
+                                </TooltipTrigger>
+                                <TooltipContent><p>Quarantine: {item.quarantineReason || "Active"}</p></TooltipContent>
+                              </Tooltip>
+                            )}
                             <Link href={`/dashboard/animals/${item.animalId}/medical`} className="font-medium text-sm hover:underline" data-testid={`link-lab-animal-${item.animalId}`}>
                               {item.animalName}
                             </Link>

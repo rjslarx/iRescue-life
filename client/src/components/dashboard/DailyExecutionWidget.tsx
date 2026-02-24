@@ -18,6 +18,7 @@ import {
   ClipboardList,
   Loader2,
   CheckCircle2,
+  AlertTriangle,
 } from "lucide-react";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, getDay, isToday } from "date-fns";
 
@@ -29,6 +30,8 @@ interface RosterMedication {
   dosage: string;
   route: string;
   prescriptionId: string;
+  isQuarantined: boolean;
+  quarantineReason: string | null;
 }
 
 interface RosterPreventative {
@@ -37,6 +40,8 @@ interface RosterPreventative {
   animalName: string;
   careName: string;
   careCategory: string;
+  isQuarantined: boolean;
+  quarantineReason: string | null;
 }
 
 interface RosterExam {
@@ -45,6 +50,8 @@ interface RosterExam {
   animalName: string;
   examType: string;
   reason: string;
+  isQuarantined: boolean;
+  quarantineReason: string | null;
 }
 
 interface RosterProcedure {
@@ -53,6 +60,8 @@ interface RosterProcedure {
   animalName: string;
   procedureName: string;
   veterinarian: string;
+  isQuarantined: boolean;
+  quarantineReason: string | null;
 }
 
 interface RosterDiagnostic {
@@ -60,6 +69,8 @@ interface RosterDiagnostic {
   animalId: string;
   animalName: string;
   testName: string;
+  isQuarantined: boolean;
+  quarantineReason: string | null;
 }
 
 interface RosterData {
@@ -256,8 +267,8 @@ export function DailyExecutionWidget() {
   const diagnostics = rosterData?.diagnostics || [];
 
   const medsAndPreventatives = [
-    ...meds.map((m) => ({ ...m, _type: "dose" as const, _label: m.medicationName, _detail: m.dosage ? `${m.dosage}${m.route ? ` (${m.route})` : ""}` : "" })),
-    ...preventatives.map((p) => ({ ...p, _type: "preventative" as const, _label: p.careName, _detail: p.careCategory || "" })),
+    ...meds.map((m) => ({ ...m, _type: "dose" as const, _label: m.medicationName, _detail: m.dosage ? `${m.dosage}${m.route ? ` (${m.route})` : ""}` : "", isQuarantined: m.isQuarantined, quarantineReason: m.quarantineReason })),
+    ...preventatives.map((p) => ({ ...p, _type: "preventative" as const, _label: p.careName, _detail: p.careCategory || "", isQuarantined: p.isQuarantined, quarantineReason: p.quarantineReason })),
   ];
   const vetVisits = [...exams.map((e) => ({ ...e, _label: e.examType, _detail: e.reason || "" })), ...procedures.map((p) => ({ ...p, _label: p.procedureName, _detail: p.veterinarian || "" }))];
   const labs = diagnostics.map((d) => ({ ...d, _label: d.testName }));
@@ -337,7 +348,7 @@ export function DailyExecutionWidget() {
                         return (
                           <label
                             key={key}
-                            className="flex items-center gap-2 py-1 px-1.5 rounded-md hover:bg-muted/50 cursor-pointer text-sm"
+                            className={`flex items-center gap-2 py-1 px-1.5 rounded-md hover:bg-muted/50 cursor-pointer text-sm ${item.isQuarantined ? "bg-red-50 dark:bg-red-950/30" : ""}`}
                             data-testid={`roster-item-${key}`}
                           >
                             {!isFutureDate && (
@@ -346,6 +357,9 @@ export function DailyExecutionWidget() {
                                 onCheckedChange={() => toggleItem(key)}
                                 data-testid={`checkbox-${key}`}
                               />
+                            )}
+                            {item.isQuarantined && (
+                              <AlertTriangle className="h-3 w-3 shrink-0 text-red-600 dark:text-red-400" />
                             )}
                             <span className="font-medium truncate">{item.animalName}</span>
                             <span className="text-muted-foreground truncate">
@@ -378,9 +392,12 @@ export function DailyExecutionWidget() {
                       {vetVisits.map((item) => (
                         <div
                           key={item.id}
-                          className="flex items-center gap-2 py-1 px-1.5 rounded-md text-sm"
+                          className={`flex items-center gap-2 py-1 px-1.5 rounded-md text-sm ${item.isQuarantined ? "bg-red-50 dark:bg-red-950/30" : ""}`}
                           data-testid={`roster-vet-${item.id}`}
                         >
+                          {item.isQuarantined && (
+                            <AlertTriangle className="h-3 w-3 shrink-0 text-red-600 dark:text-red-400" />
+                          )}
                           <span className="font-medium truncate">{item.animalName}</span>
                           <span className="text-muted-foreground truncate">{item._label}</span>
                           {item._detail && (

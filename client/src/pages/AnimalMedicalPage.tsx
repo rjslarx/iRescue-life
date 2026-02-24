@@ -174,6 +174,8 @@ export default function AnimalMedicalPage() {
   const [unablePrescription, setUnablePrescription] = useState<any>(null);
   const [unableReason, setUnableReason] = useState<"animal_sick" | "unable_to_swallow" | "other">("animal_sick");
   const [unableNotes, setUnableNotes] = useState("");
+  const [quarantineDialogOpen, setQuarantineDialogOpen] = useState(false);
+  const [quarantineReason, setQuarantineReason] = useState("");
 
   useEffect(() => {
     if (postIntakeHandled.current) return;
@@ -388,6 +390,28 @@ export default function AnimalMedicalPage() {
       toast({
         title: "Error",
         description: "Failed to delete the medication. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const quarantineMutation = useMutation({
+    mutationFn: async (data: { isQuarantined: boolean; quarantineReason?: string | null }) => {
+      await apiRequest('PATCH', `/api/animals/${animalId}/quarantine`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/animals', animalId] });
+      setQuarantineDialogOpen(false);
+      setQuarantineReason("");
+      toast({
+        title: "Quarantine updated",
+        description: "The animal's quarantine status has been updated.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to update quarantine status.",
         variant: "destructive",
       });
     },
@@ -769,6 +793,17 @@ export default function AnimalMedicalPage() {
               </div>
             </div>
             <div className="flex flex-col md:flex-row gap-2">
+              {!animal.isQuarantined && (
+                <Button
+                  variant="outline"
+                  onClick={() => setQuarantineDialogOpen(true)}
+                  data-testid="button-quarantine"
+                  className="w-full md:w-auto"
+                >
+                  <Shield className="w-4 h-4 mr-2" />
+                  Quarantine
+                </Button>
+              )}
               <Button
                 onClick={() => setAddMedicalOrderOpen(true)}
                 data-testid="button-add-medical-order"
@@ -792,6 +827,30 @@ export default function AnimalMedicalPage() {
             </div>
           </div>
         </div>
+
+        {/* Quarantine Banner */}
+        {animal.isQuarantined && (
+          <div className="mx-6 flex items-center justify-between gap-3 rounded-md border border-red-500/40 bg-red-500/10 px-4 py-3" data-testid="banner-quarantine">
+            <div className="flex items-center gap-2 min-w-0">
+              <AlertTriangle className="h-5 w-5 shrink-0 text-red-600 dark:text-red-400" />
+              <span className="font-semibold text-red-700 dark:text-red-300 text-sm md:text-base truncate" data-testid="text-quarantine-reason">
+                STRICT QUARANTINE{animal.quarantineReason ? `: ${animal.quarantineReason}` : ""}
+              </span>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="shrink-0 border-red-500/40 text-red-700 dark:text-red-300"
+              onClick={() => {
+                setQuarantineReason(animal.quarantineReason || "");
+                setQuarantineDialogOpen(true);
+              }}
+              data-testid="button-manage-quarantine"
+            >
+              Manage
+            </Button>
+          </div>
+        )}
 
         {/* Medical Alerts */}
         {animal.medicalAlertMemo && (
@@ -3111,6 +3170,55 @@ export default function AnimalMedicalPage() {
               <X className="w-4 h-4 mr-2" />
               Dismiss
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Quarantine Management Dialog */}
+      <Dialog open={quarantineDialogOpen} onOpenChange={(open) => { if (!open) { setQuarantineDialogOpen(false); setQuarantineReason(""); } }}>
+        <DialogContent data-testid="dialog-manage-quarantine">
+          <DialogHeader>
+            <DialogTitle>{animal?.isQuarantined ? "Manage Quarantine" : "Place in Quarantine"}</DialogTitle>
+            <DialogDescription>
+              {animal?.isQuarantined
+                ? "Update the quarantine reason or clear the quarantine status."
+                : "Place this animal in strict quarantine. This will display a warning across the system."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="quarantine-reason">Reason for Quarantine</Label>
+              <Input
+                id="quarantine-reason"
+                placeholder="e.g. Parvovirus, Ringworm, Upper Respiratory..."
+                value={quarantineReason}
+                onChange={(e) => setQuarantineReason(e.target.value)}
+                data-testid="input-quarantine-reason"
+              />
+            </div>
+          </div>
+          <div className="flex flex-col-reverse sm:flex-row sm:justify-between gap-2">
+            {animal?.isQuarantined && (
+              <Button
+                variant="outline"
+                onClick={() => quarantineMutation.mutate({ isQuarantined: false })}
+                disabled={quarantineMutation.isPending}
+                data-testid="button-clear-quarantine"
+              >
+                Clear Quarantine
+              </Button>
+            )}
+            <div className="flex gap-2 ml-auto">
+              <Button variant="outline" onClick={() => { setQuarantineDialogOpen(false); setQuarantineReason(""); }} data-testid="button-cancel-quarantine">Cancel</Button>
+              <Button
+                variant="destructive"
+                onClick={() => quarantineMutation.mutate({ isQuarantined: true, quarantineReason: quarantineReason || null })}
+                disabled={quarantineMutation.isPending}
+                data-testid="button-confirm-quarantine"
+              >
+                {quarantineMutation.isPending ? "Saving..." : animal?.isQuarantined ? "Update Quarantine" : "Place in Quarantine"}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
