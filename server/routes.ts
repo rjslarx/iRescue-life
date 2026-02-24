@@ -3512,7 +3512,7 @@ Crawl-delay: 1
    */
   app.get('/api/dashboard/medical-snapshot', requireTenant, requireAuth, requireRole('admin', 'staff', 'owner', 'manager'), async (req, res, next) => {
     try {
-      const { medicalDoses, medicalPrescriptions, vetVisits, medicalExams, vaccineRecords } = await import('@shared/schema');
+      const { medicalDoses, medicalPrescriptions, vetVisits, medicalExams, vaccineRecords, TERMINAL_STATUSES } = await import('@shared/schema');
 
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -3554,7 +3554,7 @@ Crawl-delay: 1
         .where(and(
           eq(animals.tenantId, req.tenant!.id),
           eq(animals.medicalStatus, 'surgery_pending'),
-          notInArray(animals.status, ['adopted', 'deceased', 'transported']),
+          notInArray(animals.status, TERMINAL_STATUSES),
           isShelter
         ));
 
@@ -3564,7 +3564,7 @@ Crawl-delay: 1
         .where(and(
           eq(animals.tenantId, req.tenant!.id),
           eq(animals.medicalStatus, 'surgery_pending'),
-          notInArray(animals.status, ['adopted', 'deceased', 'transported']),
+          notInArray(animals.status, TERMINAL_STATUSES),
           isFoster
         ));
 
@@ -3583,7 +3583,7 @@ Crawl-delay: 1
             eq(animals.medicalStatus, 'needs_vetting'),
             and(
               gte(animals.intakeDate, thirtyDaysAgo),
-              notInArray(animals.status, ['adopted', 'deceased', 'transported'])
+              notInArray(animals.status, TERMINAL_STATUSES)
             )
           )
         ));
@@ -3809,7 +3809,8 @@ Crawl-delay: 1
         preventativeCareRecords,
         procedureLogs,
         vaccineRecords,
-        medicalExams
+        medicalExams,
+        TERMINAL_STATUSES
       } = await import('@shared/schema');
       const { gte, lte } = await import('drizzle-orm');
       
@@ -3907,7 +3908,7 @@ Crawl-delay: 1
           isNotNull(preventativeCareRecords.nextDueDate),
           gte(preventativeCareRecords.nextDueDate, todayStart),
           lte(preventativeCareRecords.nextDueDate, extendedEnd),
-          not(inArray(animals.status, ['adopted', 'deceased', 'transferred']))
+          notInArray(animals.status, TERMINAL_STATUSES)
         ));
 
       // Filter medical tasks - use extended range for "tomorrow" to account for timezone offset
@@ -3936,7 +3937,7 @@ Crawl-delay: 1
           eq(preventativeCareRecords.tenantId, req.tenant!.id),
           isNotNull(preventativeCareRecords.nextDueDate),
           lt(preventativeCareRecords.nextDueDate, todayStart),
-          not(inArray(animals.status, ['adopted', 'deceased', 'transferred']))
+          notInArray(animals.status, TERMINAL_STATUSES)
         ));
 
       // 4. Get calendar events for today through day-after-tomorrow (timezone buffer)
@@ -4039,7 +4040,7 @@ Crawl-delay: 1
         .from(animals)
         .where(and(
           eq(animals.tenantId, req.tenant!.id),
-          not(inArray(animals.status, ['adopted', 'deceased', 'transferred']))
+          notInArray(animals.status, TERMINAL_STATUSES)
         ));
       activeAnimals.forEach(a => animalMap.set(a.id, a.name));
 
@@ -18150,7 +18151,7 @@ Submitted: ${new Date().toLocaleString()}
    */
   app.get('/api/foster-animals/available-animals', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
     try {
-      const { animals } = await import('@shared/schema');
+      const { animals, TERMINAL_STATUSES } = await import('@shared/schema');
       
       const availableAnimals = await db
         .select({
@@ -18164,7 +18165,7 @@ Submitted: ${new Date().toLocaleString()}
         .from(animals)
         .where(and(
           eq(animals.tenantId, req.tenant!.id),
-          notInArray(animals.status, ['adopted', 'deceased']),
+          notInArray(animals.status, TERMINAL_STATUSES),
           isNull(animals.pendingFosterUserId),
           or(isNull(animals.locationType), ne(animals.locationType, 'foster'))
         ))
@@ -31293,7 +31294,7 @@ Email: ${application.applicantEmail || ''}`
    */
   app.get('/api/medical/surgery-queue', requireTenant, requireAuth, async (req, res, next) => {
     try {
-      const { animals } = await import('@shared/schema');
+      const { animals, TERMINAL_STATUSES } = await import('@shared/schema');
       const locationFilter = req.query.location as string | undefined;
       const locationCondition = locationFilter === 'shelter' ? or(ne(animals.locationType, 'foster'), isNull(animals.locationType)) : locationFilter === 'foster' ? eq(animals.locationType, 'foster') : undefined;
       
@@ -31322,7 +31323,7 @@ Email: ${application.applicantEmail || ''}`
             eq(animals.neuterStatus, 'intact'),
             eq(animals.medicalStatus, 'surgery_pending')
           ),
-          notInArray(animals.status, ['adopted', 'deceased', 'transported']),
+          notInArray(animals.status, TERMINAL_STATUSES),
           ...(locationCondition ? [locationCondition] : [])
         ))
         .orderBy(animals.scheduledSurgeryDate, animals.intakeDate);
@@ -31476,7 +31477,7 @@ Email: ${application.applicantEmail || ''}`
    */
   app.get('/api/medical/preventative-care/coming-due', requireTenant, requireAuth, async (req, res, next) => {
     try {
-      const { preventativeCareRecords, animals } = await import('@shared/schema');
+      const { preventativeCareRecords, animals, TERMINAL_STATUSES: TERMINAL_STATUSES_PC } = await import('@shared/schema');
       const locationFilter = req.query.location as string | undefined;
       const locationCondition = locationFilter === 'shelter' ? or(ne(animals.locationType, 'foster'), isNull(animals.locationType)) : locationFilter === 'foster' ? eq(animals.locationType, 'foster') : undefined;
 
@@ -31521,7 +31522,7 @@ Email: ${application.applicantEmail || ''}`
           eq(preventativeCareRecords.tenantId, req.tenant!.id),
           isNotNull(preventativeCareRecords.nextDueDate),
           lte(preventativeCareRecords.nextDueDate, sevenDaysOut),
-          not(inArray(animals.status, ['adopted', 'deceased', 'transferred'])),
+          notInArray(animals.status, TERMINAL_STATUSES_PC),
           ...(locationCondition ? [locationCondition] : [])
         ))
         .orderBy(asc(preventativeCareRecords.nextDueDate));
