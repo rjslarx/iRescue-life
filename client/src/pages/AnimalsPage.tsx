@@ -2419,7 +2419,12 @@ export default function AnimalsPage() {
     // Handle ?action=add to auto-open add dialog
     if (urlParams.get('action') === 'add') {
       setDialogOpen(true);
-      // Clean up the URL after opening the dialog
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, '', newUrl);
+    }
+
+    if (urlParams.get('action') === 'bulk-intake') {
+      setBulkIntakeOpen(true);
       const newUrl = window.location.pathname;
       window.history.replaceState({}, '', newUrl);
     }
@@ -2710,16 +2715,27 @@ export default function AnimalsPage() {
       description="Manage your rescue's animals"
       actions={
         <div className="flex items-center gap-2">
-          <Link href="/dashboard/animals/duplicates" className="shrink-0">
-            <Button variant="outline" data-testid="button-find-duplicates">
-              <GitMerge className="h-4 w-4 sm:mr-2" />
-              <span className="hidden sm:inline">Find Duplicates</span>
-            </Button>
-          </Link>
-          <Button variant="outline" className="shrink-0" onClick={() => setBulkIntakeOpen(true)} data-testid="button-bulk-litter-intake">
-            <LitterPawsIcon className="h-4 w-4 sm:mr-2" />
-            <span className="hidden sm:inline">Litter Intake</span>
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="shrink-0" data-testid="button-more-actions">
+                <Plus className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">More</span>
+                <ChevronDown className="h-3 w-3 ml-1" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setBulkIntakeOpen(true)} data-testid="menu-item-litter-intake">
+                <LitterPawsIcon className="h-4 w-4 mr-2" />
+                Litter Intake
+              </DropdownMenuItem>
+              <Link href="/dashboard/animals/duplicates">
+                <DropdownMenuItem data-testid="menu-item-find-duplicates">
+                  <GitMerge className="h-4 w-4 mr-2" />
+                  Find Duplicates
+                </DropdownMenuItem>
+              </Link>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Dialog open={dialogOpen} onOpenChange={(open) => {
             setDialogOpen(open);
             if (!open) setSurrenderPrefill(null);

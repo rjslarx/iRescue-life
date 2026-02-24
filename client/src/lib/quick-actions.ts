@@ -40,6 +40,15 @@ export const ALL_QUICK_ACTIONS: QuickAction[] = [
     pageId: "animals",
   },
   {
+    id: "litter-intake",
+    label: "Litter Intake",
+    description: "Bulk intake for a litter of animals",
+    icon: PawPrint,
+    href: "/dashboard/animals?action=bulk-intake",
+    actionType: "navigate",
+    pageId: "animals",
+  },
+  {
     id: "record-donation",
     label: "Record Donation",
     description: "Log a new donation received",

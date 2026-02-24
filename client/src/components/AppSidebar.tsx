@@ -25,6 +25,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { LitterPawsIcon } from "@/components/icons/LitterPawsIcon";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { usePagePermissions } from "@/hooks/usePagePermissions";
@@ -252,6 +253,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
       title: "Operations",
       items: [
         { title: "Animals", url: "/dashboard/animals", icon: Heart, usesGoogleDrive: true },
+        { title: "Litter Intake", url: "/dashboard/animals?action=bulk-intake", icon: LitterPawsIcon },
         { title: "Animal Lookup", url: "/dashboard/animal-lookup", icon: Search },
         { title: "Kennels", url: "/dashboard/kennels", icon: Home },
         { title: "Network Transfers", url: "/dashboard/transfers", icon: ArrowRightLeft, notificationKey: "pendingTransfers" },
@@ -340,6 +342,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
       title: "Operations",
       items: [
         { title: "Animals", url: "/dashboard/animals", icon: Heart, usesGoogleDrive: true },
+        { title: "Litter Intake", url: "/dashboard/animals?action=bulk-intake", icon: LitterPawsIcon },
         { title: "Animal Lookup", url: "/dashboard/animal-lookup", icon: Search },
         { title: "Kennels", url: "/dashboard/kennels", icon: Home },
         { title: "Network Transfers", url: "/dashboard/transfers", icon: ArrowRightLeft, notificationKey: "pendingTransfers" },
@@ -408,6 +411,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
       title: "Daily Tasks",
       items: [
         { title: "Animals", url: "/dashboard/animals", icon: Heart, usesGoogleDrive: true },
+        { title: "Litter Intake", url: "/dashboard/animals?action=bulk-intake", icon: LitterPawsIcon },
         { title: "Animal Lookup", url: "/dashboard/animal-lookup", icon: Search },
         { title: "Kennels", url: "/dashboard/kennels", icon: Home },
         { title: "Network Transfers", url: "/dashboard/transfers", icon: ArrowRightLeft, notificationKey: "pendingTransfers" },
