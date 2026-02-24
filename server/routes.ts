@@ -11928,7 +11928,7 @@ Crawl-delay: 1
    */
   app.get('/api/public-waiver', requireTenant, async (req, res, next) => {
     try {
-      const tenantId = req.tenantId!;
+      const tenantId = req.tenant!.id;
 
       const [form] = await db
         .select({
@@ -11983,7 +11983,7 @@ Crawl-delay: 1
    */
   app.post('/api/public-waiver/sign', requireTenant, async (req, res, next) => {
     try {
-      const tenantId = req.tenantId!;
+      const tenantId = req.tenant!.id;
       const { signerName, signerEmail, signerPhone, signatureData, formData: extraFormData } = req.body;
 
       if (!signerName || !signerEmail) {
