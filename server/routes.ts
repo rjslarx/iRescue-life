@@ -31193,7 +31193,7 @@ Email: ${application.applicantEmail || ''}`
    */
   app.get('/api/medical/intake-animals', requireTenant, requireAuth, async (req, res, next) => {
     try {
-      const { animals, medicalExams, vaccineRecords } = await import('@shared/schema');
+      const { animals, medicalExams, vaccineRecords, TERMINAL_STATUSES } = await import('@shared/schema');
       const locationFilter = req.query.location as string | undefined;
       const locationCondition = locationFilter === 'shelter' ? or(ne(animals.locationType, 'foster'), isNull(animals.locationType)) : locationFilter === 'foster' ? eq(animals.locationType, 'foster') : undefined;
       
@@ -31224,7 +31224,7 @@ Email: ${application.applicantEmail || ''}`
             eq(animals.medicalStatus, 'needs_vetting'),
             and(
               gte(animals.intakeDate, thirtyDaysAgo),
-              notInArray(animals.status, ['adopted', 'deceased', 'transported'])
+              notInArray(animals.status, TERMINAL_STATUSES)
             )
           ),
           ...(locationCondition ? [locationCondition] : [])
