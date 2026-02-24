@@ -47,6 +47,7 @@ const DEFAULT_CATALOG_ITEMS: CatalogSeedItem[] = [
   { name: 'Mirtazapine (Mirataz)', category: 'Medication', defaultDose: '1.88mg', defaultFrequency: 'Every 48hrs' },
   { name: 'Galliprant (Grapiprant)', category: 'Medication', defaultDose: '2mg/kg', defaultFrequency: 'SID' },
   { name: 'Metoclopramide (Reglan)', category: 'Medication', defaultDose: '0.3mg/kg', defaultFrequency: 'TID' },
+  { name: 'Convenia Injection (Cefovecin)', category: 'Medication', defaultDose: '8mg/kg', defaultFrequency: 'Single SQ injection, lasts 14 days' },
   { name: 'Ponazuril (Marquis)', category: 'Medication', defaultDose: '50mg/kg', defaultFrequency: 'SID x 5 days' },
   { name: 'Capstar (Nitenpyram)', category: 'Medication', defaultDose: '1mg/kg', defaultFrequency: 'Once PRN' },
   { name: 'Erythromycin Ophthalmic', category: 'Medication', defaultDose: 'Topical', defaultFrequency: 'TID x 7-10 days' },
@@ -85,6 +86,8 @@ const DEFAULT_CATALOG_ITEMS: CatalogSeedItem[] = [
   { name: 'Urine Protein:Creatinine Ratio (UPC)', category: 'Lab' },
   { name: 'Reticulocyte Count', category: 'Lab' },
   { name: 'Skin Scrape', category: 'Lab' },
+  { name: 'Skin Scrape Recheck', category: 'Lab' },
+  { name: 'Giardia ELISA / Fecal Recheck', category: 'Lab' },
   { name: 'Bloodwork (CBC/Chem)', category: 'Lab' },
 
   { name: 'Spay (Ovariohysterectomy)', category: 'Procedure' },
@@ -106,6 +109,9 @@ const DEFAULT_CATALOG_ITEMS: CatalogSeedItem[] = [
   { name: 'Hernia Repair', category: 'Procedure' },
   { name: 'Euthanasia', category: 'Procedure' },
   { name: 'TPLO (Cruciate Repair)', category: 'Procedure' },
+  { name: 'Subcutaneous (SQ) Fluids', category: 'Procedure' },
+  { name: 'Syringe Feeding / Nutritional Support', category: 'Procedure' },
+  { name: 'Medicated/Sanitary Bath', category: 'Procedure' },
 
   { name: 'Simparica Trio', category: 'Preventative', defaultFrequency: 'Monthly' },
   { name: 'Heartgard Plus', category: 'Preventative', defaultFrequency: 'Monthly' },
@@ -128,26 +134,69 @@ const DEFAULT_CATALOG_ITEMS: CatalogSeedItem[] = [
   { name: 'Behavioral Consult', category: 'Exam' },
 ];
 
-const DEFAULT_ORDER_SETS = [
+interface OrderSetItemDef {
+  name: string;
+  offsetDays?: number;
+}
+
+interface OrderSetDef {
+  setName: string;
+  description: string;
+  items: (string | OrderSetItemDef)[];
+}
+
+const DEFAULT_ORDER_SETS: OrderSetDef[] = [
   {
     setName: 'Standard Dog Intake',
     description: 'Standard canine intake protocol: DHPP, fecal, dewormer, heartworm test',
-    itemNames: ['DHPP (DA2PP)', 'Fecal Float', 'Pyrantel (Strongid)', 'Heartworm/Tick 4DX SNAP', 'Intake Exam'],
+    items: ['DHPP (DA2PP)', 'Fecal Float', 'Pyrantel (Strongid)', 'Heartworm/Tick 4DX SNAP', 'Intake Exam'],
   },
   {
     setName: 'Standard Cat Intake',
     description: 'Standard feline intake protocol: FVRCP, FeLV/FIV snap, fecal, dewormer',
-    itemNames: ['FVRCP', 'FeLV/FIV SNAP Test', 'Fecal Float', 'Pyrantel (Strongid)', 'Intake Exam'],
+    items: ['FVRCP', 'FeLV/FIV SNAP Test', 'Fecal Float', 'Pyrantel (Strongid)', 'Intake Exam'],
   },
   {
     setName: 'Puppy Protocol',
     description: 'Initial puppy vaccination and preventative care series',
-    itemNames: ['DHPP (DA2PP)', 'Fecal Float', 'Pyrantel (Strongid)', 'Simparica Trio', 'Wellness Exam'],
+    items: ['DHPP (DA2PP)', 'Fecal Float', 'Pyrantel (Strongid)', 'Simparica Trio', 'Wellness Exam'],
   },
   {
     setName: 'Pre-Surgical Workup',
     description: 'Pre-operative bloodwork and exam',
-    itemNames: ['CBC (Complete Blood Count)', 'Chemistry Panel', 'Pre-Surgical Exam'],
+    items: ['CBC (Complete Blood Count)', 'Chemistry Panel', 'Pre-Surgical Exam'],
+  },
+  {
+    setName: 'Giardia Standard Protocol',
+    description: 'Standard giardia treatment: Fenbendazole + Metronidazole for 5 days, medicated bath on day 5, fecal recheck at day 14',
+    items: [
+      { name: 'Fenbendazole (Panacur)', offsetDays: 0 },
+      { name: 'Metronidazole', offsetDays: 0 },
+      { name: 'Medicated/Sanitary Bath', offsetDays: 5 },
+      { name: 'Giardia ELISA / Fecal Recheck', offsetDays: 14 },
+    ],
+  },
+  {
+    setName: 'Demodex Standard Protocol',
+    description: 'Demodectic mange treatment: Isoxazoline preventative + antibiotics for secondary infection, skin scrape rechecks at 30/60 days',
+    items: [
+      { name: 'Skin Scrape', offsetDays: 0 },
+      { name: 'Bravecto', offsetDays: 0 },
+      { name: 'Cephalexin', offsetDays: 0 },
+      { name: 'Skin Scrape Recheck', offsetDays: 30 },
+      { name: 'Skin Scrape Recheck', offsetDays: 60 },
+    ],
+  },
+  {
+    setName: 'Parvovirus Outpatient Support (5-Day)',
+    description: 'Outpatient parvo supportive care: antibiotic injection, anti-nausea, SQ fluids, and syringe feeding for 5 days',
+    items: [
+      { name: 'Parvo SNAP Test', offsetDays: 0 },
+      { name: 'Convenia Injection (Cefovecin)', offsetDays: 0 },
+      { name: 'Cerenia (Maropitant)', offsetDays: 0 },
+      { name: 'Subcutaneous (SQ) Fluids', offsetDays: 0 },
+      { name: 'Syringe Feeding / Nutritional Support', offsetDays: 0 },
+    ],
   },
 ];
 
@@ -205,13 +254,15 @@ export async function seedMedicalCatalog(tenantId: string): Promise<{ catalogCre
       .values({ tenantId, setName: osDef.setName, description: osDef.description })
       .returning();
 
-    const itemRows = osDef.itemNames
-      .map((name, idx) => {
-        const catalogItem = catalogByName.get(name);
+    const itemRows = osDef.items
+      .map((item, idx) => {
+        const itemName = typeof item === 'string' ? item : item.name;
+        const offsetDays = typeof item === 'string' ? 0 : (item.offsetDays ?? 0);
+        const catalogItem = catalogByName.get(itemName);
         if (!catalogItem) return null;
-        return { orderSetId: createdSet.id, catalogItemId: catalogItem.id, sortOrder: idx };
+        return { orderSetId: createdSet.id, catalogItemId: catalogItem.id, sortOrder: idx, offsetDays };
       })
-      .filter(Boolean) as { orderSetId: string; catalogItemId: string; sortOrder: number }[];
+      .filter(Boolean) as { orderSetId: string; catalogItemId: string; sortOrder: number; offsetDays: number }[];
 
     if (itemRows.length > 0) {
       await db.insert(orderSetItems).values(itemRows);

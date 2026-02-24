@@ -38948,6 +38948,7 @@ The user asking is a tenant administrator or staff member.`;
                 defaultDose: medicalCatalog.defaultDose,
                 defaultFrequency: medicalCatalog.defaultFrequency,
               },
+              offsetDays: orderSetItems.offsetDays,
             })
             .from(orderSetItems)
             .innerJoin(medicalCatalog, eq(orderSetItems.catalogItemId, medicalCatalog.id))
@@ -38955,7 +38956,14 @@ The user asking is a tenant administrator or staff member.`;
             .orderBy(orderSetItems.sortOrder);
 
           for (const row of items) {
-            const entry = await dispatchItem(tx, row.catalogItem, {});
+            const offsetDate = new Date(today);
+            offsetDate.setDate(offsetDate.getDate() + (row.offsetDays || 0));
+            const offsetDateStr = offsetDate.toISOString().split('T')[0];
+            const entry = await dispatchItem(tx, row.catalogItem, {
+              dueDate: offsetDateStr,
+              startDate: offsetDateStr,
+              scheduledDate: offsetDateStr,
+            });
             dispatched.push(entry);
           }
         }
@@ -39145,6 +39153,7 @@ The user asking is a tenant administrator or staff member.`;
           .select({
             id: orderSetItems.id,
             sortOrder: orderSetItems.sortOrder,
+            offsetDays: orderSetItems.offsetDays,
             catalogItem: {
               id: medicalCatalog.id,
               name: medicalCatalog.name,
@@ -39175,10 +39184,13 @@ The user asking is a tenant administrator or staff member.`;
     try {
       const { orderSets, orderSetItems } = await import('@shared/schema');
       const tenantId = req.tenant!.id;
-      const { setName, description, catalogItemIds } = req.body;
+      const { setName, description, catalogItemIds, items: itemsWithOffset } = req.body;
 
-      if (!setName || !Array.isArray(catalogItemIds) || catalogItemIds.length === 0) {
-        return res.status(400).json({ error: 'setName and catalogItemIds (non-empty array) are required' });
+      const hasItems = Array.isArray(itemsWithOffset) && itemsWithOffset.length > 0;
+      const hasLegacy = Array.isArray(catalogItemIds) && catalogItemIds.length > 0;
+
+      if (!setName || (!hasItems && !hasLegacy)) {
+        return res.status(400).json({ error: 'setName and items (or catalogItemIds) are required' });
       }
 
       const [createdSet] = await db
@@ -39186,11 +39198,19 @@ The user asking is a tenant administrator or staff member.`;
         .values({ tenantId, setName, description: description || null })
         .returning();
 
-      const itemRows = catalogItemIds.map((catId: string, idx: number) => ({
-        orderSetId: createdSet.id,
-        catalogItemId: catId,
-        sortOrder: idx,
-      }));
+      const itemRows = hasItems
+        ? itemsWithOffset.map((item: { catalogItemId: string; offsetDays?: number }, idx: number) => ({
+            orderSetId: createdSet.id,
+            catalogItemId: item.catalogItemId,
+            sortOrder: idx,
+            offsetDays: item.offsetDays ?? 0,
+          }))
+        : catalogItemIds.map((catId: string, idx: number) => ({
+            orderSetId: createdSet.id,
+            catalogItemId: catId,
+            sortOrder: idx,
+            offsetDays: 0,
+          }));
 
       await db.insert(orderSetItems).values(itemRows);
 

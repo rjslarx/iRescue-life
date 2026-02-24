@@ -41,7 +41,7 @@ interface OrderSetWithItems {
   id: string;
   setName: string;
   description: string | null;
-  items: { id: string; sortOrder: number; catalogItem: CatalogItem }[];
+  items: { id: string; sortOrder: number; offsetDays: number; catalogItem: CatalogItem }[];
 }
 
 interface PendingOrder {
@@ -224,7 +224,16 @@ const searchAliases: Record<string, string[]> = {
   'smz': ['sulfamethoxazole', 'trimethoprim'],
   'tmp': ['trimethoprim', 'sulfamethoxazole'],
   'nsaid': ['carprofen', 'meloxicam', 'rimadyl', 'metacam', 'galliprant'],
-  'abx': ['amoxicillin', 'cephalexin', 'doxycycline', 'enrofloxacin', 'clindamycin', 'metronidazole'],
+  'abx': ['amoxicillin', 'cephalexin', 'doxycycline', 'enrofloxacin', 'clindamycin', 'metronidazole', 'convenia'],
+  'sq': ['subcutaneous', 'sq fluids'],
+  'sub-q': ['subcutaneous', 'sq fluids'],
+  'subq': ['subcutaneous', 'sq fluids'],
+  'fluids': ['subcutaneous', 'sq fluids'],
+  'convenia': ['convenia', 'cefovecin'],
+  'parvo': ['parvo', 'parvovirus'],
+  'giardia': ['giardia', 'fenbendazole', 'panacur'],
+  'mange': ['skin scrape', 'demodex', 'bravecto'],
+  'demodex': ['skin scrape', 'demodex', 'bravecto'],
 };
 
 function expandSearchTerms(query: string): string[] {
@@ -764,10 +773,17 @@ export function AddMedicalOrderDialog({ animalId, animalSpecies = 'Dog', open, o
                     {selectedOrderSet.items.filter(osi => osi?.catalogItem).map(osi => {
                       const Icon = categoryIcons[osi.catalogItem.category] || Pill;
                       const isDuplicate = activeNameSet.has((osi.catalogItem.name || '').toLowerCase());
+                      const offset = osi.offsetDays || 0;
                       return (
                         <div key={osi.id} className="flex items-center gap-2 p-2 border rounded-md text-sm">
                           <Icon className="w-4 h-4 shrink-0 text-muted-foreground" />
                           <span className={isDuplicate ? "text-amber-600 dark:text-amber-400" : ""}>{osi.catalogItem.name}</span>
+                          {offset > 0 && (
+                            <Badge variant="outline" className="text-[10px] shrink-0" data-testid={`badge-offset-${osi.id}`}>
+                              <Clock className="w-3 h-3 mr-0.5" />
+                              Day {offset}
+                            </Badge>
+                          )}
                           <Badge variant="secondary" className={`text-[10px] ml-auto shrink-0 ${categoryColors[osi.catalogItem.category] || ""}`}>
                             {osi.catalogItem.category}
                           </Badge>
