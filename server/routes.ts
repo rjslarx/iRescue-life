@@ -14665,7 +14665,7 @@ ${renderedHtml}
       
       // Animal Statistics
       const allAnimals = await db
-        .select({ id: animals.id, intakeDate: animals.intakeDate, status: animals.status, adoptionDate: animals.adoptionDate })
+        .select({ id: animals.id, intakeDate: animals.intakeDate, status: animals.status, adoptionDate: animals.adoptionDate, locationType: animals.locationType })
         .from(animals)
         .where(eq(animals.tenantId, req.tenant!.id));
       
@@ -14747,7 +14747,7 @@ ${renderedHtml}
           totalIntake,
           intakeThisQuarter,
           adoptions: adopted.length,
-          adoptionsThisQuarter,
+          adoptionsThisQuarter: adoptedThisQuarter,
           avgLengthOfStay,
           currentInFoster: inFoster,
           currentInShelter: inShelter,
