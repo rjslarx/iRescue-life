@@ -210,7 +210,7 @@ router.get('/', requireTenant, requireAuth, requireRole('admin', 'owner', 'staff
         },
         requestedByUser: {
           id: sql<string>`ru.id`,
-          name: sql<string>`COALESCE(ru.first_name || ' ' || ru.last_name, ru.email)`,
+          name: sql<string>`COALESCE(ru.full_name, ru.email)`,
         },
       })
       .from(tenantTransfers)
