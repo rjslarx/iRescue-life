@@ -73,6 +73,7 @@ export default function PublicWaiverPage() {
 
   const { data, isLoading, error } = useQuery<WaiverData>({
     queryKey: ['/api/public-waiver'],
+    retry: false,
   });
 
   const hasChildrensField = data?.form.htmlTemplate?.includes('{{childrens_names}}') || false;
