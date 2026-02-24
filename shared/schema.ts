@@ -5800,6 +5800,7 @@ export const orderSetItems = pgTable("order_set_items", {
   orderSetId: uuid("order_set_id").notNull().references(() => orderSets.id, { onDelete: 'cascade' }),
   catalogItemId: uuid("catalog_item_id").notNull().references(() => medicalCatalog.id, { onDelete: 'cascade' }),
   sortOrder: integer("sort_order").notNull().default(0),
+  offsetDays: integer("offset_days").notNull().default(0),
 });
 
 export const insertOrderSetItemSchema = createInsertSchema(orderSetItems).omit({
