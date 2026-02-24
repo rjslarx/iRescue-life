@@ -38,9 +38,9 @@ interface KpiTileProps {
 function KpiTile({ icon: Icon, label, counts, href, activeColor, activeTextColor, testId }: KpiTileProps) {
   const active = counts.total > 0;
   return (
-    <Link href={href}>
+    <Link href={href} className="h-full">
       <div
-        className={`flex flex-col items-center justify-center p-2.5 rounded-md cursor-pointer hover-elevate ${
+        className={`flex flex-col items-center justify-center p-2.5 rounded-md cursor-pointer hover-elevate h-full ${
           active ? activeColor : "bg-muted/50"
         }`}
         data-testid={testId}
@@ -50,16 +50,22 @@ function KpiTile({ icon: Icon, label, counts, href, activeColor, activeTextColor
           {counts.total}
         </div>
         <p className="text-xs text-muted-foreground text-center">{label}</p>
-        <div className={`flex items-center gap-2 mt-1.5 ${counts.total > 0 && (counts.shelter > 0 || counts.foster > 0) ? "" : "invisible"}`} data-testid={`text-${testId}-breakdown`}>
-          <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
-            <Building2 className="h-2.5 w-2.5" />
-            {counts.shelter}
-          </span>
-          <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
-            <Home className="h-2.5 w-2.5" />
-            {counts.foster}
-          </span>
-        </div>
+        {counts.total > 0 && (counts.shelter > 0 || counts.foster > 0) && (
+          <div className="flex items-center gap-2 mt-1.5" data-testid={`text-${testId}-breakdown`}>
+            {counts.shelter > 0 && (
+              <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
+                <Building2 className="h-2.5 w-2.5" />
+                {counts.shelter}
+              </span>
+            )}
+            {counts.foster > 0 && (
+              <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
+                <Home className="h-2.5 w-2.5" />
+                {counts.foster}
+              </span>
+            )}
+          </div>
+        )}
       </div>
     </Link>
   );
