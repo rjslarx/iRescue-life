@@ -31,6 +31,7 @@ import { useToast } from "@/hooks/use-toast";
 import { usePagePermissions } from "@/hooks/usePagePermissions";
 import { useQuickActions } from "@/hooks/useQuickActions";
 import { RecordOfflineDonationDialog } from "@/components/RecordOfflineDonationDialog";
+import { AddMedicalOrderDialog } from "@/components/AddMedicalOrderDialog";
 import { Zap } from "lucide-react";
 import {
   LayoutDashboard,
@@ -150,6 +151,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
   const { toast } = useToast();
   const [isSwitching, setIsSwitching] = useState(false);
   const [showDonationDialog, setShowDonationDialog] = useState(false);
+  const [cpoeOpen, setCpoeOpen] = useState(false);
   const { canAccessPage, getAccessiblePages } = usePagePermissions();
   
   const { data: tenantData } = useQuery<{ tenant: { subscriptionTier: string } }>({
@@ -158,6 +160,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
   const isLiteTier = tenantData?.tenant?.subscriptionTier === 'lite';
   const { actions: allFavoriteActions, handleAction: handleFavoriteAction } = useQuickActions({
     onRecordDonation: () => setShowDonationDialog(true),
+    onAddMedicalOrder: () => setCpoeOpen(true),
   });
   
   // Filter favorite actions based on user's page permissions
@@ -797,6 +800,10 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
       <RecordOfflineDonationDialog 
         open={showDonationDialog} 
         onOpenChange={setShowDonationDialog} 
+      />
+      <AddMedicalOrderDialog
+        open={cpoeOpen}
+        onOpenChange={setCpoeOpen}
       />
     </Sidebar>
   );
