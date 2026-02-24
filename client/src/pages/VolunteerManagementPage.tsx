@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTenant } from "@/contexts/TenantContext";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -50,6 +51,7 @@ interface FolderFile {
 
 export default function VolunteerManagementPage() {
   const { user } = useAuth();
+  const { basePath } = useTenant();
   const { toast } = useToast();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingOpportunity, setEditingOpportunity] = useState<VolunteerOpportunity | undefined>();
@@ -241,7 +243,7 @@ export default function VolunteerManagementPage() {
                   variant="outline"
                   size="default"
                   onClick={() => {
-                    const waiverUrl = `${window.location.origin}/volunteer-waiver`;
+                    const waiverUrl = `${window.location.origin}${basePath}/volunteer-waiver`;
                     navigator.clipboard.writeText(waiverUrl).then(() => {
                       setWaiverLinkCopied(true);
                       toast({ title: 'Waiver link copied', description: 'Share this link with walk-in volunteers to sign the hold harmless waiver.' });
