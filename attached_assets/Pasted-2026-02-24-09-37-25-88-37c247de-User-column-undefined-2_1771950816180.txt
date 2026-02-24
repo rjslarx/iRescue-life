@@ -1,0 +1,110 @@
+2026-02-24 09:37:25.88
+37c247de
+User
+column: undefined,
+2026-02-24 09:37:25.88
+37c247de
+User
+dataType: undefined,
+2026-02-24 09:37:25.88
+37c247de
+User
+length: 91,
+2026-02-24 09:37:25.88
+37c247de
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-02-24 09:37:25.88
+37c247de
+User
+severity: 'ERROR',
+2026-02-24 09:37:25.88
+37c247de
+User
+internalQuery: undefined,
+2026-02-24 09:37:25.88
+37c247de
+User
+hint: undefined,
+2026-02-24 09:37:25.88
+37c247de
+User
+[TRANSFERS] PATCH /f425562c-2393-4a9c-b76a-08771d4a97c9/accept failed for tenant "Southern Pets Animal Rescue Inc" (87f318e1-ffe9-4cc1-9911-633336446f1f), user 8217eb09-21bb-4808-9b99-a9aa8e0b51f7: error: syntax error at or near "="
+2026-02-24 09:37:25.88
+37c247de
+User
+code: '42601',
+2026-02-24 09:37:25.88
+37c247de
+User
+at async file:///home/runner/workspace/dist/index.js:30070:32 {
+2026-02-24 09:37:25.88
+37c247de
+User
+at async file:///home/runner/workspace/node_modules/drizzle-orm/node-postgres/session.js:83:22
+2026-02-24 09:37:25.88
+37c247de
+User
+at /home/runner/workspace/node_modules/pg-pool/index.js:45:11
+2026-02-24 10:21:25.98
+5547b092
+User
+],
+2026-02-24 10:21:25.98
+5547b092
+User
+"received": "null",
+2026-02-24 10:21:25.98
+5547b092
+User
+ZodError: [
+2026-02-24 10:21:25.98
+5547b092
+User
+"expected": "date",
+2026-02-24 10:21:25.98
+5547b092
+User
+at file:///home/runner/workspace/dist/index.js:45650:65
+2026-02-24 10:21:25.98
+5547b092
+User
+at ZodObject.parse (file:///home/runner/workspace/node_modules/zod/v3/types.js:114:22)
+2026-02-24 10:21:25.98
+5547b092
+User
+}
+2026-02-24 10:21:25.98
+5547b092
+User
+"path": [
+2026-02-24 10:21:25.98
+5547b092
+User
+"intakeDate"
+2026-02-24 10:21:25.98
+5547b092
+User
+"message": "Expected date, received null"
+2026-02-24 10:21:25.98
+5547b092
+User
+"code": "invalid_type",
+2026-02-24 10:21:25.98
+5547b092
+User
+at get error [as error] (file:///home/runner/workspace/node_modules/zod/v3/types.js:39:31)
+2026-02-24 10:21:25.98
+5547b092
+User
+{
+2026-02-24 10:21:25.98
+5547b092
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-02-24 10:21:25.98
+5547b092
+User
+]
+Wrap
+Colors

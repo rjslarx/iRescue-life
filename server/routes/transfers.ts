@@ -452,6 +452,7 @@ router.patch('/:id/accept', requireTenant, requireAuth, requireRole('admin', 'ow
         sourcePrevCare.map(pc => ({
           animalId: clonedAnimal.id,
           tenantId,
+          careTypeId: null,
           careName: pc.careName,
           careCategory: pc.careCategory,
           status: pc.status,
@@ -464,6 +465,7 @@ router.patch('/:id/accept', requireTenant, requireAuth, requireRole('admin', 'ow
           anatomicalSite: pc.anatomicalSite,
           testResult: pc.testResult,
           notes: pc.notes,
+          createdBy: req.user!.id,
         }))
       );
     }
