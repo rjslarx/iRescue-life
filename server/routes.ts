@@ -26947,12 +26947,15 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
         result = { id: vaccine.id, type: 'vaccine' };
       } else if (type === 'exam') {
         const { medicalExams } = await import('@shared/schema');
+        const now = new Date();
+        const examIsFuture = appointmentDate > now;
         const [exam] = await db.insert(medicalExams).values({
           animalId,
           tenantId: req.tenant!.id,
           examType: title,
           examDate: appointmentDate,
           performedBy: veterinarian || "Staff",
+          status: examIsFuture ? 'pending' : 'completed',
           assessment: notes || null,
           createdBy: req.user!.id,
         }).returning();

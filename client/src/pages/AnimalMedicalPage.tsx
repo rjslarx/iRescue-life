@@ -1285,15 +1285,15 @@ export default function AnimalMedicalPage() {
                           <CardTitle className="text-lg">
                             {formatDateOnly(exam.examDate, 'MMMM d, yyyy')}
                           </CardTitle>
-                          {exam.status === 'pending' ? (
-                            <Badge variant="outline" className="text-amber-600 border-amber-500" data-testid={`badge-exam-pending-${exam.id}`}>
-                              <Clock className="w-3 h-3 mr-1" />
-                              Pending
-                            </Badge>
-                          ) : (
+                          {exam.status === 'completed' ? (
                             <Badge variant="secondary" data-testid={`badge-exam-completed-${exam.id}`}>
                               <CheckCircle2 className="w-3 h-3 mr-1" />
                               Completed
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-amber-600 border-amber-500" data-testid={`badge-exam-pending-${exam.id}`}>
+                              <Clock className="w-3 h-3 mr-1" />
+                              Pending
                             </Badge>
                           )}
                         </div>
