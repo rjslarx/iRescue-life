@@ -92,12 +92,12 @@ export default function DashboardLayout({ children, title, description, actions,
                 </div>
               ) : null}
             </div>
-            <div className="flex items-center gap-2 flex-wrap justify-start lg:justify-end shrink-0">
+            <div className="flex items-center gap-2 overflow-x-auto justify-start lg:justify-end shrink-0 -mx-4 px-4 lg:mx-0 lg:px-0 lg:overflow-x-visible scrollbar-none">
               {publicUrl && (
                 <Button
                   variant="outline"
                   size="default"
-                  className="gap-2"
+                  className="gap-2 shrink-0"
                   asChild
                   data-testid="button-view-public-site"
                 >
@@ -113,7 +113,7 @@ export default function DashboardLayout({ children, title, description, actions,
                     <Button
                       variant="outline"
                       size="default"
-                      className="gap-2"
+                      className="gap-2 shrink-0"
                       data-testid="button-quick-actions"
                     >
                       <Plus className="h-4 w-4" />

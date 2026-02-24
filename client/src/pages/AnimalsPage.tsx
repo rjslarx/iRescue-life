@@ -2709,14 +2709,14 @@ export default function AnimalsPage() {
       title="Animals Management"
       description="Manage your rescue's animals"
       actions={
-        <div className="flex items-center gap-2 flex-wrap">
-          <Link href="/dashboard/animals/duplicates">
+        <div className="flex items-center gap-2">
+          <Link href="/dashboard/animals/duplicates" className="shrink-0">
             <Button variant="outline" data-testid="button-find-duplicates">
               <GitMerge className="h-4 w-4 sm:mr-2" />
               <span className="hidden sm:inline">Find Duplicates</span>
             </Button>
           </Link>
-          <Button variant="outline" onClick={() => setBulkIntakeOpen(true)} data-testid="button-bulk-litter-intake">
+          <Button variant="outline" className="shrink-0" onClick={() => setBulkIntakeOpen(true)} data-testid="button-bulk-litter-intake">
             <LitterPawsIcon className="h-4 w-4 sm:mr-2" />
             <span className="hidden sm:inline">Litter Intake</span>
           </Button>
@@ -2725,7 +2725,7 @@ export default function AnimalsPage() {
             if (!open) setSurrenderPrefill(null);
           }}>
             <DialogTrigger asChild>
-              <Button data-testid="button-add-animal">
+              <Button className="shrink-0" data-testid="button-add-animal">
                 <PawPrint className="h-4 w-4 sm:mr-2" />
                 <span className="hidden sm:inline">Add Animal</span>
               </Button>
@@ -2772,10 +2772,11 @@ export default function AnimalsPage() {
               <div className="space-y-6 max-w-full min-w-0 overflow-x-hidden">
                 {(allActiveAnimals.length > 0 || archivedAnimals.length > 0) && (
                   <div className="space-y-4">
-                    <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-3 min-w-0">
                       {!showArchived && (
+                        <div className="overflow-x-auto -mx-6 px-6 sm:mx-0 sm:px-0 sm:overflow-x-visible scrollbar-none max-w-full">
                         <Tabs value={locationTab} onValueChange={(v) => { setLocationTab(v as "all" | "facility" | "foster"); setStatusFilter("all"); }} data-testid="tabs-location">
-                          <TabsList className="w-full sm:w-auto" data-testid="tabslist-location">
+                          <TabsList className="w-max sm:w-auto" data-testid="tabslist-location">
                             <TabsTrigger value="all" className="gap-1.5" data-testid="tab-all-active">
                               <PawPrint className="h-3.5 w-3.5" />
                               <span className="hidden sm:inline">All Active</span>
@@ -2796,6 +2797,7 @@ export default function AnimalsPage() {
                             </TabsTrigger>
                           </TabsList>
                         </Tabs>
+                        </div>
                       )}
                       {archivedAnimals.length > 0 && (
                         <Button
@@ -2819,7 +2821,7 @@ export default function AnimalsPage() {
                         : locationTab === "facility" ? facilityAnimals : locationTab === "foster" ? fosterAnimals : allActiveAnimals;
                       const statusCounts = currentBase.reduce<Record<string, number>>((acc, a) => { acc[a.status] = (acc[a.status] || 0) + 1; return acc; }, {});
                       return (
-                        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                        <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 sm:gap-3">
                           <label className="text-sm font-medium hidden sm:inline">Filter by Status:</label>
                           <Select value={statusFilter} onValueChange={setStatusFilter}>
                             <SelectTrigger className="w-full sm:w-56" data-testid="select-status-filter">
