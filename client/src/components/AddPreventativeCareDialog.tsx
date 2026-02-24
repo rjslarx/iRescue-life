@@ -17,6 +17,7 @@ import { Shield, Star, Loader2, Clock } from "lucide-react";
 const preventativeCareSchema = z.object({
   careTypeId: z.string().min(1, "Care type is required"),
   dateAdministered: z.string().min(1, "Date is required"),
+  nextDueDate: z.string().optional(),
   administeredBy: z.string().optional(),
   notes: z.string().optional(),
   lotNumber: z.string().optional(),
@@ -52,7 +53,7 @@ interface AddPreventativeCareDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   record?: PreventativeCareRecord | null;
-  initialValues?: { careName?: string } | null;
+  initialValues?: { careName?: string; defaultIntervalDays?: number | null } | null;
 }
 
 export function AddPreventativeCareDialog({ 
@@ -71,6 +72,7 @@ export function AddPreventativeCareDialog({
     defaultValues: {
       careTypeId: "",
       dateAdministered: new Date().toISOString().split('T')[0],
+      nextDueDate: "",
       administeredBy: "",
       notes: "",
       lotNumber: "",
@@ -108,18 +110,31 @@ export function AddPreventativeCareDialog({
   const selectedCareType = careTypes.find(t => t.id === form.watch("careTypeId"));
   const dateAdministered = form.watch("dateAdministered");
 
+  const effectiveIntervalDays = initialValues?.defaultIntervalDays ?? selectedCareType?.defaultIntervalDays ?? null;
+
   const calculatedNextDue = useMemo(() => {
-    if (!selectedCareType?.defaultIntervalDays || !dateAdministered) return null;
+    if (!effectiveIntervalDays || !dateAdministered) return null;
     const date = new Date(dateAdministered);
-    date.setDate(date.getDate() + selectedCareType.defaultIntervalDays);
+    date.setDate(date.getDate() + effectiveIntervalDays);
     return date.toISOString().split('T')[0];
-  }, [selectedCareType, dateAdministered]);
+  }, [effectiveIntervalDays, dateAdministered]);
+
+  useEffect(() => {
+    if (!record) {
+      if (calculatedNextDue) {
+        form.setValue("nextDueDate", calculatedNextDue);
+      } else {
+        form.setValue("nextDueDate", "");
+      }
+    }
+  }, [calculatedNextDue, record, form]);
 
   useEffect(() => {
     if (record && open) {
       form.reset({
         careTypeId: record.careTypeId,
         dateAdministered: record.dateAdministered?.split('T')[0] || new Date().toISOString().split('T')[0],
+        nextDueDate: record.nextDueDate?.split('T')[0] || "",
         administeredBy: record.administeredBy || "",
         notes: record.notes || "",
         lotNumber: record.lotNumber || "",
@@ -129,6 +144,7 @@ export function AddPreventativeCareDialog({
       form.reset({
         careTypeId: "",
         dateAdministered: new Date().toISOString().split('T')[0],
+        nextDueDate: "",
         administeredBy: "",
         notes: "",
         lotNumber: "",
@@ -168,11 +184,13 @@ export function AddPreventativeCareDialog({
           animalId,
           careTypeId: data.careTypeId,
           dateAdministered: data.dateAdministered,
+          nextDueDate: data.nextDueDate || null,
           administeredBy: data.administeredBy || null,
           notes: data.notes || null,
           lotNumber: data.lotNumber || null,
           manufacturer: data.manufacturer || null,
           status: isFuture ? 'pending' : 'given',
+          createFollowUp: !!data.nextDueDate,
         }),
       });
     },
@@ -338,9 +356,23 @@ export function AddPreventativeCareDialog({
                       Status: Pending — scheduled for a future date
                     </p>
                   )}
-                  {calculatedNextDue && (
-                    <FormDescription className="text-green-600">
-                      Next due: {new Date(calculatedNextDue).toLocaleDateString()}
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="nextDueDate"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Next Due Date</FormLabel>
+                  <FormControl>
+                    <Input type="date" {...field} data-testid="input-next-due-date" />
+                  </FormControl>
+                  {effectiveIntervalDays && calculatedNextDue && (
+                    <FormDescription>
+                      Auto-calculated: {effectiveIntervalDays} days from administered date. You can override this.
                     </FormDescription>
                   )}
                   <FormMessage />

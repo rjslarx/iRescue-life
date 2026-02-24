@@ -5771,6 +5771,7 @@ export const medicalCatalog = pgTable("medical_catalog", {
   category: text("category").notNull().$type<'Medication' | 'Vaccine' | 'Lab' | 'Procedure' | 'Preventative' | 'Exam'>(),
   defaultDose: text("default_dose"),
   defaultFrequency: text("default_frequency"),
+  defaultIntervalDays: integer("default_interval_days"),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });

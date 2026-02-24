@@ -35,6 +35,7 @@ interface CatalogItem {
   category: 'Medication' | 'Vaccine' | 'Lab' | 'Procedure' | 'Preventative' | 'Exam';
   defaultDose: string | null;
   defaultFrequency: string | null;
+  defaultIntervalDays: number | null;
 }
 
 interface OrderSetWithItems {
@@ -49,6 +50,7 @@ interface PendingOrder {
   name: string;
   defaultDose?: string | null;
   defaultFrequency?: string | null;
+  defaultIntervalDays?: number | null;
 }
 
 interface AnimalSummary {
@@ -413,6 +415,7 @@ export function AddMedicalOrderDialog({ animalId: propsAnimalId, animalSpecies: 
       name: item.name,
       defaultDose: item.defaultDose,
       defaultFrequency: item.defaultFrequency,
+      defaultIntervalDays: item.defaultIntervalDays,
     });
     setSearchValue("");
     onOpenChange(false);
@@ -981,7 +984,7 @@ export function AddMedicalOrderDialog({ animalId: propsAnimalId, animalSpecies: 
           animalId={animalId}
           open={true}
           onOpenChange={handleCategoryDialogClose}
-          initialValues={{ itemName: pendingOrder.name }}
+          initialValues={{ itemName: pendingOrder.name, defaultIntervalDays: pendingOrder.defaultIntervalDays }}
         />
       )}
 
@@ -1018,7 +1021,7 @@ export function AddMedicalOrderDialog({ animalId: propsAnimalId, animalSpecies: 
           animalSpecies={animalSpecies}
           open={true}
           onOpenChange={handleCategoryDialogClose}
-          initialValues={{ careName: pendingOrder.name }}
+          initialValues={{ careName: pendingOrder.name, defaultIntervalDays: pendingOrder.defaultIntervalDays }}
         />
       )}
     </>

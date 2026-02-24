@@ -7,6 +7,7 @@ interface CatalogSeedItem {
   category: 'Medication' | 'Vaccine' | 'Lab' | 'Procedure' | 'Preventative' | 'Exam';
   defaultDose?: string;
   defaultFrequency?: string;
+  defaultIntervalDays?: number;
 }
 
 const DEFAULT_CATALOG_ITEMS: CatalogSeedItem[] = [
@@ -52,19 +53,19 @@ const DEFAULT_CATALOG_ITEMS: CatalogSeedItem[] = [
   { name: 'Capstar (Nitenpyram)', category: 'Medication', defaultDose: '1mg/kg', defaultFrequency: 'Once PRN' },
   { name: 'Erythromycin Ophthalmic', category: 'Medication', defaultDose: 'Topical', defaultFrequency: 'TID x 7-10 days' },
 
-  { name: 'DHPP (DA2PP)', category: 'Vaccine' },
-  { name: 'Rabies (1-Year)', category: 'Vaccine' },
-  { name: 'Rabies (3-Year)', category: 'Vaccine' },
-  { name: 'Bordetella', category: 'Vaccine' },
-  { name: 'Bordetella (Intranasal)', category: 'Vaccine' },
-  { name: 'Bordetella (Oral)', category: 'Vaccine' },
-  { name: 'FVRCP', category: 'Vaccine' },
-  { name: 'FeLV (Feline Leukemia)', category: 'Vaccine' },
-  { name: 'Leptospirosis', category: 'Vaccine' },
-  { name: 'Lyme Disease', category: 'Vaccine' },
-  { name: 'Canine Influenza (CIV H3N2/H3N8)', category: 'Vaccine' },
-  { name: 'Distemper (Single)', category: 'Vaccine' },
-  { name: 'Parvovirus (Single)', category: 'Vaccine' },
+  { name: 'DHPP (DA2PP)', category: 'Vaccine', defaultIntervalDays: 365 },
+  { name: 'Rabies (1-Year)', category: 'Vaccine', defaultIntervalDays: 365 },
+  { name: 'Rabies (3-Year)', category: 'Vaccine', defaultIntervalDays: 1095 },
+  { name: 'Bordetella', category: 'Vaccine', defaultIntervalDays: 365 },
+  { name: 'Bordetella (Intranasal)', category: 'Vaccine', defaultIntervalDays: 365 },
+  { name: 'Bordetella (Oral)', category: 'Vaccine', defaultIntervalDays: 365 },
+  { name: 'FVRCP', category: 'Vaccine', defaultIntervalDays: 365 },
+  { name: 'FeLV (Feline Leukemia)', category: 'Vaccine', defaultIntervalDays: 365 },
+  { name: 'Leptospirosis', category: 'Vaccine', defaultIntervalDays: 365 },
+  { name: 'Lyme Disease', category: 'Vaccine', defaultIntervalDays: 365 },
+  { name: 'Canine Influenza (CIV H3N2/H3N8)', category: 'Vaccine', defaultIntervalDays: 365 },
+  { name: 'Distemper (Single)', category: 'Vaccine', defaultIntervalDays: 365 },
+  { name: 'Parvovirus (Single)', category: 'Vaccine', defaultIntervalDays: 365 },
 
   { name: 'CBC (Complete Blood Count)', category: 'Lab' },
   { name: 'Chemistry Panel', category: 'Lab' },
@@ -113,16 +114,16 @@ const DEFAULT_CATALOG_ITEMS: CatalogSeedItem[] = [
   { name: 'Syringe Feeding / Nutritional Support', category: 'Procedure' },
   { name: 'Medicated/Sanitary Bath', category: 'Procedure' },
 
-  { name: 'Simparica Trio', category: 'Preventative', defaultFrequency: 'Monthly' },
-  { name: 'Heartgard Plus', category: 'Preventative', defaultFrequency: 'Monthly' },
-  { name: 'NexGard', category: 'Preventative', defaultFrequency: 'Monthly' },
-  { name: 'Bravecto', category: 'Preventative', defaultFrequency: 'Every 3 months' },
-  { name: 'Revolution Plus', category: 'Preventative', defaultFrequency: 'Monthly' },
-  { name: 'Interceptor Plus', category: 'Preventative', defaultFrequency: 'Monthly' },
-  { name: 'Seresto Collar', category: 'Preventative', defaultFrequency: 'Every 8 months' },
-  { name: 'Flea/Tick Prevention', category: 'Preventative', defaultFrequency: 'Monthly' },
+  { name: 'Simparica Trio', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30 },
+  { name: 'Heartgard Plus', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30 },
+  { name: 'NexGard', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30 },
+  { name: 'Bravecto', category: 'Preventative', defaultFrequency: 'Every 3 months', defaultIntervalDays: 84 },
+  { name: 'Revolution Plus', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30 },
+  { name: 'Interceptor Plus', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30 },
+  { name: 'Seresto Collar', category: 'Preventative', defaultFrequency: 'Every 8 months', defaultIntervalDays: 240 },
+  { name: 'Flea/Tick Prevention', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30 },
   { name: 'Deworming Protocol', category: 'Preventative' },
-  { name: 'Heartworm Prevention', category: 'Preventative', defaultFrequency: 'Monthly' },
+  { name: 'Heartworm Prevention', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30 },
 
   { name: 'Intake Exam', category: 'Exam' },
   { name: 'Wellness Exam', category: 'Exam' },
@@ -220,6 +221,7 @@ export async function seedMedicalCatalog(tenantId: string): Promise<{ catalogCre
       category: item.category,
       defaultDose: item.defaultDose || null,
       defaultFrequency: item.defaultFrequency || null,
+      defaultIntervalDays: item.defaultIntervalDays ?? null,
     }));
 
     createdItems = await db

@@ -31559,6 +31559,7 @@ Email: ${application.applicantEmail || ''}`
     try {
       const { preventativeCareRecords, preventativeCareTypes, insertPreventativeCareRecordSchema, animals } = await import('@shared/schema');
 
+      const createFollowUp = req.body.createFollowUp === true;
       const data = insertPreventativeCareRecordSchema.parse(req.body);
 
       // Get care type info for interval calculation and coverage flags
@@ -31634,6 +31635,39 @@ Email: ${application.applicantEmail || ''}`
             .where(eq(animals.id, data.animalId));
         } catch (cacheError) {
           console.error('[PreventativeCare] Failed to update medicalDueDates cache:', cacheError);
+        }
+      }
+
+
+      // Create a follow-up pending record for the next due date
+      if (createFollowUp && effectiveNextDueDate && data.animalId && data.careTypeId) {
+        try {
+          const followUpDate = effectiveNextDueDate instanceof Date
+            ? effectiveNextDueDate.toISOString().split("T")[0]
+            : new Date(effectiveNextDueDate).toISOString().split("T")[0];
+
+          // Calculate the next interval due date for the follow-up record itself
+          let followUpNextDue: Date | null = null;
+          if (intervalDays) {
+            followUpNextDue = new Date(followUpDate);
+            followUpNextDue.setDate(followUpNextDue.getDate() + intervalDays);
+          }
+
+          await db
+            .insert(preventativeCareRecords)
+            .values({
+              animalId: data.animalId,
+              tenantId: req.tenant!.id,
+              careTypeId: data.careTypeId,
+              dateAdministered: followUpDate,
+              nextDueDate: followUpNextDue,
+              status: "pending",
+              createdBy: req.user!.id,
+              manufacturer: data.manufacturer || null,
+              notes: "Auto-scheduled follow-up",
+            });
+        } catch (followUpError) {
+          console.error("[PreventativeCare] Failed to create follow-up record:", followUpError);
         }
       }
 

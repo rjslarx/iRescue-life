@@ -56,7 +56,7 @@ interface AddVaccineDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   vaccine?: Vaccine | null;
-  initialValues?: { itemName?: string } | null;
+  initialValues?: { itemName?: string; defaultIntervalDays?: number | null } | null;
 }
 
 export function AddVaccineDialog({ animalId, open, onOpenChange, vaccine, initialValues }: AddVaccineDialogProps) {
@@ -120,10 +120,15 @@ export function AddVaccineDialog({ animalId, open, onOpenChange, vaccine, initia
         billNotes: vaccine.billNotes || "",
       });
     } else if (!vaccine && open) {
+      let autoMonths = "";
+      if (initialValues?.defaultIntervalDays) {
+        const months = Math.round(initialValues.defaultIntervalDays / 30);
+        if (months > 0) autoMonths = String(months);
+      }
       reset({
         itemName: initialValues?.itemName || "",
         dateGiven: new Date().toISOString().split('T')[0],
-        validDurationMonths: "",
+        validDurationMonths: autoMonths || "",
         dateDue: "",
         administeredBy: "",
         lotNumber: "",
