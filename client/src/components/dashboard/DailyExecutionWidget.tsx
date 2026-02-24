@@ -30,6 +30,8 @@ interface RosterMedication {
   dosage: string;
   route: string;
   prescriptionId: string;
+  dueDate: string | null;
+  frequency: string | null;
   isQuarantined: boolean;
   quarantineReason: string | null;
 }
@@ -83,6 +85,25 @@ interface RosterData {
 
 interface CalendarData {
   dates: Record<string, { total: number }>;
+}
+
+const MULTI_DOSE_FREQUENCIES = ['BID', 'TID', 'QID'];
+
+function getTimeBadge(dueDate: string | null, frequency: string | null): { label: string; className: string } | null {
+  if (!frequency || !MULTI_DOSE_FREQUENCIES.includes(frequency)) return null;
+  if (!dueDate) return null;
+  try {
+    const date = new Date(dueDate);
+    const hours = date.getHours();
+    const minutes = date.getMinutes();
+    const timeStr = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+    if (hours < 12) {
+      return { label: timeStr, className: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 border-amber-200 dark:border-amber-800/40" };
+    }
+    return { label: timeStr, className: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 border-blue-200 dark:border-blue-800/40" };
+  } catch {
+    return null;
+  }
 }
 
 const WEEKDAY_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
@@ -267,8 +288,8 @@ export function DailyExecutionWidget() {
   const diagnostics = rosterData?.diagnostics || [];
 
   const medsAndPreventatives = [
-    ...meds.map((m) => ({ ...m, _type: "dose" as const, _label: m.medicationName, _detail: m.dosage ? `${m.dosage}${m.route ? ` (${m.route})` : ""}` : "", isQuarantined: m.isQuarantined, quarantineReason: m.quarantineReason })),
-    ...preventatives.map((p) => ({ ...p, _type: "preventative" as const, _label: p.careName, _detail: p.careCategory || "", isQuarantined: p.isQuarantined, quarantineReason: p.quarantineReason })),
+    ...meds.map((m) => ({ ...m, _type: "dose" as const, _label: m.medicationName, _detail: m.dosage ? `${m.dosage}${m.route ? ` (${m.route})` : ""}` : "", dueDate: m.dueDate, frequency: m.frequency, isQuarantined: m.isQuarantined, quarantineReason: m.quarantineReason })),
+    ...preventatives.map((p) => ({ ...p, _type: "preventative" as const, _label: p.careName, _detail: p.careCategory || "", dueDate: null as string | null, frequency: null as string | null, isQuarantined: p.isQuarantined, quarantineReason: p.quarantineReason })),
   ];
   const vetVisits = [...exams.map((e) => ({ ...e, _label: e.examType, _detail: e.reason || "" })), ...procedures.map((p) => ({ ...p, _label: p.procedureName, _detail: p.veterinarian || "" }))];
   const labs = diagnostics.map((d) => ({ ...d, _label: d.testName }));
@@ -345,15 +366,17 @@ export function DailyExecutionWidget() {
                     <div className="space-y-0.5">
                       {medsAndPreventatives.map((item) => {
                         const key = `${item._type}:${item.id}`;
+                        const isChecked = checkedItems.has(key);
+                        const timeBadge = item._type === "dose" ? getTimeBadge(item.dueDate, item.frequency) : null;
                         return (
                           <label
                             key={key}
-                            className={`flex items-center gap-2 py-1 px-1.5 rounded-md hover:bg-muted/50 cursor-pointer text-sm ${item.isQuarantined ? "bg-red-50 dark:bg-red-950/30" : ""}`}
+                            className={`flex items-center gap-2 py-1 px-1.5 rounded-md hover:bg-muted/50 cursor-pointer text-sm transition-opacity ${isChecked ? "opacity-50" : ""} ${item.isQuarantined ? "bg-red-50 dark:bg-red-950/30" : ""}`}
                             data-testid={`roster-item-${key}`}
                           >
                             {!isFutureDate && (
                               <Checkbox
-                                checked={checkedItems.has(key)}
+                                checked={isChecked}
                                 onCheckedChange={() => toggleItem(key)}
                                 data-testid={`checkbox-${key}`}
                               />
@@ -361,12 +384,17 @@ export function DailyExecutionWidget() {
                             {item.isQuarantined && (
                               <AlertTriangle className="h-3 w-3 shrink-0 text-red-600 dark:text-red-400" />
                             )}
-                            <span className="font-medium truncate">{item.animalName}</span>
-                            <span className="text-muted-foreground truncate">
+                            <span className={`font-bold text-foreground truncate ${isChecked ? "line-through" : ""}`}>{item.animalName}</span>
+                            <span className={`truncate ${isChecked ? "line-through text-muted-foreground" : ""}`}>
                               {item._label}
                             </span>
+                            {timeBadge && (
+                              <span className={`shrink-0 text-[10px] font-medium px-1.5 py-0 rounded-full border ${timeBadge.className}`} data-testid={`time-badge-${item.id}`}>
+                                {timeBadge.label}
+                              </span>
+                            )}
                             {item._detail && (
-                              <span className="text-muted-foreground/70 text-xs truncate hidden sm:inline">
+                              <span className={`text-muted-foreground/70 text-xs truncate hidden sm:inline ${isChecked ? "line-through" : ""}`}>
                                 {item._detail}
                               </span>
                             )}
@@ -398,8 +426,8 @@ export function DailyExecutionWidget() {
                           {item.isQuarantined && (
                             <AlertTriangle className="h-3 w-3 shrink-0 text-red-600 dark:text-red-400" />
                           )}
-                          <span className="font-medium truncate">{item.animalName}</span>
-                          <span className="text-muted-foreground truncate">{item._label}</span>
+                          <span className="font-bold text-foreground truncate">{item.animalName}</span>
+                          <span className="truncate">{item._label}</span>
                           {item._detail && (
                             <span className="text-muted-foreground/70 text-xs truncate hidden sm:inline">
                               {item._detail}
@@ -429,8 +457,8 @@ export function DailyExecutionWidget() {
                           className="flex items-center gap-2 py-1 px-1.5 rounded-md text-sm"
                           data-testid={`roster-lab-${item.id}`}
                         >
-                          <span className="font-medium truncate">{item.animalName}</span>
-                          <span className="text-muted-foreground truncate">{item._label}</span>
+                          <span className="font-bold text-foreground truncate">{item.animalName}</span>
+                          <span className="truncate">{item._label}</span>
                         </div>
                       ))}
                     </div>

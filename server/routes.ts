@@ -37933,6 +37933,7 @@ The user asking is a tenant administrator or staff member.`;
           medicationName: medicalPrescriptions.medicationName,
           dosage: medicalPrescriptions.dosage,
           route: medicalPrescriptions.route,
+          frequency: medicalPrescriptions.frequency,
           animalId: medicalPrescriptions.animalId,
           animalName: animals.name,
           animalPhoto: animals.photoUrls,
@@ -38049,6 +38050,7 @@ The user asking is a tenant administrator or staff member.`;
         route: m.route,
         dueDate: m.dueDate,
         prescriptionId: m.prescriptionId,
+        frequency: m.frequency,
         isQuarantined: m.isQuarantined,
         quarantineReason: m.quarantineReason,
       }));
