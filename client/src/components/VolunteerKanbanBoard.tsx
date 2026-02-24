@@ -173,7 +173,7 @@ export default function VolunteerKanbanBoard({
       <div 
         className="grid gap-3"
         style={{ 
-          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))',
         }}
       >
         {stages.map((stage) => {
@@ -250,21 +250,19 @@ export default function VolunteerKanbanBoard({
                                 <VolunteerSkillsBadges app={app} />
                               )}
 
-                              {/* Stacked action buttons for reliable fit in narrow columns */}
-                              <div className="flex flex-col gap-1.5 mt-3 pt-2 border-t">
+                              <div className="flex items-center gap-1.5 mt-3 pt-2 border-t">
                                 {onViewApplication && (
                                   <Button
-                                    size="sm"
+                                    size="icon"
                                     variant="outline"
-                                    className="w-full justify-center"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       onViewApplication(app);
                                     }}
                                     data-testid={`button-view-volunteer-application-${app.id}`}
+                                    title="View application"
                                   >
-                                    <Eye className="h-4 w-4 mr-1" />
-                                    View
+                                    <Eye className="h-4 w-4" />
                                   </Button>
                                 )}
                                 {onMoveApplication && (
@@ -277,12 +275,12 @@ export default function VolunteerKanbanBoard({
                                     }}
                                   >
                                     <SelectTrigger 
-                                      className="h-8 text-xs w-full"
+                                      className="h-9 text-xs flex-1 min-w-0"
                                       onClick={(e) => e.stopPropagation()}
                                       data-testid={`select-volunteer-stage-${app.id}`}
                                     >
-                                      <ArrowRight className="h-3 w-3 mr-1" />
-                                      <span className="truncate">Move to...</span>
+                                      <ArrowRight className="h-3 w-3 shrink-0 mr-1" />
+                                      <span className="truncate">Move</span>
                                     </SelectTrigger>
                                     <SelectContent>
                                       {stages.filter(s => s.id !== app.pipelineStatus).map((s) => (
@@ -296,27 +294,25 @@ export default function VolunteerKanbanBoard({
                                     </SelectContent>
                                   </Select>
                                 )}
+                                {stage.id === "waiver_needed" && onSendWaiver && !app.holdHarmlessFormId && (
+                                  <Button
+                                    size="icon"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onSendWaiver(app);
+                                    }}
+                                    disabled={sendingWaiverId === app.id}
+                                    data-testid={`button-send-waiver-${app.id}`}
+                                    title="Send Hold Harmless Form"
+                                  >
+                                    {sendingWaiverId === app.id ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <Send className="h-4 w-4" />
+                                    )}
+                                  </Button>
+                                )}
                               </div>
-
-                              {stage.id === "waiver_needed" && onSendWaiver && !app.holdHarmlessFormId && (
-                                <Button
-                                  size="sm"
-                                  className="w-full mt-2"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onSendWaiver(app);
-                                  }}
-                                  disabled={sendingWaiverId === app.id}
-                                  data-testid={`button-send-waiver-${app.id}`}
-                                >
-                                  {sendingWaiverId === app.id ? (
-                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                  ) : (
-                                    <FileSignature className="h-4 w-4 mr-2" />
-                                  )}
-                                  Send Hold Harmless Form
-                                </Button>
-                              )}
 
                               {app.holdHarmlessFormId && !app.holdHarmlessSignedAt && (
                                 <div className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1 mt-2">
