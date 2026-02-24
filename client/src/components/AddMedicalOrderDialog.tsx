@@ -130,7 +130,7 @@ const vetVaccines = new Set([
 const vetLabs = new Set([
   'cbc', 'complete blood count', 'chemistry', 'chemistry panel', 'chem panel',
   'urinalysis', 'ua', 'fecal', 'fecal float', 'fecal test', 'ova and parasite',
-  'heartworm test', 'hw test', '4dx', 'snap 4dx', 'snap test',
+  'heartworm test', 'hw test', 'hwt', '4dx', 'snap 4dx', 'snap test',
   't4', 'total t4', 'free t4', 'thyroid', 'thyroid panel', 'tsh',
   'cytology', 'biopsy', 'histopathology', 'histopath',
   'culture', 'culture and sensitivity', 'c&s',
@@ -210,6 +210,30 @@ const vetExams = new Set([
   'ophthalmologic exam', 'eye exam',
   'cardiology consult', 'cardiac exam',
 ]);
+
+const searchAliases: Record<string, string[]> = {
+  'hwt': ['heartworm'],
+  'hw': ['heartworm'],
+  '4dx': ['heartworm', '4dx', 'snap'],
+  'felv': ['felv', 'feline leukemia'],
+  'fiv': ['fiv', 'feline immunodeficiency'],
+  'dhpp': ['dhpp', 'da2pp', 'distemper'],
+  'fvrcp': ['fvrcp', 'feline distemper'],
+  'cbc': ['cbc', 'complete blood count'],
+  'ua': ['urinalysis'],
+  'smz': ['sulfamethoxazole', 'trimethoprim'],
+  'tmp': ['trimethoprim', 'sulfamethoxazole'],
+  'nsaid': ['carprofen', 'meloxicam', 'rimadyl', 'metacam', 'galliprant'],
+  'abx': ['amoxicillin', 'cephalexin', 'doxycycline', 'enrofloxacin', 'clindamycin', 'metronidazole'],
+};
+
+function expandSearchTerms(query: string): string[] {
+  const lower = query.toLowerCase().trim();
+  if (!lower) return [];
+  const aliases = searchAliases[lower];
+  if (aliases) return [lower, ...aliases];
+  return [lower];
+}
 
 function classifyVeterinaryItem(name: string): { category: 'Medication' | 'Vaccine' | 'Lab' | 'Procedure' | 'Preventative' | 'Exam'; confidence: 'high' | 'medium' } | null {
   const normalized = name.toLowerCase().trim();
@@ -626,7 +650,12 @@ export function AddMedicalOrderDialog({ animalId, animalSpecies = 'Dog', open, o
                           {catalogItems.length > 0 && (
                             <CommandGroup heading="Catalog Items">
                               {catalogItems
-                                .filter(ci => ci?.name && ci.name.toLowerCase().includes(searchValue.toLowerCase()))
+                                .filter(ci => {
+                                  if (!ci?.name) return false;
+                                  const terms = expandSearchTerms(searchValue);
+                                  const nameLower = ci.name.toLowerCase();
+                                  return terms.some(t => nameLower.includes(t));
+                                })
                                 .map(ci => {
                                   const isDuplicate = activeNameSet.has((ci.name || '').toLowerCase());
                                   const Icon = categoryIcons[ci.category] || Pill;
