@@ -42,8 +42,15 @@ const feedbackSchema = z.object({
 
 type FeedbackFormData = z.infer<typeof feedbackSchema>;
 
-export function FeedbackDialog() {
-  const [open, setOpen] = useState(false);
+interface FeedbackDialogProps {
+  externalOpen?: boolean;
+  onExternalOpenChange?: (open: boolean) => void;
+}
+
+export function FeedbackDialog({ externalOpen, onExternalOpenChange }: FeedbackDialogProps = {}) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = externalOpen !== undefined ? externalOpen : internalOpen;
+  const setOpen = onExternalOpenChange || setInternalOpen;
   const { toast } = useToast();
 
   const form = useForm<FeedbackFormData>({
@@ -83,16 +90,18 @@ export function FeedbackDialog() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button
-          variant="outline"
-          size="icon"
-          data-testid="button-open-feedback"
-          title="Send Feedback to Platform Team"
-        >
-          <MessageSquare className="h-5 w-5" />
-        </Button>
-      </DialogTrigger>
+      {externalOpen === undefined && (
+        <DialogTrigger asChild>
+          <Button
+            variant="outline"
+            size="icon"
+            data-testid="button-open-feedback"
+            title="Send Feedback to Platform Team"
+          >
+            <MessageSquare className="h-5 w-5" />
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent className="sm:max-w-[550px]">
         <DialogHeader>
           <DialogTitle>Send Feedback</DialogTitle>

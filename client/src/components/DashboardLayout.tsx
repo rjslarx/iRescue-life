@@ -15,9 +15,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Plus, ExternalLink } from "lucide-react";
+import { Plus, ExternalLink, HelpCircle, MessageSquare } from "lucide-react";
 import { useQuickActions } from "@/hooks/useQuickActions";
 import NotificationBell from "@/components/NotificationBell";
+import { useState } from "react";
 
 interface BreadcrumbItem {
   label: string;
@@ -46,6 +47,9 @@ export default function DashboardLayout({ children, title, description, actions,
   const { user } = useAuth();
   const [, navigate] = useLocation();
   const { actions: quickActions, handleAction } = useQuickActions();
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [fabOpen, setFabOpen] = useState(false);
   
   const { data: tenantData } = useQuery<{ tenant: Tenant }>({
     queryKey: ['/api/tenant'],
@@ -137,8 +141,6 @@ export default function DashboardLayout({ children, title, description, actions,
                 </DropdownMenu>
               )}
               {showQuickActions && <NotificationBell />}
-              {showHelpAssistant && <HelpAssistant />}
-              {showHelpAssistant && <FeedbackDialog />}
               {actions}
             </div>
           </header>
@@ -149,6 +151,50 @@ export default function DashboardLayout({ children, title, description, actions,
           </main>
         </div>
       </div>
+
+      {showHelpAssistant && (
+        <>
+          <HelpAssistant externalOpen={helpOpen} onExternalOpenChange={setHelpOpen} />
+          <FeedbackDialog externalOpen={feedbackOpen} onExternalOpenChange={setFeedbackOpen} />
+          <div className="fixed bottom-6 left-6 z-50 flex flex-col-reverse items-start gap-3" data-testid="fab-help-container">
+            {fabOpen && (
+              <div className="flex flex-col-reverse gap-2 mb-2 animate-in fade-in slide-in-from-bottom-2 duration-200">
+                <Button
+                  variant="secondary"
+                  className="shadow-lg gap-2 pr-4 shrink-0"
+                  onClick={() => { setFabOpen(false); setHelpOpen(true); }}
+                  data-testid="fab-action-help-assistant"
+                >
+                  <HelpCircle className="h-4 w-4" />
+                  Help Assistant
+                </Button>
+                <Button
+                  variant="secondary"
+                  className="shadow-lg gap-2 pr-4 shrink-0"
+                  onClick={() => { setFabOpen(false); setFeedbackOpen(true); }}
+                  data-testid="fab-action-send-feedback"
+                >
+                  <MessageSquare className="h-4 w-4" />
+                  Send Feedback
+                </Button>
+              </div>
+            )}
+            <Button
+              size="icon"
+              variant="outline"
+              className={`rounded-full shadow-md transition-transform duration-200 ${fabOpen ? "rotate-45" : ""}`}
+              onClick={() => setFabOpen(!fabOpen)}
+              data-testid="fab-help-toggle"
+            >
+              {fabOpen ? (
+                <Plus className="h-4 w-4" />
+              ) : (
+                <HelpCircle className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
+        </>
+      )}
     </SidebarProvider>
   );
 }

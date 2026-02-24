@@ -21,8 +21,15 @@ interface Message {
   content: string;
 }
 
-export default function HelpAssistant() {
-  const [open, setOpen] = useState(false);
+interface HelpAssistantProps {
+  externalOpen?: boolean;
+  onExternalOpenChange?: (open: boolean) => void;
+}
+
+export default function HelpAssistant({ externalOpen, onExternalOpenChange }: HelpAssistantProps = {}) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = externalOpen !== undefined ? externalOpen : internalOpen;
+  const setOpen = onExternalOpenChange || setInternalOpen;
   const [messages, setMessages] = useState<Message[]>([]);
   const [question, setQuestion] = useState("");
   const { toast } = useToast();
@@ -97,17 +104,19 @@ export default function HelpAssistant() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button
-          variant="outline"
-          size="default"
-          className="gap-2"
-          data-testid="button-help-assistant"
-        >
-          <HelpCircle className="h-4 w-4" />
-          <span className="hidden sm:inline">Help Assistant</span>
-        </Button>
-      </DialogTrigger>
+      {externalOpen === undefined && (
+        <DialogTrigger asChild>
+          <Button
+            variant="outline"
+            size="default"
+            className="gap-2"
+            data-testid="button-help-assistant"
+          >
+            <HelpCircle className="h-4 w-4" />
+            <span className="hidden sm:inline">Help Assistant</span>
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent className="sm:max-w-[600px] h-[600px] flex flex-col p-0">
         <DialogHeader className="p-6 pb-4">
           <DialogTitle className="flex items-center gap-2">
