@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Send } from "lucide-react";
+import { AlertTriangle, Loader2, Send } from "lucide-react";
 import type { Animal } from "@shared/schema";
 
 interface TransferAnimalDialogProps {
@@ -95,6 +95,16 @@ export function TransferAnimalDialog({ open, onOpenChange, animal }: TransferAni
         </DialogHeader>
 
         <div className="space-y-4 py-2">
+          {animal && ['adopted', 'transported'].includes(animal.status) && (
+            <div className="flex items-start gap-2 rounded-md border border-yellow-500/30 bg-yellow-500/10 p-3 text-sm" data-testid="warning-terminal-status-transfer">
+              <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-yellow-600 dark:text-yellow-400" />
+              <span className="text-foreground">
+                This animal currently has a status of <strong className="capitalize">{animal.status}</strong>.
+                Submitting this transfer will change their status to <strong>Transfer Pending</strong>.
+              </span>
+            </div>
+          )}
+
           <div className="space-y-2">
             <Label htmlFor="receiving-tenant" data-testid="label-receiving-org">Receiving Organization</Label>
             {loadingTenants ? (

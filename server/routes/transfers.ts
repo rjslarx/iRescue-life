@@ -79,9 +79,8 @@ router.post('/', requireTenant, requireAuth, requireRole('admin', 'owner', 'staf
     });
     if (!animal) return res.status(404).json({ error: 'Animal not found' });
 
-    const terminalStatuses = ['adopted', 'transported', 'deceased'];
-    if (terminalStatuses.includes(animal.status)) {
-      return res.status(400).json({ error: 'Cannot transfer an animal with a terminal status' });
+    if (animal.status === 'deceased') {
+      return res.status(400).json({ error: 'Cannot transfer a deceased animal' });
     }
 
     const existingPending = await db.query.tenantTransfers.findFirst({
