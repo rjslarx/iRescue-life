@@ -23,8 +23,11 @@ import {
   adopterNotificationLogs,
   adopterComplianceConfirmations,
   insertAdopterComplianceConfirmationSchema,
+  complianceReminders,
+  complianceReminderNotifications,
+  activityLogs,
 } from '@shared/schema';
-import { eq, and, isNull, gt, desc, sql, asc } from 'drizzle-orm';
+import { eq, and, isNull, gt, desc, sql, asc, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { EmailService } from '../lib/email-service';
 
@@ -353,6 +356,8 @@ router.get('/my-pets', async (req: Request, res: Response) => {
         adoptedAt: animals.adoptionDate,
         microchipNumber: animals.microchipNumber,
         weight: animals.weight,
+        status: animals.status,
+        deceasedDate: animals.deceasedDate,
       })
       .from(animals)
       .innerJoin(
@@ -366,7 +371,7 @@ router.get('/my-pets', async (req: Request, res: Response) => {
       )
       .where(and(
         eq(animals.tenantId, tenantId),
-        eq(animals.status, 'adopted')
+        inArray(animals.status, ['adopted', 'deceased'])
       ))
       .orderBy(desc(animals.adoptionDate));
 
@@ -374,6 +379,110 @@ router.get('/my-pets', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('[Adopter Portal] Error fetching adopted animals:', error);
     res.status(500).json({ error: 'Failed to load pets' });
+  }
+});
+
+/**
+ * POST /api/adopter/report-passing
+ * Adopter reports that their pet has passed away.
+ * Wrapped in a transaction: updates animal status, resolves compliance reminders, logs activity.
+ */
+router.post('/report-passing', async (req: Request, res: Response) => {
+  try {
+    const auth = requireAdopter(req, res);
+    if (!auth) return;
+
+    const { userId, tenantId } = auth;
+
+    const schema = z.object({
+      animalId: z.string().uuid(),
+      dateOfPassing: z.coerce.date(),
+      causeOrNotes: z.string().optional(),
+    });
+
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid request data', details: parsed.error.flatten() });
+    }
+
+    const { animalId, dateOfPassing, causeOrNotes } = parsed.data;
+
+    const ownsAnimal = await verifyAdopterOwnsAnimal(userId, tenantId, animalId);
+    if (!ownsAnimal) {
+      return res.status(403).json({ error: 'You do not have access to this animal' });
+    }
+
+    const [animal] = await db
+      .select({ id: animals.id, name: animals.name, status: animals.status })
+      .from(animals)
+      .where(and(eq(animals.id, animalId), eq(animals.tenantId, tenantId)))
+      .limit(1);
+
+    if (!animal) {
+      return res.status(404).json({ error: 'Animal not found' });
+    }
+
+    if (animal.status === 'deceased') {
+      return res.status(400).json({ error: 'This pet has already been marked as deceased' });
+    }
+
+    const adopterUser = await db
+      .select({ name: users.name, email: users.email })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+
+    const adopterName = adopterUser[0]?.name || adopterUser[0]?.email || 'An adopter';
+
+    await db.transaction(async (tx) => {
+      await tx
+        .update(animals)
+        .set({
+          status: 'deceased',
+          deceasedDate: dateOfPassing,
+          deceasedNotes: causeOrNotes || null,
+        })
+        .where(and(eq(animals.id, animalId), eq(animals.tenantId, tenantId)));
+
+      await tx
+        .update(complianceReminders)
+        .set({ state: 'skipped' })
+        .where(and(
+          eq(complianceReminders.animalId, animalId),
+          eq(complianceReminders.tenantId, tenantId),
+          inArray(complianceReminders.state, ['pending', 'notified_3day', 'notified_due', 'overdue', 'requires_intervention'])
+        ));
+
+      await tx
+        .update(adopterMedicationReminders)
+        .set({ isActive: false })
+        .where(and(
+          eq(adopterMedicationReminders.animalId, animalId),
+          eq(adopterMedicationReminders.tenantId, tenantId)
+        ));
+
+      await tx.insert(activityLogs).values({
+        tenantId,
+        userId: null,
+        entityType: 'Animal',
+        entityId: animalId,
+        action: 'status_changed',
+        description: `${adopterName} has reported that ${animal.name} has passed away.`,
+        category: 'movement',
+        metadata: {
+          previousStatus: animal.status,
+          newStatus: 'deceased',
+          reportedBy: 'adopter',
+          dateOfPassing: dateOfPassing.toISOString(),
+          adopterUserId: userId,
+        },
+      });
+    });
+
+    res.json({ success: true, message: 'We have updated our records. Thank you for letting us know.' });
+  } catch (error) {
+    console.error('[Adopter Portal] Error reporting pet passing:', error);
+    res.status(500).json({ error: 'Failed to process report' });
   }
 });
 
