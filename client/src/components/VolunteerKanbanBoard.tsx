@@ -242,7 +242,7 @@ export default function VolunteerKanbanBoard({
                                 <p className="truncate">{app.applicantEmail}</p>
                                 <p className="truncate">{app.applicantPhone}</p>
                                 {app.availability && (
-                                  <p className="truncate">Available: {app.availability}</p>
+                                  <p className="line-clamp-2 break-words">Available: {app.availability}</p>
                                 )}
                               </div>
                               
