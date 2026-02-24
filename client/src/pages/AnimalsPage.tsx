@@ -2819,10 +2819,10 @@ export default function AnimalsPage() {
                         : locationTab === "facility" ? facilityAnimals : locationTab === "foster" ? fosterAnimals : allActiveAnimals;
                       const statusCounts = currentBase.reduce<Record<string, number>>((acc, a) => { acc[a.status] = (acc[a.status] || 0) + 1; return acc; }, {});
                       return (
-                        <div className="flex flex-wrap items-center gap-3">
-                          <label className="text-sm font-medium">Filter by Status:</label>
+                        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                          <label className="text-sm font-medium hidden sm:inline">Filter by Status:</label>
                           <Select value={statusFilter} onValueChange={setStatusFilter}>
-                            <SelectTrigger className="w-56 max-w-full" data-testid="select-status-filter">
+                            <SelectTrigger className="w-full sm:w-56" data-testid="select-status-filter">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -2845,10 +2845,10 @@ export default function AnimalsPage() {
                               )}
                             </SelectContent>
                           </Select>
-                          <div className="flex items-center gap-2">
-                            <ArrowUpDown className="h-4 w-4 text-muted-foreground" />
+                          <div className="flex items-center gap-2 w-full sm:w-auto">
+                            <ArrowUpDown className="h-4 w-4 text-muted-foreground shrink-0" />
                             <Select value={sortOrder} onValueChange={setSortOrder}>
-                              <SelectTrigger className="w-44 max-w-full" data-testid="select-sort-order">
+                              <SelectTrigger className="w-full sm:w-44" data-testid="select-sort-order">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
