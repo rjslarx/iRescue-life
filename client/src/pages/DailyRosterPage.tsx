@@ -52,6 +52,8 @@ interface RosterMedication {
   dosage: string;
   route: string;
   prescriptionId: string;
+  dueDate: string | null;
+  frequency: string | null;
   isQuarantined: boolean;
   quarantineReason: string | null;
 }
@@ -121,6 +123,25 @@ type CompletionItem = { type: "exam"; item: RosterExam } | { type: "procedure"; 
 
 function isRabiesVaccine(careName: string): boolean {
   return /rabies/i.test(careName);
+}
+
+const MULTI_DOSE_FREQUENCIES = ['BID', 'TID', 'QID'];
+
+function getTimeBadge(dueDate: string | null, frequency: string | null): { label: string; className: string } | null {
+  if (!frequency || !MULTI_DOSE_FREQUENCIES.includes(frequency)) return null;
+  if (!dueDate) return null;
+  try {
+    const date = new Date(dueDate);
+    const hours = date.getUTCHours();
+    const minutes = date.getUTCMinutes();
+    const timeStr = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+    if (hours < 12) {
+      return { label: timeStr, className: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 border-amber-200 dark:border-amber-800/40" };
+    }
+    return { label: timeStr, className: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 border-blue-200 dark:border-blue-800/40" };
+  } catch {
+    return null;
+  }
 }
 
 function VaccineLogModal({
@@ -593,6 +614,15 @@ export default function DailyRosterPage() {
                               <span className="text-sm" data-testid={`text-drug-${item.id}`}>
                                 {item._type === "dose" ? (item as TaggedMedication).medicationName : (item as TaggedPreventative).careName}
                               </span>
+                              {item._type === "dose" && (() => {
+                                const med = item as TaggedMedication;
+                                const tb = getTimeBadge(med.dueDate, med.frequency);
+                                return tb ? (
+                                  <span className={`shrink-0 text-[10px] font-medium px-1.5 py-0 rounded-full border ${tb.className}`} data-testid={`time-badge-${item.id}`}>
+                                    {tb.label}
+                                  </span>
+                                ) : null;
+                              })()}
                             </div>
                             {item._type === "dose" && (
                               <p className="text-xs text-muted-foreground mt-0.5">
