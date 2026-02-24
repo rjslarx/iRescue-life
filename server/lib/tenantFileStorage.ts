@@ -543,9 +543,20 @@ export class TenantFileStorage {
 
     // Try to delete from Replit Object Storage
     try {
-      // Extract the object key from the URL
-      const url = new URL(fileUrl);
-      const objectKey = url.pathname.replace(/^\/objects\//, '');
+      if (!fileUrl || typeof fileUrl !== 'string') {
+        console.warn(`[TENANT FILE STORAGE] Skipping deletion - invalid fileUrl: ${fileUrl}`);
+        return { success: true };
+      }
+
+      let objectKey: string | undefined;
+
+      try {
+        const url = new URL(fileUrl);
+        objectKey = url.pathname.replace(/^\/objects\//, '');
+      } catch {
+        objectKey = fileUrl.replace(/^\/+/, '');
+        console.warn(`[TENANT FILE STORAGE] fileUrl is not a valid URL, treating as object key: ${objectKey}`);
+      }
       
       if (objectKey) {
         console.log(`[TENANT FILE STORAGE] Attempting Replit storage deletion for key: ${objectKey}`);
