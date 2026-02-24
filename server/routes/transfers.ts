@@ -359,6 +359,17 @@ router.patch('/:id/accept', requireTenant, requireAuth, requireRole('admin', 'ow
     });
     if (!sourceAnimal) return res.status(404).json({ error: 'Source animal no longer exists' });
 
+    let clonedMicrochipNumber = sourceAnimal.microchipNumber;
+    if (clonedMicrochipNumber) {
+      const existing = await db.query.animals.findFirst({
+        where: eq(animals.microchipNumber, clonedMicrochipNumber),
+        columns: { id: true },
+      });
+      if (existing) {
+        clonedMicrochipNumber = null;
+      }
+    }
+
     const newAnimalId = await generateAnimalId();
 
     const [clonedAnimal] = await db.insert(animals).values({
@@ -371,7 +382,7 @@ router.patch('/:id/accept', requireTenant, requireAuth, requireRole('admin', 'ow
       sex: sourceAnimal.sex,
       neuterStatus: sourceAnimal.neuterStatus,
       dateOfBirth: sourceAnimal.dateOfBirth,
-      microchipNumber: sourceAnimal.microchipNumber,
+      microchipNumber: clonedMicrochipNumber,
       medicalAlertMemo: sourceAnimal.medicalAlertMemo,
       medicalStatus: sourceAnimal.medicalStatus,
       photoUrls: sourceAnimal.photoUrls,
