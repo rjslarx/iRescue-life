@@ -40,7 +40,7 @@ function KpiTile({ icon: Icon, label, counts, href, activeColor, activeTextColor
   return (
     <Link href={href}>
       <div
-        className={`flex flex-col items-center justify-center p-3 rounded-md cursor-pointer hover-elevate min-h-[7.5rem] ${
+        className={`flex flex-col items-center justify-center p-2.5 rounded-md cursor-pointer hover-elevate min-h-[5.5rem] ${
           active ? activeColor : "bg-muted/50"
         }`}
         data-testid={testId}

@@ -5,7 +5,7 @@ import { usePagePermissions } from "@/hooks/usePagePermissions";
 import { OnboardingChecklist } from "@/components/OnboardingChecklist";
 import { FloatingActionButton } from "@/components/FloatingActionButton";
 import { RecordOfflineDonationDialog } from "@/components/RecordOfflineDonationDialog";
-import { Heart, Users, Pill, Loader2, Inbox, Calendar, FileText, AlertCircle, Package, MessageSquare } from "lucide-react";
+import { Heart, Users, Loader2, Calendar, FileText, AlertCircle, Package, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +24,7 @@ import {
   DailyBriefing,
 } from "@/components/dashboard";
 import PipelineManager, { PipelineTab } from "@/components/dashboard/PipelineManager";
+import { DailyExecutionWidget } from "@/components/dashboard/DailyExecutionWidget";
 
 interface FosterAnimalWithDetails extends FosterAnimal {
   animal: Animal | null;
@@ -33,13 +34,6 @@ interface FosterAnimalWithDetails extends FosterAnimal {
 interface MyFostersData {
   fosterAnimals: FosterAnimalWithDetails[];
 }
-
-const actionButtons = [
-  { id: "new-intake", label: "New Intake", icon: Inbox, href: "/surrender", color: "bg-blue-600 text-white border-blue-600" },
-  { id: "log-meds", label: "Log Meds", icon: Pill, href: "/dashboard/medical-pipeline?tab=treatments", color: "bg-red-600 text-white border-red-600" },
-  { id: "find-foster", label: "Find Foster", icon: Heart, href: "/dashboard/foster-management", color: "bg-green-600 text-white border-green-600" },
-  { id: "invite-team-member", label: "Invite Team Member", icon: Users, href: "/dashboard/team?action=invite", color: "bg-purple-600 text-white border-purple-600" },
-];
 
 // Valid pipeline tabs that can be set via URL hash
 const validPipelineTabs: PipelineTab[] = ["adoptions", "fosters", "volunteers", "intake"];
@@ -426,41 +420,12 @@ export default function Dashboard() {
                     </section>
                   )}
 
-                  {/* Quick Actions Grid - only show if user has dashboard access and at least one permitted action */}
-                  {(() => {
-                    const filteredActions = actionButtons.filter(action => {
-                      if (isLiteTier) {
-                        if (['new-intake', 'log-meds', 'find-foster'].includes(action.id)) return false;
-                      }
-                      // Filter actions based on permissions only (no role checks)
-                      if (action.id === 'new-intake') return canViewApplications;
-                      if (action.id === 'log-meds') return canViewMedical;
-                      if (action.id === 'find-foster') return canViewFosterManagement;
-                      if (action.id === 'invite-team-member') return canAccessPage('team');
-                      return false; // Default to hidden unless explicitly permitted
-                    });
-                    
-                    return hasFullDashboardAccess && filteredActions.length > 0 && (
-                      <section data-testid="section-quick-actions">
-                        <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-3">Quick Actions</h3>
-                        <div className="grid grid-cols-2 gap-3">
-                          {filteredActions.map((action) => (
-                            <Link key={action.id} href={action.href}>
-                              <Button 
-                                variant="outline" 
-                                size="lg"
-                                className={`w-full gap-2 justify-center ${action.color}`}
-                                data-testid={`button-action-${action.id}`}
-                              >
-                                <action.icon className="h-5 w-5" />
-                                <span className="font-medium">{action.label}</span>
-                              </Button>
-                            </Link>
-                          ))}
-                        </div>
-                      </section>
-                    );
-                  })()}
+                  {/* Daily Execution Board - shows today's medical tasks for quick action */}
+                  {canViewMedical && !isLiteTier && (
+                    <section data-testid="section-daily-execution" className="w-full">
+                      <DailyExecutionWidget />
+                    </section>
+                  )}
                 </div>
 
                 {/* Right Column - Daily Briefing (1/3 width, scrollable) */}
