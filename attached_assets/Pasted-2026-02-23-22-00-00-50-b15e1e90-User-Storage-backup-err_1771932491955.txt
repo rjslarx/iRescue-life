@@ -1,0 +1,108 @@
+2026-02-23 22:00:00.50
+b15e1e90
+User
+⚠️ Storage backup errors: [Haseya's New Beginning Animal Rescue] Object storage is not accessible (credential or connectivity issue). Skipping backup.
+2026-02-23 22:00:00.50
+b15e1e90
+User
+[STORAGE BACKUP] Object storage connectivity check failed: heimdall-production@replit-user-deployments.iam.gserviceaccount.com does not have storage.buckets.get access to the Google Cloud Storage bucket. Permission 'storage.buckets.get' denied on resource (or it may not exist).
+2026-02-24 04:10:20.71
+5785d0fd
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:63:22
+2026-02-24 04:10:20.71
+5785d0fd
+User
+at Array.reduce ()
+2026-02-24 04:10:20.71
+5785d0fd
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:684:26
+2026-02-24 04:10:20.71
+5785d0fd
+User
+at Function.entries ()
+2026-02-24 04:10:20.71
+5785d0fd
+User
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:17)
+2026-02-24 04:10:20.71
+5785d0fd
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:63:22
+2026-02-24 04:10:20.71
+5785d0fd
+User
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:33)
+2026-02-24 04:10:20.71
+5785d0fd
+User
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:33)
+2026-02-24 04:10:20.71
+5785d0fd
+User
+TypeError: Cannot convert undefined or null to object
+2026-02-24 04:10:20.71
+5785d0fd
+User
+at Array.reduce ()
+2026-02-24 04:10:20.71
+5785d0fd
+User
+at Object.startActiveSpan (file:///home/runner/workspace/node_modules/drizzle-orm/tracing.js:8:14)
+2026-02-24 04:19:36.87
+592fb39b
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:63:22
+2026-02-24 04:19:36.87
+592fb39b
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:684:26
+2026-02-24 04:19:36.87
+592fb39b
+User
+at Function.entries ()
+2026-02-24 04:19:36.87
+592fb39b
+User
+at Array.reduce ()
+2026-02-24 04:19:36.87
+592fb39b
+User
+at Array.reduce ()
+2026-02-24 04:19:36.87
+592fb39b
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:63:22
+2026-02-24 04:19:36.87
+592fb39b
+User
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:17)
+2026-02-24 04:19:36.87
+592fb39b
+User
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:33)
+2026-02-24 04:19:36.87
+592fb39b
+User
+TypeError: Cannot convert undefined or null to object
+2026-02-24 04:19:36.87
+592fb39b
+User
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:33)
+2026-02-24 04:19:36.87
+592fb39b
+User
+at Object.startActiveSpan (file:///home/runner/workspace/node_modules/drizzle-orm/tracing.js:8:14)
+2026-02-24 04:22:11.80
+592fb39b
+User
+[TENANT FILE STORAGE] Failed to delete from Replit storage: Invalid URL
+2026-02-24 04:22:17.64
+592fb39b
+User
+[TENANT FILE STORAGE] Failed to delete from Replit storage: Invalid URL
+2026-02-24 04:22:22.55
+592fb39b
+User
+[TENANT FILE STORAGE] Failed to delete from Replit storage: Invalid URL
