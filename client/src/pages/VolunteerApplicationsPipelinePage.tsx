@@ -174,7 +174,7 @@ export default function VolunteerApplicationsPipelinePage() {
       title="Volunteer Pipeline"
       description="Manage volunteer applications through the approval process"
     >
-      <div className="flex-1 overflow-auto p-6">
+      <div className="flex-1 overflow-auto p-6 min-w-0">
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "pipeline" | "active_pool")}>
           <TabsList className="mb-6">
             <TabsTrigger value="pipeline" className="gap-2" data-testid="tab-pipeline">
@@ -227,24 +227,24 @@ export default function VolunteerApplicationsPipelinePage() {
                   </CardContent>
                 </Card>
               ) : (
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 min-w-0">
                   {activePoolVolunteers.map((volunteer) => (
-                    <Card key={volunteer.id} data-testid={`card-active-volunteer-${volunteer.id}`}>
+                    <Card key={volunteer.id} className="min-w-0 overflow-hidden" data-testid={`card-active-volunteer-${volunteer.id}`}>
                       <CardHeader className="pb-3">
-                        <CardTitle className="text-lg flex items-center justify-between gap-2">
-                          {volunteer.applicantName}
+                        <CardTitle className="text-lg flex items-center justify-between gap-2 min-w-0">
+                          <span className="truncate">{volunteer.applicantName}</span>
                           {volunteer.holdHarmlessSignedAt && (
-                            <Badge variant="default" className="text-xs">Waiver Signed</Badge>
+                            <Badge variant="default" className="text-xs shrink-0">Waiver Signed</Badge>
                           )}
                         </CardTitle>
                       </CardHeader>
-                      <CardContent className="space-y-2">
+                      <CardContent className="space-y-2 min-w-0">
                         <div className="text-sm text-muted-foreground space-y-1">
-                          <p>{volunteer.applicantEmail}</p>
-                          <p>{volunteer.applicantPhone}</p>
+                          <p className="truncate">{volunteer.applicantEmail}</p>
+                          <p className="truncate">{volunteer.applicantPhone}</p>
                         </div>
                         {volunteer.availability && (
-                          <div className="text-sm">
+                          <div className="text-sm line-clamp-2">
                             <span className="font-medium">Availability:</span> {volunteer.availability}
                           </div>
                         )}

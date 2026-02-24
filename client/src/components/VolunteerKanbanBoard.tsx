@@ -169,11 +169,11 @@ export default function VolunteerKanbanBoard({
   }
 
   return (
-    <div className="w-full overflow-x-auto">
+    <div className="w-full min-w-0 overflow-x-auto">
       <div 
         className="grid gap-3"
         style={{ 
-          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))',
+          gridTemplateColumns: `repeat(${stages.length}, minmax(0, 1fr))`,
         }}
       >
         {stages.map((stage) => {
@@ -182,7 +182,7 @@ export default function VolunteerKanbanBoard({
           return (
             <div
               key={stage.id}
-              className="flex flex-col"
+              className="flex flex-col min-w-0"
               onDragOver={(e) => e.preventDefault()}
               onDrop={(e) => {
                 e.preventDefault();
@@ -192,7 +192,7 @@ export default function VolunteerKanbanBoard({
                 }
               }}
             >
-              <Card>
+              <Card className="min-w-0 overflow-hidden">
                 <CardHeader className="pb-3 px-3">
                   <div className="flex items-center justify-between gap-2">
                     <CardTitle className="text-sm flex items-center gap-1.5 min-w-0 flex-1">
