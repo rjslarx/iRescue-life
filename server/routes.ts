@@ -11918,6 +11918,301 @@ Crawl-delay: 1
   });
 
   // ============================================================================
+  // Public Waiver Routes (walk-in volunteer hold harmless)
+  // ============================================================================
+
+  /**
+   * GET /api/public-waiver
+   * Get the tenant's active hold harmless / volunteer waiver form for public display
+   */
+  app.get('/api/public-waiver', requireTenant, async (req, res, next) => {
+    try {
+      const tenantId = req.tenantId!;
+
+      const [form] = await db
+        .select({
+          id: customForms.id,
+          name: customForms.name,
+          description: customForms.description,
+          htmlTemplate: customForms.htmlTemplate,
+          requiresSignature: customForms.requiresSignature,
+        })
+        .from(customForms)
+        .where(
+          and(
+            eq(customForms.tenantId, tenantId),
+            eq(customForms.isActive, true),
+            sql`(LOWER(${customForms.name}) LIKE '%hold harmless%' OR (LOWER(${customForms.name}) LIKE '%volunteer%' AND (LOWER(${customForms.name}) LIKE '%waiver%' OR LOWER(${customForms.name}) LIKE '%liability%')))`
+          )
+        )
+        .limit(1);
+
+      if (!form) {
+        return res.status(404).json({ error: 'No volunteer waiver form has been configured for this organization.' });
+      }
+
+      const [tenant] = await db
+        .select({ name: tenants.name, logoUrl: tenants.logoUrl })
+        .from(tenants)
+        .where(eq(tenants.id, tenantId))
+        .limit(1);
+
+      res.json({
+        form: {
+          id: form.id,
+          name: form.name,
+          description: form.description,
+          htmlTemplate: form.htmlTemplate,
+          requiresSignature: form.requiresSignature,
+        },
+        tenant: {
+          name: tenant?.name || 'Organization',
+          logo: tenant?.logoUrl || null,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/public-waiver/sign
+   * Submit a signed walk-in volunteer waiver (no token/auth required)
+   * Same post-signing flow as /api/public/forms/:token/submit but without pipeline automation
+   */
+  app.post('/api/public-waiver/sign', requireTenant, async (req, res, next) => {
+    try {
+      const tenantId = req.tenantId!;
+      const { signerName, signerEmail, signerPhone, signatureData, formData: extraFormData } = req.body;
+
+      if (!signerName || !signerEmail) {
+        return res.status(400).json({ error: 'Name and email are required' });
+      }
+
+      const [form] = await db
+        .select()
+        .from(customForms)
+        .where(
+          and(
+            eq(customForms.tenantId, tenantId),
+            eq(customForms.isActive, true),
+            sql`(LOWER(${customForms.name}) LIKE '%hold harmless%' OR (LOWER(${customForms.name}) LIKE '%volunteer%' AND (LOWER(${customForms.name}) LIKE '%waiver%' OR LOWER(${customForms.name}) LIKE '%liability%')))`
+          )
+        )
+        .limit(1);
+
+      if (!form) {
+        return res.status(404).json({ error: 'No volunteer waiver form found' });
+      }
+
+      if (form.requiresSignature && !signatureData) {
+        return res.status(400).json({ error: 'Signature is required' });
+      }
+
+      const ipAddress = req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || '';
+
+      const { createSubmission, updateSubmission, renderFormHtml } = await import('./services/custom-form');
+
+      const submission = await createSubmission({
+        tenantId,
+        formId: form.id,
+        signerName: signerName.trim(),
+        signerEmail: signerEmail.trim().toLowerCase(),
+        signerPhone: signerPhone?.trim() || null,
+        formData: extraFormData || null,
+        signatureData,
+        signedAt: new Date(),
+        signerIpAddress: ipAddress,
+        status: 'completed',
+      });
+
+      const [tenant] = await db
+        .select()
+        .from(tenants)
+        .where(eq(tenants.id, tenantId))
+        .limit(1);
+
+      const renderedHtml = await renderFormHtml(form as any, submission, tenant?.name || 'Organization');
+
+      await updateSubmission(submission.id, tenantId, { renderedHtml });
+
+      let agreementPdfAttachments: { filename: string; content: Buffer; contentType: string }[] = [];
+      let agreementPdfObjectPath: string | undefined;
+
+      if (renderedHtml) {
+        try {
+          const { generateCustomFormPDF } = await import('./services/custom-form-pdf');
+          const { objectPath, pdfBuffer } = await generateCustomFormPDF(renderedHtml, 'volunteer-agreements', {
+            ipAddress,
+            signedAt: new Date(),
+            sessionId: submission.id,
+          });
+          agreementPdfObjectPath = objectPath;
+
+          const signerNameSlug = (signerName || 'unknown').replace(/\s+/g, '-').toLowerCase();
+          agreementPdfAttachments.push({
+            filename: `volunteer-agreement-${signerNameSlug}.pdf`,
+            content: pdfBuffer,
+            contentType: 'application/pdf',
+          });
+
+          await updateSubmission(submission.id, tenantId, { pdfUrl: objectPath });
+          console.log(`[Public Waiver] Generated PDF: ${pdfBuffer.length} bytes at ${objectPath}`);
+        } catch (pdfError) {
+          console.error('[Public Waiver] Failed to generate PDF:', pdfError);
+        }
+      }
+
+      if (tenant?.contactEmail && renderedHtml) {
+        try {
+          const { EmailService } = await import('./lib/email-service');
+          const emailService = await EmailService.forTenant(tenantId);
+
+          if (emailService) {
+            const escapeHtml = (str: string) => str
+              .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+              .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+
+            const emailSubject = `Volunteer Waiver Signed: ${signerName}`;
+            const emailHtml = `
+<h2>Volunteer Waiver Signed</h2>
+<p>A walk-in volunteer has signed the hold harmless waiver via the public waiver page.</p>
+<p><strong>Name:</strong> ${escapeHtml(signerName)}</p>
+<p><strong>Email:</strong> ${escapeHtml(signerEmail)}</p>
+${signerPhone ? `<p><strong>Phone:</strong> ${escapeHtml(signerPhone)}</p>` : ''}
+<p><strong>Submitted:</strong> ${new Date().toLocaleString()}</p>
+<hr>
+<h3>Signed Document</h3>
+${renderedHtml}
+<p style="color:#888;font-size:12px;">This is an automated notification from your iRescue platform.</p>
+            `.trim();
+
+            await emailService.send({
+              to: tenant.contactEmail,
+              subject: emailSubject,
+              html: emailHtml,
+              attachments: agreementPdfAttachments.length > 0 ? agreementPdfAttachments : undefined,
+            });
+            console.log(`[Public Waiver] Emailed waiver to ${tenant.contactEmail}`);
+          }
+        } catch (emailError) {
+          console.error('[Public Waiver] Error sending org email:', emailError);
+        }
+      }
+
+      if (signerEmail && renderedHtml) {
+        try {
+          const { EmailService } = await import('./lib/email-service');
+          const emailService = await EmailService.forTenant(tenantId);
+
+          if (emailService) {
+            const escapeHtml = (str: string) => str
+              .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+              .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+
+            const safeTenantName = tenant?.name ? escapeHtml(tenant.name) : 'the organization';
+
+            await emailService.send({
+              to: signerEmail,
+              subject: `Your Signed Document: ${form.name}`,
+              html: `
+<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+  <h2 style="color: #333;">Your Signed Document</h2>
+  <p>Hi ${escapeHtml(signerName)},</p>
+  <p>Thank you for completing and signing the <strong>${escapeHtml(form.name)}</strong> with ${safeTenantName}.</p>
+  <p>A copy of your signed document is included below for your records.</p>
+  <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+  <div style="background: #f9f9f9; padding: 20px; border-radius: 8px;">
+    ${renderedHtml}
+  </div>
+  <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+  <p style="color: #666; font-size: 12px;">
+    Signed on: ${new Date().toLocaleString()}<br />
+    This is your copy of the signed document. Please keep it for your records.
+  </p>
+</div>
+              `.trim(),
+              attachments: agreementPdfAttachments.length > 0 ? agreementPdfAttachments : undefined,
+            });
+            console.log(`[Public Waiver] Sent confirmation to signer ${signerEmail}`);
+          }
+        } catch (signerEmailError) {
+          console.error('[Public Waiver] Error sending signer email:', signerEmailError);
+        }
+      }
+
+      if (agreementPdfObjectPath && signerEmail) {
+        try {
+          const { personDocuments, contacts: contactsTable } = await import('@shared/schema');
+          const normalizedEmail = signerEmail.toLowerCase().trim();
+          const [contact] = await db
+            .select({ id: contactsTable.id })
+            .from(contactsTable)
+            .where(
+              and(
+                eq(contactsTable.tenantId, tenantId),
+                sql`LOWER(TRIM(${contactsTable.email})) = ${normalizedEmail}`
+              )
+            )
+            .limit(1);
+
+          const [existingDoc] = await db
+            .select({ id: personDocuments.id })
+            .from(personDocuments)
+            .where(and(
+              eq(personDocuments.tenantId, tenantId),
+              eq(personDocuments.documentType, 'agreement'),
+              eq(personDocuments.documentSubtype, 'volunteer_hold_harmless'),
+              sql`LOWER(TRIM(${personDocuments.personEmail})) = ${normalizedEmail}`
+            ))
+            .limit(1);
+
+          if (!existingDoc) {
+            await db.insert(personDocuments).values({
+              tenantId,
+              personType: 'contact',
+              personId: contact?.id || null,
+              personEmail: signerEmail,
+              documentType: 'agreement',
+              documentSubtype: 'volunteer_hold_harmless',
+              title: `Volunteer Hold Harmless - ${signerName}`,
+              description: `Walk-in volunteer waiver signed on ${new Date().toLocaleDateString()}.`,
+              objectPath: agreementPdfObjectPath,
+              sourceId: submission.id,
+              sourceTable: 'custom_form_submissions',
+              fileName: `volunteer-hold-harmless-${(signerName || 'unknown').replace(/\s+/g, '-').toLowerCase()}.pdf`,
+              contentType: 'application/pdf',
+            });
+            console.log(`[Public Waiver] Saved to person documents for ${signerEmail}`);
+          }
+        } catch (docError) {
+          console.error('[Public Waiver] Failed to save to person documents:', docError);
+        }
+      }
+
+      const { logActivity } = await import('./lib/activity-logger');
+      await logActivity({
+        tenantId,
+        userId: null,
+        action: 'waiver_signed_public',
+        category: 'user',
+        entityType: 'custom_form_submission',
+        entityId: submission.id,
+        description: `Walk-in volunteer ${signerName} (${signerEmail}) signed "${form.name}" via public waiver page`,
+        metadata: { formId: form.id, signerName, signerEmail },
+      });
+
+      res.json({
+        success: true,
+        message: 'Waiver signed successfully',
+        submissionId: submission.id,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // ============================================================================
   // Public Custom Form Routes (for form signing)
   // ============================================================================
 

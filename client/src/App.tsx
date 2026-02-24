@@ -89,6 +89,7 @@ import PublicAdoptionCheckoutPage from "@/pages/PublicAdoptionCheckoutPage";
 import PublicFosterAgreementPage from "@/pages/PublicFosterAgreementPage";
 import PublicPlacementAgreementPage from "@/pages/PublicPlacementAgreementPage";
 import PublicFormSigningPage from "@/pages/PublicFormSigningPage";
+import PublicWaiverPage from "@/pages/PublicWaiverPage";
 import PublicConfirmationPage from "@/pages/PublicConfirmationPage";
 import FormPaymentPage from "@/pages/FormPaymentPage";
 import PublicContactPage from "@/pages/PublicContactPage";
@@ -233,6 +234,7 @@ function RouterSwitch() {
       <Route path="/foster-agreement/sign/:token" component={PublicFosterAgreementPage} />
       <Route path="/placement-agreement/sign/:token" component={PublicPlacementAgreementPage} />
       <Route path="/run-sheet/:token" component={RunSheetPage} />
+      <Route path="/volunteer-waiver" component={PublicWaiverPage} />
       <Route path="/form/:token" component={PublicFormSigningPage} />
       <Route path="/form/:token/payment" component={FormPaymentPage} />
       <Route path="/forms/sign/:token" component={PublicFormSigningPage} />

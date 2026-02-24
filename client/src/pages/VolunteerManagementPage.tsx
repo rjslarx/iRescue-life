@@ -6,7 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, UserCircle, Calendar, Plus, FolderOpen, FileText, ExternalLink, Files, ShieldCheck } from "lucide-react";
+import { Loader2, UserCircle, Calendar, Plus, FolderOpen, FileText, ExternalLink, Files, ShieldCheck, Link2, Copy, Check } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -54,6 +54,7 @@ export default function VolunteerManagementPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingOpportunity, setEditingOpportunity] = useState<VolunteerOpportunity | undefined>();
   const [documentFolderEmail, setDocumentFolderEmail] = useState<string | null>(null);
+  const [waiverLinkCopied, setWaiverLinkCopied] = useState(false);
   const [documentFolderPath, setDocumentFolderPath] = useState<string | null>(null);
   const [documentVolunteerName, setDocumentVolunteerName] = useState<string>('');
   const [documentsModal, setDocumentsModal] = useState<{
@@ -232,6 +233,32 @@ export default function VolunteerManagementPage() {
               Opportunities ({opportunities.length})
             </TabsTrigger>
           </TabsList>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="default"
+                  onClick={() => {
+                    const waiverUrl = `${window.location.origin}/volunteer-waiver`;
+                    navigator.clipboard.writeText(waiverUrl).then(() => {
+                      setWaiverLinkCopied(true);
+                      toast({ title: 'Waiver link copied', description: 'Share this link with walk-in volunteers to sign the hold harmless waiver.' });
+                      setTimeout(() => setWaiverLinkCopied(false), 2000);
+                    });
+                  }}
+                  data-testid="button-copy-waiver-link"
+                >
+                  {waiverLinkCopied ? <Check className="h-4 w-4 mr-2" /> : <Link2 className="h-4 w-4 mr-2" />}
+                  {waiverLinkCopied ? 'Link Copied' : 'Copy Public Waiver Link'}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                Copy the public hold harmless waiver link to share with walk-in volunteers
+              </TooltipContent>
+            </Tooltip>
+          </div>
 
           {/* Tab 1: Active Volunteers */}
           <TabsContent value="active-volunteers">
