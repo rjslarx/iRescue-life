@@ -30336,6 +30336,8 @@ Email: ${application.applicantEmail || ''}`
       const rawDoses = await db
         .select()
         .from(medicalDoses)
+        .innerJoin(medicalPrescriptions, eq(medicalDoses.prescriptionId, medicalPrescriptions.id))
+        .innerJoin(animals, eq(medicalPrescriptions.animalId, animals.id))
         .where(and(
           eq(medicalDoses.prescriptionId, req.params.prescriptionId),
           eq(medicalDoses.tenantId, req.tenant!.id),
@@ -37918,7 +37920,7 @@ The user asking is a tenant administrator or staff member.`;
     try {
       const dateParam = (req.query.date as string) || new Date().toISOString().split('T')[0];
       const tenantId = req.tenant!.id;
-      const { medicalDoses, medicalPrescriptions, preventativeCareRecords, diagnosticTests, procedureLogs } = await import('@shared/schema');
+      const { medicalDoses, medicalPrescriptions, preventativeCareRecords, diagnosticTests, procedureLogs, TERMINAL_STATUSES } = await import('@shared/schema');
 
       const dayStart = new Date(dateParam + 'T00:00:00.000Z');
       const dayEnd = new Date(dateParam + 'T23:59:59.999Z');
@@ -37948,6 +37950,7 @@ The user asking is a tenant administrator or staff member.`;
           eq(medicalDoses.status, 'due'),
           gte(medicalDoses.dueDate, dayStart),
           lte(medicalDoses.dueDate, dayEnd),
+          notInArray(animals.status, TERMINAL_STATUSES),
         )),
 
         db.select({
@@ -37971,6 +37974,7 @@ The user asking is a tenant administrator or staff member.`;
           eq(preventativeCareRecords.status, 'pending'),
           gte(preventativeCareRecords.dateAdministered, dayStart),
           lte(preventativeCareRecords.dateAdministered, dayEnd),
+          notInArray(animals.status, TERMINAL_STATUSES),
         )),
 
         db.select({
@@ -37993,6 +37997,7 @@ The user asking is a tenant administrator or staff member.`;
           eq(medicalExams.status, 'pending'),
           gte(medicalExams.examDate, dayStart),
           lte(medicalExams.examDate, dayEnd),
+          notInArray(animals.status, TERMINAL_STATUSES),
         )),
 
         db.select({
@@ -38016,6 +38021,7 @@ The user asking is a tenant administrator or staff member.`;
           eq(procedureLogs.status, 'pending'),
           gte(procedureLogs.procedureDate, dayStart),
           lte(procedureLogs.procedureDate, dayEnd),
+          notInArray(animals.status, TERMINAL_STATUSES),
         )),
 
         db.select({
@@ -38037,6 +38043,7 @@ The user asking is a tenant administrator or staff member.`;
           eq(diagnosticTests.result, 'Pending'),
           gte(diagnosticTests.testDate, dayStart),
           lte(diagnosticTests.testDate, dayEnd),
+          notInArray(animals.status, TERMINAL_STATUSES),
         )),
       ]);
 
@@ -38121,7 +38128,7 @@ The user asking is a tenant administrator or staff member.`;
     try {
       const monthParam = (req.query.month as string) || new Date().toISOString().slice(0, 7);
       const tenantId = req.tenant!.id;
-      const { medicalDoses, preventativeCareRecords, diagnosticTests, procedureLogs } = await import('@shared/schema');
+      const { medicalDoses, medicalPrescriptions, preventativeCareRecords, diagnosticTests, procedureLogs, TERMINAL_STATUSES } = await import('@shared/schema');
 
       const monthStart = new Date(monthParam + '-01T00:00:00.000Z');
       const nextMonth = new Date(monthStart);
@@ -38134,11 +38141,14 @@ The user asking is a tenant administrator or staff member.`;
           count: sql<number>`count(*)::int`,
         })
         .from(medicalDoses)
+        .innerJoin(medicalPrescriptions, eq(medicalDoses.prescriptionId, medicalPrescriptions.id))
+        .innerJoin(animals, eq(medicalPrescriptions.animalId, animals.id))
         .where(and(
           eq(medicalDoses.tenantId, tenantId),
           eq(medicalDoses.status, 'due'),
           gte(medicalDoses.dueDate, monthStart),
           lte(medicalDoses.dueDate, monthEnd),
+          notInArray(animals.status, TERMINAL_STATUSES),
         ))
         .groupBy(sql`to_char(${medicalDoses.dueDate}::date, 'YYYY-MM-DD')`),
 
@@ -38147,11 +38157,13 @@ The user asking is a tenant administrator or staff member.`;
           count: sql<number>`count(*)::int`,
         })
         .from(preventativeCareRecords)
+        .innerJoin(animals, eq(preventativeCareRecords.animalId, animals.id))
         .where(and(
           eq(preventativeCareRecords.tenantId, tenantId),
           eq(preventativeCareRecords.status, 'pending'),
           gte(preventativeCareRecords.dateAdministered, monthStart),
           lte(preventativeCareRecords.dateAdministered, monthEnd),
+          notInArray(animals.status, TERMINAL_STATUSES),
         ))
         .groupBy(sql`to_char(${preventativeCareRecords.dateAdministered}::date, 'YYYY-MM-DD')`),
 
@@ -38160,11 +38172,13 @@ The user asking is a tenant administrator or staff member.`;
           count: sql<number>`count(*)::int`,
         })
         .from(medicalExams)
+        .innerJoin(animals, eq(medicalExams.animalId, animals.id))
         .where(and(
           eq(medicalExams.tenantId, tenantId),
           eq(medicalExams.status, 'pending'),
           gte(medicalExams.examDate, monthStart),
           lte(medicalExams.examDate, monthEnd),
+          notInArray(animals.status, TERMINAL_STATUSES),
         ))
         .groupBy(sql`to_char(${medicalExams.examDate}::date, 'YYYY-MM-DD')`),
 
@@ -38173,11 +38187,13 @@ The user asking is a tenant administrator or staff member.`;
           count: sql<number>`count(*)::int`,
         })
         .from(procedureLogs)
+        .innerJoin(animals, eq(procedureLogs.animalId, animals.id))
         .where(and(
           eq(procedureLogs.tenantId, tenantId),
           eq(procedureLogs.status, 'pending'),
           gte(procedureLogs.procedureDate, monthStart),
           lte(procedureLogs.procedureDate, monthEnd),
+          notInArray(animals.status, TERMINAL_STATUSES),
         ))
         .groupBy(sql`to_char(${procedureLogs.procedureDate}::date, 'YYYY-MM-DD')`),
 
@@ -38186,11 +38202,13 @@ The user asking is a tenant administrator or staff member.`;
           count: sql<number>`count(*)::int`,
         })
         .from(diagnosticTests)
+        .innerJoin(animals, eq(diagnosticTests.animalId, animals.id))
         .where(and(
           eq(diagnosticTests.tenantId, tenantId),
           eq(diagnosticTests.result, 'Pending'),
           gte(diagnosticTests.testDate, monthStart),
           lte(diagnosticTests.testDate, monthEnd),
+          notInArray(animals.status, TERMINAL_STATUSES),
         ))
         .groupBy(sql`to_char(${diagnosticTests.testDate}::date, 'YYYY-MM-DD')`),
       ]);
