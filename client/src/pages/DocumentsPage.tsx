@@ -603,7 +603,7 @@ export default function DocumentsPage() {
       {/* Folder Contents Dialog */}
       <Dialog open={!!selectedFolder} onOpenChange={(open) => !open && setSelectedFolder(null)}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col" data-testid="dialog-folder-contents">
-          <DialogHeader>
+          <DialogHeader className="pr-8">
             <DialogTitle className="flex items-center gap-2">
               {selectedFolder && folderIcons[selectedFolder.id] && (() => {
                 const Icon = folderIcons[selectedFolder.id];
@@ -612,7 +612,7 @@ export default function DocumentsPage() {
               {selectedFolder?.name}
             </DialogTitle>
             <DialogDescription>
-              {selectedFolder?.count} records • Read-only access
+              {selectedFolder?.count} records
             </DialogDescription>
           </DialogHeader>
           <div className="flex-1 overflow-y-auto space-y-2 py-4">
@@ -706,6 +706,16 @@ export default function DocumentsPage() {
               ))
             )}
           </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setSelectedFolder(null)}
+              className="w-full sm:w-auto"
+              data-testid="button-close-folder-dialog"
+            >
+              Close
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
