@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -137,12 +137,23 @@ export function AddPreventativeCareDialog({
     }
   }, [record, open, form]);
 
+  const [careTypeMatched, setCareTypeMatched] = useState(false);
+
   useEffect(() => {
     if (initialValues?.careName && careTypes.length > 0 && open && !record) {
-      const match = careTypes.find(t => t.name.toLowerCase() === initialValues.careName!.toLowerCase());
+      const searchName = initialValues.careName!.toLowerCase();
+      let match = careTypes.find(t => t.name.toLowerCase() === searchName);
+      if (!match) {
+        match = careTypes.find(t => searchName.includes(t.name.toLowerCase()) || t.name.toLowerCase().includes(searchName));
+      }
       if (match) {
         form.setValue("careTypeId", match.id);
+        setCareTypeMatched(true);
+      } else {
+        setCareTypeMatched(false);
       }
+    } else {
+      setCareTypeMatched(false);
     }
   }, [initialValues, careTypes, open, record, form]);
 
@@ -259,9 +270,9 @@ export function AddPreventativeCareDialog({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Care Type *</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value || ""} disabled={!!initialValues?.careName}>
+                  <Select onValueChange={field.onChange} value={field.value || ""} disabled={careTypeMatched}>
                     <FormControl>
-                      <SelectTrigger data-testid="select-care-type" className={initialValues?.careName ? "opacity-70" : ""}>
+                      <SelectTrigger data-testid="select-care-type" className={careTypeMatched ? "opacity-70" : ""}>
                         <SelectValue placeholder="Select care type..." />
                       </SelectTrigger>
                     </FormControl>
