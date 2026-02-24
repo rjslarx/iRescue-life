@@ -1,7 +1,7 @@
 import { DriveService } from './googleWorkspace';
 import { objectStorageClient, parseObjectPath, ObjectStorageService } from '../objectStorage';
 import { db } from '../db';
-import { tenants, platformIntegrations, animals, volunteerApplications, fosterApplications, donations } from '@shared/schema';
+import { tenants, platformIntegrations, animals, volunteerApplications, fosterApplications } from '@shared/schema';
 import { eq, and, isNotNull } from 'drizzle-orm';
 
 const ROOT_FOLDERS = {
@@ -413,66 +413,51 @@ export class StorageBackupService {
     console.log(`[STORAGE BACKUP] Backing up donation receipts for tenant ${tenantId}...`);
 
     try {
-      // Get donations with receipt URLs from object storage
-      const donationList = await db
-        .select({
-          id: donations.id,
-          receiptUrl: donations.receiptUrl,
-          donorEmail: donations.donorEmail,
-          createdAt: donations.createdAt,
-        })
-        .from(donations)
-        .where(and(
-          eq(donations.tenantId, tenantId),
-          isNotNull(donations.receiptUrl)
-        ));
+      const objectStorage = new ObjectStorageService();
+      const privateDir = objectStorage.getPrivateObjectDir();
 
-      // Guard against undefined/null results
-      if (!donationList || !Array.isArray(donationList)) {
-        console.log(`[STORAGE BACKUP] No donations found or invalid response for tenant: ${tenantId}`);
-        return;
-      }
-
-      // Create finance/receipts folder
       const financeFolder = await this.getOrCreateFolder(driveService, ROOT_FOLDERS.FINANCE);
       if (!financeFolder.success || !financeFolder.folderId) return;
 
       const receiptsFolder = await this.getOrCreateFolder(driveService, 'Donation_Receipts', financeFolder.folderId);
       if (!receiptsFolder.success || !receiptsFolder.folderId) return;
 
-      for (const donation of donationList) {
-        // Skip if receiptUrl is null/undefined or not a string
-        if (!donation.receiptUrl || typeof donation.receiptUrl !== 'string') continue;
+      const receiptsPath = `${privateDir}/${tenantId}/donation-receipts`;
+      await this.scanAndBackupToFolder(receiptsPath, driveService, receiptsFolder.folderId, progress);
+    } catch (error: any) {
+      progress.errors.push(`Failed to backup donation receipts: ${error.message}`);
+    }
+  }
+
+  private async scanAndBackupToFolder(
+    path: string,
+    driveService: DriveService,
+    targetFolderId: string,
+    progress: BackupProgress
+  ): Promise<void> {
+    try {
+      const { bucketName, objectName } = parseObjectPath(path);
+      const bucket = objectStorageClient.bucket(bucketName);
+
+      const [files] = await bucket.getFiles({ prefix: objectName });
+
+      if (!files || !Array.isArray(files)) {
+        console.log(`[STORAGE BACKUP] No files found or invalid response for path: ${path}`);
+        return;
+      }
+
+      for (const file of files) {
         progress.filesScanned++;
 
-        // Skip if already in Google Drive
-        if (donation.receiptUrl.includes('drive.google.com') || donation.receiptUrl.includes('googleusercontent.com')) {
-          progress.filesSkipped++;
-          continue;
-        }
-
-        if (!donation.receiptUrl.startsWith('/objects/')) {
-          progress.filesSkipped++;
-          continue;
-        }
-
         try {
-          const dateStr = donation.createdAt ? new Date(donation.createdAt).toISOString().split('T')[0] : 'unknown';
-          const fileName = `Receipt_${dateStr}_${donation.id.substring(0, 8)}.pdf`;
-
-          await this.uploadObjectStorageFileToGoogleDrive(
-            donation.receiptUrl,
-            driveService,
-            receiptsFolder.folderId,
-            fileName,
-            progress
-          );
+          const fileName = file.name.split('/').pop() || 'unknown';
+          await this.uploadGCSFileToDrive(file, driveService, targetFolderId, fileName, progress);
         } catch (error: any) {
-          progress.errors.push(`Failed to backup donation receipt: ${error.message}`);
+          progress.errors.push(`Failed to backup file ${file.name}: ${error.message}`);
         }
       }
     } catch (error: any) {
-      progress.errors.push(`Failed to backup donation receipts: ${error.message}`);
+      console.log(`[STORAGE BACKUP] Could not scan folder: ${error.message}`);
     }
   }
 
