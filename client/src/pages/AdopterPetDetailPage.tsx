@@ -46,6 +46,8 @@ interface AdoptedAnimal {
   adoptedAt: string;
   microchipNumber?: string;
   weight?: string;
+  status?: string;
+  deceasedDate?: string | null;
 }
 
 interface VaccineRecord {
@@ -393,6 +395,21 @@ export default function AdopterPetDetailPage() {
         </div>
       </Card>
 
+      {pet.status === 'deceased' && (
+        <Card className="mb-6 border-muted" data-testid="banner-memorial">
+          <CardContent className="flex items-center gap-3 p-4">
+            <Heart className="h-5 w-5 text-muted-foreground shrink-0" />
+            <div>
+              <p className="text-sm font-medium">In Loving Memory</p>
+              <p className="text-sm text-muted-foreground">
+                {pet.name}'s records are preserved here. Automated reminders have been stopped.
+                {pet.deceasedDate && ` Passed on ${new Date(pet.deceasedDate).toLocaleDateString()}.`}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="compliance" data-testid="tab-compliance">
@@ -441,7 +458,7 @@ export default function AdopterPetDetailPage() {
             </Card>
           )}
 
-          {((dueCareItems && dueCareItems.length > 0) || (complianceConfirmations && complianceConfirmations.some(c => c.status === 'pending_review'))) && (
+          {pet.status !== 'deceased' && ((dueCareItems && dueCareItems.length > 0) || (complianceConfirmations && complianceConfirmations.some(c => c.status === 'pending_review'))) && (
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
@@ -737,7 +754,7 @@ export default function AdopterPetDetailPage() {
               </div>
               <Dialog open={showReminderDialog} onOpenChange={setShowReminderDialog}>
                 <DialogTrigger asChild>
-                  <Button size="sm" data-testid="button-add-reminder">
+                  <Button size="sm" disabled={pet.status === 'deceased'} data-testid="button-add-reminder">
                     <Plus className="h-4 w-4 mr-1" />
                     Add
                   </Button>
@@ -856,7 +873,7 @@ export default function AdopterPetDetailPage() {
               </div>
               <Dialog open={showWeightDialog} onOpenChange={setShowWeightDialog}>
                 <DialogTrigger asChild>
-                  <Button size="sm" data-testid="button-add-weight">
+                  <Button size="sm" disabled={pet.status === 'deceased'} data-testid="button-add-weight">
                     <Plus className="h-4 w-4 mr-1" />
                     Log Weight
                   </Button>
@@ -965,7 +982,7 @@ export default function AdopterPetDetailPage() {
               </div>
               <Dialog open={showHappyTailDialog} onOpenChange={setShowHappyTailDialog}>
                 <DialogTrigger asChild>
-                  <Button size="sm" data-testid="button-submit-update">
+                  <Button size="sm" disabled={pet.status === 'deceased'} data-testid="button-submit-update">
                     <Plus className="h-4 w-4 mr-1" />
                     Share Update
                   </Button>

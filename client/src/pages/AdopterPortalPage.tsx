@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Link, useLocation } from "wouter";
 import { PawPrint, Calendar, Heart, ChevronRight, Bell, Mail, MessageSquare, Settings } from "lucide-react";
 import { PWAInstallPrompt } from "@/components/IOSInstallPrompt";
+import { ReportPassingModal } from "@/components/ReportPassingModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -22,6 +23,8 @@ interface AdoptedAnimal {
   photoUrls?: string[];
   adoptedAt: string;
   microchipNumber?: string;
+  status?: string;
+  deceasedDate?: string | null;
 }
 
 interface NotificationPrefs {
@@ -38,11 +41,15 @@ export default function AdopterPortalPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [showSettings, setShowSettings] = useState(false);
+  const [reportPassingPet, setReportPassingPet] = useState<{ id: string; name: string } | null>(null);
   
   const { data: pets, isLoading, error } = useQuery<AdoptedAnimal[]>({
     queryKey: ["/api/adopter/my-pets"],
     enabled: !!user && user.roles?.includes("adopter"),
   });
+
+  const activePets = useMemo(() => (pets || []).filter(p => p.status !== 'deceased'), [pets]);
+  const deceasedPets = useMemo(() => (pets || []).filter(p => p.status === 'deceased'), [pets]);
 
   const { data: notifPrefs } = useQuery<NotificationPrefs>({
     queryKey: ["/api/adopter/notification-preferences"],
@@ -127,52 +134,72 @@ export default function AdopterPortalPage() {
         </p>
       </div>
 
-      {/* PWA Install Prompt for iOS/Android */}
       <PWAInstallPrompt />
 
-      <div className="grid gap-6 md:grid-cols-2">
-        {pets.map((pet) => (
-          <Link key={pet.id} href={`/my-pets/${pet.id}`}>
-            <Card 
-              className="overflow-hidden cursor-pointer hover-elevate transition-all"
+      {activePets.length > 0 && (
+        <div className="grid gap-6 md:grid-cols-2">
+          {activePets.map((pet) => (
+            <Card
+              key={pet.id}
+              className="overflow-hidden"
               data-testid={`card-pet-${pet.id}`}
             >
-              {pet.photoUrls && pet.photoUrls.length > 0 ? (
-                <div className="aspect-video relative overflow-hidden">
-                  <img
-                    src={pet.photoUrls[0]}
-                    alt={pet.name}
-                    className="w-full h-full object-cover"
-                  />
+              <Link href={`/my-pets/${pet.id}`}>
+                <div className="cursor-pointer hover-elevate transition-all">
+                  {pet.photoUrls && pet.photoUrls.length > 0 ? (
+                    <div className="aspect-video relative overflow-hidden">
+                      <img
+                        src={pet.photoUrls[0]}
+                        alt={pet.name}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  ) : (
+                    <div className="aspect-video bg-muted flex items-center justify-center">
+                      <PawPrint className="h-16 w-16 text-muted-foreground" />
+                    </div>
+                  )}
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h3 className="text-xl font-semibold" data-testid={`text-pet-name-${pet.id}`}>
+                          {pet.name}
+                        </h3>
+                        <p className="text-muted-foreground text-sm">
+                          {pet.breed} &middot; {pet.species}
+                        </p>
+                      </div>
+                      <ChevronRight className="h-5 w-5 text-muted-foreground mt-1" />
+                    </div>
+                    <div className="flex items-center gap-2 mt-3 flex-wrap">
+                      <Badge variant="secondary" className="text-xs">
+                        <Calendar className="h-3 w-3 mr-1" />
+                        Adopted {new Date(pet.adoptedAt).toLocaleDateString()}
+                      </Badge>
+                    </div>
+                  </CardContent>
                 </div>
-              ) : (
-                <div className="aspect-video bg-muted flex items-center justify-center">
-                  <PawPrint className="h-16 w-16 text-muted-foreground" />
-                </div>
-              )}
-              <CardContent className="p-4">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h3 className="text-xl font-semibold" data-testid={`text-pet-name-${pet.id}`}>
-                      {pet.name}
-                    </h3>
-                    <p className="text-muted-foreground text-sm">
-                      {pet.breed} • {pet.species}
-                    </p>
-                  </div>
-                  <ChevronRight className="h-5 w-5 text-muted-foreground mt-1" />
-                </div>
-                <div className="flex items-center gap-2 mt-3">
-                  <Badge variant="secondary" className="text-xs">
-                    <Calendar className="h-3 w-3 mr-1" />
-                    Adopted {new Date(pet.adoptedAt).toLocaleDateString()}
-                  </Badge>
-                </div>
-              </CardContent>
+              </Link>
+              <div className="px-4 pb-3">
+                <button
+                  type="button"
+                  className="text-xs text-muted-foreground hover:underline"
+                  onClick={() => setReportPassingPet({ id: pet.id, name: pet.name })}
+                  data-testid={`link-report-passing-${pet.id}`}
+                >
+                  Report Pet Passing
+                </button>
+              </div>
             </Card>
-          </Link>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
+
+      {activePets.length === 0 && deceasedPets.length > 0 && (
+        <p className="text-muted-foreground text-sm mb-6">
+          You have no active pets at this time.
+        </p>
+      )}
 
       <div className="mt-8">
         <Button
@@ -205,6 +232,74 @@ export default function AdopterPortalPage() {
           </Card>
         )}
       </div>
+
+      {deceasedPets.length > 0 && (
+        <div className="mt-12" data-testid="section-in-loving-memory">
+          <div className="flex items-center gap-2 mb-4">
+            <Heart className="h-5 w-5 text-muted-foreground" />
+            <h2 className="text-xl font-semibold text-muted-foreground">In Loving Memory</h2>
+          </div>
+          <div className="grid gap-6 md:grid-cols-2">
+            {deceasedPets.map((pet) => (
+              <Card
+                key={pet.id}
+                className="overflow-hidden opacity-80"
+                data-testid={`card-memorial-${pet.id}`}
+              >
+                {pet.photoUrls && pet.photoUrls.length > 0 ? (
+                  <div className="aspect-video relative overflow-hidden">
+                    <img
+                      src={pet.photoUrls[0]}
+                      alt={pet.name}
+                      className="w-full h-full object-cover grayscale"
+                    />
+                  </div>
+                ) : (
+                  <div className="aspect-video bg-muted flex items-center justify-center">
+                    <Heart className="h-16 w-16 text-muted-foreground" />
+                  </div>
+                )}
+                <CardContent className="p-4">
+                  <h3 className="text-xl font-semibold" data-testid={`text-memorial-name-${pet.id}`}>
+                    {pet.name}
+                  </h3>
+                  <p className="text-muted-foreground text-sm">
+                    {pet.breed} &middot; {pet.species}
+                  </p>
+                  <div className="flex items-center gap-2 mt-3 flex-wrap">
+                    <Badge variant="secondary" className="text-xs">
+                      <Calendar className="h-3 w-3 mr-1" />
+                      Adopted {new Date(pet.adoptedAt).toLocaleDateString()}
+                    </Badge>
+                    {pet.deceasedDate && (
+                      <Badge variant="outline" className="text-xs">
+                        <Heart className="h-3 w-3 mr-1" />
+                        {new Date(pet.deceasedDate).toLocaleDateString()}
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 mt-3 flex-wrap">
+                    <Link href={`/my-pets/${pet.id}`}>
+                      <Button variant="outline" size="sm" data-testid={`button-view-records-${pet.id}`}>
+                        View Records
+                      </Button>
+                    </Link>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {reportPassingPet && (
+        <ReportPassingModal
+          open={!!reportPassingPet}
+          onOpenChange={(open) => { if (!open) setReportPassingPet(null); }}
+          petId={reportPassingPet.id}
+          petName={reportPassingPet.name}
+        />
+      )}
     </div>
   );
 }

@@ -508,6 +508,8 @@ router.get('/pets/:animalId', async (req: Request, res: Response) => {
         adoptedAt: animals.adoptionDate,
         microchipNumber: animals.microchipNumber,
         weight: animals.weight,
+        status: animals.status,
+        deceasedDate: animals.deceasedDate,
       })
       .from(animals)
       .innerJoin(

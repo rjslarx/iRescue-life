@@ -1,4 +1,7 @@
 import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { useMutation } from "@tanstack/react-query";
 import {
   Dialog,
@@ -8,8 +11,15 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
@@ -18,6 +28,13 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+
+const reportPassingSchema = z.object({
+  dateOfPassing: z.date({ required_error: "Please select the date of passing" }),
+  causeOrNotes: z.string().optional(),
+});
+
+type ReportPassingFormValues = z.infer<typeof reportPassingSchema>;
 
 interface ReportPassingModalProps {
   open: boolean;
@@ -28,16 +45,22 @@ interface ReportPassingModalProps {
 
 export function ReportPassingModal({ open, onOpenChange, petId, petName }: ReportPassingModalProps) {
   const { toast } = useToast();
-  const [dateOfPassing, setDateOfPassing] = useState<Date | undefined>(undefined);
-  const [causeOrNotes, setCauseOrNotes] = useState("");
   const [confirmStep, setConfirmStep] = useState(false);
 
+  const form = useForm<ReportPassingFormValues>({
+    resolver: zodResolver(reportPassingSchema),
+    defaultValues: {
+      dateOfPassing: undefined,
+      causeOrNotes: "",
+    },
+  });
+
   const mutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (values: ReportPassingFormValues) => {
       return apiRequest("POST", "/api/adopter/report-passing", {
         animalId: petId,
-        dateOfPassing: dateOfPassing!.toISOString(),
-        causeOrNotes: causeOrNotes.trim() || undefined,
+        dateOfPassing: values.dateOfPassing.toISOString(),
+        causeOrNotes: values.causeOrNotes?.trim() || undefined,
       });
     },
     onSuccess: () => {
@@ -58,18 +81,21 @@ export function ReportPassingModal({ open, onOpenChange, petId, petName }: Repor
   });
 
   const handleClose = () => {
-    setDateOfPassing(undefined);
-    setCauseOrNotes("");
+    form.reset();
     setConfirmStep(false);
     onOpenChange(false);
   };
 
-  const handleSubmit = () => {
+  const onFormSubmit = (values: ReportPassingFormValues) => {
     if (!confirmStep) {
       setConfirmStep(true);
       return;
     }
-    mutation.mutate();
+    mutation.mutate(values);
+  };
+
+  const handleConfirmSubmit = () => {
+    form.handleSubmit(onFormSubmit)();
   };
 
   return (
@@ -89,80 +115,109 @@ export function ReportPassingModal({ open, onOpenChange, petId, petName }: Repor
           </DialogDescription>
         </DialogHeader>
 
-        {!confirmStep && (
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label htmlFor="date-of-passing">Date of Passing *</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !dateOfPassing && "text-muted-foreground"
-                    )}
-                    data-testid="button-date-of-passing"
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {dateOfPassing ? format(dateOfPassing, "PPP") : "Select date"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={dateOfPassing}
-                    onSelect={setDateOfPassing}
-                    disabled={(date) => date > new Date()}
-                    initialFocus
-                    data-testid="calendar-date-of-passing"
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onFormSubmit)}>
+            {!confirmStep && (
+              <div className="space-y-4 py-2">
+                <FormField
+                  control={form.control}
+                  name="dateOfPassing"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-col">
+                      <FormLabel>Date of Passing</FormLabel>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button
+                              variant="outline"
+                              className={cn(
+                                "w-full justify-start text-left font-normal",
+                                !field.value && "text-muted-foreground"
+                              )}
+                              data-testid="button-date-of-passing"
+                            >
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {field.value ? format(field.value, "PPP") : "Select date"}
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={field.value}
+                            onSelect={field.onChange}
+                            disabled={(date) => date > new Date()}
+                            initialFocus
+                            data-testid="calendar-date-of-passing"
+                          />
+                        </PopoverContent>
+                      </Popover>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-            <div className="space-y-2">
-              <Label htmlFor="cause-or-notes">Notes (optional)</Label>
-              <Textarea
-                id="cause-or-notes"
-                placeholder="Any details you'd like to share..."
-                value={causeOrNotes}
-                onChange={(e) => setCauseOrNotes(e.target.value)}
-                rows={3}
-                data-testid="textarea-cause-or-notes"
-              />
-            </div>
-          </div>
-        )}
+                <FormField
+                  control={form.control}
+                  name="causeOrNotes"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Notes (optional)</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          placeholder="Any details you'd like to share..."
+                          rows={3}
+                          data-testid="textarea-cause-or-notes"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            )}
 
-        <DialogFooter className="flex-col gap-2 sm:flex-row">
-          {confirmStep && (
-            <Button
-              variant="outline"
-              onClick={() => setConfirmStep(false)}
-              data-testid="button-back"
-            >
-              Go Back
-            </Button>
-          )}
-          <Button
-            variant="outline"
-            onClick={handleClose}
-            data-testid="button-cancel-report"
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={handleSubmit}
-            disabled={!dateOfPassing || mutation.isPending}
-            data-testid="button-submit-report"
-          >
-            {mutation.isPending
-              ? "Submitting..."
-              : confirmStep
-                ? "Yes, Submit Report"
-                : "Continue"}
-          </Button>
-        </DialogFooter>
+            <DialogFooter className="flex-col gap-2 sm:flex-row mt-4">
+              {confirmStep && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setConfirmStep(false)}
+                  data-testid="button-back"
+                >
+                  Go Back
+                </Button>
+              )}
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleClose}
+                data-testid="button-cancel-report"
+              >
+                Cancel
+              </Button>
+              {confirmStep ? (
+                <Button
+                  type="button"
+                  onClick={handleConfirmSubmit}
+                  disabled={mutation.isPending}
+                  data-testid="button-submit-report"
+                >
+                  {mutation.isPending ? "Submitting..." : "Yes, Submit Report"}
+                </Button>
+              ) : (
+                <Button
+                  type="submit"
+                  disabled={!form.watch("dateOfPassing")}
+                  data-testid="button-continue-report"
+                >
+                  Continue
+                </Button>
+              )}
+            </DialogFooter>
+          </form>
+        </Form>
       </DialogContent>
     </Dialog>
   );
