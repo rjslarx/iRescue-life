@@ -1,0 +1,30 @@
+so my daily execution board widget should also show preventative vaccines that can be administered and charted by the rescue?
+Gemini said
+Yes, exactly! You have completely grasped the "In-House" vs. "Out-of-House" workflow.
+Since the rescue staff administers vaccines like DHPP, FVRCP, and Bordetella themselves, those absolutely belong on the Daily Execution Board right alongside the daily medications and flea preventatives.
+However, because of the legal requirements we just talked about, we have to make one tiny—but crucial—tweak to how that widget behaves when a volunteer clicks to complete a vaccine.
+The "Smart Checkbox" Logic
+For a Medication (e.g., Doxycycline): The volunteer clicks the checkbox, the text gets a strikethrough, and they move on. It takes 1 second.
+For a Vaccine (e.g., DHPP): The volunteer clicks the checkbox, but instead of just crossing it out, the system pops open a quick modal asking for the Manufacturer and Lot Number (the sticker peeled off the vial).
+This ensures that the volunteer doesn't accidentally bypass the legal charting requirement while rushing through their morning checklist.
+The Routing for Rabies (Vet Visits)
+If a dog is due for Rabies, that shouldn't appear in the "In-House Meds" list. Your system should be smart enough to route that specific order down to the "Vet Visits & Surgeries" section of the widget. This tells the volunteer: "Don't look in the fridge for this one; put this dog in the van and drive to the vet."
+The Replit Prompt to Make the Widget "Smart"
+Here is the prompt to feed your Agent to ensure the Daily Execution Board handles vaccines legally and routes Rabies correctly.
+Copy and paste this into Replit Agent:
+Plaintext
+We need to refine the `<DailyExecutionWidget />` so it properly handles in-house vaccines versus daily medications.
+
+1. Grouping Update (In-House Section):
+   - Rename the first section to "Meds, Preventatives & Vaccines".
+   - Ensure items with `category: 'Vaccine'` are pulled into this list, EXCEPT if the item name contains "Rabies".
+
+2. The "Smart Checkbox" Interaction:
+   - When a user clicks to complete an item in this list, check its `category`.
+   - IF category is 'Medication' or 'Preventative': Immediately mark it as given (strikethrough/opacity).
+   - IF category is 'Vaccine': Do NOT immediately mark it as given. Instead, pop open a small `<VaccineLogModal />` requiring the user to input `Manufacturer` and `Lot Number`. Once submitted, update the status and apply the strikethrough.
+
+3. The Rabies Exception (Vet Routing):
+   - IF an order is a Vaccine AND the name includes "Rabies", do not put it in the In-House list. 
+   - Route it to the "Vet Visits & Surgeries" section instead, so staff knows it requires an external veterinary appointment. Clicking "Log" here should open the standard Vet Visit modal (asking for Vet Name, Cost, and Invoice Upload).
+By adding this logic, your platform acts as a digital supervisor—it physically prevents your volunteers from doing the wrong thing or forgetting crucial legal data, all while keeping the UI clean and fast.

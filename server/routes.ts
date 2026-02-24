@@ -38310,6 +38310,48 @@ The user asking is a tenant administrator or staff member.`;
     }
   });
 
+  // Mark a vaccine preventative as given with manufacturer/lot number
+  app.post('/api/daily-roster/mark-vaccine-given', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const tenantId = req.tenant!.id;
+      const { preventativeCareRecords } = await import('@shared/schema');
+
+      const schema = z.object({
+        id: z.string().uuid(),
+        manufacturer: z.string().min(1, 'Manufacturer is required'),
+        lotNumber: z.string().min(1, 'Lot number is required'),
+      });
+
+      const parsed = schema.parse(req.body);
+      const now = new Date();
+      const todayEnd = new Date();
+      todayEnd.setHours(23, 59, 59, 999);
+
+      const result = await db.update(preventativeCareRecords)
+        .set({
+          status: 'given',
+          manufacturer: parsed.manufacturer,
+          lotNumber: parsed.lotNumber,
+          updatedAt: now,
+        })
+        .where(and(
+          eq(preventativeCareRecords.tenantId, tenantId),
+          eq(preventativeCareRecords.id, parsed.id),
+          eq(preventativeCareRecords.status, 'pending'),
+          lte(preventativeCareRecords.dateAdministered, todayEnd),
+        ))
+        .returning();
+
+      if (result.length === 0) {
+        return res.status(400).json({ error: 'Cannot mark this vaccine as given. It may already be completed or is scheduled for a future date.' });
+      }
+
+      res.json({ success: true, record: result[0] });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   const httpServer = createServer(app);
 
 

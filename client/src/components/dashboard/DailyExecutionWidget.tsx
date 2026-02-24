@@ -7,6 +7,16 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { Link } from "wouter";
 import {
   Pill,
@@ -88,6 +98,10 @@ interface CalendarData {
 }
 
 const MULTI_DOSE_FREQUENCIES = ['BID', 'TID', 'QID'];
+
+function isRabiesVaccine(careName: string): boolean {
+  return /rabies/i.test(careName);
+}
 
 function getTimeBadge(dueDate: string | null, frequency: string | null): { label: string; className: string } | null {
   if (!frequency || !MULTI_DOSE_FREQUENCIES.includes(frequency)) return null;
@@ -207,10 +221,123 @@ function MiniCalendar({
   );
 }
 
+function VaccineLogModal({
+  open,
+  onOpenChange,
+  vaccineItem,
+  onSubmit,
+  isPending,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  vaccineItem: { id: string; animalName: string; careName: string } | null;
+  onSubmit: (data: { id: string; manufacturer: string; lotNumber: string }) => void;
+  isPending: boolean;
+}) {
+  const [manufacturer, setManufacturer] = useState("");
+  const [lotNumber, setLotNumber] = useState("");
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!vaccineItem || !manufacturer.trim() || !lotNumber.trim()) return;
+    onSubmit({ id: vaccineItem.id, manufacturer: manufacturer.trim(), lotNumber: lotNumber.trim() });
+  };
+
+  const handleOpenChange = (newOpen: boolean) => {
+    if (!newOpen) {
+      setManufacturer("");
+      setLotNumber("");
+    }
+    onOpenChange(newOpen);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent className="sm:max-w-[400px]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Syringe className="h-4 w-4" />
+            Log Vaccine Administration
+          </DialogTitle>
+          <DialogDescription>
+            Record manufacturer and lot number from the vaccine vial sticker for{" "}
+            <strong>{vaccineItem?.animalName}</strong> — <strong>{vaccineItem?.careName}</strong>.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit}>
+          <div className="space-y-3 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="vaccine-manufacturer">Manufacturer</Label>
+              <Input
+                id="vaccine-manufacturer"
+                placeholder="e.g. Zoetis, Merck, Boehringer"
+                value={manufacturer}
+                onChange={(e) => setManufacturer(e.target.value)}
+                data-testid="input-vaccine-manufacturer"
+                autoFocus
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="vaccine-lot-number">Lot Number</Label>
+              <Input
+                id="vaccine-lot-number"
+                placeholder="From vial sticker"
+                value={lotNumber}
+                onChange={(e) => setLotNumber(e.target.value)}
+                data-testid="input-vaccine-lot-number"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => handleOpenChange(false)}
+              disabled={isPending}
+              data-testid="button-vaccine-cancel"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={!manufacturer.trim() || !lotNumber.trim() || isPending}
+              data-testid="button-vaccine-submit"
+            >
+              {isPending ? (
+                <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+              ) : (
+                <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+              )}
+              Mark Given
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+type InHouseItem = {
+  id: string;
+  animalId: string;
+  animalName: string;
+  _type: "dose" | "preventative";
+  _label: string;
+  _detail: string;
+  _isVaccine: boolean;
+  dueDate: string | null;
+  frequency: string | null;
+  isQuarantined: boolean;
+  quarantineReason: string | null;
+};
+
 export function DailyExecutionWidget() {
   const { toast } = useToast();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
+  const [vaccineModalOpen, setVaccineModalOpen] = useState(false);
+  const [pendingVaccine, setPendingVaccine] = useState<{ id: string; animalName: string; careName: string } | null>(null);
+  const [completedVaccines, setCompletedVaccines] = useState<Set<string>>(new Set());
 
   const dateStr = format(selectedDate, "yyyy-MM-dd");
   const monthStr = format(selectedDate, "yyyy-MM");
@@ -257,18 +384,52 @@ export function DailyExecutionWidget() {
     },
   });
 
+  const vaccineMarkMutation = useMutation({
+    mutationFn: async (data: { id: string; manufacturer: string; lotNumber: string }) => {
+      const res = await apiRequest("POST", "/api/daily-roster/mark-vaccine-given", data);
+      return res.json();
+    },
+    onSuccess: (_data, variables) => {
+      toast({
+        title: "Vaccine Recorded",
+        description: "Vaccine administration logged with manufacturer and lot number.",
+      });
+      setCompletedVaccines((prev) => new Set(prev).add(variables.id));
+      setVaccineModalOpen(false);
+      setPendingVaccine(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/daily-roster"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/daily-roster/calendar"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/medical-snapshot"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to record vaccine",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleDateSelect = (date: Date) => {
     setSelectedDate(date);
     setCheckedItems(new Set());
+    setCompletedVaccines(new Set());
   };
 
-  const toggleItem = (key: string) => {
-    setCheckedItems((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
+  const handleItemClick = (item: InHouseItem) => {
+    const key = `${item._type}:${item.id}`;
+    if (item._isVaccine) {
+      if (completedVaccines.has(item.id)) return;
+      setPendingVaccine({ id: item.id, animalName: item.animalName, careName: item._label });
+      setVaccineModalOpen(true);
+    } else {
+      setCheckedItems((prev) => {
+        const next = new Set(prev);
+        if (next.has(key)) next.delete(key);
+        else next.add(key);
+        return next;
+      });
+    }
   };
 
   const handleBulkMark = () => {
@@ -287,14 +448,50 @@ export function DailyExecutionWidget() {
   const procedures = rosterData?.procedures || [];
   const diagnostics = rosterData?.diagnostics || [];
 
-  const medsAndPreventatives = [
-    ...meds.map((m) => ({ ...m, _type: "dose" as const, _label: m.medicationName, _detail: m.dosage ? `${m.dosage}${m.route ? ` (${m.route})` : ""}` : "", dueDate: m.dueDate, frequency: m.frequency, isQuarantined: m.isQuarantined, quarantineReason: m.quarantineReason })),
-    ...preventatives.map((p) => ({ ...p, _type: "preventative" as const, _label: p.careName, _detail: p.careCategory || "", dueDate: null as string | null, frequency: null as string | null, isQuarantined: p.isQuarantined, quarantineReason: p.quarantineReason })),
+  const inHousePreventatives = preventatives.filter(
+    (p) => !(p.careCategory === "vaccine" && isRabiesVaccine(p.careName))
+  );
+  const rabiesVaccines = preventatives.filter(
+    (p) => p.careCategory === "vaccine" && isRabiesVaccine(p.careName)
+  );
+
+  const medsPreventativesVaccines: InHouseItem[] = [
+    ...meds.map((m) => ({
+      ...m,
+      _type: "dose" as const,
+      _label: m.medicationName,
+      _detail: m.dosage ? `${m.dosage}${m.route ? ` (${m.route})` : ""}` : "",
+      _isVaccine: false,
+      dueDate: m.dueDate,
+      frequency: m.frequency,
+      isQuarantined: m.isQuarantined,
+      quarantineReason: m.quarantineReason,
+    })),
+    ...inHousePreventatives.map((p) => ({
+      ...p,
+      _type: "preventative" as const,
+      _label: p.careName,
+      _detail: p.careCategory === "vaccine" ? "Vaccine" : p.careCategory === "parasite_prevention" ? "Preventative" : p.careCategory || "",
+      _isVaccine: p.careCategory === "vaccine",
+      dueDate: null as string | null,
+      frequency: null as string | null,
+      isQuarantined: p.isQuarantined,
+      quarantineReason: p.quarantineReason,
+    })),
   ];
-  const vetVisits = [...exams.map((e) => ({ ...e, _label: e.examType, _detail: e.reason || "" })), ...procedures.map((p) => ({ ...p, _label: p.procedureName, _detail: p.veterinarian || "" }))];
+
+  const vetVisits = [
+    ...exams.map((e) => ({ ...e, _label: e.examType, _detail: e.reason || "" })),
+    ...procedures.map((p) => ({ ...p, _label: p.procedureName, _detail: p.veterinarian || "" })),
+    ...rabiesVaccines.map((r) => ({
+      ...r,
+      _label: r.careName,
+      _detail: "Requires vet appointment",
+    })),
+  ];
   const labs = diagnostics.map((d) => ({ ...d, _label: d.testName }));
 
-  const totalTasks = medsAndPreventatives.length + vetVisits.length + labs.length;
+  const totalTasks = medsPreventativesVaccines.length + vetVisits.length + labs.length;
   const isFutureDate = dateStr > format(new Date(), "yyyy-MM-dd");
 
   return (
@@ -352,21 +549,22 @@ export function DailyExecutionWidget() {
                   )}
                 </div>
 
-                {medsAndPreventatives.length > 0 && (
+                {medsPreventativesVaccines.length > 0 && (
                   <div data-testid="section-meds-preventatives">
                     <div className="flex items-center gap-1.5 mb-1.5">
                       <Pill className="h-3.5 w-3.5 text-primary" />
                       <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                        Meds & Preventatives
+                        Meds, Preventatives & Vaccines
                       </h4>
                       <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                        {medsAndPreventatives.length}
+                        {medsPreventativesVaccines.length}
                       </Badge>
                     </div>
                     <div className="space-y-0.5">
-                      {medsAndPreventatives.map((item) => {
+                      {medsPreventativesVaccines.map((item) => {
                         const key = `${item._type}:${item.id}`;
-                        const isChecked = checkedItems.has(key);
+                        const isVaccineCompleted = item._isVaccine && completedVaccines.has(item.id);
+                        const isChecked = isVaccineCompleted || checkedItems.has(key);
                         const timeBadge = item._type === "dose" ? getTimeBadge(item.dueDate, item.frequency) : null;
                         return (
                           <label
@@ -377,12 +575,16 @@ export function DailyExecutionWidget() {
                             {!isFutureDate && (
                               <Checkbox
                                 checked={isChecked}
-                                onCheckedChange={() => toggleItem(key)}
+                                disabled={isVaccineCompleted}
+                                onCheckedChange={() => handleItemClick(item)}
                                 data-testid={`checkbox-${key}`}
                               />
                             )}
                             {item.isQuarantined && (
                               <AlertTriangle className="h-3 w-3 shrink-0 text-red-600 dark:text-red-400" />
+                            )}
+                            {item._isVaccine && (
+                              <Syringe className="h-3 w-3 shrink-0 text-violet-600 dark:text-violet-400" />
                             )}
                             <span className={`font-bold text-foreground truncate ${isChecked ? "line-through" : ""}`}>{item.animalName}</span>
                             <span className={`truncate ${isChecked ? "line-through text-muted-foreground" : ""}`}>
@@ -476,6 +678,14 @@ export function DailyExecutionWidget() {
           </Button>
         </Link>
       </CardContent>
+
+      <VaccineLogModal
+        open={vaccineModalOpen}
+        onOpenChange={setVaccineModalOpen}
+        vaccineItem={pendingVaccine}
+        onSubmit={(data) => vaccineMarkMutation.mutate(data)}
+        isPending={vaccineMarkMutation.isPending}
+      />
     </Card>
   );
 }
