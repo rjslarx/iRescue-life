@@ -94,8 +94,8 @@ function getTimeBadge(dueDate: string | null, frequency: string | null): { label
   if (!dueDate) return null;
   try {
     const date = new Date(dueDate);
-    const hours = date.getHours();
-    const minutes = date.getMinutes();
+    const hours = date.getUTCHours();
+    const minutes = date.getUTCMinutes();
     const timeStr = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
     if (hours < 12) {
       return { label: timeStr, className: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 border-amber-200 dark:border-amber-800/40" };
