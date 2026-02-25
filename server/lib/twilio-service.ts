@@ -1,7 +1,7 @@
 import twilio from 'twilio';
 import { db } from '../db';
-import { tenants, smsMessageLogs, smsProxySessions, transportEvents } from '@shared/schema';
-import { eq, and } from 'drizzle-orm';
+import { tenants, smsMessageLogs, smsProxySessions, transportEvents, users, fosterAnimals, supplyRequests, fosterUpdates } from '@shared/schema';
+import { eq, and, desc } from 'drizzle-orm';
 import { decrypt, encrypt } from './encryption';
 
 interface TwilioConfig {
@@ -239,20 +239,144 @@ export async function createProxySession(
   return session;
 }
 
+interface FosterIdentity {
+  tenantId: string;
+  fosterId: string;
+  animalId: string;
+  fosterName: string;
+}
+
+export async function identifyFosterByPhone(fromNumber: string, toNumber: string): Promise<FosterIdentity | null> {
+  try {
+    // 1. Find the tenant that owns this Twilio number
+    const [tenant] = await db
+      .select({ id: tenants.id })
+      .from(tenants)
+      .where(eq(tenants.twilioPhoneNumber, toNumber))
+      .limit(1);
+
+    if (!tenant) return null;
+
+    // 2. Find an active user in that tenant with this phone number
+    const [user] = await db
+      .select({ id: users.id, fullName: users.fullName })
+      .from(users)
+      .where(and(
+        eq(users.tenantId, tenant.id),
+        eq(users.phone, fromNumber),
+        eq(users.isActive, true)
+      ))
+      .limit(1);
+
+    if (!user) return null;
+
+    // 3. Find their most recent active foster assignment
+    const [assignment] = await db
+      .select({ animalId: fosterAnimals.animalId })
+      .from(fosterAnimals)
+      .where(and(
+        eq(fosterAnimals.tenantId, tenant.id),
+        eq(fosterAnimals.fosterId, user.id),
+        eq(fosterAnimals.status, 'active')
+      ))
+      .orderBy(desc(fosterAnimals.createdAt))
+      .limit(1);
+
+    if (!assignment) return null;
+
+    return {
+      tenantId: tenant.id,
+      fosterId: user.id,
+      animalId: assignment.animalId,
+      fosterName: user.fullName,
+    };
+  } catch (error) {
+    console.error('[TWILIO] identifyFosterByPhone error:', error);
+    return null;
+  }
+}
+
+const SUPPLY_KEYWORD_REGEX = /\b(supply|supplies|need|needs|out of|running low|ran out|can you send|can you bring)\b/i;
+
 export async function handleIncomingSms(
   fromNumber: string,
   toNumber: string,
-  body: string
-): Promise<{ success: boolean; message?: string }> {
+  body: string,
+  mediaUrls: string[] = []
+): Promise<{ success: boolean; routedAs?: 'supply_request' | 'foster_update' | null; message?: string }> {
   const normalizedBody = body.trim().toUpperCase();
   
   if (normalizedBody === 'DONE' || normalizedBody === 'YES' || normalizedBody === 'CONFIRMED') {
     const handled = await handleComplianceConfirmationReply(fromNumber);
     if (handled.success) {
-      return handled;
+      return { ...handled, routedAs: null };
     }
   }
 
+  // Identify if the sender is a registered foster parent with an active animal
+  const fosterIdentity = await identifyFosterByPhone(fromNumber, toNumber);
+
+  if (fosterIdentity) {
+    const { tenantId, fosterId, animalId } = fosterIdentity;
+
+    try {
+      // Branch A: Supply request (keyword detected)
+      if (SUPPLY_KEYWORD_REGEX.test(body)) {
+        await db.insert(supplyRequests).values({
+          tenantId,
+          fosterId,
+          animalId,
+          category: 'other',
+          item: body.substring(0, 200),
+          quantity: '1',
+          notes: 'Received via SMS',
+          source: 'sms',
+          status: 'pending',
+        });
+        console.log(`[TWILIO] Created supply_request for foster ${fosterId}, animal ${animalId}`);
+        return { success: true, routedAs: 'supply_request' };
+      }
+
+      // Branch B: Photo / MMS update
+      if (mediaUrls.length > 0) {
+        await db.insert(fosterUpdates).values({
+          tenantId,
+          fosterId,
+          animalId,
+          updateType: 'photo_update',
+          description: body || 'Photo received via SMS',
+          photoUrls: mediaUrls,
+          source: 'sms',
+          priority: 'normal',
+          status: 'pending',
+        });
+        console.log(`[TWILIO] Created photo foster_update for foster ${fosterId}, animal ${animalId}`);
+        return { success: true, routedAs: 'foster_update' };
+      }
+
+      // Branch C: General text update
+      await db.insert(fosterUpdates).values({
+        tenantId,
+        fosterId,
+        animalId,
+        updateType: 'general_update',
+        description: body || '(No message body)',
+        photoUrls: [],
+        source: 'sms',
+        priority: 'normal',
+        status: 'pending',
+      });
+      console.log(`[TWILIO] Created general foster_update for foster ${fosterId}, animal ${animalId}`);
+      return { success: true, routedAs: 'foster_update' };
+
+    } catch (routingError) {
+      console.error('[TWILIO] Error routing foster SMS to DB:', routingError);
+      // Return success so Twilio doesn't retry — message was received, just not stored
+      return { success: true, routedAs: null, message: 'Routing error' };
+    }
+  }
+
+  // Not an identified foster — fall through to proxy session handling
   const [activeSession] = await db
     .select()
     .from(smsProxySessions)
@@ -275,7 +399,7 @@ export async function handleIncomingSms(
       );
 
     if (!sessionAsPartyB) {
-      return { success: false, message: 'No active session found for this number' };
+      return { success: false, routedAs: null, message: 'No active session found for this number' };
     }
 
     const config = await getTwilioConfig(sessionAsPartyB.tenantId);
@@ -314,15 +438,15 @@ export async function handleIncomingSms(
         status: 'received',
       });
 
-      return { success: true };
+      return { success: true, routedAs: null };
     } catch (error: any) {
-      return { success: false, message: error.message };
+      return { success: false, routedAs: null, message: error.message };
     }
   }
 
   const config = await getTwilioConfig(activeSession.tenantId);
   if (!config) {
-    return { success: false, message: 'Twilio not configured' };
+    return { success: false, routedAs: null, message: 'Twilio not configured' };
   }
 
   const client = createTwilioClient(config);
@@ -356,9 +480,9 @@ export async function handleIncomingSms(
       status: 'received',
     });
 
-    return { success: true };
+    return { success: true, routedAs: null };
   } catch (error: any) {
-    return { success: false, message: error.message };
+    return { success: false, routedAs: null, message: error.message };
   }
 }
 

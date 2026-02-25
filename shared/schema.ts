@@ -1987,6 +1987,7 @@ export const supplyRequests = pgTable("supply_requests", {
   item: text("item").notNull(),
   quantity: text("quantity").notNull(),
   notes: text("notes"),
+  source: text("source").notNull().default("portal").$type<"portal" | "sms">(),
   status: text("status").notNull().default("pending").$type<"pending" | "approved" | "fulfilled" | "denied">(),
   archivedAt: timestamp("archived_at"), // Auto-set to 7 days after fulfilled/denied
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -2012,6 +2013,7 @@ export const fosterUpdates = pgTable("foster_updates", {
   updateType: text("update_type").notNull().$type<"medical_concern" | "behavioral_note" | "general_update" | "photo_update">(),
   description: text("description").notNull(),
   photoUrls: text("photo_urls").array(),
+  source: text("source").notNull().default("portal").$type<"portal" | "sms">(),
   priority: text("priority").notNull().default("normal").$type<"low" | "normal" | "high" | "urgent">(),
   status: text("status").notNull().default("pending").$type<"pending" | "acknowledged" | "resolved">(),
   archivedAt: timestamp("archived_at"), // Auto-set to 7 days after resolved

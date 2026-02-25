@@ -671,7 +671,15 @@ export default function FosterManagementPage() {
                         <CardHeader className="pb-2">
                           <div className="flex items-start justify-between gap-2">
                             <div>
-                              <CardTitle className="text-base">{request.item}</CardTitle>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <CardTitle className="text-base">{request.item}</CardTitle>
+                                {request.source === 'sms' && (
+                                  <Badge variant="secondary" className="text-xs" data-testid={`badge-sms-supply-${request.id}`}>
+                                    <MessageSquare className="h-3 w-3 mr-1" />
+                                    Via SMS
+                                  </Badge>
+                                )}
+                              </div>
                               <p className="text-sm text-muted-foreground">
                                 {request.foster?.fullName || 'Unknown'} • {request.animal?.name || 'No animal'}
                               </p>
@@ -741,7 +749,17 @@ export default function FosterManagementPage() {
                           <TableRow key={request.id} data-testid={`row-supply-request-${request.id}`}>
                             <TableCell className="font-medium">{request.foster?.fullName || 'Unknown'}</TableCell>
                             <TableCell>{request.animal?.name || '—'}</TableCell>
-                            <TableCell>{request.item}</TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span>{request.item}</span>
+                                {request.source === 'sms' && (
+                                  <Badge variant="secondary" className="text-xs" data-testid={`badge-sms-supply-${request.id}`}>
+                                    <MessageSquare className="h-3 w-3 mr-1" />
+                                    Via SMS
+                                  </Badge>
+                                )}
+                              </div>
+                            </TableCell>
                             <TableCell className="capitalize">{request.category}</TableCell>
                             <TableCell>{request.quantity}</TableCell>
                             <TableCell>
@@ -804,7 +822,15 @@ export default function FosterManagementPage() {
                         <CardHeader className="pb-2">
                           <div className="flex items-start justify-between gap-2">
                             <div>
-                              <CardTitle className="text-base">{update.animal?.name || 'Unknown'}</CardTitle>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <CardTitle className="text-base">{update.animal?.name || 'Unknown'}</CardTitle>
+                                {update.source === 'sms' && (
+                                  <Badge variant="secondary" className="text-xs" data-testid={`badge-sms-update-${update.id}`}>
+                                    <MessageSquare className="h-3 w-3 mr-1" />
+                                    Via SMS
+                                  </Badge>
+                                )}
+                              </div>
                               <p className="text-sm text-muted-foreground">{update.foster?.fullName || 'Unknown'}</p>
                             </div>
                             <div className="flex flex-col gap-1 items-end">
@@ -902,7 +928,17 @@ export default function FosterManagementPage() {
                         {activeFosterUpdates.map((update) => (
                           <TableRow key={update.id} data-testid={`row-foster-update-${update.id}`}>
                             <TableCell className="font-medium">{update.foster?.fullName || 'Unknown'}</TableCell>
-                            <TableCell>{update.animal?.name || 'Unknown'}</TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span>{update.animal?.name || 'Unknown'}</span>
+                                {update.source === 'sms' && (
+                                  <Badge variant="secondary" className="text-xs" data-testid={`badge-sms-update-${update.id}`}>
+                                    <MessageSquare className="h-3 w-3 mr-1" />
+                                    Via SMS
+                                  </Badge>
+                                )}
+                              </div>
+                            </TableCell>
                             <TableCell className="capitalize">
                               {update.updateType === 'medical_concern' && (
                                 <Badge variant="destructive">

@@ -21600,8 +21600,16 @@ Submitted: ${new Date().toLocaleString()}
       
       const { From, To, Body } = req.body;
       
-      if (!From || !To || !Body) {
+      if (!From || !To) {
         return res.status(400).send('Missing required fields');
+      }
+
+      // Collect any attached media URLs (Twilio MMS support)
+      const numMedia = parseInt(req.body.NumMedia || '0', 10);
+      const mediaUrls: string[] = [];
+      for (let i = 0; i < numMedia && i < 10; i++) {
+        const url = req.body[`MediaUrl${i}`];
+        if (url) mediaUrls.push(url);
       }
 
       // Twilio webhook signature validation — look up tenant by the 'To' phone number
@@ -21631,11 +21639,17 @@ Submitted: ${new Date().toLocaleString()}
         }
       }
 
-      const result = await handleIncomingSms(From, To, Body);
+      const result = await handleIncomingSms(From, To, Body || '', mediaUrls);
       
-      // Return TwiML response (empty - we already forwarded the message)
+      // Return TwiML response — send friendly auto-reply for routed foster messages
       res.set('Content-Type', 'text/xml');
-      res.send('<?xml version="1.0" encoding="UTF-8"?><Response></Response>');
+      if (result.routedAs === 'supply_request') {
+        res.send('<?xml version="1.0" encoding="UTF-8"?><Response><Message>Got it! Your supply request has been logged. The team will follow up soon.</Message></Response>');
+      } else if (result.routedAs === 'foster_update') {
+        res.send('<?xml version="1.0" encoding="UTF-8"?><Response><Message>Thanks for the update! Your message has been received by the rescue team.</Message></Response>');
+      } else {
+        res.send('<?xml version="1.0" encoding="UTF-8"?><Response></Response>');
+      }
     } catch (error) {
       console.error('Twilio webhook error:', error);
       res.set('Content-Type', 'text/xml');
