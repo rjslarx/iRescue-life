@@ -209,7 +209,7 @@ export default function VolunteerKanbanBoard({
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  <ScrollArea className="h-[400px] pr-4">
+                  <ScrollArea className="h-[520px] pr-4">
                     {stageApps.length === 0 ? (
                       <div className="flex h-24 items-center justify-center rounded-md border-2 border-dashed text-sm text-muted-foreground">
                         No applications
