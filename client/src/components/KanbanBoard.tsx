@@ -41,13 +41,17 @@ interface KanbanBoardProps {
   subscriptionTier?: "free" | "professional";
 }
 
-const stages: PipelineStage[] = [
+const kanbanStages: PipelineStage[] = [
   { id: "new", label: "New", color: "bg-blue-500" },
   { id: "screening", label: "Screening", color: "bg-yellow-500" },
   { id: "vet_check", label: "Vet Check", color: "bg-purple-500" },
   { id: "home_visit", label: "Home Visit", color: "bg-orange-500" },
   { id: "approved", label: "Approved", color: "bg-green-500" },
   { id: "trial", label: "Trial", color: "bg-cyan-500" },
+];
+
+const allStages: PipelineStage[] = [
+  ...kanbanStages,
   { id: "adopted", label: "Adopted", color: "bg-teal-500" },
   { id: "denied", label: "Denied", color: "bg-red-500" },
   { id: "trial_failed", label: "Trial Failed", color: "bg-rose-500" },
@@ -159,7 +163,7 @@ export default function KanbanBoard({ applications, onMoveApplication, onAssignA
   if (isMobile) {
     return (
       <MobilePipelineView
-        stages={stages}
+        stages={allStages}
         cards={applications.map(appToCard)}
         getCardsByStage={getCardsByStage}
         onMoveCard={onMoveApplication ? handleMoveCard : undefined}
@@ -170,14 +174,19 @@ export default function KanbanBoard({ applications, onMoveApplication, onAssignA
   }
 
   return (
-    <div className="w-full">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {stages.map((stage) => {
+    <div className="w-full min-w-0 overflow-x-auto">
+      <div
+        className="grid gap-3"
+        style={{
+          gridTemplateColumns: `repeat(${kanbanStages.length}, minmax(0, 1fr))`,
+        }}
+      >
+        {kanbanStages.map((stage) => {
           const stageApps = getApplicationsByStage(stage.id);
           return (
             <div
               key={stage.id}
-              className="flex flex-col"
+              className="flex flex-col min-w-0"
               onDragOver={(e) => e.preventDefault()}
               onDrop={(e) => {
                 e.preventDefault();
@@ -187,18 +196,18 @@ export default function KanbanBoard({ applications, onMoveApplication, onAssignA
                 }
               }}
             >
-              <Card>
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <div className={`h-2 w-2 rounded-full ${stage.color}`} />
-                      {stage.label}
+              <Card className="min-w-0 overflow-hidden">
+                <CardHeader className="pb-3 px-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <CardTitle className="text-sm flex items-center gap-1.5 min-w-0 flex-1">
+                      <div className={`h-2 w-2 rounded-full shrink-0 ${stage.color}`} />
+                      <span className="truncate">{stage.label}</span>
                     </CardTitle>
-                    <Badge variant="secondary">{stageApps.length}</Badge>
+                    <Badge variant="secondary" className="shrink-0">{stageApps.length}</Badge>
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-3">
-                  <ScrollArea className="h-[400px] pr-4">
+                <CardContent className="space-y-3 px-3">
+                  <ScrollArea className="h-[400px] pr-2">
                     {stageApps.length === 0 ? (
                       <div className="flex h-24 items-center justify-center rounded-md border-2 border-dashed text-sm text-muted-foreground">
                         No applications
@@ -214,15 +223,15 @@ export default function KanbanBoard({ applications, onMoveApplication, onAssignA
                             className="cursor-move hover-elevate"
                             data-testid={`card-application-${app.id}`}
                           >
-                            <CardContent className="p-4 space-y-2">
+                            <CardContent className="p-3 space-y-2">
                               <div className="flex items-start justify-between gap-2">
-                                <div>
-                                  <p className="font-medium">{app.applicantName}</p>
-                                  <p className="text-sm text-muted-foreground">
+                                <div className="min-w-0 flex-1">
+                                  <p className="font-medium truncate">{app.applicantName}</p>
+                                  <p className="text-xs text-muted-foreground truncate">
                                     For: {app.animalName}
                                   </p>
                                 </div>
-                                <div className="flex flex-col gap-1 items-end">
+                                <div className="flex flex-col gap-1 items-end shrink-0">
                                   {app.checkoutStatus && (
                                     <CheckoutStatusBadge status={app.checkoutStatus.status} />
                                   )}
@@ -231,9 +240,9 @@ export default function KanbanBoard({ applications, onMoveApplication, onAssignA
                                   )}
                                 </div>
                               </div>
-                              <div className="space-y-1 text-xs text-muted-foreground">
-                                <p>{app.email}</p>
-                                <p>{app.phone}</p>
+                              <div className="space-y-0.5 text-xs text-muted-foreground">
+                                <p className="truncate">{app.email}</p>
+                                <p className="truncate">{app.phone}</p>
                               </div>
                               {stage.id === "approved" && onAssignAnimal && !app.checkoutStatus && (
                                 <Button
@@ -249,7 +258,6 @@ export default function KanbanBoard({ applications, onMoveApplication, onAssignA
                                   Assign Animal
                                 </Button>
                               )}
-                              {/* Change Animal button - show for eligible adoption stages before checkout */}
                               {['new', 'screening', 'vet_check', 'home_visit', 'approved'].includes(stage.id) && 
                                (!app.applicationType || app.applicationType === 'adoption') &&
                                !app.checkoutStatus && app.animalId && (
@@ -316,24 +324,43 @@ export default function KanbanBoard({ applications, onMoveApplication, onAssignA
                                   )}
                                 </div>
                               )}
-                              {/* View Application Button */}
-                              {onViewApplication && (
-                                <div className="mt-3 pt-2 border-t">
+                              <div className="mt-2 pt-2 border-t flex items-center gap-1.5">
+                                {onViewApplication && (
                                   <Button
-                                    size="sm"
+                                    size="icon"
                                     variant="outline"
-                                    className="w-full"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       onViewApplication(app);
                                     }}
                                     data-testid={`button-view-application-${app.id}`}
+                                    title="View application"
                                   >
-                                    <Eye className="h-4 w-4 mr-2" />
-                                    View Application
+                                    <Eye className="h-4 w-4" />
                                   </Button>
-                                </div>
-                              )}
+                                )}
+                                {onMoveApplication && (
+                                  <div className="flex-1 min-w-0">
+                                    <select
+                                      className="w-full h-9 rounded-md border border-input bg-background px-2 text-xs text-muted-foreground cursor-pointer"
+                                      value={app.stage}
+                                      onChange={(e) => {
+                                        if (e.target.value !== app.stage) {
+                                          onMoveApplication(app.id, e.target.value);
+                                        }
+                                      }}
+                                      onClick={(e) => e.stopPropagation()}
+                                      data-testid={`select-application-stage-${app.id}`}
+                                    >
+                                      {allStages.map((s) => (
+                                        <option key={s.id} value={s.id}>
+                                          {s.label}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                )}
+                              </div>
                             </CardContent>
                           </Card>
                         ))}

@@ -10,11 +10,12 @@ import type { PendingApplication } from "@/components/PendingApplicationsWidget"
 import { useAuth } from "@/contexts/AuthContext";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, History, DollarSign, Clock, X } from "lucide-react";
+import { Loader2, DollarSign, Clock, X, CheckCircle, XCircle, AlertTriangle, RotateCcw, Users } from "lucide-react";
 import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { Application, ApplicationWithAnimal, Animal, Tenant, AdoptionCheckoutSession } from "@shared/schema";
 import DashboardLayout from "@/components/DashboardLayout";
 
@@ -36,6 +37,7 @@ export default function ApplicationsPage() {
   const [applicationToApprove, setApplicationToApprove] = useState<ApprovalApplicationData | null>(null);
   const [viewDetailsOpen, setViewDetailsOpen] = useState(false);
   const [applicationToView, setApplicationToView] = useState<PendingApplication | null>(null);
+  const [activeTab, setActiveTab] = useState<"pipeline" | "adopted" | "denied" | "trial_failed">("pipeline");
 
   const { data: tenantData } = useQuery<{ tenant: Tenant }>({
     queryKey: ['/api/tenant'],
@@ -58,7 +60,6 @@ export default function ApplicationsPage() {
 
   const [sendingContractId, setSendingContractId] = useState<string | null>(null);
 
-  // Native e-signature flow using checkout sessions (replaces DocuSign)
   const startCheckoutMutation = useMutation({
     mutationFn: async ({ applicationId, animalId, signerEmail, signerName }: {
       applicationId: string;
@@ -67,11 +68,9 @@ export default function ApplicationsPage() {
       signerName: string;
     }) => {
       setSendingContractId(applicationId);
-      // Get animal for adoption fee
       const animalData = animalsData?.animals.find(a => a.id === animalId);
       const baseFee = animalData?.adoptionFee || "0";
       
-      // Create checkout session
       const createResponse = await apiRequest('POST', '/api/adoptions/checkouts', {
         applicationId,
         animalId,
@@ -79,7 +78,6 @@ export default function ApplicationsPage() {
       });
       const sessionData = await createResponse.json();
       
-      // Send checkout link to adopter
       const sendResponse = await apiRequest('POST', `/api/adoptions/checkouts/${sessionData.session.id}/send-link`, {
         signerEmail,
         signerName,
@@ -144,35 +142,21 @@ export default function ApplicationsPage() {
   });
 
   const animals = animalsData?.animals || [];
+  const allApps = data?.applications || [];
 
-  // Separate applications into active and history
-  // Only move denied/adopted applications to history after 7 days
-  // Keep all other statuses in the active queue regardless of age
-  const sevenDaysAgo = new Date();
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  const terminalStages = ['adopted', 'denied', 'trial_failed'];
 
-  const activeApplications: ApplicationWithAnimal[] = [];
-  const historicalApplications: ApplicationWithAnimal[] = [];
-
-  (data?.applications || []).forEach(app => {
-    const createdAt = new Date(app.createdAt);
-    const isTerminalStatus = app.stage === 'denied' || app.stage === 'adopted' || app.stage === 'trial_failed';
-    const isOldEnough = createdAt < sevenDaysAgo;
-    
-    // Only archive if it's denied/adopted AND older than 7 days
-    if (isTerminalStatus && isOldEnough) {
-      historicalApplications.push(app);
-    } else {
-      activeApplications.push(app);
-    }
-  });
-
-  // Sort historical applications by date (most recent first)
-  historicalApplications.sort((a, b) => 
+  const activeApplications = allApps.filter(app => !terminalStages.includes(app.stage));
+  const adoptedApplications = allApps.filter(app => app.stage === 'adopted').sort((a, b) =>
+    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+  const deniedApplications = allApps.filter(app => app.stage === 'denied').sort((a, b) =>
+    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+  const trialFailedApplications = allApps.filter(app => app.stage === 'trial_failed').sort((a, b) =>
     new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   );
 
-  // Transform active applications to KanbanBoard format
   const applications = activeApplications.map(app => {
     const animal = animals.find(a => a.id === app.animalId);
     const checkoutStatus = checkoutSessionsByAppId.get(app.id);
@@ -196,7 +180,6 @@ export default function ApplicationsPage() {
   };
 
   const handleMoveApplication = (applicationId: string, newStage: string) => {
-    // If moving to "approved", show the approval dialog with option to send contract
     if (newStage === 'approved') {
       const fullApp = data?.applications.find(a => a.id === applicationId);
       if (fullApp) {
@@ -213,8 +196,6 @@ export default function ApplicationsPage() {
         return;
       }
     }
-    
-    // For other stage changes, just update the stage directly
     updateStageMutation.mutate({ id: applicationId, stage: newStage });
   };
 
@@ -286,10 +267,73 @@ export default function ApplicationsPage() {
 
     setSelectedAnimal(animal);
     setSelectedApplication(fullApplication);
-
-    // For now, all applications in the applications table are adoption applications
-    // Foster applications are in a separate table
     setAdoptionDialogOpen(true);
+  };
+
+  const TerminalAppCard = ({ app, showFee = false }: { app: ApplicationWithAnimal; showFee?: boolean }) => {
+    const statusDisplay = getStatusDisplay(app.stage);
+    const submittedDate = new Date(app.createdAt).toLocaleDateString();
+    const animalName = app.animalName || "Unknown Animal";
+    const feeStatus = getFeeStatusDisplay((app as any).adoptionFeeStatus || 'pending', (app as any).adoptionFeeAmount);
+    const FeeIcon = feeStatus.icon;
+
+    return (
+      <Card data-testid={`card-terminal-${app.id}`} className="hover-elevate">
+        <CardHeader className="pb-3">
+          <div className="flex items-start justify-between gap-2">
+            <CardTitle className="text-base truncate">{app.applicantName}</CardTitle>
+            <div className="flex flex-col gap-1 items-end shrink-0">
+              <Badge variant={statusDisplay.variant} data-testid={`badge-status-${app.id}`}>
+                {statusDisplay.label}
+              </Badge>
+              {showFee && (
+                <Badge variant={feeStatus.variant} className="text-xs gap-1" data-testid={`badge-fee-${app.id}`}>
+                  <FeeIcon className="h-3 w-3" />
+                  {feeStatus.label}
+                </Badge>
+              )}
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <div className="space-y-1">
+            <p className="text-sm text-muted-foreground">Applied for:</p>
+            {app.animalName ? (
+              <Link href={`/dashboard/animals/${app.animalId}/medical`}>
+                <span
+                  className="text-sm font-medium hover:underline cursor-pointer"
+                  data-testid={`link-animal-${app.id}`}
+                >
+                  {animalName}
+                </span>
+              </Link>
+            ) : (
+              <span className="text-sm text-muted-foreground">Unknown Animal</span>
+            )}
+          </div>
+          <div className="space-y-0.5">
+            <p className="text-sm text-muted-foreground">{app.applicantEmail}</p>
+            <p className="text-sm text-muted-foreground">{app.applicantPhone}</p>
+          </div>
+          <div className="pt-2 border-t flex items-center justify-between gap-2">
+            <p className="text-xs text-muted-foreground">
+              Submitted: {submittedDate}
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1.5 text-xs shrink-0"
+              onClick={() => handleMoveApplication(app.id, 'new')}
+              disabled={updateStageMutation.isPending}
+              data-testid={`button-restore-application-${app.id}`}
+            >
+              <RotateCcw className="h-3 w-3" />
+              Restore
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
   };
 
   return (
@@ -297,109 +341,116 @@ export default function ApplicationsPage() {
       title="Application Workflow"
       description="Manage adoption applications through each stage"
     >
-      <div className="flex-1 overflow-auto p-6">
-            {isLoading ? (
-              <div className="flex items-center justify-center h-64" data-testid="loading-applications">
-                <Loader2 className="h-8 w-8 animate-spin" />
-              </div>
-            ) : (
-              <div className="space-y-6">
-                <KanbanBoard 
-                  applications={applications}
-                  onMoveApplication={handleMoveApplication}
-                  onAssignAnimal={handleAssignAnimal}
-                  onStartCheckout={handleStartCheckout}
-                  onViewApplication={handleViewApplication}
-                  sendingContractId={sendingContractId}
-                  subscriptionTier={tenantData?.tenant?.subscriptionTier}
-                />
+      <div className="flex-1 overflow-auto p-6 min-w-0">
+        {isLoading ? (
+          <div className="flex items-center justify-center h-64" data-testid="loading-applications">
+            <Loader2 className="h-8 w-8 animate-spin" />
+          </div>
+        ) : (
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
+            <TabsList className="mb-6">
+              <TabsTrigger value="pipeline" className="gap-2" data-testid="tab-pipeline">
+                <Users className="h-4 w-4" />
+                Pipeline
+                <Badge variant="secondary">{activeApplications.length}</Badge>
+              </TabsTrigger>
+              <TabsTrigger value="adopted" className="gap-2" data-testid="tab-adopted">
+                <CheckCircle className="h-4 w-4" />
+                Adopted
+                <Badge variant="secondary">{adoptedApplications.length}</Badge>
+              </TabsTrigger>
+              <TabsTrigger value="denied" className="gap-2" data-testid="tab-denied">
+                <XCircle className="h-4 w-4" />
+                Denied
+                <Badge variant="secondary">{deniedApplications.length}</Badge>
+              </TabsTrigger>
+              <TabsTrigger value="trial_failed" className="gap-2" data-testid="tab-trial-failed">
+                <AlertTriangle className="h-4 w-4" />
+                Trial Failed
+                <Badge variant="secondary">{trialFailedApplications.length}</Badge>
+              </TabsTrigger>
+            </TabsList>
 
-                {/* Application History Accordion */}
-                {historicalApplications.length > 0 && (
-                  <Accordion type="single" collapsible data-testid="accordion-application-history">
-                    <AccordionItem value="history">
-                      <AccordionTrigger className="hover:no-underline" data-testid="trigger-application-history">
-                        <div className="flex items-center gap-2">
-                          <History className="h-5 w-5" />
-                          <span className="font-semibold">Application History</span>
-                          <Badge variant="secondary" data-testid="badge-history-count">
-                            {historicalApplications.length}
-                          </Badge>
-                        </div>
-                      </AccordionTrigger>
-                      <AccordionContent>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-4">
-                          {historicalApplications.map((app) => {
-                            const statusDisplay = getStatusDisplay(app.stage);
-                            const submittedDate = new Date(app.createdAt).toLocaleDateString();
-                            const animalName = app.animalName || "Unknown Animal";
-                            const feeStatus = getFeeStatusDisplay((app as any).adoptionFeeStatus || 'pending', (app as any).adoptionFeeAmount);
-                            const FeeIcon = feeStatus.icon;
+            <TabsContent value="pipeline" className="mt-0">
+              <KanbanBoard
+                applications={applications}
+                onMoveApplication={handleMoveApplication}
+                onAssignAnimal={handleAssignAnimal}
+                onStartCheckout={handleStartCheckout}
+                onViewApplication={handleViewApplication}
+                sendingContractId={sendingContractId}
+                subscriptionTier={tenantData?.tenant?.subscriptionTier}
+              />
+            </TabsContent>
 
-                            return (
-                              <Card key={app.id} data-testid={`card-history-${app.id}`} className="hover-elevate">
-                                <CardHeader className="pb-3">
-                                  <div className="flex items-start justify-between gap-2">
-                                    <CardTitle className="text-base">{app.applicantName}</CardTitle>
-                                    <div className="flex flex-col gap-1 items-end">
-                                      <Badge variant={statusDisplay.variant} data-testid={`badge-status-${app.id}`}>
-                                        {statusDisplay.label}
-                                      </Badge>
-                                      {app.stage === 'adopted' && (
-                                        <Badge variant={feeStatus.variant} className="text-xs gap-1" data-testid={`badge-fee-${app.id}`}>
-                                          <FeeIcon className="h-3 w-3" />
-                                          {feeStatus.label}
-                                        </Badge>
-                                      )}
-                                    </div>
-                                  </div>
-                                </CardHeader>
-                                <CardContent className="space-y-2">
-                                  <div className="space-y-1">
-                                    <p className="text-sm text-muted-foreground">Applied for:</p>
-                                    {app.animalName ? (
-                                      <Link href={`/dashboard/animals/${app.animalId}/medical`}>
-                                        <span 
-                                          className="text-sm font-medium hover:underline cursor-pointer text-primary"
-                                          data-testid={`link-animal-${app.id}`}
-                                        >
-                                          {animalName}
-                                        </span>
-                                      </Link>
-                                    ) : (
-                                      <span className="text-sm text-muted-foreground">Unknown Animal</span>
-                                    )}
-                                  </div>
-                                  <div className="space-y-1">
-                                    <p className="text-sm text-muted-foreground">Contact:</p>
-                                    <p className="text-sm">{app.applicantEmail}</p>
-                                    <p className="text-sm">{app.applicantPhone}</p>
-                                  </div>
-                                  <div className="pt-2 border-t">
-                                    <p className="text-xs text-muted-foreground">
-                                      Submitted: {submittedDate}
-                                    </p>
-                                  </div>
-                                </CardContent>
-                              </Card>
-                            );
-                          })}
-                        </div>
-                      </AccordionContent>
-                    </AccordionItem>
-                  </Accordion>
-                )}
-              </div>
-            )}
+            <TabsContent value="adopted" className="mt-0">
+              {adoptedApplications.length === 0 ? (
+                <Card>
+                  <CardContent className="flex flex-col items-center justify-center py-12">
+                    <CheckCircle className="h-12 w-12 text-muted-foreground mb-4" />
+                    <p className="text-muted-foreground text-center">No adopted applications yet</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Applications moved to Adopted will appear here
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {adoptedApplications.map(app => (
+                    <TerminalAppCard key={app.id} app={app} showFee />
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="denied" className="mt-0">
+              {deniedApplications.length === 0 ? (
+                <Card>
+                  <CardContent className="flex flex-col items-center justify-center py-12">
+                    <XCircle className="h-12 w-12 text-muted-foreground mb-4" />
+                    <p className="text-muted-foreground text-center">No denied applications</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Applications moved to Denied will appear here
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {deniedApplications.map(app => (
+                    <TerminalAppCard key={app.id} app={app} />
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="trial_failed" className="mt-0">
+              {trialFailedApplications.length === 0 ? (
+                <Card>
+                  <CardContent className="flex flex-col items-center justify-center py-12">
+                    <AlertTriangle className="h-12 w-12 text-muted-foreground mb-4" />
+                    <p className="text-muted-foreground text-center">No failed trials</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Applications moved to Trial Failed will appear here
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {trialFailedApplications.map(app => (
+                    <TerminalAppCard key={app.id} app={app} />
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
+        )}
       </div>
 
-      {/* Adoption Dialog - Pre-populated with applicant info */}
       <AdoptionDialog
         animal={selectedAnimal}
         open={adoptionDialogOpen}
         onOpenChange={(open) => {
           setAdoptionDialogOpen(open);
-          // Clear state when dialog closes to prevent stale data
           if (!open) {
             setSelectedAnimal(null);
             setSelectedApplication(null);
@@ -418,13 +469,11 @@ export default function ApplicationsPage() {
         } : undefined}
       />
 
-      {/* Foster Dialog - Pre-populated with applicant info */}
       <AssignFosterDialog
         animal={selectedAnimal}
         open={fosterDialogOpen}
         onOpenChange={(open) => {
           setFosterDialogOpen(open);
-          // Clear state when dialog closes to prevent stale data
           if (!open) {
             setSelectedAnimal(null);
             setSelectedApplication(null);
@@ -437,7 +486,6 @@ export default function ApplicationsPage() {
         }}
       />
 
-      {/* Finalize Adoption Dialog */}
       {selectedAnimal && (
         <FinalizeAdoptionDialog
           open={finalizeDialogOpen}
@@ -451,7 +499,6 @@ export default function ApplicationsPage() {
         />
       )}
 
-      {/* Approve and Send Agreement Dialog */}
       <ApproveAndSendAgreementDialog
         open={approvalDialogOpen}
         onOpenChange={(open) => {
@@ -467,7 +514,6 @@ export default function ApplicationsPage() {
         }}
       />
 
-      {/* Application Details Dialog for mobile View button */}
       <ApplicationDetailsDialog
         open={viewDetailsOpen}
         onOpenChange={(open) => {
