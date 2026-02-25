@@ -4252,6 +4252,39 @@ Crawl-delay: 1
           : 0,
       }));
 
+      const { adopterComplianceConfirmations: accTable, complianceObligations: coTable } = await import('@shared/schema');
+
+      const [pendingConfirmationsRaw, pendingObligationsRaw] = await Promise.all([
+        db.select({
+          confirmationId: accTable.id,
+          animalId: accTable.animalId,
+          animalName: animals.name,
+          careName: accTable.careName,
+        })
+          .from(accTable)
+          .innerJoin(animals, eq(animals.id, accTable.animalId))
+          .where(and(
+            eq(accTable.tenantId, req.tenant!.id),
+            eq(accTable.status, 'pending_review'),
+          ))
+          .limit(10),
+
+        db.select({
+          obligationId: coTable.id,
+          animalId: coTable.animalId,
+          animalName: animals.name,
+          obligationType: coTable.obligationType,
+          proofDocumentUrl: coTable.proofDocumentUrl,
+        })
+          .from(coTable)
+          .innerJoin(animals, eq(animals.id, coTable.animalId))
+          .where(and(
+            eq(coTable.tenantId, req.tenant!.id),
+            eq(coTable.status, 'pending_review'),
+          ))
+          .limit(10),
+      ]);
+
       res.json({
         today: {
           surgeries: surgeriesToday,
@@ -4262,6 +4295,8 @@ Crawl-delay: 1
           overdue: overdueData,
           fosterNonCompliance,
           fosterBioPhotoFollowUps,
+          adopterConfirmationsPendingReview: pendingConfirmationsRaw,
+          adopterObligationsPendingReview: pendingObligationsRaw,
         },
         tomorrow: {
           surgeries: surgeriesTomorrow,
@@ -4271,7 +4306,7 @@ Crawl-delay: 1
           vetEvents: vetEventsTomorrow,
         },
         summary: {
-          urgentCount: surgeriesToday.length + transportsToday.length + overdueData.length + fosterNonCompliance.length,
+          urgentCount: surgeriesToday.length + transportsToday.length + overdueData.length + fosterNonCompliance.length + pendingObligationsRaw.length,
           medicalTodayCount: medicalToday.length,
           medicalTomorrowCount: medicalTomorrow.length,
           calendarTodayCount: calendarToday.length,
@@ -32573,6 +32608,7 @@ Email: ${application.applicantEmail || ''}`
           reviewedAt: adopterComplianceConfirmations.reviewedAt,
           reviewNotes: adopterComplianceConfirmations.reviewNotes,
           createdAt: adopterComplianceConfirmations.createdAt,
+          fileUrl: adopterComplianceConfirmations.fileUrl,
           adopterName: users.fullName,
           adopterEmail: users.email,
         })

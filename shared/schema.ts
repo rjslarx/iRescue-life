@@ -5327,6 +5327,7 @@ export const adopterComplianceConfirmations = pgTable("adopter_compliance_confir
   dateAdministered: timestamp("date_administered").notNull(),
   clinicName: text("clinic_name"),
   notes: text("notes"),
+  fileUrl: text("file_url"),
   status: text("status").notNull().$type<"pending_review" | "approved" | "rejected">().default("pending_review"),
   reviewedBy: uuid("reviewed_by").references(() => users.id),
   reviewedAt: timestamp("reviewed_at"),

@@ -14,7 +14,9 @@ import {
   Loader2,
   Stethoscope,
   Home,
-  Camera
+  Camera,
+  ClipboardCheck,
+  CheckCircle
 } from "lucide-react";
 import { format } from "date-fns";
 import { Link } from "wouter";
@@ -79,6 +81,21 @@ interface FosterBioPhotoFollowUp {
   daysInFoster: number;
 }
 
+interface AdopterConfirmationPendingReview {
+  confirmationId: string;
+  animalId: string;
+  animalName: string;
+  careName: string;
+}
+
+interface AdopterObligationPendingReview {
+  obligationId: string;
+  animalId: string;
+  animalName: string;
+  obligationType: string;
+  proofDocumentUrl: string | null;
+}
+
 interface DailyBriefingData {
   today: {
     surgeries: Surgery[];
@@ -89,6 +106,8 @@ interface DailyBriefingData {
     overdue: MedicalTask[];
     fosterNonCompliance?: FosterNonComplianceAlert[];
     fosterBioPhotoFollowUps?: FosterBioPhotoFollowUp[];
+    adopterConfirmationsPendingReview?: AdopterConfirmationPendingReview[];
+    adopterObligationsPendingReview?: AdopterObligationPendingReview[];
   };
   tomorrow: {
     surgeries: Surgery[];
@@ -153,12 +172,15 @@ export function DailyBriefing() {
 
   const hasFosterNonCompliance = (data?.today.fosterNonCompliance?.length ?? 0) > 0;
   const hasFosterBioPhoto = (data?.today.fosterBioPhotoFollowUps?.length ?? 0) > 0;
+  const hasAdopterObligations = (data?.today.adopterObligationsPendingReview?.length ?? 0) > 0;
+  const hasAdopterConfirmations = (data?.today.adopterConfirmationsPendingReview?.length ?? 0) > 0;
 
   const hasUrgent = data && (
     data.today.surgeries.length > 0 || 
     data.today.transports.length > 0 || 
     data.today.overdue.length > 0 ||
-    hasFosterNonCompliance
+    hasFosterNonCompliance ||
+    hasAdopterObligations
   );
 
   const hasMedicalToday = data && data.today.medical.length > 0;
@@ -172,7 +194,7 @@ export function DailyBriefing() {
   );
 
   const isEmpty = !hasUrgent && !hasMedicalToday && !hasVetEventsToday && !hasTomorrowItems && 
-    !hasFosterBioPhoto &&
+    !hasFosterBioPhoto && !hasAdopterConfirmations &&
     (!data?.today.calendar || data.today.calendar.length === 0);
 
   return (
@@ -199,6 +221,27 @@ export function DailyBriefing() {
                     <span className="text-sm font-semibold text-destructive">Urgent</span>
                   </div>
                   <div className="space-y-2">
+                    {data?.today.adopterObligationsPendingReview?.map((obl) => (
+                      <Link
+                        key={`obl-${obl.obligationId}`}
+                        href="/dashboard/adopter-compliance"
+                        className="block"
+                        data-testid={`link-adopter-obligation-${obl.obligationId}`}
+                      >
+                        <div className="flex items-center gap-2 p-2 rounded-md bg-destructive/10 hover-elevate cursor-pointer">
+                          <ClipboardCheck className="h-3 w-3 text-destructive flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">
+                              Review {obl.obligationType.replace(/_/g, ' ')} proof — {obl.animalName}
+                            </p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              Adopter compliance verification needed
+                            </p>
+                          </div>
+                          <ChevronRight className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                        </div>
+                      </Link>
+                    ))}
                     {data?.today.fosterNonCompliance?.map((alert, idx) => (
                       <Link
                         key={`foster-nc-${alert.animalId}-${idx}`}
@@ -359,9 +402,47 @@ export function DailyBriefing() {
                 </>
               )}
 
-              {hasVetEventsToday && (
+              {hasAdopterConfirmations && (
                 <>
                   {(hasUrgent || hasMedicalToday || hasFosterBioPhoto) && <Separator />}
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <CheckCircle className="h-4 w-4 text-amber-600" />
+                      <span className="text-sm font-semibold text-amber-700 dark:text-amber-400">Adopter Confirmations</span>
+                      <Badge variant="secondary" className="text-xs">
+                        {data?.today.adopterConfirmationsPendingReview?.length}
+                      </Badge>
+                    </div>
+                    <div className="space-y-1">
+                      {data?.today.adopterConfirmationsPendingReview?.map((conf) => (
+                        <Link
+                          key={conf.confirmationId}
+                          href={`/dashboard/animals/${conf.animalId}/medical`}
+                          className="block"
+                          data-testid={`link-adopter-confirmation-${conf.confirmationId}`}
+                        >
+                          <div className="flex items-center gap-2 p-2 rounded-md bg-amber-500/10 hover-elevate cursor-pointer">
+                            <CheckCircle className="h-3 w-3 text-amber-600 flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">
+                                {conf.animalName} submitted {conf.careName} confirmation
+                              </p>
+                              <p className="text-xs text-muted-foreground truncate">
+                                Review pending
+                              </p>
+                            </div>
+                            <ChevronRight className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {hasVetEventsToday && (
+                <>
+                  {(hasUrgent || hasMedicalToday || hasFosterBioPhoto || hasAdopterConfirmations) && <Separator />}
                   <div>
                     <div className="flex items-center gap-2 mb-2">
                       <Stethoscope className="h-4 w-4 text-red-600" />

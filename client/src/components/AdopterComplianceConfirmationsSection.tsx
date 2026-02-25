@@ -15,6 +15,7 @@ import {
   ClipboardCheck,
   Building2,
   Pill,
+  ExternalLink,
 } from "lucide-react";
 import { format } from "date-fns";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -36,6 +37,7 @@ interface Confirmation {
   createdAt: string;
   adopterName: string | null;
   adopterEmail: string | null;
+  fileUrl: string | null;
 }
 
 interface MedicationLog {
@@ -168,6 +170,20 @@ export function AdopterComplianceConfirmationsSection({ animalId }: Props) {
                   <p className="text-sm text-muted-foreground mb-3">
                     <span className="font-medium">Adopter notes:</span> {confirmation.notes}
                   </p>
+                )}
+                {confirmation.fileUrl && (
+                  <div className="mb-3">
+                    <a
+                      href={confirmation.fileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 text-sm text-primary underline-offset-4 hover:underline"
+                      data-testid={`link-view-receipt-${confirmation.id}`}
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      View Receipt
+                    </a>
+                  </div>
                 )}
                 <p className="text-xs text-muted-foreground mb-3">
                   Submitted {format(new Date(confirmation.createdAt), "MMM d, yyyy 'at' h:mm a")}

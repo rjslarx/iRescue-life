@@ -25,6 +25,7 @@ import {
   insertAdopterComplianceConfirmationSchema,
   complianceReminders,
   complianceReminderNotifications,
+  complianceObligations,
   activityLogs,
 } from '@shared/schema';
 import { eq, and, isNull, gt, desc, sql, asc, inArray } from 'drizzle-orm';
@@ -1009,6 +1010,8 @@ router.post('/compliance-confirmations', async (req: Request, res: Response) => 
       }
     }
 
+    const fileUrl = typeof req.body?.fileUrl === 'string' ? req.body.fileUrl : null;
+
     const [confirmation] = await db
       .insert(adopterComplianceConfirmations)
       .values({
@@ -1021,6 +1024,7 @@ router.post('/compliance-confirmations', async (req: Request, res: Response) => 
         dateAdministered: new Date(dateAdministered),
         clinicName: clinicName || null,
         notes: notes || null,
+        fileUrl,
       })
       .returning();
 
@@ -1839,6 +1843,104 @@ router.get('/admin/adopter-preview/:adopterId/pets/:animalId/happy-tails', async
   } catch (error) {
     console.error('[Adopter Portal Admin] Error fetching happy tails:', error);
     res.status(500).json({ error: 'Failed to load updates' });
+  }
+});
+
+/**
+ * GET /api/adopter/pets/:animalId/adoption-packet
+ * Downloads the full medical adoption packet PDF for an adopter's pet
+ */
+router.get('/pets/:animalId/adoption-packet', async (req: Request, res: Response) => {
+  try {
+    const auth = requireAdopter(req, res);
+    if (!auth) return;
+    const { animalId } = req.params;
+    const owns = await verifyAdopterOwnsAnimal(auth.userId, auth.tenantId, animalId);
+    if (!owns) return res.status(403).json({ error: 'Access denied' });
+
+    const { generateAdoptionPacketPDF } = await import('../services/adoption-packet-pdf');
+    const pdfBuffer = await generateAdoptionPacketPDF(animalId, auth.tenantId);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename="adoption-packet.pdf"');
+    res.setHeader('Content-Length', pdfBuffer.length);
+    res.send(pdfBuffer);
+  } catch (error) {
+    console.error('[Adopter Portal] Error generating adoption packet:', error);
+    res.status(500).json({ error: 'Failed to generate adoption packet' });
+  }
+});
+
+/**
+ * GET /api/adopter/pets/:animalId/compliance-obligations
+ * Returns post-adoption compliance obligations (spay/neuter, etc.) for an adopter's pet
+ */
+router.get('/pets/:animalId/compliance-obligations', async (req: Request, res: Response) => {
+  try {
+    const auth = requireAdopter(req, res);
+    if (!auth) return;
+    const { animalId } = req.params;
+    const owns = await verifyAdopterOwnsAnimal(auth.userId, auth.tenantId, animalId);
+    if (!owns) return res.status(403).json({ error: 'Access denied' });
+
+    const obligations = await db
+      .select({
+        id: complianceObligations.id,
+        obligationType: complianceObligations.obligationType,
+        contractualDueDate: complianceObligations.contractualDueDate,
+        status: complianceObligations.status,
+        notes: complianceObligations.notes,
+        proofDocumentUrl: complianceObligations.proofDocumentUrl,
+      })
+      .from(complianceObligations)
+      .where(and(
+        eq(complianceObligations.tenantId, auth.tenantId),
+        eq(complianceObligations.animalId, animalId),
+      ))
+      .orderBy(asc(complianceObligations.contractualDueDate));
+
+    res.json(obligations);
+  } catch (error) {
+    console.error('[Adopter Portal] Error fetching compliance obligations:', error);
+    res.status(500).json({ error: 'Failed to fetch compliance obligations' });
+  }
+});
+
+/**
+ * POST /api/adopter/pets/:animalId/compliance-obligations/:obligationId/submit-proof
+ * Adopter submits a proof document URL for a compliance obligation
+ */
+router.post('/pets/:animalId/compliance-obligations/:obligationId/submit-proof', async (req: Request, res: Response) => {
+  try {
+    const auth = requireAdopter(req, res);
+    if (!auth) return;
+    const { animalId, obligationId } = req.params;
+    const owns = await verifyAdopterOwnsAnimal(auth.userId, auth.tenantId, animalId);
+    if (!owns) return res.status(403).json({ error: 'Access denied' });
+
+    const { fileUrl } = req.body;
+    if (!fileUrl || typeof fileUrl !== 'string') {
+      return res.status(400).json({ error: 'fileUrl is required' });
+    }
+
+    const [updated] = await db
+      .update(complianceObligations)
+      .set({ proofDocumentUrl: fileUrl, status: 'pending_review' })
+      .where(and(
+        eq(complianceObligations.id, obligationId),
+        eq(complianceObligations.animalId, animalId),
+        eq(complianceObligations.tenantId, auth.tenantId),
+      ))
+      .returning();
+
+    if (!updated) {
+      return res.status(404).json({ error: 'Obligation not found' });
+    }
+
+    res.json(updated);
+  } catch (error) {
+    console.error('[Adopter Portal] Error submitting obligation proof:', error);
+    res.status(500).json({ error: 'Failed to submit proof' });
   }
 });
 

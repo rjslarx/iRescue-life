@@ -176,6 +176,11 @@ export default function AdopterPortalPage() {
                         <Calendar className="h-3 w-3 mr-1" />
                         Adopted {new Date(pet.adoptedAt).toLocaleDateString()}
                       </Badge>
+                      {pet.microchipNumber && (
+                        <Badge variant="outline" className="text-xs font-mono" data-testid={`badge-microchip-${pet.id}`}>
+                          {pet.microchipNumber}
+                        </Badge>
+                      )}
                     </div>
                   </CardContent>
                 </div>

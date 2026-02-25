@@ -34,7 +34,11 @@ import {
   CheckCircle2,
   Bug,
   X,
-  Loader2
+  Loader2,
+  Copy,
+  ClipboardCheck,
+  Upload,
+  CheckCircle
 } from "lucide-react";
 
 interface AdoptedAnimal {
@@ -118,6 +122,14 @@ interface ComplianceConfirmation {
   createdAt: string;
 }
 
+interface ComplianceObligation {
+  id: string;
+  obligationType: string;
+  contractualDueDate: string | null;
+  status: string;
+  proofDocumentUrl: string | null;
+}
+
 export default function AdopterPetDetailPage() {
   const { animalId } = useParams<{ animalId: string }>();
   const { toast } = useToast();
@@ -132,6 +144,17 @@ export default function AdopterPetDetailPage() {
   const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
   const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
+  const receiptInputRef = useRef<HTMLInputElement>(null);
+  const obligationReceiptInputRef = useRef<HTMLInputElement>(null);
+  const [chipCopied, setChipCopied] = useState(false);
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
+  const [isUploadingReceipt, setIsUploadingReceipt] = useState(false);
+  const [showObligationDialog, setShowObligationDialog] = useState(false);
+  const [selectedObligation, setSelectedObligation] = useState<ComplianceObligation | null>(null);
+  const [obligationReceiptFile, setObligationReceiptFile] = useState<File | null>(null);
+  const [obligationReceiptUrl, setObligationReceiptUrl] = useState<string | null>(null);
+  const [isUploadingObligationReceipt, setIsUploadingObligationReceipt] = useState(false);
 
   const { data: pet, isLoading: petLoading } = useQuery<AdoptedAnimal>({
     queryKey: ["/api/adopter/pets", animalId],
@@ -178,6 +201,29 @@ export default function AdopterPetDetailPage() {
     enabled: !!animalId && activeTab === "compliance",
   });
 
+  const { data: complianceObligations } = useQuery<ComplianceObligation[]>({
+    queryKey: ["/api/adopter/pets", animalId, "compliance-obligations"],
+    enabled: !!animalId && activeTab === "compliance",
+  });
+
+  const submitObligationProofMutation = useMutation({
+    mutationFn: async ({ obligationId, fileUrl }: { obligationId: string; fileUrl: string }) => {
+      const res = await apiRequest("POST", `/api/adopter/pets/${animalId}/compliance-obligations/${obligationId}/submit-proof`, { fileUrl });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/adopter/pets", animalId, "compliance-obligations"] });
+      setShowObligationDialog(false);
+      setSelectedObligation(null);
+      setObligationReceiptFile(null);
+      setObligationReceiptUrl(null);
+      toast({ title: "Proof submitted! Your rescue will review it." });
+    },
+    onError: () => {
+      toast({ title: "Failed to submit proof", variant: "destructive" });
+    },
+  });
+
   const addWeightMutation = useMutation({
     mutationFn: async (data: { weight: string; weightUnit: string; notes?: string }) => {
       return apiRequest("POST", `/api/adopter/pets/${animalId}/weight-logs`, data);
@@ -215,6 +261,7 @@ export default function AdopterPetDetailPage() {
       dateAdministered: string;
       clinicName?: string;
       notes?: string;
+      fileUrl?: string;
     }) => {
       return apiRequest("POST", `/api/adopter/compliance-confirmations`, data);
     },
@@ -223,6 +270,8 @@ export default function AdopterPetDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/adopter/pets", animalId, "compliance-confirmations"] });
       setShowConfirmCareDialog(false);
       setSelectedCareItem(null);
+      setReceiptFile(null);
+      setReceiptUrl(null);
       toast({ title: "Confirmation submitted! Your rescue will review it." });
     },
     onError: () => {
@@ -427,6 +476,17 @@ export default function AdopterPetDetailPage() {
         </TabsList>
 
         <TabsContent value="compliance" className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              onClick={() => window.open(`/api/adopter/pets/${animalId}/adoption-packet`, '_blank')}
+              data-testid="button-download-adoption-packet"
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Download Adoption Packet
+            </Button>
+          </div>
+
           {pet.microchipNumber && (
             <Card>
               <CardHeader>
@@ -436,27 +496,203 @@ export default function AdopterPetDetailPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between flex-wrap gap-3">
                   <div>
                     <p className="font-mono text-lg">{pet.microchipNumber}</p>
                     <p className="text-sm text-muted-foreground">
                       Keep your contact info updated with the registry
                     </p>
                   </div>
-                  <Button variant="outline" size="sm" asChild>
-                    <a 
-                      href={`https://www.petmicrochiplookup.org/?microchip_id=${encodeURIComponent(pet.microchipNumber || '')}`}
-                      target="_blank" 
-                      rel="noopener noreferrer"
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        navigator.clipboard.writeText(pet.microchipNumber || '');
+                        setChipCopied(true);
+                        setTimeout(() => setChipCopied(false), 2000);
+                      }}
+                      data-testid="button-copy-microchip"
                     >
-                      <ExternalLink className="h-4 w-4 mr-2" />
-                      Lookup Registry
-                    </a>
-                  </Button>
+                      {chipCopied ? (
+                        <><Check className="h-4 w-4 mr-2 text-green-600" />Copied</>
+                      ) : (
+                        <><Copy className="h-4 w-4 mr-2" />Copy</>
+                      )}
+                    </Button>
+                    <Button variant="outline" size="sm" asChild>
+                      <a 
+                        href={`https://www.petmicrochiplookup.org/?microchip_id=${encodeURIComponent(pet.microchipNumber || '')}`}
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        data-testid="link-microchip-registry"
+                      >
+                        <ExternalLink className="h-4 w-4 mr-2" />
+                        Lookup Registry
+                      </a>
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
           )}
+
+          {complianceObligations && complianceObligations.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <ClipboardCheck className="h-5 w-5" />
+                  Post-Adoption Requirements
+                </CardTitle>
+                <CardDescription>
+                  These are contractual obligations from your adoption agreement. Upload proof when completed.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {complianceObligations.map((obl) => {
+                  const labelMap: Record<string, string> = {
+                    spay_neuter: 'Spay/Neuter Certificate',
+                    rabies_booster: 'Rabies Booster',
+                    vet_checkup: 'Vet Check-Up',
+                    microchip_registration: 'Microchip Registration',
+                    heartworm_test: 'Heartworm Test',
+                    flea_tick_prevention: 'Flea & Tick Prevention',
+                  };
+                  const label = labelMap[obl.obligationType] || obl.obligationType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                  return (
+                    <div
+                      key={obl.id}
+                      className="flex items-center justify-between p-3 border rounded-lg flex-wrap gap-3"
+                      data-testid={`obligation-${obl.id}`}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium">{label}</p>
+                        {obl.contractualDueDate && (
+                          <p className="text-sm text-muted-foreground">
+                            Due by {new Date(obl.contractualDueDate).toLocaleDateString()}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {obl.status === 'completed' && (
+                          <Badge className="bg-green-500/10 text-green-700 border-green-500/20">
+                            <CheckCircle className="h-3 w-3 mr-1" />
+                            Verified
+                          </Badge>
+                        )}
+                        {obl.status === 'pending_review' && (
+                          <Badge variant="secondary" className="bg-blue-500/10 text-blue-700 border-blue-500/20">
+                            <Clock className="h-3 w-3 mr-1" />
+                            Under Review
+                          </Badge>
+                        )}
+                        {(obl.status === 'pending' || obl.status === 'overdue') && (
+                          <>
+                            {obl.status === 'overdue' && (
+                              <Badge variant="destructive" className="text-xs">Overdue</Badge>
+                            )}
+                            <Button
+                              size="sm"
+                              variant={obl.status === 'overdue' ? 'default' : 'outline'}
+                              onClick={() => {
+                                setSelectedObligation(obl);
+                                setObligationReceiptFile(null);
+                                setObligationReceiptUrl(null);
+                                setShowObligationDialog(true);
+                              }}
+                              data-testid={`button-upload-proof-${obl.id}`}
+                            >
+                              <Upload className="h-4 w-4 mr-1" />
+                              Upload Proof
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </CardContent>
+            </Card>
+          )}
+
+          <Dialog open={showObligationDialog} onOpenChange={(open) => {
+            setShowObligationDialog(open);
+            if (!open) {
+              setSelectedObligation(null);
+              setObligationReceiptFile(null);
+              setObligationReceiptUrl(null);
+            }
+          }}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Upload Proof</DialogTitle>
+                <DialogDescription>
+                  Upload a photo or PDF of the documentation for this requirement. Your rescue will review and mark it as verified.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label>Document (required)</Label>
+                  <input
+                    type="file"
+                    accept="image/*,application/pdf"
+                    ref={obligationReceiptInputRef}
+                    style={{ display: 'none' }}
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      setObligationReceiptFile(file);
+                      setIsUploadingObligationReceipt(true);
+                      try {
+                        const form = new FormData();
+                        form.append('photo', file);
+                        const res = await fetch('/api/adopter/photos/upload', { method: 'POST', body: form });
+                        const data = await res.json();
+                        setObligationReceiptUrl(data.url || data.fileUrl || null);
+                        toast({ title: "File uploaded successfully" });
+                      } catch {
+                        toast({ title: "Upload failed", variant: "destructive" });
+                        setObligationReceiptFile(null);
+                      } finally {
+                        setIsUploadingObligationReceipt(false);
+                      }
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full mt-1"
+                    onClick={() => obligationReceiptInputRef.current?.click()}
+                    disabled={isUploadingObligationReceipt}
+                    data-testid="button-choose-obligation-file"
+                  >
+                    {isUploadingObligationReceipt ? (
+                      <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Uploading...</>
+                    ) : obligationReceiptFile ? (
+                      <><Check className="h-4 w-4 mr-2 text-green-600" />{obligationReceiptFile.name}</>
+                    ) : (
+                      <><Upload className="h-4 w-4 mr-2" />Choose File</>
+                    )}
+                  </Button>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button
+                  disabled={!obligationReceiptUrl || submitObligationProofMutation.isPending}
+                  onClick={() => {
+                    if (selectedObligation && obligationReceiptUrl) {
+                      submitObligationProofMutation.mutate({ obligationId: selectedObligation.id, fileUrl: obligationReceiptUrl });
+                    }
+                  }}
+                  data-testid="button-submit-obligation-proof"
+                >
+                  {submitObligationProofMutation.isPending ? (
+                    <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Submitting...</>
+                  ) : "Submit Proof"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
           {pet.status !== 'deceased' && ((dueCareItems && dueCareItems.length > 0) || (complianceConfirmations && complianceConfirmations.some(c => c.status === 'pending_review'))) && (
             <Card>
@@ -551,7 +787,11 @@ export default function AdopterPetDetailPage() {
 
           <Dialog open={showConfirmCareDialog} onOpenChange={(open) => {
             setShowConfirmCareDialog(open);
-            if (!open) setSelectedCareItem(null);
+            if (!open) {
+              setSelectedCareItem(null);
+              setReceiptFile(null);
+              setReceiptUrl(null);
+            }
           }}>
             <DialogContent>
               <DialogHeader>
@@ -560,6 +800,31 @@ export default function AdopterPetDetailPage() {
                   Let your rescue know that {selectedCareItem?.careName} has been administered to {pet?.name}. They'll review and update the records.
                 </DialogDescription>
               </DialogHeader>
+              <input
+                type="file"
+                accept="image/*,application/pdf"
+                ref={receiptInputRef}
+                style={{ display: 'none' }}
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  setReceiptFile(file);
+                  setIsUploadingReceipt(true);
+                  try {
+                    const form = new FormData();
+                    form.append('photo', file);
+                    const res = await fetch('/api/adopter/photos/upload', { method: 'POST', body: form });
+                    const data = await res.json();
+                    setReceiptUrl(data.url || data.fileUrl || null);
+                    toast({ title: "Receipt uploaded" });
+                  } catch {
+                    toast({ title: "Upload failed", variant: "destructive" });
+                    setReceiptFile(null);
+                  } finally {
+                    setIsUploadingReceipt(false);
+                  }
+                }}
+              />
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
@@ -573,6 +838,7 @@ export default function AdopterPetDetailPage() {
                     dateAdministered: formData.get("dateAdministered") as string,
                     clinicName: (formData.get("clinicName") as string) || undefined,
                     notes: (formData.get("notes") as string) || undefined,
+                    fileUrl: receiptUrl || undefined,
                   });
                 }}
                 className="space-y-4"
@@ -606,8 +872,27 @@ export default function AdopterPetDetailPage() {
                     data-testid="input-confirm-notes"
                   />
                 </div>
+                <div>
+                  <Label>Vet Receipt (optional)</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full mt-1"
+                    onClick={() => receiptInputRef.current?.click()}
+                    disabled={isUploadingReceipt}
+                    data-testid="button-choose-receipt"
+                  >
+                    {isUploadingReceipt ? (
+                      <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Uploading...</>
+                    ) : receiptFile ? (
+                      <><Check className="h-4 w-4 mr-2 text-green-600" />{receiptFile.name}</>
+                    ) : (
+                      <><Upload className="h-4 w-4 mr-2" />Attach Receipt or Photo</>
+                    )}
+                  </Button>
+                </div>
                 <DialogFooter>
-                  <Button type="submit" disabled={confirmCareMutation.isPending} data-testid="button-submit-confirmation">
+                  <Button type="submit" disabled={confirmCareMutation.isPending || isUploadingReceipt} data-testid="button-submit-confirmation">
                     {confirmCareMutation.isPending ? "Submitting..." : "Submit Confirmation"}
                   </Button>
                 </DialogFooter>
