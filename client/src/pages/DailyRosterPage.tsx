@@ -259,9 +259,7 @@ export default function DailyRosterPage() {
 
   const dateStr = format(selectedDate, "yyyy-MM-dd");
   const monthStr = format(calendarMonth, "yyyy-MM");
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const isFutureDate = selectedDate > today;
+  const isFutureDate = dateStr > format(new Date(), "yyyy-MM-dd");
 
   const { data: roster, isLoading: rosterLoading } = useQuery<RosterData>({
     queryKey: ["/api/daily-roster", dateStr],
