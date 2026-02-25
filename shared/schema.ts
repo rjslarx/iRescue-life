@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, integer, boolean, jsonb, unique, numeric, serial, decimal, date, varchar, real } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, integer, boolean, jsonb, unique, uniqueIndex, numeric, serial, decimal, date, varchar, real } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -3297,10 +3297,13 @@ export const medicalReminderLogs = pgTable("medical_reminder_logs", {
   emailType: text("email_type").notNull().$type<"digest" | "individual" | "overdue" | "escalation" | "foster_confirmation">(),
   subject: text("subject").notNull(),
   sentAt: timestamp("sent_at").notNull().defaultNow(),
-  messageId: text("message_id"), // Email service message ID
-  status: text("status").notNull().default("sent").$type<"sent" | "delivered" | "failed">(),
+  messageId: text("message_id"),
+  status: text("status").notNull().default("sent").$type<"pending" | "sent" | "delivered" | "failed">(),
   errorMessage: text("error_message"),
-});
+  sentDate: date("sent_date"),
+}, (t) => ({
+  dedupIdx: uniqueIndex("medical_reminder_logs_dedup_idx").on(t.tenantId, t.recipientEmail, t.emailType, t.sentDate),
+}));
 
 export const insertMedicalReminderLogSchema = createInsertSchema(medicalReminderLogs).omit({
   id: true,

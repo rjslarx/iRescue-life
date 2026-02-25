@@ -14,7 +14,7 @@ import {
   type MedicalReminderSettings,
   type MedicalReminder,
 } from "@shared/schema";
-import { eq, and, gte, lte, lt, isNull, isNotNull, or, inArray, desc } from "drizzle-orm";
+import { eq, and, lte, lt, isNull, isNotNull, or, inArray, desc } from "drizzle-orm";
 import { EmailService } from "./email-service";
 
 interface MedicalItem {
@@ -521,33 +521,18 @@ export async function sendMedicalReminders(tenantId: string): Promise<{
       return { success: true, emailsSent: 0, errors: [] };
     }
     
-    // Same-day deduplication: check if we already sent digest emails today for this tenant
-    const todayStart = new Date();
-    todayStart.setUTCHours(0, 0, 0, 0);
-    const alreadySentToday = await db
-      .select({ recipientEmail: medicalReminderLogs.recipientEmail })
-      .from(medicalReminderLogs)
-      .where(and(
-        eq(medicalReminderLogs.tenantId, tenantId),
-        eq(medicalReminderLogs.emailType, "digest"),
-        eq(medicalReminderLogs.status, "sent"),
-        gte(medicalReminderLogs.sentAt, todayStart)
-      ));
-    const alreadySentEmails = new Set(alreadySentToday.map(r => r.recipientEmail.toLowerCase()));
-    
-    if (alreadySentEmails.size > 0) {
-      console.log(`[MedicalReminders] Dedup: ${alreadySentEmails.size} digest(s) already sent today for tenant ${tenantId}, skipping those recipients`);
-    }
-    
+    // Compute today's UTC date for atomic deduplication (YYYY-MM-DD)
+    const todaySentDate = new Date().toISOString().slice(0, 10);
+
     // Get email service
     const emailService = await EmailService.forTenant(tenantId);
     if (!emailService) {
       return { success: false, emailsSent: 0, errors: ["Email service not configured"] };
     }
-    
+
     // Get recipients based on settings
     const recipients: { email: string; name: string; role: "admin" | "staff" | "foster" }[] = [];
-    
+
     if (settings.notifyAdmins || settings.notifyStaff) {
       const staffUsers = await db
         .select({
@@ -560,11 +545,11 @@ export async function sendMedicalReminders(tenantId: string): Promise<{
           eq(users.tenantId, tenantId),
           eq(users.isActive, true)
         ));
-      
+
       for (const user of staffUsers) {
         const isAdmin = user.roles.includes("admin");
         const isStaff = user.roles.includes("staff");
-        
+
         if ((settings.notifyAdmins && isAdmin) || (settings.notifyStaff && isStaff)) {
           recipients.push({
             email: user.email,
@@ -574,8 +559,8 @@ export async function sendMedicalReminders(tenantId: string): Promise<{
         }
       }
     }
-    
-    // Send digest emails to staff/admins (deduplicate recipients by email)
+
+    // Deduplicate recipients by email address
     const seenEmails = new Set<string>();
     const uniqueRecipients = recipients.filter(r => {
       const key = r.email.toLowerCase();
@@ -586,51 +571,67 @@ export async function sendMedicalReminders(tenantId: string): Promise<{
 
     if (settings.sendDailyDigest && uniqueRecipients.length > 0) {
       for (const recipient of uniqueRecipients) {
-        if (alreadySentEmails.has(recipient.email.toLowerCase())) {
-          console.log(`[MedicalReminders] Skipping duplicate digest for ${recipient.email} (already sent today)`);
-          continue;
-        }
         try {
-          const { subject, html } = await generateMedicalReminderEmail(
-            tenantId,
-            digest,
-            recipient.name
-          );
-          
-          const result = await emailService.send({
-            to: recipient.email,
-            subject,
-            html,
-          });
-          
-          if (result.success) {
-            emailsSent++;
-            alreadySentEmails.add(recipient.email.toLowerCase());
-            
-            await db.insert(medicalReminderLogs).values({
+          // Atomic dedup: INSERT a placeholder row first. The unique constraint on
+          // (tenantId, recipientEmail, emailType, sentDate) ensures only one server
+          // instance can claim this send slot. ON CONFLICT DO NOTHING returns 0 rows
+          // if another instance already claimed it — in that case we skip silently.
+          const claimed = await db
+            .insert(medicalReminderLogs)
+            .values({
               tenantId,
               recipientEmail: recipient.email,
               recipientName: recipient.name,
               recipientRole: recipient.role,
               emailType: "digest",
-              subject,
-              messageId: result.messageId,
-              status: "sent",
-            });
+              subject: "(pending)",
+              sentDate: todaySentDate,
+              status: "pending",
+            })
+            .onConflictDoNothing()
+            .returning({ id: medicalReminderLogs.id });
+
+          if (claimed.length === 0) {
+            console.log(`[MedicalReminders] Skipping duplicate digest for ${recipient.email} (already claimed today)`);
+            continue;
+          }
+
+          const { subject, html } = await generateMedicalReminderEmail(tenantId, digest, recipient.name);
+          const result = await emailService.send({ to: recipient.email, subject, html });
+
+          if (result.success) {
+            emailsSent++;
+            await db
+              .update(medicalReminderLogs)
+              .set({ status: "sent", subject, messageId: result.messageId, sentAt: new Date() })
+              .where(and(
+                eq(medicalReminderLogs.tenantId, tenantId),
+                eq(medicalReminderLogs.recipientEmail, recipient.email),
+                eq(medicalReminderLogs.emailType, "digest"),
+                eq(medicalReminderLogs.sentDate, todaySentDate),
+              ));
           } else {
             errors.push(`Failed to send to ${recipient.email}: ${result.error}`);
+            await db
+              .update(medicalReminderLogs)
+              .set({ status: "failed", errorMessage: result.error })
+              .where(and(
+                eq(medicalReminderLogs.tenantId, tenantId),
+                eq(medicalReminderLogs.recipientEmail, recipient.email),
+                eq(medicalReminderLogs.emailType, "digest"),
+                eq(medicalReminderLogs.sentDate, todaySentDate),
+              ));
           }
         } catch (error) {
           errors.push(`Error sending to ${recipient.email}: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
       }
     }
-    
+
     // Send foster-specific emails
     if (settings.notifyFosters) {
-      // Group items by foster
       const fosterItems = new Map<string, { email: string; name: string; items: MedicalItem[] }>();
-      
+
       for (const item of [...digest.overdue, ...digest.dueSoon]) {
         if (item.assignedFosterId && item.fosterEmail && item.fosterName) {
           if (!fosterItems.has(item.assignedFosterId)) {
@@ -643,54 +644,55 @@ export async function sendMedicalReminders(tenantId: string): Promise<{
           fosterItems.get(item.assignedFosterId)!.items.push(item);
         }
       }
-      
-      // Check foster dedup separately (foster_confirmation type)
-      const fosterSentToday = await db
-        .select({ recipientEmail: medicalReminderLogs.recipientEmail })
-        .from(medicalReminderLogs)
-        .where(and(
-          eq(medicalReminderLogs.tenantId, tenantId),
-          eq(medicalReminderLogs.emailType, "foster_confirmation"),
-          eq(medicalReminderLogs.status, "sent"),
-          gte(medicalReminderLogs.sentAt, todayStart)
-        ));
-      const fosterAlreadySent = new Set(fosterSentToday.map(r => r.recipientEmail.toLowerCase()));
 
-      // Send email to each foster
-      for (const [fosterId, fosterData] of fosterItems) {
-        if (fosterAlreadySent.has(fosterData.email.toLowerCase())) {
-          console.log(`[MedicalReminders] Skipping duplicate foster reminder for ${fosterData.email} (already sent today)`);
-          continue;
-        }
+      for (const [, fosterData] of fosterItems) {
         try {
-          const { subject, html } = await generateFosterReminderEmail(
-            tenantId,
-            fosterData.items,
-            fosterData.name
-          );
-          
-          const result = await emailService.send({
-            to: fosterData.email,
-            subject,
-            html,
-          });
-          
-          if (result.success) {
-            emailsSent++;
-            fosterAlreadySent.add(fosterData.email.toLowerCase());
-            
-            await db.insert(medicalReminderLogs).values({
+          // Atomic dedup: same INSERT-first pattern for foster reminders
+          const claimed = await db
+            .insert(medicalReminderLogs)
+            .values({
               tenantId,
               recipientEmail: fosterData.email,
               recipientName: fosterData.name,
               recipientRole: "foster",
               emailType: "foster_confirmation",
-              subject,
-              messageId: result.messageId,
-              status: "sent",
-            });
+              subject: "(pending)",
+              sentDate: todaySentDate,
+              status: "pending",
+            })
+            .onConflictDoNothing()
+            .returning({ id: medicalReminderLogs.id });
+
+          if (claimed.length === 0) {
+            console.log(`[MedicalReminders] Skipping duplicate foster reminder for ${fosterData.email} (already claimed today)`);
+            continue;
+          }
+
+          const { subject, html } = await generateFosterReminderEmail(tenantId, fosterData.items, fosterData.name);
+          const result = await emailService.send({ to: fosterData.email, subject, html });
+
+          if (result.success) {
+            emailsSent++;
+            await db
+              .update(medicalReminderLogs)
+              .set({ status: "sent", subject, messageId: result.messageId, sentAt: new Date() })
+              .where(and(
+                eq(medicalReminderLogs.tenantId, tenantId),
+                eq(medicalReminderLogs.recipientEmail, fosterData.email),
+                eq(medicalReminderLogs.emailType, "foster_confirmation"),
+                eq(medicalReminderLogs.sentDate, todaySentDate),
+              ));
           } else {
             errors.push(`Failed to send to foster ${fosterData.email}: ${result.error}`);
+            await db
+              .update(medicalReminderLogs)
+              .set({ status: "failed", errorMessage: result.error })
+              .where(and(
+                eq(medicalReminderLogs.tenantId, tenantId),
+                eq(medicalReminderLogs.recipientEmail, fosterData.email),
+                eq(medicalReminderLogs.emailType, "foster_confirmation"),
+                eq(medicalReminderLogs.sentDate, todaySentDate),
+              ));
           }
         } catch (error) {
           errors.push(`Error sending to foster ${fosterData.email}: ${error instanceof Error ? error.message : 'Unknown error'}`);
