@@ -81,7 +81,7 @@ export function validateEnvironment(): void {
   }
 
   if (!process.env.ALLOWED_ORIGINS && process.env.NODE_ENV === 'production') {
-    missing.push('ALLOWED_ORIGINS (required in production for CORS security)');
+    warnings.push('ALLOWED_ORIGINS is not set. CORS will only allow requests from verified custom domains in the database. Set ALLOWED_ORIGINS to whitelist additional origins (e.g., your .replit.app domain).');
   }
 
   // Security checks
