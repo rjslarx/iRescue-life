@@ -548,6 +548,7 @@ export const animals = pgTable("animals", {
   medicalHold: boolean("medical_hold").notNull().default(false),
   locationType: text("location_type").$type<"shelter" | "foster" | "clinic" | "transport" | "offsite">().default("shelter"),
   locationName: text("location_name"),
+  fosterId: uuid("foster_id").references(() => users.id, { onDelete: 'set null' }),
   sourceContactId: uuid("source_contact_id"),
   surrenderRequestId: text("surrender_request_id"),
   motherId: uuid("mother_id"), // Self-reference to mother animal (for litter tracking)

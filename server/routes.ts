@@ -7401,6 +7401,11 @@ Crawl-delay: 1
         .where(and(eq(animals.id, req.params.id), eq(animals.tenantId, req.tenant!.id)))
         .limit(1);
 
+      // Safety: always clear fosterId FK when animal is no longer in foster
+      if (data.locationType && data.locationType !== 'foster') {
+        data.fosterId = null;
+      }
+
       const animal = await updateAnimal(req.tenant!.id, req.params.id, data);
       
       if (!animal) {

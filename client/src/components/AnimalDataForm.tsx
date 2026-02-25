@@ -76,6 +76,7 @@ const animalFormSchema = insertAnimalSchema.omit({ tenantId: true }).extend({
   strayHoldUntil: z.date().optional().nullable(),
   locationType: z.enum(["shelter", "foster", "clinic", "transport", "offsite"]).optional().default("shelter"),
   locationName: z.string().optional().default(""),
+  fosterId: z.string().uuid().optional().nullable(),
 }).refine((data) => {
   if ((data.behaviorColor === "yellow" || data.behaviorColor === "red") && !data.behaviorRestrictionReason?.trim()) {
     return false;
@@ -84,6 +85,14 @@ const animalFormSchema = insertAnimalSchema.omit({ tenantId: true }).extend({
 }, {
   message: "Restriction reason is required for Yellow or Red safety ratings",
   path: ["behaviorRestrictionReason"],
+}).refine((data) => {
+  if (data.locationType === "foster" && !data.fosterId) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Please select an approved foster from the list",
+  path: ["fosterId"],
 });
 
 type AnimalFormData = z.infer<typeof animalFormSchema>;
@@ -215,21 +224,6 @@ export function AnimalDataForm({ animalId, initialData, onSuccess, onCancel }: A
     return positions;
   }, [selectedRow, selectedBuildingId, selectedRowId, occupancyData, animalId]);
 
-  const fosterAutoMode = useMemo(() => {
-    if (mode !== 'edit' || !animalData) return false;
-    const hasActiveFoster = !!(animalData as any).activeFosterName;
-    if (!hasActiveFoster) return false;
-    const hasKennel = !!(animalData as any).kennelBuildingId && !!(animalData as any).kennelRowId && (animalData as any).kennelPosition !== null && (animalData as any).kennelPosition !== undefined;
-    if (!hasKennel) return true;
-    const kennelUpdated = animalData.updatedAt ? new Date(animalData.updatedAt).getTime() : 0;
-    const fosterStart = (animalData as any).activeFosterStartDate ? new Date((animalData as any).activeFosterStartDate).getTime() : 0;
-    return fosterStart > kennelUpdated;
-  }, [animalData, mode]);
-
-  const activeFosterName = useMemo(() => {
-    return fosterAutoMode ? ((animalData as any)?.activeFosterName || 'Foster Parent') : '';
-  }, [fosterAutoMode, animalData]);
-  
   const form = useForm<AnimalFormData>({
     resolver: zodResolver(animalFormSchema),
     defaultValues: {
@@ -273,6 +267,7 @@ export function AnimalDataForm({ animalId, initialData, onSuccess, onCancel }: A
       strayHoldUntil: null,
       locationType: "shelter",
       locationName: "",
+      fosterId: null,
     },
   });
   
@@ -323,12 +318,41 @@ export function AnimalDataForm({ animalId, initialData, onSuccess, onCancel }: A
         strayHoldUntil: animalData.strayHoldUntil ? new Date(animalData.strayHoldUntil) : null,
         locationType: (animalData as any).locationType || "shelter",
         locationName: (animalData as any).locationName || "",
+        fosterId: (animalData as any).fosterId ?? null,
       });
       if (animalData.photoUrls) {
         setUploadedPhotos(animalData.photoUrls);
       }
     }
   }, [animalData, form]);
+
+  const fosterAutoMode = useMemo(() => {
+    if (mode !== 'edit' || !animalData) return false;
+    const hasActiveFoster = !!(animalData as any).activeFosterName;
+    if (!hasActiveFoster) return false;
+    const hasKennel = !!(animalData as any).kennelBuildingId && !!(animalData as any).kennelRowId && (animalData as any).kennelPosition !== null && (animalData as any).kennelPosition !== undefined;
+    if (!hasKennel) return true;
+    const kennelUpdated = animalData.updatedAt ? new Date(animalData.updatedAt).getTime() : 0;
+    const fosterStart = (animalData as any).activeFosterStartDate ? new Date((animalData as any).activeFosterStartDate).getTime() : 0;
+    return fosterStart > kennelUpdated;
+  }, [animalData, mode]);
+
+  const activeFosterName = useMemo(() => {
+    return fosterAutoMode ? ((animalData as any)?.activeFosterName || 'Foster Parent') : '';
+  }, [fosterAutoMode, animalData]);
+
+  const [fosterOpen, setFosterOpen] = useState(false);
+  const locationType = form.watch("locationType");
+  const { data: eligibleFostersData } = useQuery<{ fosters: { id: string; fullName: string; email: string }[] }>({
+    queryKey: ["/api/fosters/eligible"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/fosters/eligible");
+      return res.json();
+    },
+    enabled: locationType === "foster",
+    staleTime: 60_000,
+  });
+  const eligibleFosters = eligibleFostersData?.fosters ?? [];
   
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -890,6 +914,10 @@ export function AnimalDataForm({ animalId, initialData, onSuccess, onCancel }: A
                         if (value !== 'shelter') {
                           handleBuildingChange('');
                         }
+                        if (value !== 'foster') {
+                          form.setValue("fosterId", null);
+                          form.setValue("locationName", "");
+                        }
                       }} value={field.value || "shelter"}>
                         <FormControl>
                           <SelectTrigger data-testid="select-location-type">
@@ -908,7 +936,67 @@ export function AnimalDataForm({ animalId, initialData, onSuccess, onCancel }: A
                     </FormItem>
                   )}
                 />
-                {form.watch("locationType") !== "shelter" && (
+                {form.watch("locationType") === "foster" && (
+                  <FormField
+                    control={form.control}
+                    name="fosterId"
+                    render={({ field }) => {
+                      const selectedFoster = eligibleFosters.find(f => f.id === field.value);
+                      return (
+                        <FormItem>
+                          <FormLabel>Assign to Approved Foster <span className="text-destructive">*</span></FormLabel>
+                          <Popover open={fosterOpen} onOpenChange={setFosterOpen}>
+                            <PopoverTrigger asChild>
+                              <FormControl>
+                                <Button
+                                  variant="outline"
+                                  role="combobox"
+                                  aria-expanded={fosterOpen}
+                                  className="w-full justify-between font-normal"
+                                  data-testid="button-select-foster"
+                                >
+                                  {selectedFoster ? selectedFoster.fullName : "Select foster..."}
+                                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                </Button>
+                              </FormControl>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-full p-0" align="start">
+                              <Command>
+                                <CommandInput placeholder="Search fosters..." />
+                                <CommandList>
+                                  <CommandEmpty>No approved fosters found. Add fosters in the Fosters section.</CommandEmpty>
+                                  <CommandGroup>
+                                    {eligibleFosters.map((foster) => (
+                                      <CommandItem
+                                        key={foster.id}
+                                        value={foster.fullName}
+                                        onSelect={() => {
+                                          form.setValue("fosterId", foster.id);
+                                          form.setValue("locationName", foster.fullName);
+                                          form.clearErrors("fosterId");
+                                          setFosterOpen(false);
+                                        }}
+                                        data-testid={`foster-option-${foster.id}`}
+                                      >
+                                        <Check className={`mr-2 h-4 w-4 ${field.value === foster.id ? "opacity-100" : "opacity-0"}`} />
+                                        <div>
+                                          <p className="font-medium">{foster.fullName}</p>
+                                          <p className="text-xs text-muted-foreground">{foster.email}</p>
+                                        </div>
+                                      </CommandItem>
+                                    ))}
+                                  </CommandGroup>
+                                </CommandList>
+                              </Command>
+                            </PopoverContent>
+                          </Popover>
+                          <FormMessage />
+                        </FormItem>
+                      );
+                    }}
+                  />
+                )}
+                {form.watch("locationType") !== "shelter" && form.watch("locationType") !== "foster" && (
                   <FormField
                     control={form.control}
                     name="locationName"
@@ -918,7 +1006,6 @@ export function AnimalDataForm({ animalId, initialData, onSuccess, onCancel }: A
                         <FormControl>
                           <Input
                             placeholder={
-                              form.watch("locationType") === "foster" ? "Foster parent name" :
                               form.watch("locationType") === "clinic" ? "Vet clinic name" :
                               form.watch("locationType") === "transport" ? "Transport details" :
                               form.watch("locationType") === "offsite" ? "Location name" :
