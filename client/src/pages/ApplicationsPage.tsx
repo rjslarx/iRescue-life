@@ -348,28 +348,30 @@ export default function ApplicationsPage() {
           </div>
         ) : (
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
-            <TabsList className="mb-6">
-              <TabsTrigger value="pipeline" className="gap-2" data-testid="tab-pipeline">
-                <Users className="h-4 w-4" />
-                Pipeline
-                <Badge variant="secondary">{activeApplications.length}</Badge>
-              </TabsTrigger>
-              <TabsTrigger value="adopted" className="gap-2" data-testid="tab-adopted">
-                <CheckCircle className="h-4 w-4" />
-                Adopted
-                <Badge variant="secondary">{adoptedApplications.length}</Badge>
-              </TabsTrigger>
-              <TabsTrigger value="denied" className="gap-2" data-testid="tab-denied">
-                <XCircle className="h-4 w-4" />
-                Denied
-                <Badge variant="secondary">{deniedApplications.length}</Badge>
-              </TabsTrigger>
-              <TabsTrigger value="trial_failed" className="gap-2" data-testid="tab-trial-failed">
-                <AlertTriangle className="h-4 w-4" />
-                Trial Failed
-                <Badge variant="secondary">{trialFailedApplications.length}</Badge>
-              </TabsTrigger>
-            </TabsList>
+            <div className="w-full overflow-x-auto mb-6">
+              <TabsList className="w-max">
+                <TabsTrigger value="pipeline" className="gap-2" data-testid="tab-pipeline">
+                  <Users className="h-4 w-4" />
+                  Pipeline
+                  <Badge variant="secondary">{activeApplications.length}</Badge>
+                </TabsTrigger>
+                <TabsTrigger value="adopted" className="gap-2" data-testid="tab-adopted">
+                  <CheckCircle className="h-4 w-4" />
+                  Adopted
+                  <Badge variant="secondary">{adoptedApplications.length}</Badge>
+                </TabsTrigger>
+                <TabsTrigger value="denied" className="gap-2" data-testid="tab-denied">
+                  <XCircle className="h-4 w-4" />
+                  Denied
+                  <Badge variant="secondary">{deniedApplications.length}</Badge>
+                </TabsTrigger>
+                <TabsTrigger value="trial_failed" className="gap-2" data-testid="tab-trial-failed">
+                  <AlertTriangle className="h-4 w-4" />
+                  Trial Failed
+                  <Badge variant="secondary">{trialFailedApplications.length}</Badge>
+                </TabsTrigger>
+              </TabsList>
+            </div>
 
             <TabsContent value="pipeline" className="mt-0">
               <KanbanBoard
