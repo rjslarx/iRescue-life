@@ -40,8 +40,10 @@ import {
   Calendar as CalendarIcon,
   AlertTriangle,
   Loader2,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
-import { format, isSameDay, parse } from "date-fns";
+import { format, isSameDay, parse, addDays } from "date-fns";
 
 interface RosterMedication {
   id: string;
@@ -443,6 +445,18 @@ export default function DailyRosterPage() {
     return type.charAt(0).toUpperCase() + type.slice(1).replace(/_/g, " ");
   }
 
+  function goToPrevDay() {
+    setSelectedDate(d => addDays(d, -1));
+    setSelectedItems(new Set());
+    setCompletedVaccines(new Set());
+  }
+
+  function goToNextDay() {
+    setSelectedDate(d => addDays(d, 1));
+    setSelectedItems(new Set());
+    setCompletedVaccines(new Set());
+  }
+
   return (
     <DashboardLayout title="Daily Medical Roster" description="Aggregated daily view of all pending medical tasks">
     <div className="flex flex-col h-full overflow-auto" data-testid="page-daily-roster">
@@ -450,15 +464,34 @@ export default function DailyRosterPage() {
         <div className="flex items-center gap-2 flex-wrap">
           <ClipboardList className="h-5 w-5 text-muted-foreground" />
           <h1 className="text-lg font-semibold" data-testid="text-page-title">Daily Medical Roster</h1>
-          <Badge variant="secondary" data-testid="badge-date">{format(selectedDate, "EEEE, MMMM d, yyyy")}</Badge>
+          <Badge variant="secondary" data-testid="badge-date" className="hidden lg:inline-flex">{format(selectedDate, "EEEE, MMMM d, yyyy")}</Badge>
           {totalItems > 0 && (
-            <Badge data-testid="badge-total-items">{totalItems} pending</Badge>
+            <Badge data-testid="badge-total-items" className="hidden lg:inline-flex">{totalItems} pending</Badge>
           )}
         </div>
       </div>
 
-      <div className="flex flex-col lg:flex-row flex-1 overflow-hidden">
-        <div className="lg:w-80 lg:min-w-80 border-b lg:border-b-0 lg:border-r p-4 lg:overflow-auto">
+      {/* Mobile compact date navigation — hidden on desktop */}
+      <div className="lg:hidden sticky top-0 z-50 bg-background border-b px-3 py-2 flex items-center justify-between gap-2">
+        <Button size="icon" variant="ghost" onClick={goToPrevDay} data-testid="button-prev-day">
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        <div className="flex flex-col items-center">
+          <span className="text-sm font-medium">{format(selectedDate, "EEE, MMM d")}</span>
+          {totalItems > 0 && <span className="text-xs text-muted-foreground">{totalItems} pending</span>}
+        </div>
+        <div className="flex items-center gap-1">
+          <Button size="sm" variant="ghost" onClick={() => { setSelectedDate(new Date()); setSelectedItems(new Set()); setCompletedVaccines(new Set()); }} data-testid="button-today">
+            Today
+          </Button>
+          <Button size="icon" variant="ghost" onClick={goToNextDay} data-testid="button-next-day">
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
+      <div className="flex flex-col lg:flex-row flex-1 min-h-0 overflow-auto lg:overflow-hidden">
+        <div className="hidden lg:flex lg:flex-col lg:w-80 lg:min-w-80 lg:border-r p-4 lg:overflow-auto">
           <Calendar
             mode="single"
             selected={selectedDate}

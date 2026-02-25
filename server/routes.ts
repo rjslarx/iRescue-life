@@ -38471,7 +38471,7 @@ The user asking is a tenant administrator or staff member.`;
           id: preventativeCareRecords.id,
           careName: preventativeCareRecords.careName,
           careCategory: preventativeCareRecords.careCategory,
-          dateAdministered: preventativeCareRecords.dateAdministered,
+          nextDueDate: preventativeCareRecords.nextDueDate,
           status: preventativeCareRecords.status,
           clinicName: preventativeCareRecords.clinicName,
           notes: preventativeCareRecords.notes,
@@ -38486,8 +38486,9 @@ The user asking is a tenant administrator or staff member.`;
         .where(and(
           eq(preventativeCareRecords.tenantId, tenantId),
           eq(preventativeCareRecords.status, 'pending'),
-          gte(preventativeCareRecords.dateAdministered, dayStart),
-          lte(preventativeCareRecords.dateAdministered, dayEnd),
+          isNotNull(preventativeCareRecords.nextDueDate),
+          gte(preventativeCareRecords.nextDueDate, dayStart),
+          lte(preventativeCareRecords.nextDueDate, dayEnd),
           notInArray(animals.status, TERMINAL_STATUSES),
         )),
 
@@ -38583,7 +38584,7 @@ The user asking is a tenant administrator or staff member.`;
         animalPhoto: Array.isArray(p.animalPhoto) && p.animalPhoto.length > 0 ? p.animalPhoto[0] : null,
         careName: p.careName,
         careCategory: p.careCategory,
-        dateAdministered: p.dateAdministered,
+        nextDueDate: p.nextDueDate,
         clinicName: p.clinicName,
         isQuarantined: p.isQuarantined,
         quarantineReason: p.quarantineReason,
@@ -38667,7 +38668,7 @@ The user asking is a tenant administrator or staff member.`;
         .groupBy(sql`to_char(${medicalDoses.dueDate}::date, 'YYYY-MM-DD')`),
 
         db.select({
-          day: sql<string>`to_char(${preventativeCareRecords.dateAdministered}::date, 'YYYY-MM-DD')`,
+          day: sql<string>`to_char(${preventativeCareRecords.nextDueDate}::date, 'YYYY-MM-DD')`,
           count: sql<number>`count(*)::int`,
         })
         .from(preventativeCareRecords)
@@ -38675,11 +38676,12 @@ The user asking is a tenant administrator or staff member.`;
         .where(and(
           eq(preventativeCareRecords.tenantId, tenantId),
           eq(preventativeCareRecords.status, 'pending'),
-          gte(preventativeCareRecords.dateAdministered, monthStart),
-          lte(preventativeCareRecords.dateAdministered, monthEnd),
+          isNotNull(preventativeCareRecords.nextDueDate),
+          gte(preventativeCareRecords.nextDueDate, monthStart),
+          lte(preventativeCareRecords.nextDueDate, monthEnd),
           notInArray(animals.status, TERMINAL_STATUSES),
         ))
-        .groupBy(sql`to_char(${preventativeCareRecords.dateAdministered}::date, 'YYYY-MM-DD')`),
+        .groupBy(sql`to_char(${preventativeCareRecords.nextDueDate}::date, 'YYYY-MM-DD')`),
 
         db.select({
           day: sql<string>`to_char(${medicalExams.examDate}::date, 'YYYY-MM-DD')`,
