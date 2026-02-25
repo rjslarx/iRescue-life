@@ -6,9 +6,10 @@ import { MoveAndSendVolunteerWaiverDialog } from "@/components/MoveAndSendVolunt
 import { useAuth } from "@/contexts/AuthContext";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Users, Filter, UserCheck, Search } from "lucide-react";
+import { Loader2, Users, UserCheck, Search, XCircle, RotateCcw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import type { VolunteerApplication } from "@shared/schema";
@@ -18,7 +19,7 @@ export default function VolunteerApplicationsPipelinePage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [sendingWaiverId, setSendingWaiverId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"pipeline" | "active_pool">("pipeline");
+  const [activeTab, setActiveTab] = useState<"pipeline" | "active_pool" | "rejected">("pipeline");
   const [searchQuery, setSearchQuery] = useState("");
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [viewApplicationId, setViewApplicationId] = useState<string | null>(null);
@@ -85,18 +86,20 @@ export default function VolunteerApplicationsPipelinePage() {
   const applications = data?.applications || [];
 
   const kanbanApplications = useMemo(() => {
-    return applications.map(app => ({
-      id: app.id,
-      applicantName: app.applicantName,
-      applicantEmail: app.applicantEmail,
-      applicantPhone: app.applicantPhone,
-      pipelineStatus: app.pipelineStatus || 'new_applicant',
-      availability: app.availability,
-      interests: app.interests,
-      skills: app.skills,
-      holdHarmlessFormId: app.holdHarmlessFormId,
-      holdHarmlessSignedAt: app.holdHarmlessSignedAt?.toString(),
-    }));
+    return applications
+      .filter(app => app.pipelineStatus !== 'rejected')
+      .map(app => ({
+        id: app.id,
+        applicantName: app.applicantName,
+        applicantEmail: app.applicantEmail,
+        applicantPhone: app.applicantPhone,
+        pipelineStatus: app.pipelineStatus || 'new_applicant',
+        availability: app.availability,
+        interests: app.interests,
+        skills: app.skills,
+        holdHarmlessFormId: app.holdHarmlessFormId,
+        holdHarmlessSignedAt: app.holdHarmlessSignedAt?.toString(),
+      }));
   }, [applications]);
 
   const activePoolVolunteers = useMemo(() => {
@@ -113,6 +116,10 @@ export default function VolunteerApplicationsPipelinePage() {
         );
       });
   }, [applications, searchQuery]);
+
+  const rejectedVolunteers = useMemo(() => {
+    return applications.filter(app => app.pipelineStatus === 'rejected');
+  }, [applications]);
 
   const handleMoveApplication = (applicationId: string, newStatus: string) => {
     if (newStatus === 'waiver_needed') {
@@ -140,7 +147,6 @@ export default function VolunteerApplicationsPipelinePage() {
     setViewDialogOpen(true);
   };
 
-  // Derive application data from fresh query data each render (prevents stale dropdown)
   const applicationToView = useMemo(() => {
     if (!viewApplicationId || !applications.length) return null;
     const app = applications.find(a => a.id === viewApplicationId);
@@ -168,6 +174,7 @@ export default function VolunteerApplicationsPipelinePage() {
 
   const pipelineCount = applications.filter(a => a.pipelineStatus !== 'active_pool' && a.pipelineStatus !== 'rejected').length;
   const activeCount = applications.filter(a => a.pipelineStatus === 'active_pool').length;
+  const rejectedCount = applications.filter(a => a.pipelineStatus === 'rejected').length;
 
   return (
     <DashboardLayout
@@ -175,7 +182,7 @@ export default function VolunteerApplicationsPipelinePage() {
       description="Manage volunteer applications through the approval process"
     >
       <div className="flex-1 overflow-auto p-6 min-w-0">
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "pipeline" | "active_pool")}>
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "pipeline" | "active_pool" | "rejected")}>
           <TabsList className="mb-6">
             <TabsTrigger value="pipeline" className="gap-2" data-testid="tab-pipeline">
               <Users className="h-4 w-4" />
@@ -186,6 +193,11 @@ export default function VolunteerApplicationsPipelinePage() {
               <UserCheck className="h-4 w-4" />
               Active Pool
               <Badge variant="secondary">{activeCount}</Badge>
+            </TabsTrigger>
+            <TabsTrigger value="rejected" className="gap-2" data-testid="tab-rejected">
+              <XCircle className="h-4 w-4" />
+              Rejected
+              <Badge variant="secondary">{rejectedCount}</Badge>
             </TabsTrigger>
           </TabsList>
 
@@ -269,10 +281,75 @@ export default function VolunteerApplicationsPipelinePage() {
               )}
             </div>
           </TabsContent>
+
+          <TabsContent value="rejected" className="mt-0">
+            {rejectedVolunteers.length === 0 ? (
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center py-12">
+                  <XCircle className="h-12 w-12 text-muted-foreground mb-4" />
+                  <p className="text-muted-foreground text-center">No rejected applications</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Applicants moved to Rejected from the pipeline will appear here
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 min-w-0">
+                {rejectedVolunteers.map((volunteer) => (
+                  <Card key={volunteer.id} className="min-w-0 overflow-hidden" data-testid={`card-rejected-volunteer-${volunteer.id}`}>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base flex items-center justify-between gap-2 min-w-0">
+                        <span className="truncate">{volunteer.applicantName}</span>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3 min-w-0">
+                      <div className="text-sm text-muted-foreground space-y-1">
+                        <p className="truncate">{volunteer.applicantEmail}</p>
+                        {volunteer.applicantPhone && (
+                          <p className="truncate">{volunteer.applicantPhone}</p>
+                        )}
+                      </div>
+                      {volunteer.availability && (
+                        <div className="text-sm line-clamp-2">
+                          <span className="font-medium">Availability:</span> {volunteer.availability}
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2 pt-2 border-t">
+                        <Button
+                          size="icon"
+                          variant="outline"
+                          onClick={() => handleViewApplication({
+                            id: volunteer.id,
+                            applicantName: volunteer.applicantName,
+                            applicantEmail: volunteer.applicantEmail,
+                            applicantPhone: volunteer.applicantPhone || '',
+                            pipelineStatus: volunteer.pipelineStatus || 'rejected',
+                          })}
+                          data-testid={`button-view-rejected-volunteer-${volunteer.id}`}
+                          title="View application"
+                        >
+                          <Search className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="flex-1 gap-2 text-sm"
+                          onClick={() => handleMoveApplication(volunteer.id, 'new_applicant')}
+                          disabled={updatePipelineStatusMutation.isPending}
+                          data-testid={`button-restore-volunteer-${volunteer.id}`}
+                        >
+                          <RotateCcw className="h-3.5 w-3.5" />
+                          Restore to Pipeline
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
         </Tabs>
       </div>
 
-      {/* View Application Dialog */}
       <ViewApplicationDialog
         application={applicationToView}
         applicationType="volunteer"

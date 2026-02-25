@@ -21,11 +21,6 @@ import {
 import MobilePipelineView, { PipelineStage, PipelineCard } from "./MobilePipelineView";
 import { useIsMobile } from "@/hooks/use-mobile";
 
-interface WaiverStatus {
-  formId?: string;
-  signedAt?: string;
-}
-
 interface VolunteerApplication {
   id: string;
   applicantName: string;
@@ -48,15 +43,18 @@ interface VolunteerKanbanBoardProps {
   sendingWaiverId?: string | null;
 }
 
-const stages: PipelineStage[] = [
+const kanbanStages: PipelineStage[] = [
   { id: "new_applicant", label: "New Applicant", color: "bg-blue-500", icon: Users },
   { id: "orientation_scheduled", label: "Orientation Scheduled", color: "bg-yellow-500", icon: Calendar },
   { id: "waiver_needed", label: "Waiver Needed", color: "bg-orange-500", icon: FileSignature },
   { id: "active_pool", label: "Active Pool", color: "bg-green-500", icon: UserCheck },
+];
+
+const allStages: PipelineStage[] = [
+  ...kanbanStages,
   { id: "rejected", label: "Rejected", color: "bg-red-500", icon: XCircle },
 ];
 
-// Stages that trigger email automation when moving from them to the next stage
 const automationTriggerStages = ["orientation_scheduled"];
 
 function WaiverStatusBadge({ signedAt }: { signedAt?: string | null }) {
@@ -158,7 +156,7 @@ export default function VolunteerKanbanBoard({
   if (isMobile) {
     return (
       <MobilePipelineView
-        stages={stages}
+        stages={allStages}
         cards={applications.map(appToCard)}
         getCardsByStage={getCardsByStage}
         onMoveCard={onMoveApplication ? handleMoveCard : undefined}
@@ -173,10 +171,10 @@ export default function VolunteerKanbanBoard({
       <div 
         className="grid gap-3"
         style={{ 
-          gridTemplateColumns: `repeat(${stages.length}, minmax(0, 1fr))`,
+          gridTemplateColumns: `repeat(${kanbanStages.length}, minmax(0, 1fr))`,
         }}
       >
-        {stages.map((stage) => {
+        {kanbanStages.map((stage) => {
           const stageApps = getApplicationsByStage(stage.id);
           const StageIcon = stage.icon;
           return (
@@ -283,7 +281,7 @@ export default function VolunteerKanbanBoard({
                                       <span className="truncate">Move</span>
                                     </SelectTrigger>
                                     <SelectContent>
-                                      {stages.filter(s => s.id !== app.pipelineStatus).map((s) => (
+                                      {allStages.filter(s => s.id !== app.pipelineStatus).map((s) => (
                                         <SelectItem key={s.id} value={s.id} data-testid={`option-volunteer-stage-${s.id}-${app.id}`}>
                                           <div className="flex items-center gap-2">
                                             <div className={`h-2 w-2 rounded-full ${s.color}`} />
