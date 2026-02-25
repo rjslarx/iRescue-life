@@ -104,6 +104,18 @@ function isRabiesVaccine(careName: string): boolean {
   return /rabies/i.test(careName);
 }
 
+function getItemSortTime(item: { _type: string; dueDate: string | null; frequency: string | null }): number {
+  if (item._type === 'dose' && item.dueDate) {
+    try {
+      const d = new Date(item.dueDate);
+      return d.getUTCHours() * 60 + d.getUTCMinutes();
+    } catch {
+      return Infinity;
+    }
+  }
+  return Infinity;
+}
+
 function getTimeBadge(dueDate: string | null, frequency: string | null): { label: string; className: string } | null {
   if (!frequency || !MULTI_DOSE_FREQUENCIES.includes(frequency)) return null;
   if (!dueDate) return null;
@@ -386,6 +398,35 @@ export function DailyExecutionWidget() {
     },
   });
 
+  const singleMarkMutation = useMutation({
+    mutationFn: async (item: { id: string; type: string; key: string }) => {
+      const res = await apiRequest("POST", "/api/daily-roster/bulk-mark-given", { items: [{ id: item.id, type: item.type }] });
+      return res.json();
+    },
+    onSuccess: (_data, variables) => {
+      setCheckedItems((prev) => {
+        const next = new Set(prev);
+        next.delete(variables.key);
+        return next;
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/daily-roster"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/daily-roster/calendar"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/medical-snapshot"] });
+    },
+    onError: (error: any, variables) => {
+      setCheckedItems((prev) => {
+        const next = new Set(prev);
+        next.delete(variables.key);
+        return next;
+      });
+      toast({
+        title: "Error",
+        description: error.message || "Failed to mark item as given",
+        variant: "destructive",
+      });
+    },
+  });
+
   const vaccineMarkMutation = useMutation({
     mutationFn: async (data: { id: string; manufacturer: string; lotNumber: string }) => {
       const res = await apiRequest("POST", "/api/daily-roster/mark-vaccine-given", data);
@@ -418,6 +459,11 @@ export function DailyExecutionWidget() {
     setCompletedVaccines(new Set());
   };
 
+  const getItemType = (item: InHouseItem): string => {
+    if (item._type === 'dose') return 'dose';
+    return item.source === 'vaccineRecord' ? 'vaccine' : 'preventative';
+  };
+
   const handleItemClick = (item: InHouseItem) => {
     const key = `${item._type}:${item.id}`;
     if (item._isVaccine) {
@@ -427,10 +473,10 @@ export function DailyExecutionWidget() {
     } else {
       setCheckedItems((prev) => {
         const next = new Set(prev);
-        if (next.has(key)) next.delete(key);
-        else next.add(key);
+        next.add(key);
         return next;
       });
+      singleMarkMutation.mutate({ id: item.id, type: getItemType(item), key });
     }
   };
 
@@ -462,7 +508,7 @@ export function DailyExecutionWidget() {
     (p) => p.careCategory === "vaccine" && isRabiesVaccine(p.careName)
   );
 
-  const medsPreventativesVaccines: InHouseItem[] = [
+  const medsPreventativesVaccines: InHouseItem[] = ([
     ...meds.map((m) => ({
       ...m,
       _type: "dose" as const,
@@ -485,7 +531,12 @@ export function DailyExecutionWidget() {
       isQuarantined: p.isQuarantined,
       quarantineReason: p.quarantineReason,
     })),
-  ];
+  ] as InHouseItem[]).sort((a, b) => {
+    const tA = getItemSortTime(a);
+    const tB = getItemSortTime(b);
+    if (tA !== tB) return tA - tB;
+    return a.animalName.localeCompare(b.animalName);
+  });
 
   const vetVisits = [
     ...exams.map((e) => ({ ...e, _label: e.examType, _detail: e.reason || "" })),

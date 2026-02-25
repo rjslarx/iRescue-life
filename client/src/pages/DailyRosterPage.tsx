@@ -130,6 +130,18 @@ function isRabiesVaccine(careName: string): boolean {
 
 const MULTI_DOSE_FREQUENCIES = ['BID', 'TID', 'QID'];
 
+function getItemSortTime(item: { _type: string; dueDate?: string | null }): number {
+  if (item._type === 'dose' && item.dueDate) {
+    try {
+      const d = new Date(item.dueDate);
+      return d.getUTCHours() * 60 + d.getUTCMinutes();
+    } catch {
+      return Infinity;
+    }
+  }
+  return Infinity;
+}
+
 function getTimeBadge(dueDate: string | null, frequency: string | null): { label: string; className: string } | null {
   if (!frequency || !MULTI_DOSE_FREQUENCIES.includes(frequency)) return null;
   if (!dueDate) return null;
@@ -370,7 +382,7 @@ export default function DailyRosterPage() {
     const inHousePreventatives = roster.preventatives.filter(
       (p) => !(p.careCategory === "vaccine" && isRabiesVaccine(p.careName))
     );
-    return [
+    const combined: (MedOrPrev & { _isVaccine: boolean })[] = [
       ...roster.medications.map((m): TaggedMedication & { _isVaccine: boolean } => ({ ...m, _type: "dose", _isVaccine: false })),
       ...inHousePreventatives.map((p): TaggedPreventative & { _isVaccine: boolean } => ({
         ...p,
@@ -378,6 +390,12 @@ export default function DailyRosterPage() {
         _isVaccine: p.careCategory === "vaccine",
       })),
     ];
+    return combined.sort((a, b) => {
+      const tA = getItemSortTime(a);
+      const tB = getItemSortTime(b);
+      if (tA !== tB) return tA - tB;
+      return a.animalName.localeCompare(b.animalName);
+    });
   }, [roster]);
 
   const rabiesVaccines = useMemo(() => {
@@ -407,6 +425,36 @@ export default function DailyRosterPage() {
     [medsAndPreventatives]
   );
 
+  const individualMarkMutation = useMutation({
+    mutationFn: async (payload: { id: string; type: string; key: string }) => {
+      await apiRequest("POST", "/api/daily-roster/bulk-mark-given", { items: [{ id: payload.id, type: payload.type }] });
+    },
+    onSuccess: (_data, variables) => {
+      toast({ title: "Marked as given", description: "Item updated successfully." });
+      setSelectedItems((prev) => {
+        const next = new Set(prev);
+        next.delete(variables.key);
+        return next;
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/daily-roster", dateStr] });
+      queryClient.invalidateQueries({ queryKey: ["/api/daily-roster/calendar", monthStr] });
+    },
+    onError: (err: Error, variables) => {
+      setSelectedItems((prev) => {
+        const next = new Set(prev);
+        next.delete(variables.key);
+        return next;
+      });
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  function getItemType(item: MedOrPrev & { _isVaccine: boolean }): string {
+    if (item._type === 'dose') return 'dose';
+    const prev = item as TaggedPreventative & { _isVaccine: boolean };
+    return prev.source === 'vaccineRecord' ? 'vaccine' : 'preventative';
+  }
+
   function handleItemClick(item: MedOrPrev & { _isVaccine: boolean }) {
     const key = `${item._type}:${item.id}`;
     if (item._isVaccine) {
@@ -417,10 +465,10 @@ export default function DailyRosterPage() {
     } else {
       setSelectedItems((prev) => {
         const next = new Set(prev);
-        if (next.has(key)) next.delete(key);
-        else next.add(key);
+        next.add(key);
         return next;
       });
+      individualMarkMutation.mutate({ id: item.id, type: getItemType(item), key });
     }
   }
 
