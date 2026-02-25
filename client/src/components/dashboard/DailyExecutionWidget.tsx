@@ -54,6 +54,7 @@ interface RosterPreventative {
   careCategory: string;
   isQuarantined: boolean;
   quarantineReason: string | null;
+  source?: 'preventativeCare' | 'vaccineRecord';
 }
 
 interface RosterExam {
@@ -329,6 +330,7 @@ type InHouseItem = {
   frequency: string | null;
   isQuarantined: boolean;
   quarantineReason: string | null;
+  source?: 'preventativeCare' | 'vaccineRecord';
 };
 
 export function DailyExecutionWidget() {
@@ -361,7 +363,7 @@ export function DailyExecutionWidget() {
   });
 
   const bulkMarkMutation = useMutation({
-    mutationFn: async (items: Array<{ id: string; type: "dose" | "preventative" }>) => {
+    mutationFn: async (items: Array<{ id: string; type: string }>) => {
       const res = await apiRequest("POST", "/api/daily-roster/bulk-mark-given", { items });
       return res.json();
     },
@@ -433,9 +435,14 @@ export function DailyExecutionWidget() {
   };
 
   const handleBulkMark = () => {
+    const sourceById = new Map<string, string>();
+    for (const p of (rosterData?.preventatives || [])) {
+      sourceById.set(p.id, p.source === 'vaccineRecord' ? 'vaccine' : 'preventative');
+    }
     const items = Array.from(checkedItems).map((key) => {
-      const [type, id] = key.split(":");
-      return { id, type: type as "dose" | "preventative" };
+      const [_type, id] = key.split(":");
+      const type = sourceById.get(id) ?? _type;
+      return { id, type };
     });
     if (items.length > 0) {
       bulkMarkMutation.mutate(items);

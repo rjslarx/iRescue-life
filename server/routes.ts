@@ -38467,443 +38467,576 @@ The user asking is a tenant administrator or staff member.`;
   // ============================================================================
 
   app.get('/api/daily-roster', requireTenant, requireAuth, async (req, res, next) => {
-    try {
-      const dateParam = (req.query.date as string) || new Date().toISOString().split('T')[0];
-      const tenantId = req.tenant!.id;
-      const { medicalDoses, medicalPrescriptions, preventativeCareRecords, diagnosticTests, procedureLogs, TERMINAL_STATUSES } = await import('@shared/schema');
+      try {
+        const dateParam = (req.query.date as string) || new Date().toISOString().split('T')[0];
+        const tenantId = req.tenant!.id;
+        const { medicalDoses, medicalPrescriptions, preventativeCareRecords, vaccineRecords, diagnosticTests, procedureLogs, TERMINAL_STATUSES } = await import('@shared/schema');
 
-      const dayStart = new Date(dateParam + 'T00:00:00.000Z');
-      const dayEnd = new Date(dateParam + 'T23:59:59.999Z');
+        const [rYear, rMonth, rDay] = dateParam.split('-').map(Number);
+        const dayStart = new Date(rYear, rMonth - 1, rDay, 0, 0, 0, 0);
+        const dayEnd = new Date(rYear, rMonth - 1, rDay, 23, 59, 59, 999);
 
-      const [medications, preventatives, exams, procedures, diagnostics] = await Promise.all([
-        db.select({
-          id: medicalDoses.id,
-          dueDate: medicalDoses.dueDate,
-          status: medicalDoses.status,
-          notes: medicalDoses.notes,
-          prescriptionId: medicalDoses.prescriptionId,
-          medicationName: medicalPrescriptions.medicationName,
-          dosage: medicalPrescriptions.dosage,
-          route: medicalPrescriptions.route,
-          frequency: medicalPrescriptions.frequency,
-          animalId: medicalPrescriptions.animalId,
-          animalName: animals.name,
-          animalPhoto: animals.photoUrls,
-          isQuarantined: animals.isQuarantined,
-          quarantineReason: animals.quarantineReason,
-        })
-        .from(medicalDoses)
-        .innerJoin(medicalPrescriptions, eq(medicalDoses.prescriptionId, medicalPrescriptions.id))
-        .innerJoin(animals, eq(medicalPrescriptions.animalId, animals.id))
-        .where(and(
-          eq(medicalDoses.tenantId, tenantId),
-          eq(medicalDoses.status, 'due'),
-          gte(medicalDoses.dueDate, dayStart),
-          lte(medicalDoses.dueDate, dayEnd),
-          notInArray(animals.status, TERMINAL_STATUSES),
-        )),
-
-        db.select({
-          id: preventativeCareRecords.id,
-          careName: preventativeCareRecords.careName,
-          careCategory: preventativeCareRecords.careCategory,
-          nextDueDate: preventativeCareRecords.nextDueDate,
-          status: preventativeCareRecords.status,
-          clinicName: preventativeCareRecords.clinicName,
-          notes: preventativeCareRecords.notes,
-          animalId: preventativeCareRecords.animalId,
-          animalName: animals.name,
-          animalPhoto: animals.photoUrls,
-          isQuarantined: animals.isQuarantined,
-          quarantineReason: animals.quarantineReason,
-        })
-        .from(preventativeCareRecords)
-        .innerJoin(animals, eq(preventativeCareRecords.animalId, animals.id))
-        .where(and(
-          eq(preventativeCareRecords.tenantId, tenantId),
-          eq(preventativeCareRecords.status, 'pending'),
-          isNotNull(preventativeCareRecords.nextDueDate),
-          gte(preventativeCareRecords.nextDueDate, dayStart),
-          lte(preventativeCareRecords.nextDueDate, dayEnd),
-          notInArray(animals.status, TERMINAL_STATUSES),
-        )),
-
-        db.select({
-          id: medicalExams.id,
-          examType: medicalExams.examType,
-          examDate: medicalExams.examDate,
-          performedBy: medicalExams.performedBy,
-          reason: medicalExams.reason,
-          status: medicalExams.status,
-          animalId: medicalExams.animalId,
-          animalName: animals.name,
-          animalPhoto: animals.photoUrls,
-          isQuarantined: animals.isQuarantined,
-          quarantineReason: animals.quarantineReason,
-        })
-        .from(medicalExams)
-        .innerJoin(animals, eq(medicalExams.animalId, animals.id))
-        .where(and(
-          eq(medicalExams.tenantId, tenantId),
-          eq(medicalExams.status, 'pending'),
-          gte(medicalExams.examDate, dayStart),
-          lte(medicalExams.examDate, dayEnd),
-          notInArray(animals.status, TERMINAL_STATUSES),
-        )),
-
-        db.select({
-          id: procedureLogs.id,
-          procedureName: procedureLogs.procedureName,
-          procedureDate: procedureLogs.procedureDate,
-          veterinarian: procedureLogs.veterinarian,
-          notes: procedureLogs.notes,
-          status: procedureLogs.status,
-          billAmount: procedureLogs.billAmount,
-          animalId: procedureLogs.animalId,
-          animalName: animals.name,
-          animalPhoto: animals.photoUrls,
-          isQuarantined: animals.isQuarantined,
-          quarantineReason: animals.quarantineReason,
-        })
-        .from(procedureLogs)
-        .innerJoin(animals, eq(procedureLogs.animalId, animals.id))
-        .where(and(
-          eq(procedureLogs.tenantId, tenantId),
-          eq(procedureLogs.status, 'pending'),
-          gte(procedureLogs.procedureDate, dayStart),
-          lte(procedureLogs.procedureDate, dayEnd),
-          notInArray(animals.status, TERMINAL_STATUSES),
-        )),
-
-        db.select({
-          id: diagnosticTests.id,
-          testName: diagnosticTests.testName,
-          testDate: diagnosticTests.testDate,
-          result: diagnosticTests.result,
-          notes: diagnosticTests.notes,
-          animalId: diagnosticTests.animalId,
-          animalName: animals.name,
-          animalPhoto: animals.photoUrls,
-          isQuarantined: animals.isQuarantined,
-          quarantineReason: animals.quarantineReason,
-        })
-        .from(diagnosticTests)
-        .innerJoin(animals, eq(diagnosticTests.animalId, animals.id))
-        .where(and(
-          eq(diagnosticTests.tenantId, tenantId),
-          eq(diagnosticTests.result, 'Pending'),
-          gte(diagnosticTests.testDate, dayStart),
-          lte(diagnosticTests.testDate, dayEnd),
-          notInArray(animals.status, TERMINAL_STATUSES),
-        )),
-      ]);
-
-      const formattedMedications = medications.map(m => ({
-        id: m.id,
-        animalId: m.animalId,
-        animalName: m.animalName,
-        animalPhoto: Array.isArray(m.animalPhoto) && m.animalPhoto.length > 0 ? m.animalPhoto[0] : null,
-        medicationName: m.medicationName,
-        dosage: m.dosage,
-        route: m.route,
-        dueDate: m.dueDate,
-        prescriptionId: m.prescriptionId,
-        frequency: m.frequency,
-        isQuarantined: m.isQuarantined,
-        quarantineReason: m.quarantineReason,
-      }));
-
-      const formattedPreventatives = preventatives.map(p => ({
-        id: p.id,
-        animalId: p.animalId,
-        animalName: p.animalName,
-        animalPhoto: Array.isArray(p.animalPhoto) && p.animalPhoto.length > 0 ? p.animalPhoto[0] : null,
-        careName: p.careName,
-        careCategory: p.careCategory,
-        nextDueDate: p.nextDueDate,
-        clinicName: p.clinicName,
-        isQuarantined: p.isQuarantined,
-        quarantineReason: p.quarantineReason,
-      }));
-
-      const formattedExams = exams.map(e => ({
-        id: e.id,
-        animalId: e.animalId,
-        animalName: e.animalName,
-        animalPhoto: Array.isArray(e.animalPhoto) && e.animalPhoto.length > 0 ? e.animalPhoto[0] : null,
-        examType: e.examType,
-        examDate: e.examDate,
-        performedBy: e.performedBy,
-        reason: e.reason,
-        isQuarantined: e.isQuarantined,
-        quarantineReason: e.quarantineReason,
-      }));
-
-      const formattedProcedures = procedures.map(p => ({
-        id: p.id,
-        animalId: p.animalId,
-        animalName: p.animalName,
-        animalPhoto: Array.isArray(p.animalPhoto) && p.animalPhoto.length > 0 ? p.animalPhoto[0] : null,
-        procedureName: p.procedureName,
-        procedureDate: p.procedureDate,
-        veterinarian: p.veterinarian,
-        billAmount: p.billAmount,
-        isQuarantined: p.isQuarantined,
-        quarantineReason: p.quarantineReason,
-      }));
-
-      const formattedDiagnostics = diagnostics.map(d => ({
-        id: d.id,
-        animalId: d.animalId,
-        animalName: d.animalName,
-        animalPhoto: Array.isArray(d.animalPhoto) && d.animalPhoto.length > 0 ? d.animalPhoto[0] : null,
-        testName: d.testName,
-        testDate: d.testDate,
-        isQuarantined: d.isQuarantined,
-        quarantineReason: d.quarantineReason,
-      }));
-
-      res.json({
-        medications: formattedMedications,
-        preventatives: formattedPreventatives,
-        exams: formattedExams,
-        procedures: formattedProcedures,
-        diagnostics: formattedDiagnostics,
-      });
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  app.get('/api/daily-roster/calendar', requireTenant, requireAuth, async (req, res, next) => {
-    try {
-      const monthParam = (req.query.month as string) || new Date().toISOString().slice(0, 7);
-      const tenantId = req.tenant!.id;
-      const { medicalDoses, medicalPrescriptions, preventativeCareRecords, diagnosticTests, procedureLogs, TERMINAL_STATUSES } = await import('@shared/schema');
-
-      const monthStart = new Date(monthParam + '-01T00:00:00.000Z');
-      const nextMonth = new Date(monthStart);
-      nextMonth.setUTCMonth(nextMonth.getUTCMonth() + 1);
-      const monthEnd = new Date(nextMonth.getTime() - 1);
-
-      const [doseCounts, preventativeCounts, examCounts, procedureCounts, diagnosticCounts] = await Promise.all([
-        db.select({
-          day: sql<string>`to_char(${medicalDoses.dueDate}::date, 'YYYY-MM-DD')`,
-          count: sql<number>`count(*)::int`,
-        })
-        .from(medicalDoses)
-        .innerJoin(medicalPrescriptions, eq(medicalDoses.prescriptionId, medicalPrescriptions.id))
-        .innerJoin(animals, eq(medicalPrescriptions.animalId, animals.id))
-        .where(and(
-          eq(medicalDoses.tenantId, tenantId),
-          eq(medicalDoses.status, 'due'),
-          gte(medicalDoses.dueDate, monthStart),
-          lte(medicalDoses.dueDate, monthEnd),
-          notInArray(animals.status, TERMINAL_STATUSES),
-        ))
-        .groupBy(sql`to_char(${medicalDoses.dueDate}::date, 'YYYY-MM-DD')`),
-
-        db.select({
-          day: sql<string>`to_char(${preventativeCareRecords.nextDueDate}::date, 'YYYY-MM-DD')`,
-          count: sql<number>`count(*)::int`,
-        })
-        .from(preventativeCareRecords)
-        .innerJoin(animals, eq(preventativeCareRecords.animalId, animals.id))
-        .where(and(
-          eq(preventativeCareRecords.tenantId, tenantId),
-          eq(preventativeCareRecords.status, 'pending'),
-          isNotNull(preventativeCareRecords.nextDueDate),
-          gte(preventativeCareRecords.nextDueDate, monthStart),
-          lte(preventativeCareRecords.nextDueDate, monthEnd),
-          notInArray(animals.status, TERMINAL_STATUSES),
-        ))
-        .groupBy(sql`to_char(${preventativeCareRecords.nextDueDate}::date, 'YYYY-MM-DD')`),
-
-        db.select({
-          day: sql<string>`to_char(${medicalExams.examDate}::date, 'YYYY-MM-DD')`,
-          count: sql<number>`count(*)::int`,
-        })
-        .from(medicalExams)
-        .innerJoin(animals, eq(medicalExams.animalId, animals.id))
-        .where(and(
-          eq(medicalExams.tenantId, tenantId),
-          eq(medicalExams.status, 'pending'),
-          gte(medicalExams.examDate, monthStart),
-          lte(medicalExams.examDate, monthEnd),
-          notInArray(animals.status, TERMINAL_STATUSES),
-        ))
-        .groupBy(sql`to_char(${medicalExams.examDate}::date, 'YYYY-MM-DD')`),
-
-        db.select({
-          day: sql<string>`to_char(${procedureLogs.procedureDate}::date, 'YYYY-MM-DD')`,
-          count: sql<number>`count(*)::int`,
-        })
-        .from(procedureLogs)
-        .innerJoin(animals, eq(procedureLogs.animalId, animals.id))
-        .where(and(
-          eq(procedureLogs.tenantId, tenantId),
-          eq(procedureLogs.status, 'pending'),
-          gte(procedureLogs.procedureDate, monthStart),
-          lte(procedureLogs.procedureDate, monthEnd),
-          notInArray(animals.status, TERMINAL_STATUSES),
-        ))
-        .groupBy(sql`to_char(${procedureLogs.procedureDate}::date, 'YYYY-MM-DD')`),
-
-        db.select({
-          day: sql<string>`to_char(${diagnosticTests.testDate}::date, 'YYYY-MM-DD')`,
-          count: sql<number>`count(*)::int`,
-        })
-        .from(diagnosticTests)
-        .innerJoin(animals, eq(diagnosticTests.animalId, animals.id))
-        .where(and(
-          eq(diagnosticTests.tenantId, tenantId),
-          eq(diagnosticTests.result, 'Pending'),
-          gte(diagnosticTests.testDate, monthStart),
-          lte(diagnosticTests.testDate, monthEnd),
-          notInArray(animals.status, TERMINAL_STATUSES),
-        ))
-        .groupBy(sql`to_char(${diagnosticTests.testDate}::date, 'YYYY-MM-DD')`),
-      ]);
-
-      const dates: Record<string, { total: number; medications: number; preventatives: number; exams: number; procedures: number; diagnostics: number }> = {};
-
-      const ensureDate = (day: string) => {
-        if (!dates[day]) {
-          dates[day] = { total: 0, medications: 0, preventatives: 0, exams: 0, procedures: 0, diagnostics: 0 };
-        }
-      };
-
-      for (const row of doseCounts) {
-        ensureDate(row.day);
-        dates[row.day].medications = row.count;
-        dates[row.day].total += row.count;
-      }
-      for (const row of preventativeCounts) {
-        ensureDate(row.day);
-        dates[row.day].preventatives = row.count;
-        dates[row.day].total += row.count;
-      }
-      for (const row of examCounts) {
-        ensureDate(row.day);
-        dates[row.day].exams = row.count;
-        dates[row.day].total += row.count;
-      }
-      for (const row of procedureCounts) {
-        ensureDate(row.day);
-        dates[row.day].procedures = row.count;
-        dates[row.day].total += row.count;
-      }
-      for (const row of diagnosticCounts) {
-        ensureDate(row.day);
-        dates[row.day].diagnostics = row.count;
-        dates[row.day].total += row.count;
-      }
-
-      res.json({ dates });
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  app.post('/api/daily-roster/bulk-mark-given', requireTenant, requireAuth, async (req, res, next) => {
-    try {
-      const tenantId = req.tenant!.id;
-      const userId = req.user!.id;
-      const { medicalDoses, preventativeCareRecords } = await import('@shared/schema');
-
-      const schema = z.object({
-        items: z.array(z.object({
-          id: z.string().uuid(),
-          type: z.enum(['dose', 'preventative']),
-        })).min(1),
-      });
-
-      const parsed = schema.parse(req.body);
-
-      const doseIds = parsed.items.filter(i => i.type === 'dose').map(i => i.id);
-      const preventativeIds = parsed.items.filter(i => i.type === 'preventative').map(i => i.id);
-
-      let successCount = 0;
-      const now = new Date();
-      const todayEnd = new Date();
-      todayEnd.setHours(23, 59, 59, 999);
-
-      if (doseIds.length > 0) {
-        const result = await db.update(medicalDoses)
-          .set({ status: 'given', givenAt: now, administeredBy: userId })
+        const [medications, preventatives, vaccinesFromVaccineRecords, exams, procedures, diagnostics] = await Promise.all([
+          db.select({
+            id: medicalDoses.id,
+            dueDate: medicalDoses.dueDate,
+            status: medicalDoses.status,
+            notes: medicalDoses.notes,
+            prescriptionId: medicalDoses.prescriptionId,
+            medicationName: medicalPrescriptions.medicationName,
+            dosage: medicalPrescriptions.dosage,
+            route: medicalPrescriptions.route,
+            frequency: medicalPrescriptions.frequency,
+            animalId: medicalPrescriptions.animalId,
+            animalName: animals.name,
+            animalPhoto: animals.photoUrls,
+            isQuarantined: animals.isQuarantined,
+            quarantineReason: animals.quarantineReason,
+          })
+          .from(medicalDoses)
+          .innerJoin(medicalPrescriptions, eq(medicalDoses.prescriptionId, medicalPrescriptions.id))
+          .innerJoin(animals, eq(medicalPrescriptions.animalId, animals.id))
           .where(and(
             eq(medicalDoses.tenantId, tenantId),
-            inArray(medicalDoses.id, doseIds),
             eq(medicalDoses.status, 'due'),
-            lte(medicalDoses.dueDate, todayEnd),
-          ));
-        successCount += (result as any).rowCount || 0;
-      }
+            gte(medicalDoses.dueDate, dayStart),
+            lte(medicalDoses.dueDate, dayEnd),
+            notInArray(animals.status, TERMINAL_STATUSES),
+          )),
 
-      if (preventativeIds.length > 0) {
-        const result = await db.update(preventativeCareRecords)
-          .set({ status: 'given', updatedAt: now })
+          db.select({
+            id: preventativeCareRecords.id,
+            careName: preventativeCareRecords.careName,
+            careCategory: preventativeCareRecords.careCategory,
+            nextDueDate: preventativeCareRecords.nextDueDate,
+            status: preventativeCareRecords.status,
+            clinicName: preventativeCareRecords.clinicName,
+            notes: preventativeCareRecords.notes,
+            animalId: preventativeCareRecords.animalId,
+            animalName: animals.name,
+            animalPhoto: animals.photoUrls,
+            isQuarantined: animals.isQuarantined,
+            quarantineReason: animals.quarantineReason,
+          })
+          .from(preventativeCareRecords)
+          .innerJoin(animals, eq(preventativeCareRecords.animalId, animals.id))
+          .where(and(
+            eq(preventativeCareRecords.tenantId, tenantId),
+            eq(preventativeCareRecords.status, 'given'),
+            isNotNull(preventativeCareRecords.nextDueDate),
+            gte(preventativeCareRecords.nextDueDate, dayStart),
+            lte(preventativeCareRecords.nextDueDate, dayEnd),
+            notInArray(animals.status, TERMINAL_STATUSES),
+          )),
+
+          // vaccineRecords with dateDue on this date
+          db.select({
+            id: vaccineRecords.id,
+            itemName: vaccineRecords.itemName,
+            dateDue: vaccineRecords.dateDue,
+            clinicName: vaccineRecords.clinicName,
+            validDurationMonths: vaccineRecords.validDurationMonths,
+            animalId: vaccineRecords.animalId,
+            animalName: animals.name,
+            animalPhoto: animals.photoUrls,
+            isQuarantined: animals.isQuarantined,
+            quarantineReason: animals.quarantineReason,
+          })
+          .from(vaccineRecords)
+          .innerJoin(animals, eq(vaccineRecords.animalId, animals.id))
+          .where(and(
+            eq(vaccineRecords.tenantId, tenantId),
+            isNotNull(vaccineRecords.dateDue),
+            gte(vaccineRecords.dateDue, dayStart),
+            lte(vaccineRecords.dateDue, dayEnd),
+            notInArray(animals.status, TERMINAL_STATUSES),
+          )),
+
+          db.select({
+            id: medicalExams.id,
+            examType: medicalExams.examType,
+            examDate: medicalExams.examDate,
+            performedBy: medicalExams.performedBy,
+            reason: medicalExams.reason,
+            status: medicalExams.status,
+            animalId: medicalExams.animalId,
+            animalName: animals.name,
+            animalPhoto: animals.photoUrls,
+            isQuarantined: animals.isQuarantined,
+            quarantineReason: animals.quarantineReason,
+          })
+          .from(medicalExams)
+          .innerJoin(animals, eq(medicalExams.animalId, animals.id))
+          .where(and(
+            eq(medicalExams.tenantId, tenantId),
+            eq(medicalExams.status, 'pending'),
+            gte(medicalExams.examDate, dayStart),
+            lte(medicalExams.examDate, dayEnd),
+            notInArray(animals.status, TERMINAL_STATUSES),
+          )),
+
+          db.select({
+            id: procedureLogs.id,
+            procedureName: procedureLogs.procedureName,
+            procedureDate: procedureLogs.procedureDate,
+            veterinarian: procedureLogs.veterinarian,
+            notes: procedureLogs.notes,
+            status: procedureLogs.status,
+            billAmount: procedureLogs.billAmount,
+            animalId: procedureLogs.animalId,
+            animalName: animals.name,
+            animalPhoto: animals.photoUrls,
+            isQuarantined: animals.isQuarantined,
+            quarantineReason: animals.quarantineReason,
+          })
+          .from(procedureLogs)
+          .innerJoin(animals, eq(procedureLogs.animalId, animals.id))
+          .where(and(
+            eq(procedureLogs.tenantId, tenantId),
+            eq(procedureLogs.status, 'pending'),
+            gte(procedureLogs.procedureDate, dayStart),
+            lte(procedureLogs.procedureDate, dayEnd),
+            notInArray(animals.status, TERMINAL_STATUSES),
+          )),
+
+          db.select({
+            id: diagnosticTests.id,
+            testName: diagnosticTests.testName,
+            testDate: diagnosticTests.testDate,
+            result: diagnosticTests.result,
+            notes: diagnosticTests.notes,
+            animalId: diagnosticTests.animalId,
+            animalName: animals.name,
+            animalPhoto: animals.photoUrls,
+            isQuarantined: animals.isQuarantined,
+            quarantineReason: animals.quarantineReason,
+          })
+          .from(diagnosticTests)
+          .innerJoin(animals, eq(diagnosticTests.animalId, animals.id))
+          .where(and(
+            eq(diagnosticTests.tenantId, tenantId),
+            eq(diagnosticTests.result, 'Pending'),
+            gte(diagnosticTests.testDate, dayStart),
+            lte(diagnosticTests.testDate, dayEnd),
+            notInArray(animals.status, TERMINAL_STATUSES),
+          )),
+        ]);
+
+        const formattedMedications = medications.map(m => ({
+          id: m.id,
+          animalId: m.animalId,
+          animalName: m.animalName,
+          animalPhoto: Array.isArray(m.animalPhoto) && m.animalPhoto.length > 0 ? m.animalPhoto[0] : null,
+          medicationName: m.medicationName,
+          dosage: m.dosage,
+          route: m.route,
+          dueDate: m.dueDate,
+          prescriptionId: m.prescriptionId,
+          frequency: m.frequency,
+          isQuarantined: m.isQuarantined,
+          quarantineReason: m.quarantineReason,
+        }));
+
+        const formattedPreventatives = [
+          ...preventatives.map(p => ({
+            id: p.id,
+            animalId: p.animalId,
+            animalName: p.animalName,
+            animalPhoto: Array.isArray(p.animalPhoto) && p.animalPhoto.length > 0 ? p.animalPhoto[0] : null,
+            careName: p.careName,
+            careCategory: p.careCategory,
+            nextDueDate: p.nextDueDate,
+            clinicName: p.clinicName,
+            isQuarantined: p.isQuarantined,
+            quarantineReason: p.quarantineReason,
+            source: 'preventativeCare' as const,
+          })),
+          ...vaccinesFromVaccineRecords.map(v => ({
+            id: v.id,
+            animalId: v.animalId,
+            animalName: v.animalName,
+            animalPhoto: Array.isArray(v.animalPhoto) && v.animalPhoto.length > 0 ? v.animalPhoto[0] : null,
+            careName: v.itemName,
+            careCategory: 'vaccine' as const,
+            nextDueDate: v.dateDue,
+            clinicName: v.clinicName,
+            isQuarantined: v.isQuarantined,
+            quarantineReason: v.quarantineReason,
+            source: 'vaccineRecord' as const,
+          })),
+        ];
+
+        const formattedExams = exams.map(e => ({
+          id: e.id,
+          animalId: e.animalId,
+          animalName: e.animalName,
+          animalPhoto: Array.isArray(e.animalPhoto) && e.animalPhoto.length > 0 ? e.animalPhoto[0] : null,
+          examType: e.examType,
+          examDate: e.examDate,
+          performedBy: e.performedBy,
+          reason: e.reason,
+          isQuarantined: e.isQuarantined,
+          quarantineReason: e.quarantineReason,
+        }));
+
+        const formattedProcedures = procedures.map(p => ({
+          id: p.id,
+          animalId: p.animalId,
+          animalName: p.animalName,
+          animalPhoto: Array.isArray(p.animalPhoto) && p.animalPhoto.length > 0 ? p.animalPhoto[0] : null,
+          procedureName: p.procedureName,
+          procedureDate: p.procedureDate,
+          veterinarian: p.veterinarian,
+          billAmount: p.billAmount,
+          isQuarantined: p.isQuarantined,
+          quarantineReason: p.quarantineReason,
+        }));
+
+        const formattedDiagnostics = diagnostics.map(d => ({
+          id: d.id,
+          animalId: d.animalId,
+          animalName: d.animalName,
+          animalPhoto: Array.isArray(d.animalPhoto) && d.animalPhoto.length > 0 ? d.animalPhoto[0] : null,
+          testName: d.testName,
+          testDate: d.testDate,
+          isQuarantined: d.isQuarantined,
+          quarantineReason: d.quarantineReason,
+        }));
+
+        res.json({
+          medications: formattedMedications,
+          preventatives: formattedPreventatives,
+          exams: formattedExams,
+          procedures: formattedProcedures,
+          diagnostics: formattedDiagnostics,
+        });
+      } catch (error) {
+        next(error);
+      }
+    });
+
+      app.get('/api/daily-roster/calendar', requireTenant, requireAuth, async (req, res, next) => {
+      try {
+        const monthParam = (req.query.month as string) || new Date().toISOString().slice(0, 7);
+        const tenantId = req.tenant!.id;
+        const { medicalDoses, medicalPrescriptions, preventativeCareRecords, vaccineRecords, diagnosticTests, procedureLogs, TERMINAL_STATUSES } = await import('@shared/schema');
+
+        const [calYr, calMo] = monthParam.split('-').map(Number);
+        const monthStart = new Date(calYr, calMo - 1, 1, 0, 0, 0, 0);
+        const monthEnd   = new Date(calYr, calMo, 0, 23, 59, 59, 999);
+
+        const [doseCounts, preventativeCounts, examCounts, procedureCounts, diagnosticCounts, vaccineRecordCounts] = await Promise.all([
+          db.select({
+            day: sql<string>`to_char(${medicalDoses.dueDate}::date, 'YYYY-MM-DD')`,
+            count: sql<number>`count(*)::int`,
+          })
+          .from(medicalDoses)
+          .innerJoin(medicalPrescriptions, eq(medicalDoses.prescriptionId, medicalPrescriptions.id))
+          .innerJoin(animals, eq(medicalPrescriptions.animalId, animals.id))
+          .where(and(
+            eq(medicalDoses.tenantId, tenantId),
+            eq(medicalDoses.status, 'due'),
+            gte(medicalDoses.dueDate, monthStart),
+            lte(medicalDoses.dueDate, monthEnd),
+            notInArray(animals.status, TERMINAL_STATUSES),
+          ))
+          .groupBy(sql`to_char(${medicalDoses.dueDate}::date, 'YYYY-MM-DD')`),
+
+          db.select({
+            day: sql<string>`to_char(${preventativeCareRecords.nextDueDate}::date, 'YYYY-MM-DD')`,
+            count: sql<number>`count(*)::int`,
+          })
+          .from(preventativeCareRecords)
+          .innerJoin(animals, eq(preventativeCareRecords.animalId, animals.id))
+          .where(and(
+            eq(preventativeCareRecords.tenantId, tenantId),
+            eq(preventativeCareRecords.status, 'given'),
+            isNotNull(preventativeCareRecords.nextDueDate),
+            gte(preventativeCareRecords.nextDueDate, monthStart),
+            lte(preventativeCareRecords.nextDueDate, monthEnd),
+            notInArray(animals.status, TERMINAL_STATUSES),
+          ))
+          .groupBy(sql`to_char(${preventativeCareRecords.nextDueDate}::date, 'YYYY-MM-DD')`),
+
+          db.select({
+            day: sql<string>`to_char(${medicalExams.examDate}::date, 'YYYY-MM-DD')`,
+            count: sql<number>`count(*)::int`,
+          })
+          .from(medicalExams)
+          .innerJoin(animals, eq(medicalExams.animalId, animals.id))
+          .where(and(
+            eq(medicalExams.tenantId, tenantId),
+            eq(medicalExams.status, 'pending'),
+            gte(medicalExams.examDate, monthStart),
+            lte(medicalExams.examDate, monthEnd),
+            notInArray(animals.status, TERMINAL_STATUSES),
+          ))
+          .groupBy(sql`to_char(${medicalExams.examDate}::date, 'YYYY-MM-DD')`),
+
+          db.select({
+            day: sql<string>`to_char(${procedureLogs.procedureDate}::date, 'YYYY-MM-DD')`,
+            count: sql<number>`count(*)::int`,
+          })
+          .from(procedureLogs)
+          .innerJoin(animals, eq(procedureLogs.animalId, animals.id))
+          .where(and(
+            eq(procedureLogs.tenantId, tenantId),
+            eq(procedureLogs.status, 'pending'),
+            gte(procedureLogs.procedureDate, monthStart),
+            lte(procedureLogs.procedureDate, monthEnd),
+            notInArray(animals.status, TERMINAL_STATUSES),
+          ))
+          .groupBy(sql`to_char(${procedureLogs.procedureDate}::date, 'YYYY-MM-DD')`),
+
+          db.select({
+            day: sql<string>`to_char(${diagnosticTests.testDate}::date, 'YYYY-MM-DD')`,
+            count: sql<number>`count(*)::int`,
+          })
+          .from(diagnosticTests)
+          .innerJoin(animals, eq(diagnosticTests.animalId, animals.id))
+          .where(and(
+            eq(diagnosticTests.tenantId, tenantId),
+            eq(diagnosticTests.result, 'Pending'),
+            gte(diagnosticTests.testDate, monthStart),
+            lte(diagnosticTests.testDate, monthEnd),
+            notInArray(animals.status, TERMINAL_STATUSES),
+          ))
+          .groupBy(sql`to_char(${diagnosticTests.testDate}::date, 'YYYY-MM-DD')`),
+
+          // vaccineRecords with dateDue in this month
+          db.select({
+            day: sql<string>`to_char(${vaccineRecords.dateDue}::date, 'YYYY-MM-DD')`,
+            count: sql<number>`count(*)::int`,
+          })
+          .from(vaccineRecords)
+          .innerJoin(animals, eq(vaccineRecords.animalId, animals.id))
+          .where(and(
+            eq(vaccineRecords.tenantId, tenantId),
+            isNotNull(vaccineRecords.dateDue),
+            gte(vaccineRecords.dateDue, monthStart),
+            lte(vaccineRecords.dateDue, monthEnd),
+            notInArray(animals.status, TERMINAL_STATUSES),
+          ))
+          .groupBy(sql`to_char(${vaccineRecords.dateDue}::date, 'YYYY-MM-DD')`),
+        ]);
+
+        const dates: Record<string, { total: number; medications: number; preventatives: number; exams: number; procedures: number; diagnostics: number }> = {};
+
+        const ensureDate = (day: string) => {
+          if (!dates[day]) {
+            dates[day] = { total: 0, medications: 0, preventatives: 0, exams: 0, procedures: 0, diagnostics: 0 };
+          }
+        };
+
+        for (const row of doseCounts) {
+          ensureDate(row.day);
+          dates[row.day].medications = row.count;
+          dates[row.day].total += row.count;
+        }
+        for (const row of preventativeCounts) {
+          ensureDate(row.day);
+          dates[row.day].preventatives = row.count;
+          dates[row.day].total += row.count;
+        }
+        for (const row of examCounts) {
+          ensureDate(row.day);
+          dates[row.day].exams = row.count;
+          dates[row.day].total += row.count;
+        }
+        for (const row of procedureCounts) {
+          ensureDate(row.day);
+          dates[row.day].procedures = row.count;
+          dates[row.day].total += row.count;
+        }
+        for (const row of diagnosticCounts) {
+          ensureDate(row.day);
+          dates[row.day].diagnostics = row.count;
+          dates[row.day].total += row.count;
+        }
+        for (const row of vaccineRecordCounts) {
+          ensureDate(row.day);
+          dates[row.day].preventatives = (dates[row.day].preventatives || 0) + row.count;
+          dates[row.day].total += row.count;
+        }
+
+        res.json({ dates });
+      } catch (error) {
+        next(error);
+      }
+    });
+
+      app.post('/api/daily-roster/bulk-mark-given', requireTenant, requireAuth, async (req, res, next) => {
+      try {
+        const tenantId = req.tenant!.id;
+        const userId = req.user!.id;
+        const { medicalDoses, preventativeCareRecords, preventativeCareTypes, vaccineRecords } = await import('@shared/schema');
+
+        const schema = z.object({
+          items: z.array(z.object({
+            id: z.string().uuid(),
+            type: z.enum(['dose', 'preventative', 'vaccine']),
+          })).min(1),
+        });
+
+        const parsed = schema.parse(req.body);
+
+        const doseIds = parsed.items.filter(i => i.type === 'dose').map(i => i.id);
+        const preventativeIds = parsed.items.filter(i => i.type === 'preventative').map(i => i.id);
+        const vaccineRecordIds = parsed.items.filter(i => i.type === 'vaccine').map(i => i.id);
+
+        let successCount = 0;
+        const now = new Date();
+        const todayEnd = new Date();
+        todayEnd.setHours(23, 59, 59, 999);
+
+        if (doseIds.length > 0) {
+          const result = await db.update(medicalDoses)
+            .set({ status: 'given', givenAt: now, administeredBy: userId })
+            .where(and(
+              eq(medicalDoses.tenantId, tenantId),
+              inArray(medicalDoses.id, doseIds),
+              eq(medicalDoses.status, 'due'),
+              lte(medicalDoses.dueDate, todayEnd),
+            ));
+          successCount += (result as any).rowCount || 0;
+        }
+
+        // Roll preventativeCareRecords forward: update dateAdministered = now, nextDueDate += interval
+        if (preventativeIds.length > 0) {
+          const candidates = await db.select({
+            id: preventativeCareRecords.id,
+            careTypeId: preventativeCareRecords.careTypeId,
+          })
+          .from(preventativeCareRecords)
           .where(and(
             eq(preventativeCareRecords.tenantId, tenantId),
             inArray(preventativeCareRecords.id, preventativeIds),
-            eq(preventativeCareRecords.status, 'pending'),
-            lte(preventativeCareRecords.dateAdministered, todayEnd),
+            eq(preventativeCareRecords.status, 'given'),
+            lte(preventativeCareRecords.nextDueDate, todayEnd),
           ));
-        successCount += (result as any).rowCount || 0;
+
+          if (candidates.length > 0) {
+            const careTypeIds = [...new Set(candidates.map(c => c.careTypeId).filter((id): id is string => !!id))];
+            const intervalMap = new Map<string, number | null>();
+            if (careTypeIds.length > 0) {
+              const types = await db.select({ id: preventativeCareTypes.id, defaultIntervalDays: preventativeCareTypes.defaultIntervalDays })
+                .from(preventativeCareTypes)
+                .where(inArray(preventativeCareTypes.id, careTypeIds));
+              for (const t of types) intervalMap.set(t.id, t.defaultIntervalDays ?? null);
+            }
+            for (const candidate of candidates) {
+              const intervalDays = candidate.careTypeId ? (intervalMap.get(candidate.careTypeId) ?? null) : null;
+              const newNextDueDate = intervalDays != null ? new Date(now.getTime() + intervalDays * 86400000) : null;
+              await db.update(preventativeCareRecords)
+                .set({ dateAdministered: now, nextDueDate: newNextDueDate, updatedAt: now })
+                .where(and(
+                  eq(preventativeCareRecords.tenantId, tenantId),
+                  eq(preventativeCareRecords.id, candidate.id),
+                ));
+              successCount++;
+            }
+          }
+        }
+
+        // Roll vaccineRecords forward by validDurationMonths
+        if (vaccineRecordIds.length > 0) {
+          const vaccCandidates = await db.select({
+            id: vaccineRecords.id,
+            validDurationMonths: vaccineRecords.validDurationMonths,
+          })
+          .from(vaccineRecords)
+          .where(and(
+            eq(vaccineRecords.tenantId, tenantId),
+            inArray(vaccineRecords.id, vaccineRecordIds),
+            isNotNull(vaccineRecords.dateDue),
+            lte(vaccineRecords.dateDue, todayEnd),
+          ));
+          for (const vc of vaccCandidates) {
+            const months = vc.validDurationMonths ?? 12;
+            const newDue = new Date(now);
+            newDue.setMonth(newDue.getMonth() + months);
+            await db.update(vaccineRecords)
+              .set({ dateGiven: now, dateDue: newDue })
+              .where(and(eq(vaccineRecords.tenantId, tenantId), eq(vaccineRecords.id, vc.id)));
+            successCount++;
+          }
+        }
+
+        if (successCount === 0 && parsed.items.length > 0) {
+          return res.status(400).json({ error: 'Cannot mark future orders as given. Items must be due today or earlier.' });
+        }
+
+        res.json({ success: true, count: successCount });
+      } catch (error) {
+        next(error);
       }
+    });
 
-      if (successCount === 0 && parsed.items.length > 0) {
-        return res.status(400).json({ error: 'Cannot mark future orders as given. Items must be due today or earlier.' });
-      }
+      // Mark a vaccine preventative as given with manufacturer/lot number
+    app.post('/api/daily-roster/mark-vaccine-given', requireTenant, requireAuth, async (req, res, next) => {
+      try {
+        const tenantId = req.tenant!.id;
+        const { preventativeCareRecords, preventativeCareTypes } = await import('@shared/schema');
 
-      res.json({ success: true, count: successCount });
-    } catch (error) {
-      next(error);
-    }
-  });
+        const schema = z.object({
+          id: z.string().uuid(),
+          manufacturer: z.string().min(1, 'Manufacturer is required'),
+          lotNumber: z.string().min(1, 'Lot number is required'),
+        });
 
-  // Mark a vaccine preventative as given with manufacturer/lot number
-  app.post('/api/daily-roster/mark-vaccine-given', requireTenant, requireAuth, async (req, res, next) => {
-    try {
-      const tenantId = req.tenant!.id;
-      const { preventativeCareRecords } = await import('@shared/schema');
+        const parsed = schema.parse(req.body);
+        const now = new Date();
+        const todayEnd = new Date();
+        todayEnd.setHours(23, 59, 59, 999);
 
-      const schema = z.object({
-        id: z.string().uuid(),
-        manufacturer: z.string().min(1, 'Manufacturer is required'),
-        lotNumber: z.string().min(1, 'Lot number is required'),
-      });
-
-      const parsed = schema.parse(req.body);
-      const now = new Date();
-      const todayEnd = new Date();
-      todayEnd.setHours(23, 59, 59, 999);
-
-      const result = await db.update(preventativeCareRecords)
-        .set({
-          status: 'given',
-          manufacturer: parsed.manufacturer,
-          lotNumber: parsed.lotNumber,
-          updatedAt: now,
+        // Fetch the existing record to compute roll-forward nextDueDate
+        const [existing] = await db.select({
+          id: preventativeCareRecords.id,
+          careTypeId: preventativeCareRecords.careTypeId,
         })
+        .from(preventativeCareRecords)
         .where(and(
           eq(preventativeCareRecords.tenantId, tenantId),
           eq(preventativeCareRecords.id, parsed.id),
-          eq(preventativeCareRecords.status, 'pending'),
-          lte(preventativeCareRecords.dateAdministered, todayEnd),
-        ))
-        .returning();
+          eq(preventativeCareRecords.status, 'given'),
+          lte(preventativeCareRecords.nextDueDate, todayEnd),
+        ));
 
-      if (result.length === 0) {
-        return res.status(400).json({ error: 'Cannot mark this vaccine as given. It may already be completed or is scheduled for a future date.' });
+        if (!existing) {
+          return res.status(400).json({ error: 'Cannot mark this vaccine as given. It may already be completed or is scheduled for a future date.' });
+        }
+
+        // Look up interval from care type to roll nextDueDate forward
+        let newNextDueDate: Date | null = null;
+        if (existing.careTypeId) {
+          const [careType] = await db.select({ defaultIntervalDays: preventativeCareTypes.defaultIntervalDays })
+            .from(preventativeCareTypes)
+            .where(eq(preventativeCareTypes.id, existing.careTypeId));
+          if (careType?.defaultIntervalDays != null) {
+            newNextDueDate = new Date(now.getTime() + careType.defaultIntervalDays * 86400000);
+          }
+        }
+
+        const [updated] = await db.update(preventativeCareRecords)
+          .set({
+            manufacturer: parsed.manufacturer,
+            lotNumber: parsed.lotNumber,
+            dateAdministered: now,
+            nextDueDate: newNextDueDate,
+            updatedAt: now,
+          })
+          .where(and(
+            eq(preventativeCareRecords.tenantId, tenantId),
+            eq(preventativeCareRecords.id, parsed.id),
+          ))
+          .returning();
+
+        res.json({ success: true, record: updated });
+      } catch (error) {
+        next(error);
       }
-
-      res.json({ success: true, record: result[0] });
-    } catch (error) {
-      next(error);
-    }
-  });
-
+    });
+  
   const httpServer = createServer(app);
 
 

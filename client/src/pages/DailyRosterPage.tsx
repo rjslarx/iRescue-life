@@ -70,6 +70,7 @@ interface RosterPreventative {
   clinicName: string | null;
   isQuarantined: boolean;
   quarantineReason: string | null;
+  source?: 'preventativeCare' | 'vaccineRecord';
 }
 
 type TaggedMedication = RosterMedication & { _type: "dose" };
@@ -432,8 +433,16 @@ export default function DailyRosterPage() {
   }
 
   function handleBulkMark() {
+    const sourceById = new Map<string, string>();
+    for (const item of medsAndPreventatives) {
+      if (item._type === "preventative") {
+        const prev = item as TaggedPreventative & { _isVaccine: boolean };
+        sourceById.set(prev.id, prev.source === 'vaccineRecord' ? 'vaccine' : 'preventative');
+      }
+    }
     const items = Array.from(selectedItems).map((key) => {
-      const [type, id] = key.split(":");
+      const [_type, id] = key.split(":");
+      const type = sourceById.get(id) ?? _type;
       return { id, type };
     });
     bulkMarkMutation.mutate(items);
