@@ -512,6 +512,10 @@ export default function PipelineManager({ activeTab, onTabChange, permissions }:
     item => item.status !== 'active_pool' && item.status !== 'rejected'
   );
 
+  const mobileVolunteerItems = volunteerItems.filter(
+    item => item.status !== 'active_pool' && item.status !== 'rejected'
+  );
+
   const activeAdoptionsCount = adoptionItems.filter(a => !completedAdoptionStatuses.includes(a.status)).length;
   const activeFostersCount = fosterItems.filter(f => f.status !== 'rejected' && f.status !== 'active_pool').length;
   const activeVolunteersCount = volunteerItems.filter(v => v.status !== 'rejected' && v.status !== 'active_pool').length;
@@ -729,23 +733,27 @@ export default function PipelineManager({ activeTab, onTabChange, permissions }:
               ) : (
                 <>
                   <ScrollArea className="h-[280px] lg:hidden">
-                    <div className="space-y-2">
-                      {[...volunteerItems].sort((a, b) => {
-                        if (a.status === 'active_pool' && b.status === 'active_pool') {
+                    {mobileVolunteerItems.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center h-full py-8 text-center px-4" data-testid="mobile-volunteer-all-processed">
+                        <p className="text-sm text-muted-foreground">All applications are in Active Pool or Rejected.</p>
+                        <p className="text-xs text-muted-foreground mt-1">View the full pipeline for details.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {[...mobileVolunteerItems].sort((a, b) => {
                           const dateA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
                           const dateB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
                           return dateB - dateA;
-                        }
-                        return 0;
-                      }).map((item) => (
-                        <PipelineItem 
-                          key={item.id} 
-                          {...item} 
-                          pipelineType="volunteer"
-                          onClick={() => handleItemClick("volunteer", item.id)}
-                        />
-                      ))}
-                    </div>
+                        }).map((item) => (
+                          <PipelineItem
+                            key={item.id}
+                            {...item}
+                            pipelineType="volunteer"
+                            onClick={() => handleItemClick("volunteer", item.id)}
+                          />
+                        ))}
+                      </div>
+                    )}
                   </ScrollArea>
                   <div className="hidden lg:block pb-2 max-h-[280px]" data-testid="volunteer-pipeline-scroll">
                     <div className="flex items-stretch">
