@@ -354,9 +354,9 @@ export function DailyExecutionWidget() {
   const monthStr = format(selectedDate, "yyyy-MM");
 
   const { data: rosterData, isLoading: rosterLoading } = useQuery<RosterData>({
-    queryKey: ["/api/daily-roster", dateStr],
+    queryKey: ["/api/daily-roster", dateStr, "shelter"],
     queryFn: async () => {
-      const res = await fetch(`/api/daily-roster?date=${dateStr}`, { credentials: "include" });
+      const res = await fetch(`/api/daily-roster?date=${dateStr}&location=shelter`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch roster");
       return res.json();
     },

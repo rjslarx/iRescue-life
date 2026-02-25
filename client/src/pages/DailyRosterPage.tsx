@@ -42,6 +42,9 @@ import {
   Loader2,
   ChevronLeft,
   ChevronRight,
+  Building2,
+  Home,
+  MapPin,
 } from "lucide-react";
 import { format, isSameDay, parse, addDays } from "date-fns";
 
@@ -58,6 +61,8 @@ interface RosterMedication {
   frequency: string | null;
   isQuarantined: boolean;
   quarantineReason: string | null;
+  locationType?: string | null;
+  locationName?: string | null;
 }
 
 interface RosterPreventative {
@@ -70,6 +75,8 @@ interface RosterPreventative {
   clinicName: string | null;
   isQuarantined: boolean;
   quarantineReason: string | null;
+  locationType?: string | null;
+  locationName?: string | null;
   source?: 'preventativeCare' | 'vaccineRecord';
 }
 
@@ -87,6 +94,8 @@ interface RosterExam {
   reason: string | null;
   isQuarantined: boolean;
   quarantineReason: string | null;
+  locationType?: string | null;
+  locationName?: string | null;
 }
 
 interface RosterProcedure {
@@ -98,6 +107,8 @@ interface RosterProcedure {
   veterinarian: string | null;
   isQuarantined: boolean;
   quarantineReason: string | null;
+  locationType?: string | null;
+  locationName?: string | null;
 }
 
 interface RosterDiagnostic {
@@ -108,6 +119,8 @@ interface RosterDiagnostic {
   testName: string;
   isQuarantined: boolean;
   quarantineReason: string | null;
+  locationType?: string | null;
+  locationName?: string | null;
 }
 
 interface RosterData {
@@ -256,6 +269,7 @@ export default function DailyRosterPage() {
   const { toast } = useToast();
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [calendarMonth, setCalendarMonth] = useState<Date>(new Date());
+  const [locationFilter, setLocationFilter] = useState<"all" | "shelter" | "foster">("shelter");
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [vaccineModalOpen, setVaccineModalOpen] = useState(false);
   const [pendingVaccine, setPendingVaccine] = useState<{ id: string; animalName: string; careName: string } | null>(null);
@@ -271,10 +285,11 @@ export default function DailyRosterPage() {
   const monthStr = format(calendarMonth, "yyyy-MM");
   const isFutureDate = dateStr > format(new Date(), "yyyy-MM-dd");
 
+  const locationParam = locationFilter !== "all" ? `&location=${locationFilter}` : "";
   const { data: roster, isLoading: rosterLoading } = useQuery<RosterData>({
-    queryKey: ["/api/daily-roster", dateStr],
+    queryKey: ["/api/daily-roster", dateStr, locationFilter],
     queryFn: async () => {
-      const res = await apiRequest("GET", `/api/daily-roster?date=${dateStr}`);
+      const res = await apiRequest("GET", `/api/daily-roster?date=${dateStr}${locationParam}`);
       return res.json();
     },
   });
@@ -513,13 +528,47 @@ export default function DailyRosterPage() {
     <DashboardLayout title="Daily Medical Roster" description="Aggregated daily view of all pending medical tasks">
     <div className="flex flex-col h-full overflow-auto" data-testid="page-daily-roster">
       <div className="border-b px-4 py-3 lg:px-6">
-        <div className="flex items-center gap-2 flex-wrap">
-          <ClipboardList className="h-5 w-5 text-muted-foreground" />
-          <h1 className="text-lg font-semibold" data-testid="text-page-title">Daily Medical Roster</h1>
-          <Badge variant="secondary" data-testid="badge-date" className="hidden lg:inline-flex">{format(selectedDate, "EEEE, MMMM d, yyyy")}</Badge>
-          {totalItems > 0 && (
-            <Badge data-testid="badge-total-items" className="hidden lg:inline-flex">{totalItems} pending</Badge>
-          )}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap">
+            <ClipboardList className="h-5 w-5 text-muted-foreground" />
+            <h1 className="text-lg font-semibold" data-testid="text-page-title">Daily Medical Roster</h1>
+            <Badge variant="secondary" data-testid="badge-date" className="hidden lg:inline-flex">{format(selectedDate, "EEEE, MMMM d, yyyy")}</Badge>
+            {totalItems > 0 && (
+              <Badge data-testid="badge-total-items" className="hidden lg:inline-flex">{totalItems} pending</Badge>
+            )}
+          </div>
+          <div className="flex items-center gap-1 rounded-md border p-0.5 bg-muted/40" data-testid="toggle-location-filter">
+            <Button
+              size="sm"
+              variant={locationFilter === "all" ? "default" : "ghost"}
+              className="h-7 px-2 gap-1"
+              onClick={() => { setLocationFilter("all"); setSelectedItems(new Set()); }}
+              data-testid="button-filter-all"
+            >
+              <MapPin className="h-3 w-3" />
+              <span className="text-xs">All</span>
+            </Button>
+            <Button
+              size="sm"
+              variant={locationFilter === "shelter" ? "default" : "ghost"}
+              className="h-7 px-2 gap-1"
+              onClick={() => { setLocationFilter("shelter"); setSelectedItems(new Set()); }}
+              data-testid="button-filter-shelter"
+            >
+              <Building2 className="h-3 w-3" />
+              <span className="text-xs">In Shelter</span>
+            </Button>
+            <Button
+              size="sm"
+              variant={locationFilter === "foster" ? "default" : "ghost"}
+              className="h-7 px-2 gap-1"
+              onClick={() => { setLocationFilter("foster"); setSelectedItems(new Set()); }}
+              data-testid="button-filter-foster"
+            >
+              <Home className="h-3 w-3" />
+              <span className="text-xs">In Foster</span>
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -695,6 +744,16 @@ export default function DailyRosterPage() {
                               <Link href={`/dashboard/animals/${item.animalId}/medical`} className="font-medium text-sm hover:underline" data-testid={`link-animal-${item.animalId}`}>
                                 {item.animalName}
                               </Link>
+                              {locationFilter === "all" && (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span className="inline-flex items-center text-muted-foreground" data-testid={`icon-location-${item.id}`}>
+                                      {item.locationType === "foster" ? <Home className="h-3 w-3" /> : item.locationType === "shelter" ? <Building2 className="h-3 w-3" /> : <MapPin className="h-3 w-3" />}
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipContent><p>{item.locationType === "foster" ? `In Foster${item.locationName ? `: ${item.locationName}` : ""}` : item.locationName || item.locationType || "Shelter"}</p></TooltipContent>
+                                </Tooltip>
+                              )}
                               <span className="text-muted-foreground text-sm hidden sm:inline">—</span>
                               <span className="text-sm" data-testid={`text-drug-${item.id}`}>
                                 {item._type === "dose" ? (item as TaggedMedication).medicationName : (item as TaggedPreventative).careName}

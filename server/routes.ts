@@ -38472,6 +38472,13 @@ The user asking is a tenant administrator or staff member.`;
         const tenantId = req.tenant!.id;
         const { medicalDoses, medicalPrescriptions, preventativeCareRecords, vaccineRecords, diagnosticTests, procedureLogs, TERMINAL_STATUSES } = await import('@shared/schema');
 
+        const locationParam = (req.query.location as string | undefined);
+        const locationFilter = locationParam === 'shelter'
+          ? eq(animals.locationType, 'shelter')
+          : locationParam === 'foster'
+            ? eq(animals.locationType, 'foster')
+            : null;
+
         const [rYear, rMonth, rDay] = dateParam.split('-').map(Number);
         const dayStart = new Date(rYear, rMonth - 1, rDay, 0, 0, 0, 0);
         const dayEnd = new Date(rYear, rMonth - 1, rDay, 23, 59, 59, 999);
@@ -38492,6 +38499,8 @@ The user asking is a tenant administrator or staff member.`;
             animalPhoto: animals.photoUrls,
             isQuarantined: animals.isQuarantined,
             quarantineReason: animals.quarantineReason,
+            locationType: animals.locationType,
+            locationName: animals.locationName,
           })
           .from(medicalDoses)
           .innerJoin(medicalPrescriptions, eq(medicalDoses.prescriptionId, medicalPrescriptions.id))
@@ -38502,6 +38511,7 @@ The user asking is a tenant administrator or staff member.`;
             gte(medicalDoses.dueDate, dayStart),
             lte(medicalDoses.dueDate, dayEnd),
             notInArray(animals.status, TERMINAL_STATUSES),
+            ...(locationFilter ? [locationFilter] : []),
           )),
 
           db.select({
@@ -38517,6 +38527,8 @@ The user asking is a tenant administrator or staff member.`;
             animalPhoto: animals.photoUrls,
             isQuarantined: animals.isQuarantined,
             quarantineReason: animals.quarantineReason,
+            locationType: animals.locationType,
+            locationName: animals.locationName,
           })
           .from(preventativeCareRecords)
           .innerJoin(animals, eq(preventativeCareRecords.animalId, animals.id))
@@ -38527,6 +38539,7 @@ The user asking is a tenant administrator or staff member.`;
             gte(preventativeCareRecords.nextDueDate, dayStart),
             lte(preventativeCareRecords.nextDueDate, dayEnd),
             notInArray(animals.status, TERMINAL_STATUSES),
+            ...(locationFilter ? [locationFilter] : []),
           )),
 
           // vaccineRecords with dateDue on this date
@@ -38541,6 +38554,8 @@ The user asking is a tenant administrator or staff member.`;
             animalPhoto: animals.photoUrls,
             isQuarantined: animals.isQuarantined,
             quarantineReason: animals.quarantineReason,
+            locationType: animals.locationType,
+            locationName: animals.locationName,
           })
           .from(vaccineRecords)
           .innerJoin(animals, eq(vaccineRecords.animalId, animals.id))
@@ -38550,6 +38565,7 @@ The user asking is a tenant administrator or staff member.`;
             gte(vaccineRecords.dateDue, dayStart),
             lte(vaccineRecords.dateDue, dayEnd),
             notInArray(animals.status, TERMINAL_STATUSES),
+            ...(locationFilter ? [locationFilter] : []),
           )),
 
           db.select({
@@ -38564,6 +38580,8 @@ The user asking is a tenant administrator or staff member.`;
             animalPhoto: animals.photoUrls,
             isQuarantined: animals.isQuarantined,
             quarantineReason: animals.quarantineReason,
+            locationType: animals.locationType,
+            locationName: animals.locationName,
           })
           .from(medicalExams)
           .innerJoin(animals, eq(medicalExams.animalId, animals.id))
@@ -38573,6 +38591,7 @@ The user asking is a tenant administrator or staff member.`;
             gte(medicalExams.examDate, dayStart),
             lte(medicalExams.examDate, dayEnd),
             notInArray(animals.status, TERMINAL_STATUSES),
+            ...(locationFilter ? [locationFilter] : []),
           )),
 
           db.select({
@@ -38588,6 +38607,8 @@ The user asking is a tenant administrator or staff member.`;
             animalPhoto: animals.photoUrls,
             isQuarantined: animals.isQuarantined,
             quarantineReason: animals.quarantineReason,
+            locationType: animals.locationType,
+            locationName: animals.locationName,
           })
           .from(procedureLogs)
           .innerJoin(animals, eq(procedureLogs.animalId, animals.id))
@@ -38597,6 +38618,7 @@ The user asking is a tenant administrator or staff member.`;
             gte(procedureLogs.procedureDate, dayStart),
             lte(procedureLogs.procedureDate, dayEnd),
             notInArray(animals.status, TERMINAL_STATUSES),
+            ...(locationFilter ? [locationFilter] : []),
           )),
 
           db.select({
@@ -38610,6 +38632,8 @@ The user asking is a tenant administrator or staff member.`;
             animalPhoto: animals.photoUrls,
             isQuarantined: animals.isQuarantined,
             quarantineReason: animals.quarantineReason,
+            locationType: animals.locationType,
+            locationName: animals.locationName,
           })
           .from(diagnosticTests)
           .innerJoin(animals, eq(diagnosticTests.animalId, animals.id))
@@ -38619,6 +38643,7 @@ The user asking is a tenant administrator or staff member.`;
             gte(diagnosticTests.testDate, dayStart),
             lte(diagnosticTests.testDate, dayEnd),
             notInArray(animals.status, TERMINAL_STATUSES),
+            ...(locationFilter ? [locationFilter] : []),
           )),
         ]);
 
@@ -38635,6 +38660,8 @@ The user asking is a tenant administrator or staff member.`;
           frequency: m.frequency,
           isQuarantined: m.isQuarantined,
           quarantineReason: m.quarantineReason,
+          locationType: m.locationType,
+          locationName: m.locationName,
         }));
 
         const formattedPreventatives = [
@@ -38649,6 +38676,8 @@ The user asking is a tenant administrator or staff member.`;
             clinicName: p.clinicName,
             isQuarantined: p.isQuarantined,
             quarantineReason: p.quarantineReason,
+            locationType: p.locationType,
+            locationName: p.locationName,
             source: 'preventativeCare' as const,
           })),
           ...vaccinesFromVaccineRecords.map(v => ({
@@ -38662,6 +38691,8 @@ The user asking is a tenant administrator or staff member.`;
             clinicName: v.clinicName,
             isQuarantined: v.isQuarantined,
             quarantineReason: v.quarantineReason,
+            locationType: v.locationType,
+            locationName: v.locationName,
             source: 'vaccineRecord' as const,
           })),
         ];
@@ -38677,6 +38708,8 @@ The user asking is a tenant administrator or staff member.`;
           reason: e.reason,
           isQuarantined: e.isQuarantined,
           quarantineReason: e.quarantineReason,
+          locationType: e.locationType,
+          locationName: e.locationName,
         }));
 
         const formattedProcedures = procedures.map(p => ({
@@ -38690,6 +38723,8 @@ The user asking is a tenant administrator or staff member.`;
           billAmount: p.billAmount,
           isQuarantined: p.isQuarantined,
           quarantineReason: p.quarantineReason,
+          locationType: p.locationType,
+          locationName: p.locationName,
         }));
 
         const formattedDiagnostics = diagnostics.map(d => ({
@@ -38701,6 +38736,8 @@ The user asking is a tenant administrator or staff member.`;
           testDate: d.testDate,
           isQuarantined: d.isQuarantined,
           quarantineReason: d.quarantineReason,
+          locationType: d.locationType,
+          locationName: d.locationName,
         }));
 
         res.json({
