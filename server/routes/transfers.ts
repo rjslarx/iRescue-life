@@ -363,7 +363,10 @@ router.patch('/:id/accept', requireTenant, requireAuth, requireRole('admin', 'ow
     let clonedMicrochipNumber = sourceAnimal.microchipNumber;
     if (clonedMicrochipNumber) {
       const existing = await db.query.animals.findFirst({
-        where: eq(animals.microchipNumber, clonedMicrochipNumber),
+        where: and(
+          eq(animals.tenantId, tenantId),
+          eq(animals.microchipNumber, clonedMicrochipNumber),
+        ),
         columns: { id: true },
       });
       if (existing) {
