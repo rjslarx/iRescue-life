@@ -183,23 +183,25 @@ export default function VolunteerApplicationsPipelinePage() {
     >
       <div className="flex-1 overflow-auto p-6 min-w-0">
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "pipeline" | "active_pool" | "rejected")}>
-          <TabsList className="mb-6">
-            <TabsTrigger value="pipeline" className="gap-2" data-testid="tab-pipeline">
-              <Users className="h-4 w-4" />
-              Pipeline
-              <Badge variant="secondary">{pipelineCount}</Badge>
-            </TabsTrigger>
-            <TabsTrigger value="active_pool" className="gap-2" data-testid="tab-active-pool">
-              <UserCheck className="h-4 w-4" />
-              Active Pool
-              <Badge variant="secondary">{activeCount}</Badge>
-            </TabsTrigger>
-            <TabsTrigger value="rejected" className="gap-2" data-testid="tab-rejected">
-              <XCircle className="h-4 w-4" />
-              Rejected
-              <Badge variant="secondary">{rejectedCount}</Badge>
-            </TabsTrigger>
-          </TabsList>
+          <div className="w-full overflow-x-auto mb-6">
+            <TabsList className="w-max">
+              <TabsTrigger value="pipeline" className="gap-2" data-testid="tab-pipeline">
+                <Users className="h-4 w-4" />
+                Pipeline
+                <Badge variant="secondary">{pipelineCount}</Badge>
+              </TabsTrigger>
+              <TabsTrigger value="active_pool" className="gap-2" data-testid="tab-active-pool">
+                <UserCheck className="h-4 w-4" />
+                Active Pool
+                <Badge variant="secondary">{activeCount}</Badge>
+              </TabsTrigger>
+              <TabsTrigger value="rejected" className="gap-2" data-testid="tab-rejected">
+                <XCircle className="h-4 w-4" />
+                Rejected
+                <Badge variant="secondary">{rejectedCount}</Badge>
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           <TabsContent value="pipeline" className="mt-0">
             <VolunteerKanbanBoard
