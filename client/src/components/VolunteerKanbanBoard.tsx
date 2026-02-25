@@ -280,7 +280,7 @@ export default function VolunteerKanbanBoard({
                                       <ArrowRight className="h-3 w-3 shrink-0 mr-1" />
                                       <span className="truncate">Move</span>
                                     </SelectTrigger>
-                                    <SelectContent>
+                                    <SelectContent className="w-44">
                                       {allStages.filter(s => s.id !== app.pipelineStatus).map((s) => (
                                         <SelectItem key={s.id} value={s.id} data-testid={`option-volunteer-stage-${s.id}-${app.id}`}>
                                           <div className="flex items-center gap-2">
