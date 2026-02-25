@@ -128,8 +128,6 @@ function isRabiesVaccine(careName: string): boolean {
   return /rabies/i.test(careName);
 }
 
-const MULTI_DOSE_FREQUENCIES = ['BID', 'TID', 'QID'];
-
 function getItemSortTime(item: { _type: string; dueDate?: string | null }): number {
   if (item._type === 'dose' && item.dueDate) {
     try {
@@ -142,8 +140,7 @@ function getItemSortTime(item: { _type: string; dueDate?: string | null }): numb
   return Infinity;
 }
 
-function getTimeBadge(dueDate: string | null, frequency: string | null): { label: string; className: string } | null {
-  if (!frequency || !MULTI_DOSE_FREQUENCIES.includes(frequency)) return null;
+function getTimeBadge(dueDate: string | null, _frequency: string | null): { label: string; className: string } | null {
   if (!dueDate) return null;
   try {
     const date = new Date(dueDate);

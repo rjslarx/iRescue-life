@@ -98,8 +98,6 @@ interface CalendarData {
   dates: Record<string, { total: number }>;
 }
 
-const MULTI_DOSE_FREQUENCIES = ['BID', 'TID', 'QID'];
-
 function isRabiesVaccine(careName: string): boolean {
   return /rabies/i.test(careName);
 }
@@ -116,8 +114,7 @@ function getItemSortTime(item: { _type: string; dueDate: string | null; frequenc
   return Infinity;
 }
 
-function getTimeBadge(dueDate: string | null, frequency: string | null): { label: string; className: string } | null {
-  if (!frequency || !MULTI_DOSE_FREQUENCIES.includes(frequency)) return null;
+function getTimeBadge(dueDate: string | null, _frequency: string | null): { label: string; className: string } | null {
   if (!dueDate) return null;
   try {
     const date = new Date(dueDate);
