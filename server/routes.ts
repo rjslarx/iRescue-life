@@ -21029,10 +21029,11 @@ Submitted: ${new Date().toLocaleString()}
       const updateSchema = z.object({
         preferences: z.array(z.object({
           eventKey: z.enum(NOTIFICATION_EVENT_KEYS as unknown as [string, ...string[]]),
-          channel: z.enum(["email"]),
+          channel: z.enum(["email", "sms"]),
           isEnabled: z.boolean(),
-          recipientRoles: z.array(z.string()),
-          recipientEmails: z.array(z.string().email()),
+          recipientRoles: z.array(z.string()).optional().default([]),
+          recipientEmails: z.array(z.string().email()).optional().default([]),
+          recipientPhones: z.array(z.string()).optional().default([]),
         })),
       });
 
@@ -21060,6 +21061,7 @@ Submitted: ${new Date().toLocaleString()}
               isEnabled: pref.isEnabled,
               recipientRoles: pref.recipientRoles,
               recipientEmails: pref.recipientEmails,
+              recipientPhones: pref.recipientPhones,
               updatedAt: new Date(),
             })
             .where(eq(notificationPreferences.id, existing[0].id))
@@ -21075,6 +21077,7 @@ Submitted: ${new Date().toLocaleString()}
               isEnabled: pref.isEnabled,
               recipientRoles: pref.recipientRoles,
               recipientEmails: pref.recipientEmails,
+              recipientPhones: pref.recipientPhones,
             })
             .returning();
           results.push(inserted);
@@ -21593,11 +21596,39 @@ Submitted: ${new Date().toLocaleString()}
   app.post('/api/webhooks/twilio/incoming', async (req, res, next) => {
     try {
       const { handleIncomingSms } = await import('./lib/twilio-service');
+      const { decrypt } = await import('./lib/encryption');
       
       const { From, To, Body } = req.body;
       
       if (!From || !To || !Body) {
         return res.status(400).send('Missing required fields');
+      }
+
+      // Twilio webhook signature validation — look up tenant by the 'To' phone number
+      const twilioSignature = req.headers['x-twilio-signature'] as string | undefined;
+      if (twilioSignature) {
+        try {
+          const [tenantRecord] = await db
+            .select({ twilioAuthTokenEncrypted: tenants.twilioAuthTokenEncrypted })
+            .from(tenants)
+            .where(eq(tenants.twilioPhoneNumber, To))
+            .limit(1);
+
+          if (tenantRecord?.twilioAuthTokenEncrypted) {
+            const twilio = (await import('twilio')).default;
+            const authToken = decrypt(tenantRecord.twilioAuthTokenEncrypted);
+            // Build the full URL Twilio signed — use configured base URL or reconstruct from request
+            const webhookUrl = `${process.env.APP_BASE_URL || `${req.protocol}://${req.get('host')}`}/api/webhooks/twilio/incoming`;
+            const isValid = twilio.validateRequest(authToken, twilioSignature, webhookUrl, req.body);
+            if (!isValid) {
+              console.warn('[TWILIO] Webhook signature validation failed — rejecting request');
+              return res.status(403).send('Invalid Twilio signature');
+            }
+          }
+        } catch (validationError) {
+          console.error('[TWILIO] Signature validation error:', validationError);
+          // Fail open so we don't drop messages on validation errors (e.g. tenant lookup failure)
+        }
       }
 
       const result = await handleIncomingSms(From, To, Body);

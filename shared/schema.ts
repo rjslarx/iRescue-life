@@ -5646,6 +5646,7 @@ export const notificationPreferences = pgTable("notification_preferences", {
   isEnabled: boolean("is_enabled").notNull().default(true),
   recipientRoles: text("recipient_roles").array().notNull().default(sql`ARRAY['admin']::text[]`),
   recipientEmails: text("recipient_emails").array().notNull().default(sql`ARRAY[]::text[]`),
+  recipientPhones: text("recipient_phones").array().notNull().default(sql`ARRAY[]::text[]`),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

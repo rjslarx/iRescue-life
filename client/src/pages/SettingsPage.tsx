@@ -3343,7 +3343,7 @@ export default function SettingsPage() {
                 <NotificationSettings />
 
                 {/* Event Notification Preferences */}
-                <NotificationPreferencesSettings />
+                <NotificationPreferencesSettings twilioEnabled={data?.tenant?.twilioEnabled} />
 
                 {/* Medical Reminder Settings - Admin Only */}
                 <MedicalReminderSettings />

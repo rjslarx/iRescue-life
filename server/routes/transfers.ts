@@ -113,6 +113,7 @@ router.post('/', requireTenant, requireAuth, requireRole('admin', 'owner', 'staf
         tenantId: parsed.receivingTenantId,
         eventKey: 'animal_transfer_received',
         subject: `Incoming Animal Transfer: ${animal.name} from ${sendingTenant.name}`,
+        smsBody: `iRescue: Incoming transfer - ${animal.name} (${animal.species}) from ${sendingTenant.name}. Log in to review.`,
         htmlBody: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
             <h2 style="color: #333;">Incoming Animal Transfer Request</h2>
@@ -576,6 +577,7 @@ router.patch('/:id/accept', requireTenant, requireAuth, requireRole('admin', 'ow
         tenantId: transfer.sendingTenantId,
         eventKey: 'animal_transfer_accepted',
         subject: `Transfer Accepted: ${sourceAnimal.name} accepted by ${receivingTenant.name}`,
+        smsBody: `iRescue: Transfer accepted - ${sourceAnimal.name} accepted by ${receivingTenant.name}. Status updated to Transported.`,
         htmlBody: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
             <h2 style="color: #333;">Animal Transfer Accepted</h2>

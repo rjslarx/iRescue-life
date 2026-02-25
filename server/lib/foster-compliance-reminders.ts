@@ -7,9 +7,11 @@ import {
   preventativeCareRecords,
   complianceReminders,
   complianceReminderNotifications,
+  medicationTasks,
+  medicationPlans,
   type ComplianceReminder,
 } from '@shared/schema';
-import { eq, and, gte, lte, lt, or, isNull, inArray } from 'drizzle-orm';
+import { eq, and, gte, lte, lt, or, isNull, inArray, sql } from 'drizzle-orm';
 import { EmailService } from './email-service';
 import { sendSms, isTwilioEnabled } from './twilio-service';
 import { randomBytes } from 'crypto';
@@ -653,6 +655,108 @@ export async function getComplianceStats(tenantId: string): Promise<{
   }
 }
 
+export async function sendMedicationTaskSmsReminders(tenantId: string): Promise<{ sent: number; errors: string[] }> {
+  const errors: string[] = [];
+  let sent = 0;
+
+  try {
+    const twilioEnabled = await isTwilioEnabled(tenantId);
+    if (!twilioEnabled) {
+      return { sent: 0, errors: [] };
+    }
+
+    const today = new Date().toISOString().split('T')[0];
+
+    // Get all active foster assignments for this tenant
+    const activeFosters = await db
+      .select({
+        animalId: fosterAnimals.animalId,
+        fosterId: fosterAnimals.fosterId,
+      })
+      .from(fosterAnimals)
+      .where(and(
+        eq(fosterAnimals.tenantId, tenantId),
+        eq(fosterAnimals.status, 'active')
+      ));
+
+    if (activeFosters.length === 0) return { sent: 0, errors: [] };
+
+    const fosterAnimalIds = activeFosters.map(f => f.animalId);
+    const fosterByAnimal = new Map(activeFosters.map(f => [f.animalId, f.fosterId]));
+
+    // Query today's pending medication tasks for foster animals
+    const todaysTasks = await db
+      .select({
+        taskId: medicationTasks.id,
+        animalId: medicationTasks.animalId,
+        planId: medicationTasks.planId,
+        roundLabel: medicationTasks.roundLabel,
+        scheduledTime: medicationTasks.scheduledTime,
+      })
+      .from(medicationTasks)
+      .where(and(
+        eq(medicationTasks.tenantId, tenantId),
+        eq(medicationTasks.status, 'pending'),
+        eq(medicationTasks.scheduledDate, today),
+        inArray(medicationTasks.animalId, fosterAnimalIds)
+      ));
+
+    if (todaysTasks.length === 0) return { sent: 0, errors: [] };
+
+    // Group tasks by animal so we send one SMS per foster parent per animal
+    const tasksByAnimal = new Map<string, typeof todaysTasks>();
+    for (const task of todaysTasks) {
+      const existing = tasksByAnimal.get(task.animalId) || [];
+      existing.push(task);
+      tasksByAnimal.set(task.animalId, existing);
+    }
+
+    for (const [animalId, tasks] of tasksByAnimal.entries()) {
+      const fosterId = fosterByAnimal.get(animalId);
+      if (!fosterId) continue;
+
+      const [foster] = await db
+        .select({ fullName: users.fullName, phone: users.phone })
+        .from(users)
+        .where(eq(users.id, fosterId));
+
+      if (!foster?.phone) continue;
+
+      const [animal] = await db
+        .select({ name: animals.name })
+        .from(animals)
+        .where(eq(animals.id, animalId));
+
+      if (!animal) continue;
+
+      // Get unique drug names for today's tasks
+      const planIds = [...new Set(tasks.map(t => t.planId))];
+      const plans = await db
+        .select({ id: medicationPlans.id, drugName: medicationPlans.drugName })
+        .from(medicationPlans)
+        .where(inArray(medicationPlans.id, planIds));
+
+      const drugNames = plans.map(p => p.drugName).join(', ');
+      const fosterFirstName = foster.fullName?.split(' ')[0] || 'Foster';
+      const roundLabel = tasks.length === 1 ? `(${tasks[0].roundLabel})` : `(${tasks.length} doses)`;
+
+      const message = `iRescue: Hi ${fosterFirstName}! ${animal.name} needs their ${drugNames} ${roundLabel} today. Log it in the Foster Portal when given.`.substring(0, 160);
+
+      try {
+        await sendSms(tenantId, foster.phone, message, 'reminder');
+        sent++;
+      } catch (err) {
+        errors.push(`Failed SMS to ${foster.phone} for ${animal.name}: ${err instanceof Error ? err.message : 'Unknown'}`);
+      }
+    }
+
+    return { sent, errors };
+  } catch (error) {
+    errors.push(error instanceof Error ? error.message : 'Unknown error');
+    return { sent, errors };
+  }
+}
+
 export async function runFosterComplianceRemindersForAllTenants(): Promise<JobResult> {
   const result: JobResult = {
     tenantsProcessed: 0,
@@ -682,6 +786,10 @@ export async function runFosterComplianceRemindersForAllTenants(): Promise<JobRe
         const smsResult = await sendMorningOfSmsReminders(tenant.id);
         result.notificationsSent += smsResult.sent;
         result.errors.push(...smsResult.errors.map(e => `${tenant.name}: ${e}`));
+
+        const medSmsResult = await sendMedicationTaskSmsReminders(tenant.id);
+        result.notificationsSent += medSmsResult.sent;
+        result.errors.push(...medSmsResult.errors.map(e => `${tenant.name}: ${e}`));
 
         const escalateResult = await escalateOverdueReminders(tenant.id);
         result.errors.push(...escalateResult.errors.map(e => `${tenant.name}: ${e}`));
