@@ -506,7 +506,11 @@ export default function IntakeManagerPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-5 gap-4 min-h-[calc(100vh-200px)]">
+        <div className="w-full overflow-x-auto">
+        <div
+          className="grid gap-4 min-h-[calc(100vh-200px)]"
+          style={{ gridTemplateColumns: `repeat(${stages.length}, minmax(220px, 1fr))` }}
+        >
           {stages.map((stage) => {
             const stageRequests = getRequestsByStage(stage.id);
             const StageIcon = stage.icon;
@@ -551,6 +555,7 @@ export default function IntakeManagerPage() {
               </Card>
             );
           })}
+        </div>
         </div>
 
         {showDeclined && declinedRequests.length > 0 && (
