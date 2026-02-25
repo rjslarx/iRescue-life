@@ -270,6 +270,36 @@ export function initializeScheduler() {
 
   console.log(`✓ Storage backup scheduled for: ${storageBackupSchedule} (UTC)`);
 
+  // Schedule bio/photo compliance task generation daily at 6:00 AM UTC
+  // "0 6 * * *" means: at minute 0, hour 6, every day
+  // Inserts bi-weekly 'bio_photo' compliance reminders for foster animals at days 14, 28, 42…
+  cron.schedule("0 6 * * *", async () => {
+    console.log("📸 Running bio/photo compliance task generation...");
+    try {
+      const { generateBioPhotoComplianceTasks } = await import("./foster-compliance-reminders");
+      const { db } = await import("../db");
+      const { tenants } = await import("@shared/schema");
+      const allTenants = await db.select({ id: tenants.id }).from(tenants);
+      let totalGenerated = 0;
+      const errors: string[] = [];
+      for (const tenant of allTenants) {
+        const result = await generateBioPhotoComplianceTasks(tenant.id);
+        totalGenerated += result.generated;
+        errors.push(...result.errors.map(e => `${tenant.id}: ${e}`));
+      }
+      console.log(`✓ Bio/photo compliance: ${totalGenerated} tasks generated across ${allTenants.length} tenants`);
+      if (errors.length > 0) {
+        console.warn(`⚠️ Bio/photo compliance errors: ${errors.slice(0, 5).join('; ')}${errors.length > 5 ? ` (+${errors.length - 5} more)` : ''}`);
+      }
+    } catch (error) {
+      console.error(`❌ Bio/photo compliance generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }, {
+    timezone: "UTC"
+  });
+
+  console.log(`✓ Bio/photo compliance task generation scheduled for: 0 6 * * * (UTC)`);
+
   // Schedule database backup daily at 9:00 AM UTC (3:00 AM CST)
   // "0 9 * * *" means: at minute 0, hour 9, every day
   // This backs up the PostgreSQL database to Google Cloud Storage

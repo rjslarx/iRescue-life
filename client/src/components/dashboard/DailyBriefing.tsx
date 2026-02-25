@@ -12,7 +12,9 @@ import {
   Clock,
   ChevronRight,
   Loader2,
-  Stethoscope
+  Stethoscope,
+  Home,
+  Camera
 } from "lucide-react";
 import { format } from "date-fns";
 import { Link } from "wouter";
@@ -61,6 +63,22 @@ interface VetEvent {
   animalId: string;
 }
 
+interface FosterNonComplianceAlert {
+  animalId: string;
+  animalName: string;
+  itemName: string;
+  fosterName: string;
+  dueDate: string;
+}
+
+interface FosterBioPhotoFollowUp {
+  reminderId: string;
+  animalId: string;
+  animalName: string;
+  fosterName: string;
+  daysInFoster: number;
+}
+
 interface DailyBriefingData {
   today: {
     surgeries: Surgery[];
@@ -69,6 +87,8 @@ interface DailyBriefingData {
     calendar: CalendarEvent[];
     vetEvents: VetEvent[];
     overdue: MedicalTask[];
+    fosterNonCompliance?: FosterNonComplianceAlert[];
+    fosterBioPhotoFollowUps?: FosterBioPhotoFollowUp[];
   };
   tomorrow: {
     surgeries: Surgery[];
@@ -131,10 +151,14 @@ export function DailyBriefing() {
     );
   }
 
+  const hasFosterNonCompliance = (data?.today.fosterNonCompliance?.length ?? 0) > 0;
+  const hasFosterBioPhoto = (data?.today.fosterBioPhotoFollowUps?.length ?? 0) > 0;
+
   const hasUrgent = data && (
     data.today.surgeries.length > 0 || 
     data.today.transports.length > 0 || 
-    data.today.overdue.length > 0
+    data.today.overdue.length > 0 ||
+    hasFosterNonCompliance
   );
 
   const hasMedicalToday = data && data.today.medical.length > 0;
@@ -148,6 +172,7 @@ export function DailyBriefing() {
   );
 
   const isEmpty = !hasUrgent && !hasMedicalToday && !hasVetEventsToday && !hasTomorrowItems && 
+    !hasFosterBioPhoto &&
     (!data?.today.calendar || data.today.calendar.length === 0);
 
   return (
@@ -174,6 +199,27 @@ export function DailyBriefing() {
                     <span className="text-sm font-semibold text-destructive">Urgent</span>
                   </div>
                   <div className="space-y-2">
+                    {data?.today.fosterNonCompliance?.map((alert, idx) => (
+                      <Link
+                        key={`foster-nc-${alert.animalId}-${idx}`}
+                        href={`/dashboard/animals/${alert.animalId}/medical`}
+                        className="block"
+                        data-testid={`link-foster-noncompliance-${alert.animalId}-${idx}`}
+                      >
+                        <div className="flex items-center gap-2 p-2 rounded-md bg-destructive/10 hover-elevate cursor-pointer">
+                          <Home className="h-3 w-3 text-destructive flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">
+                              Foster Alert: {alert.animalName} missed {alert.itemName}
+                            </p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              Foster: {alert.fosterName}
+                            </p>
+                          </div>
+                          <ChevronRight className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                        </div>
+                      </Link>
+                    ))}
                     {data?.today.overdue.map((item) => (
                       <Link 
                         key={item.id} 
@@ -275,9 +321,47 @@ export function DailyBriefing() {
                 </>
               )}
 
-              {hasVetEventsToday && (
+              {hasFosterBioPhoto && (
                 <>
                   {(hasUrgent || hasMedicalToday) && <Separator />}
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <Camera className="h-4 w-4 text-amber-600" />
+                      <span className="text-sm font-semibold text-amber-700 dark:text-amber-400">Foster Follow-ups</span>
+                      <Badge variant="secondary" className="text-xs">
+                        {data?.today.fosterBioPhotoFollowUps?.length}
+                      </Badge>
+                    </div>
+                    <div className="space-y-1">
+                      {data?.today.fosterBioPhotoFollowUps?.map((item) => (
+                        <Link
+                          key={item.reminderId}
+                          href="/dashboard/foster-management"
+                          className="block"
+                          data-testid={`link-bio-photo-${item.reminderId}`}
+                        >
+                          <div className="flex items-center gap-2 p-2 rounded-md bg-amber-500/10 hover-elevate cursor-pointer">
+                            <Camera className="h-3 w-3 text-amber-600 flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">
+                                {item.animalName} — bio/photo update due
+                              </p>
+                              <p className="text-xs text-muted-foreground truncate">
+                                Foster: {item.fosterName}, day {item.daysInFoster}
+                              </p>
+                            </div>
+                            <ChevronRight className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {hasVetEventsToday && (
+                <>
+                  {(hasUrgent || hasMedicalToday || hasFosterBioPhoto) && <Separator />}
                   <div>
                     <div className="flex items-center gap-2 mb-2">
                       <Stethoscope className="h-4 w-4 text-red-600" />
@@ -314,7 +398,7 @@ export function DailyBriefing() {
 
               {data?.today.calendar && data.today.calendar.length > 0 && (
                 <>
-                  {(hasUrgent || hasMedicalToday || hasVetEventsToday) && <Separator />}
+                  {(hasUrgent || hasMedicalToday || hasFosterBioPhoto || hasVetEventsToday) && <Separator />}
                   <div>
                     <div className="flex items-center gap-2 mb-2">
                       <Calendar className="h-4 w-4 text-purple-600" />

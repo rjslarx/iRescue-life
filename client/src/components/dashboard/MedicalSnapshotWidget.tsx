@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
-import { ChevronRight, Syringe, ClipboardCheck, Pill, FileSearch, Building2, Home } from "lucide-react";
+import { ChevronRight, Syringe, ClipboardCheck, Pill, FileSearch, Building2, Home, HeartHandshake } from "lucide-react";
 
 interface LocationCount {
   shelter: number;
@@ -16,6 +16,7 @@ interface MedicalSnapshot {
   needsVetting: LocationCount;
   surgeryPending: LocationCount;
   vetVisitsToReview: LocationCount;
+  fosterActionsToday: number;
 }
 
 function smartLocationParam(counts: LocationCount): string {
@@ -99,6 +100,7 @@ export default function MedicalSnapshotWidget() {
   const vetting = data?.needsVetting || { shelter: 0, foster: 0, total: 0 };
   const surgery = data?.surgeryPending || { shelter: 0, foster: 0, total: 0 };
   const vetVisits = data?.vetVisitsToReview || { shelter: 0, foster: 0, total: 0 };
+  const fosterActionsCount = data?.fosterActionsToday || 0;
 
   const medsLoc = smartLocationParam(meds);
   const vettingLoc = smartLocationParam(vetting);
@@ -117,7 +119,7 @@ export default function MedicalSnapshotWidget() {
         </Link>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
           <KpiTile
             icon={Pill}
             label="Meds Due Today"
@@ -153,6 +155,15 @@ export default function MedicalSnapshotWidget() {
             activeColor="bg-amber-500/10 border border-amber-500/20"
             activeTextColor="text-amber-600 dark:text-amber-400"
             testId="tile-vet-visits-review"
+          />
+          <KpiTile
+            icon={HeartHandshake}
+            label="Foster Actions Due"
+            counts={{ shelter: 0, foster: fosterActionsCount, total: fosterActionsCount }}
+            href="/dashboard/foster-management"
+            activeColor="bg-amber-500/10 border border-amber-500/20"
+            activeTextColor="text-amber-600 dark:text-amber-400"
+            testId="tile-foster-actions-due"
           />
         </div>
       </CardContent>

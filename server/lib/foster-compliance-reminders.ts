@@ -805,3 +805,78 @@ export async function runFosterComplianceRemindersForAllTenants(): Promise<JobRe
     return result;
   }
 }
+
+/**
+ * Generates bi-weekly bio/photo compliance tasks for active foster placements.
+ * Inserts a complianceReminder with reminderType='bio_photo' every 14 days of fostering.
+ */
+export async function generateBioPhotoComplianceTasks(tenantId: string): Promise<{ generated: number; errors: string[] }> {
+  const result = { generated: 0, errors: [] as string[] };
+  try {
+    const activeFosters = await db
+      .select({
+        id: fosterAnimals.id,
+        animalId: fosterAnimals.animalId,
+        fosterId: fosterAnimals.fosterId,
+        startDate: fosterAnimals.startDate,
+      })
+      .from(fosterAnimals)
+      .where(and(
+        eq(fosterAnimals.tenantId, tenantId),
+        eq(fosterAnimals.status, 'active')
+      ));
+
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    for (const fa of activeFosters) {
+      try {
+        if (!fa.startDate) continue;
+        const daysInFoster = Math.floor((Date.now() - new Date(fa.startDate).getTime()) / 86400000);
+        if (daysInFoster <= 0 || daysInFoster % 14 !== 0) continue;
+
+        // Check for duplicate
+        const existing = await db
+          .select({ id: complianceReminders.id })
+          .from(complianceReminders)
+          .where(and(
+            eq(complianceReminders.fosterAnimalId, fa.id),
+            eq(complianceReminders.reminderType, 'bio_photo'),
+            eq(complianceReminders.dueDate, todayStr),
+            or(
+              isNull(complianceReminders.state),
+              and(
+                sql`${complianceReminders.state} != 'confirmed'`,
+                sql`${complianceReminders.state} != 'skipped'`
+              )
+            )
+          ));
+
+        if (existing.length > 0) continue;
+
+        const magicToken = generateMagicLinkToken();
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + 7);
+
+        await db.insert(complianceReminders).values({
+          tenantId,
+          animalId: fa.animalId,
+          fosterId: fa.fosterId,
+          fosterAnimalId: fa.id,
+          reminderType: 'bio_photo',
+          careName: 'Bio/Photo Update',
+          dueDate: todayStr,
+          state: 'pending',
+          magicLinkToken: magicToken,
+          magicLinkExpiresAt: expiresAt,
+        });
+
+        result.generated++;
+      } catch (err) {
+        result.errors.push(`fosterAnimal ${fa.id}: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      }
+    }
+  } catch (error) {
+    result.errors.push(error instanceof Error ? error.message : 'Unknown error');
+  }
+  return result;
+}

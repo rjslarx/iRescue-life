@@ -3512,7 +3512,7 @@ Crawl-delay: 1
    */
   app.get('/api/dashboard/medical-snapshot', requireTenant, requireAuth, requireRole('admin', 'staff', 'owner', 'manager'), async (req, res, next) => {
     try {
-      const { medicalDoses, medicalPrescriptions, vetVisits, medicalExams, vaccineRecords, TERMINAL_STATUSES } = await import('@shared/schema');
+      const { medicalDoses, medicalPrescriptions, vetVisits, medicalExams, vaccineRecords, preventativeCareRecords, TERMINAL_STATUSES } = await import('@shared/schema');
 
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -3641,6 +3641,37 @@ Crawl-delay: 1
           isFoster
         ));
 
+      const [prevCareFoster] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(preventativeCareRecords)
+        .innerJoin(animals, eq(preventativeCareRecords.animalId, animals.id))
+        .where(and(
+          eq(preventativeCareRecords.tenantId, req.tenant!.id),
+          isNotNull(preventativeCareRecords.nextDueDate),
+          sql`${preventativeCareRecords.nextDueDate} >= ${today}`,
+          sql`${preventativeCareRecords.nextDueDate} < ${tomorrow}`,
+          notInArray(animals.status, TERMINAL_STATUSES),
+          isFoster
+        ));
+
+      const [examsFoster] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(medicalExams)
+        .innerJoin(animals, eq(medicalExams.animalId, animals.id))
+        .where(and(
+          eq(medicalExams.tenantId, req.tenant!.id),
+          eq(medicalExams.status, 'pending'),
+          sql`${medicalExams.examDate} >= ${today}`,
+          sql`${medicalExams.examDate} < ${tomorrow}`,
+          notInArray(animals.status, TERMINAL_STATUSES),
+          isFoster
+        ));
+
+      const fosterActionsToday =
+        (medsDueFoster?.count || 0) +
+        (prevCareFoster?.count || 0) +
+        (examsFoster?.count || 0);
+
       res.json({
         medsDueToday: {
           shelter: medsDueShelter?.count || 0,
@@ -3662,6 +3693,7 @@ Crawl-delay: 1
           foster: vetFoster?.count || 0,
           total: (vetShelter?.count || 0) + (vetFoster?.count || 0),
         },
+        fosterActionsToday,
       });
     } catch (error) {
       next(error);
@@ -3810,6 +3842,11 @@ Crawl-delay: 1
         procedureLogs,
         vaccineRecords,
         medicalExams,
+        medicalDoses,
+        medicalPrescriptions,
+        fosterAnimals,
+        users,
+        complianceReminders,
         TERMINAL_STATUSES
       } = await import('@shared/schema');
       const { gte, lte } = await import('drizzle-orm');
@@ -4121,6 +4158,100 @@ Crawl-delay: 1
         v.startTime && new Date(v.startTime) > todayEnd && new Date(v.startTime) <= extendedEnd
       );
 
+      // 6. Foster non-compliance: foster animals with overdue preventative care
+      const fosterNonCompliancePrevCare = await db
+        .select({
+          animalId: animals.id,
+          animalName: animals.name,
+          itemName: preventativeCareRecords.careName,
+          fosterName: users.fullName,
+          dueDate: preventativeCareRecords.nextDueDate,
+        })
+        .from(preventativeCareRecords)
+        .innerJoin(animals, eq(preventativeCareRecords.animalId, animals.id))
+        .innerJoin(fosterAnimals, and(
+          eq(fosterAnimals.animalId, animals.id),
+          eq(fosterAnimals.tenantId, req.tenant!.id),
+          eq(fosterAnimals.status, 'active')
+        ))
+        .innerJoin(users, eq(users.id, fosterAnimals.fosterId))
+        .where(and(
+          eq(preventativeCareRecords.tenantId, req.tenant!.id),
+          isNotNull(preventativeCareRecords.nextDueDate),
+          lt(preventativeCareRecords.nextDueDate, todayStart),
+          notInArray(animals.status, TERMINAL_STATUSES),
+          eq(animals.locationType, 'foster')
+        ));
+
+      // Foster non-compliance: foster animals with overdue medication doses
+      const fosterNonComplianceDoses = await db
+        .select({
+          animalId: animals.id,
+          animalName: animals.name,
+          itemName: medicalPrescriptions.medicationName,
+          fosterName: users.fullName,
+          dueDate: medicalDoses.dueDate,
+        })
+        .from(medicalDoses)
+        .innerJoin(medicalPrescriptions, eq(medicalDoses.prescriptionId, medicalPrescriptions.id))
+        .innerJoin(animals, eq(medicalPrescriptions.animalId, animals.id))
+        .innerJoin(fosterAnimals, and(
+          eq(fosterAnimals.animalId, animals.id),
+          eq(fosterAnimals.tenantId, req.tenant!.id),
+          eq(fosterAnimals.status, 'active')
+        ))
+        .innerJoin(users, eq(users.id, fosterAnimals.fosterId))
+        .where(and(
+          eq(medicalDoses.tenantId, req.tenant!.id),
+          eq(medicalDoses.status, 'due'),
+          lt(medicalDoses.dueDate, todayStart),
+          notInArray(animals.status, TERMINAL_STATUSES),
+          eq(animals.locationType, 'foster')
+        ));
+
+      // Merge and deduplicate foster non-compliance items
+      const seenFosterAlerts = new Set<string>();
+      const fosterNonCompliance: Array<{ animalId: string; animalName: string; itemName: string; fosterName: string; dueDate: Date | string | null }> = [];
+      for (const item of [...fosterNonCompliancePrevCare, ...fosterNonComplianceDoses]) {
+        const key = `${item.animalId}|${item.itemName}`;
+        if (!seenFosterAlerts.has(key)) {
+          seenFosterAlerts.add(key);
+          fosterNonCompliance.push(item);
+        }
+      }
+
+      // 7. Bio/photo follow-ups: pending bio_photo compliance reminders
+      const bioPhotoReminders = await db
+        .select({
+          reminderId: complianceReminders.id,
+          animalId: complianceReminders.animalId,
+          animalName: animals.name,
+          fosterName: users.fullName,
+          startDate: fosterAnimals.startDate,
+        })
+        .from(complianceReminders)
+        .innerJoin(animals, eq(animals.id, complianceReminders.animalId))
+        .innerJoin(fosterAnimals, and(
+          eq(fosterAnimals.id, complianceReminders.fosterAnimalId!),
+        ))
+        .innerJoin(users, eq(users.id, fosterAnimals.fosterId))
+        .where(and(
+          eq(complianceReminders.tenantId, req.tenant!.id),
+          eq(complianceReminders.reminderType, 'bio_photo'),
+          eq(complianceReminders.state, 'pending')
+        ));
+
+      const nowMs = Date.now();
+      const fosterBioPhotoFollowUps = bioPhotoReminders.map(r => ({
+        reminderId: r.reminderId,
+        animalId: r.animalId,
+        animalName: r.animalName,
+        fosterName: r.fosterName || 'Unknown',
+        daysInFoster: r.startDate
+          ? Math.floor((nowMs - new Date(r.startDate).getTime()) / 86400000)
+          : 0,
+      }));
+
       res.json({
         today: {
           surgeries: surgeriesToday,
@@ -4129,6 +4260,8 @@ Crawl-delay: 1
           calendar: calendarToday,
           vetEvents: vetEventsToday,
           overdue: overdueData,
+          fosterNonCompliance,
+          fosterBioPhotoFollowUps,
         },
         tomorrow: {
           surgeries: surgeriesTomorrow,
@@ -4138,7 +4271,7 @@ Crawl-delay: 1
           vetEvents: vetEventsTomorrow,
         },
         summary: {
-          urgentCount: surgeriesToday.length + transportsToday.length + overdueData.length,
+          urgentCount: surgeriesToday.length + transportsToday.length + overdueData.length + fosterNonCompliance.length,
           medicalTodayCount: medicalToday.length,
           medicalTomorrowCount: medicalTomorrow.length,
           calendarTodayCount: calendarToday.length,

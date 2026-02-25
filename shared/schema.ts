@@ -3322,7 +3322,7 @@ export const complianceReminders = pgTable("compliance_reminders", {
   // Reference to source preventative care record
   preventativeCareRecordId: uuid("preventative_care_record_id"),
   // Reminder details
-  reminderType: text("reminder_type").notNull().$type<"preventative_care" | "vaccine" | "medication">(),
+  reminderType: text("reminder_type").notNull().$type<"preventative_care" | "vaccine" | "medication" | "bio_photo">(),
   careName: text("care_name").notNull(), // e.g., "Heartgard", "Nexgard", "DHPP Vaccine"
   dueDate: date("due_date").notNull(),
   // Escalation state machine: pending → notified_3day → notified_due → overdue → requires_intervention → confirmed
