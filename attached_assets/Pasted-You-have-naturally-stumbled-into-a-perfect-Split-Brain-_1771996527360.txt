@@ -1,0 +1,34 @@
+You have naturally stumbled into a perfect "Split-Brain" architecture for your platform. By having both the main Command Center and this dedicated Foster page, you can separate the Clinical/Urgent tasks from the Administrative/Logistical tasks.
+Here is exactly how you should utilize both locations so they complement each other without duplicating data or confusing the staff.
+1. The Command Center (The "Clinical & Urgent" Brain)
+The Medical Pipeline and Daily Briefing on your home dashboard should strictly be reserved for things that affect the immediate health or adoption status of the animal.
+The Medical Pipeline: Use this to see that "5 Meds are Due Today" for animals in foster care. It is a pure operational headcount.
+The Daily Briefing: This is the alarm bell. If a foster misses a medication, or a dog in foster care is overdue for a vaccine, it pops up here in red.
+2. The Foster Management Page (The "Logistical" Brain)
+This dedicated page is the Rescue Coordinator's desk. It shouldn't be cluttered with daily pill reminders; it should manage the relationship and the inventory. Here is how to maximize those specific tabs you already built:
+The Fosters Tab (Legal & Tracking): This is exactly what you have now. Who has which dog, when are they expected back, and is the legal Foster Agreement signed?
+The Supplies Tab (Inventory Control): Fosters constantly text the rescue: "I'm out of puppy pads and Purina Pro Plan." Instead of those texts getting lost, your Twilio engine or Adopter/Foster Portal can funnel those requests straight into this tab as pending tickets.
+The Updates Tab (The Marketing Goldmine): This is where that 14-day Twilio photo/bio loop we discussed earlier lives. When the system texts the foster asking for a behavior update, and the foster replies with "Barnaby is fully potty trained now!", that text message shouldn't trigger an urgent alarm on the main dashboard. It should quietly drop into this Updates tab as a new item for the marketing team to use for Barnaby's public website profile.
+The Replit Prompt for the Foster Logistics Engine
+To tie this all together beautifully, we need to tell your Replit Agent to route non-medical incoming data directly to the tabs on this Foster Management page.
+Copy and paste this into Replit Agent:
+Plaintext
+I need to wire up our new Twilio inbound webhook to feed logistical data directly into the dedicated "Foster Management" page.
+
+1. Database Preparation:
+   - Ensure we have tables for `foster_supplies` (columns: `animal_id`, `foster_id`, `items_requested`, `status: pending | fulfilled`) and `foster_updates` (columns: `animal_id`, `foster_id`, `update_text`, `media_url`, `status: new | reviewed`).
+
+2. Twilio Webhook Logic (Routing by Keyword):
+   - Update the `POST /api/webhooks/twilio` endpoint to parse incoming texts for specific keywords.
+   - IF the text contains the word "SUPPLY" or "NEED" (e.g., "SUPPLY: out of puppy food"):
+     - Create a new row in the `foster_supplies` table with `status: pending`.
+   - IF the text is a reply to the automated 14-day bio request, OR contains an image attachment:
+     - Create a new row in the `foster_updates` table. If there is an image, save the Twilio MediaUrl to `media_url`.
+
+3. The Foster Management UI Updates:
+   - On the Foster Management page, wire the "Supplies" tab to query the `foster_supplies` table for `status: pending`. Display these as a list with a "Mark Fulfilled" action button.
+   - Wire the "Updates" tab to query the `foster_updates` table for `status: new`. Display the text/photos here with a "Mark Reviewed" button so the marketing team can easily grab the content for the public listing.
+   - Ensure the metric counters at the top of the page (e.g., "0 pending supply requests", "0 new updates") actively reflect these pending database queries.
+Why this structure wins
+If you build it this way, the Medical Coordinator lives on the Command Center to ensure dogs stay healthy, while the Foster Coordinator lives on the Foster Management page to ensure humans stay happy and equipped. It is a perfect delegation of duties.
+
