@@ -129,16 +129,6 @@ export function AddPreventativeCareDialog({
   }, [effectiveIntervalDays, dateAdministered]);
 
   useEffect(() => {
-    if (!record) {
-      if (calculatedNextDue) {
-        form.setValue("nextDueDate", calculatedNextDue);
-      } else {
-        form.setValue("nextDueDate", "");
-      }
-    }
-  }, [calculatedNextDue, record, form]);
-
-  useEffect(() => {
     if (record && open) {
       form.reset({
         careTypeId: record.careTypeId,
@@ -163,6 +153,16 @@ export function AddPreventativeCareDialog({
       });
     }
   }, [record, open, form]);
+
+  useEffect(() => {
+    if (!record) {
+      if (calculatedNextDue) {
+        form.setValue("nextDueDate", calculatedNextDue);
+      } else {
+        form.setValue("nextDueDate", "");
+      }
+    }
+  }, [calculatedNextDue, record, form]);
 
   const watchedCareTypeId = form.watch("careTypeId");
 
