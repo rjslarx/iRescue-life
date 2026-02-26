@@ -734,26 +734,48 @@ export function AddMedicalOrderDialog({ animalId: propsAnimalId, animalSpecies: 
                         data-testid="input-new-item-name"
                       />
                     </div>
-                    <div className="space-y-1.5">
-                      <Label>Category <span className="text-destructive">*</span></Label>
-                      <Select
-                        value={creatingNew.category}
-                        onValueChange={v => setCreatingNew(prev => prev ? { ...prev, category: v } : prev)}
-                      >
-                        <SelectTrigger data-testid="select-new-item-category">
-                          <SelectValue placeholder="Select a category..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Medication">Medication</SelectItem>
-                          <SelectItem value="Vaccine">Vaccine</SelectItem>
-                          <SelectItem value="Lab">Lab</SelectItem>
-                          <SelectItem value="Procedure">Procedure</SelectItem>
-                          <SelectItem value="Preventative">Preventative</SelectItem>
-                          <SelectItem value="Exam">Exam</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    {(creatingNew.category === 'Medication' || !creatingNew.category) && (
+                    {creatingNew.category ? (
+                      <div className="flex flex-wrap items-center gap-2 py-1">
+                        <Label className="shrink-0">Category</Label>
+                        <Badge variant="secondary" className={`text-xs ${categoryColors[creatingNew.category] || ''}`}>
+                          {(() => { const Icon = categoryIcons[creatingNew.category] || Pill; return <Icon className="w-3 h-3 mr-1 inline-block" />; })()}
+                          {creatingNew.category}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">Auto-detected</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-auto py-0.5 px-2 text-xs"
+                          onClick={() => setCreatingNew(prev => prev ? { ...prev, category: '' } : prev)}
+                          data-testid="button-change-category"
+                        >
+                          Change
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="space-y-1.5">
+                        <Label>Category <span className="text-destructive">*</span></Label>
+                        <p className="text-xs text-muted-foreground">New item detected — please choose a category:</p>
+                        <Select
+                          value={creatingNew.category}
+                          onValueChange={v => setCreatingNew(prev => prev ? { ...prev, category: v } : prev)}
+                        >
+                          <SelectTrigger data-testid="select-new-item-category">
+                            <SelectValue placeholder="Select a category..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Medication">Medication</SelectItem>
+                            <SelectItem value="Vaccine">Vaccine</SelectItem>
+                            <SelectItem value="Lab">Lab</SelectItem>
+                            <SelectItem value="Procedure">Procedure</SelectItem>
+                            <SelectItem value="Preventative">Preventative</SelectItem>
+                            <SelectItem value="Exam">Exam</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                    {creatingNew.category === 'Medication' && (
                       <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1.5">
                           <Label>Default Dose (optional)</Label>

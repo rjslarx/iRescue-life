@@ -320,51 +320,68 @@ export function AddPreventativeCareDialog({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Care Type *</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value || ""} disabled={careTypeMatched}>
-                    <FormControl>
-                      <SelectTrigger data-testid="select-care-type" className={careTypeMatched ? "opacity-70" : ""}>
-                        <SelectValue placeholder="Select care type..." />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {isLoadingTypes ? (
-                        <div className="flex items-center justify-center p-4">
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        </div>
-                      ) : (
-                        categoryOrder.map(category => {
-                          const types = sortedCareTypes[category];
-                          if (!types?.length) return null;
-                          return (
-                            <SelectGroup key={category}>
-                              <SelectLabel className="text-xs font-semibold text-muted-foreground">
-                                {category}
-                              </SelectLabel>
-                              {types.map(type => (
-                                <SelectItem key={type.id} value={type.id}>
-                                  <div className="flex items-center gap-2">
-                                    <span>{type.name}</span>
-                                    {type.isCore && (
-                                      <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
-                                    )}
-                                    {type.defaultIntervalDays && (
-                                      <Badge variant="outline" className="text-xs ml-1">
-                                        {type.defaultIntervalDays >= 365 
-                                          ? `${Math.round(type.defaultIntervalDays / 365)}yr`
-                                          : type.defaultIntervalDays >= 30
-                                          ? `${Math.round(type.defaultIntervalDays / 30)}mo`
-                                          : `${type.defaultIntervalDays}d`}
-                                      </Badge>
-                                    )}
-                                  </div>
-                                </SelectItem>
-                              ))}
-                            </SelectGroup>
-                          );
-                        })
-                      )}
-                    </SelectContent>
-                  </Select>
+                  {careTypeMatched ? (
+                    <div className="flex flex-wrap items-center gap-2 py-1" data-testid="care-type-auto-detected">
+                      <span className="text-sm font-medium">{selectedCareType?.name}</span>
+                      <Badge variant="secondary" className="text-xs">Auto-detected</Badge>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-auto py-0.5 px-2 text-xs"
+                        onClick={() => setCareTypeMatched(false)}
+                        data-testid="button-change-care-type"
+                      >
+                        Change
+                      </Button>
+                    </div>
+                  ) : (
+                    <Select onValueChange={field.onChange} value={field.value || ""}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-care-type">
+                          <SelectValue placeholder="Select care type..." />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {isLoadingTypes ? (
+                          <div className="flex items-center justify-center p-4">
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          </div>
+                        ) : (
+                          categoryOrder.map(category => {
+                            const types = sortedCareTypes[category];
+                            if (!types?.length) return null;
+                            return (
+                              <SelectGroup key={category}>
+                                <SelectLabel className="text-xs font-semibold text-muted-foreground">
+                                  {category}
+                                </SelectLabel>
+                                {types.map(type => (
+                                  <SelectItem key={type.id} value={type.id}>
+                                    <div className="flex items-center gap-2">
+                                      <span>{type.name}</span>
+                                      {type.isCore && (
+                                        <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
+                                      )}
+                                      {type.defaultIntervalDays && (
+                                        <Badge variant="outline" className="text-xs ml-1">
+                                          {type.defaultIntervalDays >= 365
+                                            ? `${Math.round(type.defaultIntervalDays / 365)}yr`
+                                            : type.defaultIntervalDays >= 30
+                                            ? `${Math.round(type.defaultIntervalDays / 30)}mo`
+                                            : `${type.defaultIntervalDays}d`}
+                                        </Badge>
+                                      )}
+                                    </div>
+                                  </SelectItem>
+                                ))}
+                              </SelectGroup>
+                            );
+                          })
+                        )}
+                      </SelectContent>
+                    </Select>
+                  )}
                   {selectedCareType?.description && (
                     <FormDescription>{selectedCareType.description}</FormDescription>
                   )}
