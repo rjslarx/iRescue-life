@@ -19,7 +19,7 @@ DB_PUSH_SUCCESS=false
 
 while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
   echo "Attempt $((RETRY_COUNT + 1)) of $MAX_RETRIES..."
-  npm run db:push 2>&1
+  npx drizzle-kit push --force 2>&1
   if [ $? -eq 0 ]; then
     DB_PUSH_SUCCESS=true
     echo "✓ Database schema pushed successfully"
