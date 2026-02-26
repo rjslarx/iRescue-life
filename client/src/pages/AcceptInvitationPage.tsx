@@ -142,6 +142,9 @@ export default function AcceptInvitationPage() {
     }
   };
 
+  const isVolunteer = !!invitation?.roles?.includes('volunteer') &&
+    !invitation.roles.some(r => ['admin', 'staff', 'board_member'].includes(r));
+
   const getRoleBadgeVariant = (role: string) => {
     switch (role) {
       case "admin":
@@ -193,7 +196,9 @@ export default function AcceptInvitationPage() {
             <Alert data-testid="alert-success">
               <CheckCircle className="h-4 w-4" />
               <AlertDescription>
-                Your account has been created successfully. Redirecting to your dashboard...
+                {isVolunteer
+                  ? "Your volunteer account is set up! You can now log in to view your schedule and sign up for shifts."
+                  : "Your account has been created successfully. Redirecting to your dashboard..."}
               </AlertDescription>
             </Alert>
           </CardContent>
@@ -235,10 +240,16 @@ export default function AcceptInvitationPage() {
         <CardHeader className="space-y-3">
           <div className="flex items-center gap-3">
             <Mail className="h-6 w-6 text-primary" />
-            <CardTitle className="text-2xl">Accept Invitation</CardTitle>
+            <CardTitle className="text-2xl">
+              {isVolunteer
+                ? `Join the ${invitation?.tenant.name} Volunteer Team`
+                : "Accept Invitation"}
+            </CardTitle>
           </div>
           <CardDescription>
-            You've been invited to join <strong>{invitation?.tenant.name}</strong>
+            {isVolunteer
+              ? "Set up your account to view your schedule, sign up for shifts, and stay connected with the rescue team."
+              : <>You've been invited to join <strong>{invitation?.tenant.name}</strong></>}
           </CardDescription>
         </CardHeader>
         <CardContent>

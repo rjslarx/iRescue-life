@@ -5625,6 +5625,7 @@ export const NOTIFICATION_EVENT_KEYS = [
   "contract_signed",
   "animal_transfer_received",
   "animal_transfer_accepted",
+  "volunteer_activated",
 ] as const;
 
 export type NotificationEventKey = typeof NOTIFICATION_EVENT_KEYS[number];
@@ -5646,6 +5647,7 @@ export const NOTIFICATION_EVENT_LABELS: Record<NotificationEventKey, { label: st
   donation_received: { label: "New donation received", category: "Financial" },
   expense_recorded: { label: "New expense recorded", category: "Financial" },
   volunteer_shift_signup: { label: "New volunteer shift signup", category: "Operations" },
+  volunteer_activated: { label: "Volunteer moved to active pool", category: "Operations" },
   transport_created: { label: "Transport assignment created", category: "Operations" },
   contract_signed: { label: "Contract/agreement signed", category: "Operations" },
   animal_transfer_received: { label: "Incoming animal transfer request", category: "Animal Management" },

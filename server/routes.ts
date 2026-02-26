@@ -12637,6 +12637,42 @@ ${renderedHtml}
             } else {
               console.log(`[Volunteer Automation] Folder already exists for ${volunteerApp.applicantName}, skipping creation`);
             }
+
+            // ========================================================================
+            // AUTOMATION: Send volunteer welcome email with account setup link
+            // ========================================================================
+            try {
+              const { createAndSendVolunteerWelcome } = await import('./services/invitations');
+              const welcomeResult = await createAndSendVolunteerWelcome(
+                submission.tenantId,
+                volunteerApp.applicantEmail,
+                volunteerApp.applicantName,
+              );
+              if (welcomeResult?.skipped) {
+                console.log(`[Volunteer Automation] Welcome email skipped (${welcomeResult.reason}) for ${volunteerApp.applicantEmail}`);
+              } else {
+                console.log(`[Volunteer Automation] Sent welcome email to ${volunteerApp.applicantEmail}`);
+              }
+            } catch (emailError) {
+              console.error('[Volunteer Automation] Error sending welcome email:', emailError);
+            }
+
+            // ========================================================================
+            // AUTOMATION: Notify staff via notification preferences
+            // ========================================================================
+            try {
+              const { dispatchEventNotification } = await import('./services/notification-dispatcher');
+              await dispatchEventNotification({
+                tenantId: submission.tenantId,
+                eventKey: 'volunteer_activated',
+                subject: `Volunteer Activated: ${volunteerApp.applicantName}`,
+                htmlBody: `<p><strong>${volunteerApp.applicantName}</strong> (${volunteerApp.applicantEmail}) has been moved to the Active Volunteer Pool after signing their waiver.</p>`,
+                textBody: `${volunteerApp.applicantName} (${volunteerApp.applicantEmail}) has been moved to the Active Volunteer Pool after signing their waiver.`,
+                metadata: { volunteerId: volunteerApp.id, volunteerName: volunteerApp.applicantName },
+              });
+            } catch (notifyError) {
+              console.error('[Volunteer Automation] Error dispatching staff notification:', notifyError);
+            }
           }
         } catch (automationError) {
           // Log error but don't fail the form submission
@@ -16896,6 +16932,44 @@ If you have any questions, please contact us.
           }
         } catch (folderError) {
           console.error('[Volunteer Automation] Error creating folder:', folderError);
+        }
+      }
+
+      // ========================================================================
+      // AUTOMATION: Send volunteer welcome email with account setup link
+      // ========================================================================
+      if (statusChangedToActivePool) {
+        try {
+          const { createAndSendVolunteerWelcome } = await import('./services/invitations');
+          const result = await createAndSendVolunteerWelcome(
+            req.tenant!.id,
+            updatedApplication.applicantEmail,
+            updatedApplication.applicantName,
+          );
+          if (result?.skipped) {
+            console.log(`[Volunteer Automation] Welcome email skipped (${result.reason}) for ${updatedApplication.applicantEmail}`);
+          } else {
+            console.log(`[Volunteer Automation] Sent welcome email to ${updatedApplication.applicantEmail}`);
+          }
+        } catch (emailError) {
+          console.error('[Volunteer Automation] Error sending welcome email:', emailError);
+        }
+
+        // ========================================================================
+        // AUTOMATION: Notify staff via notification preferences
+        // ========================================================================
+        try {
+          const { dispatchEventNotification } = await import('./services/notification-dispatcher');
+          await dispatchEventNotification({
+            tenantId: req.tenant!.id,
+            eventKey: 'volunteer_activated',
+            subject: `Volunteer Activated: ${updatedApplication.applicantName}`,
+            htmlBody: `<p><strong>${updatedApplication.applicantName}</strong> (${updatedApplication.applicantEmail}) has been moved to the Active Volunteer Pool.</p>`,
+            textBody: `${updatedApplication.applicantName} (${updatedApplication.applicantEmail}) has been moved to the Active Volunteer Pool.`,
+            metadata: { volunteerId: updatedApplication.id, volunteerName: updatedApplication.applicantName },
+          });
+        } catch (notifyError) {
+          console.error('[Volunteer Automation] Error dispatching staff notification:', notifyError);
         }
       }
 

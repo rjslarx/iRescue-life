@@ -296,6 +296,176 @@ export async function sendFosterWelcomeEmail(
 }
 
 /**
+ * Send a volunteer-specific welcome email with account setup link
+ * Mirrors sendFosterWelcomeEmail but with volunteer-appropriate copy
+ */
+export async function sendVolunteerWelcomeEmail(
+  tenantId: string,
+  invitation: {
+    id: string;
+    email: string;
+    fullName: string | null;
+    roles: string[];
+    token: string;
+  },
+  tenantName: string
+) {
+  const emailService = await EmailService.forTenant(tenantId);
+
+  if (!emailService) {
+    console.error('[Volunteer Welcome] Email service not configured, cannot send volunteer welcome email');
+    return { success: false, error: 'Email service not configured' };
+  }
+
+  const [tenant] = await db
+    .select({ subdomain: tenants.subdomain, customDomain: tenants.customDomain })
+    .from(tenants)
+    .where(eq(tenants.id, tenantId))
+    .limit(1);
+
+  const encodedToken = encodeURIComponent(invitation.token);
+  let acceptUrl: string;
+  if (tenant?.customDomain) {
+    acceptUrl = `https://${tenant.customDomain}/accept-invitation?token=${encodedToken}`;
+  } else {
+    const baseUrl = getAppBaseUrl();
+    const tenantPath = tenant?.subdomain ? `/${tenant.subdomain}` : '';
+    acceptUrl = `${baseUrl}${tenantPath}/accept-invitation?token=${encodedToken}`;
+  }
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #2563eb;">Welcome to the ${tenantName} Volunteer Team!</h2>
+      
+      <p>Hello${invitation.fullName ? ` ${invitation.fullName}` : ''},</p>
+      
+      <p>Thank you for becoming an active volunteer with <strong>${tenantName}</strong>! We're thrilled to have you on the team.</p>
+      
+      <p>To get started, please set up your account by clicking the button below. Once your account is active, you'll be able to:</p>
+      
+      <ul style="color: #374151; line-height: 1.8;">
+        <li>View upcoming volunteer events and shifts</li>
+        <li>Sign up for volunteer opportunities</li>
+        <li>Access volunteer resources and care instructions</li>
+        <li>Stay connected with the rescue team</li>
+      </ul>
+      
+      <div style="text-align: center; margin: 30px 0;">
+        <a href="${acceptUrl}" style="background-color: #2563eb; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">Set Up Your Account</a>
+      </div>
+      
+      <p style="color: #6b7280; font-size: 14px;">
+        Or copy and paste this link into your browser:<br>
+        <a href="${acceptUrl}" style="color: #2563eb;">${acceptUrl}</a>
+      </p>
+      
+      <p style="color: #6b7280; font-size: 14px;">
+        This link will expire in 7 days. If it expires, please contact the rescue team to have a new one sent.
+      </p>
+      
+      <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+      
+      <p style="color: #9ca3af; font-size: 12px;">
+        Thank you for giving your time to help animals in need!
+      </p>
+    </div>
+  `;
+
+  const result = await emailService.send({
+    to: invitation.email,
+    subject: `Welcome to the ${tenantName} Volunteer Team - Set Up Your Account`,
+    html,
+  });
+
+  if (!result.success) {
+    throw new Error(result.error || 'Failed to send volunteer welcome email');
+  }
+
+  return result;
+}
+
+/**
+ * Idempotent helper: creates an invitation and sends the volunteer welcome email.
+ * Guards against duplicate sends by checking for an existing user account or
+ * a still-pending (non-expired, not-yet-accepted) invitation for the same email.
+ */
+export async function createAndSendVolunteerWelcome(
+  tenantId: string,
+  applicantEmail: string,
+  applicantName: string
+): Promise<{ success?: boolean; skipped?: boolean; reason?: string }> {
+  const normalizedEmail = applicantEmail.trim().toLowerCase();
+
+  // Guard 1: user account already exists
+  const [existingUser] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(and(eq(users.tenantId, tenantId), eq(users.email, normalizedEmail)))
+    .limit(1);
+
+  if (existingUser) {
+    console.log(`[Volunteer Welcome] Skipping — user account already exists for ${normalizedEmail}`);
+    return { skipped: true, reason: 'user_exists' };
+  }
+
+  // Guard 2: a non-expired, pending invitation already exists
+  const [existingInvitation] = await db
+    .select({ id: userInvitations.id })
+    .from(userInvitations)
+    .where(and(
+      eq(userInvitations.tenantId, tenantId),
+      eq(userInvitations.email, normalizedEmail),
+      isNull(userInvitations.acceptedAt),
+      gt(userInvitations.expiresAt, new Date())
+    ))
+    .limit(1);
+
+  if (existingInvitation) {
+    console.log(`[Volunteer Welcome] Skipping — pending invitation already exists for ${normalizedEmail}`);
+    return { skipped: true, reason: 'invitation_pending' };
+  }
+
+  // Create invitation (system-generated on behalf of the tenant's first owner/admin)
+  const token = generateInvitationToken();
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + 7);
+
+  // Resolve a valid invitedBy user (required by FK constraint) — use tenant's first owner or admin
+  const [tenantAdmin] = await db
+    .select({ id: users.id, name: tenants.name })
+    .from(users)
+    .innerJoin(tenants, eq(tenants.id, users.tenantId))
+    .where(eq(users.tenantId, tenantId))
+    .orderBy(users.createdAt)
+    .limit(1);
+
+  if (!tenantAdmin) {
+    console.error(`[Volunteer Welcome] Cannot find any user for tenant ${tenantId} to use as invitedBy`);
+    return { skipped: true, reason: 'no_admin_user' };
+  }
+
+  const [invitation] = await db
+    .insert(userInvitations)
+    .values({
+      tenantId,
+      email: normalizedEmail,
+      fullName: applicantName || null,
+      phone: null,
+      roles: ['volunteer'],
+      token,
+      invitedBy: tenantAdmin.id,
+      expiresAt,
+    })
+    .returning();
+
+  const tenantName = tenantAdmin.name || 'the rescue';
+
+  await sendVolunteerWelcomeEmail(tenantId, invitation, tenantName);
+
+  return { success: true };
+}
+
+/**
  * Construct the invitation accept URL based on tenant configuration
  * Uses custom domain if available, otherwise path-based routing
  * URL-encodes the token to prevent email quoted-printable encoding issues
