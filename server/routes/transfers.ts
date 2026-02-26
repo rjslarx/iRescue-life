@@ -15,7 +15,7 @@ import {
   users,
   complianceObligations,
 } from '@shared/schema';
-import { eq, and, or, desc, ne, sql, inArray } from 'drizzle-orm';
+import { eq, and, or, desc, ne, sql, inArray, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 
 const router = Router();
@@ -160,13 +160,16 @@ router.get('/', requireTenant, requireAuth, requireRole('admin', 'owner', 'staff
 
     let whereClause;
     if (direction === 'incoming') {
-      whereClause = eq(tenantTransfers.receivingTenantId, tenantId);
+      whereClause = and(eq(tenantTransfers.receivingTenantId, tenantId), isNull(tenantTransfers.archivedAt));
     } else if (direction === 'outgoing') {
-      whereClause = eq(tenantTransfers.sendingTenantId, tenantId);
+      whereClause = and(eq(tenantTransfers.sendingTenantId, tenantId), isNull(tenantTransfers.archivedAt));
     } else {
-      whereClause = or(
-        eq(tenantTransfers.sendingTenantId, tenantId),
-        eq(tenantTransfers.receivingTenantId, tenantId),
+      whereClause = and(
+        or(
+          eq(tenantTransfers.sendingTenantId, tenantId),
+          eq(tenantTransfers.receivingTenantId, tenantId),
+        ),
+        isNull(tenantTransfers.archivedAt),
       );
     }
 
@@ -658,6 +661,40 @@ router.patch('/:id/cancel', requireTenant, requireAuth, requireRole('admin', 'ow
     res.json({ transfer: { id: transferId, status: 'cancelled' } });
   } catch (error) {
     console.error(`[TRANSFERS] PATCH /${req.params.id}/cancel failed for tenant "${req.tenant?.name}" (${req.tenant?.id}), user ${req.user?.id}:`, error);
+    next(error);
+  }
+});
+
+router.patch('/:id/archive', requireTenant, requireAuth, requireRole('admin', 'owner'), async (req, res, next) => {
+  try {
+    const tenantId = req.tenant!.id;
+    const transferId = req.params.id;
+
+    const transfer = await db.query.tenantTransfers.findFirst({
+      where: and(
+        eq(tenantTransfers.id, transferId),
+        or(
+          eq(tenantTransfers.sendingTenantId, tenantId),
+          eq(tenantTransfers.receivingTenantId, tenantId),
+        ),
+      ),
+    });
+    if (!transfer) return res.status(404).json({ error: 'Transfer not found' });
+    if (transfer.status === 'pending') {
+      return res.status(400).json({ error: 'Cannot archive a pending transfer — cancel or resolve it first' });
+    }
+    if (transfer.archivedAt) {
+      return res.status(400).json({ error: 'Transfer is already archived' });
+    }
+
+    await db.update(tenantTransfers).set({
+      archivedAt: new Date(),
+      updatedAt: new Date(),
+    }).where(eq(tenantTransfers.id, transferId));
+
+    res.json({ transfer: { id: transferId, archivedAt: new Date() } });
+  } catch (error) {
+    console.error(`[TRANSFERS] PATCH /${req.params.id}/archive failed for tenant "${req.tenant?.name}" (${req.tenant?.id}), user ${req.user?.id}:`, error);
     next(error);
   }
 });

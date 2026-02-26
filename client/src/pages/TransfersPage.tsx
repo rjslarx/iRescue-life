@@ -34,6 +34,7 @@ import {
   FileText,
   Cpu,
   PawPrint,
+  Archive,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -50,6 +51,7 @@ interface TransferRecord {
     respondedBy: string | null;
     respondedAt: string | null;
     clonedAnimalId: string | null;
+    archivedAt: string | null;
     createdAt: string;
     updatedAt: string;
   };
@@ -180,6 +182,20 @@ export default function TransfersPage() {
     },
     onError: (err: any) => {
       toast({ title: "Error", description: err.message || "Failed to cancel transfer", variant: "destructive" });
+    },
+  });
+
+  const archiveMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("PATCH", `/api/transfers/${id}/archive`);
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Transfer Archived", description: "The transfer has been archived and removed from this list." });
+      queryClient.invalidateQueries({ queryKey: ["/api/transfers"] });
+    },
+    onError: (err: any) => {
+      toast({ title: "Error", description: err.message || "Failed to archive transfer", variant: "destructive" });
     },
   });
 
@@ -369,6 +385,22 @@ export default function TransfersPage() {
                               <Ban className="w-4 h-4 mr-1" />
                             )}
                             Cancel
+                          </Button>
+                        )}
+                        {!isPending && !record.transfer.archivedAt && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => archiveMutation.mutate(record.transfer.id)}
+                            disabled={archiveMutation.isPending}
+                            data-testid={`button-archive-${record.transfer.id}`}
+                          >
+                            {archiveMutation.isPending ? (
+                              <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                            ) : (
+                              <Archive className="w-4 h-4 mr-1" />
+                            )}
+                            Archive
                           </Button>
                         )}
                       </div>

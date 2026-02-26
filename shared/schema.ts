@@ -5711,6 +5711,7 @@ export const tenantTransfers = pgTable("tenant_transfers", {
   respondedBy: uuid("responded_by").references(() => users.id, { onDelete: 'set null' }),
   respondedAt: timestamp("responded_at"),
   clonedAnimalId: uuid("cloned_animal_id"),
+  archivedAt: timestamp("archived_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
