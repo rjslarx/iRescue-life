@@ -31695,7 +31695,7 @@ Email: ${application.applicantEmail || ''}`
    */
   app.get('/api/medical/preventative-care/coming-due', requireTenant, requireAuth, async (req, res, next) => {
     try {
-      const { preventativeCareRecords, animals, TERMINAL_STATUSES: TERMINAL_STATUSES_PC } = await import('@shared/schema');
+      const { preventativeCareRecords, vaccineRecords: vaccineRecordsTable, animals, TERMINAL_STATUSES: TERMINAL_STATUSES_PC } = await import('@shared/schema');
       const locationFilter = req.query.location as string | undefined;
       const locationCondition = locationFilter === 'shelter' ? or(ne(animals.locationType, 'foster'), isNull(animals.locationType)) : locationFilter === 'foster' ? eq(animals.locationType, 'foster') : undefined;
 
@@ -31707,51 +31707,139 @@ Email: ${application.applicantEmail || ''}`
       const sevenDaysOut = new Date(today);
       sevenDaysOut.setDate(sevenDaysOut.getDate() + 7);
 
-      // Get all records with next_due_date within the range (overdue to 7 days out)
-      // For animals that are active (not adopted/deceased)
-      const records = await db
-        .select({
-          record: {
-            id: preventativeCareRecords.id,
-            tenantId: preventativeCareRecords.tenantId,
-            animalId: preventativeCareRecords.animalId,
-            careTypeId: preventativeCareRecords.careTypeId,
-            careName: preventativeCareRecords.careName,
-            careCategory: preventativeCareRecords.careCategory,
-            dateAdministered: preventativeCareRecords.dateAdministered,
-            nextDueDate: preventativeCareRecords.nextDueDate,
-            notes: preventativeCareRecords.notes,
-            createdBy: preventativeCareRecords.createdBy,
-            createdAt: preventativeCareRecords.createdAt,
-          },
-          animal: {
-            id: animals.id,
-            name: animals.name,
-            species: animals.species,
-            breed: animals.breed,
-            photoUrls: animals.photoUrls,
-            status: animals.status,
-            location: animals.location,
-          }
-        })
-        .from(preventativeCareRecords)
-        .innerJoin(animals, eq(preventativeCareRecords.animalId, animals.id))
-        .where(and(
-          eq(preventativeCareRecords.tenantId, req.tenant!.id),
-          isNotNull(preventativeCareRecords.nextDueDate),
-          lte(preventativeCareRecords.nextDueDate, sevenDaysOut),
-          notInArray(animals.status, TERMINAL_STATUSES_PC),
-          ...(locationCondition ? [locationCondition] : [])
-        ))
-        .orderBy(asc(preventativeCareRecords.nextDueDate));
+      type ComingDueItem = {
+        record: {
+          id: string;
+          tenantId: string | null;
+          animalId: string;
+          careTypeId: string | null;
+          careName: string | null;
+          careCategory: string | null;
+          dateAdministered: Date | string | null;
+          nextDueDate: Date | string | null;
+          notes: string | null;
+          createdBy: string | null;
+          createdAt: Date | null;
+          sourceTable?: 'preventative_care_records' | 'vaccine_records';
+        };
+        animal: {
+          id: string;
+          name: string | null;
+          species: string | null;
+          breed: string | null;
+          photoUrls: string[] | null;
+          status: string | null;
+          locationName: string | null;
+        };
+      };
 
-      // Categorize records
-      const overdue: typeof records = [];
-      const dueToday: typeof records = [];
-      const comingSoon: typeof records = [];
+      const [preventativeRows, vaccineRows] = await Promise.all([
+        db
+          .select({
+            record: {
+              id: preventativeCareRecords.id,
+              tenantId: preventativeCareRecords.tenantId,
+              animalId: preventativeCareRecords.animalId,
+              careTypeId: preventativeCareRecords.careTypeId,
+              careName: preventativeCareRecords.careName,
+              careCategory: preventativeCareRecords.careCategory,
+              dateAdministered: preventativeCareRecords.dateAdministered,
+              nextDueDate: preventativeCareRecords.nextDueDate,
+              notes: preventativeCareRecords.notes,
+              createdBy: preventativeCareRecords.createdBy,
+              createdAt: preventativeCareRecords.createdAt,
+            },
+            animal: {
+              id: animals.id,
+              name: animals.name,
+              species: animals.species,
+              breed: animals.breed,
+              photoUrls: animals.photoUrls,
+              status: animals.status,
+              locationName: animals.locationName,
+            }
+          })
+          .from(preventativeCareRecords)
+          .innerJoin(animals, eq(preventativeCareRecords.animalId, animals.id))
+          .where(and(
+            eq(preventativeCareRecords.tenantId, req.tenant!.id),
+            isNotNull(preventativeCareRecords.nextDueDate),
+            lte(preventativeCareRecords.nextDueDate, sevenDaysOut),
+            notInArray(animals.status, TERMINAL_STATUSES_PC),
+            ...(locationCondition ? [locationCondition] : [])
+          ))
+          .orderBy(asc(preventativeCareRecords.nextDueDate)),
 
-      for (const item of records) {
-        const dueDate = new Date(item.record.nextDueDate!);
+        db
+          .select({
+            id: vaccineRecordsTable.id,
+            tenantId: vaccineRecordsTable.tenantId,
+            animalId: vaccineRecordsTable.animalId,
+            itemName: vaccineRecordsTable.itemName,
+            dateDue: vaccineRecordsTable.dateDue,
+            createdAt: vaccineRecordsTable.createdAt,
+            animalId2: animals.id,
+            animalName: animals.name,
+            animalSpecies: animals.species,
+            animalBreed: animals.breed,
+            animalPhotoUrls: animals.photoUrls,
+            animalStatus: animals.status,
+            animalLocation: animals.locationName,
+          })
+          .from(vaccineRecordsTable)
+          .innerJoin(animals, eq(vaccineRecordsTable.animalId, animals.id))
+          .where(and(
+            eq(vaccineRecordsTable.tenantId, req.tenant!.id),
+            isNotNull(vaccineRecordsTable.dateDue),
+            lte(vaccineRecordsTable.dateDue, sevenDaysOut),
+            notInArray(animals.status, TERMINAL_STATUSES_PC),
+            ...(locationCondition ? [locationCondition] : [])
+          )),
+      ]);
+
+      const vaccineMapped: ComingDueItem[] = vaccineRows.map(v => ({
+        record: {
+          id: v.id,
+          tenantId: v.tenantId,
+          animalId: v.animalId,
+          careTypeId: null,
+          careName: v.itemName,
+          careCategory: 'vaccine',
+          dateAdministered: null,
+          nextDueDate: v.dateDue,
+          notes: null,
+          createdBy: null,
+          createdAt: v.createdAt,
+          sourceTable: 'vaccine_records' as const,
+        },
+        animal: {
+          id: v.animalId2,
+          name: v.animalName,
+          species: v.animalSpecies,
+          breed: v.animalBreed,
+          photoUrls: v.animalPhotoUrls,
+          status: v.animalStatus,
+          locationName: v.animalLocation,
+        },
+      }));
+
+      const preventativeMapped: ComingDueItem[] = preventativeRows.map(r => ({
+        record: { ...r.record, sourceTable: 'preventative_care_records' as const },
+        animal: r.animal,
+      }));
+
+      const allRecords = [...preventativeMapped, ...vaccineMapped].sort((a, b) => {
+        const aDate = a.record.nextDueDate ? new Date(a.record.nextDueDate as string | Date).getTime() : 0;
+        const bDate = b.record.nextDueDate ? new Date(b.record.nextDueDate as string | Date).getTime() : 0;
+        return aDate - bDate;
+      });
+
+      const overdue: ComingDueItem[] = [];
+      const dueToday: ComingDueItem[] = [];
+      const comingSoon: ComingDueItem[] = [];
+
+      for (const item of allRecords) {
+        const dueDate = new Date(item.record.nextDueDate as string | Date);
         dueDate.setHours(0, 0, 0, 0);
 
         if (dueDate < today) {
@@ -38480,7 +38568,7 @@ The user asking is a tenant administrator or staff member.`;
 
         const locationParam = (req.query.location as string | undefined);
         const locationFilter = locationParam === 'shelter'
-          ? eq(animals.locationType, 'shelter')
+          ? or(eq(animals.locationType, 'shelter'), isNull(animals.locationType))
           : locationParam === 'foster'
             ? eq(animals.locationType, 'foster')
             : null;

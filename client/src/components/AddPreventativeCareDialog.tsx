@@ -221,7 +221,7 @@ export function AddPreventativeCareDialog({
           manufacturer: data.manufacturer || null,
           administrationRoute: data.administrationRoute || null,
           status: isFuture ? 'pending' : 'given',
-          createFollowUp: !!data.nextDueDate,
+          createFollowUp: false,
         }),
       });
     },
