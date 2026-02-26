@@ -7140,7 +7140,9 @@ Crawl-delay: 1
       if (payload.petfinderSyncedAt && typeof payload.petfinderSyncedAt === 'string') {
         payload.petfinderSyncedAt = new Date(payload.petfinderSyncedAt);
       }
-      if (payload.intakeDate && typeof payload.intakeDate === 'string') {
+      if (!payload.intakeDate) {
+        payload.intakeDate = new Date();
+      } else if (typeof payload.intakeDate === 'string') {
         payload.intakeDate = new Date(payload.intakeDate);
       }
       if (payload.strayHoldUntil && typeof payload.strayHoldUntil === 'string') {
