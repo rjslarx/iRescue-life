@@ -4021,6 +4021,8 @@ export const smsMessageLogs = pgTable("sms_message_logs", {
   // Metadata
   sentBy: uuid("sent_by").references(() => users.id, { onDelete: 'set null' }),
   sentByName: text("sent_by_name"),
+  recipientUserId: uuid("recipient_user_id").references(() => users.id, { onDelete: 'set null' }), // The user receiving this message
+  relatedAnimalId: uuid("related_animal_id").references(() => animals.id, { onDelete: 'set null' }), // Animal this message concerns
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

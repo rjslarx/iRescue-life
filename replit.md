@@ -27,6 +27,7 @@ Core functionalities include:
 - Stripe Embedded Components for transaction, payout, and balance display, supporting platform fees and "Donor Covers Fees".
 - Client and server-side detection for photo uploads from cloud services.
 - Automated email and optional SMS notifications for adopters regarding overdue or upcoming preventative care.
+- **SMS Communications Log**: Full audit trail of all outbound/inbound SMS via Twilio. `sms_message_logs` table records every send (outbound) and receive (inbound) with `recipientUserId` and `relatedAnimalId` for enriched context. `POST /api/webhooks/twilio/status` receives Twilio delivery callbacks (delivered/failed) and updates log status. `GET /api/sms/logs` returns filtered, joined logs (recipient name, animal name). "SMS Log" tab in CommunicationsPage.tsx shows direction, type, recipient, animal, message preview, status badges, and a detail dialog. All compliance reminder sendSms() call sites pass recipient userId + animal ID.
 - A mobile-first Foster Portal (My Fosters) for foster parents, including medication task logging.
 - Medication Plan & Task System for staff to create plans and track completion by fosters.
 - Subscription Feature Flags to support different subscription tiers by showing/hiding features.

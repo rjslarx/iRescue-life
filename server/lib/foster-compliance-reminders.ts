@@ -379,7 +379,10 @@ export async function sendMorningOfSmsReminders(tenantId: string): Promise<{ sen
       const message = `ACTION: Please give ${animal.name} their ${reminder.careName} today. Reply 'DONE' or click link to confirm: ${magicLink}`;
 
       try {
-        const result = await sendSms(tenantId, foster.phone, message, 'reminder');
+        const result = await sendSms(tenantId, foster.phone, message, 'reminder', {
+          recipientUserId: reminder.fosterId,
+          relatedAnimalId: reminder.animalId,
+        });
 
         if (result.status === 'sent') {
           await db.insert(complianceReminderNotifications).values({
@@ -743,7 +746,10 @@ export async function sendMedicationTaskSmsReminders(tenantId: string): Promise<
       const message = `iRescue: Hi ${fosterFirstName}! ${animal.name} needs their ${drugNames} ${roundLabel} today. Log it in the Foster Portal when given.`.substring(0, 160);
 
       try {
-        await sendSms(tenantId, foster.phone, message, 'reminder');
+        await sendSms(tenantId, foster.phone, message, 'reminder', {
+          recipientUserId: fosterId,
+          relatedAnimalId: animalId,
+        });
         sent++;
       } catch (err) {
         errors.push(`Failed SMS to ${foster.phone} for ${animal.name}: ${err instanceof Error ? err.message : 'Unknown'}`);

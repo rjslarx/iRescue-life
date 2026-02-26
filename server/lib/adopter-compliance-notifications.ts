@@ -401,7 +401,10 @@ export async function runAdopterComplianceNotifications(tenantId: string): Promi
               : portalUrl;
 
             const smsMessage = buildComplianceSmsMessage(newItems, petPortalUrl);
-            const smsResult = await sendSms(tenantId, smsPhone, smsMessage, 'reminder');
+            const smsResult = await sendSms(tenantId, smsPhone, smsMessage, 'reminder', {
+              recipientUserId: userId,
+              relatedAnimalId: newItems.length === 1 ? newItems[0].animalId : undefined,
+            });
 
             if (smsResult.status === 'sent') {
               result.smsSent++;

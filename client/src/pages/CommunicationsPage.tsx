@@ -16,11 +16,12 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useTenant } from "@/contexts/TenantContext";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Send, Loader2, Mail, AlertCircle, Users, DollarSign, BookOpen, CheckCircle2, Sparkles, FileText, Inbox, Archive, Paperclip, ExternalLink, Newspaper } from "lucide-react";
+import { Send, Loader2, Mail, AlertCircle, Users, DollarSign, BookOpen, CheckCircle2, Sparkles, FileText, Inbox, Archive, Paperclip, ExternalLink, Newspaper, MessageSquare, ArrowUpRight, ArrowDownLeft, Phone } from "lucide-react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Link } from "wouter";
 import type { Tenant } from "@shared/schema";
 import DashboardLayout from "@/components/DashboardLayout";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow, format } from "date-fns";
 
 type RecipientType = 'team' | 'donors' | 'newsletter' | 'custom';
 type EmailStatus = "unprocessed" | "processed" | "archived";
@@ -53,6 +54,14 @@ export default function CommunicationsPage() {
   const [selectedEmail, setSelectedEmail] = useState<any>(null);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [notes, setNotes] = useState("");
+
+  // SMS Log state
+  const [smsDirection, setSmsDirection] = useState("");
+  const [smsStatus, setSmsStatus] = useState("");
+  const [smsMessageType, setSmsMessageType] = useState("");
+  const [smsSearch, setSmsSearch] = useState("");
+  const [selectedSmsLog, setSelectedSmsLog] = useState<any>(null);
+  const [smsDetailOpen, setSmsDetailOpen] = useState(false);
   const [linkedAnimalId, setLinkedAnimalId] = useState<string | null>(null);
 
   // Fetch tenant settings
@@ -95,6 +104,21 @@ export default function CommunicationsPage() {
   const { data: animalsData } = useQuery<{ animals: any[] }>({
     queryKey: ['/api/animals'],
   });
+
+  // Build SMS log query params
+  const smsQueryParams = new URLSearchParams();
+  if (smsDirection) smsQueryParams.set('direction', smsDirection);
+  if (smsStatus) smsQueryParams.set('status', smsStatus);
+  if (smsMessageType) smsQueryParams.set('messageType', smsMessageType);
+  if (smsSearch) smsQueryParams.set('search', smsSearch);
+  const smsQueryString = smsQueryParams.toString();
+
+  // Fetch SMS logs
+  const { data: smsLogsRaw, isLoading: smsLoading } = useQuery<any>({
+    queryKey: ['/api/sms/logs', smsDirection, smsStatus, smsMessageType, smsSearch],
+    queryFn: () => fetch(`/api/sms/logs${smsQueryString ? `?${smsQueryString}` : ''}`).then(r => r.json()),
+  });
+  const smsLogs: any[] = Array.isArray(smsLogsRaw) ? smsLogsRaw : [];
 
   // Admin-only access check
   if (!user || user.activeRole !== 'admin') {
@@ -292,7 +316,7 @@ export default function CommunicationsPage() {
     >
       <div className="flex-1 overflow-auto p-6">
         <Tabs defaultValue="inbox" className="w-full">
-          <TabsList className="grid w-full max-w-md grid-cols-2">
+          <TabsList className="grid w-full max-w-xl grid-cols-3">
             <TabsTrigger value="inbox" data-testid="tab-inbox">
               <Inbox className="w-4 h-4 mr-2" />
               Inbox
@@ -300,6 +324,10 @@ export default function CommunicationsPage() {
             <TabsTrigger value="campaigns" data-testid="tab-campaigns">
               <Send className="w-4 h-4 mr-2" />
               Email Campaigns
+            </TabsTrigger>
+            <TabsTrigger value="sms-log" data-testid="tab-sms-log">
+              <MessageSquare className="w-4 h-4 mr-2" />
+              SMS Log
             </TabsTrigger>
           </TabsList>
 
@@ -635,7 +663,250 @@ export default function CommunicationsPage() {
               </CardContent>
             </Card>
           </TabsContent>
+
+          {/* ─── SMS Log Tab ─────────────────────────────────────────── */}
+          <TabsContent value="sms-log" className="space-y-6 mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>SMS Communications Log</CardTitle>
+                <CardDescription>
+                  All automated and manual SMS messages sent and received by this organisation.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Filter bar */}
+                <div className="flex flex-wrap gap-3 items-center">
+                  <Select value={smsDirection || "all"} onValueChange={v => setSmsDirection(v === "all" ? "" : v)}>
+                    <SelectTrigger className="w-36" data-testid="select-sms-direction">
+                      <SelectValue placeholder="Direction" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Directions</SelectItem>
+                      <SelectItem value="outbound">Outbound</SelectItem>
+                      <SelectItem value="inbound">Inbound</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  <Select value={smsStatus || "all"} onValueChange={v => setSmsStatus(v === "all" ? "" : v)}>
+                    <SelectTrigger className="w-36" data-testid="select-sms-status">
+                      <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Statuses</SelectItem>
+                      <SelectItem value="sent">Sent</SelectItem>
+                      <SelectItem value="delivered">Delivered</SelectItem>
+                      <SelectItem value="failed">Failed</SelectItem>
+                      <SelectItem value="received">Received</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  <Select value={smsMessageType || "all"} onValueChange={v => setSmsMessageType(v === "all" ? "" : v)}>
+                    <SelectTrigger className="w-44" data-testid="select-sms-type">
+                      <SelectValue placeholder="Type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Types</SelectItem>
+                      <SelectItem value="transport_alert">Transport Alert</SelectItem>
+                      <SelectItem value="proxy_message">Proxy Message</SelectItem>
+                      <SelectItem value="broadcast">Broadcast</SelectItem>
+                      <SelectItem value="reminder">Reminder</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  <Input
+                    placeholder="Search recipient or animal..."
+                    value={smsSearch}
+                    onChange={e => setSmsSearch(e.target.value)}
+                    className="w-64"
+                    data-testid="input-sms-search"
+                  />
+
+                  {(smsDirection || smsStatus || smsMessageType || smsSearch) && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => { setSmsDirection(""); setSmsStatus(""); setSmsMessageType(""); setSmsSearch(""); }}
+                      data-testid="button-sms-clear-filters"
+                    >
+                      Clear filters
+                    </Button>
+                  )}
+                </div>
+
+                {/* Table */}
+                {smsLoading ? (
+                  <div className="space-y-2">
+                    {[...Array(6)].map((_, i) => (
+                      <div key={i} className="h-10 rounded-md bg-muted animate-pulse" />
+                    ))}
+                  </div>
+                ) : !smsLogs || smsLogs.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground gap-3">
+                    <MessageSquare className="w-10 h-10 opacity-30" />
+                    <p className="font-medium">No SMS messages found</p>
+                    <p className="text-sm max-w-sm">
+                      SMS logs appear here once Twilio is configured and messages are sent. Try adjusting your filters.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-36">Date / Time</TableHead>
+                          <TableHead className="w-10">Dir</TableHead>
+                          <TableHead className="w-36">Type</TableHead>
+                          <TableHead>Recipient</TableHead>
+                          <TableHead>Animal</TableHead>
+                          <TableHead>Message</TableHead>
+                          <TableHead className="w-28">Status</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {smsLogs.map((log: any) => (
+                          <TableRow
+                            key={log.id}
+                            className="cursor-pointer"
+                            onClick={() => { setSelectedSmsLog(log); setSmsDetailOpen(true); }}
+                            data-testid={`row-sms-${log.id}`}
+                          >
+                            <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                              {log.createdAt ? format(new Date(log.createdAt), 'MMM d, yyyy HH:mm') : '—'}
+                            </TableCell>
+                            <TableCell>
+                              {log.direction === 'outbound'
+                                ? <ArrowUpRight className="w-4 h-4 text-primary" />
+                                : <ArrowDownLeft className="w-4 h-4 text-muted-foreground" />
+                              }
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="text-xs capitalize">
+                                {(log.messageType || 'other').replace('_', ' ')}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-sm">
+                              {log.recipientName || log.toNumber || '—'}
+                            </TableCell>
+                            <TableCell className="text-sm">
+                              {log.animalName
+                                ? <span>{log.animalName}{log.animalLocalId ? <span className="text-xs text-muted-foreground ml-1">({log.animalLocalId})</span> : null}</span>
+                                : <span className="text-muted-foreground">—</span>
+                              }
+                            </TableCell>
+                            <TableCell className="text-sm max-w-xs truncate">
+                              {log.body ? log.body.slice(0, 70) + (log.body.length > 70 ? '…' : '') : '—'}
+                            </TableCell>
+                            <TableCell>
+                              {log.status === 'delivered' && (
+                                <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 text-xs">Delivered</Badge>
+                              )}
+                              {log.status === 'sent' && (
+                                <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 text-xs">Sent</Badge>
+                              )}
+                              {log.status === 'failed' && (
+                                <Badge className="bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 text-xs">Failed</Badge>
+                              )}
+                              {log.status === 'received' && (
+                                <Badge variant="secondary" className="text-xs">Received</Badge>
+                              )}
+                              {!['delivered','sent','failed','received'].includes(log.status) && (
+                                <Badge variant="outline" className="text-xs capitalize">{log.status || 'unknown'}</Badge>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
         </Tabs>
+
+        {/* SMS Detail Dialog */}
+        <Dialog open={smsDetailOpen} onOpenChange={setSmsDetailOpen}>
+          <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                {selectedSmsLog?.direction === 'outbound'
+                  ? <ArrowUpRight className="w-5 h-5 text-primary" />
+                  : <ArrowDownLeft className="w-5 h-5 text-muted-foreground" />
+                }
+                SMS Detail
+              </DialogTitle>
+            </DialogHeader>
+            {selectedSmsLog && (
+              <div className="space-y-4 text-sm">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Date</Label>
+                    <p>{selectedSmsLog.createdAt ? format(new Date(selectedSmsLog.createdAt), 'MMM d, yyyy HH:mm:ss') : '—'}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Direction</Label>
+                    <p className="capitalize">{selectedSmsLog.direction || '—'}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">From</Label>
+                    <p className="font-mono">{selectedSmsLog.fromNumber || '—'}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">To</Label>
+                    <p className="font-mono">{selectedSmsLog.toNumber || '—'}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Type</Label>
+                    <p className="capitalize">{(selectedSmsLog.messageType || 'other').replace('_', ' ')}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Status</Label>
+                    <p className="capitalize">{selectedSmsLog.status || '—'}</p>
+                  </div>
+                  {selectedSmsLog.recipientName && (
+                    <div>
+                      <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Recipient</Label>
+                      <p>{selectedSmsLog.recipientName}{selectedSmsLog.recipientRoles?.length ? <span className="text-muted-foreground ml-1">({selectedSmsLog.recipientRoles.join(', ')})</span> : null}</p>
+                    </div>
+                  )}
+                  {selectedSmsLog.animalName && (
+                    <div>
+                      <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Animal</Label>
+                      <p>{selectedSmsLog.animalName}{selectedSmsLog.animalLocalId ? <span className="text-muted-foreground ml-1">({selectedSmsLog.animalLocalId})</span> : null}</p>
+                    </div>
+                  )}
+                  {selectedSmsLog.senderName && (
+                    <div>
+                      <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Sent By</Label>
+                      <p>{selectedSmsLog.senderName}</p>
+                    </div>
+                  )}
+                  {selectedSmsLog.twilioMessageSid && (
+                    <div className="col-span-2">
+                      <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Twilio SID</Label>
+                      <p className="font-mono text-xs break-all">{selectedSmsLog.twilioMessageSid}</p>
+                    </div>
+                  )}
+                </div>
+                <Separator />
+                <div>
+                  <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 block">Message Body</Label>
+                  <div className="bg-muted p-3 rounded-md text-sm whitespace-pre-wrap">
+                    {selectedSmsLog.body || '(no body)'}
+                  </div>
+                </div>
+                {selectedSmsLog.errorMessage && (
+                  <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>{selectedSmsLog.errorMessage}</AlertDescription>
+                  </Alert>
+                )}
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
 
         <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
           <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">

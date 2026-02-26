@@ -149,6 +149,8 @@ export async function sendSms(
     transportId?: string;
     proxySessionId?: string;
     sentBy?: { id: string; name: string };
+    recipientUserId?: string;
+    relatedAnimalId?: string;
   }
 ): Promise<SendResult> {
   const config = await getTwilioConfig(tenantId);
@@ -180,6 +182,8 @@ export async function sendSms(
       status: 'sent',
       sentBy: context?.sentBy?.id,
       sentByName: context?.sentBy?.name,
+      recipientUserId: context?.recipientUserId,
+      relatedAnimalId: context?.relatedAnimalId,
     });
 
     return { number: toNumber, status: 'sent', sid: twilioMessage.sid };
@@ -197,6 +201,8 @@ export async function sendSms(
       errorMessage: error.message,
       sentBy: context?.sentBy?.id,
       sentByName: context?.sentBy?.name,
+      recipientUserId: context?.recipientUserId,
+      relatedAnimalId: context?.relatedAnimalId,
     });
 
     return { number: toNumber, status: 'failed', error: error.message };

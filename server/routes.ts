@@ -21833,6 +21833,37 @@ Submitted: ${new Date().toLocaleString()}
   });
 
   /**
+   * POST /api/webhooks/twilio/status
+   * Twilio Delivery Status callback — updates sms_message_logs.status when Twilio delivers/fails a message.
+   * Configure in Twilio dashboard as the "Status Callback URL" for your messaging service.
+   * No auth required — public webhook. Responds with TwiML <Response/> as required by Twilio.
+   */
+  app.post('/api/webhooks/twilio/status', async (req, res) => {
+    try {
+      const messageSid = req.body?.MessageSid as string | undefined;
+      const twilioStatus = req.body?.MessageStatus as string | undefined;
+
+      if (messageSid && twilioStatus) {
+        let newStatus: 'sent' | 'delivered' | 'failed' | 'received' | null = null;
+        if (twilioStatus === 'delivered') newStatus = 'delivered';
+        else if (twilioStatus === 'undelivered' || twilioStatus === 'failed') newStatus = 'failed';
+
+        if (newStatus) {
+          await db
+            .update(smsMessageLogs)
+            .set({ status: newStatus })
+            .where(eq(smsMessageLogs.twilioMessageSid, messageSid));
+          console.log(`[TWILIO STATUS] ${messageSid} → ${newStatus}`);
+        }
+      }
+    } catch (err) {
+      console.error('[TWILIO STATUS WEBHOOK] Error:', err);
+    }
+    res.set('Content-Type', 'text/xml');
+    res.send('<?xml version="1.0" encoding="UTF-8"?><Response></Response>');
+  });
+
+  /**
    * POST /api/transports/:id/sms-broadcast
    * Send SMS broadcast to transport subscribers (staff only)
    */
@@ -22011,18 +22042,57 @@ Submitted: ${new Date().toLocaleString()}
 
   /**
    * GET /api/sms/logs
-   * Get SMS message logs for this tenant (admin only)
+   * Get SMS message logs for this tenant (admin only) with joins + filters
+   * Query params: direction, status, messageType, search (recipient name or animal name)
    */
-  app.get('/api/sms/logs', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+  app.get('/api/sms/logs', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
     try {
-      const logs = await db
-        .select()
-        .from(smsMessageLogs)
-        .where(eq(smsMessageLogs.tenantId, req.tenant!.id))
-        .orderBy(sql`${smsMessageLogs.createdAt} DESC`)
-        .limit(100);
+      const tenantId = req.tenant!.id;
+      const { direction, status, messageType, search } = req.query as Record<string, string>;
 
-      res.json(logs);
+      // Build conditions (sentByName is denormalized — only 1 users join needed for recipient)
+      const conditions = [eq(smsMessageLogs.tenantId, tenantId)];
+      if (direction)   conditions.push(eq(smsMessageLogs.direction, direction as any));
+      if (status)      conditions.push(eq(smsMessageLogs.status, status as any));
+      if (messageType) conditions.push(eq(smsMessageLogs.messageType, messageType as any));
+
+      const logs = await db
+        .select({
+          id: smsMessageLogs.id,
+          direction: smsMessageLogs.direction,
+          messageType: smsMessageLogs.messageType,
+          fromNumber: smsMessageLogs.fromNumber,
+          toNumber: smsMessageLogs.toNumber,
+          body: smsMessageLogs.body,
+          status: smsMessageLogs.status,
+          errorMessage: smsMessageLogs.errorMessage,
+          twilioMessageSid: smsMessageLogs.twilioMessageSid,
+          transportId: smsMessageLogs.transportId,
+          proxySessionId: smsMessageLogs.proxySessionId,
+          sentByName: smsMessageLogs.sentByName,
+          createdAt: smsMessageLogs.createdAt,
+          recipientName: users.fullName,
+          recipientRoles: users.roles,
+          animalName: animals.name,
+          animalLocalId: animals.localShelterId,
+        })
+        .from(smsMessageLogs)
+        .leftJoin(users, eq(smsMessageLogs.recipientUserId, users.id))
+        .leftJoin(animals, eq(smsMessageLogs.relatedAnimalId, animals.id))
+        .where(and(...conditions))
+        .orderBy(sql`${smsMessageLogs.createdAt} DESC`)
+        .limit(200);
+
+      // Apply search filter in-memory
+      const filtered = search
+        ? logs.filter(l =>
+            (l.recipientName?.toLowerCase().includes(search.toLowerCase())) ||
+            (l.animalName?.toLowerCase().includes(search.toLowerCase())) ||
+            (l.sentByName?.toLowerCase().includes(search.toLowerCase()))
+          )
+        : logs;
+
+      res.json(filtered);
     } catch (error) {
       next(error);
     }
