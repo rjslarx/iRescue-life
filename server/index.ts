@@ -12,6 +12,24 @@ import { helmetConfig, getCorsConfig, configureTrustProxy, apiLimiter } from "./
 import { initializeScheduler } from "./lib/scheduler";
 import { backfillNewPagePermissions } from "./services/page-permissions-seeding";
 import { seedPlatformPreventativeProtocols } from "./services/preventative-protocols-seeding";
+import { db } from "./db";
+import { medicalCatalog } from "@shared/schema";
+import { eq, and } from "drizzle-orm";
+
+async function patchBravectoPlusInterval() {
+  try {
+    const result = await db
+      .update(medicalCatalog)
+      .set({ defaultIntervalDays: 56, defaultFrequency: 'Every 8 weeks' })
+      .where(and(
+        eq(medicalCatalog.name, 'Bravecto Plus'),
+        eq(medicalCatalog.defaultIntervalDays, 60),
+      ));
+    console.log('[Startup] Bravecto Plus interval patch applied (60→56 days for any affected rows)');
+  } catch (err) {
+    console.error('[Startup] Bravecto Plus interval patch failed:', err);
+  }
+}
 
 // Validate environment variables before starting
 validateEnvironment();
@@ -142,5 +160,8 @@ app.use((req, res, next) => {
     
     // Seed platform default preventative protocols
     seedPlatformPreventativeProtocols();
+
+    // Patch Bravecto Plus interval from 60 → 56 days across all tenants
+    patchBravectoPlusInterval();
   });
 })();

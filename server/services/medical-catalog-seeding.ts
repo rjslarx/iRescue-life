@@ -137,7 +137,7 @@ const DEFAULT_CATALOG_ITEMS: CatalogSeedItem[] = [
   { name: 'Revolution Plus', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30, speciesTarget: 'Cat', defaultRoute: 'Topical', manufacturer: 'Zoetis' },
   { name: 'Revolution (Feline)', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30, speciesTarget: 'Cat', defaultRoute: 'Topical', manufacturer: 'Zoetis' },
   { name: 'Bravecto Topical (Cat)', category: 'Preventative', defaultFrequency: 'Every 12 weeks', defaultIntervalDays: 84, speciesTarget: 'Cat', defaultRoute: 'Topical', manufacturer: 'Merck Animal Health' },
-  { name: 'Bravecto Plus', category: 'Preventative', defaultFrequency: 'Every 2 months', defaultIntervalDays: 60, speciesTarget: 'Cat', defaultRoute: 'Topical', manufacturer: 'Merck Animal Health' },
+  { name: 'Bravecto Plus', category: 'Preventative', defaultFrequency: 'Every 8 weeks', defaultIntervalDays: 56, speciesTarget: 'Cat', defaultRoute: 'Topical', manufacturer: 'Merck Animal Health' },
   { name: 'Cheristin', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30, speciesTarget: 'Cat', defaultRoute: 'Topical', manufacturer: 'Elanco' },
   { name: 'NexGard Combo', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30, speciesTarget: 'Cat', defaultRoute: 'Topical', manufacturer: 'Boehringer Ingelheim' },
   { name: 'Advantage II (Feline)', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30, speciesTarget: 'Cat', defaultRoute: 'Topical', manufacturer: 'Elanco' },
@@ -307,6 +307,16 @@ export async function seedMedicalCatalog(tenantId: string): Promise<{ catalogCre
         isNull(medicalCatalog.speciesTarget),
       ));
   }
+
+  // Patch Bravecto Plus interval: label says every 8 weeks (56 days), not 2 months (60 days)
+  await db
+    .update(medicalCatalog)
+    .set({ defaultIntervalDays: 56, defaultFrequency: 'Every 8 weeks' })
+    .where(and(
+      eq(medicalCatalog.tenantId, tenantId),
+      eq(medicalCatalog.name, 'Bravecto Plus'),
+      eq(medicalCatalog.defaultIntervalDays, 60),
+    ));
 
   const allCatalogItems = await db
     .select({ id: medicalCatalog.id, name: medicalCatalog.name })
