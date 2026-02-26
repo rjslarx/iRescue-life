@@ -19816,6 +19816,74 @@ Submitted: ${new Date().toLocaleString()}
         console.error('[Placement Agreement] Failed to send staff notification:', emailError);
       }
 
+      // Send confirmation email to foster with signed agreement PDF
+      try {
+        const emailService = await EmailService.forTenant(tenant.id);
+        if (emailService) {
+          // Attempt to download the signed PDF for attachment
+          let pdfAttachments: { filename: string; content: Buffer; contentType: string }[] = [];
+          if (contractPdfUrl) {
+            try {
+              const privateObjectDir = process.env.PRIVATE_OBJECT_DIR;
+              if (privateObjectDir) {
+                const pdfFilename = contractPdfUrl.split('/').pop();
+                if (pdfFilename) {
+                  const objectPath = `${privateObjectDir}/placement-agreements/${pdfFilename}`;
+                  const pathParts = objectPath.split('/');
+                  const bucketName = pathParts[1];
+                  const objectName = pathParts.slice(2).join('/');
+                  const { objectStorageClient } = await import('./objectStorage');
+                  const bucket = objectStorageClient.bucket(bucketName);
+                  const file = bucket.file(objectName);
+                  const [pdfBuffer] = await file.download();
+                  pdfAttachments.push({
+                    filename: `placement-agreement-${animal.name.replace(/\s+/g, '-').toLowerCase()}.pdf`,
+                    content: Buffer.from(pdfBuffer),
+                    contentType: 'application/pdf',
+                  });
+                }
+              }
+            } catch (pdfDownloadError) {
+              console.error('[Placement Agreement] Failed to download PDF for foster email attachment:', pdfDownloadError);
+            }
+          }
+
+          const safeFosterName = escapeHtml(signatureData.signerName);
+          const safeAnimalName = escapeHtml(animal.name);
+          const safeTenantName = escapeHtml(tenant.name);
+          const signedDate = new Date().toLocaleString();
+
+          await emailService.send({
+            to: signatureData.signerEmail,
+            subject: `Placement Agreement Confirmed - ${animal.name} | ${tenant.name}`,
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2 style="color: #2563eb;">Placement Agreement Confirmed</h2>
+                <p>Hi ${safeFosterName},</p>
+                <p>Thank you for signing the placement agreement for <strong>${safeAnimalName}</strong>. Your placement is now confirmed!</p>
+                ${pdfAttachments.length > 0
+                  ? '<p>Your signed agreement is attached to this email as a PDF for your records.</p>'
+                  : '<p>Your signed agreement has been saved to your foster documents.</p>'}
+                <p>The <strong>${safeTenantName}</strong> team has been notified and will be in touch with any next steps or care instructions.</p>
+                <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
+                <p style="color: #6b7280; font-size: 13px;">
+                  Signed: ${signedDate}<br />
+                  Please keep this email for your records.
+                </p>
+                <p style="color: #9ca3af; font-size: 12px;">
+                  Thank you for opening your home to ${safeAnimalName}!<br />
+                  ${safeTenantName}
+                </p>
+              </div>
+            `,
+            attachments: pdfAttachments.length > 0 ? pdfAttachments : undefined,
+          });
+          console.log(`[Placement Agreement] Sent confirmation email to foster: ${signatureData.signerEmail}`);
+        }
+      } catch (fosterEmailError) {
+        console.error('[Placement Agreement] Failed to send foster confirmation email:', fosterEmailError);
+      }
+
       // Log activity
       try {
         const { logActivity } = await import('./lib/activity-logger');
