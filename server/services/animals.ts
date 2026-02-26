@@ -1,6 +1,7 @@
 import { db } from '../db';
 import { animals, kennelRows, type InsertAnimal, type Animal } from '@shared/schema';
 import { eq, and, or, desc, sql, ne, inArray } from 'drizzle-orm';
+import { generateLocalShelterId } from '../utils/shelterId';
 
 async function checkDuplicateAnimalName(tenantId: string, name: string, excludeAnimalId?: string): Promise<void> {
   const conditions = [
@@ -135,6 +136,7 @@ export async function getAnimalById(tenantId: string, animalId: string): Promise
 export async function createAnimal(tenantId: string, data: Omit<InsertAnimal, 'animalId' | 'tenantId'>): Promise<Animal> {
   await checkDuplicateAnimalName(tenantId, data.name);
   const animalId = await generateAnimalId();
+  const localShelterId = await generateLocalShelterId(tenantId, data.species);
   
   const [animal] = await db
     .insert(animals)
@@ -142,6 +144,7 @@ export async function createAnimal(tenantId: string, data: Omit<InsertAnimal, 'a
       ...data,
       tenantId,
       animalId,
+      localShelterId,
     })
     .returning();
   

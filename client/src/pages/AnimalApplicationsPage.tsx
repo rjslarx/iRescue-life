@@ -179,9 +179,14 @@ export default function AnimalApplicationsPage() {
                 <h1 className="text-3xl font-bold" data-testid="text-page-title">
                   Apps & Agreements for {animal.name}
                 </h1>
-                {animal.animalId && (
-                  <Badge variant="outline" className="text-base font-mono">
-                    {animal.animalId}
+                {(animal.localShelterId || animal.animalId) && (
+                  <Badge variant="outline" className="text-base font-mono" data-testid="badge-animal-shelter-id">
+                    {animal.localShelterId || animal.animalId}
+                  </Badge>
+                )}
+                {animal.sourceAnimalId && (
+                  <Badge variant="secondary" className="text-sm" data-testid="badge-transferred-in">
+                    Transferred In
                   </Badge>
                 )}
               </div>

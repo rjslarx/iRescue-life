@@ -197,9 +197,14 @@ export function AnimalHudCard({
             <h3 className="font-bold text-white text-sm leading-tight truncate drop-shadow-sm" data-testid={`text-animal-name-${animal.id}`}>
               {animal.name}
             </h3>
-            {animal.animalId && (
+            {(animal.localShelterId || animal.animalId) && (
               <span className="text-white/80 text-[10px] font-mono drop-shadow-sm" data-testid={`text-animal-id-${animal.id}`}>
-                ({animal.animalId})
+                {animal.localShelterId || animal.animalId}
+              </span>
+            )}
+            {animal.sourceAnimalId && (
+              <span className="text-white/60 text-[9px] drop-shadow-sm" data-testid={`badge-transferred-in-${animal.id}`}>
+                Transferred In
               </span>
             )}
           </div>

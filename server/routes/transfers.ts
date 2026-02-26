@@ -11,11 +11,13 @@ import {
   microchipRecords,
   medicalFiles,
   medicationPlans,
+  medicalExams,
   fosterAnimals,
   users,
   complianceObligations,
 } from '@shared/schema';
 import { eq, and, or, desc, ne, sql, inArray, isNull } from 'drizzle-orm';
+import { generateLocalShelterId } from '../utils/shelterId';
 import { z } from 'zod';
 
 const router = Router();
@@ -378,10 +380,13 @@ router.patch('/:id/accept', requireTenant, requireAuth, requireRole('admin', 'ow
     }
 
     const newAnimalId = await generateAnimalId();
+    const newLocalShelterId = await generateLocalShelterId(tenantId, sourceAnimal.species);
 
     const [clonedAnimal] = await db.insert(animals).values({
       tenantId,
       animalId: newAnimalId,
+      localShelterId: newLocalShelterId,
+      sourceAnimalId: sourceAnimal.id,
       name: sourceAnimal.name,
       species: sourceAnimal.species,
       breed: sourceAnimal.breed,
@@ -452,7 +457,10 @@ router.patch('/:id/accept', requireTenant, requireAuth, requireRole('admin', 'ow
     const sourcePrevCare = await db
       .select()
       .from(preventativeCareRecords)
-      .where(eq(preventativeCareRecords.animalId, sourceAnimal.id));
+      .where(and(
+        eq(preventativeCareRecords.animalId, sourceAnimal.id),
+        eq(preventativeCareRecords.status, 'given'),
+      ));
 
     if (sourcePrevCare.length > 0) {
       await db.insert(preventativeCareRecords).values(
@@ -513,6 +521,41 @@ router.patch('/:id/accept', requireTenant, requireAuth, requireRole('admin', 'ow
           mimeType: mf.mimeType,
           fileSize: mf.fileSize,
           description: mf.description,
+        }))
+      );
+    }
+
+    const sourceExams = await db
+      .select()
+      .from(medicalExams)
+      .where(and(
+        eq(medicalExams.animalId, sourceAnimal.id),
+        eq(medicalExams.status, 'completed'),
+      ));
+
+    if (sourceExams.length > 0) {
+      await db.insert(medicalExams).values(
+        sourceExams.map(e => ({
+          animalId: clonedAnimal.id,
+          tenantId,
+          examType: e.examType,
+          examDate: e.examDate,
+          performedBy: e.performedBy,
+          status: 'completed' as const,
+          reason: e.reason,
+          completedDate: e.completedDate,
+          completionNotes: e.completionNotes,
+          subjective: e.subjective,
+          objective: e.objective,
+          assessment: e.assessment,
+          plan: e.plan,
+          structuredFields: e.structuredFields,
+          billVendor: e.billVendor,
+          billAmount: e.billAmount,
+          billInvoiceNumber: e.billInvoiceNumber,
+          billPaymentStatus: e.billPaymentStatus,
+          billPaidAmount: e.billPaidAmount,
+          billNotes: e.billNotes,
         }))
       );
     }

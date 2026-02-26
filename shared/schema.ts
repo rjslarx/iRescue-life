@@ -558,13 +558,18 @@ export const animals = pgTable("animals", {
   isQuarantined: boolean("is_quarantined").notNull().default(false),
   quarantineReason: text("quarantine_reason"),
   quarantineStartDate: timestamp("quarantine_start_date"),
+  // Network Transfer Engine fields
+  localShelterId: text("local_shelter_id"),       // Per-tenant sequential ID, format: D-26-0015
+  sourceAnimalId: uuid("source_animal_id"),        // UUID of the original animal if cloned via network transfer
+  transferNetworkId: text("transfer_network_id"),  // Name of sending/receiving org if off-platform
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
 export const insertAnimalSchema = createInsertSchema(animals).omit({
   id: true,
-  animalId: true, // Auto-generated on backend
+  animalId: true,        // Auto-generated on backend
+  localShelterId: true,  // Auto-generated on backend
   createdAt: true,
   updatedAt: true,
 });

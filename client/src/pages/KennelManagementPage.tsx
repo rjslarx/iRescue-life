@@ -161,7 +161,7 @@ function AnimalSelectorDialog({ open, onClose, buildingId, rowId, position, curr
                   <SelectItem value={CLEAR_KENNEL_VALUE}>-- Clear kennel --</SelectItem>
                   {availableAnimals.map(animal => (
                     <SelectItem key={animal.id} value={animal.id}>
-                      {animal.name} ({animal.animalId}) - {animal.species}
+                      {animal.name} ({animal.localShelterId || animal.animalId}) - {animal.species}
                     </SelectItem>
                   ))}
                 </SelectContent>
