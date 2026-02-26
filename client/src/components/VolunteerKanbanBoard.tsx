@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,10 +17,16 @@ import {
   Users,
   Eye,
   ArrowRight,
-  Zap
+  Zap,
+  AlertCircle,
+  RefreshCw,
+  MailX,
+  CheckCircle
 } from "lucide-react";
 import MobilePipelineView, { PipelineStage, PipelineCard } from "./MobilePipelineView";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 interface VolunteerApplication {
   id: string;
@@ -33,6 +40,7 @@ interface VolunteerApplication {
   holdHarmlessFormId?: string | null;
   holdHarmlessSignedAt?: string | null;
   createdAt?: string;
+  inviteStatus?: string;
 }
 
 interface VolunteerKanbanBoardProps {
@@ -71,6 +79,78 @@ function WaiverStatusBadge({ signedAt }: { signedAt?: string | null }) {
       <FileSignature className="h-3 w-3 shrink-0" />
       <span className="truncate">Pending</span>
     </Badge>
+  );
+}
+
+function InviteStatusBadge({ status }: { status?: string }) {
+  if (!status || status === 'not_invited') {
+    return (
+      <Badge variant="outline" className="text-xs gap-1" data-testid="badge-invite-not-invited">
+        <MailX className="h-3 w-3 shrink-0 text-muted-foreground" />
+        <span className="truncate">Not Invited</span>
+      </Badge>
+    );
+  }
+  if (status === 'account_active') {
+    return (
+      <Badge variant="outline" className="text-xs gap-1" data-testid="badge-invite-account-active">
+        <CheckCircle className="h-3 w-3 shrink-0 text-green-600 dark:text-green-400" />
+        <span className="truncate">Account Active</span>
+      </Badge>
+    );
+  }
+  if (status === 'invite_pending') {
+    return (
+      <Badge variant="outline" className="text-xs gap-1" data-testid="badge-invite-pending">
+        <Clock className="h-3 w-3 shrink-0 text-amber-500" />
+        <span className="truncate">Invite Pending</span>
+      </Badge>
+    );
+  }
+  if (status === 'invite_expired') {
+    return (
+      <Badge variant="outline" className="text-xs gap-1" data-testid="badge-invite-expired">
+        <AlertCircle className="h-3 w-3 shrink-0 text-orange-500" />
+        <span className="truncate">Invite Expired</span>
+      </Badge>
+    );
+  }
+  return null;
+}
+
+function ResendInviteButton({ app }: { app: VolunteerApplication }) {
+  const { toast } = useToast();
+  const mutation = useMutation({
+    mutationFn: () => apiRequest('POST', `/api/volunteer-applications/${app.id}/resend-invite`),
+    onSuccess: () => {
+      toast({ title: 'Invitation resent', description: `Invite sent to ${app.applicantEmail}` });
+      queryClient.invalidateQueries({ queryKey: ['/api/volunteer-applications'] });
+    },
+    onError: (err: any) => {
+      toast({ title: 'Failed to resend', description: err?.message || 'An error occurred', variant: 'destructive' });
+    },
+  });
+
+  return (
+    <Button
+      size="sm"
+      variant="ghost"
+      className="h-7 px-2 text-xs gap-1"
+      disabled={mutation.isPending}
+      onClick={(e) => {
+        e.stopPropagation();
+        mutation.mutate();
+      }}
+      data-testid={`button-resend-invite-${app.id}`}
+      title="Resend invitation email"
+    >
+      {mutation.isPending ? (
+        <Loader2 className="h-3 w-3 animate-spin" />
+      ) : (
+        <RefreshCw className="h-3 w-3" />
+      )}
+      <span>Resend</span>
+    </Button>
   );
 }
 
@@ -245,7 +325,15 @@ export default function VolunteerKanbanBoard({
                               </div>
                               
                               {stage.id === "active_pool" && (
-                                <VolunteerSkillsBadges app={app} />
+                                <>
+                                  <VolunteerSkillsBadges app={app} />
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <InviteStatusBadge status={app.inviteStatus} />
+                                    {app.inviteStatus !== 'account_active' && (
+                                      <ResendInviteButton app={app} />
+                                    )}
+                                  </div>
+                                </>
                               )}
 
                               <div className="flex items-center gap-1.5 mt-3 pt-2 border-t">

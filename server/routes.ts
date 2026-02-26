@@ -16585,8 +16585,130 @@ Submitted: ${new Date().toLocaleString()}
         .from(volunteerApplications)
         .where(eq(volunteerApplications.tenantId, req.tenant!.id))
         .orderBy(desc(volunteerApplications.createdAt));
-      
-      res.json({ applications });
+
+      // Enrich each application with invite/account status
+      const emails = [...new Set(applications.map(a => a.applicantEmail).filter(Boolean))] as string[];
+      let enrichedApplications: (typeof applications[0] & { inviteStatus: string })[] = applications.map(a => ({ ...a, inviteStatus: 'not_invited' }));
+
+      if (emails.length > 0) {
+        const { userInvitations } = await import('@shared/schema');
+        const [existingUsers, existingInvitations] = await Promise.all([
+          db.select({ email: users.email })
+            .from(users)
+            .where(and(
+              eq(users.tenantId, req.tenant!.id),
+              inArray(users.email, emails)
+            )),
+          db.select({ email: userInvitations.email, acceptedAt: userInvitations.acceptedAt, expiresAt: userInvitations.expiresAt })
+            .from(userInvitations)
+            .where(and(
+              eq(userInvitations.tenantId, req.tenant!.id),
+              isNull(userInvitations.acceptedAt),
+              inArray(userInvitations.email, emails)
+            ))
+        ]);
+
+        const activeEmails = new Set(existingUsers.map(u => u.email.toLowerCase()));
+        const now = new Date();
+        const pendingEmails = new Set(
+          existingInvitations.filter(i => new Date(i.expiresAt) > now).map(i => i.email.toLowerCase())
+        );
+        const expiredEmails = new Set(
+          existingInvitations.filter(i => new Date(i.expiresAt) <= now).map(i => i.email.toLowerCase())
+        );
+
+        enrichedApplications = applications.map(app => {
+          const email = (app.applicantEmail || '').toLowerCase();
+          let inviteStatus = 'not_invited';
+          if (activeEmails.has(email)) inviteStatus = 'account_active';
+          else if (pendingEmails.has(email)) inviteStatus = 'invite_pending';
+          else if (expiredEmails.has(email)) inviteStatus = 'invite_expired';
+          return { ...app, inviteStatus };
+        });
+      }
+
+      res.json({ applications: enrichedApplications });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/volunteer-applications/:id/resend-invite
+   * Resend or create a fresh volunteer welcome invitation email
+   */
+  app.post('/api/volunteer-applications/:id/resend-invite', requireTenant, requireAuth, requireRole('admin', 'owner', 'board_member', 'staff'), async (req, res, next) => {
+    try {
+      const { volunteerApplications, userInvitations } = await import('@shared/schema');
+
+      const [application] = await db
+        .select()
+        .from(volunteerApplications)
+        .where(and(
+          eq(volunteerApplications.id, req.params.id),
+          eq(volunteerApplications.tenantId, req.tenant!.id)
+        ))
+        .limit(1);
+
+      if (!application) {
+        return res.status(404).json({ error: 'Volunteer application not found' });
+      }
+
+      const email = application.applicantEmail?.trim().toLowerCase();
+      if (!email) {
+        return res.status(400).json({ error: 'Volunteer application has no email address' });
+      }
+
+      // Block if the volunteer already has an active user account
+      const [existingUser] = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(and(eq(users.tenantId, req.tenant!.id), eq(users.email, email)))
+        .limit(1);
+
+      if (existingUser) {
+        return res.status(400).json({ error: 'This volunteer already has an active account' });
+      }
+
+      // Check for existing (possibly expired) pending invitation
+      const [existingInvitation] = await db
+        .select()
+        .from(userInvitations)
+        .where(and(
+          eq(userInvitations.tenantId, req.tenant!.id),
+          eq(userInvitations.email, email),
+          isNull(userInvitations.acceptedAt)
+        ))
+        .limit(1);
+
+      const { sendVolunteerWelcomeEmail, createAndSendVolunteerWelcome } = await import('./services/invitations');
+      const [tenant] = await db
+        .select({ name: tenants.name })
+        .from(tenants)
+        .where(eq(tenants.id, req.tenant!.id))
+        .limit(1);
+      const tenantName = tenant?.name || 'the rescue';
+
+      if (existingInvitation) {
+        // Refresh the token and extend expiry, then send email
+        const crypto = await import('crypto');
+        const newToken = crypto.default.randomBytes(12).toString('base64url');
+        const newExpiresAt = new Date();
+        newExpiresAt.setDate(newExpiresAt.getDate() + 7);
+
+        const [refreshed] = await db
+          .update(userInvitations)
+          .set({ token: newToken, expiresAt: newExpiresAt })
+          .where(eq(userInvitations.id, existingInvitation.id))
+          .returning();
+
+        await sendVolunteerWelcomeEmail(req.tenant!.id, refreshed, tenantName);
+      } else {
+        // Create a fresh invitation and send welcome email
+        await createAndSendVolunteerWelcome(req.tenant!.id, email, application.applicantName || '');
+      }
+
+      res.json({ success: true, message: 'Invitation resent' });
     } catch (error) {
       next(error);
     }
