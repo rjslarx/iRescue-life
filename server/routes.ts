@@ -32134,11 +32134,20 @@ Email: ${application.applicantEmail || ''}`
       const { preventativeCareRecords, preventativeCareTypes, insertPreventativeCareRecordSchema, animals } = await import('@shared/schema');
 
       const createFollowUp = req.body.createFollowUp === true;
-      const data = insertPreventativeCareRecordSchema.parse(req.body);
+
+      // Make careName and tenantId optional in parse — server derives/overrides them
+      const { z } = await import('zod');
+      const tolerantSchema = insertPreventativeCareRecordSchema.extend({
+        careName: z.string().optional(),
+        tenantId: z.string().uuid().optional(),
+      });
+      const data = tolerantSchema.parse(req.body);
 
       // Get care type info for interval calculation and coverage flags
       let intervalDays: number | null = null;
       let careTypeInfo: { coversHeartworm: boolean; coversFleaTick: boolean } | null = null;
+      let resolvedCareName = data.careName || 'Preventative Care';
+
       if (data.careTypeId) {
         const [careType] = await db
           .select()
@@ -32148,6 +32157,9 @@ Email: ${application.applicantEmail || ''}`
         if (careType) {
           intervalDays = careType.defaultIntervalDays;
           careTypeInfo = { coversHeartworm: careType.coversHeartworm, coversFleaTick: careType.coversFleaTick };
+          if (!data.careName) {
+            resolvedCareName = careType.name;
+          }
         }
       }
 
@@ -32169,6 +32181,7 @@ Email: ${application.applicantEmail || ''}`
         .insert(preventativeCareRecords)
         .values({
           ...data,
+          careName: resolvedCareName,
           tenantId: req.tenant!.id,
           nextDueDate: effectiveNextDueDate,
           createdBy: req.user!.id,

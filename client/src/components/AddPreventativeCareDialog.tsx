@@ -208,8 +208,12 @@ export function AddPreventativeCareDialog({
       const today = new Date().toISOString().split('T')[0];
       const isFuture = data.dateAdministered > today;
 
+      const selectedCareType = careTypes.find(t => t.id === data.careTypeId);
+      const careName = initialValues?.careName || selectedCareType?.name || 'Preventative Care';
+
       return apiRequest("POST", `/api/medical/preventative-care/records`, {
         animalId,
+        careName,
         careTypeId: data.careTypeId,
         dateAdministered: data.dateAdministered,
         nextDueDate: data.nextDueDate || null,
