@@ -2328,6 +2328,15 @@ export default function AnimalMedicalPage() {
                 <Shield className="w-5 h-5" />
                 Preventative Care Records
               </h3>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setAddMedicalOrderOpen(true)}
+                data-testid="button-preventative-add-record"
+              >
+                <Plus className="w-3.5 h-3.5 mr-1.5" />
+                Add Record
+              </Button>
             </div>
             
             <div className="space-y-4">

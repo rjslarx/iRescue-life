@@ -11,7 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { AlertTriangle, Pill, Syringe, FlaskConical, Stethoscope, ShieldCheck, ClipboardCheck, Package, Loader2, Clock, CheckCircle2, AlertCircle, ArrowLeft, Search, Zap, Plus, PawPrint } from "lucide-react";
+import { AlertTriangle, Pill, Syringe, FlaskConical, Stethoscope, ShieldCheck, ClipboardCheck, Package, Loader2, Clock, CheckCircle2, AlertCircle, ArrowLeft, Search, Zap, Plus, PawPrint, ListChecks } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 
 import { AddPrescriptionDialog } from "@/components/AddPrescriptionDialog";
 import { AddVaccineDialog } from "@/components/AddVaccineDialog";
@@ -74,6 +75,39 @@ interface AddMedicalOrderDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
+
+const PREVENTATIVE_PROTOCOLS = [
+  {
+    key: 'adult_dog',
+    name: 'Adult Dog Standard',
+    description: 'Rabies · DHPP · Heartworm · Flea/Tick · Bordetella',
+    items: ['Rabies', 'DHPP (DA2PP)', 'Heartworm Prevention', 'Flea & Tick Prevention', 'Bordetella'],
+  },
+  {
+    key: 'adult_cat',
+    name: 'Adult Cat Standard',
+    description: 'Rabies · FVRCP · Heartworm · Flea/Tick',
+    items: ['Rabies', 'FVRCP', 'Heartworm Prevention', 'Flea & Tick Prevention'],
+  },
+  {
+    key: 'kitten',
+    name: 'Kitten Protocol',
+    description: 'Dewormer · FVRCP · Flea/Tick · Heartworm',
+    items: ['Dewormer (Pyrantel)', 'FVRCP', 'Flea & Tick Prevention', 'Heartworm Prevention'],
+  },
+  {
+    key: 'intake_dog',
+    name: 'Intake Default – Dog',
+    description: 'Dewormer · Flea/Tick · HW Test · Microchip',
+    items: ['Dewormer (Pyrantel)', 'Flea & Tick Prevention', 'Heartworm Test (Antigen)', 'Microchip Implant'],
+  },
+  {
+    key: 'intake_cat',
+    name: 'Intake Default – Cat',
+    description: 'Dewormer · Flea/Tick · FeLV/FIV Test · Microchip',
+    items: ['Dewormer (Pyrantel)', 'Flea & Tick Prevention', 'FeLV/FIV Combo Test', 'Microchip Implant'],
+  },
+];
 
 const categoryIcons: Record<string, typeof Pill> = {
   Medication: Pill,
@@ -340,6 +374,9 @@ export function AddMedicalOrderDialog({ animalId: propsAnimalId, animalSpecies: 
   const [creatingNewLoading, setCreatingNewLoading] = useState(false);
   const [pendingOrder, setPendingOrder] = useState<PendingOrder | null>(null);
   const [selectedOrderSet, setSelectedOrderSet] = useState<OrderSetWithItems | null>(null);
+  const [selectedProtocol, setSelectedProtocol] = useState<typeof PREVENTATIVE_PROTOCOLS[0] | null>(null);
+  const [protocolMarkInitialAsGiven, setProtocolMarkInitialAsGiven] = useState(false);
+  const [protocolSubmitting, setProtocolSubmitting] = useState(false);
 
   const [selectedAnimal, setSelectedAnimal] = useState<AnimalSummary | null>(null);
   const [animalSearchValue, setAnimalSearchValue] = useState("");
@@ -409,6 +446,8 @@ export function AddMedicalOrderDialog({ animalId: propsAnimalId, animalSpecies: 
       setCreatingNew(null);
       setCreatingNewLoading(false);
       setSelectedOrderSet(null);
+      setSelectedProtocol(null);
+      setProtocolMarkInitialAsGiven(false);
       if (needsAnimalSearch) {
         setSelectedAnimal(null);
         setAnimalSearchValue("");
@@ -506,6 +545,38 @@ export function AddMedicalOrderDialog({ animalId: propsAnimalId, animalSpecies: 
       toast({ title: "Failed to create order", description: err.message || "An error occurred", variant: "destructive" });
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleProtocolSubmit() {
+    if (!selectedProtocol || !animalId) return;
+    setProtocolSubmitting(true);
+    try {
+      const res = await apiRequest('POST', `/api/animals/${animalId}/preventative-care/apply-protocol`, {
+        protocolName: selectedProtocol.key,
+        dateAdministered: new Date().toISOString().split('T')[0],
+        markInitialAsGiven: protocolMarkInitialAsGiven,
+      });
+      const result = await res.json();
+      queryClient.invalidateQueries({ queryKey: [`/api/animals/${animalId}/preventative-care`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/animals/${animalId}/medical/active-orders`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/animals/${animalId}/medical/history`] });
+      const givenCount = result.givenCount || 0;
+      const scheduledCount = result.scheduledCount || 0;
+      const parts = [];
+      if (givenCount > 0) parts.push(`${givenCount} marked as given`);
+      if (scheduledCount > 0) parts.push(`${scheduledCount} scheduled`);
+      toast({
+        title: `${selectedProtocol.name} Applied`,
+        description: parts.length > 0 ? parts.join(', ') : `${result.created || 0} records created`,
+      });
+      setSelectedProtocol(null);
+      setProtocolMarkInitialAsGiven(false);
+      onOpenChange(false);
+    } catch (err: any) {
+      toast({ title: "Failed to apply protocol", description: err.message || "An error occurred", variant: "destructive" });
+    } finally {
+      setProtocolSubmitting(false);
     }
   }
 
@@ -638,7 +709,7 @@ export function AddMedicalOrderDialog({ animalId: propsAnimalId, animalSpecies: 
               )}
             </div>
 
-            {!selectedOrderSet ? (
+            {!selectedOrderSet && !selectedProtocol ? (
               creatingNew ? (
                 <div className="space-y-4" data-testid="container-create-new-item">
                   <div className="flex items-center gap-3">
@@ -788,6 +859,32 @@ export function AddMedicalOrderDialog({ animalId: propsAnimalId, animalSpecies: 
                           </div>
                         </div>
                       )}
+
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+                          <ListChecks className="w-3.5 h-3.5" />
+                          Preventative Protocols
+                        </p>
+                        <div className="space-y-1">
+                          {PREVENTATIVE_PROTOCOLS.map(proto => (
+                            <button
+                              key={proto.key}
+                              onClick={() => { setSelectedProtocol(proto); setProtocolMarkInitialAsGiven(false); }}
+                              className="flex items-center gap-2 w-full p-2.5 text-sm border rounded-md text-left hover-elevate active-elevate-2 transition-colors"
+                              data-testid={`quick-pick-protocol-${proto.key}`}
+                            >
+                              <ShieldCheck className="w-4 h-4 shrink-0 text-muted-foreground" />
+                              <div className="flex-1 min-w-0">
+                                <span className="font-medium">{proto.name}</span>
+                                <span className="text-xs text-muted-foreground block truncate">{proto.description}</span>
+                              </div>
+                              <Badge variant="secondary" className="text-[10px] shrink-0">
+                                {proto.items.length} items
+                              </Badge>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   ) : (
                     <div className="space-y-2">
@@ -887,7 +984,7 @@ export function AddMedicalOrderDialog({ animalId: propsAnimalId, animalSpecies: 
                   )}
                 </div>
               )
-            ) : (
+            ) : selectedOrderSet ? (
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
                   <Button
@@ -954,7 +1051,69 @@ export function AddMedicalOrderDialog({ animalId: propsAnimalId, animalSpecies: 
                   </Button>
                 </div>
               </div>
-            )}
+            ) : selectedProtocol ? (
+              <div className="space-y-4" data-testid="container-protocol-review">
+                <div className="flex items-center gap-3">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setSelectedProtocol(null)}
+                    data-testid="button-back-protocol"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                  </Button>
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <ListChecks className="w-4 h-4 shrink-0 text-muted-foreground" />
+                    <span className="font-medium truncate">Protocol: {selectedProtocol.name}</span>
+                    <Badge variant="secondary" className="text-[10px] shrink-0">
+                      {selectedProtocol.items.length} items
+                    </Badge>
+                  </div>
+                </div>
+
+                <div className="border-t pt-4 space-y-3">
+                  <p className="text-sm font-medium">Items in this protocol:</p>
+                  <div className="space-y-1.5" data-testid="container-protocol-items">
+                    {selectedProtocol.items.map((item, idx) => (
+                      <div key={idx} className="flex items-center gap-2 p-2 border rounded-md text-sm">
+                        <ShieldCheck className="w-4 h-4 shrink-0 text-muted-foreground" />
+                        <span className="flex-1">{item}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-1" data-testid="container-protocol-options">
+                    <Checkbox
+                      id="protocol-mark-given"
+                      checked={protocolMarkInitialAsGiven}
+                      onCheckedChange={(v) => setProtocolMarkInitialAsGiven(!!v)}
+                      data-testid="checkbox-protocol-mark-given"
+                    />
+                    <label htmlFor="protocol-mark-given" className="text-sm cursor-pointer select-none">
+                      Mark all items as given today
+                    </label>
+                  </div>
+                </div>
+
+                <div className="flex justify-between pt-2">
+                  <Button
+                    variant="ghost"
+                    onClick={() => setSelectedProtocol(null)}
+                    data-testid="button-back-protocol-footer"
+                  >
+                    <ArrowLeft className="w-4 h-4 mr-1.5" />
+                    Back
+                  </Button>
+                  <Button onClick={handleProtocolSubmit} disabled={protocolSubmitting} data-testid="button-submit-protocol">
+                    {protocolSubmitting ? (
+                      <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Applying...</>
+                    ) : (
+                      `Apply ${selectedProtocol.items.length} Records`
+                    )}
+                  </Button>
+                </div>
+              </div>
+            ) : null}
           </div>
           </>
           )}
