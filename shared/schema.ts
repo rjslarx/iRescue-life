@@ -5792,7 +5792,7 @@ export const medicalCatalog = pgTable("medical_catalog", {
   defaultFrequency: text("default_frequency"),
   defaultIntervalDays: integer("default_interval_days"),
   speciesTarget: text("species_target").$type<'Dog' | 'Cat' | 'Both'>(), // null = species-agnostic
-  defaultRoute: text("default_route").$type<'PO' | 'Topical' | 'Collar'>(), // null = not applicable
+  defaultRoute: text("default_route").$type<'PO' | 'Topical' | 'Collar' | 'Injection'>(), // null = not applicable
   manufacturer: text("manufacturer"), // stored for grant reporting; not shown in UI
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),

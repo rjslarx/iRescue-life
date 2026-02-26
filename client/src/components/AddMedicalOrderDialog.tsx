@@ -132,10 +132,7 @@ const vetMedications = new Set([
   'cephalexin', 'keflex', 'gabapentin', 'trazodone', 'prednisone', 'prednisolone', 'dexamethasone',
   'carprofen', 'rimadyl', 'meloxicam', 'metacam', 'cerenia', 'maropitant', 'famotidine', 'pepcid',
   'omeprazole', 'prilosec', 'sucralfate', 'carafate', 'enrofloxacin', 'baytril', 'clindamycin',
-  'antirobe', 'apoquel', 'oclacitinib', 'cytopoint', 'simparica', 'simparica trio', 'bravecto',
-  'nexgard', 'heartgard', 'heartgard plus', 'interceptor', 'interceptor plus', 'sentinel',
-  'revolution', 'revolution plus', 'advantage', 'advantage multi', 'frontline', 'frontline plus',
-  'seresto', 'denamarin', 'ursodiol', 'methimazole', 'tapazole', 'phenobarbital', 'luminal',
+  'antirobe', 'apoquel', 'oclacitinib', 'cytopoint', 'denamarin', 'ursodiol', 'methimazole', 'tapazole', 'phenobarbital', 'luminal',
   'potassium bromide', 'kbr', 'zonisamide', 'zonegran', 'levetiracetam', 'keppra',
   'fluoxetine', 'prozac', 'reconcile', 'acepromazine', 'butorphanol', 'torbugesic',
   'tramadol', 'ondansetron', 'zofran', 'metoclopramide', 'reglan', 'cisapride', 'propulsid',
@@ -162,7 +159,7 @@ const vetMedications = new Set([
   'maelstrom', 'trilostane', 'vetoryl',
   'succinylcholine', 'propofol', 'alfaxalone', 'alfaxan', 'ketamine', 'telazol', 'tiletamine',
   'atropine', 'glycopyrrolate',
-  'ponazuril', 'marquis', 'capstar', 'nitenpyram',
+  'ponazuril', 'marquis',
   'erythromycin ophthalmic',
 ]);
 
@@ -243,6 +240,20 @@ const vetPreventatives = new Set([
   'flea comb', 'flea bath', 'medicated bath', 'lime sulfur dip',
   'heartworm prevention', 'hw prevention',
   'grooming', 'sanitary trim', 'mat removal',
+  // Preventative product brands (moved from vetMedications — these are not prescriptions)
+  'simparica', 'simparica trio',
+  'bravecto', 'bravecto chews', 'bravecto 1-month', 'bravecto topical', 'bravecto quantum', 'bravecto plus',
+  'nexgard', 'nexgard combo',
+  'heartgard', 'heartgard plus',
+  'interceptor', 'interceptor plus',
+  'sentinel', 'sentinel spectrum',
+  'revolution', 'revolution plus', 'revolution (feline)',
+  'advantage', 'advantage ii', 'advantage multi', 'advantage multi (dog)', 'advantage ii (feline)',
+  'frontline', 'frontline plus', 'frontline gold',
+  'seresto', 'seresto collar', 'seresto collar (dog)', 'seresto collar (cat)',
+  'capstar', 'nitenpyram',
+  'credelio', 'trifexis', 'k9 advantix', 'k9 advantix ii',
+  'cheristin', 'proheart', 'proheart 6', 'proheart 12',
 ]);
 
 const vetExams = new Set([

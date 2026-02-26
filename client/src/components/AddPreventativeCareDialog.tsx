@@ -22,7 +22,7 @@ const preventativeCareSchema = z.object({
   notes: z.string().optional(),
   lotNumber: z.string().optional(),
   manufacturer: z.string().optional(),
-  administrationRoute: z.enum(['PO', 'Topical', 'Collar']).optional(),
+  administrationRoute: z.enum(['PO', 'Topical', 'Collar', 'Injection']).optional(),
 });
 
 type PreventativeCareFormData = z.infer<typeof preventativeCareSchema>;
@@ -138,7 +138,7 @@ export function AddPreventativeCareDialog({
         notes: record.notes || "",
         lotNumber: record.lotNumber || "",
         manufacturer: record.manufacturer || "",
-        administrationRoute: (record.administrationRoute as 'PO' | 'Topical' | 'Collar' | undefined) || undefined,
+        administrationRoute: (record.administrationRoute as 'PO' | 'Topical' | 'Collar' | 'Injection' | undefined) || undefined,
       });
     } else if (!record && open) {
       form.reset({
@@ -179,7 +179,7 @@ export function AddPreventativeCareDialog({
     }
 
     if (initialValues?.defaultRoute) {
-      form.setValue("administrationRoute", initialValues.defaultRoute as 'PO' | 'Topical' | 'Collar');
+      form.setValue("administrationRoute", initialValues.defaultRoute as 'PO' | 'Topical' | 'Collar' | 'Injection');
     }
   }, [watchedCareTypeId, careTypes, initialValues, record, open, form]);
 
@@ -208,21 +208,18 @@ export function AddPreventativeCareDialog({
       const today = new Date().toISOString().split('T')[0];
       const isFuture = data.dateAdministered > today;
 
-      return apiRequest(`/api/medical/preventative-care/records`, {
-        method: "POST",
-        body: JSON.stringify({
-          animalId,
-          careTypeId: data.careTypeId,
-          dateAdministered: data.dateAdministered,
-          nextDueDate: data.nextDueDate || null,
-          administeredBy: data.administeredBy || null,
-          notes: data.notes || null,
-          lotNumber: data.lotNumber || null,
-          manufacturer: data.manufacturer || null,
-          administrationRoute: data.administrationRoute || null,
-          status: isFuture ? 'pending' : 'given',
-          createFollowUp: false,
-        }),
+      return apiRequest("POST", `/api/medical/preventative-care/records`, {
+        animalId,
+        careTypeId: data.careTypeId,
+        dateAdministered: data.dateAdministered,
+        nextDueDate: data.nextDueDate || null,
+        administeredBy: data.administeredBy || null,
+        notes: data.notes || null,
+        lotNumber: data.lotNumber || null,
+        manufacturer: data.manufacturer || null,
+        administrationRoute: data.administrationRoute || null,
+        status: isFuture ? 'pending' : 'given',
+        createFollowUp: false,
       });
     },
     onSuccess: () => {
@@ -247,17 +244,14 @@ export function AddPreventativeCareDialog({
 
   const updateMutation = useMutation({
     mutationFn: async (data: PreventativeCareFormData) => {
-      return apiRequest(`/api/medical/preventative-care/records/${record?.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({
-          careTypeId: data.careTypeId,
-          dateAdministered: data.dateAdministered,
-          administeredBy: data.administeredBy || null,
-          notes: data.notes || null,
-          lotNumber: data.lotNumber || null,
-          manufacturer: data.manufacturer || null,
-          administrationRoute: data.administrationRoute || null,
-        }),
+      return apiRequest("PATCH", `/api/medical/preventative-care/records/${record?.id}`, {
+        careTypeId: data.careTypeId,
+        dateAdministered: data.dateAdministered,
+        administeredBy: data.administeredBy || null,
+        notes: data.notes || null,
+        lotNumber: data.lotNumber || null,
+        manufacturer: data.manufacturer || null,
+        administrationRoute: data.administrationRoute || null,
       });
     },
     onSuccess: () => {
@@ -463,6 +457,7 @@ export function AddPreventativeCareDialog({
                       <SelectItem value="PO">Oral (PO)</SelectItem>
                       <SelectItem value="Topical">Topical</SelectItem>
                       <SelectItem value="Collar">Collar</SelectItem>
+                      <SelectItem value="Injection">Injection</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />

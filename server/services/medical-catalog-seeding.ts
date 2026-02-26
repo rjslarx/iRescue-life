@@ -9,7 +9,7 @@ interface CatalogSeedItem {
   defaultFrequency?: string;
   defaultIntervalDays?: number;
   speciesTarget?: 'Dog' | 'Cat' | 'Both';
-  defaultRoute?: 'PO' | 'Topical' | 'Collar';
+  defaultRoute?: 'PO' | 'Topical' | 'Collar' | 'Injection';
   manufacturer?: string;
 }
 
@@ -121,8 +121,10 @@ const DEFAULT_CATALOG_ITEMS: CatalogSeedItem[] = [
   { name: 'Heartgard Plus', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30, speciesTarget: 'Dog', defaultRoute: 'PO', manufacturer: 'Boehringer Ingelheim' },
   { name: 'Simparica Trio', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30, speciesTarget: 'Dog', defaultRoute: 'PO', manufacturer: 'Zoetis' },
   { name: 'NexGard', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30, speciesTarget: 'Dog', defaultRoute: 'PO', manufacturer: 'Boehringer Ingelheim' },
-  { name: 'Bravecto (3-Month)', category: 'Preventative', defaultFrequency: 'Every 3 months', defaultIntervalDays: 84, speciesTarget: 'Dog', defaultRoute: 'PO', manufacturer: 'Merck Animal Health' },
-  { name: 'Bravecto (1-Month)', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30, speciesTarget: 'Dog', defaultRoute: 'PO', manufacturer: 'Merck Animal Health' },
+  { name: 'Bravecto Chews', category: 'Preventative', defaultFrequency: 'Every 12 weeks', defaultIntervalDays: 84, speciesTarget: 'Dog', defaultRoute: 'PO', manufacturer: 'Merck Animal Health' },
+  { name: 'Bravecto 1-Month', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30, speciesTarget: 'Dog', defaultRoute: 'PO', manufacturer: 'Merck Animal Health' },
+  { name: 'Bravecto Topical (Dog)', category: 'Preventative', defaultFrequency: 'Every 12 weeks', defaultIntervalDays: 84, speciesTarget: 'Dog', defaultRoute: 'Topical', manufacturer: 'Merck Animal Health' },
+  { name: 'Bravecto Quantum', category: 'Preventative', defaultFrequency: 'Annually', defaultIntervalDays: 365, speciesTarget: 'Dog', defaultRoute: 'Injection', manufacturer: 'Merck Animal Health' },
   { name: 'Interceptor Plus', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30, speciesTarget: 'Dog', defaultRoute: 'PO', manufacturer: 'Elanco' },
   { name: 'Sentinel Spectrum', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30, speciesTarget: 'Dog', defaultRoute: 'PO', manufacturer: 'Virbac' },
   { name: 'K9 Advantix II', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30, speciesTarget: 'Dog', defaultRoute: 'Topical', manufacturer: 'Elanco' },
@@ -134,7 +136,8 @@ const DEFAULT_CATALOG_ITEMS: CatalogSeedItem[] = [
   // --- CAT PREVENTATIVES ---
   { name: 'Revolution Plus', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30, speciesTarget: 'Cat', defaultRoute: 'Topical', manufacturer: 'Zoetis' },
   { name: 'Revolution (Feline)', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30, speciesTarget: 'Cat', defaultRoute: 'Topical', manufacturer: 'Zoetis' },
-  { name: 'Bravecto (Feline)', category: 'Preventative', defaultFrequency: 'Every 3 months', defaultIntervalDays: 84, speciesTarget: 'Cat', defaultRoute: 'Topical', manufacturer: 'Merck Animal Health' },
+  { name: 'Bravecto Topical (Cat)', category: 'Preventative', defaultFrequency: 'Every 12 weeks', defaultIntervalDays: 84, speciesTarget: 'Cat', defaultRoute: 'Topical', manufacturer: 'Merck Animal Health' },
+  { name: 'Bravecto Plus', category: 'Preventative', defaultFrequency: 'Every 2 months', defaultIntervalDays: 60, speciesTarget: 'Cat', defaultRoute: 'Topical', manufacturer: 'Merck Animal Health' },
   { name: 'Cheristin', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30, speciesTarget: 'Cat', defaultRoute: 'Topical', manufacturer: 'Elanco' },
   { name: 'NexGard Combo', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30, speciesTarget: 'Cat', defaultRoute: 'Topical', manufacturer: 'Boehringer Ingelheim' },
   { name: 'Advantage II (Feline)', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30, speciesTarget: 'Cat', defaultRoute: 'Topical', manufacturer: 'Elanco' },
@@ -154,11 +157,17 @@ const DEFAULT_CATALOG_ITEMS: CatalogSeedItem[] = [
 ];
 
 // Metadata for backfilling existing preventative items that were seeded without new fields
-const PREVENTATIVE_BACKFILL: { name: string; speciesTarget: 'Dog' | 'Cat' | 'Both'; defaultRoute: 'PO' | 'Topical' | 'Collar'; manufacturer: string }[] = [
+const PREVENTATIVE_BACKFILL: { name: string; speciesTarget: 'Dog' | 'Cat' | 'Both'; defaultRoute: 'PO' | 'Topical' | 'Collar' | 'Injection'; manufacturer: string }[] = [
   { name: 'Heartgard Plus', speciesTarget: 'Dog', defaultRoute: 'PO', manufacturer: 'Boehringer Ingelheim' },
   { name: 'Simparica Trio', speciesTarget: 'Dog', defaultRoute: 'PO', manufacturer: 'Zoetis' },
   { name: 'NexGard', speciesTarget: 'Dog', defaultRoute: 'PO', manufacturer: 'Boehringer Ingelheim' },
   { name: 'Bravecto', speciesTarget: 'Both', defaultRoute: 'PO', manufacturer: 'Merck Animal Health' },
+  { name: 'Bravecto Chews', speciesTarget: 'Dog', defaultRoute: 'PO', manufacturer: 'Merck Animal Health' },
+  { name: 'Bravecto 1-Month', speciesTarget: 'Dog', defaultRoute: 'PO', manufacturer: 'Merck Animal Health' },
+  { name: 'Bravecto Topical (Dog)', speciesTarget: 'Dog', defaultRoute: 'Topical', manufacturer: 'Merck Animal Health' },
+  { name: 'Bravecto Quantum', speciesTarget: 'Dog', defaultRoute: 'Injection', manufacturer: 'Merck Animal Health' },
+  { name: 'Bravecto Topical (Cat)', speciesTarget: 'Cat', defaultRoute: 'Topical', manufacturer: 'Merck Animal Health' },
+  { name: 'Bravecto Plus', speciesTarget: 'Cat', defaultRoute: 'Topical', manufacturer: 'Merck Animal Health' },
   { name: 'Bravecto (3-Month)', speciesTarget: 'Dog', defaultRoute: 'PO', manufacturer: 'Merck Animal Health' },
   { name: 'Bravecto (1-Month)', speciesTarget: 'Dog', defaultRoute: 'PO', manufacturer: 'Merck Animal Health' },
   { name: 'Bravecto (Feline)', speciesTarget: 'Cat', defaultRoute: 'Topical', manufacturer: 'Merck Animal Health' },
@@ -228,7 +237,7 @@ const DEFAULT_ORDER_SETS: OrderSetDef[] = [
     description: 'Demodectic mange treatment: Isoxazoline preventative + antibiotics for secondary infection, skin scrape rechecks at 30/60 days',
     items: [
       { name: 'Skin Scrape', offsetDays: 0 },
-      { name: 'Bravecto (3-Month)', offsetDays: 0 },
+      { name: 'Bravecto Chews', offsetDays: 0 },
       { name: 'Cephalexin', offsetDays: 0 },
       { name: 'Skin Scrape Recheck', offsetDays: 30 },
       { name: 'Skin Scrape Recheck', offsetDays: 60 },
