@@ -1978,6 +1978,8 @@ export const controlledSubstanceLog = pgTable("controlled_substance_log", {
 
 export const insertControlledSubstanceLogSchema = createInsertSchema(controlledSubstanceLog).omit({
   id: true,
+  tenantId: true,
+  administeredBy: true,
   createdAt: true,
 });
 export type InsertControlledSubstanceLog = z.infer<typeof insertControlledSubstanceLogSchema>;
