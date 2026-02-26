@@ -32203,10 +32203,11 @@ Email: ${application.applicantEmail || ''}`
 
       const createFollowUp = req.body.createFollowUp === true;
 
-      // Make careName and tenantId optional in parse — server derives/overrides them
+      // Make careName, careCategory, and tenantId optional in parse — server derives/overrides them
       const { z } = await import('zod');
       const tolerantSchema = insertPreventativeCareRecordSchema.extend({
         careName: z.string().optional(),
+        careCategory: z.string().optional(),
         tenantId: z.string().uuid().optional(),
       });
       const data = tolerantSchema.parse(req.body);
@@ -32215,6 +32216,7 @@ Email: ${application.applicantEmail || ''}`
       let intervalDays: number | null = null;
       let careTypeInfo: { coversHeartworm: boolean; coversFleaTick: boolean } | null = null;
       let resolvedCareName = data.careName || 'Preventative Care';
+      let resolvedCareCategory = (data as any).careCategory || 'other';
 
       if (data.careTypeId) {
         const [careType] = await db
@@ -32227,6 +32229,9 @@ Email: ${application.applicantEmail || ''}`
           careTypeInfo = { coversHeartworm: careType.coversHeartworm, coversFleaTick: careType.coversFleaTick };
           if (!data.careName) {
             resolvedCareName = careType.name;
+          }
+          if (!(data as any).careCategory) {
+            resolvedCareCategory = careType.category;
           }
         }
       }
@@ -32250,6 +32255,7 @@ Email: ${application.applicantEmail || ''}`
         .values({
           ...data,
           careName: resolvedCareName,
+          careCategory: resolvedCareCategory as any,
           tenantId: req.tenant!.id,
           nextDueDate: effectiveNextDueDate,
           createdBy: req.user!.id,
