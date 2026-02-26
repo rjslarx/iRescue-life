@@ -78,6 +78,9 @@ import {
   HardDrive,
   Ticket,
   ClipboardList,
+  Bell,
+  CreditCard,
+  ShieldCheck,
 } from "lucide-react";
 
 interface AppSidebarProps {
@@ -318,8 +321,18 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
         { title: "Platform Integrations", url: "/dashboard/platform-integrations", icon: Plug2 },
         { title: "Analytics & Reports", url: "/dashboard/analytics", icon: BarChart3 },
         { title: "Adopter Portal Preview", url: "/dashboard/adopter-portal-preview", icon: Eye, proOnly: true },
-        { title: "Settings", url: "/dashboard/settings", icon: Settings },
         { title: "Data & Backups", url: "/dashboard/data-backups", icon: HardDrive },
+      ],
+      defaultOpen: false,
+    },
+    {
+      title: "Settings",
+      items: [
+        { title: "Branding", url: "/dashboard/settings/branding", icon: Palette },
+        { title: "Notifications", url: "/dashboard/settings/notifications", icon: Bell },
+        { title: "Integrations", url: "/dashboard/settings/integrations", icon: Plug2 },
+        { title: "Billing", url: "/dashboard/settings/billing", icon: CreditCard },
+        { title: "Security & Access", url: "/dashboard/settings/security", icon: ShieldCheck },
       ],
       defaultOpen: false,
     },
@@ -388,7 +401,17 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
         { title: "Form Testing", url: "/dashboard/form-testing", icon: FileSignature, proOnly: true },
         { title: "Analytics & Reports", url: "/dashboard/analytics", icon: BarChart3 },
         { title: "Happy Tails", url: "/dashboard/happy-tails", icon: Smile, usesGoogleDrive: true },
-        { title: "Settings", url: "/dashboard/settings", icon: Settings },
+      ],
+      defaultOpen: false,
+    },
+    {
+      title: "Settings",
+      items: [
+        { title: "Branding", url: "/dashboard/settings/branding", icon: Palette },
+        { title: "Notifications", url: "/dashboard/settings/notifications", icon: Bell },
+        { title: "Integrations", url: "/dashboard/settings/integrations", icon: Plug2 },
+        { title: "Billing", url: "/dashboard/settings/billing", icon: CreditCard },
+        { title: "Security & Access", url: "/dashboard/settings/security", icon: ShieldCheck },
       ],
       defaultOpen: false,
     },
@@ -501,6 +524,11 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
     '/dashboard/compliance': 'compliance',
     '/dashboard/audit-logs': 'audit-logs',
     '/dashboard/settings': 'branding',
+    '/dashboard/settings/branding': 'branding',
+    '/dashboard/settings/notifications': 'branding',
+    '/dashboard/settings/integrations': 'branding',
+    '/dashboard/settings/billing': 'branding',
+    '/dashboard/settings/security': 'branding',
     '/dashboard/my-fosters': 'my-fosters',
     '/dashboard/foster-mobile': 'my-fosters',
     '/dashboard/opportunities': 'volunteers',
@@ -553,7 +581,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
     'compliance': { title: "Compliance & Watchdog", url: "/dashboard/compliance", icon: Shield },
     'audit-logs': { title: "Audit Logs", url: "/dashboard/audit-logs", icon: FileText },
     'platform-integrations': { title: "Platform Integrations", url: "/dashboard/platform-integrations", icon: Plug2 },
-    'branding': { title: "Settings", url: "/dashboard/settings", icon: Settings },
+    'branding': { title: "Branding", url: "/dashboard/settings/branding", icon: Palette },
     'collaboration': { title: "Collaboration Hub", url: "/dashboard/collaboration", icon: Truck },
     'tutorials': { title: "Video Tutorials", url: "/dashboard/tutorials", icon: Video },
     'volunteer-pipeline': { title: "Volunteer Pipeline", url: "/dashboard/volunteer-pipeline", icon: Kanban },
@@ -648,7 +676,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
         {filteredGroups.map((group) => (
           <Collapsible
             key={group.title}
-            defaultOpen={group.defaultOpen}
+            defaultOpen={group.title === "Settings" ? location.startsWith('/dashboard/settings') : group.defaultOpen}
             className="group/collapsible"
           >
             <SidebarGroup>

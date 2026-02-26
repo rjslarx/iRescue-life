@@ -45,6 +45,11 @@ import ContractTemplatesPage from "@/pages/ContractTemplatesPage";
 import CustomFormsPage from "@/pages/CustomFormsPage";
 import FormTestingPage from "@/pages/FormTestingPage";
 import SettingsPage from "@/pages/SettingsPage";
+import BrandingSettingsPage from "@/pages/BrandingSettingsPage";
+import NotificationsSettingsPage from "@/pages/NotificationsSettingsPage";
+import IntegrationsSettingsPage from "@/pages/IntegrationsSettingsPage";
+import BillingSettingsPage from "@/pages/BillingSettingsPage";
+import SecuritySettingsPage from "@/pages/SecuritySettingsPage";
 import DataBackupsPage from "@/pages/DataBackupsPage";
 import MyAccountPage from "@/pages/MyAccountPage";
 import ContentPagesPage from "@/pages/ContentPagesPage";
@@ -298,6 +303,11 @@ function RouterSwitch() {
       <ProtectedRoute path="/dashboard/website-builder" pageId="custom-pages" component={WebsiteBuilderPage} />
       <ProtectedRoute path="/dashboard/content-modules" pageId="content-modules" component={ContentModulesPage} />
       <Route path="/dashboard/my-account" component={MyAccountPage} />
+      <ProtectedRoute path="/dashboard/settings/branding" pageId="branding" component={BrandingSettingsPage} />
+      <ProtectedRoute path="/dashboard/settings/notifications" pageId="branding" component={NotificationsSettingsPage} />
+      <ProtectedRoute path="/dashboard/settings/integrations" pageId="branding" component={IntegrationsSettingsPage} />
+      <ProtectedRoute path="/dashboard/settings/billing" pageId="branding" component={BillingSettingsPage} />
+      <ProtectedRoute path="/dashboard/settings/security" pageId="branding" component={SecuritySettingsPage} />
       <ProtectedRoute path="/dashboard/settings" pageId="branding" component={SettingsPage} />
       <ProtectedRoute path="/dashboard/data-backups" pageId="data-backups" component={DataBackupsPage} />
       <ProtectedRoute path="/dashboard/platform-integrations" pageId="platform-integrations" component={PlatformIntegrationsPage} />
