@@ -13,6 +13,7 @@ const PLATFORM_DEFAULT_PROTOCOLS = [
     coversFleaTick: true,
     description: "Monthly oral flea and tick prevention",
     sortOrder: 10,
+    manufacturer: "Zoetis",
   },
   {
     name: "Simparica Trio",
@@ -24,6 +25,7 @@ const PLATFORM_DEFAULT_PROTOCOLS = [
     coversFleaTick: true,
     description: "Monthly oral heartworm, flea, and tick prevention (combination)",
     sortOrder: 11,
+    manufacturer: "Zoetis",
   },
   {
     name: "NexGard",
@@ -35,6 +37,7 @@ const PLATFORM_DEFAULT_PROTOCOLS = [
     coversFleaTick: true,
     description: "Monthly oral flea and tick prevention",
     sortOrder: 12,
+    manufacturer: "Boehringer Ingelheim",
   },
   {
     name: "Heartgard Plus",
@@ -46,6 +49,7 @@ const PLATFORM_DEFAULT_PROTOCOLS = [
     coversFleaTick: false,
     description: "Monthly oral heartworm prevention",
     sortOrder: 13,
+    manufacturer: "Boehringer Ingelheim",
   },
   {
     name: "ProHeart 6",
@@ -57,6 +61,7 @@ const PLATFORM_DEFAULT_PROTOCOLS = [
     coversFleaTick: false,
     description: "6-month injectable heartworm prevention",
     sortOrder: 14,
+    manufacturer: "Zoetis",
   },
   {
     name: "ProHeart 12",
@@ -68,6 +73,7 @@ const PLATFORM_DEFAULT_PROTOCOLS = [
     coversFleaTick: false,
     description: "12-month injectable heartworm prevention",
     sortOrder: 15,
+    manufacturer: "Zoetis",
   },
   {
     name: "Revolution Plus",
@@ -79,6 +85,7 @@ const PLATFORM_DEFAULT_PROTOCOLS = [
     coversFleaTick: true,
     description: "Monthly topical heartworm, flea, and tick prevention for cats",
     sortOrder: 20,
+    manufacturer: "Zoetis",
   },
   {
     name: "Bravecto",
@@ -90,16 +97,18 @@ const PLATFORM_DEFAULT_PROTOCOLS = [
     coversFleaTick: true,
     description: "3-month oral flea and tick prevention",
     sortOrder: 21,
+    manufacturer: "Merck Animal Health",
   },
 ];
 
 export async function seedPlatformPreventativeProtocols() {
   try {
     let inserted = 0;
+    let backfilled = 0;
 
     for (const protocol of PLATFORM_DEFAULT_PROTOCOLS) {
       const existing = await db
-        .select({ id: preventativeCareTypes.id })
+        .select({ id: preventativeCareTypes.id, manufacturer: preventativeCareTypes.manufacturer })
         .from(preventativeCareTypes)
         .where(and(
           isNull(preventativeCareTypes.tenantId),
@@ -114,11 +123,18 @@ export async function seedPlatformPreventativeProtocols() {
           isActive: true,
         });
         inserted++;
+      } else if (!existing[0].manufacturer) {
+        // Backfill manufacturer on pre-existing records
+        await db
+          .update(preventativeCareTypes)
+          .set({ manufacturer: protocol.manufacturer })
+          .where(eq(preventativeCareTypes.id, existing[0].id));
+        backfilled++;
       }
     }
 
-    if (inserted > 0) {
-      console.log(`[PreventativeProtocols] Seeded ${inserted} platform default protocol(s)`);
+    if (inserted > 0 || backfilled > 0) {
+      console.log(`[PreventativeProtocols] Seeded ${inserted} new protocol(s), backfilled manufacturer on ${backfilled} existing`);
     }
 
     // Backfill coverage flags on pre-existing generic types

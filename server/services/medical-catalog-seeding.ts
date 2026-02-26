@@ -1,6 +1,6 @@
 import { db } from '../db';
 import { medicalCatalog, orderSets, orderSetItems } from '@shared/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, isNull, sql } from 'drizzle-orm';
 
 interface CatalogSeedItem {
   name: string;
@@ -8,6 +8,9 @@ interface CatalogSeedItem {
   defaultDose?: string;
   defaultFrequency?: string;
   defaultIntervalDays?: number;
+  speciesTarget?: 'Dog' | 'Cat' | 'Both';
+  defaultRoute?: 'PO' | 'Topical' | 'Collar';
+  manufacturer?: string;
 }
 
 const DEFAULT_CATALOG_ITEMS: CatalogSeedItem[] = [
@@ -114,16 +117,31 @@ const DEFAULT_CATALOG_ITEMS: CatalogSeedItem[] = [
   { name: 'Syringe Feeding / Nutritional Support', category: 'Procedure' },
   { name: 'Medicated/Sanitary Bath', category: 'Procedure' },
 
-  { name: 'Simparica Trio', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30 },
-  { name: 'Heartgard Plus', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30 },
-  { name: 'NexGard', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30 },
-  { name: 'Bravecto', category: 'Preventative', defaultFrequency: 'Every 3 months', defaultIntervalDays: 84 },
-  { name: 'Revolution Plus', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30 },
-  { name: 'Interceptor Plus', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30 },
-  { name: 'Seresto Collar', category: 'Preventative', defaultFrequency: 'Every 8 months', defaultIntervalDays: 240 },
-  { name: 'Flea/Tick Prevention', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30 },
-  { name: 'Deworming Protocol', category: 'Preventative' },
-  { name: 'Heartworm Prevention', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30 },
+  // --- DOG PREVENTATIVES ---
+  { name: 'Heartgard Plus', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30, speciesTarget: 'Dog', defaultRoute: 'PO', manufacturer: 'Boehringer Ingelheim' },
+  { name: 'Simparica Trio', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30, speciesTarget: 'Dog', defaultRoute: 'PO', manufacturer: 'Zoetis' },
+  { name: 'NexGard', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30, speciesTarget: 'Dog', defaultRoute: 'PO', manufacturer: 'Boehringer Ingelheim' },
+  { name: 'Bravecto (3-Month)', category: 'Preventative', defaultFrequency: 'Every 3 months', defaultIntervalDays: 84, speciesTarget: 'Dog', defaultRoute: 'PO', manufacturer: 'Merck Animal Health' },
+  { name: 'Bravecto (1-Month)', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30, speciesTarget: 'Dog', defaultRoute: 'PO', manufacturer: 'Merck Animal Health' },
+  { name: 'Interceptor Plus', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30, speciesTarget: 'Dog', defaultRoute: 'PO', manufacturer: 'Elanco' },
+  { name: 'Sentinel Spectrum', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30, speciesTarget: 'Dog', defaultRoute: 'PO', manufacturer: 'Virbac' },
+  { name: 'K9 Advantix II', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30, speciesTarget: 'Dog', defaultRoute: 'Topical', manufacturer: 'Elanco' },
+  { name: 'Advantage Multi (Dog)', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30, speciesTarget: 'Dog', defaultRoute: 'Topical', manufacturer: 'Elanco' },
+  { name: 'Trifexis', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30, speciesTarget: 'Dog', defaultRoute: 'PO', manufacturer: 'Elanco' },
+  { name: 'Credelio', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30, speciesTarget: 'Dog', defaultRoute: 'PO', manufacturer: 'Elanco' },
+  { name: 'Seresto Collar (Dog)', category: 'Preventative', defaultFrequency: 'Every 8 months', defaultIntervalDays: 240, speciesTarget: 'Dog', defaultRoute: 'Collar', manufacturer: 'Elanco' },
+
+  // --- CAT PREVENTATIVES ---
+  { name: 'Revolution Plus', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30, speciesTarget: 'Cat', defaultRoute: 'Topical', manufacturer: 'Zoetis' },
+  { name: 'Revolution (Feline)', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30, speciesTarget: 'Cat', defaultRoute: 'Topical', manufacturer: 'Zoetis' },
+  { name: 'Bravecto (Feline)', category: 'Preventative', defaultFrequency: 'Every 3 months', defaultIntervalDays: 84, speciesTarget: 'Cat', defaultRoute: 'Topical', manufacturer: 'Merck Animal Health' },
+  { name: 'Cheristin', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30, speciesTarget: 'Cat', defaultRoute: 'Topical', manufacturer: 'Elanco' },
+  { name: 'NexGard Combo', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30, speciesTarget: 'Cat', defaultRoute: 'Topical', manufacturer: 'Boehringer Ingelheim' },
+  { name: 'Advantage II (Feline)', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30, speciesTarget: 'Cat', defaultRoute: 'Topical', manufacturer: 'Elanco' },
+  { name: 'Seresto Collar (Cat)', category: 'Preventative', defaultFrequency: 'Every 8 months', defaultIntervalDays: 240, speciesTarget: 'Cat', defaultRoute: 'Collar', manufacturer: 'Elanco' },
+
+  // --- GENERAL DEWORMERS ---
+  { name: 'Pyrantel Pamoate (Strongid)', category: 'Preventative', defaultFrequency: 'Every 2 weeks', defaultIntervalDays: 14, speciesTarget: 'Both', defaultRoute: 'PO', manufacturer: 'Zoetis' },
 
   { name: 'Intake Exam', category: 'Exam' },
   { name: 'Wellness Exam', category: 'Exam' },
@@ -133,6 +151,34 @@ const DEFAULT_CATALOG_ITEMS: CatalogSeedItem[] = [
   { name: 'Adoption Exam', category: 'Exam' },
   { name: 'Emergency Exam', category: 'Exam' },
   { name: 'Behavioral Consult', category: 'Exam' },
+];
+
+// Metadata for backfilling existing preventative items that were seeded without new fields
+const PREVENTATIVE_BACKFILL: { name: string; speciesTarget: 'Dog' | 'Cat' | 'Both'; defaultRoute: 'PO' | 'Topical' | 'Collar'; manufacturer: string }[] = [
+  { name: 'Heartgard Plus', speciesTarget: 'Dog', defaultRoute: 'PO', manufacturer: 'Boehringer Ingelheim' },
+  { name: 'Simparica Trio', speciesTarget: 'Dog', defaultRoute: 'PO', manufacturer: 'Zoetis' },
+  { name: 'NexGard', speciesTarget: 'Dog', defaultRoute: 'PO', manufacturer: 'Boehringer Ingelheim' },
+  { name: 'Bravecto', speciesTarget: 'Both', defaultRoute: 'PO', manufacturer: 'Merck Animal Health' },
+  { name: 'Bravecto (3-Month)', speciesTarget: 'Dog', defaultRoute: 'PO', manufacturer: 'Merck Animal Health' },
+  { name: 'Bravecto (1-Month)', speciesTarget: 'Dog', defaultRoute: 'PO', manufacturer: 'Merck Animal Health' },
+  { name: 'Bravecto (Feline)', speciesTarget: 'Cat', defaultRoute: 'Topical', manufacturer: 'Merck Animal Health' },
+  { name: 'Revolution Plus', speciesTarget: 'Cat', defaultRoute: 'Topical', manufacturer: 'Zoetis' },
+  { name: 'Revolution (Feline)', speciesTarget: 'Cat', defaultRoute: 'Topical', manufacturer: 'Zoetis' },
+  { name: 'Interceptor Plus', speciesTarget: 'Dog', defaultRoute: 'PO', manufacturer: 'Elanco' },
+  { name: 'Sentinel Spectrum', speciesTarget: 'Dog', defaultRoute: 'PO', manufacturer: 'Virbac' },
+  { name: 'Seresto Collar', speciesTarget: 'Dog', defaultRoute: 'Collar', manufacturer: 'Elanco' },
+  { name: 'Seresto Collar (Dog)', speciesTarget: 'Dog', defaultRoute: 'Collar', manufacturer: 'Elanco' },
+  { name: 'Seresto Collar (Cat)', speciesTarget: 'Cat', defaultRoute: 'Collar', manufacturer: 'Elanco' },
+  { name: 'K9 Advantix II', speciesTarget: 'Dog', defaultRoute: 'Topical', manufacturer: 'Elanco' },
+  { name: 'Advantage Multi (Dog)', speciesTarget: 'Dog', defaultRoute: 'Topical', manufacturer: 'Elanco' },
+  { name: 'Advantage II (Feline)', speciesTarget: 'Cat', defaultRoute: 'Topical', manufacturer: 'Elanco' },
+  { name: 'Trifexis', speciesTarget: 'Dog', defaultRoute: 'PO', manufacturer: 'Elanco' },
+  { name: 'Credelio', speciesTarget: 'Dog', defaultRoute: 'PO', manufacturer: 'Elanco' },
+  { name: 'Cheristin', speciesTarget: 'Cat', defaultRoute: 'Topical', manufacturer: 'Elanco' },
+  { name: 'NexGard Combo', speciesTarget: 'Cat', defaultRoute: 'Topical', manufacturer: 'Boehringer Ingelheim' },
+  { name: 'Pyrantel Pamoate (Strongid)', speciesTarget: 'Both', defaultRoute: 'PO', manufacturer: 'Zoetis' },
+  { name: 'Heartworm Prevention', speciesTarget: 'Dog', defaultRoute: 'PO', manufacturer: '' },
+  { name: 'Flea/Tick Prevention', speciesTarget: 'Both', defaultRoute: 'Topical', manufacturer: '' },
 ];
 
 interface OrderSetItemDef {
@@ -182,7 +228,7 @@ const DEFAULT_ORDER_SETS: OrderSetDef[] = [
     description: 'Demodectic mange treatment: Isoxazoline preventative + antibiotics for secondary infection, skin scrape rechecks at 30/60 days',
     items: [
       { name: 'Skin Scrape', offsetDays: 0 },
-      { name: 'Bravecto', offsetDays: 0 },
+      { name: 'Bravecto (3-Month)', offsetDays: 0 },
       { name: 'Cephalexin', offsetDays: 0 },
       { name: 'Skin Scrape Recheck', offsetDays: 30 },
       { name: 'Skin Scrape Recheck', offsetDays: 60 },
@@ -222,6 +268,9 @@ export async function seedMedicalCatalog(tenantId: string): Promise<{ catalogCre
       defaultDose: item.defaultDose || null,
       defaultFrequency: item.defaultFrequency || null,
       defaultIntervalDays: item.defaultIntervalDays ?? null,
+      speciesTarget: item.speciesTarget || null,
+      defaultRoute: item.defaultRoute || null,
+      manufacturer: item.manufacturer || null,
     }));
 
     createdItems = await db
@@ -232,6 +281,22 @@ export async function seedMedicalCatalog(tenantId: string): Promise<{ catalogCre
     console.log(`[MedicalCatalog] Seeded ${createdItems.length} new catalog items for tenant ${tenantId} (${skippedCount} already existed)`);
   } else {
     console.log(`[MedicalCatalog] All ${DEFAULT_CATALOG_ITEMS.length} default items already exist for tenant ${tenantId}`);
+  }
+
+  // Backfill species_target, default_route, manufacturer on existing rows that predate these columns
+  for (const entry of PREVENTATIVE_BACKFILL) {
+    await db
+      .update(medicalCatalog)
+      .set({
+        speciesTarget: entry.speciesTarget,
+        defaultRoute: entry.defaultRoute,
+        ...(entry.manufacturer ? { manufacturer: entry.manufacturer } : {}),
+      })
+      .where(and(
+        eq(medicalCatalog.tenantId, tenantId),
+        eq(medicalCatalog.name, entry.name),
+        isNull(medicalCatalog.speciesTarget),
+      ));
   }
 
   const allCatalogItems = await db

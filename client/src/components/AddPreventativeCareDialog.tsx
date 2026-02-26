@@ -22,6 +22,7 @@ const preventativeCareSchema = z.object({
   notes: z.string().optional(),
   lotNumber: z.string().optional(),
   manufacturer: z.string().optional(),
+  administrationRoute: z.enum(['PO', 'Topical', 'Collar']).optional(),
 });
 
 type PreventativeCareFormData = z.infer<typeof preventativeCareSchema>;
@@ -34,6 +35,7 @@ interface PreventativeCareType {
   isCore: boolean;
   defaultIntervalDays: number | null;
   description: string | null;
+  manufacturer: string | null;
 }
 
 interface PreventativeCareRecord {
@@ -45,6 +47,7 @@ interface PreventativeCareRecord {
   notes: string | null;
   lotNumber: string | null;
   manufacturer: string | null;
+  administrationRoute: string | null;
 }
 
 interface AddPreventativeCareDialogProps {
@@ -53,7 +56,12 @@ interface AddPreventativeCareDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   record?: PreventativeCareRecord | null;
-  initialValues?: { careName?: string; defaultIntervalDays?: number | null } | null;
+  initialValues?: {
+    careName?: string;
+    defaultIntervalDays?: number | null;
+    defaultRoute?: string | null;
+    manufacturer?: string | null;
+  } | null;
 }
 
 export function AddPreventativeCareDialog({ 
@@ -77,6 +85,7 @@ export function AddPreventativeCareDialog({
       notes: "",
       lotNumber: "",
       manufacturer: "",
+      administrationRoute: undefined,
     },
   });
 
@@ -139,6 +148,7 @@ export function AddPreventativeCareDialog({
         notes: record.notes || "",
         lotNumber: record.lotNumber || "",
         manufacturer: record.manufacturer || "",
+        administrationRoute: (record.administrationRoute as 'PO' | 'Topical' | 'Collar' | undefined) || undefined,
       });
     } else if (!record && open) {
       form.reset({
@@ -149,9 +159,29 @@ export function AddPreventativeCareDialog({
         notes: "",
         lotNumber: "",
         manufacturer: "",
+        administrationRoute: undefined,
       });
     }
   }, [record, open, form]);
+
+  const watchedCareTypeId = form.watch("careTypeId");
+
+  // Auto-fill manufacturer (from CPOE initialValues or standalone care type selection)
+  // and route (from CPOE initialValues only) when care type changes or initialValues arrive
+  useEffect(() => {
+    if (record || !open) return;
+    const matchedType = careTypes.find(t => t.id === watchedCareTypeId);
+
+    if (initialValues?.manufacturer) {
+      form.setValue("manufacturer", initialValues.manufacturer);
+    } else if (matchedType?.manufacturer) {
+      form.setValue("manufacturer", matchedType.manufacturer);
+    }
+
+    if (initialValues?.defaultRoute) {
+      form.setValue("administrationRoute", initialValues.defaultRoute as 'PO' | 'Topical' | 'Collar');
+    }
+  }, [watchedCareTypeId, careTypes, initialValues, record, open, form]);
 
   const [careTypeMatched, setCareTypeMatched] = useState(false);
 
@@ -189,6 +219,7 @@ export function AddPreventativeCareDialog({
           notes: data.notes || null,
           lotNumber: data.lotNumber || null,
           manufacturer: data.manufacturer || null,
+          administrationRoute: data.administrationRoute || null,
           status: isFuture ? 'pending' : 'given',
           createFollowUp: !!data.nextDueDate,
         }),
@@ -225,6 +256,7 @@ export function AddPreventativeCareDialog({
           notes: data.notes || null,
           lotNumber: data.lotNumber || null,
           manufacturer: data.manufacturer || null,
+          administrationRoute: data.administrationRoute || null,
         }),
       });
     },
@@ -393,6 +425,29 @@ export function AddPreventativeCareDialog({
                       data-testid="input-administered-by"
                     />
                   </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="administrationRoute"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Administration Route</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value ?? undefined}>
+                    <FormControl>
+                      <SelectTrigger data-testid="select-administration-route">
+                        <SelectValue placeholder="Select route..." />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="PO">Oral (PO)</SelectItem>
+                      <SelectItem value="Topical">Topical</SelectItem>
+                      <SelectItem value="Collar">Collar</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )}

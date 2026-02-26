@@ -32504,7 +32504,7 @@ Email: ${application.applicantEmail || ''}`
         return res.status(404).json({ error: 'Record not found' });
       }
 
-      const { careTypeId, dateAdministered, administeredBy, notes, lotNumber, manufacturer } = req.body;
+      const { careTypeId, dateAdministered, administeredBy, notes, lotNumber, manufacturer, administrationRoute } = req.body;
 
       // Recalculate next due date if date or care type changed
       let nextDueDate: Date | null = existingRecord.nextDueDate;
@@ -32533,6 +32533,7 @@ Email: ${application.applicantEmail || ''}`
           ...(notes !== undefined && { notes }),
           ...(lotNumber !== undefined && { lotNumber }),
           ...(manufacturer !== undefined && { manufacturer }),
+          ...(administrationRoute !== undefined && { administrationRoute }),
           nextDueDate,
           updatedAt: new Date(),
         })

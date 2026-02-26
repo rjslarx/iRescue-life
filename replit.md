@@ -37,7 +37,9 @@ Core functionalities include:
     - **Badges (Boolean Warning Flags):** Medical, behavioral, and compatibility warning icons displayed on animal cards.
 - Configurable Stripe checkout integration for owner surrender fees.
 - Preventative Care Coverage Tracking, automatically updating `medicalDueDates` based on product coverage.
-- Smart Add Medical Order Modal for Computerized Provider Order Entry (CPOE) on the Animal Medical Profile page, offering active order context, quick picks, and autocomplete search.
+- Smart Add Medical Order Modal for Computerized Provider Order Entry (CPOE) on the Animal Medical Profile page, offering active order context, quick picks, autocomplete search, and **species-aware catalog filtering** (Dog animals only see Dog/Both preventatives; Cat animals only see Cat/Both).
+- **Expanded Medical Catalog**: `medical_catalog` now carries `species_target`, `default_route`, and `manufacturer` per item. 20 specific preventative products replace the old generic list, each with correct species targeting, administration route, and manufacturer (for grant reporting). Manufacturer is stored internally but intentionally hidden from CPOE search UI. `preventative_care_records` stores `administration_route`. `preventative_care_types` stores `manufacturer` for the 8 seeded platform-wide care types.
+- **CPOE → Preventative Care auto-fill**: When a preventative is selected via CPOE, `AddPreventativeCareDialog` pre-fills the Administration Route (Oral/PO, Topical, Collar) and Manufacturer. Standalone path auto-fills only Manufacturer from the selected care type; route remains blank for manual selection.
 - CPOE Medical Catalog & Order Sets for managing orderable items (medications, vaccines, labs) and bulk protocol groups.
 - Age-Aware Puppy Protocol Automation for intelligent scheduling of puppy vaccinations and preventative care based on DOB.
 - Automated Adoption Packet Generator for professional, certificate-style PDFs of vaccination history, preventative care, and microchip information, generated during adoption finalization.

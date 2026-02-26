@@ -36,6 +36,9 @@ interface CatalogItem {
   defaultDose: string | null;
   defaultFrequency: string | null;
   defaultIntervalDays: number | null;
+  speciesTarget: 'Dog' | 'Cat' | 'Both' | null;
+  defaultRoute: 'PO' | 'Topical' | 'Collar' | null;
+  manufacturer: string | null;
 }
 
 interface OrderSetWithItems {
@@ -51,6 +54,9 @@ interface PendingOrder {
   defaultDose?: string | null;
   defaultFrequency?: string | null;
   defaultIntervalDays?: number | null;
+  speciesTarget?: 'Dog' | 'Cat' | 'Both' | null;
+  defaultRoute?: 'PO' | 'Topical' | 'Collar' | null;
+  manufacturer?: string | null;
 }
 
 interface AnimalSummary {
@@ -386,6 +392,16 @@ export function AddMedicalOrderDialog({ animalId: propsAnimalId, animalSpecies: 
     return set;
   }, [activeOrders]);
 
+  // Filter catalog by species for Preventative items; other categories are species-agnostic
+  const speciesFilteredCatalog = useMemo(() => {
+    if (!animalSpecies) return catalogItems;
+    return catalogItems.filter(ci => {
+      if (ci.category !== 'Preventative') return true;
+      if (!ci.speciesTarget) return true;
+      return ci.speciesTarget === animalSpecies || ci.speciesTarget === 'Both';
+    });
+  }, [catalogItems, animalSpecies]);
+
   useEffect(() => {
     if (!open && !pendingOrder) {
       setSearchValue("");
@@ -416,6 +432,9 @@ export function AddMedicalOrderDialog({ animalId: propsAnimalId, animalSpecies: 
       defaultDose: item.defaultDose,
       defaultFrequency: item.defaultFrequency,
       defaultIntervalDays: item.defaultIntervalDays,
+      speciesTarget: item.speciesTarget,
+      defaultRoute: item.defaultRoute,
+      manufacturer: item.manufacturer,
     });
     setSearchValue("");
     onOpenChange(false);
@@ -726,7 +745,7 @@ export function AddMedicalOrderDialog({ animalId: propsAnimalId, animalSpecies: 
                           Quick Picks
                         </p>
                         <div className="flex flex-wrap gap-2">
-                          {catalogItems.slice(0, 5).map(ci => {
+                          {speciesFilteredCatalog.slice(0, 5).map(ci => {
                             const Icon = categoryIcons[ci.category] || Pill;
                             const isDuplicate = activeNameSet.has((ci.name || '').toLowerCase());
                             return (
@@ -777,9 +796,9 @@ export function AddMedicalOrderDialog({ animalId: propsAnimalId, animalSpecies: 
                           <CommandEmpty>
                             <span className="text-muted-foreground">No matching items in catalog.</span>
                           </CommandEmpty>
-                          {catalogItems.length > 0 && (
+                          {speciesFilteredCatalog.length > 0 && (
                             <CommandGroup heading="Catalog Items">
-                              {catalogItems
+                              {speciesFilteredCatalog
                                 .filter(ci => {
                                   if (!ci?.name) return false;
                                   const terms = expandSearchTerms(searchValue);
@@ -1021,7 +1040,12 @@ export function AddMedicalOrderDialog({ animalId: propsAnimalId, animalSpecies: 
           animalSpecies={animalSpecies}
           open={true}
           onOpenChange={handleCategoryDialogClose}
-          initialValues={{ careName: pendingOrder.name, defaultIntervalDays: pendingOrder.defaultIntervalDays }}
+          initialValues={{
+            careName: pendingOrder.name,
+            defaultIntervalDays: pendingOrder.defaultIntervalDays,
+            defaultRoute: pendingOrder.defaultRoute,
+            manufacturer: pendingOrder.manufacturer,
+          }}
         />
       )}
     </>

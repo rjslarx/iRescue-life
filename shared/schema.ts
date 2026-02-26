@@ -2126,7 +2126,7 @@ export const personDocuments = pgTable("person_documents", {
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
   // Person identification - can link to different person types
   personType: text("person_type").notNull().$type<"foster" | "volunteer" | "contact" | "user">(),
-  personId: uuid("person_id").notNull(), // ID of the person (userId, contactId, etc.)
+  personId: uuid("person_id"), // ID of the person (userId, contactId, etc.) — nullable when signer email not yet in contacts
   personEmail: text("person_email"), // Email for matching applications/agreements
   // Document information
   documentType: text("document_type").notNull().$type<"application" | "agreement" | "uploaded">(),
@@ -5011,6 +5011,7 @@ export const preventativeCareTypes = pgTable("preventative_care_types", {
   description: text("description"), // Optional notes for staff
   sortOrder: integer("sort_order").notNull().default(0), // For dropdown ordering
   isActive: boolean("is_active").notNull().default(true),
+  manufacturer: text("manufacturer"), // e.g., "Zoetis", "Boehringer Ingelheim"
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -5037,6 +5038,8 @@ export const preventativeCareRecords = pgTable("preventative_care_records", {
   nextDueDate: timestamp("next_due_date"), // Auto-calculated from dateAdministered + interval
   administeredBy: text("administered_by"), // Vet/staff name
   clinicName: text("clinic_name").default("In-House"),
+  // Administration details
+  administrationRoute: text("administration_route"), // 'PO', 'Topical', 'Collar'
   // Vaccine-specific fields
   manufacturer: text("manufacturer"),
   lotNumber: text("lot_number"),
@@ -5786,6 +5789,9 @@ export const medicalCatalog = pgTable("medical_catalog", {
   defaultDose: text("default_dose"),
   defaultFrequency: text("default_frequency"),
   defaultIntervalDays: integer("default_interval_days"),
+  speciesTarget: text("species_target").$type<'Dog' | 'Cat' | 'Both'>(), // null = species-agnostic
+  defaultRoute: text("default_route").$type<'PO' | 'Topical' | 'Collar'>(), // null = not applicable
+  manufacturer: text("manufacturer"), // stored for grant reporting; not shown in UI
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
