@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useRoute, useLocation } from "wouter";
+import { useRoute, useLocation, Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useTenant } from "@/contexts/TenantContext";
 import { apiRequest } from "@/lib/queryClient";
@@ -7,17 +7,19 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, CheckCircle2, ShoppingCart } from "lucide-react";
+import { AlertCircle, CheckCircle2, ShoppingCart, ArrowLeft, Clock, Package } from "lucide-react";
 
 interface FundraiserEventPublic {
   id: string;
   title: string;
   description: string | null;
+  bodyContent: string | null;
+  imageUrl: string | null;
   priceCents: number;
   inventoryCap: number | null;
   pickupTimes: string[];
@@ -69,9 +71,7 @@ export default function FundraiserEventPage() {
       });
     },
     onSuccess: (data: any) => {
-      if (data.url) {
-        window.location.href = data.url;
-      }
+      if (data.url) window.location.href = data.url;
     },
     onError: (err: any) => {
       if (err.status === 409 || err.message?.includes("sold_out")) {
@@ -100,9 +100,11 @@ export default function FundraiserEventPage() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background">
-        <div className="max-w-xl mx-auto px-4 py-12 space-y-4">
+        <Skeleton className="w-full h-72 rounded-none" />
+        <div className="max-w-2xl mx-auto px-4 py-8 space-y-4">
           <Skeleton className="h-10 w-3/4" />
-          <Skeleton className="h-6 w-full" />
+          <Skeleton className="h-5 w-1/2" />
+          <Skeleton className="h-40 w-full" />
           <Skeleton className="h-72 w-full" />
         </div>
       </div>
@@ -116,6 +118,9 @@ export default function FundraiserEventPage() {
           <AlertCircle className="h-10 w-10 text-muted-foreground mx-auto" />
           <p className="text-lg font-medium">Event not found</p>
           <p className="text-sm text-muted-foreground">This fundraiser event may no longer be active.</p>
+          <Button variant="outline" asChild>
+            <Link href="/fundraisers">Browse all fundraisers</Link>
+          </Button>
         </div>
       </div>
     );
@@ -123,48 +128,132 @@ export default function FundraiserEventPage() {
 
   if (status === "success") {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center px-4">
-        <Card className="max-w-md w-full">
-          <CardHeader className="text-center">
-            <CheckCircle2 className="h-12 w-12 text-green-600 mx-auto mb-2" />
-            <CardTitle>Order Confirmed!</CardTitle>
-            <CardDescription>
-              Thank you for supporting <strong>{event.title}</strong>. A confirmation has been sent to your email.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="text-center">
-            <p className="text-sm text-muted-foreground">
-              {event.pickupTimes.length > 0 && "Please arrive at your selected pickup time."}
-            </p>
-          </CardContent>
-        </Card>
+      <div className="min-h-screen bg-background">
+        {event.imageUrl && (
+          <div className="relative w-full h-56 overflow-hidden">
+            <img src={event.imageUrl} alt={event.title} className="w-full h-full object-cover" />
+            <div className="absolute inset-0 bg-black/50" />
+            <div className="absolute inset-0 flex flex-col items-center justify-center px-4 text-center">
+              <h1 className="text-3xl font-bold text-white">{event.title}</h1>
+            </div>
+          </div>
+        )}
+        <div className="flex items-center justify-center px-4 py-16 min-h-[50vh]">
+          <Card className="max-w-md w-full">
+            <CardHeader className="text-center pb-2">
+              <CheckCircle2 className="h-14 w-14 text-green-600 mx-auto mb-3" />
+              <CardTitle className="text-2xl">Order Confirmed!</CardTitle>
+            </CardHeader>
+            <CardContent className="text-center space-y-3">
+              <p className="text-muted-foreground">
+                Thank you for supporting <strong>{event.title}</strong>. A confirmation has been sent to your email.
+              </p>
+              {event.pickupTimes.length > 0 && pickupTime && (
+                <div className="flex items-center justify-center gap-2 text-sm font-medium">
+                  <Clock className="h-4 w-4" />
+                  Pickup: {pickupTime}
+                </div>
+              )}
+              <Button variant="outline" asChild className="mt-4">
+                <Link href="/fundraisers">Browse all fundraisers</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="max-w-xl mx-auto px-4 py-10 space-y-6">
-        <div className="space-y-1">
-          <h1 className="text-3xl font-bold">{event.title}</h1>
-          {event.description && <p className="text-muted-foreground">{event.description}</p>}
-          <div className="flex items-center gap-3 pt-1">
-            <span className="text-xl font-semibold">{formatCents(event.priceCents)} per item</span>
-            {event.inventoryCap != null && (
-              <Badge variant={isSoldOut ? "destructive" : "secondary"}>
-                {isSoldOut ? "Sold Out" : `${remaining} remaining`}
-              </Badge>
-            )}
+      {/* Hero image or plain header */}
+      {event.imageUrl ? (
+        <div className="relative w-full h-72 md:h-96 overflow-hidden">
+          <img src={event.imageUrl} alt={event.title} className="w-full h-full object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
+          <div className="absolute inset-0 flex flex-col justify-end px-6 pb-8 max-w-3xl mx-auto w-full">
+            <div className="space-y-2">
+              {isSoldOut && <Badge variant="destructive" className="w-fit">Sold Out</Badge>}
+              <h1 className="text-3xl md:text-4xl font-bold text-white leading-tight">{event.title}</h1>
+              {event.description && (
+                <p className="text-white/85 text-base md:text-lg">{event.description}</p>
+              )}
+              <div className="flex items-center gap-3 pt-1">
+                <span className="text-xl font-semibold text-white">{formatCents(event.priceCents)} per item</span>
+                {event.inventoryCap != null && !isSoldOut && (
+                  <Badge variant="secondary" className="bg-white/20 text-white border-0">
+                    {remaining} remaining
+                  </Badge>
+                )}
+              </div>
+            </div>
           </div>
         </div>
+      ) : (
+        <div className="bg-muted/30 border-b px-4 py-10">
+          <div className="max-w-2xl mx-auto space-y-2">
+            <Link href="/fundraisers" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-2">
+              <ArrowLeft className="h-3.5 w-3.5" />
+              All fundraisers
+            </Link>
+            {isSoldOut && <Badge variant="destructive" className="w-fit">Sold Out</Badge>}
+            <h1 className="text-3xl font-bold">{event.title}</h1>
+            {event.description && <p className="text-muted-foreground text-lg">{event.description}</p>}
+            <div className="flex items-center gap-3 pt-1">
+              <span className="text-xl font-semibold">{formatCents(event.priceCents)} per item</span>
+              {event.inventoryCap != null && !isSoldOut && (
+                <Badge variant="secondary">{remaining} remaining</Badge>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
+      <div className="max-w-2xl mx-auto px-4 py-8 space-y-8">
+        {event.imageUrl && (
+          <Link href="/fundraisers" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+            <ArrowLeft className="h-3.5 w-3.5" />
+            All fundraisers
+          </Link>
+        )}
+
+        {/* Body content */}
+        {event.bodyContent && (
+          <div className="prose prose-sm max-w-none text-foreground">
+            {event.bodyContent.split("\n").map((paragraph, i) =>
+              paragraph.trim() ? (
+                <p key={i} className="mb-3 leading-relaxed text-foreground">
+                  {paragraph}
+                </p>
+              ) : (
+                <br key={i} />
+              )
+            )}
+          </div>
+        )}
+
+        {/* Pickup times info */}
+        {event.pickupTimes.length > 0 && (
+          <div className="flex flex-wrap gap-2 items-center">
+            <div className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
+              <Clock className="h-4 w-4" />
+              Pickup times:
+            </div>
+            {event.pickupTimes.map((t) => (
+              <Badge key={t} variant="outline" className="text-sm">
+                {t}
+              </Badge>
+            ))}
+          </div>
+        )}
+
+        {/* Sold out / race-condition alerts */}
         {isSoldOut && (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>This event is sold out. Thank you for your interest!</AlertDescription>
           </Alert>
         )}
-
         {soldOutError && !isSoldOut && (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
@@ -172,9 +261,13 @@ export default function FundraiserEventPage() {
           </Alert>
         )}
 
+        {/* Checkout card */}
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Order Details</CardTitle>
+          <CardHeader className="pb-4">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Package className="h-4 w-4" />
+              Place Your Order
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
@@ -203,7 +296,10 @@ export default function FundraiserEventPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="customer-phone">Phone Number <span className="text-muted-foreground text-xs">(optional)</span></Label>
+              <Label htmlFor="customer-phone">
+                Phone Number{" "}
+                <span className="text-muted-foreground text-xs">(optional)</span>
+              </Label>
               <Input
                 id="customer-phone"
                 data-testid="input-customer-phone"

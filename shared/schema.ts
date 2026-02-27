@@ -5118,6 +5118,8 @@ export const fundraiserEvents = pgTable("fundraiser_events", {
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
   title: text("title").notNull(),
   description: text("description"),
+  bodyContent: text("body_content"),
+  imageUrl: text("image_url"),
   priceCents: integer("price_cents").notNull(),
   inventoryCap: integer("inventory_cap"), // null = unlimited
   pickupTimes: text("pickup_times").array().notNull().default([]),

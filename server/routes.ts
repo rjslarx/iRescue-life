@@ -40695,6 +40695,87 @@ The user asking is a tenant administrator or staff member.`;
   // ===== FUNDRAISER EVENTS =====
 
   /**
+   * POST /api/fundraiser-events/images/upload
+   * Admin: upload a hero image for a fundraiser event
+   */
+  app.post('/api/fundraiser-events/images/upload', requireTenant, requireAuth, requireRole('admin', 'owner'), async (req, res, next) => {
+    try {
+      const multer = (await import('multer')).default;
+      const { TenantFileStorage } = await import('./lib/tenantFileStorage');
+      const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'heic', 'heif', 'bmp', 'avif'];
+      const upload = multer({
+        storage: multer.memoryStorage(),
+        limits: { fileSize: 10 * 1024 * 1024 },
+        fileFilter: (_req, file, cb) => {
+          if (file.mimetype.startsWith('image/')) { cb(null, true); return; }
+          const ext = file.originalname.toLowerCase().split('.').pop();
+          if (ext && imageExtensions.includes(ext)) { cb(null, true); } else { cb(new Error('Only image files are allowed')); }
+        },
+      }).single('file');
+
+      upload(req, res, async (err) => {
+        if (err) return res.status(400).json({ error: err.message });
+        const file = req.file;
+        if (!file) return res.status(400).json({ error: 'No file uploaded' });
+        try {
+          const tenantId = req.tenant!.id;
+          const userId = req.session.userId!;
+          let fileBuffer = file.buffer;
+          let contentType = file.mimetype;
+          const ext = file.originalname.toLowerCase().split('.').pop();
+          if (ext === 'heic' || ext === 'heif' || file.mimetype === 'image/heic' || file.mimetype === 'image/heif') {
+            try {
+              const heicConvert = (await import('heic-convert')).default;
+              const converted = await heicConvert({ buffer: file.buffer, format: 'JPEG', quality: 0.9 });
+              fileBuffer = Buffer.from(converted);
+              contentType = 'image/jpeg';
+            } catch { /* keep original */ }
+          }
+          const storage = await TenantFileStorage.forTenant(tenantId);
+          const result = await storage.uploadFile({
+            tenantId, userId,
+            category: 'fundraiser-images',
+            visibility: 'public',
+            fileName: file.originalname,
+            mimeType: contentType,
+            content: fileBuffer,
+          });
+          if (!result.success) return res.status(500).json({ error: result.error || 'Upload failed' });
+          res.json({ imageUrl: result.fileUrl });
+        } catch (e: any) {
+          console.error('[FUNDRAISER-UPLOAD]', e);
+          res.status(500).json({ error: 'Upload failed' });
+        }
+      });
+    } catch (error) { next(error); }
+  });
+
+  /**
+   * GET /api/fundraiser-events/public
+   * Public (no auth): list all active fundraiser events for the tenant
+   */
+  app.get('/api/fundraiser-events/public', requireTenant, async (req, res, next) => {
+    try {
+      const { fundraiserEvents, fundraiserOrders } = await import('@shared/schema');
+      const events = await db
+        .select()
+        .from(fundraiserEvents)
+        .where(and(eq(fundraiserEvents.tenantId, req.tenant!.id), eq(fundraiserEvents.isActive, true)))
+        .orderBy(desc(fundraiserEvents.createdAt));
+
+      const results = await Promise.all(events.map(async (evt) => {
+        const [row] = await db
+          .select({ soldCount: sql<number>`COALESCE(SUM(${fundraiserOrders.quantity}), 0)` })
+          .from(fundraiserOrders)
+          .where(and(eq(fundraiserOrders.eventId, evt.id), eq(fundraiserOrders.paymentStatus, 'paid')));
+        return { ...evt, soldCount: Number(row?.soldCount ?? 0) };
+      }));
+
+      res.json({ events: results });
+    } catch (error) { next(error); }
+  });
+
+  /**
    * GET /api/fundraiser-events
    * Staff: list all fundraiser events for this tenant with sold count
    */
@@ -40707,6 +40788,8 @@ The user asking is a tenant administrator or staff member.`;
           tenantId: fundraiserEvents.tenantId,
           title: fundraiserEvents.title,
           description: fundraiserEvents.description,
+          bodyContent: fundraiserEvents.bodyContent,
+          imageUrl: fundraiserEvents.imageUrl,
           priceCents: fundraiserEvents.priceCents,
           inventoryCap: fundraiserEvents.inventoryCap,
           pickupTimes: fundraiserEvents.pickupTimes,
@@ -40755,7 +40838,7 @@ The user asking is a tenant administrator or staff member.`;
     try {
       const { fundraiserEvents } = await import('@shared/schema');
       const { id } = req.params;
-      const allowed = ['title', 'description', 'priceCents', 'inventoryCap', 'pickupTimes', 'isActive'] as const;
+      const allowed = ['title', 'description', 'bodyContent', 'imageUrl', 'priceCents', 'inventoryCap', 'pickupTimes', 'isActive'] as const;
       const updates: Record<string, unknown> = {};
       for (const key of allowed) {
         if (key in req.body) updates[key] = req.body[key];

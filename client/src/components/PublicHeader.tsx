@@ -9,7 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Menu, ChevronDown, Package, Heart } from "lucide-react";
+import { Menu, ChevronDown, Package, Heart, TicketPercent } from "lucide-react";
 import type { CustomPage, SupplyItem, Tenant } from "@shared/schema";
 
 interface ActiveCampaign {
@@ -57,9 +57,23 @@ export default function PublicHeader({ rescueName, logoUrl }: PublicHeaderProps)
     staleTime: 1000 * 60 * 5,
   });
 
+  const { data: fundraiserData } = useQuery<{ events: Array<{ id: string }> }>({
+    queryKey: ['/api/fundraiser-events/public', tenantId],
+    queryFn: async () => {
+      const res = await fetch('/api/fundraiser-events/public', {
+        headers: { 'x-tenant-id': tenantId || '' },
+      });
+      if (!res.ok) return { events: [] };
+      return res.json();
+    },
+    enabled: !!tenantId,
+    staleTime: 1000 * 60 * 5,
+  });
+
   const navigationPages = pagesData?.pages || [];
   const hasWishlistItems = (supplyData?.items?.length || 0) > 0;
   const activeCampaigns = campaignsData?.campaigns || [];
+  const hasActiveFundraisers = (fundraiserData?.events?.length || 0) > 0;
   
   // Show "More" dropdown if there are custom pages, wishlist items, or active campaigns
   const showMoreDropdown = navigationPages.length > 0 || hasWishlistItems || activeCampaigns.length > 0;
@@ -167,6 +181,14 @@ export default function PublicHeader({ rescueName, logoUrl }: PublicHeaderProps)
             </DropdownMenu>
           )}
           
+          {hasActiveFundraisers && (
+            <Link href="/fundraisers">
+              <Button variant="ghost" data-testid="button-fundraisers">
+                <TicketPercent className="h-4 w-4 mr-1.5" />
+                Fundraisers
+              </Button>
+            </Link>
+          )}
           <Link href="/donate">
             <Button variant="default" data-testid="button-donate">
               Donate
@@ -304,6 +326,19 @@ export default function PublicHeader({ rescueName, logoUrl }: PublicHeaderProps)
                 </>
               )}
               
+              {hasActiveFundraisers && (
+                <Link href="/fundraisers">
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start"
+                    data-testid="button-fundraisers-mobile"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    <TicketPercent className="h-4 w-4 mr-2" />
+                    Fundraisers
+                  </Button>
+                </Link>
+              )}
               <Link href="/donate">
                 <Button 
                   variant="default" 

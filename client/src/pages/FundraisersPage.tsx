@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTenant } from "@/contexts/TenantContext";
@@ -14,7 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Plus, Pencil, Trash2, ExternalLink, Copy, TicketPercent, Users } from "lucide-react";
+import { Plus, Pencil, Trash2, Copy, TicketPercent, Users, ImagePlus, X } from "lucide-react";
 import type { FundraiserEvent } from "@shared/schema";
 
 type EventWithSold = FundraiserEvent & { soldCount: number };
@@ -26,6 +26,8 @@ function formatCents(cents: number): string {
 interface EventFormState {
   title: string;
   description: string;
+  bodyContent: string;
+  imageUrl: string | null;
   priceStr: string;
   inventoryCapStr: string;
   pickupTimes: string[];
@@ -35,6 +37,8 @@ interface EventFormState {
 const defaultForm = (): EventFormState => ({
   title: "",
   description: "",
+  bodyContent: "",
+  imageUrl: null,
   priceStr: "",
   inventoryCapStr: "",
   pickupTimes: [],
@@ -51,6 +55,9 @@ export default function FundraisersPage() {
   const [form, setForm] = useState<EventFormState>(defaultForm());
   const [pickupInput, setPickupInput] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<EventWithSold | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data, isLoading } = useQuery<{ events: EventWithSold[] }>({
     queryKey: ["/api/fundraiser-events"],
@@ -90,6 +97,7 @@ export default function FundraisersPage() {
     setEditingEvent(null);
     setForm(defaultForm());
     setPickupInput("");
+    setImagePreview(null);
     setDialogOpen(true);
   }
 
@@ -98,13 +106,38 @@ export default function FundraisersPage() {
     setForm({
       title: evt.title,
       description: evt.description ?? "",
+      bodyContent: (evt as any).bodyContent ?? "",
+      imageUrl: (evt as any).imageUrl ?? null,
       priceStr: (evt.priceCents / 100).toFixed(2),
       inventoryCapStr: evt.inventoryCap != null ? String(evt.inventoryCap) : "",
       pickupTimes: [...evt.pickupTimes],
       isActive: evt.isActive,
     });
+    setImagePreview((evt as any).imageUrl ?? null);
     setPickupInput("");
     setDialogOpen(true);
+  }
+
+  async function handleImageUpload(file: File) {
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/fundraiser-events/images/upload", {
+        method: "POST",
+        headers: { "x-tenant-id": tenantId || "" },
+        body: fd,
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Upload failed");
+      const { imageUrl } = await res.json();
+      setForm((f) => ({ ...f, imageUrl }));
+      setImagePreview(imageUrl);
+    } catch {
+      toast({ title: "Upload failed", description: "Could not upload image.", variant: "destructive" });
+    } finally {
+      setUploading(false);
+    }
   }
 
   function handleAddPickupTime() {
@@ -128,6 +161,8 @@ export default function FundraisersPage() {
     const body = {
       title: form.title.trim(),
       description: form.description.trim() || null,
+      bodyContent: form.bodyContent.trim() || null,
+      imageUrl: form.imageUrl || null,
       priceCents,
       inventoryCap,
       pickupTimes: form.pickupTimes,
@@ -189,18 +224,32 @@ export default function FundraisersPage() {
           <div className="grid gap-4 sm:grid-cols-2">
             {data.events.map((evt) => {
               const isSoldOut = evt.inventoryCap != null && evt.soldCount >= evt.inventoryCap;
+              const evtAny = evt as any;
               return (
                 <Card key={evt.id} data-testid={`card-event-${evt.id}`}>
+                  {evtAny.imageUrl && (
+                    <div className="relative h-40 w-full overflow-hidden rounded-t-md">
+                      <img src={evtAny.imageUrl} alt={evt.title} className="w-full h-full object-cover" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                      <div className="absolute bottom-3 left-3">
+                        <Badge variant={evt.isActive ? (isSoldOut ? "destructive" : "default") : "secondary"}>
+                          {!evt.isActive ? "Inactive" : isSoldOut ? "Sold Out" : "Active"}
+                        </Badge>
+                      </div>
+                    </div>
+                  )}
                   <CardHeader className="flex flex-row items-start justify-between gap-2 flex-wrap">
                     <div className="space-y-1 flex-1 min-w-0">
                       <CardTitle className="text-base truncate">{evt.title}</CardTitle>
                       <CardDescription className="line-clamp-2">{evt.description || "No description"}</CardDescription>
                     </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      <Badge variant={evt.isActive ? (isSoldOut ? "destructive" : "default") : "secondary"}>
-                        {!evt.isActive ? "Inactive" : isSoldOut ? "Sold Out" : "Active"}
-                      </Badge>
-                    </div>
+                    {!evtAny.imageUrl && (
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Badge variant={evt.isActive ? (isSoldOut ? "destructive" : "default") : "secondary"}>
+                          {!evt.isActive ? "Inactive" : isSoldOut ? "Sold Out" : "Active"}
+                        </Badge>
+                      </div>
+                    )}
                   </CardHeader>
                   <CardContent className="space-y-3">
                     <div className="flex items-center gap-4 text-sm">
@@ -246,11 +295,54 @@ export default function FundraisersPage() {
 
       {/* Create/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg" data-testid="dialog-event-form">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto" data-testid="dialog-event-form">
           <DialogHeader>
             <DialogTitle>{editingEvent ? "Edit Event" : "Create Fundraiser Event"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+
+            {/* Hero Image Upload */}
+            <div className="space-y-2">
+              <Label>Hero Image <span className="text-muted-foreground text-xs">(optional)</span></Label>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                data-testid="input-image-file"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleImageUpload(file);
+                  e.target.value = "";
+                }}
+              />
+              {imagePreview ? (
+                <div className="relative rounded-md overflow-hidden h-40 w-full bg-muted">
+                  <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+                  <Button
+                    size="icon"
+                    variant="destructive"
+                    className="absolute top-2 right-2"
+                    onClick={() => { setImagePreview(null); setForm((f) => ({ ...f, imageUrl: null })); }}
+                    data-testid="button-remove-image"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  data-testid="button-upload-image"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                  className="w-full h-32 rounded-md border-2 border-dashed border-muted-foreground/30 flex flex-col items-center justify-center gap-2 text-muted-foreground hover-elevate transition-colors"
+                >
+                  <ImagePlus className="h-8 w-8" />
+                  <span className="text-sm">{uploading ? "Uploading…" : "Click to upload a hero image"}</span>
+                </button>
+              )}
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="event-title">Title <span className="text-destructive">*</span></Label>
               <Input
@@ -263,14 +355,25 @@ export default function FundraisersPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="event-description">Description</Label>
-              <Textarea
+              <Label htmlFor="event-description">Short Description <span className="text-muted-foreground text-xs">(shown in listings)</span></Label>
+              <Input
                 id="event-description"
                 data-testid="input-event-description"
-                placeholder="Tell customers about this event…"
+                placeholder="A brief tagline for this event"
                 value={form.description}
                 onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                rows={3}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="event-body">Full Details <span className="text-muted-foreground text-xs">(shown on event page)</span></Label>
+              <Textarea
+                id="event-body"
+                data-testid="input-event-body"
+                placeholder="Tell customers everything about this event — what they're getting, how it supports the rescue, pickup logistics, etc."
+                value={form.bodyContent}
+                onChange={(e) => setForm((f) => ({ ...f, bodyContent: e.target.value }))}
+                rows={5}
               />
             </div>
 
@@ -351,7 +454,7 @@ export default function FundraisersPage() {
 
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleSave} disabled={isSaving} data-testid="button-save-event">
+            <Button onClick={handleSave} disabled={isSaving || uploading} data-testid="button-save-event">
               {isSaving ? "Saving…" : editingEvent ? "Save Changes" : "Create Event"}
             </Button>
           </DialogFooter>
@@ -370,7 +473,7 @@ export default function FundraisersPage() {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="bg-destructive text-destructive-foreground"
               onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
               disabled={deleteMutation.isPending}
             >

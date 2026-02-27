@@ -103,6 +103,7 @@ import DonationLinkRedirectPage from "@/pages/DonationLinkRedirectPage";
 import FundraiserEventPage from "@/pages/FundraiserEventPage";
 import FundraisersPage from "@/pages/FundraisersPage";
 import FundraiserFulfillmentPage from "@/pages/FundraiserFulfillmentPage";
+import PublicFundraisersPage from "@/pages/PublicFundraisersPage";
 import EventTicketCheckoutPage from "@/pages/EventTicketCheckoutPage";
 import EventSuccessPage from "@/pages/EventSuccessPage";
 import GivePage from "@/pages/GivePage";
@@ -218,6 +219,7 @@ function RouterSwitch() {
       <Route path="/surrender" component={PublicSurrenderPage} />
       <Route path="/form-success/:formType" component={FormSuccessPage} />
       <Route path="/contact" component={PublicContactPage} />
+      <Route path="/fundraisers" component={PublicFundraisersPage} />
       <Route path="/donate/event/:eventId" component={FundraiserEventPage} />
       <Route path="/donate/:linkId" component={DonationLinkRedirectPage} />
       <Route path="/donate" component={DonatePage} />
