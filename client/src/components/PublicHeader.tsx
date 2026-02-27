@@ -132,8 +132,8 @@ export default function PublicHeader({ rescueName, logoUrl }: PublicHeaderProps)
             </Link>
           )}
           
-          {/* Custom Navigation Pages & Wishlist - More dropdown */}
-          {showMoreDropdown && (
+          {/* Custom Navigation Pages, Wishlist & Fundraisers - More dropdown or standalone */}
+          {showMoreDropdown ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" data-testid="button-more-pages">
@@ -142,6 +142,18 @@ export default function PublicHeader({ rescueName, logoUrl }: PublicHeaderProps)
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
+                {hasActiveFundraisers && (
+                  <DropdownMenuItem asChild>
+                    <Link
+                      href="/fundraisers"
+                      className="cursor-pointer w-full flex items-center gap-2"
+                      data-testid="link-nav-fundraisers"
+                    >
+                      <TicketPercent className="h-4 w-4" />
+                      Fundraisers
+                    </Link>
+                  </DropdownMenuItem>
+                )}
                 {hasWishlistItems && (
                   <DropdownMenuItem asChild>
                     <Link 
@@ -179,16 +191,14 @@ export default function PublicHeader({ rescueName, logoUrl }: PublicHeaderProps)
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
-          )}
-          
-          {hasActiveFundraisers && (
+          ) : hasActiveFundraisers ? (
             <Link href="/fundraisers">
               <Button variant="ghost" data-testid="button-fundraisers">
                 <TicketPercent className="h-4 w-4 mr-1.5" />
                 Fundraisers
               </Button>
             </Link>
-          )}
+          ) : null}
           <Link href="/donate">
             <Button variant="default" data-testid="button-donate">
               Donate
@@ -280,10 +290,23 @@ export default function PublicHeader({ rescueName, logoUrl }: PublicHeaderProps)
                 </Link>
               )}
               
-              {/* Custom Navigation Pages, Campaigns & Wishlist - in mobile menu */}
-              {showMoreDropdown && (
+              {/* Custom Navigation Pages, Campaigns, Wishlist & Fundraisers - in mobile menu */}
+              {(showMoreDropdown || hasActiveFundraisers) && (
                 <>
                   <div className="border-t my-2" />
+                  {hasActiveFundraisers && (
+                    <Link href="/fundraisers">
+                      <Button
+                        variant="ghost"
+                        className="w-full justify-start"
+                        data-testid="button-fundraisers-mobile"
+                        onClick={() => setMobileMenuOpen(false)}
+                      >
+                        <TicketPercent className="h-4 w-4 mr-2" />
+                        Fundraisers
+                      </Button>
+                    </Link>
+                  )}
                   {hasWishlistItems && (
                     <Link href="/wishlist">
                       <Button 
@@ -324,20 +347,6 @@ export default function PublicHeader({ rescueName, logoUrl }: PublicHeaderProps)
                   ))}
                   <div className="border-t my-2" />
                 </>
-              )}
-              
-              {hasActiveFundraisers && (
-                <Link href="/fundraisers">
-                  <Button
-                    variant="ghost"
-                    className="w-full justify-start"
-                    data-testid="button-fundraisers-mobile"
-                    onClick={() => setMobileMenuOpen(false)}
-                  >
-                    <TicketPercent className="h-4 w-4 mr-2" />
-                    Fundraisers
-                  </Button>
-                </Link>
               )}
               <Link href="/donate">
                 <Button 
