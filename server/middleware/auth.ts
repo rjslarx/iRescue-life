@@ -4,7 +4,7 @@ import createMemoryStore from 'memorystore';
 import connectPgSimple from 'connect-pg-simple';
 import { users, userPagePermissions } from '@shared/schema';
 import { db } from '../db';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
 import pg from 'pg';
 
 const MemoryStore = createMemoryStore(session);
@@ -316,11 +316,13 @@ export function requireRole(...roles: string[]) {
  * Otherwise, checks the user_page_permissions table for an explicit grant on the given pageId.
  * This bridges the gap between page-level navigation permissions and API data access.
  */
-export function requireRoleOrPageAccess(pageId: string, ...roles: string[]) {
+export function requireRoleOrPageAccess(pageIds: string | string[], ...roles: string[]) {
   return async (req: Request, res: Response, next: NextFunction) => {
     if (!req.user) {
       return res.status(401).json({ error: 'Authentication required' });
     }
+
+    const ids = Array.isArray(pageIds) ? pageIds : [pageIds];
 
     // Check activeRole first (standard check)
     if (roles.includes(req.user.activeRole)) {
@@ -348,7 +350,7 @@ export function requireRoleOrPageAccess(pageId: string, ...roles: string[]) {
       return next();
     }
 
-    // Finally, check user_page_permissions for explicit grant
+    // Finally, check user_page_permissions for explicit grant on any of the given page IDs
     if (req.tenant) {
       try {
         const [grant] = await db
@@ -357,7 +359,7 @@ export function requireRoleOrPageAccess(pageId: string, ...roles: string[]) {
           .where(and(
             eq(userPagePermissions.tenantId, req.tenant.id),
             eq(userPagePermissions.userId, req.user.id),
-            eq(userPagePermissions.pageId, pageId)
+            inArray(userPagePermissions.pageId, ids)
           ))
           .limit(1);
 

@@ -16637,7 +16637,7 @@ Submitted: ${new Date().toLocaleString()}
    * POST /api/volunteer-applications/:id/resend-invite
    * Resend or create a fresh volunteer welcome invitation email
    */
-  app.post('/api/volunteer-applications/:id/resend-invite', requireTenant, requireAuth, requireRole('admin', 'owner', 'board_member', 'staff'), async (req, res, next) => {
+  app.post('/api/volunteer-applications/:id/resend-invite', requireTenant, requireAuth, requireRoleOrPageAccess(['volunteers', 'volunteer-pipeline'], 'admin', 'owner', 'board_member', 'staff'), async (req, res, next) => {
     try {
       const { volunteerApplications, userInvitations } = await import('@shared/schema');
 
@@ -16718,7 +16718,7 @@ Submitted: ${new Date().toLocaleString()}
    * GET /api/volunteer-applications/:id
    * Get a single volunteer application by ID with full details (admin/staff only)
    */
-  app.get('/api/volunteer-applications/:id', requireTenant, requireAuth, requireRole('admin', 'owner', 'board_member', 'staff', 'intake_coordinator'), async (req, res, next) => {
+  app.get('/api/volunteer-applications/:id', requireTenant, requireAuth, requireRoleOrPageAccess(['volunteers', 'volunteer-pipeline'], 'admin', 'owner', 'board_member', 'staff', 'intake_coordinator'), async (req, res, next) => {
     try {
       const { volunteerApplications } = await import('@shared/schema');
       
@@ -16769,7 +16769,7 @@ Submitted: ${new Date().toLocaleString()}
    * Update volunteer application status (admin/staff only)
    * Auto-dismisses from pending widget when status changes from 'pending' to other statuses
    */
-  app.patch('/api/volunteer-applications/:id', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) =>{
+  app.patch('/api/volunteer-applications/:id', requireTenant, requireAuth, requireRoleOrPageAccess(['volunteers', 'volunteer-pipeline'], 'admin', 'staff'), async (req, res, next) =>{
     try {
       const { volunteerApplications, dismissedWidgetItems } = await import('@shared/schema');
       
@@ -17105,7 +17105,7 @@ If you have any questions, please contact us.
    * POST /api/volunteer-applications/:id/send-waiver
    * Manually send/resend hold harmless waiver email to volunteer applicant
    */
-  app.post('/api/volunteer-applications/:id/send-waiver', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+  app.post('/api/volunteer-applications/:id/send-waiver', requireTenant, requireAuth, requireRoleOrPageAccess(['volunteers', 'volunteer-pipeline'], 'admin', 'staff'), async (req, res, next) => {
     try {
       const { volunteerApplications, customForms, customFormSubmissions } = await import('@shared/schema');
       const { generateSecureToken, hashToken } = await import('./services/custom-form');
@@ -32267,7 +32267,7 @@ Email: ${application.applicantEmail || ''}`
       if (careTypeInfo && effectiveNextDueDate && data.animalId && (careTypeInfo.coversHeartworm || careTypeInfo.coversFleaTick)) {
         try {
           const [animal] = await db
-            .select({ medicalDueDates: animals.medicalDueDates })
+            .select()
             .from(animals)
             .where(eq(animals.id, data.animalId))
             .limit(1);
@@ -32440,7 +32440,7 @@ Email: ${application.applicantEmail || ''}`
         }
         if (Object.keys(dueDates).length > 0) {
           const [existingAnimal] = await db
-            .select({ medicalDueDates: animals.medicalDueDates })
+            .select()
             .from(animals)
             .where(eq(animals.id, animalId))
             .limit(1);
@@ -32681,7 +32681,7 @@ Email: ${application.applicantEmail || ''}`
         }
         if (Object.keys(protocolDueDates).length > 0) {
           const [existingAnimal] = await db
-            .select({ medicalDueDates: animals.medicalDueDates })
+            .select()
             .from(animals)
             .where(eq(animals.id, animalId))
             .limit(1);
