@@ -9,6 +9,8 @@ import {
   complianceReminderNotifications,
   medicationTasks,
   medicationPlans,
+  medicalExams,
+  smsMessageLogs,
   type ComplianceReminder,
 } from '@shared/schema';
 import { eq, and, gte, lte, lt, or, isNull, inArray, sql } from 'drizzle-orm';
@@ -885,4 +887,212 @@ export async function generateBioPhotoComplianceTasks(tenantId: string): Promise
     result.errors.push(error instanceof Error ? error.message : 'Unknown error');
   }
   return result;
+}
+
+/**
+ * Sends bio/photo update SMS to fosters whose bi-weekly reminder was generated today.
+ * Called immediately after generateBioPhotoComplianceTasks() in the 6 AM scheduler.
+ */
+export async function sendBioPhotoSmsToFosters(tenantId: string): Promise<{ sent: number; errors: string[] }> {
+  const errors: string[] = [];
+  let sent = 0;
+
+  try {
+    const twilioEnabled = await isTwilioEnabled(tenantId);
+    if (!twilioEnabled) return { sent: 0, errors: [] };
+
+    const todayStart = new Date();
+    todayStart.setUTCHours(0, 0, 0, 0);
+
+    const todayReminders = await db
+      .select({
+        id: complianceReminders.id,
+        animalId: complianceReminders.animalId,
+        fosterId: complianceReminders.fosterId,
+      })
+      .from(complianceReminders)
+      .where(and(
+        eq(complianceReminders.tenantId, tenantId),
+        eq(complianceReminders.reminderType, 'bio_photo'),
+        eq(complianceReminders.state, 'pending'),
+        gte(complianceReminders.createdAt, todayStart)
+      ));
+
+    if (todayReminders.length === 0) return { sent: 0, errors: [] };
+
+    for (const reminder of todayReminders) {
+      try {
+        if (!reminder.fosterId || !reminder.animalId) continue;
+
+        const [foster] = await db
+          .select({ fullName: users.fullName, phone: users.phone })
+          .from(users)
+          .where(eq(users.id, reminder.fosterId));
+
+        if (!foster?.phone) continue;
+
+        const [animal] = await db
+          .select({ name: animals.name })
+          .from(animals)
+          .where(eq(animals.id, reminder.animalId));
+
+        if (!animal) continue;
+
+        const [fosterPlacement] = await db
+          .select({ startDate: fosterAnimals.startDate })
+          .from(fosterAnimals)
+          .where(and(
+            eq(fosterAnimals.tenantId, tenantId),
+            eq(fosterAnimals.animalId, reminder.animalId),
+            eq(fosterAnimals.fosterId, reminder.fosterId),
+            eq(fosterAnimals.status, 'active')
+          ))
+          .limit(1);
+
+        const startDate = fosterPlacement?.startDate ? new Date(fosterPlacement.startDate) : new Date();
+        const daysSince = Math.floor((Date.now() - startDate.getTime()) / 86400000);
+        const weeks = Math.floor(daysSince / 7);
+
+        const fosterFirstName = foster.fullName?.split(' ')[0] || 'Foster';
+        const message = `Hi ${fosterFirstName}! ${animal.name} has been with you for ${weeks} week${weeks !== 1 ? 's' : ''}! Please reply with a quick update on their personality and attach a cute new photo so we can update their adoption profile!`.substring(0, 320);
+
+        const result = await sendSms(tenantId, foster.phone, message, 'reminder', {
+          recipientUserId: reminder.fosterId,
+          relatedAnimalId: reminder.animalId,
+        });
+
+        if (result.status === 'sent') {
+          await db
+            .update(complianceReminders)
+            .set({ state: 'notified_due', updatedAt: new Date() })
+            .where(eq(complianceReminders.id, reminder.id));
+          sent++;
+        } else {
+          errors.push(`Failed to SMS ${foster.phone} for bio/photo reminder: ${result.error}`);
+        }
+      } catch (err) {
+        errors.push(`Bio/photo SMS error for reminder ${reminder.id}: ${err instanceof Error ? err.message : 'Unknown'}`);
+      }
+    }
+
+    return { sent, errors };
+  } catch (error) {
+    errors.push(error instanceof Error ? error.message : 'Unknown error');
+    return { sent, errors };
+  }
+}
+
+/**
+ * Sends 24-hour appointment reminder SMS to fosters whose animal has a pending exam tomorrow.
+ */
+export async function sendAppointmentRemindersForTenant(tenantId: string): Promise<{ sent: number; errors: string[] }> {
+  const errors: string[] = [];
+  let sent = 0;
+
+  try {
+    const twilioEnabled = await isTwilioEnabled(tenantId);
+    if (!twilioEnabled) return { sent: 0, errors: [] };
+
+    const tomorrowStart = new Date();
+    tomorrowStart.setUTCDate(tomorrowStart.getUTCDate() + 1);
+    tomorrowStart.setUTCHours(0, 0, 0, 0);
+
+    const tomorrowEnd = new Date(tomorrowStart);
+    tomorrowEnd.setUTCHours(23, 59, 59, 999);
+
+    const upcomingExams = await db
+      .select({
+        id: medicalExams.id,
+        animalId: medicalExams.animalId,
+        examType: medicalExams.examType,
+        examDate: medicalExams.examDate,
+      })
+      .from(medicalExams)
+      .where(and(
+        eq(medicalExams.tenantId, tenantId),
+        eq(medicalExams.status, 'pending'),
+        gte(medicalExams.examDate, tomorrowStart),
+        lte(medicalExams.examDate, tomorrowEnd)
+      ));
+
+    if (upcomingExams.length === 0) return { sent: 0, errors: [] };
+
+    for (const exam of upcomingExams) {
+      try {
+        const [placement] = await db
+          .select({ fosterId: fosterAnimals.fosterId })
+          .from(fosterAnimals)
+          .where(and(
+            eq(fosterAnimals.tenantId, tenantId),
+            eq(fosterAnimals.animalId, exam.animalId),
+            eq(fosterAnimals.status, 'active')
+          ))
+          .limit(1);
+
+        if (!placement?.fosterId) continue;
+
+        const [foster] = await db
+          .select({ fullName: users.fullName, phone: users.phone })
+          .from(users)
+          .where(eq(users.id, placement.fosterId));
+
+        if (!foster?.phone) continue;
+
+        const [animal] = await db
+          .select({ name: animals.name })
+          .from(animals)
+          .where(eq(animals.id, exam.animalId));
+
+        if (!animal) continue;
+
+        const examDate = new Date(exam.examDate);
+        const timeStr = examDate.toLocaleTimeString('en-US', {
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true,
+          timeZone: 'UTC',
+        });
+
+        const examTypeLabel = exam.examType.charAt(0).toUpperCase() + exam.examType.slice(1);
+        const message = `Reminder: ${animal.name} has a ${examTypeLabel} appointment scheduled for tomorrow at ${timeStr}. Please ensure they have no food after midnight tonight!`.substring(0, 320);
+
+        const result = await sendSms(tenantId, foster.phone, message, 'reminder', {
+          recipientUserId: placement.fosterId,
+          relatedAnimalId: exam.animalId,
+        });
+
+        if (result.status === 'sent') {
+          sent++;
+        } else {
+          errors.push(`Failed to SMS ${foster.phone} for exam reminder: ${result.error}`);
+        }
+      } catch (err) {
+        errors.push(`Appointment SMS error for exam ${exam.id}: ${err instanceof Error ? err.message : 'Unknown'}`);
+      }
+    }
+
+    return { sent, errors };
+  } catch (error) {
+    errors.push(error instanceof Error ? error.message : 'Unknown error');
+    return { sent, errors };
+  }
+}
+
+export async function sendAppointmentRemindersForAllTenants(): Promise<{ sent: number; errors: string[] }> {
+  let sent = 0;
+  const errors: string[] = [];
+  try {
+    const activeTenants = await db
+      .select({ id: tenants.id })
+      .from(tenants)
+      .where(eq(tenants.isActive, true));
+    for (const tenant of activeTenants) {
+      const result = await sendAppointmentRemindersForTenant(tenant.id);
+      sent += result.sent;
+      errors.push(...result.errors.map(e => `[${tenant.id}] ${e}`));
+    }
+  } catch (error) {
+    errors.push(error instanceof Error ? error.message : 'Unknown error');
+  }
+  return { sent, errors };
 }

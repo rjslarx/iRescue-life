@@ -1,7 +1,7 @@
 import twilio from 'twilio';
 import { db } from '../db';
-import { tenants, smsMessageLogs, smsProxySessions, transportEvents, users, fosterAnimals, supplyRequests, fosterUpdates } from '@shared/schema';
-import { eq, and, desc } from 'drizzle-orm';
+import { tenants, smsMessageLogs, smsProxySessions, transportEvents, users, fosterAnimals, supplyRequests, fosterUpdates, medicationTasks, complianceReminders, animals } from '@shared/schema';
+import { eq, and, desc, gte, isNotNull, inArray, or } from 'drizzle-orm';
 import { decrypt, encrypt } from './encryption';
 
 interface TwilioConfig {
@@ -326,6 +326,57 @@ export async function handleIncomingSms(
     const { tenantId, fosterId, animalId } = fosterIdentity;
 
     try {
+      // Branch A0: NEED reply — create a contextual supply request linked to the pending preventative care reminder
+      if (normalizedBody === 'NEED' || normalizedBody.startsWith('NEED ')) {
+        let supplyItem = body.substring(0, 200);
+        try {
+          const { or: orOp, desc: descOp, isNull: isNullOp } = await import('drizzle-orm');
+          const [pendingCareReminder] = await db
+            .select({
+              careName: complianceReminders.careName,
+            })
+            .from(complianceReminders)
+            .where(and(
+              eq(complianceReminders.tenantId, tenantId),
+              eq(complianceReminders.fosterId, fosterId),
+              eq(complianceReminders.reminderType, 'preventative_care'),
+              orOp(
+                eq(complianceReminders.state, 'pending'),
+                eq(complianceReminders.state, 'notified_due')
+              ),
+              isNullOp(complianceReminders.confirmedAt)
+            ))
+            .orderBy(descOp(complianceReminders.createdAt))
+            .limit(1);
+
+          const [animalRow] = await db
+            .select({ name: animals.name })
+            .from(animals)
+            .where(eq(animals.id, animalId))
+            .limit(1);
+
+          if (pendingCareReminder?.careName && animalRow?.name) {
+            supplyItem = `${pendingCareReminder.careName} for ${animalRow.name}`;
+          }
+        } catch (e) {
+          // fall through with raw body as item
+        }
+
+        await db.insert(supplyRequests).values({
+          tenantId,
+          fosterId,
+          animalId,
+          category: 'medical',
+          item: supplyItem,
+          quantity: '1',
+          notes: "Foster replied NEED via SMS — out of stock",
+          source: 'sms',
+          status: 'pending',
+        });
+        console.log(`[TWILIO] Created contextual supply_request for foster ${fosterId}: ${supplyItem}`);
+        return { success: true, routedAs: 'supply_request' };
+      }
+
       // Branch A: Supply request (keyword detected)
       if (SUPPLY_KEYWORD_REGEX.test(body)) {
         await db.insert(supplyRequests).values({
@@ -608,6 +659,41 @@ async function handleComplianceConfirmationReply(
       .limit(1);
 
     if (!pendingReminder) {
+      // No compliance reminder found — check for a medication digest batch sent in the last 4 hours
+      const fourHoursAgo = new Date(Date.now() - 4 * 60 * 60 * 1000);
+      const normalizedFromPhone = fromNumber.replace(/D/g, '');
+      const phonePatterns2 = [
+        fromNumber,
+        normalizedFromPhone,
+        `+${normalizedFromPhone}`,
+        `+1${normalizedFromPhone.replace(/^1/, '')}`,
+      ];
+
+      const [digestLog] = await db
+        .select({ relatedTaskIds: smsMessageLogs.relatedTaskIds, tenantId: smsMessageLogs.tenantId })
+        .from(smsMessageLogs)
+        .where(and(
+          or(...phonePatterns2.map(p => eq(smsMessageLogs.toNumber, p))),
+          eq(smsMessageLogs.direction, 'outbound'),
+          eq(smsMessageLogs.messageType, 'reminder'),
+          gte(smsMessageLogs.createdAt, fourHoursAgo),
+          isNotNull(smsMessageLogs.relatedTaskIds)
+        ))
+        .orderBy(desc(smsMessageLogs.createdAt))
+        .limit(1);
+
+      if (digestLog?.relatedTaskIds && digestLog.relatedTaskIds.length > 0) {
+        await db
+          .update(medicationTasks)
+          .set({ status: 'given', completedAt: new Date() })
+          .where(and(
+            inArray(medicationTasks.id, digestLog.relatedTaskIds),
+            eq(medicationTasks.status, 'pending')
+          ));
+        console.log(`[TWILIO] Marked ${digestLog.relatedTaskIds.length} medication task(s) as given via DONE reply from ${fromNumber}`);
+        return { success: true, message: `Medication batch (${digestLog.relatedTaskIds.length} tasks) marked as given via SMS reply` };
+      }
+
       return { success: false, message: 'No pending reminder found' };
     }
 

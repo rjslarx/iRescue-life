@@ -4025,6 +4025,7 @@ export const smsMessageLogs = pgTable("sms_message_logs", {
   sentByName: text("sent_by_name"),
   recipientUserId: uuid("recipient_user_id").references(() => users.id, { onDelete: 'set null' }), // The user receiving this message
   relatedAnimalId: uuid("related_animal_id").references(() => animals.id, { onDelete: 'set null' }), // Animal this message concerns
+  relatedTaskIds: uuid("related_task_id").array(), // Task UUIDs in a medication digest batch
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

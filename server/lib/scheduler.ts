@@ -276,18 +276,22 @@ export function initializeScheduler() {
   cron.schedule("0 6 * * *", async () => {
     console.log("📸 Running bio/photo compliance task generation...");
     try {
-      const { generateBioPhotoComplianceTasks } = await import("./foster-compliance-reminders");
+      const { generateBioPhotoComplianceTasks, sendBioPhotoSmsToFosters } = await import("./foster-compliance-reminders");
       const { db } = await import("../db");
       const { tenants } = await import("@shared/schema");
       const allTenants = await db.select({ id: tenants.id }).from(tenants);
       let totalGenerated = 0;
+      let totalSmsSent = 0;
       const errors: string[] = [];
       for (const tenant of allTenants) {
         const result = await generateBioPhotoComplianceTasks(tenant.id);
         totalGenerated += result.generated;
         errors.push(...result.errors.map(e => `${tenant.id}: ${e}`));
+        const smsResult = await sendBioPhotoSmsToFosters(tenant.id);
+        totalSmsSent += smsResult.sent;
+        errors.push(...smsResult.errors.map(e => `${tenant.id}: ${e}`));
       }
-      console.log(`✓ Bio/photo compliance: ${totalGenerated} tasks generated across ${allTenants.length} tenants`);
+      console.log(`✓ Bio/photo compliance: ${totalGenerated} tasks generated, ${totalSmsSent} SMS sent across ${allTenants.length} tenants`);
       if (errors.length > 0) {
         console.warn(`⚠️ Bio/photo compliance errors: ${errors.slice(0, 5).join('; ')}${errors.length > 5 ? ` (+${errors.length - 5} more)` : ''}`);
       }
@@ -351,6 +355,48 @@ export function initializeScheduler() {
   });
 
   console.log(`✓ Foster compliance reminders scheduled for: ${fosterComplianceSchedule} (UTC)`);
+
+  // Schedule hourly medication SMS digest
+  // Runs at the top of every hour; sends grouped 'DONE'-able SMS to fosters with tasks due this hour
+  cron.schedule("0 * * * *", async () => {
+    console.log("💊 Running hourly medication SMS digest...");
+    try {
+      const { sendMedicationDigestForAllTenants } = await import("../services/medicationSmsDigest");
+      const result = await sendMedicationDigestForAllTenants();
+      if (result.sent > 0) {
+        console.log(`✓ Medication digest: ${result.sent} SMS sent`);
+      }
+      if (result.errors.length > 0) {
+        console.warn(`⚠️ Medication digest errors: ${result.errors.slice(0, 5).join('; ')}${result.errors.length > 5 ? ` (+${result.errors.length - 5} more)` : ''}`);
+      }
+    } catch (error) {
+      console.error(`❌ Medication SMS digest failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }, {
+    timezone: "UTC"
+  });
+
+  console.log(`✓ Hourly medication SMS digest scheduled: 0 * * * * (UTC)`);
+
+  // Schedule foster appointment reminders daily at 14:00 UTC (10 AM Eastern)
+  // Sends 24-hour advance reminder SMS to fosters whose animal has a pending exam tomorrow
+  cron.schedule("0 14 * * *", async () => {
+    console.log("📅 Running foster appointment reminders (24h before exams)...");
+    try {
+      const { sendAppointmentRemindersForAllTenants } = await import("./foster-compliance-reminders");
+      const result = await sendAppointmentRemindersForAllTenants();
+      console.log(`✓ Appointment reminders: ${result.sent} SMS sent`);
+      if (result.errors.length > 0) {
+        console.warn(`⚠️ Appointment reminder errors: ${result.errors.slice(0, 5).join('; ')}${result.errors.length > 5 ? ` (+${result.errors.length - 5} more)` : ''}`);
+      }
+    } catch (error) {
+      console.error(`❌ Foster appointment reminders failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }, {
+    timezone: "UTC"
+  });
+
+  console.log(`✓ Foster appointment reminders scheduled for: 0 14 * * * (UTC)`);
 
   // Schedule foster compliance escalation hourly
   // "0 * * * *" means: at minute 0, every hour
