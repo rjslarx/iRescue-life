@@ -10,6 +10,14 @@ import pg from 'pg';
 const MemoryStore = createMemoryStore(session);
 const PgSession = connectPgSimple(session);
 
+const ROLE_PRIORITY = ['owner', 'admin', 'board_member', 'staff', 'foster', 'volunteer', 'adopter'];
+function getDefaultRole(roles: string[]): string {
+  for (const r of ROLE_PRIORITY) {
+    if (roles.includes(r)) return r;
+  }
+  return roles[0];
+}
+
 // Extend session data to include user and tenant
 declare module 'express-session' {
   interface SessionData {
@@ -230,10 +238,10 @@ export async function authenticateUser(req: Request, res: Response, next: NextFu
           }
         }
 
-        // Determine active role: use session's activeRole if valid, otherwise default to first role
+        // Determine active role: use session's activeRole if valid, otherwise default to highest-priority role
         let activeRole = req.session.activeRole;
         if (!activeRole || !user.roles.includes(activeRole)) {
-          activeRole = user.roles[0]; // Default to first role
+          activeRole = getDefaultRole(user.roles);
           req.session.activeRole = activeRole;
         }
 

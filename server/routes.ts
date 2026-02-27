@@ -12,6 +12,14 @@ import { z } from "zod";
 import { authLimiter, signupLimiter, passwordResetLimiter, emailLimiter } from "./config/security";
 import QRCode from "qrcode";
 
+const ROLE_PRIORITY = ['owner', 'admin', 'board_member', 'staff', 'foster', 'volunteer', 'adopter'];
+function getDefaultRole(roles: string[]): string {
+  for (const r of ROLE_PRIORITY) {
+    if (roles.includes(r)) return r;
+  }
+  return roles[0];
+}
+
 // Build version identifier for debugging production deployments
 const BUILD_VERSION = "2025-12-27-v6-gmail-admin-notification";
 console.log(`[SERVER] Starting with build version: ${BUILD_VERSION}`);
@@ -1969,10 +1977,10 @@ Crawl-delay: 1
       req.session.userId = user.id;
       req.session.tenantId = user.tenantId;
       
-      // Set active role: use selected role if provided and valid, otherwise default to first role
+      // Set active role: use selected role if provided and valid, otherwise default to highest-priority role
       const activeRole = credentials.selectedRole && user.roles.includes(credentials.selectedRole)
         ? credentials.selectedRole
-        : user.roles[0];
+        : getDefaultRole(user.roles);
       req.session.activeRole = activeRole;
 
       // Save session before sending response to ensure cookie is set
@@ -2155,7 +2163,7 @@ Crawl-delay: 1
         // Valid TOTP code - create session
         req.session.userId = user.id;
         req.session.tenantId = user.tenantId;
-        req.session.activeRole = user.roles[0];
+        req.session.activeRole = getDefaultRole(user.roles);
         // Save session before sending response
         return req.session.save((err) => {
           if (err) {
@@ -2170,7 +2178,7 @@ Crawl-delay: 1
               email: user.email,
               fullName: user.fullName,
               roles: user.roles,
-              activeRole: user.roles[0],
+              activeRole: getDefaultRole(user.roles),
             },
           });
         });
@@ -2192,7 +2200,7 @@ Crawl-delay: 1
           // Create session
           req.session.userId = user.id;
           req.session.tenantId = user.tenantId;
-          req.session.activeRole = user.roles[0];
+          req.session.activeRole = getDefaultRole(user.roles);
           
           // Save session before sending response
           return req.session.save((err) => {
@@ -2208,7 +2216,7 @@ Crawl-delay: 1
                 email: user.email,
                 fullName: user.fullName,
                 roles: user.roles,
-                activeRole: user.roles[0],
+                activeRole: getDefaultRole(user.roles),
               },
               backupCodeUsed: true,
               remainingBackupCodes: updatedBackupCodes.length,
