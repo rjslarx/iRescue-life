@@ -1,7 +1,8 @@
 import { db } from '../db';
-import { scheduledCommunications, animals, tenants } from '@shared/schema';
+import { scheduledCommunications, animals, tenants, adoptionCheckoutSessions, contacts } from '@shared/schema';
 import { eq, and, lte, ne } from 'drizzle-orm';
 import { EmailService } from './email-service';
+import { sendSms } from './twilio-service';
 
 interface RetentionEmailResult {
   tenantsProcessed: number;
@@ -231,6 +232,39 @@ export async function runRetentionEmailsJob(): Promise<RetentionEmailResult> {
 
         result.emailsSent++;
         console.log(`[Retention] Sent ${comm.messageType} email to ${comm.adopterEmail} for ${comm.animalName}`);
+
+        // Also send SMS alongside the email
+        try {
+          const [checkout] = await db
+            .select({ adopterContactId: adoptionCheckoutSessions.adopterContactId })
+            .from(adoptionCheckoutSessions)
+            .where(eq(adoptionCheckoutSessions.id, comm.adoptionId))
+            .limit(1);
+
+          if (checkout?.adopterContactId) {
+            const [adopterContact] = await db
+              .select({ phone: contacts.phone })
+              .from(contacts)
+              .where(eq(contacts.id, checkout.adopterContactId))
+              .limit(1);
+
+            if (adopterContact?.phone) {
+              const firstName = comm.adopterName.split(' ')[0];
+              const smsTemplates: Record<string, string> = {
+                '3_days': `Hi ${firstName}! It's been 3 days with ${comm.animalName}. They're still decompressing — keep things calm and quiet. Reply HELP if you need advice from our team!`,
+                '3_weeks': `Happy 3 Weeks with ${comm.animalName}! They should be settling into their routine now. We'd love to see a photo — reply with a pic!`,
+                '3_months': `Happy 3 Month Rescue Anniversary to ${comm.animalName}! Thank you for giving them a forever home!`,
+              };
+              const smsBody = smsTemplates[comm.messageType];
+              if (smsBody) {
+                await sendSms(comm.tenantId, adopterContact.phone, smsBody, 'notification');
+                console.log(`[Retention] Sent ${comm.messageType} SMS to ${adopterContact.phone} for ${comm.animalName}`);
+              }
+            }
+          }
+        } catch (smsErr) {
+          console.warn(`[Retention] SMS failed for ${comm.adopterEmail} (non-blocking):`, smsErr instanceof Error ? smsErr.message : 'Unknown');
+        }
 
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : 'Unknown error';

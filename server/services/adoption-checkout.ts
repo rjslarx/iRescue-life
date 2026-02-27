@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import bcrypt from 'bcrypt';
 import { db } from '../db';
+import { sendSms } from '../lib/twilio-service';
 import {
   adoptionCheckoutSessions,
   adoptionContracts,
@@ -1670,6 +1671,28 @@ export async function finalizeAdoption(sessionId: string): Promise<void> {
             `,
           });
           console.log(`[Adoption] Sent Pet Portal welcome email to ${adopterEmail}`);
+        }
+
+        // Welcome SMS — send alongside email if adopter has a phone on file
+        try {
+          if (session.adopterContactId) {
+            const [adopterContact] = await db
+              .select({ phone: contacts.phone })
+              .from(contacts)
+              .where(eq(contacts.id, session.adopterContactId))
+              .limit(1);
+
+            if (adopterContact?.phone) {
+              const firstName = (adopterName || 'there').split(' ')[0];
+              const smsMessage = `Congratulations, ${firstName}! ${animalName}'s adoption is complete. Tap here to access your Adopter Portal for their vaccine records, microchip info, and adoption packet: ${loginUrl}`;
+              await sendSms(session.tenantId, adopterContact.phone, smsMessage, 'notification', {
+                recipientUserId: adopterUserId,
+              });
+              console.log(`[Adoption] Sent welcome SMS to ${adopterContact.phone}`);
+            }
+          }
+        } catch (smsErr) {
+          console.warn('[Adoption] Welcome SMS failed (non-blocking):', smsErr instanceof Error ? smsErr.message : 'Unknown');
         }
       }
     }

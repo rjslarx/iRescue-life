@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { 
@@ -16,8 +17,10 @@ import {
   Home,
   Camera,
   ClipboardCheck,
-  CheckCircle
+  CheckCircle,
+  Phone,
 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { Link } from "wouter";
 import { useTenant } from "@/contexts/TenantContext";
@@ -96,6 +99,17 @@ interface AdopterObligationPendingReview {
   proofDocumentUrl: string | null;
 }
 
+interface SpayNeuterOverdueItem {
+  obligationId: string;
+  animalId: string;
+  animalName: string;
+  adopterName: string;
+  adopterPhone: string | null;
+  adopterEmail: string;
+  contractualDueDate: string;
+  daysOverdue: number;
+}
+
 interface DailyBriefingData {
   today: {
     surgeries: Surgery[];
@@ -108,6 +122,7 @@ interface DailyBriefingData {
     fosterBioPhotoFollowUps?: FosterBioPhotoFollowUp[];
     adopterConfirmationsPendingReview?: AdopterConfirmationPendingReview[];
     adopterObligationsPendingReview?: AdopterObligationPendingReview[];
+    spayNeuterOverdue?: SpayNeuterOverdueItem[];
   };
   tomorrow: {
     surgeries: Surgery[];
@@ -129,6 +144,7 @@ interface DailyBriefingData {
 
 export function DailyBriefing() {
   const { basePath } = useTenant();
+  const { toast } = useToast();
   
   const { data, isLoading, error } = useQuery<DailyBriefingData>({
     queryKey: ['/api/dashboard/daily-briefing'],
@@ -174,6 +190,7 @@ export function DailyBriefing() {
   const hasFosterBioPhoto = (data?.today.fosterBioPhotoFollowUps?.length ?? 0) > 0;
   const hasAdopterObligations = (data?.today.adopterObligationsPendingReview?.length ?? 0) > 0;
   const hasAdopterConfirmations = (data?.today.adopterConfirmationsPendingReview?.length ?? 0) > 0;
+  const hasSpayNeuterOverdue = (data?.today.spayNeuterOverdue?.length ?? 0) > 0;
 
   const hasUrgent = data && (
     data.today.surgeries.length > 0 || 
@@ -193,7 +210,7 @@ export function DailyBriefing() {
     (data.tomorrow.vetEvents && data.tomorrow.vetEvents.length > 0)
   );
 
-  const isEmpty = !hasUrgent && !hasMedicalToday && !hasVetEventsToday && !hasTomorrowItems && 
+  const isEmpty = !hasUrgent && !hasSpayNeuterOverdue && !hasMedicalToday && !hasVetEventsToday && !hasTomorrowItems && 
     !hasFosterBioPhoto && !hasAdopterConfirmations &&
     (!data?.today.calendar || data.today.calendar.length === 0);
 
@@ -214,6 +231,50 @@ export function DailyBriefing() {
             </div>
           ) : (
             <div className="space-y-4">
+              {hasSpayNeuterOverdue && (
+                <div
+                  className="rounded-md border border-destructive bg-destructive/10 p-3"
+                  data-testid="section-spay-neuter-overdue"
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <AlertTriangle className="h-4 w-4 text-destructive flex-shrink-0" />
+                    <span className="text-sm font-semibold text-destructive">Spay/Neuter Compliance Alert</span>
+                    <Badge variant="destructive" className="text-xs ml-auto">
+                      {data?.today.spayNeuterOverdue?.length}
+                    </Badge>
+                  </div>
+                  <div className="space-y-1">
+                    {data?.today.spayNeuterOverdue?.map((item) => (
+                      <div
+                        key={item.obligationId}
+                        className="flex items-center gap-2 py-1"
+                        data-testid={`row-spay-neuter-overdue-${item.obligationId}`}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{item.animalName}</p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {item.adopterName} &middot; {item.daysOverdue}d overdue
+                          </p>
+                        </div>
+                        {item.adopterPhone && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            data-testid={`button-copy-phone-${item.obligationId}`}
+                            onClick={() => {
+                              navigator.clipboard.writeText(item.adopterPhone!);
+                              toast({ title: "Phone copied", description: item.adopterPhone! });
+                            }}
+                          >
+                            <Phone className="h-3 w-3" />
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {hasUrgent && (
                 <div>
                   <div className="flex items-center gap-2 mb-2">

@@ -4253,8 +4253,9 @@ Crawl-delay: 1
       }));
 
       const { adopterComplianceConfirmations: accTable, complianceObligations: coTable } = await import('@shared/schema');
+      const { lt: ltOp } = await import('drizzle-orm');
 
-      const [pendingConfirmationsRaw, pendingObligationsRaw] = await Promise.all([
+      const [pendingConfirmationsRaw, pendingObligationsRaw, spayNeuterOverdueRaw] = await Promise.all([
         db.select({
           confirmationId: accTable.id,
           animalId: accTable.animalId,
@@ -4283,7 +4284,33 @@ Crawl-delay: 1
             eq(coTable.status, 'pending_review'),
           ))
           .limit(10),
+
+        // Overdue spay/neuter obligations — no proof uploaded, past contractual due date
+        db.select({
+          obligationId: coTable.id,
+          animalId: coTable.animalId,
+          animalName: animals.name,
+          adopterName: coTable.adopterName,
+          adopterPhone: coTable.adopterPhone,
+          adopterEmail: coTable.adopterEmail,
+          contractualDueDate: coTable.contractualDueDate,
+        })
+          .from(coTable)
+          .innerJoin(animals, eq(animals.id, coTable.animalId))
+          .where(and(
+            eq(coTable.tenantId, req.tenant!.id),
+            eq(coTable.obligationType, 'spay_neuter'),
+            eq(coTable.status, 'pending'),
+            isNull(coTable.proofDocumentUrl),
+            ltOp(coTable.contractualDueDate, new Date().toISOString().split('T')[0]),
+          ))
+          .limit(10),
       ]);
+
+      const spayNeuterOverdue = spayNeuterOverdueRaw.map(o => ({
+        ...o,
+        daysOverdue: Math.floor((Date.now() - new Date(o.contractualDueDate).getTime()) / 86400000),
+      }));
 
       res.json({
         today: {
@@ -4297,6 +4324,7 @@ Crawl-delay: 1
           fosterBioPhotoFollowUps,
           adopterConfirmationsPendingReview: pendingConfirmationsRaw,
           adopterObligationsPendingReview: pendingObligationsRaw,
+          spayNeuterOverdue,
         },
         tomorrow: {
           surgeries: surgeriesTomorrow,

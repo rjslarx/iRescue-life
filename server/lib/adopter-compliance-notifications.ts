@@ -8,8 +8,12 @@ import {
   adopterMedicationReminders,
   adopterNotificationPreferences,
   adopterNotificationLogs,
+  complianceObligations,
+  vaccineRecords,
+  adoptions,
+  smsMessageLogs,
 } from '@shared/schema';
-import { eq, and, lte, sql, desc, isNull } from 'drizzle-orm';
+import { eq, and, lte, sql, desc, isNull, gte, lt, isNotNull, like } from 'drizzle-orm';
 import { EmailService } from './email-service';
 import { sendSms } from './twilio-service';
 
@@ -469,4 +473,225 @@ export async function runAdopterComplianceForAllTenants(): Promise<{
     totalSmsSent,
     errors,
   };
+}
+
+// ─── T003: Spay/Neuter 14-Day Warning SMS ───────────────────────────────────
+
+export async function sendSpayNeuterWarnings(tenantId: string): Promise<{ sent: number; errors: string[] }> {
+  const result = { sent: 0, errors: [] as string[] };
+
+  try {
+    const today = new Date();
+    const warningStart = new Date(today);
+    warningStart.setDate(warningStart.getDate() + 14);
+    warningStart.setHours(0, 0, 0, 0);
+    const warningEnd = new Date(warningStart);
+    warningEnd.setHours(23, 59, 59, 999);
+
+    // contractualDueDate is stored as text (ISO date string) — compare lexicographically
+    const warningStartStr = warningStart.toISOString().split('T')[0];
+    const warningEndStr = warningEnd.toISOString().split('T')[0];
+
+    const obligations = await db
+      .select({
+        id: complianceObligations.id,
+        animalId: complianceObligations.animalId,
+        adopterName: complianceObligations.adopterName,
+        adopterPhone: complianceObligations.adopterPhone,
+        contractualDueDate: complianceObligations.contractualDueDate,
+        animalName: animals.name,
+      })
+      .from(complianceObligations)
+      .innerJoin(animals, eq(animals.id, complianceObligations.animalId))
+      .where(and(
+        eq(complianceObligations.tenantId, tenantId),
+        eq(complianceObligations.obligationType, 'spay_neuter'),
+        eq(complianceObligations.status, 'pending'),
+        gte(complianceObligations.contractualDueDate, warningStartStr),
+        lte(complianceObligations.contractualDueDate, warningEndStr),
+      ));
+
+    const [tenantRecord] = await db
+      .select({ subdomain: tenants.subdomain, customDomain: tenants.customDomain })
+      .from(tenants)
+      .where(eq(tenants.id, tenantId))
+      .limit(1);
+
+    for (const obligation of obligations) {
+      if (!obligation.adopterPhone) continue;
+
+      try {
+        // Dedup: skip if we sent a spay/neuter warning to this number in last 3 days
+        const threeDaysAgo = new Date();
+        threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+
+        const recentLog = await db
+          .select({ id: smsMessageLogs.id })
+          .from(smsMessageLogs)
+          .where(and(
+            eq(smsMessageLogs.tenantId, tenantId),
+            eq(smsMessageLogs.direction, 'outbound'),
+            eq(smsMessageLogs.toNumber, obligation.adopterPhone),
+            gte(smsMessageLogs.createdAt, threeDaysAgo),
+            like(smsMessageLogs.body, `%${obligation.animalName}%`),
+            like(smsMessageLogs.body, '%spay/neuter%'),
+          ))
+          .limit(1);
+
+        if (recentLog.length > 0) continue;
+
+        const portalUrl = tenantRecord
+          ? buildPortalUrl(tenantRecord, '/my-pets')
+          : 'https://irescue.life/my-pets';
+
+        const firstName = obligation.adopterName.split(' ')[0];
+        const formattedDate = new Date(obligation.contractualDueDate).toLocaleDateString('en-US', {
+          month: 'long', day: 'numeric', year: 'numeric',
+        });
+
+        const message = `Hi ${firstName}! A reminder from the rescue that ${obligation.animalName}'s spay/neuter procedure is required by ${formattedDate}. Please upload a photo of your vet receipt in your Adopter Portal: ${portalUrl}`;
+
+        await sendSms(tenantId, obligation.adopterPhone, message, 'reminder', {
+          relatedAnimalId: obligation.animalId,
+        });
+
+        result.sent++;
+        console.log(`[SpayNeuterWarning] Sent 14-day SMS to ${obligation.adopterPhone} for ${obligation.animalName}`);
+      } catch (err) {
+        result.errors.push(`Obligation ${obligation.id}: ${err instanceof Error ? err.message : 'Unknown'}`);
+      }
+    }
+  } catch (err) {
+    result.errors.push(`Tenant ${tenantId}: ${err instanceof Error ? err.message : 'Unknown'}`);
+  }
+
+  return result;
+}
+
+export async function sendSpayNeuterWarningsForAllTenants(): Promise<{ sent: number; errors: string[] }> {
+  const activeTenants = await db
+    .select({ id: tenants.id })
+    .from(tenants)
+    .where(eq(tenants.isActive, true));
+
+  let totalSent = 0;
+  const allErrors: string[] = [];
+
+  for (const tenant of activeTenants) {
+    try {
+      const r = await sendSpayNeuterWarnings(tenant.id);
+      totalSent += r.sent;
+      allErrors.push(...r.errors);
+    } catch (err) {
+      allErrors.push(`Tenant ${tenant.id}: ${err instanceof Error ? err.message : 'Unknown'}`);
+    }
+  }
+
+  return { sent: totalSent, errors: allErrors };
+}
+
+// ─── T005: Annual Vaccine Planning Reminder SMS (11-month mark) ─────────────
+
+export async function sendAnnualVaccineReminders(tenantId: string): Promise<{ sent: number; errors: string[] }> {
+  const result = { sent: 0, errors: [] as string[] };
+
+  try {
+    const today = new Date();
+    // 30-day lookahead window centered on 11 months after a 1-year vaccine was given
+    const dueStart = new Date(today);
+    dueStart.setDate(dueStart.getDate() + 25);
+    dueStart.setHours(0, 0, 0, 0);
+    const dueEnd = new Date(today);
+    dueEnd.setDate(dueEnd.getDate() + 35);
+    dueEnd.setHours(23, 59, 59, 999);
+
+    // Find 1-year vaccines due in the window for adopted animals
+    const dueVaccines = await db
+      .select({
+        vaccineId: vaccineRecords.id,
+        animalId: vaccineRecords.animalId,
+        itemName: vaccineRecords.itemName,
+        dateDue: vaccineRecords.dateDue,
+        animalName: animals.name,
+        adopterName: adoptions.adopterName,
+        adopterPhone: adoptions.adopterPhone,
+        adopterEmail: adoptions.adopterEmail,
+      })
+      .from(vaccineRecords)
+      .innerJoin(animals, and(
+        eq(animals.id, vaccineRecords.animalId),
+        eq(animals.status, 'adopted'),
+      ))
+      .innerJoin(adoptions, eq(adoptions.animalId, vaccineRecords.animalId))
+      .where(and(
+        eq(vaccineRecords.tenantId, tenantId),
+        eq(vaccineRecords.validDurationMonths, 12),
+        isNotNull(vaccineRecords.dateDue),
+        gte(vaccineRecords.dateDue, dueStart),
+        lte(vaccineRecords.dateDue, dueEnd),
+      ));
+
+    for (const vaccine of dueVaccines) {
+      if (!vaccine.adopterPhone) continue;
+
+      try {
+        // Dedup: skip if we sent an annual vaccine reminder to this phone in last 20 days
+        const twentyDaysAgo = new Date();
+        twentyDaysAgo.setDate(twentyDaysAgo.getDate() - 20);
+
+        const recentLog = await db
+          .select({ id: smsMessageLogs.id })
+          .from(smsMessageLogs)
+          .where(and(
+            eq(smsMessageLogs.tenantId, tenantId),
+            eq(smsMessageLogs.direction, 'outbound'),
+            eq(smsMessageLogs.toNumber, vaccine.adopterPhone),
+            gte(smsMessageLogs.createdAt, twentyDaysAgo),
+            like(smsMessageLogs.body, `%${vaccine.animalName}%`),
+            like(smsMessageLogs.body, '%annual vet%'),
+          ))
+          .limit(1);
+
+        if (recentLog.length > 0) continue;
+
+        const firstName = vaccine.adopterName.split(' ')[0];
+        const message = `Hi ${firstName}! It's been almost a year since ${vaccine.animalName} was adopted. This is a friendly reminder that they'll be due for their annual vet checkup and vaccines next month! Please schedule an appointment with your vet soon.`;
+
+        await sendSms(tenantId, vaccine.adopterPhone, message, 'reminder', {
+          relatedAnimalId: vaccine.animalId,
+        });
+
+        result.sent++;
+        console.log(`[AnnualVaccine] Sent reminder to ${vaccine.adopterPhone} for ${vaccine.animalName}`);
+      } catch (err) {
+        result.errors.push(`Vaccine ${vaccine.vaccineId}: ${err instanceof Error ? err.message : 'Unknown'}`);
+      }
+    }
+  } catch (err) {
+    result.errors.push(`Tenant ${tenantId}: ${err instanceof Error ? err.message : 'Unknown'}`);
+  }
+
+  return result;
+}
+
+export async function sendAnnualVaccineRemindersForAllTenants(): Promise<{ sent: number; errors: string[] }> {
+  const activeTenants = await db
+    .select({ id: tenants.id })
+    .from(tenants)
+    .where(eq(tenants.isActive, true));
+
+  let totalSent = 0;
+  const allErrors: string[] = [];
+
+  for (const tenant of activeTenants) {
+    try {
+      const r = await sendAnnualVaccineReminders(tenant.id);
+      totalSent += r.sent;
+      allErrors.push(...r.errors);
+    } catch (err) {
+      allErrors.push(`Tenant ${tenant.id}: ${err instanceof Error ? err.message : 'Unknown'}`);
+    }
+  }
+
+  return { sent: totalSent, errors: allErrors };
 }

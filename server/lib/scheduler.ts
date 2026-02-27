@@ -438,12 +438,28 @@ export function initializeScheduler() {
   cron.schedule(adopterComplianceSchedule, async () => {
     console.log("Running adopter compliance notifications job...");
     try {
-      const { runAdopterComplianceForAllTenants } = await import("./adopter-compliance-notifications");
+      const {
+        runAdopterComplianceForAllTenants,
+        sendSpayNeuterWarningsForAllTenants,
+        sendAnnualVaccineRemindersForAllTenants,
+      } = await import("./adopter-compliance-notifications");
+
+      // 1. Core vaccine/preventative compliance reminders
       const result = await runAdopterComplianceForAllTenants();
       console.log(`Adopter compliance: ${result.tenantsProcessed} tenants, ${result.totalEmailsSent} emails, ${result.totalSmsSent} SMS sent`);
       if (result.errors.length > 0) {
         console.warn(`Adopter compliance errors: ${result.errors.slice(0, 5).join('; ')}${result.errors.length > 5 ? ` (+${result.errors.length - 5} more)` : ''}`);
       }
+
+      // 2. Spay/Neuter 14-day warning SMS
+      const snResult = await sendSpayNeuterWarningsForAllTenants();
+      if (snResult.sent > 0) console.log(`✓ Spay/neuter warnings: ${snResult.sent} SMS sent`);
+      if (snResult.errors.length > 0) console.warn(`Spay/neuter warning errors: ${snResult.errors.slice(0, 3).join('; ')}`);
+
+      // 3. Annual vaccine planning reminder SMS (11-month mark)
+      const avResult = await sendAnnualVaccineRemindersForAllTenants();
+      if (avResult.sent > 0) console.log(`✓ Annual vaccine reminders: ${avResult.sent} SMS sent`);
+      if (avResult.errors.length > 0) console.warn(`Annual vaccine reminder errors: ${avResult.errors.slice(0, 3).join('; ')}`);
     } catch (error) {
       console.error(`Adopter compliance notifications failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
