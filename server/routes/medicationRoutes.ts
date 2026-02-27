@@ -24,7 +24,7 @@ router.post('/plans', requireAuth, requireStaff, async (req: Request, res: Respo
   try {
     const tenantId = req.tenant!.id;
     const userId = req.user!.id;
-    const { animalId, drugName, dosage, frequency, instructions, startDate, endDate, active } = req.body;
+    const { animalId, drugName, dosage, frequency, instructions, startDate, endDate, active, smsReminder } = req.body;
 
     if (!animalId || !drugName || !dosage || !frequency || !startDate || !endDate) {
       return res.status(400).json({ error: 'Missing required fields: animalId, drugName, dosage, frequency, startDate, endDate' });
@@ -48,6 +48,7 @@ router.post('/plans', requireAuth, requireStaff, async (req: Request, res: Respo
         startDate,
         endDate,
         active: active !== undefined ? active : true,
+        smsReminder: smsReminder !== undefined ? smsReminder : true,
       })
       .returning();
 
@@ -97,7 +98,7 @@ router.patch('/plans/:planId', requireAuth, requireStaff, async (req: Request, r
   try {
     const tenantId = req.tenant!.id;
     const { planId } = req.params;
-    const { drugName, dosage, frequency, instructions, startDate, endDate, active } = req.body;
+    const { drugName, dosage, frequency, instructions, startDate, endDate, active, smsReminder } = req.body;
 
     const [existingPlan] = await db
       .select()
@@ -131,6 +132,7 @@ router.patch('/plans/:planId', requireAuth, requireStaff, async (req: Request, r
     if (startDate !== undefined) updateData.startDate = startDate;
     if (endDate !== undefined) updateData.endDate = endDate;
     if (active !== undefined) updateData.active = active;
+    if (smsReminder !== undefined) updateData.smsReminder = smsReminder;
 
     const [updatedPlan] = await db
       .update(medicationPlans)

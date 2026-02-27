@@ -2594,6 +2594,7 @@ Crawl-delay: 1
         email: z.string().email().optional(),
         currentPassword: z.string().optional(),
         newPassword: z.string().min(8).optional(),
+        dailySmsOptIn: z.boolean().optional(),
       }).refine(data => {
         if (data.newPassword && !data.currentPassword) {
           return false;
@@ -2640,6 +2641,7 @@ Crawl-delay: 1
       if (data.newPassword) {
         updateFields.passwordHash = await bcrypt.hash(data.newPassword, 10);
       }
+      if (data.dailySmsOptIn !== undefined) updateFields.dailySmsOptIn = data.dailySmsOptIn;
 
       if (Object.keys(updateFields).length === 0) {
         return res.status(400).json({ error: 'No fields to update' });
@@ -2653,6 +2655,7 @@ Crawl-delay: 1
           email: users.email,
           phone: users.phone,
           fullName: users.fullName,
+          dailySmsOptIn: users.dailySmsOptIn,
         });
 
       res.json({ user: updated, message: 'Profile updated successfully' });
@@ -5157,6 +5160,7 @@ Crawl-delay: 1
           phone: sql<string | null>`COALESCE(${users.phone}, ${contacts.phone})`,
           createdAt: users.createdAt,
           smsOptIn: users.smsOptIn,
+          dailySmsOptIn: users.dailySmsOptIn,
           hasPushSubscription: sql<boolean>`EXISTS (
             SELECT 1 FROM push_subscriptions ps 
             WHERE ps.user_id = ${users.id} 
@@ -5334,6 +5338,46 @@ Crawl-delay: 1
         });
       } catch (auditErr) {
         console.error('Failed to create audit log:', auditErr);
+      }
+
+      res.json({ success: true, user: updatedUser });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * PATCH /api/users/:id/sms-prefs
+   * Update a user's SMS notification preferences (admin/owner only)
+   * Used by Team Management to toggle dailySmsOptIn for foster users
+   */
+  app.patch('/api/users/:id/sms-prefs', requireTenant, requireAuth, requireRole('owner', 'admin'), async (req, res, next) => {
+    try {
+      const { users } = await import('@shared/schema');
+      const updateSchema = z.object({
+        dailySmsOptIn: z.boolean(),
+      });
+      const data = updateSchema.parse(req.body);
+
+      const [updatedUser] = await db
+        .update(users)
+        .set({ dailySmsOptIn: data.dailySmsOptIn })
+        .where(
+          and(
+            eq(users.id, req.params.id),
+            eq(users.tenantId, req.tenant!.id)
+          )
+        )
+        .returning({
+          id: users.id,
+          email: users.email,
+          fullName: users.fullName,
+          roles: users.roles,
+          dailySmsOptIn: users.dailySmsOptIn,
+        });
+
+      if (!updatedUser) {
+        return res.status(404).json({ error: 'User not found' });
       }
 
       res.json({ success: true, user: updatedUser });

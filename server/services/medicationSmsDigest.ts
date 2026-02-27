@@ -85,10 +85,11 @@ export async function sendMedicationDigestForTenant(tenantId: string): Promise<{
 
     const planIds = [...new Set(dueTasks.map(t => t.planId))];
     const plans = await db
-      .select({ id: medicationPlans.id, drugName: medicationPlans.drugName })
+      .select({ id: medicationPlans.id, drugName: medicationPlans.drugName, smsReminder: medicationPlans.smsReminder })
       .from(medicationPlans)
       .where(inArray(medicationPlans.id, planIds));
     const planMap = new Map(plans.map(p => [p.id, p.drugName]));
+    const planSmsMap = new Map(plans.map(p => [p.id, p.smsReminder]));
 
     const animalIds = [...new Set(dueTasks.map(t => t.animalId))];
     const animalRows = await db
@@ -99,7 +100,7 @@ export async function sendMedicationDigestForTenant(tenantId: string): Promise<{
 
     const fosterIds = [...new Set(activeFosters.filter(f => fosterAnimalIds.includes(f.animalId)).map(f => f.fosterId))];
     const fosterRows = await db
-      .select({ id: users.id, fullName: users.fullName, phone: users.phone })
+      .select({ id: users.id, fullName: users.fullName, phone: users.phone, dailySmsOptIn: users.dailySmsOptIn })
       .from(users)
       .where(inArray(users.id, fosterIds));
     const fosterMap = new Map(fosterRows.map(f => [f.id, f]));
@@ -107,6 +108,9 @@ export async function sendMedicationDigestForTenant(tenantId: string): Promise<{
     const batchesByFoster = new Map<string, FosterBatch>();
 
     for (const task of dueTasks) {
+      // Skip tasks from plans that have SMS reminders disabled
+      if (planSmsMap.get(task.planId) === false) continue;
+
       const fosterId = fosterByAnimal.get(task.animalId);
       if (!fosterId) continue;
 
@@ -140,6 +144,13 @@ export async function sendMedicationDigestForTenant(tenantId: string): Promise<{
     }
 
     for (const [fosterId, fosterBatch] of batchesByFoster.entries()) {
+      // Skip fosters who have opted out of daily medication SMS reminders
+      const fosterUser = fosterMap.get(fosterId);
+      if (fosterUser?.dailySmsOptIn === false) continue;
+
+      // Skip if the batch has no animals after smsReminder filtering
+      if (fosterBatch.animals.size === 0) continue;
+
       const message = composeDigestMessage(fosterBatch.fosterFirstName, fosterBatch.animals).substring(0, 160);
       const allTaskIds = Array.from(fosterBatch.animals.values()).flatMap(b => b.taskIds);
 

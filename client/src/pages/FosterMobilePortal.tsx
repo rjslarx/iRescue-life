@@ -15,7 +15,8 @@ import QuickPhotoUpload from "@/components/QuickPhotoUpload";
 import SupplyRequestDialog from "@/components/SupplyRequestDialog";
 import FosterUpdateDialog from "@/components/FosterUpdateDialog";
 import type { Animal, RescueContact } from "@shared/schema";
-import { Home, Heart, Package, User, Camera, Pill, Phone, AlertCircle, Check, X, Clock, ChevronRight, ArrowRight } from "lucide-react";
+import { Home, Heart, Package, User, Camera, Pill, Phone, AlertCircle, Check, X, Clock, ChevronRight, ArrowRight, Bell } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { formatDistanceToNow } from "date-fns";
 
 interface MedTask {
@@ -49,6 +50,7 @@ export default function FosterMobilePortal() {
   const [showFosterUpdate, setShowFosterUpdate] = useState(false);
   const [skipReasonTaskId, setSkipReasonTaskId] = useState<string | null>(null);
   const [skipReasonText, setSkipReasonText] = useState("");
+  const [dailySmsOptIn, setDailySmsOptIn] = useState<boolean | null>(null);
 
   const { activeFosters, activeAnimals, isLoading: fostersLoading } = useFosterAnimals();
 
@@ -74,6 +76,20 @@ export default function FosterMobilePortal() {
     },
     onError: (err: any) => {
       toast({ title: "Error", description: err.message || "Failed to update task", variant: "destructive" });
+    },
+  });
+
+  const dailySmsMutation = useMutation({
+    mutationFn: async (newValue: boolean) => {
+      const res = await apiRequest("PATCH", "/api/me/profile", { dailySmsOptIn: newValue });
+      return res.json();
+    },
+    onSuccess: (_data, newValue) => {
+      setDailySmsOptIn(newValue);
+      toast({ title: newValue ? "Daily medication SMS enabled" : "Daily medication SMS disabled" });
+    },
+    onError: () => {
+      toast({ title: "Failed to update preference", variant: "destructive" });
     },
   });
 
@@ -431,6 +447,31 @@ export default function FosterMobilePortal() {
           </CardContent>
         </Card>
       )}
+
+      <Card data-testid="card-notification-prefs">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Bell className="h-4 w-4" />
+            Notification Preferences
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-4 pt-0">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex-1">
+              <p className="text-sm font-medium">Daily Medication Reminders</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                SMS alerts when medications are due. Appointment reminders always sent.
+              </p>
+            </div>
+            <Switch
+              checked={dailySmsOptIn ?? (user?.dailySmsOptIn ?? true)}
+              onCheckedChange={(v) => dailySmsMutation.mutate(v)}
+              disabled={dailySmsMutation.isPending}
+              data-testid="switch-daily-sms"
+            />
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 

@@ -41,6 +41,9 @@ declare global {
         roles: string[]; // All roles the user has
         activeRole: string; // The role they're currently using
         tenantId: string;
+        phone?: string | null;
+        smsOptIn?: boolean;
+        dailySmsOptIn?: boolean;
       };
       // Impersonation context for UI
       impersonation?: {
@@ -149,6 +152,9 @@ export async function authenticateUser(req: Request, res: Response, next: NextFu
             fullName: users.fullName,
             roles: users.roles,
             tenantId: users.tenantId,
+            phone: users.phone,
+            smsOptIn: users.smsOptIn,
+            dailySmsOptIn: users.dailySmsOptIn,
           })
           .from(users)
           .where(and(

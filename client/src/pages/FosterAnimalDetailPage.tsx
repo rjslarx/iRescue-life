@@ -30,8 +30,14 @@ import {
   Send,
   Download,
   ClipboardCheck,
-  ShieldCheck
+  ShieldCheck,
+  Pill,
+  BellOff,
+  Bell,
+  Pencil,
 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Tooltip as UITooltip, TooltipContent as UITooltipContent, TooltipTrigger as UITooltipTrigger } from "@/components/ui/tooltip";
 import { format, formatDistanceToNow } from "date-fns";
 import {
   LineChart,
@@ -139,12 +145,13 @@ export default function FosterAnimalDetailPage() {
       </Card>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className="grid w-full grid-cols-7">
           <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
           <TabsTrigger value="bio" data-testid="tab-bio">Bio Builder</TabsTrigger>
           <TabsTrigger value="photos" data-testid="tab-photos">Photos</TabsTrigger>
           <TabsTrigger value="weight" data-testid="tab-weight">Weight</TabsTrigger>
           <TabsTrigger value="notes" data-testid="tab-notes">Notes</TabsTrigger>
+          <TabsTrigger value="medications" data-testid="tab-medications">Meds</TabsTrigger>
           <TabsTrigger value="agreement" data-testid="tab-agreement">Agreement</TabsTrigger>
         </TabsList>
 
@@ -154,6 +161,10 @@ export default function FosterAnimalDetailPage() {
 
         <TabsContent value="bio">
           <BioBuilderTab animalId={animalId!} animalName={animal.name} />
+        </TabsContent>
+
+        <TabsContent value="medications">
+          <MedicationPlansTab animalId={animalId!} animalName={animal.name} />
         </TabsContent>
 
         <TabsContent value="photos">
@@ -1029,6 +1040,205 @@ function PlacementAgreementTab({ animalId, animalName }: { animalId: string; ani
           </Card>
         );
       })}
+    </div>
+  );
+}
+
+interface MedPlan {
+  id: string;
+  drugName: string;
+  dosage: string;
+  frequency: string;
+  instructions: string | null;
+  startDate: string;
+  endDate: string;
+  active: boolean;
+  smsReminder: boolean;
+  createdAt: string;
+}
+
+function MedicationPlansTab({ animalId, animalName }: { animalId: string; animalName: string }) {
+  const { toast } = useToast();
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [planForm, setPlanForm] = useState({
+    drugName: "",
+    dosage: "",
+    frequency: "SID" as "SID" | "BID" | "TID" | "QID",
+    instructions: "",
+    startDate: new Date().toISOString().split("T")[0],
+    endDate: "",
+    smsReminder: true,
+  });
+
+  const { data: plans = [], isLoading, refetch } = useQuery<MedPlan[]>({
+    queryKey: ["/api/medications/plans", animalId],
+    queryFn: () => fetch(`/api/medications/plans/${animalId}`, { credentials: "include" }).then(r => r.json()),
+    enabled: !!animalId,
+  });
+
+  const toggleSmsReminder = async (plan: MedPlan) => {
+    try {
+      await apiRequest("PATCH", `/api/medications/plans/${plan.id}`, { smsReminder: !plan.smsReminder });
+      await refetch();
+      toast({ title: plan.smsReminder ? "SMS reminders disabled" : "SMS reminders enabled" });
+    } catch {
+      toast({ title: "Failed to update", variant: "destructive" });
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!planForm.drugName || !planForm.dosage || !planForm.startDate || !planForm.endDate) {
+      toast({ title: "Please fill all required fields", variant: "destructive" });
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await apiRequest("POST", "/api/medications/plans", { animalId, ...planForm });
+      toast({ title: "Medication plan created" });
+      setDialogOpen(false);
+      setPlanForm({ drugName: "", dosage: "", frequency: "SID", instructions: "", startDate: new Date().toISOString().split("T")[0], endDate: "", smsReminder: true });
+      await refetch();
+    } catch {
+      toast({ title: "Failed to create plan", variant: "destructive" });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const freqLabel: Record<string, string> = { SID: "Once daily", BID: "Twice daily", TID: "3x daily", QID: "4x daily" };
+
+  return (
+    <div className="space-y-4 pt-2">
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-2">
+              <Pill className="h-5 w-5" />
+              <div>
+                <CardTitle>Medication Plans</CardTitle>
+                <CardDescription>Scheduled medications for foster task tracking & SMS reminders</CardDescription>
+              </div>
+            </div>
+            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" className="gap-2" data-testid="button-new-plan">
+                  <Plus className="h-4 w-4" />
+                  New Plan
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>New Medication Plan — {animalName}</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="plan-drugName">Drug Name *</Label>
+                    <Input id="plan-drugName" data-testid="input-drug-name" value={planForm.drugName} onChange={e => setPlanForm(f => ({ ...f, drugName: e.target.value }))} placeholder="e.g. Amoxicillin 250mg" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="plan-dosage">Dosage *</Label>
+                    <Input id="plan-dosage" data-testid="input-dosage" value={planForm.dosage} onChange={e => setPlanForm(f => ({ ...f, dosage: e.target.value }))} placeholder="e.g. 1 tablet" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Frequency *</Label>
+                    <Select value={planForm.frequency} onValueChange={(v: "SID" | "BID" | "TID" | "QID") => setPlanForm(f => ({ ...f, frequency: v }))}>
+                      <SelectTrigger data-testid="select-frequency">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="SID">SID — Once daily</SelectItem>
+                        <SelectItem value="BID">BID — Twice daily</SelectItem>
+                        <SelectItem value="TID">TID — 3× daily</SelectItem>
+                        <SelectItem value="QID">QID — 4× daily</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="plan-startDate">Start Date *</Label>
+                      <Input id="plan-startDate" type="date" data-testid="input-start-date" value={planForm.startDate} onChange={e => setPlanForm(f => ({ ...f, startDate: e.target.value }))} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="plan-endDate">End Date *</Label>
+                      <Input id="plan-endDate" type="date" data-testid="input-end-date" value={planForm.endDate} onChange={e => setPlanForm(f => ({ ...f, endDate: e.target.value }))} />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="plan-instructions">Instructions</Label>
+                    <Textarea id="plan-instructions" data-testid="input-instructions" value={planForm.instructions} onChange={e => setPlanForm(f => ({ ...f, instructions: e.target.value }))} placeholder="e.g. Give with food" rows={2} />
+                  </div>
+                  <div className="flex items-center justify-between rounded-md border p-3">
+                    <div>
+                      <p className="text-sm font-medium">Send SMS Reminder</p>
+                      <p className="text-xs text-muted-foreground">Foster receives hourly SMS when this medication is due</p>
+                    </div>
+                    <Switch
+                      checked={planForm.smsReminder}
+                      onCheckedChange={v => setPlanForm(f => ({ ...f, smsReminder: v }))}
+                      data-testid="switch-sms-reminder"
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+                    <Button type="submit" disabled={submitting} data-testid="button-submit-plan">
+                      {submitting ? "Creating..." : "Create Plan"}
+                    </Button>
+                  </div>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : plans.length === 0 ? (
+            <div className="text-center py-10 text-muted-foreground">
+              <Pill className="h-10 w-10 mx-auto mb-3 opacity-30" />
+              <p className="text-sm">No medication plans yet. Click "New Plan" to create one.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {plans.map(plan => (
+                <div key={plan.id} className="flex items-center gap-3 p-3 border rounded-md" data-testid={`plan-${plan.id}`}>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-medium text-sm">{plan.drugName}</p>
+                      <Badge variant="outline" className="text-xs">{freqLabel[plan.frequency] || plan.frequency}</Badge>
+                      {!plan.active && <Badge variant="secondary" className="text-xs">Inactive</Badge>}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">{plan.dosage} · {plan.startDate} → {plan.endDate}</p>
+                    {plan.instructions && <p className="text-xs text-muted-foreground mt-0.5 italic">{plan.instructions}</p>}
+                  </div>
+                  <UITooltip>
+                    <UITooltipTrigger asChild>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => toggleSmsReminder(plan)}
+                        data-testid={`button-toggle-sms-${plan.id}`}
+                        className={plan.smsReminder ? "" : "text-muted-foreground"}
+                      >
+                        {plan.smsReminder
+                          ? <Bell className="h-4 w-4" />
+                          : <BellOff className="h-4 w-4" data-testid={`icon-no-sms-${plan.id}`} />
+                        }
+                      </Button>
+                    </UITooltipTrigger>
+                    <UITooltipContent>
+                      {plan.smsReminder ? "SMS reminders on — click to disable" : "SMS reminders off — click to enable"}
+                    </UITooltipContent>
+                  </UITooltip>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

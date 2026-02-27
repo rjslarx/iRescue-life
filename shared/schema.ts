@@ -324,6 +324,7 @@ export const users = pgTable("users", {
   // SMS notification preferences
   smsOptIn: boolean("sms_opt_in").notNull().default(false), // User opted in to SMS notifications
   smsOptOutAt: timestamp("sms_opt_out_at"), // When they opted out (if STOP received)
+  dailySmsOptIn: boolean("daily_sms_opt_in").notNull().default(true), // Foster daily medication SMS digest opt-in
   // Foster profile fields (for smart matching)
   fosterStatus: text("foster_status").$type<"active" | "on_break" | "full">(), // Foster availability status
   hasCats: boolean("has_cats"), // Foster home has cats
@@ -5568,6 +5569,7 @@ export const medicationPlans = pgTable("medication_plans", {
   startDate: date("start_date").notNull(),
   endDate: date("end_date").notNull(),
   active: boolean("active").notNull().default(true),
+  smsReminder: boolean("sms_reminder").notNull().default(true), // Send hourly SMS reminders to foster for this plan
   tasksGenerated: boolean("tasks_generated").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),

@@ -40,6 +40,7 @@ import {
 } from "@/components/ui/table";
 import { Loader2, UserPlus, Shield, Users as UsersIcon, Trash2, Mail, Clock, Send, Pencil, UserCheck, Copy, KeyRound, Bell, BellOff, MessageSquare, Smartphone } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Switch } from "@/components/ui/switch";
 import { UserPagePermissionsManager } from "@/components/UserPagePermissionsManager";
 
 interface User {
@@ -49,6 +50,7 @@ interface User {
   roles: Array<"owner" | "admin" | "board_member" | "staff" | "foster" | "volunteer">;
   createdAt: Date;
   smsOptIn: boolean;
+  dailySmsOptIn: boolean;
   hasPushSubscription: boolean;
 }
 
@@ -261,6 +263,20 @@ export default function TeamManagementPage() {
         description: error.message,
         variant: "destructive",
       });
+    },
+  });
+
+  const toggleDailySmsMutation = useMutation({
+    mutationFn: async ({ userId, dailySmsOptIn }: { userId: string; dailySmsOptIn: boolean }) => {
+      const response = await apiRequest("PATCH", `/api/users/${userId}/sms-prefs`, { dailySmsOptIn });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      toast({ title: "Daily SMS preference updated" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to update preference", description: error.message, variant: "destructive" });
     },
   });
 
@@ -816,6 +832,21 @@ export default function TeamManagementPage() {
                                   : "No notifications"}
                               </span>
                             </div>
+                            {user.roles.includes("foster") && (
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className="text-xs text-muted-foreground">
+                                  Daily medication SMS:
+                                </span>
+                                <Switch
+                                  checked={user.dailySmsOptIn}
+                                  onCheckedChange={(v) => toggleDailySmsMutation.mutate({ userId: user.id, dailySmsOptIn: v })}
+                                  data-testid={`switch-daily-sms-${user.id}`}
+                                />
+                                <span className="text-xs text-muted-foreground">
+                                  {user.dailySmsOptIn ? "On" : "Off"}
+                                </span>
+                              </div>
+                            )}
                             <p className="text-xs text-muted-foreground mt-2">Joined {formatDate(user.createdAt)}</p>
                           </div>
                           <div className="flex gap-2 shrink-0">
@@ -1010,6 +1041,17 @@ export default function TeamManagementPage() {
                                     </TooltipContent>
                                   </Tooltip>
                                 </div>
+                                {user.roles.includes("foster") && (
+                                  <div className="flex items-center gap-2 mt-1">
+                                    <span className="text-xs text-muted-foreground">Daily med SMS:</span>
+                                    <Switch
+                                      checked={user.dailySmsOptIn}
+                                      onCheckedChange={(v) => toggleDailySmsMutation.mutate({ userId: user.id, dailySmsOptIn: v })}
+                                      data-testid={`switch-daily-sms-${user.id}`}
+                                    />
+                                    <span className="text-xs text-muted-foreground">{user.dailySmsOptIn ? "On" : "Off"}</span>
+                                  </div>
+                                )}
                               </TableCell>
                               <TableCell>{formatDate(user.createdAt)}</TableCell>
                               <TableCell>
