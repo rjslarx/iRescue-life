@@ -1,0 +1,37 @@
+ADOPTER NOTIFICATIONS (The Compliance Engine)
+Adopters do not need daily pestering. Their notifications should be focused on immediate access to records, legally required compliance, and retention (making sure the adoption doesn't fail).
+
+1. The Welcome & Digital Vault (Actionable)
+
+Trigger: The moment the Adoption Contract is marked signed / completed.
+
+Template: "Congratulations on adopting [Animal Name]! 🎉 Tap here to access your Adopter Portal to view your digital adoption packet, vaccine records, and microchip info: [Magic Link]"
+
+System Action: Logs the user in without a password to view the portal we mapped out earlier.
+
+2. The Spay/Neuter Compliance Warning (Actionable)
+
+Trigger: 14 days before the spay_neuter_due_date stored in the adopter_compliance table.
+
+Template: "Hi [Adopter Name]! A quick reminder from the rescue that [Animal Name]'s spay/neuter procedure is required by [Date]. Please tap here to upload a photo of your vet receipt: [Portal Link]"
+
+System Action: If no upload happens by the due date, this triggers an Urgent Red Alert on the Shelter Manager's Daily Briefing widget.
+
+3. The "3-3-3 Rule" Check-Ins (Informational & Retention)
+
+Context: The 3-3-3 rule is the standard decompression timeline for rescue dogs (3 days, 3 weeks, 3 months). Reaching out automatically prevents returns.
+
+Trigger 1 (Day 3): "Hi [Adopter Name]! It's been 3 days! [Animal Name] is likely feeling overwhelmed as they decompress. Remember to keep things quiet and positive. Need advice? Reply HELP to speak with our coordinator."
+
+Trigger 2 (Week 3): "Happy 3 Weeks! [Animal Name] should be settling into your routine now. We'd love to see a photo of them at home! Reply with a pic!"
+
+Trigger 3 (Month 3): "Happy 3 Month Rescue Anniversary to [Animal Name]! Thank you for giving them a forever home! 🐾"
+
+4. The Annual Vaccine Reminder (Informational)
+
+Trigger: 11 months after the animal's last known 1-Year Rabies or DHPP vaccine.
+
+Template: "Hi [Adopter Name]! It's been almost a year since you adopted [Animal Name]. This is a friendly reminder that they will be due for their annual vet checkup and vaccines next month!"
+
+The Replit Implementation Strategy
+If you feed this list to your Replit Agent, you can instruct it to build a single Cron Job Service (a scheduled task that runs once every morning at 8:00 AM). The agent will write a script that scans the database, matches these exact triggers, and pushes the payloads to Twilio all at once.
