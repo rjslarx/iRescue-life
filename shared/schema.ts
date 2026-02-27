@@ -5111,6 +5111,50 @@ export const insertEventTicketSchema = createInsertSchema(eventTickets).omit({
 export type InsertEventTicket = z.infer<typeof insertEventTicketSchema>;
 export type EventTicket = typeof eventTickets.$inferSelect;
 
+// ===== FUNDRAISER EVENTS =====
+// Inventory-capped fundraiser sales (e.g. Poboy Sales, BBQ plates, event tickets with pickup)
+export const fundraiserEvents = pgTable("fundraiser_events", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  title: text("title").notNull(),
+  description: text("description"),
+  priceCents: integer("price_cents").notNull(),
+  inventoryCap: integer("inventory_cap"), // null = unlimited
+  pickupTimes: text("pickup_times").array().notNull().default([]),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertFundraiserEventSchema = createInsertSchema(fundraiserEvents).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertFundraiserEvent = z.infer<typeof insertFundraiserEventSchema>;
+export type FundraiserEvent = typeof fundraiserEvents.$inferSelect;
+
+// ===== FUNDRAISER ORDERS =====
+// Orders placed by customers for fundraiser events
+export const fundraiserOrders = pgTable("fundraiser_orders", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  eventId: uuid("event_id").notNull().references(() => fundraiserEvents.id, { onDelete: 'cascade' }),
+  customerName: text("customer_name").notNull(),
+  customerEmail: text("customer_email").notNull(),
+  customerPhone: text("customer_phone"),
+  quantity: integer("quantity").notNull().default(1),
+  pickupTime: text("pickup_time"),
+  stripeSessionId: text("stripe_session_id"),
+  paymentStatus: text("payment_status").notNull().default("pending").$type<"pending" | "paid">(),
+  pickedUp: boolean("picked_up").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertFundraiserOrderSchema = createInsertSchema(fundraiserOrders).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertFundraiserOrder = z.infer<typeof insertFundraiserOrderSchema>;
+export type FundraiserOrder = typeof fundraiserOrders.$inferSelect;
+
 // ===== DONATION LINKS =====
 // Donation links for Stripe Payment Links
 export const donationLinks = pgTable("donation_links", {

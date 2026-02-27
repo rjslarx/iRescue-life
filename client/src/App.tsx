@@ -100,6 +100,9 @@ import FormPaymentPage from "@/pages/FormPaymentPage";
 import PublicContactPage from "@/pages/PublicContactPage";
 import DonatePage from "@/pages/DonatePage";
 import DonationLinkRedirectPage from "@/pages/DonationLinkRedirectPage";
+import FundraiserEventPage from "@/pages/FundraiserEventPage";
+import FundraisersPage from "@/pages/FundraisersPage";
+import FundraiserFulfillmentPage from "@/pages/FundraiserFulfillmentPage";
 import EventTicketCheckoutPage from "@/pages/EventTicketCheckoutPage";
 import EventSuccessPage from "@/pages/EventSuccessPage";
 import GivePage from "@/pages/GivePage";
@@ -215,6 +218,7 @@ function RouterSwitch() {
       <Route path="/surrender" component={PublicSurrenderPage} />
       <Route path="/form-success/:formType" component={FormSuccessPage} />
       <Route path="/contact" component={PublicContactPage} />
+      <Route path="/donate/event/:eventId" component={FundraiserEventPage} />
       <Route path="/donate/:linkId" component={DonationLinkRedirectPage} />
       <Route path="/donate" component={DonatePage} />
       <Route path="/event/:eventId" component={EventTicketCheckoutPage} />
@@ -255,6 +259,8 @@ function RouterSwitch() {
       <ProtectedRoute path="/dashboard/analytics" pageId="analytics" component={Analytics} />
       <ProtectedRoute path="/dashboard/finance" pageId="finance" component={FinancePage} />
       <ProtectedRoute path="/dashboard/donation-links" pageId="finance" component={DonationLinksPage} />
+      <ProtectedRoute path="/dashboard/fundraisers/:eventId" pageId="finance" component={FundraiserFulfillmentPage} />
+      <ProtectedRoute path="/dashboard/fundraisers" pageId="finance" component={FundraisersPage} />
       <ProtectedRoute path="/dashboard/grants" pageId="grants" component={GrantsPage} proOnly proFeatureName="Grants" />
       <ProtectedRoute path="/dashboard/donors" pageId="donors" component={DonorsPage} />
       <ProtectedRoute path="/dashboard/contacts" pageId="contacts" component={ContactsPage} />

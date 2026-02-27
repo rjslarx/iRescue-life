@@ -77,6 +77,7 @@ import {
   ArrowRightLeft,
   HardDrive,
   Ticket,
+  TicketPercent,
   ClipboardList,
   Bell,
   CreditCard,
@@ -306,6 +307,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
       title: "Administration",
       items: [
         { title: "Finance", url: "/dashboard/finance", icon: DollarSign },
+        { title: "Fundraisers", url: "/dashboard/fundraisers", icon: TicketPercent },
         { title: "Event Ticket Sales", url: "/dashboard/event-ticket-sales", icon: Ticket },
         { title: "Donation Links", url: "/dashboard/donation-links", icon: DollarSign },
         { title: "Grants", url: "/dashboard/grants", icon: Briefcase, proOnly: true },
@@ -387,6 +389,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
       title: "Content & Reports",
       items: [
         { title: "Finance", url: "/dashboard/finance", icon: DollarSign },
+        { title: "Fundraisers", url: "/dashboard/fundraisers", icon: TicketPercent },
         { title: "Event Ticket Sales", url: "/dashboard/event-ticket-sales", icon: Ticket },
         { title: "Donation Links", url: "/dashboard/donation-links", icon: DollarSign },
         { title: "Grants", url: "/dashboard/grants", icon: Briefcase, proOnly: true },
@@ -505,6 +508,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
     '/dashboard/foster-management': 'foster-management',
     '/dashboard/team': 'team',
     '/dashboard/finance': 'finance',
+    '/dashboard/fundraisers': 'fundraisers',
     '/dashboard/grants': 'grants',
     '/dashboard/donors': 'donors',
     '/dashboard/supplies': 'supply-registry',

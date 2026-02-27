@@ -25064,6 +25064,23 @@ Submitted: ${new Date().toLocaleString()}
         case 'checkout.session.completed': {
           console.log('[STRIPE-WEBHOOK] Processing checkout.session.completed event');
           const session = event.data.object as any;
+
+          // Fundraiser order fulfillment — early exit to avoid donation processing
+          if (session.metadata?.fundraiser_event_id) {
+            console.log('[STRIPE-WEBHOOK] Fundraiser order payment received:', session.metadata.fundraiser_order_id);
+            try {
+              const { fundraiserOrders } = await import('@shared/schema');
+              const result = await db
+                .update(fundraiserOrders)
+                .set({ paymentStatus: 'paid' })
+                .where(eq(fundraiserOrders.stripeSessionId, session.id));
+              console.log('[STRIPE-WEBHOOK] Fundraiser order marked paid for session:', session.id);
+            } catch (err) {
+              console.error('[STRIPE-WEBHOOK] Failed to mark fundraiser order paid:', err);
+            }
+            break;
+          }
+
           const customerEmail = session.customer_email || session.customer_details?.email;
           const customerName = session.customer_details?.name || 'Anonymous Donor';
 
@@ -40670,6 +40687,271 @@ The user asking is a tenant administrator or staff member.`;
       await db.insert(orderSetItems).values(itemRows);
 
       res.status(201).json(createdSet);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // ===== FUNDRAISER EVENTS =====
+
+  /**
+   * GET /api/fundraiser-events
+   * Staff: list all fundraiser events for this tenant with sold count
+   */
+  app.get('/api/fundraiser-events', requireTenant, requireAuth, requireRole('admin', 'owner', 'board_member', 'staff'), async (req, res, next) => {
+    try {
+      const { fundraiserEvents, fundraiserOrders } = await import('@shared/schema');
+      const events = await db
+        .select({
+          id: fundraiserEvents.id,
+          tenantId: fundraiserEvents.tenantId,
+          title: fundraiserEvents.title,
+          description: fundraiserEvents.description,
+          priceCents: fundraiserEvents.priceCents,
+          inventoryCap: fundraiserEvents.inventoryCap,
+          pickupTimes: fundraiserEvents.pickupTimes,
+          isActive: fundraiserEvents.isActive,
+          createdAt: fundraiserEvents.createdAt,
+        })
+        .from(fundraiserEvents)
+        .where(eq(fundraiserEvents.tenantId, req.tenant!.id))
+        .orderBy(desc(fundraiserEvents.createdAt));
+
+      // Attach soldCount per event
+      const results = await Promise.all(events.map(async (evt) => {
+        const [row] = await db
+          .select({ soldCount: sql<number>`COALESCE(SUM(${fundraiserOrders.quantity}), 0)` })
+          .from(fundraiserOrders)
+          .where(and(eq(fundraiserOrders.eventId, evt.id), eq(fundraiserOrders.paymentStatus, 'paid')));
+        return { ...evt, soldCount: Number(row?.soldCount ?? 0) };
+      }));
+
+      res.json({ events: results });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/fundraiser-events
+   * Admin/owner: create a new fundraiser event
+   */
+  app.post('/api/fundraiser-events', requireTenant, requireAuth, requireRole('admin', 'owner'), async (req, res, next) => {
+    try {
+      const { fundraiserEvents, insertFundraiserEventSchema } = await import('@shared/schema');
+      const data = insertFundraiserEventSchema.parse({ ...req.body, tenantId: req.tenant!.id });
+      const [event] = await db.insert(fundraiserEvents).values(data).returning();
+      res.status(201).json({ event });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * PATCH /api/fundraiser-events/:id
+   * Admin/owner: update a fundraiser event
+   */
+  app.patch('/api/fundraiser-events/:id', requireTenant, requireAuth, requireRole('admin', 'owner'), async (req, res, next) => {
+    try {
+      const { fundraiserEvents } = await import('@shared/schema');
+      const { id } = req.params;
+      const allowed = ['title', 'description', 'priceCents', 'inventoryCap', 'pickupTimes', 'isActive'] as const;
+      const updates: Record<string, unknown> = {};
+      for (const key of allowed) {
+        if (key in req.body) updates[key] = req.body[key];
+      }
+      const [event] = await db
+        .update(fundraiserEvents)
+        .set(updates)
+        .where(and(eq(fundraiserEvents.id, id), eq(fundraiserEvents.tenantId, req.tenant!.id)))
+        .returning();
+      if (!event) return res.status(404).json({ error: 'Not found' });
+      res.json({ event });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * DELETE /api/fundraiser-events/:id
+   * Admin/owner: soft-delete (set isActive = false)
+   */
+  app.delete('/api/fundraiser-events/:id', requireTenant, requireAuth, requireRole('admin', 'owner'), async (req, res, next) => {
+    try {
+      const { fundraiserEvents } = await import('@shared/schema');
+      const { id } = req.params;
+      await db
+        .update(fundraiserEvents)
+        .set({ isActive: false })
+        .where(and(eq(fundraiserEvents.id, id), eq(fundraiserEvents.tenantId, req.tenant!.id)));
+      res.json({ success: true });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/fundraiser-events/:id/public
+   * Public (no auth): get a single active event + sold count
+   */
+  app.get('/api/fundraiser-events/:id/public', requireTenant, async (req, res, next) => {
+    try {
+      const { fundraiserEvents, fundraiserOrders } = await import('@shared/schema');
+      const { id } = req.params;
+      const [event] = await db
+        .select()
+        .from(fundraiserEvents)
+        .where(and(eq(fundraiserEvents.id, id), eq(fundraiserEvents.tenantId, req.tenant!.id), eq(fundraiserEvents.isActive, true)))
+        .limit(1);
+      if (!event) return res.status(404).json({ error: 'Event not found' });
+      const [row] = await db
+        .select({ soldCount: sql<number>`COALESCE(SUM(${fundraiserOrders.quantity}), 0)` })
+        .from(fundraiserOrders)
+        .where(and(eq(fundraiserOrders.eventId, id), eq(fundraiserOrders.paymentStatus, 'paid')));
+      res.json({ event: { ...event, soldCount: Number(row?.soldCount ?? 0) } });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/fundraiser-events/:id/checkout
+   * Public (no auth): create Stripe checkout session for a fundraiser event
+   */
+  app.post('/api/fundraiser-events/:id/checkout', requireTenant, async (req, res, next) => {
+    try {
+      const { fundraiserEvents, fundraiserOrders } = await import('@shared/schema');
+      const { calculatePlatformFee } = await import('./config/platform');
+      const { id } = req.params;
+
+      const checkoutSchema = z.object({
+        customerName: z.string().min(1),
+        customerEmail: z.string().email(),
+        customerPhone: z.string().optional(),
+        quantity: z.number().int().min(1).max(100),
+        pickupTime: z.string().optional(),
+      });
+      const body = checkoutSchema.parse(req.body);
+
+      // Load event
+      const [event] = await db
+        .select()
+        .from(fundraiserEvents)
+        .where(and(eq(fundraiserEvents.id, id), eq(fundraiserEvents.tenantId, req.tenant!.id), eq(fundraiserEvents.isActive, true)))
+        .limit(1);
+      if (!event) return res.status(404).json({ error: 'Event not found' });
+
+      // Inventory check
+      if (event.inventoryCap !== null) {
+        const [row] = await db
+          .select({ soldCount: sql<number>`COALESCE(SUM(${fundraiserOrders.quantity}), 0)` })
+          .from(fundraiserOrders)
+          .where(and(eq(fundraiserOrders.eventId, id), eq(fundraiserOrders.paymentStatus, 'paid')));
+        const sold = Number(row?.soldCount ?? 0);
+        if (sold + body.quantity > event.inventoryCap) {
+          return res.status(409).json({ error: 'sold_out', remaining: Math.max(0, event.inventoryCap - sold) });
+        }
+      }
+
+      // Create pending order
+      const [order] = await db.insert(fundraiserOrders).values({
+        eventId: id,
+        customerName: body.customerName,
+        customerEmail: body.customerEmail,
+        customerPhone: body.customerPhone ?? null,
+        quantity: body.quantity,
+        pickupTime: body.pickupTime ?? null,
+        paymentStatus: 'pending',
+      }).returning();
+
+      // Require Stripe Connect
+      const connectedAccountId = req.tenant!.stripeConnectedAccountId;
+      const { getPlatformStripeSecretKey } = await import('./config/platform');
+      const platformKey = getPlatformStripeSecretKey();
+      if (!connectedAccountId || !platformKey) {
+        return res.status(400).json({ error: 'Stripe not configured for this organization' });
+      }
+
+      // Build base URL for success/cancel
+      const baseUrl = process.env.PLATFORM_URL || `https://${req.hostname}`;
+      const tenantSubdomain = req.tenant!.subdomain;
+      const tenantBase = `${baseUrl}/${tenantSubdomain}`;
+      const successUrl = `${tenantBase}/donate/event/${id}?status=success`;
+      const cancelUrl = `${tenantBase}/donate/event/${id}?status=cancelled`;
+
+      const totalCents = event.priceCents * body.quantity;
+      const applicationFeeAmount = calculatePlatformFee(totalCents, req.tenant!.subscriptionTier || 'free', req.tenant!.platformFeePercent);
+
+      // Create Stripe checkout session directly using platform key (Connect destination charges)
+      const Stripe = (await import('stripe')).default;
+      const stripeClient = new Stripe(platformKey, { apiVersion: '2025-09-30.clover' as any, typescript: true });
+
+      const session = await stripeClient.checkout.sessions.create({
+        mode: 'payment',
+        success_url: successUrl,
+        cancel_url: cancelUrl,
+        customer_email: body.customerEmail,
+        line_items: [{
+          price_data: {
+            currency: 'usd',
+            product_data: { name: event.title },
+            unit_amount: event.priceCents,
+          },
+          quantity: body.quantity,
+        }],
+        payment_intent_data: {
+          on_behalf_of: connectedAccountId,
+          transfer_data: { destination: connectedAccountId },
+          ...(applicationFeeAmount > 0 ? { application_fee_amount: applicationFeeAmount } : {}),
+        },
+        metadata: {
+          fundraiser_event_id: id,
+          fundraiser_order_id: order.id,
+          tenantId: req.tenant!.id,
+        },
+      });
+
+      // Store session ID on order
+      await db.update(fundraiserOrders).set({ stripeSessionId: session.id }).where(eq(fundraiserOrders.id, order.id));
+
+      res.json({ url: session.url });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/fundraiser-orders?eventId=X
+   * Staff: list paid orders for a fundraiser event
+   */
+  app.get('/api/fundraiser-orders', requireTenant, requireAuth, requireRole('admin', 'owner', 'board_member', 'staff'), async (req, res, next) => {
+    try {
+      const { fundraiserOrders } = await import('@shared/schema');
+      const { eventId } = req.query as { eventId?: string };
+      if (!eventId) return res.status(400).json({ error: 'eventId query param required' });
+      const orders = await db
+        .select()
+        .from(fundraiserOrders)
+        .where(and(eq(fundraiserOrders.eventId, eventId), eq(fundraiserOrders.paymentStatus, 'paid')))
+        .orderBy(fundraiserOrders.createdAt);
+      res.json({ orders });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * PATCH /api/fundraiser-orders/:id/pickup
+   * Staff: toggle picked-up status for an order
+   */
+  app.patch('/api/fundraiser-orders/:id/pickup', requireTenant, requireAuth, requireRole('admin', 'owner', 'board_member', 'staff'), async (req, res, next) => {
+    try {
+      const { fundraiserOrders } = await import('@shared/schema');
+      const { id } = req.params;
+      const [current] = await db.select({ pickedUp: fundraiserOrders.pickedUp }).from(fundraiserOrders).where(eq(fundraiserOrders.id, id)).limit(1);
+      if (!current) return res.status(404).json({ error: 'Order not found' });
+      const [updated] = await db.update(fundraiserOrders).set({ pickedUp: !current.pickedUp }).where(eq(fundraiserOrders.id, id)).returning();
+      res.json({ order: updated });
     } catch (error) {
       next(error);
     }
