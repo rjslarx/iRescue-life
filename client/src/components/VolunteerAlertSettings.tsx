@@ -714,3 +714,288 @@ function AlertForm({
 }
 
 export default VolunteerAlertSettings;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Volunteer Recruitment SMS Settings
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface RecruitmentSmsSettings {
+  enabled?: boolean;
+  watchedCalendarIds?: string[];
+  minimumVolunteers?: number;
+  weeklyDigestEnabled?: boolean;
+  weeklyDigestDayOfWeek?: string;
+  weeklyDigestTime?: string;
+  urgentAlertEnabled?: boolean;
+  urgentAlertDaysOut?: number;
+  lastWeeklyDigestAt?: string;
+}
+
+interface VolunteerCalendar {
+  id: string;
+  name: string;
+  minVolunteersRequired: number | null;
+}
+
+const RECRUIT_DAYS = [
+  { value: "sun", label: "Sun" },
+  { value: "mon", label: "Mon" },
+  { value: "tue", label: "Tue" },
+  { value: "wed", label: "Wed" },
+  { value: "thu", label: "Thu" },
+  { value: "fri", label: "Fri" },
+  { value: "sat", label: "Sat" },
+];
+
+export function VolunteerRecruitmentSmsSettings() {
+  const { toast } = useToast();
+
+  const { data: settingsData, isLoading: settingsLoading } = useQuery<RecruitmentSmsSettings>({
+    queryKey: ["/api/settings/volunteer-recruitment-sms"],
+  });
+
+  const { data: calendarsData } = useQuery<{ calendars: VolunteerCalendar[] }>({
+    queryKey: ["/api/volunteer-calendars"],
+  });
+
+  const [enabled, setEnabled] = useState(false);
+  const [watchedCalendarIds, setWatchedCalendarIds] = useState<string[]>([]);
+  const [minimumVolunteers, setMinimumVolunteers] = useState(2);
+  const [weeklyDigestEnabled, setWeeklyDigestEnabled] = useState(false);
+  const [weeklyDigestDayOfWeek, setWeeklyDigestDayOfWeek] = useState("thu");
+  const [weeklyDigestTime, setWeeklyDigestTime] = useState("09:00");
+  const [urgentAlertEnabled, setUrgentAlertEnabled] = useState(false);
+  const [urgentAlertDaysOut, setUrgentAlertDaysOut] = useState(2);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+
+  // Populate state from loaded settings (only once)
+  if (settingsData && !settingsLoaded) {
+    setEnabled(settingsData.enabled ?? false);
+    setWatchedCalendarIds(settingsData.watchedCalendarIds ?? []);
+    setMinimumVolunteers(settingsData.minimumVolunteers ?? 2);
+    setWeeklyDigestEnabled(settingsData.weeklyDigestEnabled ?? false);
+    setWeeklyDigestDayOfWeek(settingsData.weeklyDigestDayOfWeek ?? "thu");
+    setWeeklyDigestTime(settingsData.weeklyDigestTime ?? "09:00");
+    setUrgentAlertEnabled(settingsData.urgentAlertEnabled ?? false);
+    setUrgentAlertDaysOut(settingsData.urgentAlertDaysOut ?? 2);
+    setSettingsLoaded(true);
+  }
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest("PATCH", "/api/settings/volunteer-recruitment-sms", {
+        enabled,
+        watchedCalendarIds,
+        minimumVolunteers,
+        weeklyDigestEnabled,
+        weeklyDigestDayOfWeek,
+        weeklyDigestTime,
+        urgentAlertEnabled,
+        urgentAlertDaysOut,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/settings/volunteer-recruitment-sms"] });
+      toast({ title: "Settings saved", description: "Volunteer recruitment SMS settings updated." });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error saving settings", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const toggleCalendar = (calId: string) => {
+    setWatchedCalendarIds((prev) =>
+      prev.includes(calId) ? prev.filter((id) => id !== calId) : [...prev, calId]
+    );
+  };
+
+  const volunteerCalendars = calendarsData?.calendars ?? [];
+
+  if (settingsLoading) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6" data-testid="card-volunteer-recruitment-sms">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h3 className="text-lg font-medium">Volunteer Recruitment SMS</h3>
+          <p className="text-sm text-muted-foreground">
+            Send grouped or personalized texts to opted-in volunteers when shifts need coverage.
+          </p>
+        </div>
+        <Switch
+          checked={enabled}
+          onCheckedChange={setEnabled}
+          data-testid="switch-recruitment-sms-enabled"
+        />
+      </div>
+
+      {enabled && (
+        <div className="space-y-6">
+          {/* Section 1 — Weekly Digest */}
+          <div className="space-y-4 rounded-md border p-4">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="font-medium">Weekly Digest SMS</p>
+                <p className="text-sm text-muted-foreground">
+                  Once a week, send a single SMS listing all understaffed shifts for the coming 7 days.
+                </p>
+              </div>
+              <Switch
+                checked={weeklyDigestEnabled}
+                onCheckedChange={setWeeklyDigestEnabled}
+                data-testid="switch-weekly-digest"
+              />
+            </div>
+
+            {weeklyDigestEnabled && (
+              <div className="space-y-4 pt-2">
+                {/* Calendar multi-select */}
+                <div className="space-y-2">
+                  <Label>Volunteer Calendars to Monitor</Label>
+                  {volunteerCalendars.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No volunteer-type calendars found. Create a calendar with type "Volunteer" first.
+                    </p>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {volunteerCalendars.map((cal) => (
+                        <Button
+                          key={cal.id}
+                          type="button"
+                          variant={watchedCalendarIds.includes(cal.id) ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => toggleCalendar(cal.id)}
+                          data-testid={`button-calendar-${cal.id}`}
+                        >
+                          {cal.name}
+                        </Button>
+                      ))}
+                    </div>
+                  )}
+                  {volunteerCalendars.length > 0 && watchedCalendarIds.length === 0 && (
+                    <p className="text-xs text-muted-foreground">No calendars selected — all volunteer calendars will be monitored.</p>
+                  )}
+                </div>
+
+                {/* Minimum volunteers */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="min-volunteers-recruitment">Minimum Volunteers Required</Label>
+                    <Input
+                      id="min-volunteers-recruitment"
+                      type="number"
+                      min={1}
+                      max={50}
+                      value={minimumVolunteers}
+                      onChange={(e) => setMinimumVolunteers(parseInt(e.target.value) || 2)}
+                      data-testid="input-min-volunteers-recruitment"
+                    />
+                    <p className="text-xs text-muted-foreground">Fallback if calendar has no minimum set</p>
+                  </div>
+
+                  {/* Send time */}
+                  <div className="space-y-2">
+                    <Label htmlFor="weekly-digest-time">Send Time (UTC, 24h)</Label>
+                    <Input
+                      id="weekly-digest-time"
+                      type="text"
+                      placeholder="09:00"
+                      value={weeklyDigestTime}
+                      onChange={(e) => setWeeklyDigestTime(e.target.value)}
+                      data-testid="input-weekly-digest-time"
+                    />
+                  </div>
+                </div>
+
+                {/* Day of week */}
+                <div className="space-y-2">
+                  <Label>Day of Week to Send</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {RECRUIT_DAYS.map((day) => (
+                      <Button
+                        key={day.value}
+                        type="button"
+                        variant={weeklyDigestDayOfWeek === day.value ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setWeeklyDigestDayOfWeek(day.value)}
+                        data-testid={`button-digest-day-${day.value}`}
+                      >
+                        {day.label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Section 2 — Urgent Alert */}
+          <div className="space-y-4 rounded-md border p-4">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="font-medium">Urgent Last-Minute Alert</p>
+                <p className="text-sm text-muted-foreground">
+                  Send a personalized SMS when a shift is X days away and still understaffed, naming any volunteer already signed up.
+                </p>
+              </div>
+              <Switch
+                checked={urgentAlertEnabled}
+                onCheckedChange={setUrgentAlertEnabled}
+                data-testid="switch-urgent-alert"
+              />
+            </div>
+
+            {urgentAlertEnabled && (
+              <div className="space-y-2 pt-2 max-w-xs">
+                <Label htmlFor="urgent-days-out">Days before shift to send alert</Label>
+                <Input
+                  id="urgent-days-out"
+                  type="number"
+                  min={1}
+                  max={14}
+                  value={urgentAlertDaysOut}
+                  onChange={(e) => setUrgentAlertDaysOut(parseInt(e.target.value) || 2)}
+                  data-testid="input-days-before-urgent"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Example: setting 2 sends an alert when there are 2 days until the shift.
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Save button */}
+          <div className="flex justify-end">
+            <Button
+              onClick={() => saveMutation.mutate()}
+              disabled={saveMutation.isPending}
+              data-testid="button-save-recruitment-sms"
+            >
+              {saveMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              Save Settings
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {!enabled && (
+        <div className="flex justify-end">
+          <Button
+            onClick={() => saveMutation.mutate()}
+            disabled={saveMutation.isPending}
+            data-testid="button-save-recruitment-sms"
+          >
+            {saveMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+            Save Settings
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}

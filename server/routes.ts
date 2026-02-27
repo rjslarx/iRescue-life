@@ -5359,17 +5359,24 @@ Crawl-delay: 1
    * Update a user's SMS notification preferences (admin/owner only)
    * Used by Team Management to toggle dailySmsOptIn for foster users
    */
-  app.patch('/api/users/:id/sms-prefs', requireTenant, requireAuth, requireRole('owner', 'admin'), async (req, res, next) => {
+  app.patch('/api/users/:id/sms-prefs', requireTenant, requireAuth, requireRole('owner', 'admin', 'staff'), async (req, res, next) => {
     try {
       const { users } = await import('@shared/schema');
       const updateSchema = z.object({
-        dailySmsOptIn: z.boolean(),
+        dailySmsOptIn: z.boolean().optional(),
+        smsRecruitmentOptIn: z.boolean().optional(),
+      }).refine(d => d.dailySmsOptIn !== undefined || d.smsRecruitmentOptIn !== undefined, {
+        message: 'At least one field must be provided',
       });
       const data = updateSchema.parse(req.body);
 
+      const setFields: Record<string, unknown> = {};
+      if (data.dailySmsOptIn !== undefined) setFields.dailySmsOptIn = data.dailySmsOptIn;
+      if (data.smsRecruitmentOptIn !== undefined) setFields.smsRecruitmentOptIn = data.smsRecruitmentOptIn;
+
       const [updatedUser] = await db
         .update(users)
-        .set({ dailySmsOptIn: data.dailySmsOptIn })
+        .set(setFields as any)
         .where(
           and(
             eq(users.id, req.params.id),
@@ -5382,6 +5389,7 @@ Crawl-delay: 1
           fullName: users.fullName,
           roles: users.roles,
           dailySmsOptIn: users.dailySmsOptIn,
+          smsRecruitmentOptIn: users.smsRecruitmentOptIn,
         });
 
       if (!updatedUser) {
@@ -5389,6 +5397,76 @@ Crawl-delay: 1
       }
 
       res.json({ success: true, user: updatedUser });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/settings/volunteer-recruitment-sms
+   * Get volunteer recruitment SMS settings for the tenant
+   */
+  app.get('/api/settings/volunteer-recruitment-sms', requireTenant, requireAuth, requireRole('owner', 'admin'), async (req, res, next) => {
+    try {
+      const { tenants } = await import('@shared/schema');
+      const [tenant] = await db.select({ volunteerRecruitmentSmsSettings: tenants.volunteerRecruitmentSmsSettings })
+        .from(tenants)
+        .where(eq(tenants.id, req.tenant!.id));
+      res.json(tenant?.volunteerRecruitmentSmsSettings || {});
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * PATCH /api/settings/volunteer-recruitment-sms
+   * Update volunteer recruitment SMS settings for the tenant
+   */
+  app.patch('/api/settings/volunteer-recruitment-sms', requireTenant, requireAuth, requireRole('owner', 'admin'), async (req, res, next) => {
+    try {
+      const { tenants } = await import('@shared/schema');
+      const settingsSchema = z.object({
+        enabled: z.boolean().optional(),
+        watchedCalendarIds: z.array(z.string().uuid()).optional(),
+        minimumVolunteers: z.number().int().min(1).max(100).optional(),
+        weeklyDigestEnabled: z.boolean().optional(),
+        weeklyDigestDayOfWeek: z.enum(['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']).optional(),
+        weeklyDigestTime: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+        urgentAlertEnabled: z.boolean().optional(),
+        urgentAlertDaysOut: z.number().int().min(1).max(14).optional(),
+      });
+      const incoming = settingsSchema.parse(req.body);
+
+      const [current] = await db.select({ volunteerRecruitmentSmsSettings: tenants.volunteerRecruitmentSmsSettings })
+        .from(tenants)
+        .where(eq(tenants.id, req.tenant!.id));
+
+      const merged = { ...(current?.volunteerRecruitmentSmsSettings || {}), ...incoming };
+
+      await db.update(tenants)
+        .set({ volunteerRecruitmentSmsSettings: merged } as any)
+        .where(eq(tenants.id, req.tenant!.id));
+
+      res.json(merged);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/volunteer-calendars
+   * List all volunteer-type calendars for the tenant
+   */
+  app.get('/api/volunteer-calendars', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { calendars } = await import('@shared/schema');
+      const results = await db.select()
+        .from(calendars)
+        .where(and(
+          eq(calendars.tenantId, req.tenant!.id),
+          eq(calendars.type, 'volunteer')
+        ));
+      res.json({ calendars: results });
     } catch (error) {
       next(error);
     }

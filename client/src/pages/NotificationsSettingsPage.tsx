@@ -19,7 +19,7 @@ import {
 import DashboardLayout from "@/components/DashboardLayout";
 import NotificationSettings from "@/components/NotificationSettings";
 import NotificationPreferencesSettings from "@/components/NotificationPreferencesSettings";
-import VolunteerAlertSettings from "@/components/VolunteerAlertSettings";
+import VolunteerAlertSettings, { VolunteerRecruitmentSmsSettings } from "@/components/VolunteerAlertSettings";
 import VolunteerDigestSettings from "@/components/VolunteerDigestSettings";
 import type { Tenant } from "@shared/schema";
 
@@ -266,6 +266,21 @@ export default function NotificationsSettingsPage() {
             </CardHeader>
             <CardContent>
               <VolunteerAlertSettings />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Users className="h-5 w-5" />
+                <CardTitle>Volunteer Recruitment SMS</CardTitle>
+              </div>
+              <CardDescription>
+                Send grouped or personalized texts to opted-in volunteers when shifts need more coverage
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <VolunteerRecruitmentSmsSettings />
             </CardContent>
           </Card>
 

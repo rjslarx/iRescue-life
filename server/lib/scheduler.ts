@@ -6,6 +6,7 @@ import { runImpactStatsCalculation, runReviewRequestEmails } from "./compliance-
 import { runRetentionEmailsJob } from "./retention-emails";
 import { VolunteerThresholdAlertService } from "../services/volunteer-threshold-alerts";
 import { VolunteerScheduleDigestService } from "../services/volunteer-schedule-digest";
+import { VolunteerRecruitmentSmsService } from "../services/volunteer-recruitment-sms";
 
 let schedulerInitialized = false;
 
@@ -493,6 +494,26 @@ export function initializeScheduler() {
   });
 
   console.log(`Calendar share cleanup scheduled for: ${calendarShareCleanupSchedule} (UTC)`);
+
+  // Volunteer Recruitment SMS — weekly digest (runs hourly, service gates by day/time internally)
+  cron.schedule('0 * * * *', async () => {
+    try {
+      await VolunteerRecruitmentSmsService.checkAndRunAllTenants('weekly');
+    } catch (err: any) {
+      console.error('[Scheduler] Volunteer recruitment weekly SMS error:', err.message);
+    }
+  }, { timezone: "UTC" });
+  console.log("✓ Volunteer recruitment weekly SMS scheduled: 0 * * * * (UTC)");
+
+  // Volunteer Recruitment SMS — urgent last-minute alerts (offset 30 min)
+  cron.schedule('30 * * * *', async () => {
+    try {
+      await VolunteerRecruitmentSmsService.checkAndRunAllTenants('urgent');
+    } catch (err: any) {
+      console.error('[Scheduler] Volunteer recruitment urgent SMS error:', err.message);
+    }
+  }, { timezone: "UTC" });
+  console.log("✓ Volunteer recruitment urgent SMS scheduled: 30 * * * * (UTC)");
 
   // Log next scheduled run times
   const nextMidnight = new Date();

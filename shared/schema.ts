@@ -245,7 +245,20 @@ export const tenants = pgTable("tenants", {
     includeUpcomingDays?: number; // How many days ahead to include (default: 7)
     lastSentAt?: string; // ISO date of last digest sent
   }>(),
-  
+
+  // Volunteer Recruitment SMS — weekly digest + urgent last-minute alerts
+  volunteerRecruitmentSmsSettings: jsonb("volunteer_recruitment_sms_settings").$type<{
+    enabled?: boolean;
+    watchedCalendarIds?: string[];        // volunteer calendar IDs to monitor; empty = all volunteer-type
+    minimumVolunteers?: number;            // fallback threshold (default: 2)
+    weeklyDigestEnabled?: boolean;
+    weeklyDigestDayOfWeek?: "sun" | "mon" | "tue" | "wed" | "thu" | "fri" | "sat"; // default "thu"
+    weeklyDigestTime?: string;             // HH:mm, default "09:00"
+    urgentAlertEnabled?: boolean;
+    urgentAlertDaysOut?: number;           // days before shift to fire urgent message (default: 2)
+    lastWeeklyDigestAt?: string;           // ISO — prevents double-fire same day
+  }>(),
+
   // QR Code donation landing page settings (mobile-optimized /give page)
   donationLandingEnabled: boolean("donation_landing_enabled").notNull().default(true),
   donationLandingHeader: text("donation_landing_header"), // e.g., "Thank you for supporting Haseya's."
@@ -325,6 +338,7 @@ export const users = pgTable("users", {
   smsOptIn: boolean("sms_opt_in").notNull().default(false), // User opted in to SMS notifications
   smsOptOutAt: timestamp("sms_opt_out_at"), // When they opted out (if STOP received)
   dailySmsOptIn: boolean("daily_sms_opt_in").notNull().default(true), // Foster daily medication SMS digest opt-in
+  smsRecruitmentOptIn: boolean("sms_recruitment_opt_in").notNull().default(true), // Volunteer receives weekly/urgent shift-fill SMS
   // Foster profile fields (for smart matching)
   fosterStatus: text("foster_status").$type<"active" | "on_break" | "full">(), // Foster availability status
   hasCats: boolean("has_cats"), // Foster home has cats
@@ -991,6 +1005,7 @@ export const volunteerOpportunities = pgTable("volunteer_opportunities", {
   location: text("location").notNull(),
   slotsTotal: integer("slots_total").notNull(),
   slotsFilled: integer("slots_filled").notNull().default(0),
+  calendarId: uuid("calendar_id").references(() => calendars.id, { onDelete: 'set null' }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

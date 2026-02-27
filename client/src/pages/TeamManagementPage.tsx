@@ -51,6 +51,7 @@ interface User {
   createdAt: Date;
   smsOptIn: boolean;
   dailySmsOptIn: boolean;
+  smsRecruitmentOptIn?: boolean;
   hasPushSubscription: boolean;
 }
 
@@ -274,6 +275,20 @@ export default function TeamManagementPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
       toast({ title: "Daily SMS preference updated" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to update preference", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const toggleRecruitmentSmsMutation = useMutation({
+    mutationFn: async ({ userId, smsRecruitmentOptIn }: { userId: string; smsRecruitmentOptIn: boolean }) => {
+      const response = await apiRequest("PATCH", `/api/users/${userId}/sms-prefs`, { smsRecruitmentOptIn });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      toast({ title: "Recruitment SMS preference updated" });
     },
     onError: (error: Error) => {
       toast({ title: "Failed to update preference", description: error.message, variant: "destructive" });
@@ -847,6 +862,21 @@ export default function TeamManagementPage() {
                                 </span>
                               </div>
                             )}
+                            {user.roles.includes("volunteer") && (
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className="text-xs text-muted-foreground">
+                                  Recruitment SMS:
+                                </span>
+                                <Switch
+                                  checked={user.smsRecruitmentOptIn ?? true}
+                                  onCheckedChange={(v) => toggleRecruitmentSmsMutation.mutate({ userId: user.id, smsRecruitmentOptIn: v })}
+                                  data-testid={`switch-sms-recruitment-${user.id}`}
+                                />
+                                <span className="text-xs text-muted-foreground">
+                                  {(user.smsRecruitmentOptIn ?? true) ? "On" : "Off"}
+                                </span>
+                              </div>
+                            )}
                             <p className="text-xs text-muted-foreground mt-2">Joined {formatDate(user.createdAt)}</p>
                           </div>
                           <div className="flex gap-2 shrink-0">
@@ -1050,6 +1080,17 @@ export default function TeamManagementPage() {
                                       data-testid={`switch-daily-sms-${user.id}`}
                                     />
                                     <span className="text-xs text-muted-foreground">{user.dailySmsOptIn ? "On" : "Off"}</span>
+                                  </div>
+                                )}
+                                {user.roles.includes("volunteer") && (
+                                  <div className="flex items-center gap-2 mt-1">
+                                    <span className="text-xs text-muted-foreground">Recruitment SMS:</span>
+                                    <Switch
+                                      checked={user.smsRecruitmentOptIn ?? true}
+                                      onCheckedChange={(v) => toggleRecruitmentSmsMutation.mutate({ userId: user.id, smsRecruitmentOptIn: v })}
+                                      data-testid={`switch-sms-recruitment-${user.id}`}
+                                    />
+                                    <span className="text-xs text-muted-foreground">{(user.smsRecruitmentOptIn ?? true) ? "On" : "Off"}</span>
                                   </div>
                                 )}
                               </TableCell>
