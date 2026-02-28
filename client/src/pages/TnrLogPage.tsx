@@ -142,6 +142,7 @@ export default function TnrLogPage() {
   const [printRowId, setPrintRowId] = useState<string | null>(null);
   const [attachmentAnimalId, setAttachmentAnimalId] = useState<string | null>(null);
   const [attachmentAnimalName, setAttachmentAnimalName] = useState<string>("");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const monthStr = getMonthString(currentDate);
   const monthLabel = `${MONTHS[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
@@ -181,16 +182,41 @@ export default function TnrLogPage() {
     onError: (e: any) => toast({ title: "Delete failed", description: e.message, variant: "destructive" }),
   });
 
+  function setSelected(id: string, checked: boolean) {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      checked ? next.add(id) : next.delete(id);
+      return next;
+    });
+  }
+  function toggleSelectAll() {
+    if (selectedIds.size === records.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(records.map(r => r.id)));
+    }
+  }
+
   function prevMonth() {
+    setSelectedIds(new Set());
     setCurrentDate(d => new Date(d.getFullYear(), d.getMonth() - 1, 1));
   }
   function nextMonth() {
+    setSelectedIds(new Set());
     setCurrentDate(d => new Date(d.getFullYear(), d.getMonth() + 1, 1));
   }
 
   function doPrintMonth() {
     document.body.classList.remove("tnr-printing-row");
     window.print();
+  }
+
+  function doPrintSelected() {
+    document.body.classList.add("tnr-printing-selected");
+    setTimeout(() => {
+      window.print();
+      document.body.classList.remove("tnr-printing-selected");
+    }, 150);
   }
 
   function doPrintRow(id: string) {
@@ -215,6 +241,7 @@ export default function TnrLogPage() {
           .tnr-table-wrapper { overflow: visible !important; }
           body.tnr-printing-row .tnr-main-content { display: none !important; }
           body.tnr-printing-row .print-only { display: block !important; }
+          body.tnr-printing-selected .tnr-main-content tr[data-tnr-selected="false"] { display: none !important; }
         }
         .print-only { display: none; }
       `}</style>
@@ -253,6 +280,11 @@ export default function TnrLogPage() {
             <Button size="icon" variant="ghost" onClick={prevMonth} data-testid="button-prev-month"><ChevronLeft className="h-4 w-4" /></Button>
             <span className="text-base font-medium min-w-36 text-center">{monthLabel}</span>
             <Button size="icon" variant="ghost" onClick={nextMonth} data-testid="button-next-month"><ChevronRight className="h-4 w-4" /></Button>
+            {selectedIds.size > 0 && (
+              <Button variant="outline" onClick={doPrintSelected} data-testid="button-print-selected">
+                <Printer className="h-4 w-4 mr-2" /> Print Selected ({selectedIds.size})
+              </Button>
+            )}
             <Button variant="outline" onClick={doPrintMonth} data-testid="button-print-month">
               <Printer className="h-4 w-4 mr-2" /> Print Month
             </Button>
@@ -283,6 +315,14 @@ export default function TnrLogPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b bg-muted/40">
+                    <th className="px-3 py-2 print-hidden w-10">
+                      <Checkbox
+                        checked={records.length > 0 && selectedIds.size === records.length}
+                        onCheckedChange={toggleSelectAll}
+                        data-testid="checkbox-select-all"
+                        aria-label="Select all"
+                      />
+                    </th>
                     {["Date","Trap #","Color","Sex","Breed","Age","Colony","Surgery Location","Invoice #","Partnership","S/N","Ear Tip","Notes"].map(h => (
                       <th key={h} className="px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">{h}</th>
                     ))}
@@ -292,7 +332,20 @@ export default function TnrLogPage() {
                 </thead>
                 <tbody>
                   {records.map((r) => (
-                    <tr key={r.id} className="border-b last:border-0" data-testid={`row-tnr-${r.id}`}>
+                    <tr
+                      key={r.id}
+                      className="border-b last:border-0"
+                      data-testid={`row-tnr-${r.id}`}
+                      data-tnr-selected={selectedIds.has(r.id) ? "true" : "false"}
+                    >
+                      <td className="px-3 py-2 print-hidden">
+                        <Checkbox
+                          checked={selectedIds.has(r.id)}
+                          onCheckedChange={(checked) => setSelected(r.id, checked === true)}
+                          data-testid={`checkbox-select-${r.id}`}
+                          aria-label={`Select ${r.name}`}
+                        />
+                      </td>
                       <td className="px-3 py-2 whitespace-nowrap">{formatDate(r.intakeDate)}</td>
                       <td className="px-3 py-2 whitespace-nowrap">{r.trapNumber || "—"}</td>
                       <td className="px-3 py-2 whitespace-nowrap">{r.colors?.join(", ") || "—"}</td>
