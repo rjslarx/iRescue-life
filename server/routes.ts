@@ -22056,7 +22056,9 @@ Submitted: ${new Date().toLocaleString()}
       const { sendSms } = await import('./lib/twilio-service');
       
       const testSchema = z.object({
-        phoneNumber: z.string().regex(/^\+[1-9]\d{1,14}$/, "Phone number must be in E.164 format"),
+        phoneNumber: z.string()
+          .transform((v) => v.replace(/[\s\-().]/g, ''))
+          .regex(/^\+[1-9]\d{1,14}$/, "Phone number must be in E.164 format (e.g. +15551234567 or +46701234567)"),
       });
 
       const { phoneNumber } = testSchema.parse(req.body);
@@ -22358,7 +22360,9 @@ Submitted: ${new Date().toLocaleString()}
       const { addTransportSmsSubscriber } = await import('./lib/twilio-service');
       
       const subscribeSchema = z.object({
-        phoneNumber: z.string().regex(/^\+[1-9]\d{1,14}$/, "Phone number must be in E.164 format"),
+        phoneNumber: z.string()
+          .transform((v) => v.replace(/[\s\-().]/g, ''))
+          .regex(/^\+[1-9]\d{1,14}$/, "Phone number must be in E.164 format (e.g. +15551234567 or +46701234567)"),
       });
 
       const { phoneNumber } = subscribeSchema.parse(req.body);
@@ -22394,7 +22398,9 @@ Submitted: ${new Date().toLocaleString()}
       const { removeTransportSmsSubscriber } = await import('./lib/twilio-service');
       
       const unsubscribeSchema = z.object({
-        phoneNumber: z.string().regex(/^\+[1-9]\d{1,14}$/, "Phone number must be in E.164 format"),
+        phoneNumber: z.string()
+          .transform((v) => v.replace(/[\s\-().]/g, ''))
+          .regex(/^\+[1-9]\d{1,14}$/, "Phone number must be in E.164 format (e.g. +15551234567 or +46701234567)"),
       });
 
       const { phoneNumber } = unsubscribeSchema.parse(req.body);

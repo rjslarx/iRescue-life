@@ -718,9 +718,9 @@ export default function IntegrationsSettingsPage() {
                   <h4 className="text-sm font-medium">Send Test SMS</h4>
                   <div className="flex gap-2">
                     <Input
-                      placeholder="+15551234567"
+                      placeholder="+46701234567"
                       value={testPhoneNumber}
-                      onChange={(e) => setTestPhoneNumber(e.target.value)}
+                      onChange={(e) => setTestPhoneNumber(e.target.value.replace(/[\s\-().]/g, ''))}
                       className="font-mono flex-1"
                       data-testid="input-test-phone"
                     />
@@ -735,7 +735,7 @@ export default function IntegrationsSettingsPage() {
                       Send Test
                     </Button>
                   </div>
-                  <p className="text-xs text-muted-foreground">Enter a phone number in E.164 format (e.g., +15551234567)</p>
+                  <p className="text-xs text-muted-foreground">Include country code with + prefix — spaces and dashes are stripped automatically (e.g., +46 70 123 4567)</p>
                 </div>
               )}
 
