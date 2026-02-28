@@ -508,7 +508,8 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
     '/dashboard/foster-management': 'foster-management',
     '/dashboard/team': 'team',
     '/dashboard/finance': 'finance',
-    '/dashboard/fundraisers': 'fundraisers',
+    '/dashboard/fundraisers': 'finance',
+    '/dashboard/donation-links': 'finance',
     '/dashboard/grants': 'grants',
     '/dashboard/donors': 'donors',
     '/dashboard/supplies': 'supply-registry',
@@ -516,6 +517,12 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
     '/dashboard/inbox': 'email-inbox',
     '/dashboard/volunteers': 'volunteers',
     '/dashboard/calendar': 'calendar',
+    '/dashboard/calendar-management': 'calendar',
+    '/dashboard/contract-templates': 'documents',
+    '/dashboard/custom-forms': 'branding',
+    '/dashboard/form-testing': 'branding',
+    '/dashboard/adopter-portal-preview': 'analytics',
+    '/dashboard/data-backups': 'audit-logs',
     '/dashboard/site-permissions': 'site-permissions',
     '/dashboard/contacts': 'donors',
     '/dashboard/partner-organizations': 'donors',
@@ -550,7 +557,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
     const pageId = urlToPageId[url];
     
     if (!pageId) {
-      return effectiveRole === 'admin';
+      return effectiveRole === 'admin' || effectiveRole === 'owner';
     }
     
     return canAccessPage(pageId);
