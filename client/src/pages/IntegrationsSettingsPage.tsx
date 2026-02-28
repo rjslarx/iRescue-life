@@ -62,6 +62,12 @@ const twilioSettingsSchema = z.object({
       (val) => !val || val.startsWith("MG"),
       { message: "Messaging Service SID must start with MG" }
     ),
+  twilioBrandSid: z.string().optional()
+    .transform((val) => val?.trim() || undefined)
+    .refine(
+      (val) => !val || val.startsWith("BN"),
+      { message: "Brand SID must start with BN" }
+    ),
 });
 
 type StripeSettingsData = z.infer<typeof stripeSettingsSchema>;
@@ -134,6 +140,7 @@ export default function IntegrationsSettingsPage() {
       twilioAuthToken: "",
       twilioPhoneNumber: "",
       twilioMessagingServiceSid: "",
+      twilioBrandSid: "",
     },
   });
 
@@ -676,7 +683,10 @@ export default function IntegrationsSettingsPage() {
                     <div className="flex flex-col gap-1">
                       <span>Twilio is configured with number {data.tenant.twilioPhoneNumber}</span>
                       {data.tenant.twilioMessagingServiceSid && (
-                        <span className="text-xs text-muted-foreground">Using Messaging Service: {data.tenant.twilioMessagingServiceSid}</span>
+                        <span className="text-xs text-muted-foreground">Messaging Service: {data.tenant.twilioMessagingServiceSid}</span>
+                      )}
+                      {(data.tenant as any).twilioBrandSid && (
+                        <span className="text-xs text-muted-foreground">Brand SID: {(data.tenant as any).twilioBrandSid}</span>
                       )}
                     </div>
                     <Button
@@ -787,6 +797,22 @@ export default function IntegrationsSettingsPage() {
                             </FormControl>
                             <FormDescription>
                               If you have a registered A2P 10DLC campaign, enter your Messaging Service SID (starts with MG) for better deliverability
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={twilioForm.control}
+                        name="twilioBrandSid"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Brand Registration SID (Optional)</FormLabel>
+                            <FormControl>
+                              <Input placeholder="BNxxxxxxxxxxxxxx" className="font-mono" data-testid="input-twilio-brand-sid" {...field} />
+                            </FormControl>
+                            <FormDescription>
+                              Your A2P 10DLC Brand Registration SID (starts with BN) — stored for compliance tracking, not used for sending
                             </FormDescription>
                             <FormMessage />
                           </FormItem>

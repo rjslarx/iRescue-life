@@ -80,6 +80,7 @@ export const tenants = pgTable("tenants", {
   twilioAuthTokenEncrypted: text("twilio_auth_token_encrypted"), // Encrypted Twilio Auth Token
   twilioPhoneNumber: text("twilio_phone_number"), // Twilio phone number (e.g., "+15551234567")
   twilioMessagingServiceSid: text("twilio_messaging_service_sid"), // Twilio Messaging Service SID (e.g., "MG...")
+  twilioBrandSid: text("twilio_brand_sid"), // A2P 10DLC Brand Registration SID (e.g., "BN...") for compliance tracking
   twilioEnabled: boolean("twilio_enabled").notNull().default(false), // Whether Twilio is configured
   // DocuSign eSignature integration (for adoption contracts)
   docusignIntegrationKeyEncrypted: text("docusign_integration_key_encrypted"), // Encrypted Integration Key (Client ID)

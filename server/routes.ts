@@ -21970,6 +21970,12 @@ Submitted: ${new Date().toLocaleString()}
             (val) => !val || val.startsWith("MG"),
             { message: "Messaging Service SID must start with MG" }
           ),
+        twilioBrandSid: z.string().optional()
+          .transform((val) => val?.trim() || undefined)
+          .refine(
+            (val) => !val || val.startsWith("BN"),
+            { message: "Brand SID must start with BN" }
+          ),
       });
 
       const settings = twilioSettingsSchema.parse(req.body);
@@ -21986,6 +21992,7 @@ Submitted: ${new Date().toLocaleString()}
           twilioAuthTokenEncrypted: encryptedAuthToken,
           twilioPhoneNumber: settings.twilioPhoneNumber,
           twilioMessagingServiceSid: settings.twilioMessagingServiceSid || null,
+          twilioBrandSid: settings.twilioBrandSid || null,
           twilioEnabled: true,
         })
         .where(eq(tenants.id, req.tenant!.id))
