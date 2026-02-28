@@ -718,15 +718,19 @@ export default function IntegrationsSettingsPage() {
                   <h4 className="text-sm font-medium">Send Test SMS</h4>
                   <div className="flex gap-2">
                     <Input
-                      placeholder="+46701234567"
+                      placeholder="(555) 867-5309"
                       value={testPhoneNumber}
-                      onChange={(e) => setTestPhoneNumber(e.target.value.replace(/[\s\-().]/g, ''))}
+                      onChange={(e) => setTestPhoneNumber(e.target.value)}
                       className="font-mono flex-1"
                       data-testid="input-test-phone"
                     />
                     <Button
                       variant="outline"
-                      onClick={() => testTwilioMutation.mutate(testPhoneNumber)}
+                      onClick={() => {
+                        const stripped = testPhoneNumber.replace(/[\s\-().]/g, '');
+                        const normalized = /^\d{10}$/.test(stripped) ? `+1${stripped}` : /^1\d{10}$/.test(stripped) ? `+${stripped}` : stripped;
+                        testTwilioMutation.mutate(normalized);
+                      }}
                       disabled={!testPhoneNumber || testTwilioMutation.isPending}
                       data-testid="button-test-sms"
                     >
@@ -735,7 +739,7 @@ export default function IntegrationsSettingsPage() {
                       Send Test
                     </Button>
                   </div>
-                  <p className="text-xs text-muted-foreground">Include country code with + prefix — spaces and dashes are stripped automatically (e.g., +46 70 123 4567)</p>
+                  <p className="text-xs text-muted-foreground">US numbers like (555) 867-5309 work as-is — international numbers need a + country code prefix</p>
                 </div>
               )}
 

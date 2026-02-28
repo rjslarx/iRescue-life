@@ -22057,8 +22057,13 @@ Submitted: ${new Date().toLocaleString()}
       
       const testSchema = z.object({
         phoneNumber: z.string()
-          .transform((v) => v.replace(/[\s\-().]/g, ''))
-          .regex(/^\+[1-9]\d{1,14}$/, "Phone number must be in E.164 format (e.g. +15551234567 or +46701234567)"),
+          .transform((v) => {
+            const stripped = v.replace(/[\s\-().]/g, '');
+            if (/^\d{10}$/.test(stripped)) return `+1${stripped}`;
+            if (/^1\d{10}$/.test(stripped)) return `+${stripped}`;
+            return stripped;
+          })
+          .regex(/^\+[1-9]\d{1,14}$/, "Phone number must be in E.164 format (e.g. 555-867-5309 or +15558675309)"),
       });
 
       const { phoneNumber } = testSchema.parse(req.body);
@@ -22361,8 +22366,13 @@ Submitted: ${new Date().toLocaleString()}
       
       const subscribeSchema = z.object({
         phoneNumber: z.string()
-          .transform((v) => v.replace(/[\s\-().]/g, ''))
-          .regex(/^\+[1-9]\d{1,14}$/, "Phone number must be in E.164 format (e.g. +15551234567 or +46701234567)"),
+          .transform((v) => {
+            const stripped = v.replace(/[\s\-().]/g, '');
+            if (/^\d{10}$/.test(stripped)) return `+1${stripped}`;
+            if (/^1\d{10}$/.test(stripped)) return `+${stripped}`;
+            return stripped;
+          })
+          .regex(/^\+[1-9]\d{1,14}$/, "Phone number must be in E.164 format (e.g. 555-867-5309 or +15558675309)"),
       });
 
       const { phoneNumber } = subscribeSchema.parse(req.body);
@@ -22399,8 +22409,13 @@ Submitted: ${new Date().toLocaleString()}
       
       const unsubscribeSchema = z.object({
         phoneNumber: z.string()
-          .transform((v) => v.replace(/[\s\-().]/g, ''))
-          .regex(/^\+[1-9]\d{1,14}$/, "Phone number must be in E.164 format (e.g. +15551234567 or +46701234567)"),
+          .transform((v) => {
+            const stripped = v.replace(/[\s\-().]/g, '');
+            if (/^\d{10}$/.test(stripped)) return `+1${stripped}`;
+            if (/^1\d{10}$/.test(stripped)) return `+${stripped}`;
+            return stripped;
+          })
+          .regex(/^\+[1-9]\d{1,14}$/, "Phone number must be in E.164 format (e.g. 555-867-5309 or +15558675309)"),
       });
 
       const { phoneNumber } = unsubscribeSchema.parse(req.body);
