@@ -235,13 +235,24 @@ export default function TnrLogPage() {
     <DashboardLayout>
       <style>{`
         @media print {
-          @page { margin: 1.5cm; }
+          @page { size: landscape; margin: 1cm; }
           .print-hidden { display: none !important; }
           .print-only { display: none !important; }
           .tnr-table-wrapper { overflow: visible !important; }
           body.tnr-printing-row .tnr-main-content { display: none !important; }
           body.tnr-printing-row .print-only { display: block !important; }
           body.tnr-printing-selected .tnr-main-content tr[data-tnr-selected="false"] { display: none !important; }
+          [data-slot="sidebar-wrapper"] { --sidebar-width: 0px !important; }
+          [data-sidebar="sidebar"],
+          [data-sidebar="trigger"],
+          [data-sidebar="rail"] { display: none !important; }
+          header { display: none !important; }
+          .tnr-main-content td {
+            white-space: normal !important;
+            overflow: visible !important;
+            text-overflow: clip !important;
+            max-width: none !important;
+          }
         }
         .print-only { display: none; }
       `}</style>
