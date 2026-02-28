@@ -73,7 +73,13 @@ Core functionalities include:
 - **node-cron:** Task scheduling.
 - **Twilio (optional):** SMS notifications.
 
-## TNR (Trap-Neuter-Return) Log Module
+## Help & Training Module
+  - **Two-tab page** at `/dashboard/tutorials` — "Videos" tab and "Documents" tab; sidebar label is "Help & Training" (BookOpen icon)
+  - **Videos tab**: Admin CRUD for video links. Any HTTPS URL accepted (not just YouTube). YouTube URLs embed a thumbnail + play-in-place; non-YouTube URLs show a "Watch Video" external link button. Table: `tutorials`. Routes: `GET/POST /api/tutorials`, `PATCH/DELETE /api/tutorials/:id`.
+  - **Documents tab**: Admin can upload PDFs, Word docs, and images via `POST /api/documents/upload` (returns `uploadedPaths`), then save metadata to `POST /api/help-documents`. Staff can view and download. Table: `help_documents` (tenant-scoped). Routes: `GET/POST /api/help-documents`, `PATCH/DELETE /api/help-documents/:id` (admin only).
+  - Page: `TutorialsPage.tsx`
+
+  ## TNR (Trap-Neuter-Return) Log Module
 - Uses `record_type='tnr'` discriminator on the `animals` table (no separate table)
 - Enabled per-tenant via `tnr_enabled` column on `tenants` table (toggle in Settings → Integrations)
 - Routes: `GET/POST /api/tnr-records`, `POST /api/tnr-records/batch`, `PATCH /api/tnr-records/:id`, `DELETE /api/tnr-records/:id`, `PATCH /api/tnr-records/:id/convert`

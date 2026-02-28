@@ -4847,6 +4847,23 @@ export const insertTutorialSchema = createInsertSchema(tutorials).omit({
 export type InsertTutorial = z.infer<typeof insertTutorialSchema>;
 export type Tutorial = typeof tutorials.$inferSelect;
 
+export const helpDocuments = pgTable("help_documents", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").references(() => tenants.id, { onDelete: 'cascade' }),
+  title: text("title").notNull(),
+  description: text("description"),
+  category: text("category").notNull().default("other"),
+  fileUrl: text("file_url").notNull(),
+  fileName: text("file_name").notNull(),
+  mimeType: text("mime_type"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+export const insertHelpDocumentSchema = createInsertSchema(helpDocuments).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertHelpDocument = z.infer<typeof insertHelpDocumentSchema>;
+export type HelpDocument = typeof helpDocuments.$inferSelect;
+
 // ============================================
 // CUSTOM FORMS WITH E-SIGNATURE
 // ============================================

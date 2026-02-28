@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -37,10 +37,13 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Loader2, Plus, Edit, Trash2, Play, Video, BookOpen, ExternalLink } from "lucide-react";
+import {
+  Loader2, Plus, Edit, Trash2, Play, Video, BookOpen,
+  ExternalLink, FileText, Upload, Download, File,
+} from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import DashboardLayout from "@/components/DashboardLayout";
-import type { Tutorial } from "@shared/schema";
+import type { Tutorial, HelpDocument } from "@shared/schema";
 
 const CATEGORIES = [
   { value: "getting-started", label: "Getting Started" },
@@ -55,17 +58,15 @@ const CATEGORIES = [
   { value: "other", label: "Other" },
 ] as const;
 
+// ── Video helpers ──────────────────────────────────────────────────────────────
+
 const tutorialFormSchema = z.object({
   title: z.string().min(1, "Title is required"),
   description: z.string().optional(),
-  youtubeUrl: z.string().min(1, "YouTube URL is required").refine(
-    (url) => url.includes("youtube.com") || url.includes("youtu.be"),
-    "Must be a valid YouTube URL"
-  ),
+  youtubeUrl: z.string().min(1, "Video URL is required").url("Must be a valid URL"),
   category: z.enum(["getting-started", "animals", "medical", "fosters", "volunteers", "communications", "finance", "website", "settings", "other"]),
   sortOrder: z.coerce.number().int().min(0).default(0),
 });
-
 type TutorialFormData = z.infer<typeof tutorialFormSchema>;
 
 function extractYouTubeId(url: string): string | null {
@@ -80,12 +81,16 @@ function extractYouTubeId(url: string): string | null {
   return null;
 }
 
+function isYouTubeUrl(url: string) {
+  return url.includes("youtube.com") || url.includes("youtu.be");
+}
+
 function YouTubeEmbed({ url, title }: { url: string; title: string }) {
   const videoId = extractYouTubeId(url);
   if (!videoId) {
     return (
       <div className="aspect-video bg-muted flex items-center justify-center rounded-lg">
-        <p className="text-muted-foreground">Invalid YouTube URL</p>
+        <p className="text-muted-foreground text-sm">Invalid YouTube URL</p>
       </div>
     );
   }
@@ -104,263 +109,393 @@ function YouTubeEmbed({ url, title }: { url: string; title: string }) {
   );
 }
 
+// ── Document helpers ───────────────────────────────────────────────────────────
+
+const docFormSchema = z.object({
+  title: z.string().min(1, "Title is required"),
+  description: z.string().optional(),
+  category: z.enum(["getting-started", "animals", "medical", "fosters", "volunteers", "communications", "finance", "website", "settings", "other"]),
+  sortOrder: z.coerce.number().int().min(0).default(0),
+});
+type DocFormData = z.infer<typeof docFormSchema>;
+
+function getFileIcon(mimeType: string | null | undefined) {
+  if (!mimeType) return <File className="h-8 w-8 text-muted-foreground" />;
+  if (mimeType === "application/pdf") return <FileText className="h-8 w-8 text-red-500" />;
+  if (mimeType.startsWith("image/")) return <File className="h-8 w-8 text-blue-500" />;
+  return <FileText className="h-8 w-8 text-muted-foreground" />;
+}
+
+function getCategoryLabel(value: string) {
+  return CATEGORIES.find(c => c.value === value)?.label || value;
+}
+
+// ── Main page ──────────────────────────────────────────────────────────────────
+
 export default function TutorialsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const isAdmin = user?.roles.includes("admin");
+
+  // ── Video state ──────────────────────────────────────────────────────────────
+  const [videoDialogOpen, setVideoDialogOpen] = useState(false);
   const [editingTutorial, setEditingTutorial] = useState<Tutorial | null>(null);
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [tutorialToDelete, setTutorialToDelete] = useState<string | null>(null);
+  const [deleteVideoConfirm, setDeleteVideoConfirm] = useState(false);
+  const [videoToDelete, setVideoToDelete] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [expandedVideo, setExpandedVideo] = useState<string | null>(null);
 
-  const isAdmin = user?.roles.includes("admin");
+  // ── Document state ───────────────────────────────────────────────────────────
+  const [docDialogOpen, setDocDialogOpen] = useState(false);
+  const [editingDoc, setEditingDoc] = useState<HelpDocument | null>(null);
+  const [deleteDocConfirm, setDeleteDocConfirm] = useState(false);
+  const [docToDelete, setDocToDelete] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { data, isLoading } = useQuery<{ tutorials: Tutorial[] }>({
+  // ── Queries ──────────────────────────────────────────────────────────────────
+  const { data: tutData, isLoading: tutLoading } = useQuery<{ tutorials: Tutorial[] }>({
     queryKey: ['/api/tutorials'],
   });
+  const { data: docData, isLoading: docLoading } = useQuery<{ documents: HelpDocument[] }>({
+    queryKey: ['/api/help-documents'],
+  });
 
-  const form = useForm<TutorialFormData>({
+  // ── Video form ───────────────────────────────────────────────────────────────
+  const videoForm = useForm<TutorialFormData>({
     resolver: zodResolver(tutorialFormSchema),
-    defaultValues: {
-      title: "",
-      description: "",
-      youtubeUrl: "",
-      category: "getting-started",
-      sortOrder: 0,
-    },
+    defaultValues: { title: "", description: "", youtubeUrl: "", category: "getting-started", sortOrder: 0 },
   });
 
-  const createMutation = useMutation({
-    mutationFn: async (data: TutorialFormData) => {
-      const res = await apiRequest('POST', '/api/tutorials', data);
-      return res.json();
-    },
+  const createVideoMutation = useMutation({
+    mutationFn: async (data: TutorialFormData) => (await apiRequest('POST', '/api/tutorials', data)).json(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/tutorials'] });
-      toast({
-        title: "Success",
-        description: "Tutorial has been added.",
-      });
-      handleCloseDialog();
+      toast({ title: "Tutorial added" });
+      closeVideoDialog();
     },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to add tutorial",
-        variant: "destructive",
-      });
-    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
-  const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: Partial<TutorialFormData> }) => {
-      const res = await apiRequest('PATCH', `/api/tutorials/${id}`, data);
-      return res.json();
-    },
+  const updateVideoMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<TutorialFormData> }) =>
+      (await apiRequest('PATCH', `/api/tutorials/${id}`, data)).json(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/tutorials'] });
-      toast({
-        title: "Success",
-        description: "Tutorial has been updated.",
-      });
-      handleCloseDialog();
+      toast({ title: "Tutorial updated" });
+      closeVideoDialog();
     },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update tutorial",
-        variant: "destructive",
-      });
-    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const res = await apiRequest('DELETE', `/api/tutorials/${id}`);
-      return res.json();
-    },
+  const deleteVideoMutation = useMutation({
+    mutationFn: async (id: string) => (await apiRequest('DELETE', `/api/tutorials/${id}`)).json(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/tutorials'] });
-      toast({
-        title: "Success",
-        description: "Tutorial has been deleted.",
-      });
-      setDeleteConfirmOpen(false);
-      setTutorialToDelete(null);
+      toast({ title: "Tutorial deleted" });
+      setDeleteVideoConfirm(false);
+      setVideoToDelete(null);
     },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to delete tutorial",
-        variant: "destructive",
-      });
-    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
-  const handleCloseDialog = () => {
-    setDialogOpen(false);
+  function closeVideoDialog() {
+    setVideoDialogOpen(false);
     setEditingTutorial(null);
-    form.reset({
-      title: "",
-      description: "",
-      youtubeUrl: "",
-      category: "getting-started",
-      sortOrder: 0,
-    });
-  };
+    videoForm.reset({ title: "", description: "", youtubeUrl: "", category: "getting-started", sortOrder: 0 });
+  }
 
-  const handleEdit = (tutorial: Tutorial) => {
+  function handleEditVideo(tutorial: Tutorial) {
     setEditingTutorial(tutorial);
-    form.reset({
+    videoForm.reset({
       title: tutorial.title,
       description: tutorial.description || "",
       youtubeUrl: tutorial.youtubeUrl,
       category: tutorial.category as any,
       sortOrder: tutorial.sortOrder,
     });
-    setDialogOpen(true);
-  };
+    setVideoDialogOpen(true);
+  }
 
-  const handleSubmit = (data: TutorialFormData) => {
+  function handleSubmitVideo(data: TutorialFormData) {
     if (editingTutorial) {
-      updateMutation.mutate({ id: editingTutorial.id, data });
+      updateVideoMutation.mutate({ id: editingTutorial.id, data });
     } else {
-      createMutation.mutate(data);
+      createVideoMutation.mutate(data);
     }
-  };
+  }
 
-  const tutorials = data?.tutorials || [];
-  const filteredTutorials = selectedCategory === "all" 
-    ? tutorials 
-    : tutorials.filter(t => t.category === selectedCategory);
+  // ── Document form ────────────────────────────────────────────────────────────
+  const docForm = useForm<DocFormData>({
+    resolver: zodResolver(docFormSchema),
+    defaultValues: { title: "", description: "", category: "getting-started", sortOrder: 0 },
+  });
+
+  const createDocMutation = useMutation({
+    mutationFn: async (data: DocFormData & { fileUrl: string; fileName: string; mimeType: string }) =>
+      (await apiRequest('POST', '/api/help-documents', data)).json(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/help-documents'] });
+      toast({ title: "Document uploaded" });
+      closeDocDialog();
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const updateDocMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<DocFormData> }) =>
+      (await apiRequest('PATCH', `/api/help-documents/${id}`, data)).json(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/help-documents'] });
+      toast({ title: "Document updated" });
+      closeDocDialog();
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const deleteDocMutation = useMutation({
+    mutationFn: async (id: string) => (await apiRequest('DELETE', `/api/help-documents/${id}`)).json(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/help-documents'] });
+      toast({ title: "Document deleted" });
+      setDeleteDocConfirm(false);
+      setDocToDelete(null);
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  function closeDocDialog() {
+    setDocDialogOpen(false);
+    setEditingDoc(null);
+    setSelectedFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    docForm.reset({ title: "", description: "", category: "getting-started", sortOrder: 0 });
+  }
+
+  function handleEditDoc(doc: HelpDocument) {
+    setEditingDoc(doc);
+    docForm.reset({
+      title: doc.title,
+      description: doc.description || "",
+      category: doc.category as any,
+      sortOrder: doc.sortOrder,
+    });
+    setDocDialogOpen(true);
+  }
+
+  async function handleSubmitDoc(data: DocFormData) {
+    if (editingDoc) {
+      updateDocMutation.mutate({ id: editingDoc.id, data });
+      return;
+    }
+    if (!selectedFile) {
+      toast({ title: "Please select a file", variant: "destructive" });
+      return;
+    }
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("files", selectedFile);
+      const uploadRes = await fetch("/api/documents/upload", {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+      if (!uploadRes.ok) throw new Error("Upload failed");
+      const { uploadedPaths } = await uploadRes.json();
+      if (!uploadedPaths?.length) throw new Error("No file URL returned");
+      createDocMutation.mutate({
+        ...data,
+        fileUrl: uploadedPaths[0],
+        fileName: selectedFile.name,
+        mimeType: selectedFile.type,
+      });
+    } catch (e: any) {
+      toast({ title: "Upload failed", description: e.message, variant: "destructive" });
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  // ── Derived data ─────────────────────────────────────────────────────────────
+  const tutorials = tutData?.tutorials || [];
+  const documents = docData?.documents || [];
 
   const groupedTutorials = CATEGORIES.reduce((acc, cat) => {
-    const categoryTutorials = tutorials.filter(t => t.category === cat.value);
-    if (categoryTutorials.length > 0) {
-      acc[cat.value] = { label: cat.label, tutorials: categoryTutorials };
-    }
+    const catTuts = tutorials.filter(t => t.category === cat.value);
+    if (catTuts.length > 0) acc[cat.value] = { label: cat.label, tutorials: catTuts };
     return acc;
   }, {} as Record<string, { label: string; tutorials: Tutorial[] }>);
 
-  const getCategoryLabel = (value: string) => {
-    return CATEGORIES.find(c => c.value === value)?.label || value;
-  };
-
+  // ── Render ────────────────────────────────────────────────────────────────────
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between gap-4 flex-wrap">
-          <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <BookOpen className="h-6 w-6" />
-              Video Tutorials
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              Learn how to use all the features of your rescue management platform
-            </p>
-          </div>
-          {isAdmin && (
-            <Button onClick={() => setDialogOpen(true)} data-testid="button-add-tutorial">
-              <Plus className="h-4 w-4 mr-2" />
-              Add Tutorial
-            </Button>
-          )}
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <BookOpen className="h-6 w-6" />
+            Help &amp; Training
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            Video tutorials and reference documents for your team
+          </p>
         </div>
 
-        {isLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-          </div>
-        ) : tutorials.length === 0 ? (
-          <Card>
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <Video className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-medium">No tutorials yet</h3>
-              <p className="text-muted-foreground text-center mt-2 max-w-md">
-                {isAdmin 
-                  ? "Add your first video tutorial to help your team learn how to use the platform."
-                  : "Video tutorials will appear here once your admin adds them."
-                }
-              </p>
+        <Tabs defaultValue="videos" className="space-y-6">
+          <TabsList data-testid="tabs-main">
+            <TabsTrigger value="videos" data-testid="tab-videos">Videos</TabsTrigger>
+            <TabsTrigger value="documents" data-testid="tab-documents">Documents</TabsTrigger>
+          </TabsList>
+
+          {/* ── VIDEOS TAB ─────────────────────────────────────────────────── */}
+          <TabsContent value="videos" className="space-y-6">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <p className="text-sm text-muted-foreground">Video tutorials to help your team learn the platform</p>
               {isAdmin && (
-                <Button onClick={() => setDialogOpen(true)} className="mt-4" data-testid="button-add-first-tutorial">
+                <Button onClick={() => setVideoDialogOpen(true)} data-testid="button-add-tutorial">
                   <Plus className="h-4 w-4 mr-2" />
-                  Add Tutorial
+                  Add Video
                 </Button>
               )}
-            </CardContent>
-          </Card>
-        ) : (
-          <Tabs value={selectedCategory} onValueChange={setSelectedCategory} className="space-y-6">
-            <TabsList className="flex-wrap h-auto gap-1" data-testid="tabs-categories">
-              <TabsTrigger value="all" data-testid="tab-all">All</TabsTrigger>
-              {Object.entries(groupedTutorials).map(([key, { label }]) => (
-                <TabsTrigger key={key} value={key} data-testid={`tab-${key}`}>
-                  {label}
-                </TabsTrigger>
-              ))}
-            </TabsList>
+            </div>
 
-            <TabsContent value="all" className="space-y-8">
-              {Object.entries(groupedTutorials).map(([key, { label, tutorials: catTutorials }]) => (
-                <div key={key}>
-                  <h2 className="text-lg font-semibold mb-4">{label}</h2>
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                    {catTutorials.map(tutorial => (
-                      <TutorialCard
-                        key={tutorial.id}
-                        tutorial={tutorial}
-                        isAdmin={isAdmin}
-                        isExpanded={expandedVideo === tutorial.id}
-                        onExpand={() => setExpandedVideo(expandedVideo === tutorial.id ? null : tutorial.id)}
-                        onEdit={() => handleEdit(tutorial)}
-                        onDelete={() => {
-                          setTutorialToDelete(tutorial.id);
-                          setDeleteConfirmOpen(true);
-                        }}
-                      />
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </TabsContent>
-
-            {Object.entries(groupedTutorials).map(([key, { tutorials: catTutorials }]) => (
-              <TabsContent key={key} value={key}>
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                  {catTutorials.map(tutorial => (
-                    <TutorialCard
-                      key={tutorial.id}
-                      tutorial={tutorial}
-                      isAdmin={isAdmin}
-                      isExpanded={expandedVideo === tutorial.id}
-                      onExpand={() => setExpandedVideo(expandedVideo === tutorial.id ? null : tutorial.id)}
-                      onEdit={() => handleEdit(tutorial)}
-                      onDelete={() => {
-                        setTutorialToDelete(tutorial.id);
-                        setDeleteConfirmOpen(true);
-                      }}
-                    />
+            {tutLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : tutorials.length === 0 ? (
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center py-12">
+                  <Video className="h-12 w-12 text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-medium">No videos yet</h3>
+                  <p className="text-muted-foreground text-center mt-2 max-w-md">
+                    {isAdmin
+                      ? "Add your first video tutorial to help your team learn how to use the platform."
+                      : "Video tutorials will appear here once your admin adds them."}
+                  </p>
+                  {isAdmin && (
+                    <Button onClick={() => setVideoDialogOpen(true)} className="mt-4" data-testid="button-add-first-tutorial">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Video
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
+            ) : (
+              <Tabs value={selectedCategory} onValueChange={setSelectedCategory} className="space-y-6">
+                <TabsList className="flex-wrap h-auto gap-1" data-testid="tabs-categories">
+                  <TabsTrigger value="all" data-testid="tab-all">All</TabsTrigger>
+                  {Object.entries(groupedTutorials).map(([key, { label }]) => (
+                    <TabsTrigger key={key} value={key} data-testid={`tab-${key}`}>{label}</TabsTrigger>
                   ))}
-                </div>
-              </TabsContent>
-            ))}
-          </Tabs>
-        )}
+                </TabsList>
 
-        <Dialog open={dialogOpen} onOpenChange={(open) => !open && handleCloseDialog()}>
+                <TabsContent value="all" className="space-y-8">
+                  {Object.entries(groupedTutorials).map(([key, { label, tutorials: catTuts }]) => (
+                    <div key={key}>
+                      <h2 className="text-lg font-semibold mb-4">{label}</h2>
+                      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                        {catTuts.map(tutorial => (
+                          <TutorialCard
+                            key={tutorial.id}
+                            tutorial={tutorial}
+                            isAdmin={isAdmin}
+                            isExpanded={expandedVideo === tutorial.id}
+                            onExpand={() => setExpandedVideo(expandedVideo === tutorial.id ? null : tutorial.id)}
+                            onEdit={() => handleEditVideo(tutorial)}
+                            onDelete={() => { setVideoToDelete(tutorial.id); setDeleteVideoConfirm(true); }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </TabsContent>
+
+                {Object.entries(groupedTutorials).map(([key, { tutorials: catTuts }]) => (
+                  <TabsContent key={key} value={key}>
+                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                      {catTuts.map(tutorial => (
+                        <TutorialCard
+                          key={tutorial.id}
+                          tutorial={tutorial}
+                          isAdmin={isAdmin}
+                          isExpanded={expandedVideo === tutorial.id}
+                          onExpand={() => setExpandedVideo(expandedVideo === tutorial.id ? null : tutorial.id)}
+                          onEdit={() => handleEditVideo(tutorial)}
+                          onDelete={() => { setVideoToDelete(tutorial.id); setDeleteVideoConfirm(true); }}
+                        />
+                      ))}
+                    </div>
+                  </TabsContent>
+                ))}
+              </Tabs>
+            )}
+          </TabsContent>
+
+          {/* ── DOCUMENTS TAB ──────────────────────────────────────────────── */}
+          <TabsContent value="documents" className="space-y-6">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <p className="text-sm text-muted-foreground">Reference documents, guides, and resources for your team</p>
+              {isAdmin && (
+                <Button onClick={() => setDocDialogOpen(true)} data-testid="button-upload-document">
+                  <Upload className="h-4 w-4 mr-2" />
+                  Upload Document
+                </Button>
+              )}
+            </div>
+
+            {docLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : documents.length === 0 ? (
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center py-12">
+                  <FileText className="h-12 w-12 text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-medium">No documents yet</h3>
+                  <p className="text-muted-foreground text-center mt-2 max-w-md">
+                    {isAdmin
+                      ? "Upload PDFs, Word documents, or images to share resources with your team."
+                      : "Training documents will appear here once your admin uploads them."}
+                  </p>
+                  {isAdmin && (
+                    <Button onClick={() => setDocDialogOpen(true)} className="mt-4" data-testid="button-upload-first-document">
+                      <Upload className="h-4 w-4 mr-2" />
+                      Upload Document
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {documents.map(doc => (
+                  <DocumentCard
+                    key={doc.id}
+                    doc={doc}
+                    isAdmin={isAdmin}
+                    onEdit={() => handleEditDoc(doc)}
+                    onDelete={() => { setDocToDelete(doc.id); setDeleteDocConfirm(true); }}
+                  />
+                ))}
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
+
+        {/* ── VIDEO DIALOG ──────────────────────────────────────────────────── */}
+        <Dialog open={videoDialogOpen} onOpenChange={(open) => !open && closeVideoDialog()}>
           <DialogContent className="max-w-lg">
             <DialogHeader>
-              <DialogTitle>{editingTutorial ? "Edit Tutorial" : "Add Tutorial"}</DialogTitle>
+              <DialogTitle>{editingTutorial ? "Edit Video" : "Add Video"}</DialogTitle>
               <DialogDescription>
-                Add a YouTube video tutorial to help your team learn the platform.
+                Add a video link (YouTube, Vimeo, Loom, or any video URL) to help your team.
               </DialogDescription>
             </DialogHeader>
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+            <Form {...videoForm}>
+              <form onSubmit={videoForm.handleSubmit(handleSubmitVideo)} className="space-y-4">
                 <FormField
-                  control={form.control}
+                  control={videoForm.control}
                   name="title"
                   render={({ field }) => (
                     <FormItem>
@@ -372,23 +507,21 @@ export default function TutorialsPage() {
                     </FormItem>
                   )}
                 />
-
                 <FormField
-                  control={form.control}
+                  control={videoForm.control}
                   name="youtubeUrl"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>YouTube URL</FormLabel>
+                      <FormLabel>Video URL</FormLabel>
                       <FormControl>
-                        <Input placeholder="https://www.youtube.com/watch?v=..." {...field} data-testid="input-youtube-url" />
+                        <Input placeholder="https://www.youtube.com/watch?v=... or any video link" {...field} data-testid="input-video-url" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-
                 <FormField
-                  control={form.control}
+                  control={videoForm.control}
                   name="category"
                   render={({ field }) => (
                     <FormItem>
@@ -401,9 +534,7 @@ export default function TutorialsPage() {
                         </FormControl>
                         <SelectContent>
                           {CATEGORIES.map(cat => (
-                            <SelectItem key={cat.value} value={cat.value}>
-                              {cat.label}
-                            </SelectItem>
+                            <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
@@ -411,58 +542,37 @@ export default function TutorialsPage() {
                     </FormItem>
                   )}
                 />
-
                 <FormField
-                  control={form.control}
+                  control={videoForm.control}
                   name="description"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Description (optional)</FormLabel>
                       <FormControl>
-                        <Textarea 
-                          placeholder="A brief description of what this tutorial covers..." 
-                          {...field} 
-                          data-testid="input-description"
-                        />
+                        <Textarea placeholder="A brief description of what this video covers..." {...field} data-testid="input-description" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-
                 <FormField
-                  control={form.control}
+                  control={videoForm.control}
                   name="sortOrder"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Sort Order</FormLabel>
                       <FormControl>
-                        <Input 
-                          type="number" 
-                          placeholder="0" 
-                          {...field} 
-                          onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
-                          data-testid="input-sort-order"
-                        />
+                        <Input type="number" placeholder="0" {...field} onChange={e => field.onChange(parseInt(e.target.value) || 0)} data-testid="input-sort-order" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-
                 <DialogFooter>
-                  <Button type="button" variant="outline" onClick={handleCloseDialog}>
-                    Cancel
-                  </Button>
-                  <Button 
-                    type="submit" 
-                    disabled={createMutation.isPending || updateMutation.isPending}
-                    data-testid="button-submit-tutorial"
-                  >
-                    {(createMutation.isPending || updateMutation.isPending) && (
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    )}
-                    {editingTutorial ? "Update" : "Add"} Tutorial
+                  <Button type="button" variant="outline" onClick={closeVideoDialog}>Cancel</Button>
+                  <Button type="submit" disabled={createVideoMutation.isPending || updateVideoMutation.isPending} data-testid="button-submit-tutorial">
+                    {(createVideoMutation.isPending || updateVideoMutation.isPending) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                    {editingTutorial ? "Update" : "Add"} Video
                   </Button>
                 </DialogFooter>
               </form>
@@ -470,22 +580,145 @@ export default function TutorialsPage() {
           </DialogContent>
         </Dialog>
 
-        <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        {/* ── DOCUMENT DIALOG ───────────────────────────────────────────────── */}
+        <Dialog open={docDialogOpen} onOpenChange={(open) => !open && closeDocDialog()}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>{editingDoc ? "Edit Document" : "Upload Document"}</DialogTitle>
+              <DialogDescription>
+                {editingDoc ? "Update the document details." : "Upload a PDF, Word document, or image to share with your team."}
+              </DialogDescription>
+            </DialogHeader>
+            <Form {...docForm}>
+              <form onSubmit={docForm.handleSubmit(handleSubmitDoc)} className="space-y-4">
+                <FormField
+                  control={docForm.control}
+                  name="title"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Title</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g., Intake Procedures Guide" {...field} data-testid="input-doc-title" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={docForm.control}
+                  name="category"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Category</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-doc-category">
+                            <SelectValue placeholder="Select a category" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {CATEGORIES.map(cat => (
+                            <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={docForm.control}
+                  name="description"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Description (optional)</FormLabel>
+                      <FormControl>
+                        <Textarea placeholder="A brief description of this document..." {...field} data-testid="input-doc-description" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                {!editingDoc && (
+                  <div className="space-y-2">
+                    <FormLabel>File</FormLabel>
+                    <div
+                      className="border-2 border-dashed rounded-md p-6 flex flex-col items-center gap-2 cursor-pointer hover-elevate"
+                      onClick={() => fileInputRef.current?.click()}
+                      data-testid="dropzone-document"
+                    >
+                      <Upload className="h-8 w-8 text-muted-foreground" />
+                      {selectedFile ? (
+                        <p className="text-sm font-medium">{selectedFile.name}</p>
+                      ) : (
+                        <>
+                          <p className="text-sm font-medium">Click to select a file</p>
+                          <p className="text-xs text-muted-foreground">PDF, DOC, DOCX, images — up to 15 MB</p>
+                        </>
+                      )}
+                    </div>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      className="hidden"
+                      accept=".pdf,.doc,.docx,.txt,.rtf,.jpg,.jpeg,.png,.gif,.webp"
+                      onChange={e => setSelectedFile(e.target.files?.[0] ?? null)}
+                      data-testid="input-doc-file"
+                    />
+                  </div>
+                )}
+                <DialogFooter>
+                  <Button type="button" variant="outline" onClick={closeDocDialog}>Cancel</Button>
+                  <Button
+                    type="submit"
+                    disabled={uploading || createDocMutation.isPending || updateDocMutation.isPending}
+                    data-testid="button-submit-document"
+                  >
+                    {(uploading || createDocMutation.isPending || updateDocMutation.isPending) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                    {editingDoc ? "Update" : "Upload"}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </Form>
+          </DialogContent>
+        </Dialog>
+
+        {/* ── DELETE VIDEO CONFIRM ──────────────────────────────────────────── */}
+        <AlertDialog open={deleteVideoConfirm} onOpenChange={setDeleteVideoConfirm}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Delete Tutorial</AlertDialogTitle>
-              <AlertDialogDescription>
-                Are you sure you want to delete this tutorial? This action cannot be undone.
-              </AlertDialogDescription>
+              <AlertDialogTitle>Delete Video</AlertDialogTitle>
+              <AlertDialogDescription>Are you sure you want to delete this video tutorial? This cannot be undone.</AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
               <AlertDialogAction
-                onClick={() => tutorialToDelete && deleteMutation.mutate(tutorialToDelete)}
+                onClick={() => videoToDelete && deleteVideoMutation.mutate(videoToDelete)}
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                data-testid="button-confirm-delete"
+                data-testid="button-confirm-delete-video"
               >
-                {deleteMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                {deleteVideoMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* ── DELETE DOCUMENT CONFIRM ───────────────────────────────────────── */}
+        <AlertDialog open={deleteDocConfirm} onOpenChange={setDeleteDocConfirm}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Document</AlertDialogTitle>
+              <AlertDialogDescription>Are you sure you want to delete this document? This cannot be undone.</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => docToDelete && deleteDocMutation.mutate(docToDelete)}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                data-testid="button-confirm-delete-document"
+              >
+                {deleteDocMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                 Delete
               </AlertDialogAction>
             </AlertDialogFooter>
@@ -496,13 +729,10 @@ export default function TutorialsPage() {
   );
 }
 
+// ── Sub-components ─────────────────────────────────────────────────────────────
+
 function TutorialCard({
-  tutorial,
-  isAdmin,
-  isExpanded,
-  onExpand,
-  onEdit,
-  onDelete,
+  tutorial, isAdmin, isExpanded, onExpand, onEdit, onDelete,
 }: {
   tutorial: Tutorial;
   isAdmin?: boolean;
@@ -511,57 +741,46 @@ function TutorialCard({
   onEdit: () => void;
   onDelete: () => void;
 }) {
-  const videoId = extractYouTubeId(tutorial.youtubeUrl);
-  const thumbnailUrl = videoId 
-    ? `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`
-    : null;
+  const isYT = isYouTubeUrl(tutorial.youtubeUrl);
+  const videoId = isYT ? extractYouTubeId(tutorial.youtubeUrl) : null;
+  const thumbnailUrl = videoId ? `https://img.youtube.com/vi/${videoId}/mqdefault.jpg` : null;
 
   return (
     <Card className="overflow-hidden" data-testid={`card-tutorial-${tutorial.id}`}>
-      {isExpanded ? (
-        <YouTubeEmbed url={tutorial.youtubeUrl} title={tutorial.title} />
-      ) : (
-        <div 
-          className="aspect-video bg-muted relative cursor-pointer group"
-          onClick={onExpand}
-        >
-          {thumbnailUrl ? (
-            <img 
-              src={thumbnailUrl} 
-              alt={tutorial.title}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center">
-              <Video className="h-12 w-12 text-muted-foreground" />
-            </div>
-          )}
-          <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-            <div className="bg-white/90 rounded-full p-3">
-              <Play className="h-8 w-8 text-primary" />
+      {isYT ? (
+        isExpanded ? (
+          <YouTubeEmbed url={tutorial.youtubeUrl} title={tutorial.title} />
+        ) : (
+          <div className="aspect-video bg-muted relative cursor-pointer group" onClick={onExpand}>
+            {thumbnailUrl ? (
+              <img src={thumbnailUrl} alt={tutorial.title} className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <Video className="h-12 w-12 text-muted-foreground" />
+              </div>
+            )}
+            <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="bg-white/90 rounded-full p-3">
+                <Play className="h-8 w-8 text-primary" />
+              </div>
             </div>
           </div>
+        )
+      ) : (
+        <div className="aspect-video bg-muted flex items-center justify-center">
+          <Video className="h-12 w-12 text-muted-foreground" />
         </div>
       )}
+
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between gap-2">
           <CardTitle className="text-base line-clamp-2">{tutorial.title}</CardTitle>
           {isAdmin && (
             <div className="flex gap-1 shrink-0">
-              <Button 
-                size="icon" 
-                variant="ghost" 
-                onClick={onEdit}
-                data-testid={`button-edit-${tutorial.id}`}
-              >
+              <Button size="icon" variant="ghost" onClick={onEdit} data-testid={`button-edit-${tutorial.id}`}>
                 <Edit className="h-4 w-4" />
               </Button>
-              <Button 
-                size="icon" 
-                variant="ghost" 
-                onClick={onDelete}
-                data-testid={`button-delete-${tutorial.id}`}
-              >
+              <Button size="icon" variant="ghost" onClick={onDelete} data-testid={`button-delete-${tutorial.id}`}>
                 <Trash2 className="h-4 w-4" />
               </Button>
             </div>
@@ -571,23 +790,76 @@ function TutorialCard({
           {CATEGORIES.find(c => c.value === tutorial.category)?.label || tutorial.category}
         </Badge>
       </CardHeader>
+
       {tutorial.description && (
         <CardContent className="pt-0">
-          <CardDescription className="line-clamp-2">
-            {tutorial.description}
-          </CardDescription>
+          <CardDescription className="line-clamp-2">{tutorial.description}</CardDescription>
         </CardContent>
       )}
+
       <CardContent className="pt-0 pb-3">
-        <Button 
-          variant="outline" 
-          size="sm" 
+        <Button
+          variant="outline"
+          size="sm"
           className="w-full"
           onClick={() => window.open(tutorial.youtubeUrl, '_blank')}
-          data-testid={`button-open-youtube-${tutorial.id}`}
+          data-testid={`button-open-video-${tutorial.id}`}
         >
           <ExternalLink className="h-4 w-4 mr-2" />
-          Open in YouTube
+          {isYT ? "Open in YouTube" : "Watch Video"}
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+function DocumentCard({
+  doc, isAdmin, onEdit, onDelete,
+}: {
+  doc: HelpDocument;
+  isAdmin?: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <Card data-testid={`card-document-${doc.id}`}>
+      <CardHeader className="pb-2">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-start gap-3 min-w-0">
+            <div className="shrink-0 mt-0.5">{getFileIcon(doc.mimeType)}</div>
+            <CardTitle className="text-base line-clamp-2">{doc.title}</CardTitle>
+          </div>
+          {isAdmin && (
+            <div className="flex gap-1 shrink-0">
+              <Button size="icon" variant="ghost" onClick={onEdit} data-testid={`button-edit-doc-${doc.id}`}>
+                <Edit className="h-4 w-4" />
+              </Button>
+              <Button size="icon" variant="ghost" onClick={onDelete} data-testid={`button-delete-doc-${doc.id}`}>
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+        </div>
+        <Badge variant="secondary" className="w-fit">{getCategoryLabel(doc.category)}</Badge>
+      </CardHeader>
+
+      {doc.description && (
+        <CardContent className="pt-0">
+          <CardDescription className="line-clamp-2">{doc.description}</CardDescription>
+        </CardContent>
+      )}
+
+      <CardContent className="pt-0 pb-3">
+        <p className="text-xs text-muted-foreground mb-2 truncate">{doc.fileName}</p>
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full"
+          onClick={() => window.open(doc.fileUrl, '_blank')}
+          data-testid={`button-open-doc-${doc.id}`}
+        >
+          <Download className="h-4 w-4 mr-2" />
+          Open / Download
         </Button>
       </CardContent>
     </Card>

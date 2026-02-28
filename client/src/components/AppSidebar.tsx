@@ -69,7 +69,6 @@ import {
   Truck,
   Radio,
   Palette,
-  Video,
   Kanban,
   Building2,
   UserCog,
@@ -83,6 +82,8 @@ import {
   CreditCard,
   ShieldCheck,
   Cat,
+  BookOpen,
+  Video,
 } from "lucide-react";
 
 interface AppSidebarProps {
@@ -345,7 +346,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
     {
       title: "Help & Training",
       items: [
-        { title: "Video Tutorials", url: "/dashboard/tutorials", icon: Video },
+        { title: "Help & Training", url: "/dashboard/tutorials", icon: BookOpen },
       ],
       defaultOpen: false,
     },
@@ -426,7 +427,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
     {
       title: "Help & Training",
       items: [
-        { title: "Video Tutorials", url: "/dashboard/tutorials", icon: Video },
+        { title: "Help & Training", url: "/dashboard/tutorials", icon: BookOpen },
       ],
       defaultOpen: false,
     },
@@ -466,7 +467,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
       items: [
         { title: "Email Inbox", url: "/dashboard/inbox", icon: Inbox },
         { title: "Calendar", url: "/dashboard/calendar", icon: Calendar },
-        { title: "Video Tutorials", url: "/dashboard/tutorials", icon: Video },
+        { title: "Help & Training", url: "/dashboard/tutorials", icon: BookOpen },
       ],
       defaultOpen: false,
     },
@@ -480,7 +481,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
         { title: "My Fosters", url: "/dashboard/my-fosters", icon: Heart, usesGoogleDrive: true },
         { title: "Quick Updates", url: "/dashboard/foster-mobile", icon: Smartphone, usesGoogleDrive: true },
         { title: "Kennels", url: "/dashboard/kennels", icon: Home },
-        { title: "Video Tutorials", url: "/dashboard/tutorials", icon: Video },
+        { title: "Help & Training", url: "/dashboard/tutorials", icon: BookOpen },
       ],
       defaultOpen: true,
     },
@@ -496,7 +497,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
         { title: "Opportunities", url: "/dashboard/opportunities", icon: UserCircle },
         { title: "Today's Medications", url: "/dashboard/volunteer-medications", icon: Pill },
         { title: "Animals", url: "/dashboard/animals", icon: Heart, usesGoogleDrive: true },
-        { title: "Video Tutorials", url: "/dashboard/tutorials", icon: Video },
+        { title: "Help & Training", url: "/dashboard/tutorials", icon: BookOpen },
       ],
       defaultOpen: true,
     },
@@ -601,7 +602,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
     'platform-integrations': { title: "Platform Integrations", url: "/dashboard/platform-integrations", icon: Plug2 },
     'branding': { title: "Branding", url: "/dashboard/settings/branding", icon: Palette },
     'collaboration': { title: "Collaboration Hub", url: "/dashboard/collaboration", icon: Truck },
-    'tutorials': { title: "Video Tutorials", url: "/dashboard/tutorials", icon: Video },
+    'tutorials': { title: "Help & Training", url: "/dashboard/tutorials", icon: BookOpen },
     'volunteer-pipeline': { title: "Volunteer Pipeline", url: "/dashboard/volunteer-pipeline", icon: Kanban },
     'foster-pipeline': { title: "Foster Pipeline", url: "/dashboard/foster-pipeline", icon: Kanban },
     'event-ticket-sales': { title: "Event Ticket Sales", url: "/dashboard/event-ticket-sales", icon: Ticket },

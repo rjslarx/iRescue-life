@@ -37769,6 +37769,67 @@ The user asking is a tenant administrator or staff member.`;
   });
 
 
+
+    // GET /api/help-documents - List all help documents for the tenant
+    app.get('/api/help-documents', requireTenant, requireAuth, async (req, res, next) => {
+      try {
+        const { helpDocuments } = await import('@shared/schema');
+        const results = await db
+          .select()
+          .from(helpDocuments)
+          .where(eq(helpDocuments.tenantId, req.tenant!.id))
+          .orderBy(helpDocuments.sortOrder, helpDocuments.createdAt);
+        res.json({ documents: results });
+      } catch (error) { next(error); }
+    });
+
+    // POST /api/help-documents - Create a help document record (admin only)
+    app.post('/api/help-documents', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+      try {
+        const { helpDocuments, insertHelpDocumentSchema } = await import('@shared/schema');
+        const data = insertHelpDocumentSchema.parse({ ...req.body, tenantId: req.tenant!.id });
+        const [doc] = await db.insert(helpDocuments).values(data).returning();
+        res.json({ document: doc });
+      } catch (error) { next(error); }
+    });
+
+    // PATCH /api/help-documents/:id - Update a help document (admin only)
+    app.patch('/api/help-documents/:id', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+      try {
+        const { helpDocuments } = await import('@shared/schema');
+        const updateSchema = z.object({
+          title: z.string().min(1).max(200).optional(),
+          description: z.string().max(1000).optional(),
+          category: z.string().max(100).optional(),
+          sortOrder: z.coerce.number().int().min(0).max(9999).optional(),
+        }).strict();
+        const validatedData = updateSchema.parse(req.body);
+        const updateFields: Record<string, any> = { updatedAt: new Date(), ...validatedData };
+        const [updated] = await db
+          .update(helpDocuments)
+          .set(updateFields)
+          .where(and(eq(helpDocuments.id, req.params.id), eq(helpDocuments.tenantId, req.tenant!.id)))
+          .returning();
+        if (!updated) return res.status(404).json({ error: 'Document not found' });
+        res.json({ document: updated });
+      } catch (error) { next(error); }
+    });
+
+    // DELETE /api/help-documents/:id - Delete a help document (admin only)
+    app.delete('/api/help-documents/:id', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+      try {
+        const { helpDocuments } = await import('@shared/schema');
+        const [deleted] = await db
+          .delete(helpDocuments)
+          .where(and(eq(helpDocuments.id, req.params.id), eq(helpDocuments.tenantId, req.tenant!.id)))
+          .returning();
+        if (!deleted) return res.status(404).json({ error: 'Document not found' });
+        res.json({ success: true });
+      } catch (error) { next(error); }
+    });
+
+  
+
   /**
    * POST /api/admin/trigger-database-backup
    * Manually trigger a database backup (platform admin only)
