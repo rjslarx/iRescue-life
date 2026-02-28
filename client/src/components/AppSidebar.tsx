@@ -82,6 +82,7 @@ import {
   Bell,
   CreditCard,
   ShieldCheck,
+  Cat,
 } from "lucide-react";
 
 interface AppSidebarProps {
@@ -146,6 +147,7 @@ const iconMap: Record<string, any> = {
   Kanban,
   UserCog,
   Ticket,
+  Cat,
 };
 
 
@@ -158,10 +160,11 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
   const [cpoeOpen, setCpoeOpen] = useState(false);
   const { canAccessPage, getAccessiblePages } = usePagePermissions();
   
-  const { data: tenantData } = useQuery<{ tenant: { subscriptionTier: string } }>({
+  const { data: tenantData } = useQuery<{ tenant: { subscriptionTier: string; tnrEnabled?: boolean } }>({
     queryKey: ['/api/tenant'],
   });
   const isLiteTier = tenantData?.tenant?.subscriptionTier === 'lite';
+  const tnrEnabled = tenantData?.tenant?.tnrEnabled === true;
   const { actions: allFavoriteActions, handleAction: handleFavoriteAction } = useQuickActions({
     onRecordDonation: () => setShowDonationDialog(true),
     onAddMedicalOrder: () => setCpoeOpen(true),
@@ -266,6 +269,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
         { title: "Network Transfers", url: "/dashboard/transfers", icon: ArrowRightLeft, notificationKey: "pendingTransfers" },
         { title: "Medical Pipeline", url: "/dashboard/medical-pipeline", icon: Stethoscope, notificationKey: "medicalTasks", usesGoogleDrive: true, proOnly: true },
         { title: "Daily Roster", url: "/dashboard/daily-roster", icon: ClipboardList },
+        ...(tnrEnabled ? [{ title: "TNR Log", url: "/dashboard/tnr-log", icon: Cat }] : []),
         { title: "Adoption Applications", url: "/dashboard/applications", icon: FileText, notificationKey: "applications", proOnly: true },
         { title: "Intake Manager", url: "/dashboard/intake", icon: Inbox, proOnly: true },
       ],
@@ -366,6 +370,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
         { title: "Network Transfers", url: "/dashboard/transfers", icon: ArrowRightLeft, notificationKey: "pendingTransfers" },
         { title: "Medical Pipeline", url: "/dashboard/medical-pipeline", icon: Stethoscope, notificationKey: "medicalTasks", usesGoogleDrive: true, proOnly: true },
         { title: "Daily Roster", url: "/dashboard/daily-roster", icon: ClipboardList },
+        ...(tnrEnabled ? [{ title: "TNR Log", url: "/dashboard/tnr-log", icon: Cat }] : []),
         { title: "Adoption Applications", url: "/dashboard/applications", icon: FileText, notificationKey: "applications", proOnly: true },
         { title: "Intake Manager", url: "/dashboard/intake", icon: Inbox, proOnly: true },
       ],
@@ -446,6 +451,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
         { title: "Network Transfers", url: "/dashboard/transfers", icon: ArrowRightLeft, notificationKey: "pendingTransfers" },
         { title: "Medical Pipeline", url: "/dashboard/medical-pipeline", icon: Stethoscope, notificationKey: "medicalTasks", usesGoogleDrive: true, proOnly: true },
         { title: "Daily Roster", url: "/dashboard/daily-roster", icon: ClipboardList },
+        ...(tnrEnabled ? [{ title: "TNR Log", url: "/dashboard/tnr-log", icon: Cat }] : []),
         { title: "Adoption Applications", url: "/dashboard/applications", icon: FileText, notificationKey: "applications", proOnly: true },
         { title: "Intake Manager", url: "/dashboard/intake", icon: Inbox, proOnly: true },
         { title: "Supply Registry", url: "/dashboard/supplies", icon: ShoppingCart },
@@ -550,6 +556,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
     '/dashboard/event-ticket-sales': 'event-ticket-sales',
     '/dashboard/volunteer-pipeline': 'volunteer-pipeline',
     '/dashboard/foster-pipeline': 'foster-pipeline',
+    '/dashboard/tnr-log': 'tnr-log',
   };
 
   // Helper function to check if menu item should be shown
@@ -598,6 +605,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
     'volunteer-pipeline': { title: "Volunteer Pipeline", url: "/dashboard/volunteer-pipeline", icon: Kanban },
     'foster-pipeline': { title: "Foster Pipeline", url: "/dashboard/foster-pipeline", icon: Kanban },
     'event-ticket-sales': { title: "Event Ticket Sales", url: "/dashboard/event-ticket-sales", icon: Ticket },
+    'tnr-log': { title: "TNR Log", url: "/dashboard/tnr-log", icon: Cat },
   };
 
   // Filter groups and items based on permissions and tier

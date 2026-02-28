@@ -247,6 +247,24 @@ export default function IntegrationsSettingsPage() {
     },
   });
 
+  const updateTnrEnabledMutation = useMutation({
+    mutationFn: async (tnrEnabled: boolean) => {
+      const response = await apiRequest('PATCH', '/api/tenant/settings/tnr', { tnrEnabled });
+      return response.json();
+    },
+    onSuccess: (_, tnrEnabled) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/tenant/settings'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/tenant'] });
+      toast({
+        title: tnrEnabled ? "TNR Log enabled" : "TNR Log disabled",
+        description: tnrEnabled ? "The TNR Log is now available in the Operations sidebar." : "The TNR Log has been hidden from the sidebar.",
+      });
+    },
+    onError: (error: any) => {
+      toast({ title: "Failed to update TNR settings", description: error.message || "Please try again later.", variant: "destructive" });
+    },
+  });
+
   const updateTwilioMutation = useMutation({
     mutationFn: async (settings: TwilioSettingsData) => {
       const response = await apiRequest('PATCH', '/api/tenant/settings/twilio', settings);
@@ -483,6 +501,26 @@ export default function IntegrationsSettingsPage() {
                   </AlertDescription>
                 </Alert>
               )}
+
+              <Separator />
+
+              <div className="flex items-center justify-between gap-4">
+                <div className="space-y-0.5">
+                  <Label htmlFor="tnr-enabled-toggle" className="text-base font-medium">
+                    TNR Log (Trap-Neuter-Return)
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    Enable rapid batch-entry logging for TNR programs. Adds a TNR Log page to the Operations sidebar and makes it available as a Quick Action. TNR animals are kept separate from the standard rescue pipeline.
+                  </p>
+                </div>
+                <Switch
+                  id="tnr-enabled-toggle"
+                  checked={data?.tenant?.tnrEnabled || false}
+                  disabled={updateTnrEnabledMutation.isPending || !canEdit}
+                  onCheckedChange={(checked) => updateTnrEnabledMutation.mutate(checked)}
+                  data-testid="switch-tnr-enabled"
+                />
+              </div>
 
               <Separator />
 

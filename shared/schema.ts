@@ -32,6 +32,7 @@ export const tenants = pgTable("tenants", {
   stripeSecretKeyEncrypted: text("stripe_secret_key_encrypted"), // Encrypted secret key
   stripeWebhookSecretEncrypted: text("stripe_webhook_secret_encrypted"), // Encrypted webhook secret
   stripeEnabled: boolean("stripe_enabled").notNull().default(false), // Whether Stripe is configured
+  tnrEnabled: boolean("tnr_enabled").notNull().default(false), // Whether the TNR Log module is enabled for this tenant
   stripeConnectedAccountId: text("stripe_connected_account_id"), // Stripe Connect account ID (Standard Connect - tenant owns account)
   stripeConnectedAt: timestamp("stripe_connected_at"), // When Stripe was connected via OAuth
   // Adoption fee settings
@@ -525,7 +526,19 @@ export const animals = pgTable("animals", {
   specialDiet: boolean("special_diet").notNull().default(false),
   needsSpayNeuter: boolean("needs_spay_neuter").notNull().default(false),
   isFlightRisk: boolean("is_flight_risk").notNull().default(false),
-  status: text("status").notNull().default("available").$type<"available" | "adoption_pending" | "transfer_pending" | "medical_hold" | "stray_hold" | "adopted" | "transported" | "deceased" | "returned_to_owner">(),
+  status: text("status").notNull().default("available").$type<"available" | "adoption_pending" | "transfer_pending" | "medical_hold" | "stray_hold" | "adopted" | "transported" | "deceased" | "returned_to_owner" | "returned_to_field">(),
+  // TNR (Trap-Neuter-Return) fields
+  recordType: text("record_type").notNull().default("rescue").$type<"rescue" | "tnr">(), // Discriminator: 'tnr' = TNR program animal, strictly excluded from main pipeline
+  colonyLocation: text("colony_location"), // Address/location of the trap site or TNR colony
+  earTipped: boolean("ear_tipped").notNull().default(false), // Whether ear tip was performed (universal TNR identifier)
+  caretakerName: text("caretaker_name"), // TNR colony caretaker contact name
+  caretakerPhone: text("caretaker_phone"), // TNR colony caretaker phone
+  invoiceNumber: text("invoice_number"), // Surgery/clinic invoice # for billing tracking
+  surgeryLocation: text("surgery_location"), // Clinic or facility where surgery was performed
+  partnership: text("partnership"), // Sponsoring organization or grant partnership name
+  releaseLocation: text("release_location"), // Address where the cat was returned to field
+  trapNumber: text("trap_number"), // Temporary trap ID during batch TNR event
+  tnrNotes: text("tnr_notes"), // TNR-specific notes (separate from general bio)
   intakeDate: timestamp("intake_date").notNull().defaultNow(),
   intakeSource: text("intake_source").$type<"stray" | "owner_surrender" | "transfer" | "born_in_care" | "other">(), // How the animal came to the rescue
   locationFound: text("location_found"), // Where the stray animal was found (address or intersection)
@@ -594,7 +607,7 @@ export type Animal = typeof animals.$inferSelect;
 
 export type AnimalStatus = Animal["status"];
 
-export const TERMINAL_STATUSES: AnimalStatus[] = ["adopted", "transported", "deceased", "returned_to_owner"] as const;
+export const TERMINAL_STATUSES: AnimalStatus[] = ["adopted", "transported", "deceased", "returned_to_owner", "returned_to_field"] as const;
 export const ACTIVE_STATUSES: AnimalStatus[] = ["available", "adoption_pending", "transfer_pending", "medical_hold", "stray_hold"] as const;
 
 export const ANIMAL_COLORS = [

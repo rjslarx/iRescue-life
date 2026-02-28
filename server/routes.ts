@@ -18696,7 +18696,8 @@ Submitted: ${new Date().toLocaleString()}
           eq(animals.tenantId, req.tenant!.id),
           notInArray(animals.status, TERMINAL_STATUSES),
           isNull(animals.pendingFosterUserId),
-          or(isNull(animals.locationType), ne(animals.locationType, 'foster'))
+          or(isNull(animals.locationType), ne(animals.locationType, 'foster')),
+          or(isNull(animals.recordType), ne(animals.recordType, 'tnr'))
         ))
         .orderBy(animals.name);
       
@@ -41092,6 +41093,203 @@ The user asking is a tenant administrator or staff member.`;
     } catch (error) {
       next(error);
     }
+  });
+
+  // ============================================================================
+  // TNR (Trap-Neuter-Return) Log Routes
+  // ============================================================================
+
+  /**
+   * GET /api/tenant/settings/tnr
+   * Get TNR module enabled status for this tenant
+   */
+  app.get('/api/tenant/settings/tnr', requireTenant, requireAuth, requireRole('admin', 'owner'), async (req, res, next) => {
+    try {
+      const { tenants } = await import('@shared/schema');
+      const [tenant] = await db.select({ tnrEnabled: tenants.tnrEnabled }).from(tenants).where(eq(tenants.id, req.tenant!.id)).limit(1);
+      res.json({ tnrEnabled: tenant?.tnrEnabled ?? false });
+    } catch (error) { next(error); }
+  });
+
+  /**
+   * PATCH /api/tenant/settings/tnr
+   * Toggle TNR module on/off for this tenant
+   */
+  app.patch('/api/tenant/settings/tnr', requireTenant, requireAuth, requireRole('admin', 'owner'), async (req, res, next) => {
+    try {
+      const { tenants } = await import('@shared/schema');
+      const { tnrEnabled } = req.body;
+      if (typeof tnrEnabled !== 'boolean') return res.status(400).json({ error: 'tnrEnabled must be a boolean' });
+      const [updated] = await db.update(tenants).set({ tnrEnabled }).where(eq(tenants.id, req.tenant!.id)).returning({ tnrEnabled: tenants.tnrEnabled });
+      res.json({ tnrEnabled: updated.tnrEnabled });
+    } catch (error) { next(error); }
+  });
+
+  /**
+   * GET /api/tnr-records
+   * List TNR animals for this tenant, optionally filtered by ?month=YYYY-MM
+   */
+  app.get('/api/tnr-records', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const monthParam = req.query.month as string | undefined;
+      let conditions: any[] = [eq(animals.tenantId, req.tenant!.id), eq(animals.recordType, 'tnr')];
+      if (monthParam && /^\d{4}-\d{2}$/.test(monthParam)) {
+        const [y, m] = monthParam.split('-').map(Number);
+        const monthStart = new Date(y, m - 1, 1, 0, 0, 0, 0);
+        const monthEnd = new Date(y, m, 0, 23, 59, 59, 999);
+        conditions.push(gte(animals.intakeDate, monthStart), lte(animals.intakeDate, monthEnd));
+      }
+      const records = await db
+        .select({
+          id: animals.id,
+          name: animals.name,
+          species: animals.species,
+          sex: animals.sex,
+          breed: animals.breed,
+          colors: animals.colors,
+          status: animals.status,
+          intakeDate: animals.intakeDate,
+          photoUrls: animals.photoUrls,
+          recordType: animals.recordType,
+          colonyLocation: animals.colonyLocation,
+          earTipped: animals.earTipped,
+          caretakerName: animals.caretakerName,
+          caretakerPhone: animals.caretakerPhone,
+          invoiceNumber: animals.invoiceNumber,
+          surgeryLocation: animals.surgeryLocation,
+          partnership: animals.partnership,
+          releaseLocation: animals.releaseLocation,
+          trapNumber: animals.trapNumber,
+          tnrNotes: animals.tnrNotes,
+          neuterStatus: animals.neuterStatus,
+          localShelterId: animals.localShelterId,
+          createdAt: animals.createdAt,
+        })
+        .from(animals)
+        .where(and(...conditions))
+        .orderBy(animals.intakeDate);
+      res.json({ records });
+    } catch (error) { next(error); }
+  });
+
+  /**
+   * POST /api/tnr-records/batch
+   * Batch-create TNR animals + auto-create medical records from checkboxes
+   */
+  app.post('/api/tnr-records/batch', requireTenant, requireAuth, requireRole('admin', 'staff', 'owner'), async (req, res, next) => {
+    try {
+      const { vaccineRecords } = await import('@shared/schema');
+      const { generateLocalShelterId } = await import('./utils/shelterId');
+
+      const { trappingDate, colonyLocation, caretakerName, caretakerPhone, surgeryLocation, partnership, rows } = req.body;
+      if (!Array.isArray(rows) || rows.length === 0) return res.status(400).json({ error: 'At least one row is required' });
+
+      const trapDate = trappingDate ? new Date(trappingDate) : new Date();
+      const createdRecords: any[] = [];
+
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row.color && !row.trapNumber && !row.description) continue; // skip completely empty rows
+
+        // Generate unique IDs
+        const animalId = `TNR-${Date.now()}-${i}`;
+        const localShelterId = await generateLocalShelterId(req.tenant!.id, 'cat');
+        const catName = row.catName || row.name || `TNR-${(row.trapNumber || String(i + 1)).toUpperCase()}`;
+
+        const [newAnimal] = await db.insert(animals).values({
+          tenantId: req.tenant!.id,
+          animalId,
+          localShelterId,
+          name: catName,
+          species: 'cat',
+          breed: row.breed || 'Domestic Short Hair',
+          age: row.ageGroup === 'Kitten' ? 'Baby' : 'Adult',
+          sex: row.sex || 'unknown',
+          status: 'returned_to_field',
+          recordType: 'tnr',
+          intakeDate: trapDate,
+          colonyLocation: row.colonyLocation || colonyLocation || null,
+          earTipped: row.earTipped === true,
+          caretakerName: caretakerName || null,
+          caretakerPhone: caretakerPhone || null,
+          invoiceNumber: row.invoiceNumber || null,
+          surgeryLocation: row.surgeryLocation || surgeryLocation || null,
+          partnership: row.partnership || partnership || null,
+          releaseLocation: row.releaseLocation || colonyLocation || null,
+          trapNumber: row.trapNumber || null,
+          tnrNotes: row.tnrNotes || row.notes || null,
+          colors: row.color ? [row.color] : [],
+          neuterStatus: row.snCompleted ? (row.sex === 'female' ? 'spayed' : 'neutered') : 'unknown',
+          locationType: 'offsite',
+        }).returning();
+
+        // Auto-create Rabies vaccine record if checked
+        if (row.rabiesVaxGiven && newAnimal) {
+          await db.insert(vaccineRecords).values({
+            tenantId: req.tenant!.id,
+            animalId: newAnimal.id,
+            itemName: 'Rabies',
+            dateGiven: trapDate,
+            dateDue: null,
+            status: 'given',
+            administeredBy: caretakerName || null,
+          });
+        }
+
+        createdRecords.push(newAnimal);
+      }
+
+      res.status(201).json({ created: createdRecords.length, records: createdRecords });
+    } catch (error) { next(error); }
+  });
+
+  /**
+   * PATCH /api/tnr-records/:id
+   * Update a TNR animal record
+   */
+  app.patch('/api/tnr-records/:id', requireTenant, requireAuth, requireRole('admin', 'staff', 'owner'), async (req, res, next) => {
+    try {
+      const { id } = req.params;
+      const updateData = req.body;
+      delete updateData.id; delete updateData.tenantId; delete updateData.recordType;
+      const [updated] = await db.update(animals)
+        .set({ ...updateData, updatedAt: new Date() })
+        .where(and(eq(animals.id, id), eq(animals.tenantId, req.tenant!.id), eq(animals.recordType, 'tnr')))
+        .returning();
+      if (!updated) return res.status(404).json({ error: 'TNR record not found' });
+      res.json({ record: updated });
+    } catch (error) { next(error); }
+  });
+
+  /**
+   * DELETE /api/tnr-records/:id
+   * Delete a TNR animal record
+   */
+  app.delete('/api/tnr-records/:id', requireTenant, requireAuth, requireRole('admin', 'owner'), async (req, res, next) => {
+    try {
+      const { id } = req.params;
+      const [deleted] = await db.delete(animals)
+        .where(and(eq(animals.id, id), eq(animals.tenantId, req.tenant!.id), eq(animals.recordType, 'tnr')))
+        .returning({ id: animals.id });
+      if (!deleted) return res.status(404).json({ error: 'TNR record not found' });
+      res.json({ success: true });
+    } catch (error) { next(error); }
+  });
+
+  /**
+   * PATCH /api/tnr-records/:id/convert
+   * Convert a TNR animal to a rescue intake animal
+   */
+  app.patch('/api/tnr-records/:id/convert', requireTenant, requireAuth, requireRole('admin', 'staff', 'owner'), async (req, res, next) => {
+    try {
+      const { id } = req.params;
+      const [converted] = await db.update(animals)
+        .set({ recordType: 'rescue', status: 'stray_hold', locationType: 'shelter', updatedAt: new Date() })
+        .where(and(eq(animals.id, id), eq(animals.tenantId, req.tenant!.id), eq(animals.recordType, 'tnr')))
+        .returning();
+      if (!converted) return res.status(404).json({ error: 'TNR record not found' });
+      res.json({ record: converted });
+    } catch (error) { next(error); }
   });
 
     return httpServer;

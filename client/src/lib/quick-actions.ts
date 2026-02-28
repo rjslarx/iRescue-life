@@ -15,6 +15,7 @@ import {
   UserCheck,
   UserPlus,
   MessageSquare,
+  Cat,
   type LucideIcon
 } from "lucide-react";
 
@@ -209,6 +210,15 @@ export const ALL_QUICK_ACTIONS: QuickAction[] = [
     actionType: "callback",
     callbackName: "onAddMedicalOrder",
     pageId: "medical-tasks",
+  },
+  {
+    id: "tnr-log",
+    label: "TNR Log",
+    description: "Open the TNR batch entry log",
+    icon: Cat,
+    href: "/dashboard/tnr-log",
+    actionType: "navigate",
+    pageId: "tnr-log",
   },
 ];
 

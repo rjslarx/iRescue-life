@@ -1,7 +1,11 @@
 import { db } from '../db';
 import { animals, kennelRows, type InsertAnimal, type Animal } from '@shared/schema';
-import { eq, and, or, desc, sql, ne, inArray } from 'drizzle-orm';
+import { eq, and, or, desc, sql, ne, inArray, isNull } from 'drizzle-orm';
+
 import { generateLocalShelterId } from '../utils/shelterId';
+
+/** Reusable filter that excludes TNR animals from all standard rescue views */
+export const excludeTnr = or(isNull(animals.recordType), ne(animals.recordType, 'tnr'));
 
 async function checkDuplicateAnimalName(tenantId: string, name: string, excludeAnimalId?: string): Promise<void> {
   const conditions = [
@@ -62,7 +66,7 @@ export async function getAnimalsByTenant(tenantId: string): Promise<(Animal & { 
   const animalResults = await db
     .select()
     .from(animals)
-    .where(eq(animals.tenantId, tenantId))
+    .where(and(eq(animals.tenantId, tenantId), excludeTnr))
     .orderBy(desc(animals.createdAt));
   
   if (!animalResults.length) return [];
@@ -94,7 +98,8 @@ export async function getAvailableAnimals(tenantId: string): Promise<Animal[]> {
     .where(and(
       eq(animals.tenantId, tenantId),
       eq(animals.status, 'available'),
-      eq(animals.medicalHold, false)
+      eq(animals.medicalHold, false),
+      excludeTnr
     ))
     .orderBy(desc(animals.createdAt)) as any;
 }
