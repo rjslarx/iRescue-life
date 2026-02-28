@@ -1,13 +1,11 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/contexts/AuthContext";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -49,7 +47,6 @@ import {
   X,
   Loader2,
 } from "lucide-react";
-import { format } from "date-fns";
 
 const MONTHS = [
   "January","February","March","April","May","June",
@@ -109,10 +106,21 @@ function getMonthString(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
 
+function formatDate(dateStr: string | null): string {
+  if (!dateStr) return "—";
+  const parts = dateStr.split("T")[0].split("-");
+  if (parts.length !== 3) return dateStr;
+  const [year, month, day] = parts;
+  return `${month}/${day}/${year}`;
+}
+
+function toDateInputValue(dateStr: string | null): string {
+  if (!dateStr) return "";
+  return dateStr.split("T")[0];
+}
+
 export default function TnrLogPage() {
   const { toast } = useToast();
-  const { user } = useAuth();
-  const printRef = useRef<HTMLDivElement>(null);
 
   const [currentDate, setCurrentDate] = useState(new Date());
   const [showBatchDialog, setShowBatchDialog] = useState(false);
@@ -124,7 +132,7 @@ export default function TnrLogPage() {
   const monthStr = getMonthString(currentDate);
   const monthLabel = `${MONTHS[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
 
-  const { data, isLoading, refetch } = useQuery<{ records: TnrRecord[] }>({
+  const { data, isLoading } = useQuery<{ records: TnrRecord[] }>({
     queryKey: ["/api/tnr-records", monthStr],
     queryFn: async () => {
       const res = await apiRequest("GET", `/api/tnr-records?month=${monthStr}`);
@@ -166,7 +174,22 @@ export default function TnrLogPage() {
     setCurrentDate(d => new Date(d.getFullYear(), d.getMonth() + 1, 1));
   }
 
-  const printRow = records.find(r => r.id === printRowId);
+  function doPrintMonth() {
+    document.body.classList.remove("tnr-printing-row");
+    window.print();
+  }
+
+  function doPrintRow(id: string) {
+    setPrintRowId(id);
+    document.body.classList.add("tnr-printing-row");
+    setTimeout(() => {
+      window.print();
+      document.body.classList.remove("tnr-printing-row");
+      setPrintRowId(null);
+    }, 150);
+  }
+
+  const printRow = records.find(r => r.id === printRowId) ?? null;
 
   return (
     <DashboardLayout>
@@ -174,8 +197,10 @@ export default function TnrLogPage() {
         @media print {
           @page { margin: 1.5cm; }
           .print-hidden { display: none !important; }
-          .print-only { display: block !important; }
+          .print-only { display: none !important; }
           .tnr-table-wrapper { overflow: visible !important; }
+          body.tnr-printing-row .tnr-main-content { display: none !important; }
+          body.tnr-printing-row .print-only { display: block !important; }
         }
         .print-only { display: none; }
       `}</style>
@@ -187,8 +212,8 @@ export default function TnrLogPage() {
           </div>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
             <tbody>
+              <tr><td style={{ fontWeight: "bold", padding: "4px 8px", width: 140 }}>Date</td><td style={{ padding: "4px 8px" }}>{formatDate(printRow.intakeDate)}</td></tr>
               <tr><td style={{ fontWeight: "bold", padding: "4px 8px" }}>Trap #</td><td style={{ padding: "4px 8px" }}>{printRow.trapNumber || "—"}</td></tr>
-              <tr><td style={{ fontWeight: "bold", padding: "4px 8px" }}>Date</td><td style={{ padding: "4px 8px" }}>{printRow.intakeDate ? format(new Date(printRow.intakeDate), "MM/dd/yyyy") : "—"}</td></tr>
               <tr><td style={{ fontWeight: "bold", padding: "4px 8px" }}>Color</td><td style={{ padding: "4px 8px" }}>{printRow.colors?.join(", ") || "—"}</td></tr>
               <tr><td style={{ fontWeight: "bold", padding: "4px 8px" }}>Sex</td><td style={{ padding: "4px 8px" }}>{printRow.sex || "—"}</td></tr>
               <tr><td style={{ fontWeight: "bold", padding: "4px 8px" }}>Breed</td><td style={{ padding: "4px 8px" }}>{printRow.breed || "—"}</td></tr>
@@ -204,8 +229,8 @@ export default function TnrLogPage() {
         </div>
       )}
 
-      <div className="p-6 space-y-6 print-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="p-6 space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-3 print-hidden">
           <div className="flex items-center gap-2">
             <Cat className="h-6 w-6 text-muted-foreground" />
             <h1 className="text-2xl font-bold">TNR Log</h1>
@@ -214,7 +239,7 @@ export default function TnrLogPage() {
             <Button size="icon" variant="ghost" onClick={prevMonth} data-testid="button-prev-month"><ChevronLeft className="h-4 w-4" /></Button>
             <span className="text-base font-medium min-w-36 text-center">{monthLabel}</span>
             <Button size="icon" variant="ghost" onClick={nextMonth} data-testid="button-next-month"><ChevronRight className="h-4 w-4" /></Button>
-            <Button variant="outline" onClick={() => window.print()} data-testid="button-print-month">
+            <Button variant="outline" onClick={doPrintMonth} data-testid="button-print-month">
               <Printer className="h-4 w-4 mr-2" /> Print Month
             </Button>
             <Button onClick={() => setShowBatchDialog(true)} data-testid="button-new-batch">
@@ -223,76 +248,79 @@ export default function TnrLogPage() {
           </div>
         </div>
 
-        {isLoading ? (
-          <div className="space-y-2">
-            {[1,2,3].map(i => <Skeleton key={i} className="h-12 w-full" />)}
-          </div>
-        ) : records.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24 text-center gap-4">
-            <Cat className="h-12 w-12 text-muted-foreground/40" />
-            <div>
-              <p className="text-lg font-medium">No TNR records for {monthLabel}</p>
-              <p className="text-sm text-muted-foreground">Start a new batch to log trapped cats for this month.</p>
+        <div className="tnr-main-content">
+          {isLoading ? (
+            <div className="space-y-2">
+              {[1,2,3].map(i => <Skeleton key={i} className="h-12 w-full" />)}
             </div>
-            <Button onClick={() => setShowBatchDialog(true)} data-testid="button-start-batch">
-              <Plus className="h-4 w-4 mr-2" /> Start Batch
-            </Button>
-          </div>
-        ) : (
-          <div className="tnr-table-wrapper overflow-x-auto rounded-md border">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-muted/40">
-                  {["Date","Trap #","Color","Sex","Breed","Age","Colony","Surgery Location","Invoice #","Partnership","S/N","Ear Tip","Notes","Actions"].map(h => (
-                    <th key={h} className="px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {records.map((r) => (
-                  <tr key={r.id} className="border-b last:border-0 hover-elevate" data-testid={`row-tnr-${r.id}`}>
-                    <td className="px-3 py-2 whitespace-nowrap">{r.intakeDate ? format(new Date(r.intakeDate), "MM/dd/yyyy") : "—"}</td>
-                    <td className="px-3 py-2 whitespace-nowrap">{r.trapNumber || "—"}</td>
-                    <td className="px-3 py-2 whitespace-nowrap">{r.colors?.join(", ") || "—"}</td>
-                    <td className="px-3 py-2 whitespace-nowrap capitalize">{r.sex || "—"}</td>
-                    <td className="px-3 py-2 whitespace-nowrap">{r.breed || "—"}</td>
-                    <td className="px-3 py-2 whitespace-nowrap">{r.neuterStatus === "unknown" || !r.neuterStatus ? (r.name?.includes("Kitten") ? "Kitten" : "Adult") : "Adult"}</td>
-                    <td className="px-3 py-2 max-w-32 truncate">{r.colonyLocation || "—"}</td>
-                    <td className="px-3 py-2 max-w-32 truncate">{r.surgeryLocation || "—"}</td>
-                    <td className="px-3 py-2 whitespace-nowrap">{r.invoiceNumber || "—"}</td>
-                    <td className="px-3 py-2 whitespace-nowrap">{r.partnership || "—"}</td>
-                    <td className="px-3 py-2 text-center">
-                      {r.neuterStatus && r.neuterStatus !== "unknown" ? <Check className="h-4 w-4 text-green-600 mx-auto" /> : <span className="text-muted-foreground">—</span>}
-                    </td>
-                    <td className="px-3 py-2 text-center">
-                      {r.earTipped ? <Check className="h-4 w-4 text-green-600 mx-auto" /> : <span className="text-muted-foreground">—</span>}
-                    </td>
-                    <td className="px-3 py-2 max-w-40 truncate text-muted-foreground">{r.tnrNotes || "—"}</td>
-                    <td className="px-3 py-2 whitespace-nowrap">
-                      <div className="flex items-center gap-1">
-                        <Button size="icon" variant="ghost" onClick={() => setEditRecord(r)} data-testid={`button-edit-${r.id}`}>
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button size="icon" variant="ghost" onClick={() => { setPrintRowId(r.id); setTimeout(() => window.print(), 100); }} data-testid={`button-print-row-${r.id}`}>
-                          <Printer className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button size="icon" variant="ghost" onClick={() => setConvertId(r.id)} data-testid={`button-convert-${r.id}`}>
-                          <ArrowRightCircle className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button size="icon" variant="ghost" onClick={() => setDeleteId(r.id)} data-testid={`button-delete-${r.id}`}>
-                          <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                        </Button>
-                      </div>
-                    </td>
+          ) : records.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-24 text-center gap-4">
+              <Cat className="h-12 w-12 text-muted-foreground/40" />
+              <div>
+                <p className="text-lg font-medium">No TNR records for {monthLabel}</p>
+                <p className="text-sm text-muted-foreground">Start a new batch to log trapped cats for this month.</p>
+              </div>
+              <Button onClick={() => setShowBatchDialog(true)} data-testid="button-start-batch">
+                <Plus className="h-4 w-4 mr-2" /> Start Batch
+              </Button>
+            </div>
+          ) : (
+            <div className="tnr-table-wrapper overflow-x-auto rounded-md border">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/40">
+                    {["Date","Trap #","Color","Sex","Breed","Age","Colony","Surgery Location","Invoice #","Partnership","S/N","Ear Tip","Notes"].map(h => (
+                      <th key={h} className="px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">{h}</th>
+                    ))}
+                    <th className="px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap print-hidden">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-            <div className="px-3 py-2 text-sm text-muted-foreground border-t">
-              {records.length} {records.length === 1 ? "cat" : "cats"} logged in {monthLabel}
+                </thead>
+                <tbody>
+                  {records.map((r) => (
+                    <tr key={r.id} className="border-b last:border-0" data-testid={`row-tnr-${r.id}`}>
+                      <td className="px-3 py-2 whitespace-nowrap">{formatDate(r.intakeDate)}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">{r.trapNumber || "—"}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">{r.colors?.join(", ") || "—"}</td>
+                      <td className="px-3 py-2 whitespace-nowrap capitalize">{r.sex || "—"}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">{r.breed || "—"}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">{r.name?.includes("Kitten") ? "Kitten" : "Adult"}</td>
+                      <td className="px-3 py-2 max-w-32 truncate">{r.colonyLocation || "—"}</td>
+                      <td className="px-3 py-2 max-w-32 truncate">{r.surgeryLocation || "—"}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">{r.invoiceNumber || "—"}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">{r.partnership || "—"}</td>
+                      <td className="px-3 py-2 text-center">
+                        {r.neuterStatus && r.neuterStatus !== "unknown" ? <Check className="h-4 w-4 text-green-600 mx-auto" /> : <span className="text-muted-foreground">—</span>}
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        {r.earTipped ? <Check className="h-4 w-4 text-green-600 mx-auto" /> : <span className="text-muted-foreground">—</span>}
+                      </td>
+                      <td className="px-3 py-2 max-w-40 truncate text-muted-foreground">{r.tnrNotes || "—"}</td>
+                      <td className="px-3 py-2 whitespace-nowrap print-hidden">
+                        <div className="flex items-center gap-1">
+                          <Button size="icon" variant="ghost" onClick={() => setEditRecord(r)} data-testid={`button-edit-${r.id}`}>
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button size="icon" variant="ghost" onClick={() => doPrintRow(r.id)} data-testid={`button-print-row-${r.id}`}>
+                            <Printer className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button size="icon" variant="ghost" onClick={() => setConvertId(r.id)} data-testid={`button-convert-${r.id}`}>
+                            <ArrowRightCircle className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button size="icon" variant="ghost" onClick={() => setDeleteId(r.id)} data-testid={`button-delete-${r.id}`}>
+                            <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div className="px-3 py-2 text-sm text-muted-foreground border-t print-hidden">
+                {records.length} {records.length === 1 ? "cat" : "cats"} logged in {monthLabel}
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       <BatchEntryDialog
@@ -369,7 +397,10 @@ interface BatchEntryDialogProps {
 
 function BatchEntryDialog({ open, onClose, onSuccess }: BatchEntryDialogProps) {
   const { toast } = useToast();
-  const [trappingDate, setTrappingDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [trappingDate, setTrappingDate] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  });
   const [colonyLocation, setColonyLocation] = useState("");
   const [caretakerName, setCaretakerName] = useState("");
   const [caretakerPhone, setCaretakerPhone] = useState("");
@@ -544,6 +575,7 @@ interface EditRecordDialogProps {
 
 function EditRecordDialog({ record, onClose, onSuccess }: EditRecordDialogProps) {
   const { toast } = useToast();
+  const [intakeDate, setIntakeDate] = useState(toDateInputValue(record.intakeDate));
   const [colonyLocation, setColonyLocation] = useState(record.colonyLocation || "");
   const [trapNumber, setTrapNumber] = useState(record.trapNumber || "");
   const [invoiceNumber, setInvoiceNumber] = useState(record.invoiceNumber || "");
@@ -555,6 +587,7 @@ function EditRecordDialog({ record, onClose, onSuccess }: EditRecordDialogProps)
   const updateMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("PATCH", `/api/tnr-records/${record.id}`, {
+        intakeDate: intakeDate || null,
         colonyLocation, trapNumber, invoiceNumber, surgeryLocation, partnership, earTipped, tnrNotes,
       });
       if (!res.ok) throw new Error("Failed to update record");
@@ -574,6 +607,10 @@ function EditRecordDialog({ record, onClose, onSuccess }: EditRecordDialogProps)
           <DialogTitle>Edit TNR Record</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="edit-date">Trapping Date</Label>
+            <Input id="edit-date" type="date" value={intakeDate} onChange={e => setIntakeDate(e.target.value)} data-testid="input-edit-date" />
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Trap #</Label>
