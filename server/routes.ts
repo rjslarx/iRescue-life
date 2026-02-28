@@ -6962,7 +6962,7 @@ Crawl-delay: 1
    * POST /api/animals/:id/generate-ad-copy
    * Generate Google Ads Grant compliant ad copy for an animal using AI
    */
-  app.post('/api/animals/:id/generate-ad-copy', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+  app.post('/api/animals/:id/generate-ad-copy', requireTenant, requireAuth, requireRoleOrPageAccess('animals', 'admin', 'staff'), async (req, res, next) => {
     try {
       const { getAnimalById } = await import('./services/animals');
       const { generateAdCopy } = await import('./geminiAdCopy');
@@ -7062,7 +7062,7 @@ Crawl-delay: 1
    * POST /api/animals/:id/generate-bio
    * Generate a Petfinder-ready bio for an animal using AI based on personality tags
    */
-  app.post('/api/animals/:id/generate-bio', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+  app.post('/api/animals/:id/generate-bio', requireTenant, requireAuth, requireRoleOrPageAccess('animals', 'admin', 'staff'), async (req, res, next) => {
     try {
       const { getAnimalById } = await import('./services/animals');
       const { generateAnimalBio } = await import('./services/aiAnimalBio');
@@ -7483,9 +7483,9 @@ Crawl-delay: 1
 
   /**
    * PATCH /api/animals/:id
-   * Update animal (staff only)
+   * Update animal (staff only, or users with explicit animals page permission)
    */
-  app.patch('/api/animals/:id', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+  app.patch('/api/animals/:id', requireTenant, requireAuth, requireRoleOrPageAccess('animals', 'admin', 'staff'), async (req, res, next) => {
     try {
       const { updateAnimal } = await import('./services/animals');
       const { ObjectStorageService } = await import('./objectStorage');
@@ -8246,7 +8246,7 @@ Crawl-delay: 1
    * Upload animal photos directly (proxied through backend to avoid CORS)
    * Uses Google Drive if configured, otherwise falls back to Replit object storage
    */
-  app.post('/api/animals/photos/upload', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+  app.post('/api/animals/photos/upload', requireTenant, requireAuth, requireRoleOrPageAccess('animals', 'admin', 'staff'), async (req, res, next) => {
     try {
       const multer = (await import('multer')).default;
       const { TenantFileStorage } = await import('./lib/tenantFileStorage');
@@ -8564,7 +8564,7 @@ Crawl-delay: 1
    * PUT /api/animals/:id/photos
    * Update animal photos after upload
    */
-  app.put('/api/animals/:id/photos', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+  app.put('/api/animals/:id/photos', requireTenant, requireAuth, requireRoleOrPageAccess('animals', 'admin', 'staff'), async (req, res, next) => {
     try {
       const { ObjectStorageService } = await import('./objectStorage');
       const { getAnimalById, updateAnimal } = await import('./services/animals');
