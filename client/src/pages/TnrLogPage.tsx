@@ -326,6 +326,33 @@ export default function TnrLogPage() {
               <tr><td style={{ fontWeight: "bold", padding: "4px 8px" }}>Notes</td><td style={{ padding: "4px 8px" }}>{printRow.tnrNotes || "—"}</td></tr>
             </tbody>
           </table>
+          {(printFileMap[printRow.id] ?? []).length > 0 && (
+            <div style={{ marginTop: 20 }}>
+              <div style={{ fontWeight: "bold", fontSize: 13, borderBottom: "1px solid #ccc", paddingBottom: 4, marginBottom: 12 }}>
+                Attachments
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+                {(printFileMap[printRow.id] ?? []).map((file: any) => (
+                  <div key={file.id} style={{ textAlign: "center", maxWidth: 200 }}>
+                    {file.mimeType?.startsWith("image/") ? (
+                      <img
+                        src={resolveFileUrl(file.fileUrl)}
+                        alt={file.fileName}
+                        style={{ maxWidth: 200, maxHeight: 200, border: "1px solid #ddd", display: "block" }}
+                      />
+                    ) : (
+                      <div style={{ padding: "8px 12px", border: "1px solid #ddd", fontSize: 11, textAlign: "left" }}>
+                        {file.fileName}
+                      </div>
+                    )}
+                    {file.description && (
+                      <div style={{ fontSize: 10, color: "#666", marginTop: 3 }}>{file.description}</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -458,6 +485,43 @@ export default function TnrLogPage() {
               <div className="px-3 py-2 text-sm text-muted-foreground border-t print-hidden">
                 {records.length} {records.length === 1 ? "cat" : "cats"} logged in {monthLabel}
               </div>
+            </div>
+          )}
+          {Object.keys(printFileMap).length > 0 && (
+            <div className="tnr-print-attachments" style={{ marginTop: 24 }}>
+              <div style={{ fontWeight: "bold", fontSize: 13, borderBottom: "2px solid #333", paddingBottom: 4, marginBottom: 16 }}>
+                Attachments
+              </div>
+              {records
+                .filter(r => (printFileMap[r.id] ?? []).length > 0)
+                .map(r => (
+                  <div key={r.id} style={{ marginBottom: 20 }}>
+                    <div style={{ fontWeight: "bold", fontSize: 11, color: "#444", marginBottom: 8, borderBottom: "1px solid #eee", paddingBottom: 3 }}>
+                      {r.colors?.join(", ") || "Unknown"} — Trap #{r.trapNumber || "—"} — {formatDate(r.intakeDate)}
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+                      {(printFileMap[r.id] ?? []).map((file: any) => (
+                        <div key={file.id} style={{ textAlign: "center", maxWidth: 180 }}>
+                          {file.mimeType?.startsWith("image/") ? (
+                            <img
+                              src={resolveFileUrl(file.fileUrl)}
+                              alt={file.fileName}
+                              style={{ maxWidth: 180, maxHeight: 180, border: "1px solid #ddd", display: "block" }}
+                            />
+                          ) : (
+                            <div style={{ padding: "8px 12px", border: "1px solid #ddd", fontSize: 10, textAlign: "left" }}>
+                              {file.fileName}
+                            </div>
+                          )}
+                          {file.description && (
+                            <div style={{ fontSize: 10, color: "#666", marginTop: 3 }}>{file.description}</div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))
+              }
             </div>
           )}
         </div>
@@ -824,12 +888,6 @@ function TnrAttachmentsDrawer({ animalId, animalName, open, onClose }: TnrAttach
     } finally {
       setIsUploading(false);
     }
-  }
-
-  function resolveFileUrl(fileUrl: string): string {
-    if (fileUrl.startsWith("http")) return fileUrl;
-    if (fileUrl.startsWith("/objects/")) return fileUrl;
-    return fileUrl;
   }
 
   return (
