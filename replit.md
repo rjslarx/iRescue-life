@@ -72,3 +72,14 @@ Core functionalities include:
 - **express-rate-limit:** Request limiting.
 - **node-cron:** Task scheduling.
 - **Twilio (optional):** SMS notifications.
+
+## TNR (Trap-Neuter-Return) Log Module
+- Uses `record_type='tnr'` discriminator on the `animals` table (no separate table)
+- Enabled per-tenant via `tnr_enabled` column on `tenants` table (toggle in Settings → Integrations)
+- Routes: `GET/POST /api/tnr-records`, `POST /api/tnr-records/batch`, `PATCH /api/tnr-records/:id`, `DELETE /api/tnr-records/:id`, `PATCH /api/tnr-records/:id/convert`
+- TNR records are excluded from all standard animal pipeline filters
+- Settings toggle: `PATCH /api/tenant/settings/tnr` (dedicated endpoint)
+- Page: `TnrLogPage.tsx`, Sidebar: Operations > TNR Log (conditional on `tnr_enabled`)
+- Date formatting: uses `formatDate()` helper (splits YYYY-MM-DD string directly — no `new Date()` to avoid UTC off-by-one)
+- Print: `doPrintMonth()` removes body class; `doPrintRow()` adds `tnr-printing-row` to body → hides `.tnr-main-content`, shows `.print-only`
+- **TNR Attachments**: Each saved TNR row has a paperclip icon button that opens a `TnrAttachmentsDrawer` (right Sheet). Reuses the existing `medical_files` table and `server/routes/medicalFileUpload.ts` endpoints. The `description` field stores the category label ("Photo", "Rabies Certificate", "Medical Note"). Badge count shown on the button when files exist. Upload supports both Replit Object Storage (signed URL) and Google Drive (server-side) paths.
