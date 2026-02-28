@@ -168,6 +168,7 @@ export default function TnrLogPage() {
   const [attachmentAnimalId, setAttachmentAnimalId] = useState<string | null>(null);
   const [attachmentAnimalName, setAttachmentAnimalName] = useState<string>("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const fmtSex = (s: string | null) => s === 'male' ? 'M' : s === 'female' ? 'F' : s || '—';
 
   const monthStr = getMonthString(currentDate);
   const monthLabel = `${MONTHS[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
@@ -321,7 +322,7 @@ export default function TnrLogPage() {
               <tr><td style={{ fontWeight: "bold", padding: "4px 8px", width: 140 }}>Date</td><td style={{ padding: "4px 8px" }}>{formatDate(printRow.intakeDate)}</td></tr>
               <tr><td style={{ fontWeight: "bold", padding: "4px 8px" }}>Trap #</td><td style={{ padding: "4px 8px" }}>{printRow.trapNumber || "—"}</td></tr>
               <tr><td style={{ fontWeight: "bold", padding: "4px 8px" }}>Color</td><td style={{ padding: "4px 8px" }}>{printRow.colors?.join(", ") || "—"}</td></tr>
-              <tr><td style={{ fontWeight: "bold", padding: "4px 8px" }}>Sex</td><td style={{ padding: "4px 8px" }}>{printRow.sex || "—"}</td></tr>
+              <tr><td style={{ fontWeight: "bold", padding: "4px 8px" }}>Sex</td><td style={{ padding: "4px 8px" }}>{fmtSex(printRow.sex)}</td></tr>
               <tr><td style={{ fontWeight: "bold", padding: "4px 8px" }}>Breed</td><td style={{ padding: "4px 8px" }}>{printRow.breed || "—"}</td></tr>
               <tr><td style={{ fontWeight: "bold", padding: "4px 8px" }}>Colony Location</td><td style={{ padding: "4px 8px" }}>{printRow.colonyLocation || "—"}</td></tr>
               <tr><td style={{ fontWeight: "bold", padding: "4px 8px" }}>Surgery Location</td><td style={{ padding: "4px 8px" }}>{printRow.surgeryLocation || "—"}</td></tr>
@@ -441,7 +442,7 @@ export default function TnrLogPage() {
                       <td className="px-3 py-2 whitespace-nowrap">{formatDate(r.intakeDate)}</td>
                       <td className="px-3 py-2 whitespace-nowrap">{r.trapNumber || "—"}</td>
                       <td className="px-3 py-2 whitespace-nowrap">{r.colors?.join(", ") || "—"}</td>
-                      <td className="px-3 py-2 whitespace-nowrap capitalize">{r.sex || "—"}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">{fmtSex(r.sex)}</td>
                       <td className="px-3 py-2 whitespace-nowrap">{r.breed || "—"}</td>
                       <td className="px-3 py-2 whitespace-nowrap">{r.name?.includes("Kitten") ? "Kitten" : "Adult"}</td>
                       <td className="px-3 py-2 max-w-32 truncate">{r.colonyLocation || "—"}</td>

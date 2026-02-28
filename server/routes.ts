@@ -41271,6 +41271,9 @@ The user asking is a tenant administrator or staff member.`;
       const { id } = req.params;
       const updateData = req.body;
       delete updateData.id; delete updateData.tenantId; delete updateData.recordType;
+      if (updateData.intakeDate && typeof updateData.intakeDate === 'string') {
+        updateData.intakeDate = new Date(updateData.intakeDate);
+      }
       const [updated] = await db.update(animals)
         .set({ ...updateData, updatedAt: new Date() })
         .where(and(eq(animals.id, id), eq(animals.tenantId, req.tenant!.id), eq(animals.recordType, 'tnr')))
