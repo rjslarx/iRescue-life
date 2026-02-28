@@ -110,6 +110,8 @@ export default function IntegrationsSettingsPage() {
   const [surrenderFeeInput, setSurrenderFeeInput] = useState("");
   const [surrenderFeeEnabled, setSurrenderFeeEnabled] = useState(false);
   const [testPhoneNumber, setTestPhoneNumber] = useState("");
+  const [brandSidValue, setBrandSidValue] = useState("");
+  const [brandSidLoaded, setBrandSidLoaded] = useState(false);
 
   useEffect(() => {
     if (data?.tenant) {
@@ -123,6 +125,13 @@ export default function IntegrationsSettingsPage() {
       }
     }
   }, [data?.tenant?.defaultSurrenderFee]);
+
+  useEffect(() => {
+    if (data?.tenant && !brandSidLoaded) {
+      setBrandSidValue((data.tenant as any).twilioBrandSid ?? "");
+      setBrandSidLoaded(true);
+    }
+  }, [data?.tenant, brandSidLoaded]);
 
   const stripeForm = useForm<StripeSettingsData>({
     resolver: zodResolver(stripeSettingsSchema),
@@ -279,6 +288,20 @@ export default function IntegrationsSettingsPage() {
     },
     onError: (error: any) => {
       toast({ title: "Test failed", description: error.message || "Failed to send test SMS.", variant: "destructive" });
+    },
+  });
+
+  const updateBrandSidMutation = useMutation({
+    mutationFn: async (twilioBrandSid: string) => {
+      const response = await apiRequest('PATCH', '/api/tenant/settings/twilio/brand-sid', { twilioBrandSid });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/tenant/settings'] });
+      toast({ title: "Brand SID saved", description: "A2P 10DLC Brand Registration SID has been updated." });
+    },
+    onError: (error: any) => {
+      toast({ title: "Failed to save", description: error.message || "Could not save Brand SID.", variant: "destructive" });
     },
   });
 
@@ -740,6 +763,34 @@ export default function IntegrationsSettingsPage() {
                     </Button>
                   </div>
                   <p className="text-xs text-muted-foreground">US numbers like (555) 867-5309 work as-is — international numbers need a + country code prefix</p>
+                </div>
+              )}
+
+              {data?.tenant?.twilioEnabled && (
+                <div className="rounded-lg border p-4 space-y-3">
+                  <div>
+                    <h4 className="text-sm font-medium">A2P Brand Registration SID</h4>
+                    <p className="text-xs text-muted-foreground mt-0.5">Stored for compliance tracking only — not used for sending</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="BNxxxxxxxxxxxxxx"
+                      value={brandSidValue}
+                      onChange={(e) => setBrandSidValue(e.target.value)}
+                      className="font-mono flex-1"
+                      data-testid="input-brand-sid"
+                    />
+                    <Button
+                      variant="outline"
+                      onClick={() => updateBrandSidMutation.mutate(brandSidValue)}
+                      disabled={updateBrandSidMutation.isPending || !canEdit}
+                      data-testid="button-save-brand-sid"
+                    >
+                      {updateBrandSidMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                      <Save className="h-4 w-4 mr-2" />
+                      Save
+                    </Button>
+                  </div>
                 </div>
               )}
 

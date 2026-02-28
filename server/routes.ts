@@ -22048,6 +22048,32 @@ Submitted: ${new Date().toLocaleString()}
   });
 
   /**
+   * PATCH /api/tenant/settings/twilio/brand-sid
+   * Update just the Brand Registration SID (admin only, Twilio must already be enabled)
+   */
+  app.patch('/api/tenant/settings/twilio/brand-sid', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+    try {
+      const schema = z.object({
+        twilioBrandSid: z.string().optional()
+          .transform((v) => v?.trim() || null)
+          .refine((v) => !v || v.startsWith("BN"), { message: "Brand SID must start with BN" }),
+      });
+
+      const { twilioBrandSid } = schema.parse(req.body);
+
+      const [updatedTenant] = await db
+        .update(tenants)
+        .set({ twilioBrandSid })
+        .where(eq(tenants.id, req.tenant!.id))
+        .returning();
+
+      res.json({ success: true, tenant: updatedTenant });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * POST /api/tenant/settings/twilio/test
    * Send a test SMS (admin only)
    */
