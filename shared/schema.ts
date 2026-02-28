@@ -903,6 +903,10 @@ export const donations = pgTable("donations", {
   recurringFrequency: text("recurring_frequency").$type<"monthly" | "quarterly" | "yearly">(), // Frequency if recurring
   externalSubscriptionId: text("external_subscription_id"), // External subscription ID (e.g., Stripe subscription ID)
   recurringStatus: text("recurring_status").$type<"active" | "paused" | "cancelled">(), // Status of recurring subscription
+  donorCountry: text("donor_country"), // Country from billing address
+  isPublic: boolean("is_public").notNull().default(true), // Whether this donation is visible on public donor wall
+  contactId: uuid("contact_id").references(() => contacts.id, { onDelete: 'set null' }), // Linked contact record
+  paymentMethod: text("payment_method"), // e.g. 'stripe', 'check', 'cash'
   date: timestamp("date").notNull().defaultNow(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });

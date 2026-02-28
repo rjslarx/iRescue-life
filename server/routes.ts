@@ -25138,9 +25138,12 @@ Submitted: ${new Date().toLocaleString()}
 
           const customerEmail = session.customer_email || session.customer_details?.email;
           const customerName = session.customer_details?.name || 'Anonymous Donor';
+          const billingAddr = session.customer_details?.address;
+
+          console.log(`[STRIPE-WEBHOOK] session=${session.id} intent=${session.payment_intent} amount=${session.amount_total} customer=${customerEmail || 'none'}`);
 
           if (!customerEmail) {
-            console.error('Checkout session completed without customer email');
+            console.error('[STRIPE-WEBHOOK] No customer email — skipping donation processing');
             break;
           }
 
@@ -25185,6 +25188,7 @@ Submitted: ${new Date().toLocaleString()}
               totalDonated: isPaymentComplete ? (session.amount_total || 0) : 0,
               lastDonationDate: isPaymentComplete ? new Date() : null,
             }).returning();
+            console.log(`[STRIPE-WEBHOOK] Created new donor ${donor.id} for ${customerEmail}`);
           } else if (isPaymentComplete) {
             [donor] = await db
               .update(donors)
@@ -25195,9 +25199,10 @@ Submitted: ${new Date().toLocaleString()}
               })
               .where(eq(donors.id, donor.id))
               .returning();
+            console.log(`[STRIPE-WEBHOOK] Updated existing donor ${donor.id} for ${customerEmail}`);
           }
 
-          await db.insert(payments).values({
+          const [paymentRecord] = await db.insert(payments).values({
             tenantId: tenant.id,
             donorId: donor.id,
             stripePaymentIntentId: session.payment_intent,
@@ -25208,9 +25213,9 @@ Submitted: ${new Date().toLocaleString()}
             paymentMethod: 'stripe',
             isRecurring: session.mode === 'subscription',
             message: session.metadata?.message,
-          });
+          }).returning();
           
-          console.log(`[STRIPE-WEBHOOK] Created payment record for ${session.payment_intent}, amount: ${session.amount_total}, status: ${paymentStatus}`);
+          console.log(`[STRIPE-WEBHOOK] Created payment record ${paymentRecord.id} for intent ${session.payment_intent}, amount: ${session.amount_total}, status: ${paymentStatus}`);
           
           // Classify payment type from metadata and DB cross-references
           const sessionMetadata = session.metadata || {};
@@ -25241,10 +25246,23 @@ Submitted: ${new Date().toLocaleString()}
 
           // Create donation record only for actual donations
           if (isPaymentComplete && isDonation) {
+            const feeNote = sessionMetadata.donorCoveredFees === 'true' && sessionMetadata.feesCovered
+              ? ` (donor covered $${(parseInt(sessionMetadata.feesCovered, 10) / 100).toFixed(2)} in processing fees)`
+              : '';
+            const donationDescription = sessionMetadata.sponsoredAnimalName
+              ? `Sponsored: ${sessionMetadata.sponsoredAnimalName}${feeNote}`
+              : feeNote || null;
+
             const [donationRecord] = await db.insert(donations).values({
               tenantId: tenant.id,
+              donorId: donor.id,
               donorName: customerName,
               donorEmail: customerEmail,
+              donorAddress: billingAddr?.line1 || null,
+              donorCity: billingAddr?.city || null,
+              donorState: billingAddr?.state || null,
+              donorZip: billingAddr?.postal_code || null,
+              donorCountry: billingAddr?.country || null,
               amount: session.amount_total || 0,
               source: 'stripe' as any,
               date: new Date(),
@@ -25252,12 +25270,13 @@ Submitted: ${new Date().toLocaleString()}
               isRecurring: session.mode === 'subscription',
               recurringFrequency: session.mode === 'subscription' ? 'monthly' : null,
               recurringStatus: session.mode === 'subscription' ? 'active' : null,
-              donationType: 'cash',
-              description: sessionMetadata.sponsoredAnimalName ? `Sponsored: ${sessionMetadata.sponsoredAnimalName}` : null,
+              donationType: 'online',
+              paymentMethod: 'stripe',
               isPublic: true,
+              description: donationDescription,
             }).returning();
             
-            console.log(`[STRIPE-WEBHOOK] Created donation record ${donationRecord.id} for Finance page, donor: ${customerName}, amount: ${session.amount_total / 100}`);
+            console.log(`[STRIPE-WEBHOOK] Created donation record ${donationRecord.id} for Finance page, donor: ${customerName} (${donor.id}), amount: $${session.amount_total / 100}${feeNote}`);
           } else if (isPaymentComplete && !isDonation) {
             console.log(`[STRIPE-WEBHOOK] Skipping donation record for non-donation payment: ${paymentTypeLabel}`);
           }
@@ -25743,7 +25762,7 @@ Submitted: ${new Date().toLocaleString()}
 
       res.json({ received: true });
     } catch (error) {
-      console.error('Webhook error:', error);
+      console.error('[STRIPE-WEBHOOK] Unhandled error:', error instanceof Error ? error.stack : error);
       res.status(400).send(`Webhook Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   });
