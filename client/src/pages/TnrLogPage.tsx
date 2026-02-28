@@ -275,6 +275,7 @@ export default function TnrLogPage() {
       <style>{`
         @media print {
           @page { size: landscape; margin: 1cm; }
+          html, body { overflow: hidden !important; }
           .print-hidden { display: none !important; }
           .print-only { display: none !important; }
           .tnr-table-wrapper { overflow: visible !important; }
