@@ -131,6 +131,30 @@ function toDateInputValue(dateStr: string | null): string {
   return dateStr.split("T")[0];
 }
 
+function resolveFileUrl(fileUrl: string): string {
+  if (fileUrl.startsWith("http")) return fileUrl;
+  if (fileUrl.startsWith("/objects/")) return fileUrl;
+  return fileUrl;
+}
+
+async function collectFilesForPrint(ids: string[]): Promise<Record<string, any[]>> {
+  const map: Record<string, any[]> = {};
+  await Promise.all(ids.map(async (id) => {
+    const cached = queryClient.getQueryData<{ files: any[] }>(["/api/animals", id, "files"]);
+    if (cached?.files?.length) {
+      map[id] = cached.files;
+    } else {
+      try {
+        const data = await queryClient.fetchQuery<{ files: any[] }>({
+          queryKey: ["/api/animals", id, "files"],
+        });
+        if (data?.files?.length) map[id] = data.files;
+      } catch {}
+    }
+  }));
+  return map;
+}
+
 export default function TnrLogPage() {
   const { toast } = useToast();
 
@@ -140,6 +164,7 @@ export default function TnrLogPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [editRecord, setEditRecord] = useState<TnrRecord | null>(null);
   const [printRowId, setPrintRowId] = useState<string | null>(null);
+  const [printFileMap, setPrintFileMap] = useState<Record<string, any[]>>({});
   const [attachmentAnimalId, setAttachmentAnimalId] = useState<string | null>(null);
   const [attachmentAnimalName, setAttachmentAnimalName] = useState<string>("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -206,27 +231,40 @@ export default function TnrLogPage() {
     setCurrentDate(d => new Date(d.getFullYear(), d.getMonth() + 1, 1));
   }
 
-  function doPrintMonth() {
+  async function doPrintMonth() {
+    const fileMap = await collectFilesForPrint(records.map(r => r.id));
+    setPrintFileMap(fileMap);
     document.body.classList.remove("tnr-printing-row");
-    window.print();
+    document.body.classList.remove("tnr-printing-selected");
+    setTimeout(() => {
+      window.print();
+      setPrintFileMap({});
+    }, 400);
   }
 
-  function doPrintSelected() {
+  async function doPrintSelected() {
+    const ids = records.filter(r => selectedIds.has(r.id)).map(r => r.id);
+    const fileMap = await collectFilesForPrint(ids);
+    setPrintFileMap(fileMap);
     document.body.classList.add("tnr-printing-selected");
     setTimeout(() => {
       window.print();
       document.body.classList.remove("tnr-printing-selected");
-    }, 150);
+      setPrintFileMap({});
+    }, 400);
   }
 
-  function doPrintRow(id: string) {
+  async function doPrintRow(id: string) {
+    const fileMap = await collectFilesForPrint([id]);
+    setPrintFileMap(fileMap);
     setPrintRowId(id);
     document.body.classList.add("tnr-printing-row");
     setTimeout(() => {
       window.print();
       document.body.classList.remove("tnr-printing-row");
       setPrintRowId(null);
-    }, 150);
+      setPrintFileMap({});
+    }, 400);
   }
 
   const printRow = records.find(r => r.id === printRowId) ?? null;
@@ -261,8 +299,10 @@ export default function TnrLogPage() {
             padding: 3px 5px !important;
             word-break: break-word !important;
           }
+          .tnr-print-attachments { display: block !important; }
         }
         .print-only { display: none; }
+        .tnr-print-attachments { display: none; }
       `}</style>
 
       {printRow && (
