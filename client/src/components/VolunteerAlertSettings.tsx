@@ -767,6 +767,8 @@ export function VolunteerRecruitmentSmsSettings() {
   const [urgentAlertEnabled, setUrgentAlertEnabled] = useState(false);
   const [urgentAlertDaysOut, setUrgentAlertDaysOut] = useState(2);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [calendarMinimumEdits, setCalendarMinimumEdits] = useState<Record<string, number>>({});
+  const [calendarMinimumsLoaded, setCalendarMinimumsLoaded] = useState(false);
 
   // Populate state from loaded settings (only once)
   if (settingsData && !settingsLoaded) {
@@ -781,8 +783,28 @@ export function VolunteerRecruitmentSmsSettings() {
     setSettingsLoaded(true);
   }
 
+  // Initialize per-calendar minimums from calendar data (only once)
+  if (calendarsData && !calendarMinimumsLoaded) {
+    const edits: Record<string, number> = {};
+    for (const cal of calendarsData.calendars) {
+      edits[cal.id] = cal.minVolunteersRequired ?? minimumVolunteers;
+    }
+    setCalendarMinimumEdits(edits);
+    setCalendarMinimumsLoaded(true);
+  }
+
   const saveMutation = useMutation({
     mutationFn: async () => {
+      // Patch per-calendar minimums for any watched calendar whose value changed
+      const allCalendars = calendarsData?.calendars ?? [];
+      for (const cal of allCalendars) {
+        if (!watchedCalendarIds.includes(cal.id)) continue;
+        const edited = calendarMinimumEdits[cal.id];
+        const original = cal.minVolunteersRequired;
+        if (edited !== undefined && edited !== original) {
+          await apiRequest("PATCH", `/api/calendars/${cal.id}`, { minVolunteersRequired: edited });
+        }
+      }
       return apiRequest("PATCH", "/api/settings/volunteer-recruitment-sms", {
         enabled,
         watchedCalendarIds,
@@ -796,6 +818,7 @@ export function VolunteerRecruitmentSmsSettings() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/settings/volunteer-recruitment-sms"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/volunteer-calendars"] });
       toast({ title: "Settings saved", description: "Volunteer recruitment SMS settings updated." });
     },
     onError: (error: Error) => {
@@ -855,7 +878,7 @@ export function VolunteerRecruitmentSmsSettings() {
 
             {weeklyDigestEnabled && (
               <div className="space-y-4 pt-2">
-                {/* Calendar multi-select */}
+                {/* Calendar multi-select with per-calendar minimums */}
                 <div className="space-y-2">
                   <Label>Volunteer Calendars to Monitor</Label>
                   {volunteerCalendars.length === 0 ? (
@@ -863,19 +886,52 @@ export function VolunteerRecruitmentSmsSettings() {
                       No volunteer-type calendars found. Create a calendar with type "Volunteer" first.
                     </p>
                   ) : (
-                    <div className="flex flex-wrap gap-2">
-                      {volunteerCalendars.map((cal) => (
-                        <Button
-                          key={cal.id}
-                          type="button"
-                          variant={watchedCalendarIds.includes(cal.id) ? "default" : "outline"}
-                          size="sm"
-                          onClick={() => toggleCalendar(cal.id)}
-                          data-testid={`button-calendar-${cal.id}`}
-                        >
-                          {cal.name}
-                        </Button>
-                      ))}
+                    <div className="space-y-2">
+                      {volunteerCalendars.map((cal) => {
+                        const isWatched = watchedCalendarIds.includes(cal.id);
+                        return (
+                          <div
+                            key={cal.id}
+                            className="flex items-center gap-3 rounded-md border px-3 py-2"
+                          >
+                            <Button
+                              type="button"
+                              variant={isWatched ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => toggleCalendar(cal.id)}
+                              data-testid={`button-calendar-${cal.id}`}
+                              className="shrink-0"
+                            >
+                              {cal.name}
+                            </Button>
+                            {isWatched && (
+                              <div className="flex items-center gap-2 ml-auto">
+                                <Label
+                                  htmlFor={`cal-min-${cal.id}`}
+                                  className="text-xs text-muted-foreground whitespace-nowrap shrink-0"
+                                >
+                                  Min. volunteers
+                                </Label>
+                                <Input
+                                  id={`cal-min-${cal.id}`}
+                                  type="number"
+                                  min={1}
+                                  max={50}
+                                  value={calendarMinimumEdits[cal.id] ?? minimumVolunteers}
+                                  onChange={(e) =>
+                                    setCalendarMinimumEdits((prev) => ({
+                                      ...prev,
+                                      [cal.id]: parseInt(e.target.value) || 1,
+                                    }))
+                                  }
+                                  className="w-20"
+                                  data-testid={`input-cal-min-${cal.id}`}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                   {volunteerCalendars.length > 0 && watchedCalendarIds.length === 0 && (
@@ -883,10 +939,10 @@ export function VolunteerRecruitmentSmsSettings() {
                   )}
                 </div>
 
-                {/* Minimum volunteers */}
+                {/* Default minimum + send time */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="min-volunteers-recruitment">Minimum Volunteers Required</Label>
+                    <Label htmlFor="min-volunteers-recruitment">Default minimum (fallback)</Label>
                     <Input
                       id="min-volunteers-recruitment"
                       type="number"
@@ -896,7 +952,7 @@ export function VolunteerRecruitmentSmsSettings() {
                       onChange={(e) => setMinimumVolunteers(parseInt(e.target.value) || 2)}
                       data-testid="input-min-volunteers-recruitment"
                     />
-                    <p className="text-xs text-muted-foreground">Fallback if calendar has no minimum set</p>
+                    <p className="text-xs text-muted-foreground">Used when a calendar has no per-calendar minimum set</p>
                   </div>
 
                   {/* Send time */}
