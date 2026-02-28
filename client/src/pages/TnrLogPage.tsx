@@ -247,11 +247,19 @@ export default function TnrLogPage() {
           [data-sidebar="trigger"],
           [data-sidebar="rail"] { display: none !important; }
           header { display: none !important; }
+          .tnr-main-content table {
+            font-size: 9.5px !important;
+            width: 100% !important;
+            table-layout: auto !important;
+          }
+          .tnr-main-content th,
           .tnr-main-content td {
             white-space: normal !important;
             overflow: visible !important;
             text-overflow: clip !important;
             max-width: none !important;
+            padding: 3px 5px !important;
+            word-break: break-word !important;
           }
         }
         .print-only { display: none; }
