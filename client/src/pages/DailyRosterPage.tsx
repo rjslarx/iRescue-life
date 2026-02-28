@@ -45,6 +45,7 @@ import {
   Building2,
   Home,
   MapPin,
+  Printer,
 } from "lucide-react";
 import { format, isSameDay, parse, addDays } from "date-fns";
 
@@ -280,6 +281,10 @@ export default function DailyRosterPage() {
   const [resultsItem, setResultsItem] = useState<RosterDiagnostic | null>(null);
   const [resultValue, setResultValue] = useState("");
   const [resultNotes, setResultNotes] = useState("");
+
+  const { data: tenantData } = useQuery<{ tenant: { name: string } }>({
+    queryKey: ["/api/tenant"],
+  });
 
   const dateStr = format(selectedDate, "yyyy-MM-dd");
   const monthStr = format(calendarMonth, "yyyy-MM");
@@ -527,7 +532,15 @@ export default function DailyRosterPage() {
   return (
     <DashboardLayout title="Daily Medical Roster" description="Aggregated daily view of all pending medical tasks">
     <div className="flex flex-col h-full overflow-auto" data-testid="page-daily-roster">
-      <div className="border-b px-4 py-3 lg:px-6">
+      {/* Print-only header — hidden on screen, visible when printing */}
+      <div className="hidden print:block print:mb-4 print:pb-3 print:border-b print:border-gray-300">
+        <p className="text-sm text-gray-500">{tenantData?.tenant?.name}</p>
+        <h1 className="text-xl font-bold">Daily Medical Roster</h1>
+        <p className="text-base">{format(selectedDate, "EEEE, MMMM d, yyyy")}</p>
+        {totalItems > 0 && <p className="text-sm text-gray-500 mt-0.5">{totalItems} pending task{totalItems !== 1 ? "s" : ""}</p>}
+      </div>
+
+      <div className="border-b px-4 py-3 lg:px-6 print:hidden">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2 flex-wrap">
             <ClipboardList className="h-5 w-5 text-muted-foreground" />
@@ -537,7 +550,12 @@ export default function DailyRosterPage() {
               <Badge data-testid="badge-total-items" className="hidden lg:inline-flex">{totalItems} pending</Badge>
             )}
           </div>
-          <div className="flex items-center gap-1 rounded-md border p-0.5 bg-muted/40" data-testid="toggle-location-filter">
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" onClick={() => window.print()} data-testid="button-print">
+              <Printer className="h-4 w-4 mr-1.5" />
+              Print
+            </Button>
+            <div className="flex items-center gap-1 rounded-md border p-0.5 bg-muted/40" data-testid="toggle-location-filter">
             <Button
               size="sm"
               variant={locationFilter === "all" ? "default" : "ghost"}
@@ -568,12 +586,13 @@ export default function DailyRosterPage() {
               <Home className="h-3 w-3" />
               <span className="text-xs">In Foster</span>
             </Button>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Mobile compact date navigation — hidden on desktop */}
-      <div className="lg:hidden sticky top-0 z-50 bg-background border-b px-3 py-2 flex items-center justify-between gap-2">
+      {/* Mobile compact date navigation — hidden on desktop, hidden when printing */}
+      <div className="lg:hidden print:hidden sticky top-0 z-50 bg-background border-b px-3 py-2 flex items-center justify-between gap-2">
         <Button size="icon" variant="ghost" onClick={goToPrevDay} data-testid="button-prev-day">
           <ChevronLeft className="h-4 w-4" />
         </Button>
@@ -592,7 +611,7 @@ export default function DailyRosterPage() {
       </div>
 
       <div className="flex flex-col lg:flex-row flex-1 min-h-0 overflow-auto lg:overflow-hidden">
-        <div className="hidden lg:flex lg:flex-col lg:w-80 lg:min-w-80 lg:border-r p-4 lg:overflow-auto">
+        <div className="hidden lg:flex print:!hidden lg:flex-col lg:w-80 lg:min-w-80 lg:border-r p-4 lg:overflow-auto">
           <Calendar
             mode="single"
             selected={selectedDate}
@@ -664,7 +683,7 @@ export default function DailyRosterPage() {
                       <CardTitle className="text-base">Meds, Preventatives & Vaccines</CardTitle>
                       <Badge variant="secondary">{medsAndPreventatives.length}</Badge>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 print:hidden">
                       <div className="flex items-center gap-1.5">
                         <Checkbox
                           checked={selectedItems.size === nonVaccineItems.length && nonVaccineItems.length > 0}
@@ -715,7 +734,7 @@ export default function DailyRosterPage() {
                               checked={isChecked}
                               disabled={isVaccineCompleted}
                               onCheckedChange={() => handleItemClick(item)}
-                              className="mt-0.5 shrink-0"
+                              className="mt-0.5 shrink-0 print:hidden"
                               data-testid={`checkbox-med-${item.id}`}
                             />
                           )}
@@ -824,7 +843,7 @@ export default function DailyRosterPage() {
                           <Button
                             size="sm"
                             variant="outline"
-                            className="shrink-0"
+                            className="shrink-0 print:hidden"
                             disabled={isFutureDate || isRabiesCompleted}
                             onClick={() => {
                               if (isRabiesCompleted) return;
@@ -872,7 +891,7 @@ export default function DailyRosterPage() {
                         <Button
                           size="sm"
                           variant="outline"
-                          className="shrink-0"
+                          className="shrink-0 print:hidden"
                           onClick={() => {
                             if (item.itemType === "exam") {
                               setCompletionItem({ type: "exam", item: item as RosterExam & { itemType: "exam" } });
@@ -927,7 +946,7 @@ export default function DailyRosterPage() {
                         <Button
                           size="sm"
                           variant="outline"
-                          className="shrink-0"
+                          className="shrink-0 print:hidden"
                           onClick={() => setResultsItem(item)}
                           disabled={isFutureDate}
                           data-testid={`button-results-${item.id}`}
@@ -1057,6 +1076,58 @@ export default function DailyRosterPage() {
           height: 5px;
           border-radius: 50%;
           background-color: hsl(var(--primary));
+        }
+
+        @page {
+          margin: 1.5cm;
+        }
+
+        @media print {
+          body, html {
+            background: white !important;
+            color: black !important;
+          }
+
+          /* Hide the entire sidebar (DashboardLayout renders it outside this component) */
+          [data-sidebar], aside, nav {
+            display: none !important;
+          }
+
+          /* Ensure content fills the full width — no overflow clipping */
+          .flex-1, [data-testid="page-daily-roster"] {
+            overflow: visible !important;
+            height: auto !important;
+          }
+
+          /* Remove card shadows and borders for cleaner print */
+          [data-testid="card-meds-section"],
+          [data-testid="card-vet-section"],
+          [data-testid="card-labs-section"] {
+            box-shadow: none !important;
+            border: 1px solid #e5e7eb !important;
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+
+          /* Avoid mid-row page breaks */
+          [class*="row-med-"],
+          [class*="row-vet-"],
+          [class*="row-lab-"],
+          [class*="row-rabies-"] {
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+
+          /* Force black text everywhere for clean output */
+          * {
+            color: black !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+
+          a {
+            text-decoration: none !important;
+          }
         }
       `}</style>
     </div>
