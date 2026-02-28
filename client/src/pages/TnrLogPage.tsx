@@ -285,6 +285,12 @@ export default function TnrLogPage() {
           [data-sidebar="trigger"],
           [data-sidebar="rail"] { display: none !important; }
           header { display: none !important; }
+          [data-slot="sidebar-wrapper"] > div,
+          [data-slot="sidebar-wrapper"] > div > div:last-child {
+            height: auto !important;
+            max-height: none !important;
+            overflow: visible !important;
+          }
           .tnr-main-content table {
             font-size: 9.5px !important;
             width: 100% !important;
