@@ -1,0 +1,90 @@
+2026-02-28 08:53:06.12
+83573fd4
+User
+at file:///home/runner/workspace/dist/index.js:57607:12
+2026-02-28 08:53:06.12
+83573fd4
+User
+TypeError: z18.string(...).transform(...).regex is not a function
+2026-02-28 08:53:06.12
+83573fd4
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-02-28 08:53:08.86
+83573fd4
+System
+healthcheck failed error=healthcheck /: Get "http://127.0.0.1:1104/": dial tcp 127.0.0.1:1104: connect: connection refused
+2026-02-28 08:53:08.86
+83573fd4
+System
+healthcheck failed error=healthcheck / returned status 500
+2026-02-28 08:53:08.88
+83573fd4
+System
+healthcheck failed error=healthcheck / returned status 500
+2026-02-28 08:53:08.91
+83573fd4
+System
+healthcheck failed error=healthcheck / returned status 500
+2026-02-28 08:53:08.97
+83573fd4
+System
+healthcheck failed error=healthcheck / returned status 500
+2026-02-28 08:53:09.05
+83573fd4
+System
+healthcheck failed error=healthcheck / returned status 500
+2026-02-28 08:53:09.17
+83573fd4
+System
+healthcheck failed error=healthcheck / returned status 500
+2026-02-28 08:53:09.22
+83573fd4
+System
+healthcheck failed error=healthcheck / returned status 500
+2026-02-28 08:53:09.84
+83573fd4
+System
+healthcheck failed error=healthcheck / returned status 500
+2026-02-28 08:53:11.33
+83573fd4
+System
+healthcheck failed error=healthcheck / returned status 500
+2026-02-28 08:53:11.52
+83573fd4
+System
+healthcheck failed error=healthcheck / returned status 500
+2026-02-28 08:53:12.84
+83573fd4
+System
+healthcheck failed error=healthcheck / returned status 500
+2026-02-28 08:53:12.94
+83573fd4
+System
+healthcheck failed error=healthcheck / returned status 500
+2026-02-28 08:53:14.83
+83573fd4
+System
+healthcheck failed error=healthcheck / returned status 500
+2026-02-28 08:53:16.77
+83573fd4
+System
+healthcheck failed error=healthcheck / returned status 500
+2026-02-28 08:53:18.55
+83573fd4
+System
+healthcheck failed error=healthcheck / returned status 500
+2026-02-28 08:53:31.33
+83573fd4
+User
+TypeError: z18.string(...).transform(...).regex is not a function
+2026-02-28 08:53:31.33
+83573fd4
+User
+at file:///home/runner/workspace/dist/index.js:57607:12
+2026-02-28 08:53:31.33
+83573fd4
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+Wrap
+Colors

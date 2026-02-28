@@ -22089,7 +22089,7 @@ Submitted: ${new Date().toLocaleString()}
             if (/^1\d{10}$/.test(stripped)) return `+${stripped}`;
             return stripped;
           })
-          .regex(/^\+[1-9]\d{1,14}$/, "Phone number must be in E.164 format (e.g. 555-867-5309 or +15558675309)"),
+          .refine((v) => /^\+[1-9]\d{1,14}$/.test(v), "Phone number must be in E.164 format (e.g. 555-867-5309 or +15558675309)"),
       });
 
       const { phoneNumber } = testSchema.parse(req.body);
