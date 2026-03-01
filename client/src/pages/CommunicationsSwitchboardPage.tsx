@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
@@ -20,6 +22,14 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Table,
   TableBody,
   TableCell,
@@ -27,7 +37,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Radio, Mail, Search, XCircle, ChevronLeft, ChevronRight, MessageSquare, AlertTriangle, Pause } from "lucide-react";
+import { Radio, Mail, Search, XCircle, ChevronLeft, ChevronRight, MessageSquare, AlertTriangle, ArrowLeftRight } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface CommMessage {
@@ -51,6 +61,27 @@ interface CommMessage {
 interface FeedResponse {
   messages: CommMessage[];
   pagination: { page: number; limit: number; total: number; totalPages: number };
+}
+
+interface RecipientInfo {
+  id: string;
+  currentChannel: string;
+  status: string;
+  recipientUserId: string | null;
+  recipientName: string | null;
+  recipientAddress: string;
+  messageBody: string;
+  subject: string | null;
+  email: string | null;
+  phone: string | null;
+  canConvertToSms: boolean;
+  canConvertToEmail: boolean;
+}
+
+function stripHtml(html: string): string {
+  const div = document.createElement("div");
+  div.innerHTML = html;
+  return div.textContent || div.innerText || "";
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -89,7 +120,7 @@ function ChannelBadge({ channel }: { channel: string }) {
 }
 
 function formatDate(dateStr: string | null) {
-  if (!dateStr) return "—";
+  if (!dateStr) return "\u2014";
   const d = new Date(dateStr);
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
 }
@@ -99,12 +130,173 @@ function truncate(str: string, len: number) {
   return str.slice(0, len) + "...";
 }
 
+function ConvertMessageDialog({
+  messageId,
+  open,
+  onOpenChange,
+}: {
+  messageId: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const { toast } = useToast();
+  const [body, setBody] = useState("");
+  const [subject, setSubject] = useState("");
+
+  const recipientQuery = useQuery<RecipientInfo>({
+    queryKey: ["/api/communications/queue", messageId, "recipient-info"],
+    queryFn: async () => {
+      const res = await fetch(`/api/communications/queue/${messageId}/recipient-info`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch recipient info");
+      return res.json();
+    },
+    enabled: open && !!messageId,
+  });
+
+  const info = recipientQuery.data;
+  const targetChannel = info?.currentChannel === "sms" ? "email" : "sms";
+  const canConvert = targetChannel === "sms" ? info?.canConvertToSms : info?.canConvertToEmail;
+  const targetAddress = targetChannel === "sms" ? info?.phone : info?.email;
+
+  useEffect(() => {
+    if (info) {
+      if (targetChannel === "sms") {
+        setBody(stripHtml(info.messageBody));
+      } else {
+        setBody(info.messageBody);
+      }
+      setSubject(info.subject || "");
+    }
+  }, [info, targetChannel]);
+
+  const convertMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("PUT", `/api/communications/queue/${messageId}/convert`, {
+        channel: targetChannel,
+        messageBody: body,
+        subject: targetChannel === "email" ? subject : undefined,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/communications/feed"] });
+      toast({ title: "Channel converted", description: `Message will now be sent as ${targetChannel === "sms" ? "SMS" : "Email"}.` });
+      onOpenChange(false);
+    },
+    onError: (err: any) => {
+      toast({ title: "Conversion failed", description: err?.message || "Failed to convert message channel", variant: "destructive" });
+    },
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg" data-testid="dialog-convert-message">
+        <DialogHeader>
+          <DialogTitle data-testid="text-convert-title">Convert Message Channel</DialogTitle>
+          <DialogDescription>
+            {info
+              ? `Change this message from ${info.currentChannel === "sms" ? "SMS" : "Email"} to ${targetChannel === "sms" ? "SMS" : "Email"}`
+              : "Loading message details..."}
+          </DialogDescription>
+        </DialogHeader>
+
+        {recipientQuery.isLoading ? (
+          <div className="space-y-3 py-4">
+            <Skeleton className="h-4 w-3/4" />
+            <Skeleton className="h-4 w-1/2" />
+            <Skeleton className="h-20 w-full" />
+          </div>
+        ) : !info ? (
+          <p className="text-sm text-destructive py-4" data-testid="text-convert-error">Failed to load message info.</p>
+        ) : !info.recipientUserId ? (
+          <p className="text-sm text-destructive py-4" data-testid="text-convert-no-user">
+            Cannot convert: this message has no linked user record to look up alternate contact info.
+          </p>
+        ) : !canConvert ? (
+          <div className="py-4" data-testid="text-convert-missing-contact">
+            <p className="text-sm text-destructive">
+              Cannot convert to {targetChannel === "sms" ? "SMS" : "Email"}: {info.recipientName || "recipient"} does not have a{" "}
+              {targetChannel === "sms" ? "phone number" : "email address"} on file.
+            </p>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-4 py-2">
+            <div className="flex items-center gap-3">
+              <div className="flex flex-col gap-0.5">
+                <span className="text-sm font-medium" data-testid="text-convert-recipient">{info.recipientName}</span>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span>{info.recipientAddress}</span>
+                  <ArrowLeftRight className="w-3 h-3" />
+                  <span data-testid="text-convert-target-address">{targetAddress}</span>
+                </div>
+              </div>
+            </div>
+
+            {targetChannel === "email" && (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="convert-subject">Subject</Label>
+                <Input
+                  id="convert-subject"
+                  data-testid="input-convert-subject"
+                  value={subject}
+                  onChange={(e) => setSubject(e.target.value)}
+                  placeholder="Email subject line..."
+                />
+              </div>
+            )}
+
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="convert-body">Message Body</Label>
+                {targetChannel === "sms" && (
+                  <span
+                    className={`text-xs ${body.length > 160 ? "text-destructive font-medium" : "text-muted-foreground"}`}
+                    data-testid="text-convert-char-count"
+                  >
+                    {body.length}/160
+                  </span>
+                )}
+              </div>
+              <Textarea
+                id="convert-body"
+                data-testid="textarea-convert-body"
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                rows={5}
+                className="resize-none"
+              />
+              {targetChannel === "sms" && body.length > 160 && (
+                <p className="text-xs text-destructive" data-testid="text-convert-sms-warning">
+                  SMS messages over 160 characters will be split into multiple segments and may cost more.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} data-testid="button-convert-cancel">
+            Cancel
+          </Button>
+          <Button
+            onClick={() => convertMutation.mutate()}
+            disabled={!canConvert || !body.trim() || convertMutation.isPending || recipientQuery.isLoading}
+            data-testid="button-convert-confirm"
+          >
+            {convertMutation.isPending ? "Converting..." : `Convert to ${targetChannel === "sms" ? "SMS" : "Email"}`}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function CommunicationsSwitchboardPage() {
   const { toast } = useToast();
   const [channelFilter, setChannelFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(1);
+  const [convertMessageId, setConvertMessageId] = useState<string | null>(null);
 
   const feedQuery = useQuery<FeedResponse>({
     queryKey: ["/api/communications/feed", channelFilter, statusFilter, searchQuery, page],
@@ -254,7 +446,7 @@ export default function CommunicationsSwitchboardPage() {
                       <TableHead className="w-[100px]">Status</TableHead>
                       <TableHead className="hidden lg:table-cell w-[160px]">Scheduled</TableHead>
                       <TableHead className="w-[160px]">Sent</TableHead>
-                      <TableHead className="w-[80px]">Actions</TableHead>
+                      <TableHead className="w-[100px]">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -295,30 +487,41 @@ export default function CommunicationsSwitchboardPage() {
                         </TableCell>
                         <TableCell>
                           {msg.status === "scheduled" && msg.queueId && (
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button size="sm" variant="ghost" data-testid={`button-cancel-${msg.id}`}>
-                                  <XCircle className="w-4 h-4 text-destructive" />
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Cancel scheduled message?</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    This will prevent this {msg.channel === "sms" ? "SMS" : "email"} from being sent to {msg.recipientName || msg.recipientAddress}. This action cannot be undone.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel data-testid="button-cancel-dialog-cancel">Keep</AlertDialogCancel>
-                                  <AlertDialogAction
-                                    data-testid="button-cancel-dialog-confirm"
-                                    onClick={() => cancelMutation.mutate(msg.queueId!)}
-                                  >
-                                    Cancel Message
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
+                            <div className="flex items-center gap-0.5">
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => setConvertMessageId(msg.queueId!)}
+                                data-testid={`button-convert-${msg.id}`}
+                                title="Convert channel"
+                              >
+                                <ArrowLeftRight className="w-4 h-4" />
+                              </Button>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button size="icon" variant="ghost" data-testid={`button-cancel-${msg.id}`} title="Cancel message">
+                                    <XCircle className="w-4 h-4 text-destructive" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Cancel scheduled message?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      This will prevent this {msg.channel === "sms" ? "SMS" : "email"} from being sent to {msg.recipientName || msg.recipientAddress}. This action cannot be undone.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel data-testid="button-cancel-dialog-cancel">Keep</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      data-testid="button-cancel-dialog-confirm"
+                                      onClick={() => cancelMutation.mutate(msg.queueId!)}
+                                    >
+                                      Cancel Message
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </div>
                           )}
                         </TableCell>
                       </TableRow>
@@ -361,6 +564,14 @@ export default function CommunicationsSwitchboardPage() {
           )}
         </CardContent>
       </Card>
+
+      {convertMessageId && (
+        <ConvertMessageDialog
+          messageId={convertMessageId}
+          open={!!convertMessageId}
+          onOpenChange={(open) => { if (!open) setConvertMessageId(null); }}
+        />
+      )}
     </div>
   );
 }

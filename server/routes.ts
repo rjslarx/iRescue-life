@@ -41711,5 +41711,131 @@ The user asking is a tenant administrator or staff member.`;
     } catch (error) { next(error); }
   });
 
+  /**
+   * GET /api/communications/queue/:id/recipient-info
+   * Look up recipient contact info for channel conversion
+   */
+  app.get('/api/communications/queue/:id/recipient-info', requireTenant, requireAuth, requireRole('admin', 'owner'), async (req, res, next) => {
+    try {
+      const { id } = req.params;
+      const [queueRow] = await db
+        .select({
+          id: messageQueue.id,
+          channel: messageQueue.channel,
+          recipientUserId: messageQueue.recipientUserId,
+          recipientName: messageQueue.recipientName,
+          recipientAddress: messageQueue.recipientAddress,
+          messageBody: messageQueue.messageBody,
+          subject: messageQueue.subject,
+          status: messageQueue.status,
+        })
+        .from(messageQueue)
+        .where(and(eq(messageQueue.id, id), eq(messageQueue.tenantId, req.tenant!.id)));
+
+      if (!queueRow) return res.status(404).json({ error: 'Queued message not found' });
+
+      let userEmail: string | null = null;
+      let userPhone: string | null = null;
+      let userName: string | null = queueRow.recipientName;
+
+      if (queueRow.recipientUserId) {
+        const [user] = await db
+          .select({ email: users.email, phone: users.phone, fullName: users.fullName })
+          .from(users)
+          .where(eq(users.id, queueRow.recipientUserId));
+        if (user) {
+          userEmail = user.email;
+          userPhone = user.phone;
+          userName = user.fullName;
+        }
+      }
+
+      res.json({
+        id: queueRow.id,
+        currentChannel: queueRow.channel,
+        status: queueRow.status,
+        recipientUserId: queueRow.recipientUserId,
+        recipientName: userName,
+        recipientAddress: queueRow.recipientAddress,
+        messageBody: queueRow.messageBody,
+        subject: queueRow.subject,
+        email: userEmail,
+        phone: userPhone,
+        canConvertToSms: !!userPhone,
+        canConvertToEmail: !!userEmail,
+      });
+    } catch (error) { next(error); }
+  });
+
+  /**
+   * PUT /api/communications/queue/:id/convert
+   * Convert a scheduled message's channel (SMS <-> Email)
+   */
+  app.put('/api/communications/queue/:id/convert', requireTenant, requireAuth, requireRole('admin', 'owner'), async (req, res, next) => {
+    try {
+      const { id } = req.params;
+      const { channel, messageBody, subject } = req.body;
+
+      if (!channel || !['sms', 'email'].includes(channel)) {
+        return res.status(400).json({ error: 'channel must be "sms" or "email"' });
+      }
+      if (!messageBody || typeof messageBody !== 'string' || messageBody.trim().length === 0) {
+        return res.status(400).json({ error: 'messageBody is required' });
+      }
+
+      const [queueRow] = await db
+        .select()
+        .from(messageQueue)
+        .where(and(eq(messageQueue.id, id), eq(messageQueue.tenantId, req.tenant!.id)));
+
+      if (!queueRow) return res.status(404).json({ error: 'Queued message not found' });
+      if (queueRow.status !== 'scheduled') return res.status(400).json({ error: 'Can only convert messages with status "scheduled"' });
+      if (queueRow.channel === channel) return res.status(400).json({ error: 'Message is already on this channel' });
+
+      if (!queueRow.recipientUserId) {
+        return res.status(400).json({ error: 'Cannot convert: no linked recipient user to look up alternate contact info' });
+      }
+
+      const [recipientUser] = await db
+        .select({ email: users.email, phone: users.phone })
+        .from(users)
+        .where(eq(users.id, queueRow.recipientUserId));
+
+      if (!recipientUser) return res.status(400).json({ error: 'Recipient user not found' });
+
+      let newAddress: string;
+      if (channel === 'sms') {
+        if (!recipientUser.phone) return res.status(400).json({ error: 'Recipient does not have a phone number on file' });
+        newAddress = recipientUser.phone;
+      } else {
+        if (!recipientUser.email) return res.status(400).json({ error: 'Recipient does not have an email address on file' });
+        newAddress = recipientUser.email;
+      }
+
+      let finalBody = messageBody.trim();
+      if (channel === 'sms') {
+        finalBody = finalBody.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#?\w+;/g, '').replace(/\s+/g, ' ').trim();
+      }
+
+      const result = await db.update(messageQueue)
+        .set({
+          channel,
+          messageBody: finalBody,
+          subject: channel === 'email' ? (subject || null) : null,
+          recipientAddress: newAddress,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(messageQueue.id, id), eq(messageQueue.tenantId, req.tenant!.id), eq(messageQueue.status, 'scheduled')))
+        .returning();
+
+      if (result.length === 0) {
+        return res.status(409).json({ error: 'Message was already picked up for processing or is no longer scheduled. Please refresh and try again.' });
+      }
+      const [updated] = result;
+
+      res.json({ success: true, message: updated });
+    } catch (error) { next(error); }
+  });
+
     return httpServer;
 }
