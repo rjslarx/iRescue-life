@@ -164,6 +164,12 @@ export async function seedDefaultPagePermissions(tenantId: string) {
       description: 'Access training videos and reference documentation',
       allowedRoles: ['admin', 'board_member', 'staff', 'foster', 'volunteer'],
     },
+    {
+      pageId: 'my-fosters',
+      displayName: 'My Fosters',
+      description: 'Foster parent view of assigned animals and medical information',
+      allowedRoles: ['admin', 'board_member', 'staff', 'foster'],
+    },
   ];
 
   try {
@@ -204,6 +210,12 @@ const NEW_PAGE_PERMISSIONS = [
     displayName: 'Help & Training',
     description: 'Access training videos and reference documentation',
     allowedRoles: ['admin', 'board_member', 'staff', 'foster', 'volunteer'] as ('admin' | 'board_member' | 'staff' | 'foster' | 'volunteer')[],
+  },
+  {
+    pageId: 'my-fosters',
+    displayName: 'My Fosters',
+    description: 'Foster parent view of assigned animals and medical information',
+    allowedRoles: ['admin', 'board_member', 'staff', 'foster'] as ('admin' | 'board_member' | 'staff' | 'foster' | 'volunteer')[],
   },
 ];
 
