@@ -1175,6 +1175,7 @@ export default function DailyRosterPage() {
           body, html {
             background: white !important;
             color: black !important;
+            font-size: 11px !important;
           }
 
           /* Hide the entire sidebar (DashboardLayout renders it outside this component) */
@@ -1193,18 +1194,71 @@ export default function DailyRosterPage() {
           [data-testid="card-vet-section"],
           [data-testid="card-labs-section"] {
             box-shadow: none !important;
-            border: 1px solid #e5e7eb !important;
+            border: 1px solid #d1d5db !important;
+            break-inside: avoid;
+            page-break-inside: avoid;
+            margin-bottom: 6px !important;
+          }
+
+          /* Compact card headers */
+          [data-testid="card-meds-section"] > div:first-child,
+          [data-testid="card-vet-section"] > div:first-child,
+          [data-testid="card-labs-section"] > div:first-child {
+            padding: 6px 10px !important;
+          }
+
+          /* Compact card content */
+          [data-testid="card-meds-section"] > div:last-child,
+          [data-testid="card-vet-section"] > div:last-child,
+          [data-testid="card-labs-section"] > div:last-child {
+            padding: 4px 8px 6px !important;
+            gap: 0 !important;
+          }
+
+          /* Compact individual rows — tighter vertical padding */
+          [data-testid^="row-med-"],
+          [data-testid^="row-vet-"],
+          [data-testid^="row-lab-"],
+          [data-testid^="row-rabies-"] {
+            padding-top: 2px !important;
+            padding-bottom: 2px !important;
+            padding-left: 4px !important;
+            padding-right: 4px !important;
+            gap: 6px !important;
             break-inside: avoid;
             page-break-inside: avoid;
           }
 
-          /* Avoid mid-row page breaks */
-          [class*="row-med-"],
-          [class*="row-vet-"],
-          [class*="row-lab-"],
-          [class*="row-rabies-"] {
-            break-inside: avoid;
-            page-break-inside: avoid;
+          /* Hide avatars in print — they waste horizontal and vertical space */
+          [data-testid^="row-med-"] .h-7.w-7,
+          [data-testid^="row-vet-"] .h-7.w-7,
+          [data-testid^="row-lab-"] .h-7.w-7,
+          [data-testid^="row-rabies-"] .h-7.w-7 {
+            display: none !important;
+          }
+
+          /* Tighter subtext lines */
+          [data-testid^="row-med-"] p,
+          [data-testid^="row-vet-"] p,
+          [data-testid^="row-lab-"] p,
+          [data-testid^="row-rabies-"] p {
+            margin-top: 0 !important;
+            font-size: 10px !important;
+            line-height: 1.2 !important;
+          }
+
+          /* Smaller badges */
+          [data-testid^="row-med-"] .text-xs,
+          [data-testid^="row-vet-"] .text-xs,
+          [data-testid^="row-lab-"] .text-xs,
+          [data-testid^="row-rabies-"] .text-xs {
+            font-size: 9px !important;
+            padding: 0 3px !important;
+          }
+
+          /* Compact section wrapper spacing */
+          .space-y-4 > * + * {
+            margin-top: 6px !important;
           }
 
           /* Force black text everywhere for clean output */
