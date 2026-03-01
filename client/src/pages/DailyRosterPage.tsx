@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Link } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -282,6 +282,20 @@ export default function DailyRosterPage() {
   const [resultsItem, setResultsItem] = useState<RosterDiagnostic | null>(null);
   const [resultValue, setResultValue] = useState("");
   const [resultNotes, setResultNotes] = useState("");
+
+  // Shift View mode — locked to today, individual charting only
+  const [, setLocation] = useLocation();
+  const search = useSearch();
+  const isShiftView = new URLSearchParams(search).get("mode") === "shift";
+
+  // Lock date to today when in Shift View
+  useEffect(() => {
+    if (isShiftView) {
+      setSelectedDate(new Date());
+      setSelectedItems(new Set());
+      setCompletedVaccines(new Set());
+    }
+  }, [isShiftView]);
 
   // Undo window state — tracks dose IDs that can still be undone (within 30 s)
   const [undoableIds, setUndoableIds] = useState<Map<string, number>>(new Map()); // doseId → markedAt timestamp
@@ -612,13 +626,37 @@ export default function DailyRosterPage() {
           <div className="flex items-center gap-2 flex-wrap">
             <ClipboardList className="h-5 w-5 text-muted-foreground" />
             <h1 className="text-lg font-semibold" data-testid="text-page-title">Daily Medical Roster</h1>
-            <Badge variant="secondary" data-testid="badge-date" className="hidden lg:inline-flex">{format(selectedDate, "EEEE, MMMM d, yyyy")}</Badge>
+            {isShiftView ? (
+              <Badge variant="default" data-testid="badge-date" className="hidden lg:inline-flex">Today's Shift — {format(new Date(), "EEEE, MMMM d")}</Badge>
+            ) : (
+              <Badge variant="secondary" data-testid="badge-date" className="hidden lg:inline-flex">{format(selectedDate, "EEEE, MMMM d, yyyy")}</Badge>
+            )}
             {totalItems > 0 && (
               <Badge data-testid="badge-total-items" className="hidden lg:inline-flex">{totalItems} pending</Badge>
             )}
           </div>
           <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline" onClick={() => window.print()} data-testid="button-print">
+            <Button
+              size="sm"
+              variant={isShiftView ? "default" : "outline"}
+              onClick={() => {
+                const params = new URLSearchParams(search);
+                if (isShiftView) {
+                  params.delete("mode");
+                } else {
+                  params.set("mode", "shift");
+                }
+                const qs = params.toString();
+                setLocation(qs ? `?${qs}` : window.location.pathname);
+                setSelectedItems(new Set());
+                setCompletedVaccines(new Set());
+              }}
+              data-testid="button-toggle-shift-view"
+            >
+              <Stethoscope className="h-4 w-4 mr-1.5" />
+              {isShiftView ? "Exit Shift View" : "Shift View"}
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => window.print()} data-testid="button-print" className={isShiftView ? "hidden" : ""}>
               <Printer className="h-4 w-4 mr-1.5" />
               Print
             </Button>
@@ -658,7 +696,16 @@ export default function DailyRosterPage() {
         </div>
       </div>
 
+      {/* Shift View info banner */}
+      {isShiftView && (
+        <div className="flex items-center gap-2 px-4 lg:px-6 py-2 bg-primary/5 border-b text-sm text-muted-foreground print:hidden" data-testid="banner-shift-view">
+          <Stethoscope className="h-4 w-4 shrink-0 text-primary" />
+          <span>Shift View — locked to today. Chart each medication individually using the "Mark Given" button on each row.</span>
+        </div>
+      )}
+
       {/* Mobile compact date navigation — hidden on desktop, hidden when printing */}
+      {!isShiftView && (
       <div className="lg:hidden print:hidden sticky top-0 z-50 bg-background border-b px-3 py-2 flex items-center justify-between gap-2">
         <Button size="icon" variant="ghost" onClick={goToPrevDay} data-testid="button-prev-day">
           <ChevronLeft className="h-4 w-4" />
@@ -676,8 +723,10 @@ export default function DailyRosterPage() {
           </Button>
         </div>
       </div>
+      )}
 
       <div className="flex flex-col lg:flex-row flex-1 min-h-0 overflow-auto lg:overflow-hidden">
+        {!isShiftView && (
         <div className="hidden lg:flex print:!hidden lg:flex-col lg:w-80 lg:min-w-80 lg:border-r p-4 lg:overflow-auto">
           <Calendar
             mode="single"
@@ -714,6 +763,7 @@ export default function DailyRosterPage() {
             </div>
           )}
         </div>
+        )}
 
         <div className="flex-1 overflow-auto p-4 lg:p-6 space-y-4">
           {rosterLoading ? (
@@ -750,6 +800,7 @@ export default function DailyRosterPage() {
                       <CardTitle className="text-base">Meds, Preventatives & Vaccines</CardTitle>
                       <Badge variant="secondary">{medsAndPreventatives.length}</Badge>
                     </div>
+                    {!isShiftView && (
                     <div className="flex items-center gap-2 print:hidden">
                       <div className="flex items-center gap-1.5">
                         <Checkbox
@@ -788,6 +839,7 @@ export default function DailyRosterPage() {
                         </Button>
                       )}
                     </div>
+                    )}
                   </CardHeader>
                   <CardContent className="space-y-1">
                     {medsAndPreventatives.map((item) => {
@@ -801,14 +853,36 @@ export default function DailyRosterPage() {
                       void renderTick; // consumed to force re-render each second
                       return (
                         <div key={key} className={`flex items-start gap-3 py-2 px-2 rounded-md transition-opacity ${isChecked && !isUndoable ? "opacity-50 hover-elevate" : isChecked ? "opacity-70" : "hover-elevate"} ${item.isQuarantined ? "bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/40" : ""}`} data-testid={`row-med-${item.id}`}>
-                          {!isFutureDate && (
-                            <Checkbox
-                              checked={isChecked}
-                              disabled={isVaccineCompleted}
-                              onCheckedChange={() => handleItemClick(item)}
-                              className="mt-0.5 shrink-0"
-                              data-testid={`checkbox-med-${item.id}`}
-                            />
+                          {isShiftView ? (
+                            !isChecked && !isFutureDate && !isUndoable ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="shrink-0 print:hidden self-center"
+                                disabled={individualMarkMutation.isPending}
+                                onClick={() => {
+                                  if (item._isVaccine) {
+                                    handleItemClick(item);
+                                  } else {
+                                    individualMarkMutation.mutate({ id: item.id, type: item._type, key });
+                                  }
+                                }}
+                                data-testid={`button-mark-given-${item.id}`}
+                              >
+                                <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+                                Mark Given
+                              </Button>
+                            ) : null
+                          ) : (
+                            !isFutureDate && (
+                              <Checkbox
+                                checked={isChecked}
+                                disabled={isVaccineCompleted}
+                                onCheckedChange={() => handleItemClick(item)}
+                                className="mt-0.5 shrink-0"
+                                data-testid={`checkbox-med-${item.id}`}
+                              />
+                            )
                           )}
                           <Avatar className="h-7 w-7 shrink-0">
                             {item.animalPhoto ? <AvatarImage src={item.animalPhoto} alt={item.animalName} /> : null}
