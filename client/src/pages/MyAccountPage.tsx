@@ -134,38 +134,46 @@ export default function MyAccountPage() {
   };
 
   const handleToggleNotifications = async (enabled: boolean) => {
-    try {
-      if (enabled) {
-        const success = await subscribe();
-        if (success) {
-          toast({
-            title: "Notifications enabled",
-            description: "You will now receive push notifications for broadcasts and alerts.",
-          });
-        } else {
-          toast({
-            title: "Could not enable notifications",
-            description: permission === "denied"
-              ? "Notifications are blocked in your browser settings. Please allow them and try again."
-              : "Something went wrong. Please try again.",
-            variant: "destructive",
-          });
-        }
+    if (enabled) {
+      const result = await subscribe();
+      if (result.success) {
+        toast({
+          title: "Notifications enabled",
+          description: "You will now receive push notifications for broadcasts and alerts.",
+        });
+      } else if (result.reason === 'permission-denied') {
+        toast({
+          title: "Permission denied",
+          description: "Notifications were blocked. Click the lock icon in your address bar, allow notifications, then try again.",
+          variant: "destructive",
+        });
+      } else if (result.reason === 'sw-failed') {
+        toast({
+          title: "Could not enable notifications",
+          description: "The notification service could not be registered on this device.",
+          variant: "destructive",
+        });
+      } else if (result.reason === 'server-error') {
+        toast({
+          title: "Could not enable notifications",
+          description: result.error || "The server could not save your notification subscription.",
+          variant: "destructive",
+        });
       } else {
-        const success = await unsubscribe();
-        if (success) {
-          toast({
-            title: "Notifications disabled",
-            description: "You will no longer receive push notifications.",
-          });
-        }
+        toast({
+          title: "Could not enable notifications",
+          description: result.error || "Something went wrong. Please try again.",
+          variant: "destructive",
+        });
       }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to update notification settings.",
-        variant: "destructive",
-      });
+    } else {
+      const success = await unsubscribe();
+      if (success) {
+        toast({
+          title: "Notifications disabled",
+          description: "You will no longer receive push notifications.",
+        });
+      }
     }
   };
 

@@ -22,38 +22,34 @@ export default function NotificationSettings() {
   const { toast } = useToast();
 
   const handleToggleNotifications = async (enabled: boolean) => {
-    try {
-      if (enabled) {
-        const success = await subscribe();
-        if (success) {
-          toast({
-            title: 'Notifications Enabled',
-            description: 'You will now receive push notifications for urgent updates.',
-          });
-        } else {
-          toast({
-            title: 'Failed to Enable Notifications',
-            description: permission === 'denied' 
-              ? 'Please enable notifications in your browser settings.'
-              : 'Could not enable notifications. Please try again.',
-            variant: 'destructive',
-          });
-        }
+    if (enabled) {
+      const result = await subscribe();
+      if (result.success) {
+        toast({
+          title: 'Notifications Enabled',
+          description: 'You will now receive push notifications for urgent updates.',
+        });
+      } else if (result.reason === 'permission-denied') {
+        toast({
+          title: 'Permission Denied',
+          description: 'Please enable notifications in your browser settings and try again.',
+          variant: 'destructive',
+        });
       } else {
-        const success = await unsubscribe();
-        if (success) {
-          toast({
-            title: 'Notifications Disabled',
-            description: 'You will no longer receive push notifications.',
-          });
-        }
+        toast({
+          title: 'Failed to Enable Notifications',
+          description: result.error || 'Could not enable notifications. Please try again.',
+          variant: 'destructive',
+        });
       }
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to update notification settings.',
-        variant: 'destructive',
-      });
+    } else {
+      const success = await unsubscribe();
+      if (success) {
+        toast({
+          title: 'Notifications Disabled',
+          description: 'You will no longer receive push notifications.',
+        });
+      }
     }
   };
 

@@ -40,10 +40,9 @@ export function usePushNotifications() {
     }
   };
 
-  const subscribe = async () => {
+  const subscribe = async (): Promise<{ success: boolean; reason?: 'permission-denied' | 'not-supported' | 'vapid-missing' | 'sw-failed' | 'server-error' | 'error'; error?: string }> => {
     if (!isSupported || !user) {
-      console.warn('Push notifications not supported or user not logged in');
-      return false;
+      return { success: false, reason: 'not-supported' };
     }
 
     setIsLoading(true);
@@ -54,9 +53,7 @@ export function usePushNotifications() {
       setPermission(permissionResult);
 
       if (permissionResult !== 'granted') {
-        console.log('Notification permission denied');
-        setIsLoading(false);
-        return false;
+        return { success: false, reason: 'permission-denied' };
       }
 
       // Register service worker if not already registered
@@ -64,7 +61,7 @@ export function usePushNotifications() {
       if (!registration) {
         registration = await registerServiceWorker();
         if (!registration) {
-          throw new Error('Service Worker registration failed');
+          return { success: false, reason: 'sw-failed', error: 'Service Worker registration failed' };
         }
       }
 
@@ -76,16 +73,19 @@ export function usePushNotifications() {
       const { publicKey } = await vapidResponse.json();
 
       if (!publicKey) {
-        console.warn('VAPID key not configured on server');
-        setIsLoading(false);
-        return false;
+        return { success: false, reason: 'vapid-missing', error: 'Push notifications are not configured on this server' };
       }
 
       // Subscribe to push notifications
-      const subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(publicKey),
-      });
+      let subscription: PushSubscription;
+      try {
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(publicKey),
+        });
+      } catch (err: any) {
+        return { success: false, reason: 'error', error: err?.message || 'Failed to create push subscription' };
+      }
 
       // Send subscription to server
       const response = await fetch('/api/push/subscribe', {
@@ -96,15 +96,15 @@ export function usePushNotifications() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to save subscription');
+        const errData = await response.json().catch(() => ({}));
+        return { success: false, reason: 'server-error', error: errData?.error || 'Server failed to save subscription' };
       }
 
       setIsSubscribed(true);
-      console.log('Push notification subscription successful');
-      return true;
-    } catch (error) {
+      return { success: true };
+    } catch (error: any) {
       console.error('Error subscribing to push notifications:', error);
-      return false;
+      return { success: false, reason: 'error', error: error?.message };
     } finally {
       setIsLoading(false);
     }
