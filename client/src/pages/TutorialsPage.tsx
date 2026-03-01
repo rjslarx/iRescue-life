@@ -40,7 +40,7 @@ import { z } from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import {
   Loader2, Plus, Edit, Trash2, Play, Video, BookOpen,
-  ExternalLink, FileText, Upload, Download, File, Lock,
+  ExternalLink, FileText, Upload, Download, File, Lock, Eye, X,
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -933,37 +933,17 @@ function TutorialCard({
   );
 }
 
-async function handleDocOpen(
-  doc: HelpDocument,
-  setDownloading: (v: boolean) => void,
-) {
-  const viewable =
-    doc.mimeType === 'application/pdf' ||
-    (doc.mimeType?.startsWith('image/') ?? false);
-
-  if (viewable) {
-    window.open(doc.fileUrl, '_blank');
-    return;
+function getViewerUrl(fileUrl: string, token: string, mimeType: string | null | undefined): string {
+  const base = `${window.location.origin}${fileUrl}?view_token=${token}`;
+  const isOffice = [
+    'application/vnd.openxmlformats-officedocument',
+    'application/msword',
+    'application/vnd.ms-',
+  ].some(m => (mimeType ?? '').startsWith(m));
+  if (isOffice) {
+    return `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(base)}`;
   }
-
-  setDownloading(true);
-  try {
-    const res = await fetch(doc.fileUrl, { credentials: 'include' });
-    if (!res.ok) throw new Error('Download failed');
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = doc.fileName || 'document';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  } catch {
-    window.open(doc.fileUrl, '_blank');
-  } finally {
-    setDownloading(false);
-  }
+  return base;
 }
 
 function DocumentCard({
@@ -974,53 +954,117 @@ function DocumentCard({
   onEdit: () => void;
   onDelete: () => void;
 }) {
-  const [downloading, setDownloading] = useState(false);
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewToken, setViewToken] = useState<string | null>(null);
+  const [opening, setOpening] = useState(false);
+  const { toast } = useToast();
+
+  const isPdf = doc.mimeType === 'application/pdf';
+  const isImage = (doc.mimeType ?? '').startsWith('image/');
+
+  async function openViewer() {
+    setOpening(true);
+    try {
+      const res = await apiRequest('POST', `/api/help-documents/${doc.id}/view-token`);
+      const data = await res.json();
+      setViewToken(data.token);
+      setViewerOpen(true);
+    } catch {
+      toast({ title: 'Unable to open document', description: 'Please try again.', variant: 'destructive' });
+    } finally {
+      setOpening(false);
+    }
+  }
+
+  const viewerUrl = viewToken ? getViewerUrl(doc.fileUrl, viewToken, doc.mimeType) : null;
 
   return (
-    <Card data-testid={`card-document-${doc.id}`}>
-      <CardHeader className="pb-2">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex items-start gap-3 min-w-0">
-            <div className="shrink-0 mt-0.5">{getFileIcon(doc.mimeType)}</div>
-            <CardTitle className="text-base line-clamp-2">{doc.title}</CardTitle>
+    <>
+      <Card data-testid={`card-document-${doc.id}`}>
+        <CardHeader className="pb-2">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-start gap-3 min-w-0">
+              <div className="shrink-0 mt-0.5">{getFileIcon(doc.mimeType)}</div>
+              <CardTitle className="text-base line-clamp-2">{doc.title}</CardTitle>
+            </div>
+            {isAdmin && (
+              <div className="flex gap-1 shrink-0">
+                <Button size="icon" variant="ghost" onClick={onEdit} data-testid={`button-edit-doc-${doc.id}`}>
+                  <Edit className="h-4 w-4" />
+                </Button>
+                <Button size="icon" variant="ghost" onClick={onDelete} data-testid={`button-delete-doc-${doc.id}`}>
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
           </div>
-          {isAdmin && (
-            <div className="flex gap-1 shrink-0">
-              <Button size="icon" variant="ghost" onClick={onEdit} data-testid={`button-edit-doc-${doc.id}`}>
-                <Edit className="h-4 w-4" />
-              </Button>
-              <Button size="icon" variant="ghost" onClick={onDelete} data-testid={`button-delete-doc-${doc.id}`}>
-                <Trash2 className="h-4 w-4" />
+          <div className="flex flex-wrap gap-1.5">
+            <Badge variant="secondary" className="w-fit">{getCategoryLabel(doc.category)}</Badge>
+            {isAdmin && <VisibilityBadge roles={doc.visibleToRoles as RoleValue[] | null} />}
+          </div>
+        </CardHeader>
+
+        {doc.description && (
+          <CardContent className="pt-0">
+            <CardDescription className="line-clamp-2">{doc.description}</CardDescription>
+          </CardContent>
+        )}
+
+        <CardContent className="pt-0 pb-3">
+          <p className="text-xs text-muted-foreground mb-2 truncate">{doc.fileName}</p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full"
+            disabled={opening}
+            onClick={openViewer}
+            data-testid={`button-open-doc-${doc.id}`}
+          >
+            {opening ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Eye className="h-4 w-4 mr-2" />}
+            {opening ? 'Opening…' : 'View Document'}
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Dialog open={viewerOpen} onOpenChange={(open) => { setViewerOpen(open); if (!open) setViewToken(null); }}>
+        <DialogContent className="max-w-5xl w-[95vw] p-0 gap-0 overflow-hidden flex flex-col" style={{ height: '90vh' }}>
+          <div className="flex items-center justify-between px-4 py-3 border-b shrink-0">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="shrink-0">{getFileIcon(doc.mimeType)}</div>
+              <span className="font-semibold text-sm truncate">{doc.title}</span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {viewerUrl && (
+                <Button variant="outline" size="sm" asChild>
+                  <a href={`${window.location.origin}${doc.fileUrl}?view_token=${viewToken}`} download={doc.fileName} data-testid={`button-download-doc-${doc.id}`}>
+                    <Download className="h-4 w-4 mr-1.5" />
+                    Download
+                  </a>
+                </Button>
+              )}
+              <Button size="icon" variant="ghost" onClick={() => setViewerOpen(false)} data-testid={`button-close-viewer-${doc.id}`}>
+                <X className="h-4 w-4" />
               </Button>
             </div>
-          )}
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          <Badge variant="secondary" className="w-fit">{getCategoryLabel(doc.category)}</Badge>
-          {isAdmin && <VisibilityBadge roles={doc.visibleToRoles as RoleValue[] | null} />}
-        </div>
-      </CardHeader>
+          </div>
 
-      {doc.description && (
-        <CardContent className="pt-0">
-          <CardDescription className="line-clamp-2">{doc.description}</CardDescription>
-        </CardContent>
-      )}
-
-      <CardContent className="pt-0 pb-3">
-        <p className="text-xs text-muted-foreground mb-2 truncate">{doc.fileName}</p>
-        <Button
-          variant="outline"
-          size="sm"
-          className="w-full"
-          disabled={downloading}
-          onClick={() => handleDocOpen(doc, setDownloading)}
-          data-testid={`button-open-doc-${doc.id}`}
-        >
-          <Download className="h-4 w-4 mr-2" />
-          {downloading ? 'Downloading…' : 'Open / Download'}
-        </Button>
-      </CardContent>
-    </Card>
+          <div className="flex-1 overflow-hidden bg-muted/30">
+            {viewerUrl && isImage && (
+              <div className="flex items-center justify-center h-full p-4">
+                <img src={viewerUrl} alt={doc.title} className="max-h-full max-w-full object-contain rounded-md" />
+              </div>
+            )}
+            {viewerUrl && !isImage && (
+              <iframe
+                src={viewerUrl}
+                title={doc.title}
+                className="w-full h-full border-0"
+                sandbox={isPdf || isImage ? undefined : "allow-scripts allow-same-origin allow-forms allow-popups"}
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

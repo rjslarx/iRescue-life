@@ -297,6 +297,13 @@ function sanitizeContentModuleStyling(styling: any): any {
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // ============================================================================
+  // Short-lived document view tokens (in-memory, no DB needed)
+  // Issued by POST /api/help-documents/:id/view-token, consumed by /objects/ route
+  // Allows embedding private files in iframes / Office Online without re-auth
+  // ============================================================================
+  const docViewTokens = new Map<string, { fileUrl: string; tenantId: string; expiresAt: number }>();
+
+  // ============================================================================
   // Pro-tier API Route Protection
   // Blocks Lite tier tenants from accessing Pro-only API endpoints
   // ============================================================================
@@ -8622,6 +8629,20 @@ Crawl-delay: 1
       const { ObjectPermission, getObjectAclPolicy } = await import('./objectAcl');
       const objectStorageService = new ObjectStorageService();
       const objectFile = await objectStorageService.getObjectEntityFile(req.path);
+
+      // Short-lived view token bypass (issued by /api/help-documents/:id/view-token)
+      // Allows embedding private docs in iframes without re-authenticating
+      const viewToken = req.query.view_token as string | undefined;
+      if (viewToken) {
+        const tokenData = docViewTokens.get(viewToken);
+        if (tokenData && tokenData.expiresAt > Date.now() && req.path === tokenData.fileUrl) {
+          // Set Content-Disposition: inline so browsers render PDFs/images in-place
+          res.setHeader('Content-Disposition', 'inline');
+          await objectStorageService.downloadObject(objectFile, res);
+          return;
+        }
+        return res.sendStatus(403);
+      }
       
       // Extract tenant ID from path if present (new tenant-scoped paths)
       const pathTenantId = objectStorageService.extractTenantIdFromPath(req.path);
@@ -37864,6 +37885,34 @@ The user asking is a tenant administrator or staff member.`;
           .returning();
         if (!deleted) return res.status(404).json({ error: 'Document not found' });
         res.json({ success: true });
+      } catch (error) { next(error); }
+    });
+
+    // POST /api/help-documents/:id/view-token - Issue short-lived token for inline viewing
+    // Allows private documents to be viewed in iframe/Office Online without re-auth
+    app.post('/api/help-documents/:id/view-token', requireTenant, requireAuth, async (req, res, next) => {
+      try {
+        const { helpDocuments } = await import('@shared/schema');
+        const [doc] = await db
+          .select({ fileUrl: helpDocuments.fileUrl, tenantId: helpDocuments.tenantId })
+          .from(helpDocuments)
+          .where(and(eq(helpDocuments.id, req.params.id), eq(helpDocuments.tenantId, req.tenant!.id)))
+          .limit(1);
+        if (!doc) return res.status(404).json({ error: 'Document not found' });
+
+        // Purge expired tokens
+        const now = Date.now();
+        for (const [k, v] of docViewTokens.entries()) {
+          if (v.expiresAt < now) docViewTokens.delete(k);
+        }
+
+        const token = crypto.randomUUID();
+        docViewTokens.set(token, {
+          fileUrl: doc.fileUrl,
+          tenantId: doc.tenantId,
+          expiresAt: now + 10 * 60 * 1000,
+        });
+        res.json({ token });
       } catch (error) { next(error); }
     });
 
