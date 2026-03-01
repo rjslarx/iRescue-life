@@ -84,6 +84,7 @@ import {
   Cat,
   BookOpen,
   Video,
+  Activity,
 } from "lucide-react";
 
 interface AppSidebarProps {
@@ -294,6 +295,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
       title: "Communications",
       items: [
         { title: "Communications", url: "/dashboard/communications", icon: Mail },
+        { title: "Switchboard", url: "/dashboard/communications-switchboard", icon: Activity },
         { title: "Broadcasts", url: "/dashboard/broadcasts", icon: Radio },
         { title: "Newsletter Designer", url: "/dashboard/newsletter-designer", icon: Palette, proOnly: true },
       ],
@@ -401,6 +403,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
         { title: "Grants", url: "/dashboard/grants", icon: Briefcase, proOnly: true },
         { title: "Supply Registry", url: "/dashboard/supplies", icon: ShoppingCart },
         { title: "Communications", url: "/dashboard/communications", icon: Mail },
+        { title: "Switchboard", url: "/dashboard/communications-switchboard", icon: Activity },
         { title: "Broadcasts", url: "/dashboard/broadcasts", icon: Radio },
         { title: "Newsletter Designer", url: "/dashboard/newsletter-designer", icon: Palette, proOnly: true },
         { title: "Calendar", url: "/dashboard/calendar", icon: Calendar },

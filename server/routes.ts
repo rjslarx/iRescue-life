@@ -6,7 +6,7 @@ import { requireAuth, requireRole, requireRoleOrPageAccess, requireProTier } fro
 import { loginUser, createTenantWithAdmin, createUser } from "./services/auth";
 import { PushNotificationService } from "./services/push-notifications";
 import { db } from "./db";
-import { tenants, users, demoRequests, insertDemoRequestSchema, smsMessageLogs, emailEvents, animals, platformIntegrations, newsletterCampaigns, newsletterSubscribers, happyTails, animalMergeHistory, activityLogs, medicalExams, medicalPrescriptions, medicalBills, medicalFiles, animalNotes, applications, adoptionCheckoutSessions, adoptions, partnerOrganizations, microchipRecords, surrenderRequests, surrenderFormFields, insertSurrenderRequestSchema, insertSurrenderFormFieldSchema, inboundEmails, calendars, careInstructionSnippets, fosterApplications, volunteerApplications, adoptionContracts, fosterAgreementSessions, volunteerAgreementSessions, surrenderAgreementSessions, customFormSubmissions, customForms, placementAgreementSessions, medicationTasks, medicationPlans, fosterAnimals } from "@shared/schema";
+import { tenants, users, demoRequests, insertDemoRequestSchema, smsMessageLogs, emailEvents, animals, platformIntegrations, newsletterCampaigns, newsletterSubscribers, happyTails, animalMergeHistory, activityLogs, medicalExams, medicalPrescriptions, medicalBills, medicalFiles, animalNotes, applications, adoptionCheckoutSessions, adoptions, partnerOrganizations, microchipRecords, surrenderRequests, surrenderFormFields, insertSurrenderRequestSchema, insertSurrenderFormFieldSchema, inboundEmails, calendars, careInstructionSnippets, fosterApplications, volunteerApplications, adoptionContracts, fosterAgreementSessions, volunteerAgreementSessions, surrenderAgreementSessions, customFormSubmissions, customForms, placementAgreementSessions, medicationTasks, medicationPlans, fosterAnimals, messageQueue } from "@shared/schema";
 import { eq, and, desc, asc, sql, inArray, lt, lte, gte, not, notInArray, or, ne, isNull, isNotNull } from "drizzle-orm";
 import { z } from "zod";
 import { authLimiter, signupLimiter, passwordResetLimiter, emailLimiter } from "./config/security";
@@ -41516,6 +41516,198 @@ The user asking is a tenant administrator or staff member.`;
         .returning();
       if (!converted) return res.status(404).json({ error: 'TNR record not found' });
       res.json({ record: converted });
+    } catch (error) { next(error); }
+  });
+
+  /**
+   * GET /api/communications/feed
+   */
+  app.get('/api/communications/feed', requireTenant, requireAuth, requireRole('admin', 'owner'), async (req, res, next) => {
+    try {
+      const tenantId = req.tenant!.id;
+      const { channel, status, search, page = '1', limit = '50' } = req.query;
+      const pageNum = Math.max(1, parseInt(page as string) || 1);
+      const limitNum = Math.min(100, Math.max(1, parseInt(limit as string) || 50));
+      const offset = (pageNum - 1) * limitNum;
+
+      const results: any[] = [];
+
+      const shouldIncludeSms = !channel || channel === 'all' || channel === 'sms';
+
+      if (shouldIncludeSms && (!status || status === 'all' || status === 'sent' || status === 'delivered' || status === 'failed')) {
+        const smsConditions: any[] = [eq(smsMessageLogs.tenantId, tenantId)];
+        if (status && status !== 'all') {
+          smsConditions.push(eq(smsMessageLogs.status, status as string));
+        }
+
+        let smsRows = await db
+          .select({
+            id: smsMessageLogs.id,
+            toNumber: smsMessageLogs.toNumber,
+            body: smsMessageLogs.body,
+            status: smsMessageLogs.status,
+            direction: smsMessageLogs.direction,
+            twilioMessageSid: smsMessageLogs.twilioMessageSid,
+            errorMessage: smsMessageLogs.errorMessage,
+            sentByName: smsMessageLogs.sentByName,
+            recipientUserId: smsMessageLogs.recipientUserId,
+            messageType: smsMessageLogs.messageType,
+            createdAt: smsMessageLogs.createdAt,
+            recipientName: users.fullName,
+          })
+          .from(smsMessageLogs)
+          .leftJoin(users, eq(smsMessageLogs.recipientUserId, users.id))
+          .where(and(...smsConditions))
+          .orderBy(desc(smsMessageLogs.createdAt))
+          .limit(500);
+
+        if (search) {
+          const s = (search as string).toLowerCase();
+          smsRows = smsRows.filter(r =>
+            (r.recipientName && r.recipientName.toLowerCase().includes(s)) ||
+            r.body.toLowerCase().includes(s) ||
+            r.toNumber.includes(s)
+          );
+        }
+
+        for (const r of smsRows) {
+          results.push({
+            id: r.id,
+            channel: 'sms',
+            direction: r.direction,
+            recipientName: r.recipientName || r.sentByName,
+            recipientAddress: r.toNumber,
+            subject: null,
+            body: r.body,
+            status: r.status,
+            scheduledFor: null,
+            sentAt: r.createdAt,
+            providerSid: r.twilioMessageSid,
+            errorLog: r.errorMessage,
+            source: r.messageType,
+            createdAt: r.createdAt,
+            queueId: null,
+          });
+        }
+      }
+
+      const mqConditions: any[] = [eq(messageQueue.tenantId, tenantId)];
+      if (channel && channel !== 'all') {
+        mqConditions.push(eq(messageQueue.channel, channel as string));
+      }
+      if (status && status !== 'all') {
+        mqConditions.push(eq(messageQueue.status, status as string));
+      }
+
+      let mqRows = await db
+        .select({
+          id: messageQueue.id,
+          channel: messageQueue.channel,
+          direction: messageQueue.direction,
+          recipientAddress: messageQueue.recipientAddress,
+          recipientName: messageQueue.recipientName,
+          subject: messageQueue.subject,
+          messageBody: messageQueue.messageBody,
+          status: messageQueue.status,
+          scheduledFor: messageQueue.scheduledFor,
+          sentAt: messageQueue.sentAt,
+          providerSid: messageQueue.providerSid,
+          errorLog: messageQueue.errorLog,
+          sourceType: messageQueue.sourceType,
+          createdAt: messageQueue.createdAt,
+        })
+        .from(messageQueue)
+        .where(and(...mqConditions))
+        .orderBy(desc(messageQueue.createdAt))
+        .limit(500);
+
+      if (search) {
+        const s = (search as string).toLowerCase();
+        mqRows = mqRows.filter(r =>
+          (r.recipientName && r.recipientName.toLowerCase().includes(s)) ||
+          r.messageBody.toLowerCase().includes(s) ||
+          r.recipientAddress.includes(s)
+        );
+      }
+
+      for (const r of mqRows) {
+        results.push({
+          id: r.id,
+          channel: r.channel,
+          direction: r.direction,
+          recipientName: r.recipientName,
+          recipientAddress: r.recipientAddress,
+          subject: r.subject,
+          body: r.messageBody,
+          status: r.status,
+          scheduledFor: r.scheduledFor,
+          sentAt: r.sentAt,
+          providerSid: r.providerSid,
+          errorLog: r.errorLog,
+          source: r.sourceType,
+          createdAt: r.createdAt,
+          queueId: r.id,
+        });
+      }
+
+      results.sort((a, b) => {
+        const dateA = new Date(a.scheduledFor || a.createdAt).getTime();
+        const dateB = new Date(b.scheduledFor || b.createdAt).getTime();
+        return dateB - dateA;
+      });
+
+      const total = results.length;
+      const paged = results.slice(offset, offset + limitNum);
+
+      res.json({
+        messages: paged,
+        pagination: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) },
+      });
+    } catch (error) { next(error); }
+  });
+
+  /**
+   * POST /api/communications/queue/:id/cancel
+   */
+  app.post('/api/communications/queue/:id/cancel', requireTenant, requireAuth, requireRole('admin', 'owner'), async (req, res, next) => {
+    try {
+      const { id } = req.params;
+      const [updated] = await db.update(messageQueue)
+        .set({ status: 'cancelled', updatedAt: new Date() })
+        .where(and(
+          eq(messageQueue.id, id),
+          eq(messageQueue.tenantId, req.tenant!.id),
+          eq(messageQueue.status, 'scheduled')
+        ))
+        .returning();
+
+      if (!updated) return res.status(404).json({ error: 'Scheduled message not found or already processed' });
+      res.json({ success: true, message: updated });
+    } catch (error) { next(error); }
+  });
+
+  /**
+   * GET /api/tenant/settings/comms-paused
+   */
+  app.get('/api/tenant/settings/comms-paused', requireTenant, requireAuth, requireRole('admin', 'owner'), async (req, res, next) => {
+    try {
+      const [tenant] = await db.select({ commsPaused: tenants.commsPaused }).from(tenants).where(eq(tenants.id, req.tenant!.id));
+      res.json({ commsPaused: tenant?.commsPaused ?? false });
+    } catch (error) { next(error); }
+  });
+
+  /**
+   * PATCH /api/tenant/settings/comms-paused
+   */
+  app.patch('/api/tenant/settings/comms-paused', requireTenant, requireAuth, requireRole('admin', 'owner'), async (req, res, next) => {
+    try {
+      const { commsPaused } = req.body;
+      if (typeof commsPaused !== 'boolean') return res.status(400).json({ error: 'commsPaused must be a boolean' });
+      const [updated] = await db.update(tenants)
+        .set({ commsPaused })
+        .where(eq(tenants.id, req.tenant!.id))
+        .returning({ commsPaused: tenants.commsPaused });
+      res.json({ commsPaused: updated.commsPaused });
     } catch (error) { next(error); }
   });
 

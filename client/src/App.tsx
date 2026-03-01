@@ -37,6 +37,7 @@ import FosterMobilePortal from "@/pages/FosterMobilePortal";
 import TeamManagementPage from "@/pages/TeamManagementPage";
 import EmailCampaignPage from "@/pages/EmailCampaignPage";
 import CommunicationsPage from "@/pages/CommunicationsPage";
+import CommunicationsSwitchboardPage from "@/pages/CommunicationsSwitchboardPage";
 import BroadcastsPage from "@/pages/BroadcastsPage";
 import NewsletterCampaignsPage from "@/pages/NewsletterCampaignsPage";
 import NewsletterDesignerPage from "@/pages/NewsletterDesignerPage";
@@ -295,6 +296,7 @@ function RouterSwitch() {
       <ProtectedRoute path="/dashboard/foster-pipeline" pageId="foster-management" component={FosterApplicationsPipelinePage} proOnly proFeatureName="Foster Pipeline" />
       <ProtectedRoute path="/dashboard/volunteer-applications" pageId="volunteers" component={VolunteerApplicationManagementPage} proOnly proFeatureName="Volunteer Applications" />
       <ProtectedRoute path="/dashboard/volunteer-pipeline" pageId="volunteers" component={VolunteerApplicationsPipelinePage} proOnly proFeatureName="Volunteer Pipeline" />
+      <ProtectedRoute path="/dashboard/communications-switchboard" pageId="communications-switchboard" component={CommunicationsSwitchboardPage} />
       <ProtectedRoute path="/dashboard/communications" pageId="communications" component={CommunicationsPage} />
       <ProtectedRoute path="/dashboard/broadcasts" pageId="communications" component={BroadcastsPage} />
       <ProtectedRoute path="/dashboard/newsletter-campaigns" pageId="communications" component={NewsletterCampaignsPage} />

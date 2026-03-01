@@ -194,6 +194,15 @@ export async function sendSms(
     skipOrgPrefix?: boolean;
   }
 ): Promise<SendResult> {
+  const [tenantRow] = await db.select({ commsPaused: tenants.commsPaused }).from(tenants).where(eq(tenants.id, tenantId));
+  if (tenantRow?.commsPaused) {
+    return {
+      number: toNumber,
+      status: 'failed',
+      error: 'Outbound communications are paused for this organization',
+    };
+  }
+
   const config = await getTwilioConfig(tenantId);
   if (!config) {
     return {

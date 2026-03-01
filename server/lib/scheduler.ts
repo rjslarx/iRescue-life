@@ -554,4 +554,20 @@ export function initializeScheduler() {
     next9AM.setDate(next9AM.getDate() + 1);
   }
   console.log(`   Next retention emails will run at: ${next9AM.toISOString()}`);
+
+  cron.schedule("* * * * *", async () => {
+    try {
+      const { processMessageQueue } = await import("../services/message-queue-dispatcher");
+      const result = await processMessageQueue();
+      if (result.processed > 0) {
+        console.log(`📨 Message queue: ${result.sent} sent, ${result.failed} failed, ${result.skipped} skipped (paused)`);
+      }
+    } catch (error) {
+      console.error(`❌ Message queue dispatcher failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }, {
+    timezone: "UTC"
+  });
+
+  console.log(`✓ Message queue dispatcher scheduled: * * * * * (every minute, UTC)`);
 }

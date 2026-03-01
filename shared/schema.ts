@@ -306,6 +306,8 @@ export const tenants = pgTable("tenants", {
   jotformVolunteerUrl: text("jotform_volunteer_url"),
   jotformSurrenderUrl: text("jotform_surrender_url"),
   
+  commsPaused: boolean("comms_paused").notNull().default(false),
+  
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
@@ -5939,3 +5941,33 @@ export const insertOrderSetItemSchema = createInsertSchema(orderSetItems).omit({
 });
 export type InsertOrderSetItem = z.infer<typeof insertOrderSetItemSchema>;
 export type OrderSetItem = typeof orderSetItems.$inferSelect;
+
+export const messageQueue = pgTable("message_queue", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  channel: text("channel").notNull().$type<"sms" | "email">(),
+  direction: text("direction").notNull().default("outbound").$type<"outbound">(),
+  recipientUserId: uuid("recipient_user_id").references(() => users.id, { onDelete: 'set null' }),
+  recipientAddress: text("recipient_address").notNull(),
+  recipientName: text("recipient_name"),
+  relatedAnimalId: uuid("related_animal_id").references(() => animals.id, { onDelete: 'set null' }),
+  subject: text("subject"),
+  messageBody: text("message_body").notNull(),
+  scheduledFor: timestamp("scheduled_for").notNull(),
+  sentAt: timestamp("sent_at"),
+  status: text("status").notNull().default("scheduled").$type<"scheduled" | "processing" | "delivered" | "failed" | "cancelled">(),
+  providerSid: text("provider_sid"),
+  errorLog: text("error_log"),
+  sourceType: text("source_type").notNull().default("other").$type<"broadcast" | "reminder" | "compliance" | "newsletter" | "manual" | "other">(),
+  createdBy: uuid("created_by").references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertMessageQueueSchema = createInsertSchema(messageQueue).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertMessageQueue = z.infer<typeof insertMessageQueueSchema>;
+export type MessageQueue = typeof messageQueue.$inferSelect;

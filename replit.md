@@ -46,6 +46,7 @@ Core functionalities include:
 - **Fundraiser / Event Sales Module:** Enables full campaign pages with Stripe Connect checkout, inventory caps, and pickup time tracking, supporting custom images and rich content for public-facing event pages and an administrative fulfillment dashboard.
 - **Help & Training Module:** Offers a two-tab page for videos and documents, with admin CRUD capabilities and per-item role visibility for controlling access to training materials.
 - **TNR (Trap-Neuter-Return) Log Module:** Integrates TNR record management within the existing animal data structure, enabling per-tenant activation, specific APIs for TNR records, and attachment capabilities.
+- **Omnichannel Communications Switchboard:** A unified admin control panel (`/dashboard/communications-switchboard`) aggregating all SMS logs and queued messages. Features channel/status filtering, search, colored status badges, a `message_queue` table for scheduled/cancellable messages with a per-minute cron dispatcher, and a tenant-level "Pause Outbound Comms" emergency kill switch (`commsPaused` flag on tenants table) that halts all SMS delivery when activated.
 
 ## External Dependencies
 - **Stripe:** Payment processing and financial management.

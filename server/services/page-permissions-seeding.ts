@@ -217,6 +217,12 @@ const NEW_PAGE_PERMISSIONS = [
     description: 'Foster parent view of assigned animals and medical information',
     allowedRoles: ['admin', 'board_member', 'staff', 'foster'] as ('admin' | 'board_member' | 'staff' | 'foster' | 'volunteer')[],
   },
+  {
+    pageId: 'communications-switchboard',
+    displayName: 'Communications Switchboard',
+    description: 'Monitor all outbound SMS and email communications with scheduling controls',
+    allowedRoles: ['admin'] as ('admin' | 'board_member' | 'staff' | 'foster' | 'volunteer')[],
+  },
 ];
 
 export async function backfillNewPagePermissions() {
