@@ -22131,7 +22131,27 @@ Submitted: ${new Date().toLocaleString()}
         return res.status(400).json({ error: result.error });
       }
 
-      res.json({ success: true, sid: result.sid });
+      let deliveryStatus: string | null = null;
+      let deliveryError: string | null = null;
+      if (result.sid) {
+        try {
+          const { getTwilioConfigForTenant } = await import('./lib/twilio-service');
+          const config = await getTwilioConfigForTenant(req.tenant!.id);
+          if (config) {
+            const twilioLib = await import('twilio');
+            const client = twilioLib.default(config.accountSid, config.authToken);
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            const msg = await client.messages(result.sid).fetch();
+            deliveryStatus = msg.status;
+            deliveryError = msg.errorCode ? `${msg.errorCode}: ${msg.errorMessage}` : null;
+            console.log(`[TWILIO TEST] SID=${result.sid} status=${msg.status} errorCode=${msg.errorCode} errorMessage=${msg.errorMessage}`);
+          }
+        } catch (fetchErr: any) {
+          console.error('[TWILIO TEST] Failed to fetch message status:', fetchErr.message);
+        }
+      }
+
+      res.json({ success: true, sid: result.sid, deliveryStatus, deliveryError });
     } catch (error) {
       next(error);
     }

@@ -18,6 +18,10 @@ interface SendResult {
   error?: string;
 }
 
+export async function getTwilioConfigForTenant(tenantId: string): Promise<TwilioConfig | null> {
+  return getTwilioConfig(tenantId);
+}
+
 async function getTwilioConfig(tenantId: string): Promise<TwilioConfig | null> {
   const [tenant] = await db
     .select({
@@ -58,21 +62,27 @@ function createTwilioClient(config: TwilioConfig) {
   return twilio(config.accountSid, config.authToken);
 }
 
-// Helper to build message create options - uses Messaging Service SID when available for better deliverability
+function getStatusCallbackUrl(): string | undefined {
+  const base = process.env.APP_BASE_URL || process.env.REPLIT_DEV_DOMAIN || 'https://irescue.life';
+  const origin = base.startsWith('http') ? base : `https://${base}`;
+  return `${origin}/api/webhooks/twilio/status`;
+}
+
 function buildMessageOptions(config: TwilioConfig, to: string, body: string) {
+  const statusCallback = getStatusCallbackUrl();
   if (config.messagingServiceSid) {
-    // Use Messaging Service SID for registered campaigns (recommended by Twilio)
     return {
       body,
       messagingServiceSid: config.messagingServiceSid,
       to,
+      ...(statusCallback ? { statusCallback } : {}),
     };
   }
-  // Fallback to phone number if no Messaging Service SID configured
   return {
     body,
     from: config.phoneNumber,
     to,
+    ...(statusCallback ? { statusCallback } : {}),
   };
 }
 

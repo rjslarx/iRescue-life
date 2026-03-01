@@ -301,8 +301,14 @@ export default function IntegrationsSettingsPage() {
       const response = await apiRequest('POST', '/api/tenant/settings/twilio/test', { phoneNumber });
       return response.json();
     },
-    onSuccess: () => {
-      toast({ title: "Test message sent", description: "Check your phone for the test SMS." });
+    onSuccess: (data: any) => {
+      if (data.deliveryError) {
+        toast({ title: "Twilio delivery issue", description: `Status: ${data.deliveryStatus} — ${data.deliveryError}`, variant: "destructive" });
+      } else if (data.deliveryStatus === 'undelivered' || data.deliveryStatus === 'failed') {
+        toast({ title: "Message not delivered", description: `Twilio status: ${data.deliveryStatus}. The carrier may be blocking this message.`, variant: "destructive" });
+      } else {
+        toast({ title: "Test message sent", description: `Twilio status: ${data.deliveryStatus || 'queued'}. Check your phone for the test SMS.` });
+      }
     },
     onError: (error: any) => {
       toast({ title: "Test failed", description: error.message || "Failed to send test SMS.", variant: "destructive" });
