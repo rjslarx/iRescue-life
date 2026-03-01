@@ -39807,6 +39807,37 @@ The user asking is a tenant administrator or staff member.`;
       }
     });
 
+      // POST /api/daily-roster/undo-mark-given - Undo a recently marked dose (within 90 seconds)
+      app.post('/api/daily-roster/undo-mark-given', requireTenant, requireAuth, async (req, res, next) => {
+        try {
+          const tenantId = req.tenant!.id;
+          const { medicalDoses } = await import('@shared/schema');
+          const schema = z.object({ doseId: z.string().uuid() });
+          const { doseId } = schema.parse(req.body);
+
+          const [dose] = await db.select()
+            .from(medicalDoses)
+            .where(and(eq(medicalDoses.tenantId, tenantId), eq(medicalDoses.id, doseId)))
+            .limit(1);
+
+          if (!dose) return res.status(404).json({ error: 'Dose not found' });
+          if (dose.status !== 'given') return res.status(400).json({ error: 'Dose is not marked as given' });
+
+          const now = new Date();
+          const givenAt = dose.givenAt ? new Date(dose.givenAt) : null;
+          if (!givenAt || (now.getTime() - givenAt.getTime()) > 90000) {
+            return res.status(400).json({ error: 'Undo window has expired' });
+          }
+
+          const [updated] = await db.update(medicalDoses)
+            .set({ status: 'due', givenAt: null, administeredBy: null })
+            .where(and(eq(medicalDoses.tenantId, tenantId), eq(medicalDoses.id, doseId)))
+            .returning();
+
+          res.json({ dose: updated });
+        } catch (error) { next(error); }
+      });
+
       // Mark a vaccine preventative as given with manufacturer/lot number
     app.post('/api/daily-roster/mark-vaccine-given', requireTenant, requireAuth, async (req, res, next) => {
       try {

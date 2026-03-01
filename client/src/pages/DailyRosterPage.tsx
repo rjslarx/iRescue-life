@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -46,6 +46,7 @@ import {
   Home,
   MapPin,
   Printer,
+  Undo2,
 } from "lucide-react";
 import { format, isSameDay, parse, addDays } from "date-fns";
 
@@ -282,6 +283,12 @@ export default function DailyRosterPage() {
   const [resultValue, setResultValue] = useState("");
   const [resultNotes, setResultNotes] = useState("");
 
+  // Undo window state — tracks dose IDs that can still be undone (within 30 s)
+  const [undoableIds, setUndoableIds] = useState<Map<string, number>>(new Map()); // doseId → markedAt timestamp
+  const [renderTick, setRenderTick] = useState(0); // incremented every second to drive countdown display
+  const dateStrRef = useRef('');
+  const monthStrRef = useRef('');
+
   const { data: tenantData } = useQuery<{ tenant: { name: string } }>({
     queryKey: ["/api/tenant"],
   });
@@ -447,14 +454,21 @@ export default function DailyRosterPage() {
       await apiRequest("POST", "/api/daily-roster/bulk-mark-given", { items: [{ id: payload.id, type: payload.type }] });
     },
     onSuccess: (_data, variables) => {
-      toast({ title: "Marked as given", description: "Item updated successfully." });
-      setSelectedItems((prev) => {
-        const next = new Set(prev);
-        next.delete(variables.key);
-        return next;
-      });
-      queryClient.invalidateQueries({ queryKey: ["/api/daily-roster", dateStr] });
-      queryClient.invalidateQueries({ queryKey: ["/api/daily-roster/calendar", monthStr] });
+      if (variables.type === 'dose') {
+        // Keep row visible during the 30-second undo window — do NOT invalidate or remove from selectedItems yet
+        setUndoableIds((prev) => new Map(prev).set(variables.id, Date.now()));
+        toast({ title: "Marked as given", description: "Click Undo on the row within 30 seconds to reverse." });
+      } else {
+        // Preventatives/vaccines: normal immediate behaviour
+        toast({ title: "Marked as given", description: "Item updated successfully." });
+        setSelectedItems((prev) => {
+          const next = new Set(prev);
+          next.delete(variables.key);
+          return next;
+        });
+        queryClient.invalidateQueries({ queryKey: ["/api/daily-roster", dateStrRef.current] });
+        queryClient.invalidateQueries({ queryKey: ["/api/daily-roster/calendar", monthStrRef.current] });
+      }
     },
     onError: (err: Error, variables) => {
       setSelectedItems((prev) => {
@@ -465,6 +479,59 @@ export default function DailyRosterPage() {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     },
   });
+
+  const undoMutation = useMutation({
+    mutationFn: async (doseId: string) => {
+      const res = await apiRequest("POST", "/api/daily-roster/undo-mark-given", { doseId });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Undo failed");
+      }
+      return doseId;
+    },
+    onSuccess: (doseId) => {
+      setUndoableIds((prev) => { const next = new Map(prev); next.delete(doseId); return next; });
+      setSelectedItems((prev) => { const next = new Set(prev); next.delete(`dose:${doseId}`); return next; });
+      // Refetch so the dose reappears as pending
+      queryClient.invalidateQueries({ queryKey: ["/api/daily-roster", dateStrRef.current] });
+      queryClient.invalidateQueries({ queryKey: ["/api/daily-roster/calendar", monthStrRef.current] });
+      toast({ title: "Undone", description: "Medication restored to the pending list." });
+    },
+    onError: (err: Error, doseId) => {
+      // Undo window expired — clean up local state and let the query resync
+      setUndoableIds((prev) => { const next = new Map(prev); next.delete(doseId); return next; });
+      setSelectedItems((prev) => { const next = new Set(prev); next.delete(`dose:${doseId}`); return next; });
+      queryClient.invalidateQueries({ queryKey: ["/api/daily-roster", dateStrRef.current] });
+      toast({ title: "Undo unavailable", description: "The undo window has expired. Edit from the animal's medical page.", variant: "destructive" });
+    },
+  });
+
+  // Keep date refs current so interval callbacks reference the latest values
+  useEffect(() => { dateStrRef.current = dateStr; }, [dateStr]);
+  useEffect(() => { monthStrRef.current = monthStr; }, [monthStr]);
+
+  // 1-second ticker: drives countdown display and expires undo windows after 30 s
+  useEffect(() => {
+    if (undoableIds.size === 0) return;
+    const interval = setInterval(() => {
+      const now = Date.now();
+      setRenderTick((t) => t + 1);
+      setUndoableIds((prev) => {
+        const next = new Map(prev);
+        for (const [id, ts] of next) {
+          if (now - ts > 30000) {
+            next.delete(id);
+            // Remove from checked state and refresh list now that undo window is closed
+            setSelectedItems((si) => { const n = new Set(si); n.delete(`dose:${id}`); return n; });
+            queryClient.invalidateQueries({ queryKey: ["/api/daily-roster", dateStrRef.current] });
+            queryClient.invalidateQueries({ queryKey: ["/api/daily-roster/calendar", monthStrRef.current] });
+          }
+        }
+        return next;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [undoableIds.size]);
 
   function getItemType(item: MedOrPrev & { _isVaccine: boolean }): string {
     if (item._type === 'dose') return 'dose';
@@ -727,8 +794,13 @@ export default function DailyRosterPage() {
                       const key = `${item._type}:${item.id}`;
                       const isVaccineCompleted = item._isVaccine && completedVaccines.has(item.id);
                       const isChecked = isVaccineCompleted || selectedItems.has(key);
+                      const isUndoable = item._type === 'dose' && undoableIds.has(item.id);
+                      const secondsLeft = isUndoable
+                        ? Math.max(0, 30 - Math.floor((Date.now() - undoableIds.get(item.id)!) / 1000))
+                        : 0;
+                      void renderTick; // consumed to force re-render each second
                       return (
-                        <div key={key} className={`flex items-start gap-3 py-2 px-2 rounded-md hover-elevate transition-opacity ${isChecked ? "opacity-50" : ""} ${item.isQuarantined ? "bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/40" : ""}`} data-testid={`row-med-${item.id}`}>
+                        <div key={key} className={`flex items-start gap-3 py-2 px-2 rounded-md transition-opacity ${isChecked && !isUndoable ? "opacity-50 hover-elevate" : isChecked ? "opacity-70" : "hover-elevate"} ${item.isQuarantined ? "bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/40" : ""}`} data-testid={`row-med-${item.id}`}>
                           {!isFutureDate && (
                             <Checkbox
                               checked={isChecked}
@@ -796,6 +868,23 @@ export default function DailyRosterPage() {
                               <Badge variant="outline" className="text-xs mt-0.5">{(item as TaggedPreventative).careCategory}</Badge>
                             )}
                           </div>
+                          {isUndoable && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="shrink-0 print:hidden gap-1.5"
+                              disabled={undoMutation.isPending}
+                              onClick={() => undoMutation.mutate(item.id)}
+                              data-testid={`button-undo-med-${item.id}`}
+                            >
+                              {undoMutation.isPending ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Undo2 className="h-3.5 w-3.5" />
+                              )}
+                              Undo ({secondsLeft}s)
+                            </Button>
+                          )}
                         </div>
                       );
                     })}
