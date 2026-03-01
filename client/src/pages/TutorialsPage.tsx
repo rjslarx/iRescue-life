@@ -933,6 +933,39 @@ function TutorialCard({
   );
 }
 
+async function handleDocOpen(
+  doc: HelpDocument,
+  setDownloading: (v: boolean) => void,
+) {
+  const viewable =
+    doc.mimeType === 'application/pdf' ||
+    (doc.mimeType?.startsWith('image/') ?? false);
+
+  if (viewable) {
+    window.open(doc.fileUrl, '_blank');
+    return;
+  }
+
+  setDownloading(true);
+  try {
+    const res = await fetch(doc.fileUrl, { credentials: 'include' });
+    if (!res.ok) throw new Error('Download failed');
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = doc.fileName || 'document';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch {
+    window.open(doc.fileUrl, '_blank');
+  } finally {
+    setDownloading(false);
+  }
+}
+
 function DocumentCard({
   doc, isAdmin, onEdit, onDelete,
 }: {
@@ -941,6 +974,8 @@ function DocumentCard({
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const [downloading, setDownloading] = useState(false);
+
   return (
     <Card data-testid={`card-document-${doc.id}`}>
       <CardHeader className="pb-2">
@@ -978,11 +1013,12 @@ function DocumentCard({
           variant="outline"
           size="sm"
           className="w-full"
-          onClick={() => window.open(doc.fileUrl, '_blank')}
+          disabled={downloading}
+          onClick={() => handleDocOpen(doc, setDownloading)}
           data-testid={`button-open-doc-${doc.id}`}
         >
           <Download className="h-4 w-4 mr-2" />
-          Open / Download
+          {downloading ? 'Downloading…' : 'Open / Download'}
         </Button>
       </CardContent>
     </Card>
