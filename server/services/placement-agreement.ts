@@ -283,7 +283,7 @@ export function buildPlacementMergeData(
     additional_notes: additionalNotes || 'None',
     ...buildCarePriorityFields(carePriorities),
     date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
-    signature_image: signatureImageHtml || '',
+    signature_image: signatureImageHtml || '{{signature_image}}',
   };
 }
 
