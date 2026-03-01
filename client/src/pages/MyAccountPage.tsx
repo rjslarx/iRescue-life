@@ -29,6 +29,7 @@ import DashboardLayout from "@/components/DashboardLayout";
 const contactSchema = z.object({
   phone: z.string().max(20).optional().nullable(),
   email: z.string().email("Please enter a valid email address"),
+  smsOptIn: z.boolean().optional(),
 });
 
 const passwordSchema = z.object({
@@ -44,7 +45,7 @@ type ContactFormValues = z.infer<typeof contactSchema>;
 type PasswordFormValues = z.infer<typeof passwordSchema>;
 
 export default function MyAccountPage() {
-  const { user } = useAuth();
+  const { user, checkAuth } = useAuth();
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const {
@@ -61,6 +62,7 @@ export default function MyAccountPage() {
     defaultValues: {
       phone: user?.phone || "",
       email: user?.email || "",
+      smsOptIn: user?.smsOptIn ?? false,
     },
   });
 
@@ -69,9 +71,10 @@ export default function MyAccountPage() {
       contactForm.reset({
         phone: user.phone || "",
         email: user.email || "",
+        smsOptIn: user.smsOptIn ?? false,
       });
     }
-  }, [user?.phone, user?.email]);
+  }, [user?.phone, user?.email, user?.smsOptIn]);
 
   const passwordForm = useForm<PasswordFormValues>({
     resolver: zodResolver(passwordSchema),
@@ -88,11 +91,13 @@ export default function MyAccountPage() {
       return res.json();
     },
     onSuccess: (result) => {
+      checkAuth();
       queryClient.invalidateQueries({ queryKey: ["/api/me"] });
-      if (result.user?.phone !== undefined || result.user?.email) {
+      if (result.user) {
         contactForm.reset({
           phone: result.user.phone || "",
           email: result.user.email || (user?.email ?? ""),
+          smsOptIn: result.user.smsOptIn ?? false,
         });
       }
       toast({
@@ -113,6 +118,9 @@ export default function MyAccountPage() {
     const updates: Record<string, any> = {};
     if (values.email !== user?.email) updates.email = values.email;
     if ((values.phone || "") !== (user?.phone || "")) updates.phone = values.phone || null;
+    if (values.smsOptIn !== undefined && values.smsOptIn !== (user?.smsOptIn ?? false)) {
+      updates.smsOptIn = values.smsOptIn;
+    }
 
     if (Object.keys(updates).length === 0) {
       toast({ title: "No changes", description: "Nothing was changed." });
@@ -232,6 +240,23 @@ export default function MyAccountPage() {
                     </FormControl>
                     <FormMessage />
                   </FormItem>
+                )}
+              />
+              <FormField
+                control={contactForm.control}
+                name="smsOptIn"
+                render={({ field }) => (
+                  <div className="flex items-center justify-between rounded-lg border p-3">
+                    <div>
+                      <p className="text-sm font-medium">SMS Notifications</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Receive broadcast alerts and SMS messages from your organization</p>
+                    </div>
+                    <Switch
+                      checked={field.value ?? false}
+                      onCheckedChange={field.onChange}
+                      data-testid="switch-sms-opt-in"
+                    />
+                  </div>
                 )}
               />
               <Button

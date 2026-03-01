@@ -2610,6 +2610,7 @@ Crawl-delay: 1
         currentPassword: z.string().optional(),
         newPassword: z.string().min(8).optional(),
         dailySmsOptIn: z.boolean().optional(),
+        smsOptIn: z.boolean().optional(),
       }).refine(data => {
         if (data.newPassword && !data.currentPassword) {
           return false;
@@ -2657,6 +2658,7 @@ Crawl-delay: 1
         updateFields.passwordHash = await bcrypt.hash(data.newPassword, 10);
       }
       if (data.dailySmsOptIn !== undefined) updateFields.dailySmsOptIn = data.dailySmsOptIn;
+      if (data.smsOptIn !== undefined) updateFields.smsOptIn = data.smsOptIn;
 
       if (Object.keys(updateFields).length === 0) {
         return res.status(400).json({ error: 'No fields to update' });
@@ -2671,6 +2673,7 @@ Crawl-delay: 1
           phone: users.phone,
           fullName: users.fullName,
           dailySmsOptIn: users.dailySmsOptIn,
+          smsOptIn: users.smsOptIn,
         });
 
       res.json({ user: updated, message: 'Profile updated successfully' });

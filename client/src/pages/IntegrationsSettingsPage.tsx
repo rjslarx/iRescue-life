@@ -109,7 +109,7 @@ export default function IntegrationsSettingsPage() {
 
   const [surrenderFeeInput, setSurrenderFeeInput] = useState("");
   const [surrenderFeeEnabled, setSurrenderFeeEnabled] = useState(false);
-  const [testPhoneNumber, setTestPhoneNumber] = useState("");
+  const [testPhoneNumber, setTestPhoneNumber] = useState(() => localStorage.getItem("twilio_test_phone") ?? "");
   const [brandSidValue, setBrandSidValue] = useState("");
   const [brandSidLoaded, setBrandSidLoaded] = useState(false);
 
@@ -781,7 +781,7 @@ export default function IntegrationsSettingsPage() {
                     <Input
                       placeholder="(555) 867-5309"
                       value={testPhoneNumber}
-                      onChange={(e) => setTestPhoneNumber(e.target.value)}
+                      onChange={(e) => { setTestPhoneNumber(e.target.value); localStorage.setItem("twilio_test_phone", e.target.value); }}
                       className="font-mono flex-1"
                       data-testid="input-test-phone"
                     />
