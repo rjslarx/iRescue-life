@@ -68,9 +68,9 @@ function getStatusCallbackUrl(): string | undefined {
   return `${origin}/api/webhooks/twilio/status`;
 }
 
-function buildMessageOptions(config: TwilioConfig, to: string, body: string) {
+function buildMessageOptions(config: TwilioConfig, to: string, body: string, useDirectNumber = false) {
   const statusCallback = getStatusCallbackUrl();
-  if (config.messagingServiceSid) {
+  if (config.messagingServiceSid && !useDirectNumber) {
     return {
       body,
       messagingServiceSid: config.messagingServiceSid,
@@ -84,6 +84,24 @@ function buildMessageOptions(config: TwilioConfig, to: string, body: string) {
     to,
     ...(statusCallback ? { statusCallback } : {}),
   };
+}
+
+async function sendWithFallback(
+  client: ReturnType<typeof createTwilioClient>,
+  config: TwilioConfig,
+  to: string,
+  body: string
+) {
+  try {
+    return await client.messages.create(buildMessageOptions(config, to, body));
+  } catch (error: any) {
+    const code = error?.code ?? error?.status;
+    if (config.messagingServiceSid && (code === 21704 || code === 21703 || code === 21711)) {
+      console.warn(`[TWILIO FALLBACK] Messaging Service failed (${code}), retrying with direct phone number ${config.phoneNumber}`);
+      return await client.messages.create(buildMessageOptions(config, to, body, true));
+    }
+    throw error;
+  }
 }
 
 export async function broadcastTransportUpdate(
@@ -109,9 +127,7 @@ export async function broadcastTransportUpdate(
 
   const promises = phoneNumbers.map(async (number) => {
     try {
-      const twilioMessage = await client.messages.create(
-        buildMessageOptions(config, number, formattedMessage)
-      );
+      const twilioMessage = await sendWithFallback(client, config, number, formattedMessage);
 
       await db.insert(smsMessageLogs).values({
         tenantId,
@@ -175,15 +191,13 @@ export async function sendSms(
   const client = createTwilioClient(config);
 
   try {
-    const twilioMessage = await client.messages.create(
-      buildMessageOptions(config, toNumber, message)
-    );
+    const twilioMessage = await sendWithFallback(client, config, toNumber, message);
 
     await db.insert(smsMessageLogs).values({
       tenantId,
       twilioMessageSid: twilioMessage.sid,
       direction: 'outbound',
-      fromNumber: config.messagingServiceSid || config.phoneNumber,
+      fromNumber: twilioMessage.from || config.phoneNumber,
       toNumber,
       body: message,
       messageType,
