@@ -434,11 +434,60 @@ export default function TutorialsPage() {
           </p>
         </div>
 
-        <Tabs defaultValue="videos" className="space-y-6">
+        <Tabs defaultValue="documents" className="space-y-6">
           <TabsList data-testid="tabs-main">
-            <TabsTrigger value="videos" data-testid="tab-videos">Videos</TabsTrigger>
             <TabsTrigger value="documents" data-testid="tab-documents">Documents</TabsTrigger>
+            <TabsTrigger value="videos" data-testid="tab-videos">Videos</TabsTrigger>
           </TabsList>
+
+          {/* ── DOCUMENTS TAB ──────────────────────────────────────────────── */}
+          <TabsContent value="documents" className="space-y-6">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <p className="text-sm text-muted-foreground">Reference documents, guides, and resources for your team</p>
+              {isAdmin && (
+                <Button onClick={() => setDocDialogOpen(true)} data-testid="button-upload-document">
+                  <Upload className="h-4 w-4 mr-2" />
+                  Upload Document
+                </Button>
+              )}
+            </div>
+
+            {docLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : documents.length === 0 ? (
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center py-12">
+                  <FileText className="h-12 w-12 text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-medium">No documents yet</h3>
+                  <p className="text-muted-foreground text-center mt-2 max-w-md">
+                    {isAdmin
+                      ? "Upload PDFs, Word documents, or images to share resources with your team."
+                      : "Training documents will appear here once your admin uploads them."}
+                  </p>
+                  {isAdmin && (
+                    <Button onClick={() => setDocDialogOpen(true)} className="mt-4" data-testid="button-upload-first-document">
+                      <Upload className="h-4 w-4 mr-2" />
+                      Upload Document
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {documents.map(doc => (
+                  <DocumentCard
+                    key={doc.id}
+                    doc={doc}
+                    isAdmin={isAdmin}
+                    onEdit={() => handleEditDoc(doc)}
+                    onDelete={() => { setDocToDelete(doc.id); setDeleteDocConfirm(true); }}
+                  />
+                ))}
+              </div>
+            )}
+          </TabsContent>
 
           {/* ── VIDEOS TAB ─────────────────────────────────────────────────── */}
           <TabsContent value="videos" className="space-y-6">
@@ -525,54 +574,6 @@ export default function TutorialsPage() {
             )}
           </TabsContent>
 
-          {/* ── DOCUMENTS TAB ──────────────────────────────────────────────── */}
-          <TabsContent value="documents" className="space-y-6">
-            <div className="flex items-center justify-between gap-4 flex-wrap">
-              <p className="text-sm text-muted-foreground">Reference documents, guides, and resources for your team</p>
-              {isAdmin && (
-                <Button onClick={() => setDocDialogOpen(true)} data-testid="button-upload-document">
-                  <Upload className="h-4 w-4 mr-2" />
-                  Upload Document
-                </Button>
-              )}
-            </div>
-
-            {docLoading ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-              </div>
-            ) : documents.length === 0 ? (
-              <Card>
-                <CardContent className="flex flex-col items-center justify-center py-12">
-                  <FileText className="h-12 w-12 text-muted-foreground mb-4" />
-                  <h3 className="text-lg font-medium">No documents yet</h3>
-                  <p className="text-muted-foreground text-center mt-2 max-w-md">
-                    {isAdmin
-                      ? "Upload PDFs, Word documents, or images to share resources with your team."
-                      : "Training documents will appear here once your admin uploads them."}
-                  </p>
-                  {isAdmin && (
-                    <Button onClick={() => setDocDialogOpen(true)} className="mt-4" data-testid="button-upload-first-document">
-                      <Upload className="h-4 w-4 mr-2" />
-                      Upload Document
-                    </Button>
-                  )}
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {documents.map(doc => (
-                  <DocumentCard
-                    key={doc.id}
-                    doc={doc}
-                    isAdmin={isAdmin}
-                    onEdit={() => handleEditDoc(doc)}
-                    onDelete={() => { setDocToDelete(doc.id); setDeleteDocConfirm(true); }}
-                  />
-                ))}
-              </div>
-            )}
-          </TabsContent>
         </Tabs>
 
         {/* ── VIDEO DIALOG ──────────────────────────────────────────────────── */}
