@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -64,6 +64,15 @@ export default function MyAccountPage() {
     },
   });
 
+  useEffect(() => {
+    if (user) {
+      contactForm.reset({
+        phone: user.phone || "",
+        email: user.email || "",
+      });
+    }
+  }, [user?.phone, user?.email]);
+
   const passwordForm = useForm<PasswordFormValues>({
     resolver: zodResolver(passwordSchema),
     defaultValues: {
@@ -80,6 +89,12 @@ export default function MyAccountPage() {
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["/api/me"] });
+      if (result.user?.phone !== undefined || result.user?.email) {
+        contactForm.reset({
+          phone: result.user.phone || "",
+          email: result.user.email || (user?.email ?? ""),
+        });
+      }
       toast({
         title: "Profile updated",
         description: result.message || "Your changes have been saved.",
