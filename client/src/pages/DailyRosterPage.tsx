@@ -806,7 +806,7 @@ export default function DailyRosterPage() {
                               checked={isChecked}
                               disabled={isVaccineCompleted}
                               onCheckedChange={() => handleItemClick(item)}
-                              className="mt-0.5 shrink-0 print:hidden"
+                              className="mt-0.5 shrink-0"
                               data-testid={`checkbox-med-${item.id}`}
                             />
                           )}
@@ -1172,10 +1172,26 @@ export default function DailyRosterPage() {
         }
 
         @media print {
+          /* Break out of DashboardLayout's h-screen overflow-hidden shell */
           body, html {
             background: white !important;
             color: black !important;
             font-size: 11px !important;
+            height: auto !important;
+            overflow: visible !important;
+          }
+
+          /* Clear every overflow-hidden/overflow-auto/h-screen wrapper so content flows across pages */
+          * {
+            overflow: visible !important;
+          }
+
+          /* Restore scroll containers that should clip visually but still flow in print */
+          .h-screen {
+            height: auto !important;
+          }
+          .min-h-0 {
+            min-height: 0 !important;
           }
 
           /* Hide the entire sidebar (DashboardLayout renders it outside this component) */
