@@ -156,7 +156,7 @@ export async function dispatchEventNotification(
 
       if (twilioReady) {
         const message = smsBody
-          || (textBody ? textBody.substring(0, 155) + (textBody.length > 155 ? '...' : '') : `iRescue: ${subject}`.substring(0, 160));
+          || (textBody ? textBody.substring(0, 155) + (textBody.length > 155 ? '...' : '') : subject.substring(0, 160));
 
         for (const phone of smsPrefs[0].recipientPhones) {
           try {

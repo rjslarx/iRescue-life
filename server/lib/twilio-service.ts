@@ -9,6 +9,7 @@ interface TwilioConfig {
   authToken: string;
   phoneNumber: string;
   messagingServiceSid?: string | null;
+  tenantName?: string;
 }
 
 interface SendResult {
@@ -30,6 +31,7 @@ async function getTwilioConfig(tenantId: string): Promise<TwilioConfig | null> {
       twilioPhoneNumber: tenants.twilioPhoneNumber,
       twilioMessagingServiceSid: tenants.twilioMessagingServiceSid,
       twilioEnabled: tenants.twilioEnabled,
+      name: tenants.name,
     })
     .from(tenants)
     .where(eq(tenants.id, tenantId));
@@ -51,6 +53,7 @@ async function getTwilioConfig(tenantId: string): Promise<TwilioConfig | null> {
       authToken,
       phoneNumber: tenant.twilioPhoneNumber,
       messagingServiceSid: tenant.twilioMessagingServiceSid,
+      tenantName: tenant.name || undefined,
     };
   } catch (error) {
     console.error('Failed to decrypt Twilio credentials:', error);
@@ -123,7 +126,7 @@ export async function broadcastTransportUpdate(
   const client = createTwilioClient(config);
   const results: SendResult[] = [];
 
-  const formattedMessage = `iRescue Transport Update: ${message}`;
+  const formattedMessage = applyOrgPrefix(`Transport Update: ${message}`, config.tenantName);
 
   const promises = phoneNumbers.map(async (number) => {
     try {
@@ -166,17 +169,29 @@ export async function broadcastTransportUpdate(
   return Promise.all(promises);
 }
 
+function applyOrgPrefix(message: string, tenantName?: string, skipPrefix?: boolean): string {
+  if (skipPrefix || !tenantName) return message;
+  const shortName = tenantName.replace(/\s*(Animal\s+Rescue|Rescue|Foundation|Organization|Inc\.?|LLC)\s*$/i, '').trim() || tenantName;
+  const prefixPattern = new RegExp(`^\\[?${shortName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\]?[:\\s]`, 'i');
+  if (prefixPattern.test(message) || message.startsWith(tenantName)) return message;
+  if (/^(iRescue[:\s])/i.test(message)) {
+    return message.replace(/^iRescue[:\s]+/i, `${shortName}: `);
+  }
+  return `${shortName}: ${message}`;
+}
+
 export async function sendSms(
   tenantId: string,
   toNumber: string,
   message: string,
-  messageType: 'transport_alert' | 'proxy_message' | 'broadcast' | 'reminder' | 'other',
+  messageType: 'transport_alert' | 'proxy_message' | 'broadcast' | 'reminder' | 'other' | 'notification' | 'volunteer_recruitment_weekly' | 'volunteer_recruitment_urgent',
   context?: {
     transportId?: string;
     proxySessionId?: string;
     sentBy?: { id: string; name: string };
     recipientUserId?: string;
     relatedAnimalId?: string;
+    skipOrgPrefix?: boolean;
   }
 ): Promise<SendResult> {
   const config = await getTwilioConfig(tenantId);
@@ -189,9 +204,10 @@ export async function sendSms(
   }
 
   const client = createTwilioClient(config);
+  const prefixedMessage = applyOrgPrefix(message, config.tenantName, context?.skipOrgPrefix);
 
   try {
-    const twilioMessage = await sendWithFallback(client, config, toNumber, message);
+    const twilioMessage = await sendWithFallback(client, config, toNumber, prefixedMessage);
 
     await db.insert(smsMessageLogs).values({
       tenantId,
@@ -199,7 +215,7 @@ export async function sendSms(
       direction: 'outbound',
       fromNumber: twilioMessage.from || config.phoneNumber,
       toNumber,
-      body: message,
+      body: prefixedMessage,
       messageType,
       transportId: context?.transportId,
       proxySessionId: context?.proxySessionId,
@@ -217,7 +233,7 @@ export async function sendSms(
       direction: 'outbound',
       fromNumber: config.phoneNumber,
       toNumber,
-      body: message,
+      body: prefixedMessage,
       messageType,
       transportId: context?.transportId,
       proxySessionId: context?.proxySessionId,

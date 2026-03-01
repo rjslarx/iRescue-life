@@ -745,7 +745,7 @@ export async function sendMedicationTaskSmsReminders(tenantId: string): Promise<
       const fosterFirstName = foster.fullName?.split(' ')[0] || 'Foster';
       const roundLabel = tasks.length === 1 ? `(${tasks[0].roundLabel})` : `(${tasks.length} doses)`;
 
-      const message = `iRescue: Hi ${fosterFirstName}! ${animal.name} needs their ${drugNames} ${roundLabel} today. Log it in the Foster Portal when given.`.substring(0, 160);
+      const message = `Hi ${fosterFirstName}! ${animal.name} needs their ${drugNames} ${roundLabel} today. Log it in the Foster Portal when given.`.substring(0, 160);
 
       try {
         await sendSms(tenantId, foster.phone, message, 'reminder', {

@@ -22122,7 +22122,7 @@ Submitted: ${new Date().toLocaleString()}
       const result = await sendSms(
         req.tenant!.id,
         phoneNumber,
-        `Test message from ${req.tenant!.name || 'iRescue'}! Your Twilio integration is working.`,
+        `Your Twilio SMS integration is working! This is a test message.`,
         'other',
         { sentBy: { id: req.user!.id, name: req.user!.name || req.user!.email } }
       );
