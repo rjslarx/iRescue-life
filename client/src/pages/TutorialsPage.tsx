@@ -933,17 +933,8 @@ function TutorialCard({
   );
 }
 
-function getViewerUrl(fileUrl: string, token: string, mimeType: string | null | undefined): string {
-  const base = `${window.location.origin}${fileUrl}?view_token=${token}`;
-  const isOffice = [
-    'application/vnd.openxmlformats-officedocument',
-    'application/msword',
-    'application/vnd.ms-',
-  ].some(m => (mimeType ?? '').startsWith(m));
-  if (isOffice) {
-    return `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(base)}`;
-  }
-  return base;
+function getViewerUrl(fileUrl: string, token: string): string {
+  return `${window.location.origin}${fileUrl}?view_token=${token}`;
 }
 
 function DocumentCard({
@@ -957,10 +948,12 @@ function DocumentCard({
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewToken, setViewToken] = useState<string | null>(null);
   const [opening, setOpening] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const { toast } = useToast();
 
   const isPdf = doc.mimeType === 'application/pdf';
   const isImage = (doc.mimeType ?? '').startsWith('image/');
+  const isPreviewable = isPdf || isImage;
 
   async function openViewer() {
     setOpening(true);
@@ -976,7 +969,30 @@ function DocumentCard({
     }
   }
 
-  const viewerUrl = viewToken ? getViewerUrl(doc.fileUrl, viewToken, doc.mimeType) : null;
+  async function handleDownload() {
+    if (!viewToken) return;
+    const url = `${window.location.origin}${doc.fileUrl}?view_token=${viewToken}`;
+    setDownloading(true);
+    try {
+      const res = await fetch(url, { credentials: 'include' });
+      if (!res.ok) throw new Error('Download failed');
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = doc.fileName || 'document';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(objectUrl);
+    } catch {
+      window.open(url, '_blank');
+    } finally {
+      setDownloading(false);
+    }
+  }
+
+  const viewerUrl = viewToken ? getViewerUrl(doc.fileUrl, viewToken) : null;
 
   return (
     <>
@@ -1020,8 +1036,12 @@ function DocumentCard({
             onClick={openViewer}
             data-testid={`button-open-doc-${doc.id}`}
           >
-            {opening ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Eye className="h-4 w-4 mr-2" />}
-            {opening ? 'Opening…' : 'View Document'}
+            {opening
+              ? <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              : isPreviewable
+                ? <Eye className="h-4 w-4 mr-2" />
+                : <Download className="h-4 w-4 mr-2" />}
+            {opening ? 'Opening…' : isPreviewable ? 'View Document' : 'Open / Download'}
           </Button>
         </CardContent>
       </Card>
@@ -1035,11 +1055,17 @@ function DocumentCard({
             </div>
             <div className="flex items-center gap-2 shrink-0">
               {viewerUrl && (
-                <Button variant="outline" size="sm" asChild>
-                  <a href={`${window.location.origin}${doc.fileUrl}?view_token=${viewToken}`} download={doc.fileName} data-testid={`button-download-doc-${doc.id}`}>
-                    <Download className="h-4 w-4 mr-1.5" />
-                    Download
-                  </a>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={downloading}
+                  onClick={handleDownload}
+                  data-testid={`button-download-doc-${doc.id}`}
+                >
+                  {downloading
+                    ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                    : <Download className="h-4 w-4 mr-1.5" />}
+                  {downloading ? 'Downloading…' : 'Download'}
                 </Button>
               )}
               <Button size="icon" variant="ghost" onClick={() => setViewerOpen(false)} data-testid={`button-close-viewer-${doc.id}`}>
@@ -1054,13 +1080,20 @@ function DocumentCard({
                 <img src={viewerUrl} alt={doc.title} className="max-h-full max-w-full object-contain rounded-md" />
               </div>
             )}
-            {viewerUrl && !isImage && (
+            {viewerUrl && isPdf && (
               <iframe
                 src={viewerUrl}
                 title={doc.title}
                 className="w-full h-full border-0"
-                sandbox={isPdf || isImage ? undefined : "allow-scripts allow-same-origin allow-forms allow-popups"}
               />
+            )}
+            {viewerUrl && !isImage && !isPdf && (
+              <div className="flex flex-col items-center justify-center h-full gap-4 text-muted-foreground p-8">
+                <FileText className="h-16 w-16" />
+                <p className="text-sm text-center max-w-xs">
+                  This file type cannot be previewed in the browser. Use the Download button above to open it.
+                </p>
+              </div>
             )}
           </div>
         </DialogContent>
