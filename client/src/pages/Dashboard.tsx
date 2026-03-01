@@ -5,7 +5,7 @@ import { usePagePermissions } from "@/hooks/usePagePermissions";
 import { OnboardingChecklist } from "@/components/OnboardingChecklist";
 import { FloatingActionButton } from "@/components/FloatingActionButton";
 import { RecordOfflineDonationDialog } from "@/components/RecordOfflineDonationDialog";
-import { Heart, Users, Loader2, Calendar, FileText, AlertCircle, Package, MessageSquare } from "lucide-react";
+import { Heart, Users, Loader2, Calendar, FileText, AlertCircle, Package, MessageSquare, Pill } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
