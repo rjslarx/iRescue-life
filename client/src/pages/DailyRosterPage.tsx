@@ -3,6 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Link, useLocation, useSearch } from "wouter";
+import { useAuth } from "@/contexts/AuthContext";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -284,9 +285,22 @@ export default function DailyRosterPage() {
   const [resultNotes, setResultNotes] = useState("");
 
   // Shift View mode — locked to today, individual charting only
+  const { user } = useAuth();
   const [, setLocation] = useLocation();
   const search = useSearch();
   const isShiftView = new URLSearchParams(search).get("mode") === "shift";
+
+  // Volunteers and fosters are restricted to Shift View only
+  const isRestrictedToShiftView = ['volunteer', 'foster'].includes(user?.activeRole || '');
+
+  // Force Shift View for restricted roles
+  useEffect(() => {
+    if (isRestrictedToShiftView && !isShiftView) {
+      const params = new URLSearchParams(search);
+      params.set("mode", "shift");
+      setLocation(`?${params.toString()}`);
+    }
+  }, [isRestrictedToShiftView, isShiftView, search, setLocation]);
 
   // Lock date to today when in Shift View
   useEffect(() => {
@@ -636,6 +650,7 @@ export default function DailyRosterPage() {
             )}
           </div>
           <div className="flex items-center gap-2">
+            {!isRestrictedToShiftView && (
             <Button
               size="sm"
               variant={isShiftView ? "default" : "outline"}
@@ -656,6 +671,7 @@ export default function DailyRosterPage() {
               <Stethoscope className="h-4 w-4 mr-1.5" />
               {isShiftView ? "Exit Shift View" : "Shift View"}
             </Button>
+            )}
             <Button size="sm" variant="outline" onClick={() => window.print()} data-testid="button-print" className={isShiftView ? "hidden" : ""}>
               <Printer className="h-4 w-4 mr-1.5" />
               Print
