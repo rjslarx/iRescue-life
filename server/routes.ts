@@ -33689,25 +33689,27 @@ Email: ${application.applicantEmail || ''}`
     try {
       const { medicalPrescriptions, vaccineRecords, fosterAnimals } = await import('@shared/schema');
       
-      // Check if user is a foster and has access to this animal - explicit field selection for dynamic import
-      const fosterAnimal = await db
-        .select({
-          id: fosterAnimals.id,
-        })
-        .from(fosterAnimals)
-        .where(and(
-          eq(fosterAnimals.animalId, req.params.animalId),
-          eq(fosterAnimals.fosterId, req.user!.id),
-          eq(fosterAnimals.tenantId, req.tenant!.id),
-          eq(fosterAnimals.status, 'active')
-        ))
-        .limit(1);
+      const isStaff = ['admin', 'staff', 'manager', 'vet'].includes(req.user!.activeRole ?? '');
 
-      if (fosterAnimal.length === 0) {
-        return res.status(403).json({ 
-          error: 'Access denied',
-          message: 'You can only view medical information for animals assigned to you'
-        });
+      if (!isStaff) {
+        // Foster users: verify the animal is actively assigned to them
+        const fosterAnimal = await db
+          .select({ id: fosterAnimals.id })
+          .from(fosterAnimals)
+          .where(and(
+            eq(fosterAnimals.animalId, req.params.animalId),
+            eq(fosterAnimals.fosterId, req.user!.id),
+            eq(fosterAnimals.tenantId, req.tenant!.id),
+            eq(fosterAnimals.status, 'active')
+          ))
+          .limit(1);
+
+        if (fosterAnimal.length === 0) {
+          return res.status(403).json({ 
+            error: 'Access denied',
+            message: 'You can only view medical information for animals assigned to you'
+          });
+        }
       }
       
       // Get prescriptions and vaccines for this animal - explicit field selection for dynamic import

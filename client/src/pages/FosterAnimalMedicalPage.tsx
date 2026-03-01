@@ -1,10 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { useParams, Link } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
-import { useTenant } from "@/contexts/TenantContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Heart, ArrowLeft, AlertCircle, Pill, Syringe, Clock } from "lucide-react";
+import { Loader2, Heart, ArrowLeft, AlertCircle, Pill, Syringe, Clock, WifiOff } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -14,6 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import DashboardLayout from "@/components/DashboardLayout";
 import type { FosterAnimal, Animal, User } from "@shared/schema";
 
 interface FosterAnimalWithDetails extends FosterAnimal {
@@ -53,109 +53,113 @@ interface MedicalDataResponse {
 
 export default function FosterAnimalMedicalPage() {
   const { user } = useAuth();
-  const { basePath } = useTenant();
   const { animalId } = useParams<{ animalId: string }>();
 
   const { data: fostersData, isLoading: fostersLoading } = useQuery<MyFostersData>({
     queryKey: ['/api/foster-animals'],
   });
 
-  const { data: medicalData, isLoading: medicalLoading } = useQuery<MedicalDataResponse>({
+  const {
+    data: medicalData,
+    isLoading: medicalLoading,
+    isError: medicalError,
+  } = useQuery<MedicalDataResponse>({
     queryKey: [`/api/animals/${animalId}/medical-summary`],
     enabled: !!animalId,
+    retry: 0,
   });
 
   const fosterAnimal = fostersData?.fosterAnimals.find(
-    (fa) => fa.animal?.id === animalId
+    (fa) => fa.animal?.id === animalId || fa.animalId === animalId
   );
 
   const animal = fosterAnimal?.animal;
   const prescriptions = medicalData?.prescriptions || [];
   const vaccines = medicalData?.vaccines || [];
 
-  // Filter active prescriptions (no end date or end date in future)
   const activePrescriptions = prescriptions.filter(
     (p) => !p.endDate || new Date(p.endDate) >= new Date()
   );
 
-  if (fostersLoading || medicalLoading) {
+  if (fostersLoading) {
     return (
-      <div className="flex flex-col h-full overflow-hidden">
-        <div className="flex items-center justify-between gap-4 border-b p-4 bg-background">
-          <div className="flex-1">
-            <h1 className="text-2xl font-semibold">Loading...</h1>
-          </div>
+      <DashboardLayout title="Medical Information" description="Loading...">
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
-        <main className="flex-1 overflow-auto p-6">
-          <div className="flex items-center justify-center h-64">
-            <Loader2 className="h-8 w-8 animate-spin" />
-          </div>
-        </main>
-      </div>
+      </DashboardLayout>
     );
   }
 
   if (!animal || !fosterAnimal) {
     return (
-      <div className="flex flex-col h-full overflow-hidden">
-        <div className="flex items-center justify-between gap-4 border-b p-4 bg-background">
-          <div className="flex-1">
-            <h1 className="text-2xl font-semibold">Animal Not Found</h1>
-          </div>
-        </div>
-        <main className="flex-1 overflow-auto p-6">
-          <Card className="p-12 text-center">
+      <DashboardLayout title="Medical Information" description="Animal not found">
+        <div className="p-6">
+          <Card className="p-12 text-center max-w-lg mx-auto">
             <Heart className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
             <h3 className="text-xl font-semibold mb-2">Animal Not Found</h3>
             <p className="text-muted-foreground mb-6">
-              This animal is not assigned to you or does not exist.
+              This animal is not assigned to your account or does not exist.
             </p>
             <Link href="/dashboard/my-fosters">
               <Button>Back to My Fosters</Button>
             </Link>
           </Card>
-        </main>
-      </div>
+        </div>
+      </DashboardLayout>
     );
   }
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
-      <div className="flex items-center justify-between gap-4 border-b p-4 bg-background">
-        <div className="flex-1 flex items-center gap-4">
-          <Link href={`/dashboard/my-fosters/${animal.id}`}>
-            <Button variant="ghost" size="sm" className="gap-2" data-testid="button-back">
-              <ArrowLeft className="h-4 w-4" />
-              Back to Profile
-            </Button>
-          </Link>
-          <div>
-            <h1 className="text-2xl font-semibold">{animal.name} - Medical Information</h1>
-            <p className="text-sm text-muted-foreground">
-              Read-only view for foster care reference
-            </p>
-          </div>
-        </div>
-      </div>
-      <main className="flex-1 overflow-auto p-6">
-            <div className="max-w-5xl mx-auto space-y-6">
-              {/* Medical Alert */}
-              {animal.medicalAlertMemo && (
-                <Card className="border-destructive bg-destructive/5">
-                  <CardHeader>
-                    <div className="flex items-center gap-2">
-                      <AlertCircle className="h-5 w-5 text-destructive" />
-                      <CardTitle className="text-destructive">Medical Alert</CardTitle>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm font-semibold" data-testid="text-medical-alert">
-                      {animal.medicalAlertMemo}
-                    </p>
-                  </CardContent>
-                </Card>
-              )}
+    <DashboardLayout
+      title={`${animal.name} — Medical Info`}
+      description="Read-only view for foster care reference"
+    >
+      <div className="flex-1 overflow-auto p-6">
+        <div className="max-w-5xl mx-auto space-y-6">
 
+          <div className="flex items-center gap-3">
+            <Link href={`/dashboard/my-fosters/${animal.id}`}>
+              <Button variant="ghost" size="sm" className="gap-2" data-testid="button-back">
+                <ArrowLeft className="h-4 w-4" />
+                Back to Profile
+              </Button>
+            </Link>
+          </div>
+
+          {/* Medical Alert — shown only when field is present */}
+          {(animal as any).medicalAlertMemo && (
+            <Card className="border-destructive bg-destructive/5">
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="h-5 w-5 text-destructive" />
+                  <CardTitle className="text-destructive">Medical Alert</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm font-semibold" data-testid="text-medical-alert">
+                  {(animal as any).medicalAlertMemo}
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Medical data loading / error / content */}
+          {medicalLoading ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : medicalError ? (
+            <Card>
+              <CardContent className="py-12 text-center">
+                <WifiOff className="h-12 w-12 mx-auto mb-4 text-muted-foreground/40" />
+                <p className="text-sm text-muted-foreground">
+                  Medical records could not be loaded. Please contact your rescue coordinator.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <>
               {/* Active Medications */}
               <Card>
                 <CardHeader>
@@ -181,9 +185,9 @@ export default function FosterAnimalMedicalPage() {
                   ) : (
                     <div className="space-y-4">
                       {activePrescriptions.map((prescription) => (
-                        <div 
-                          key={prescription.id} 
-                          className="p-4 border rounded-lg"
+                        <div
+                          key={prescription.id}
+                          className="p-4 border rounded-md"
                           data-testid={`medication-${prescription.id}`}
                         >
                           <div className="flex items-start justify-between gap-4 mb-3">
@@ -252,7 +256,7 @@ export default function FosterAnimalMedicalPage() {
                       </p>
                     </div>
                   ) : (
-                    <div className="border rounded-lg overflow-hidden">
+                    <div className="border rounded-md overflow-hidden">
                       <Table>
                         <TableHeader>
                           <TableRow>
@@ -265,15 +269,12 @@ export default function FosterAnimalMedicalPage() {
                         <TableBody>
                           {vaccines.map((vaccine) => {
                             const isOverdue = vaccine.dateDue && new Date(vaccine.dateDue) < new Date();
-                            const isDueSoon = vaccine.dateDue && 
-                              new Date(vaccine.dateDue) > new Date() && 
+                            const isDueSoon = vaccine.dateDue &&
+                              new Date(vaccine.dateDue) > new Date() &&
                               new Date(vaccine.dateDue) < new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-                            
+
                             return (
-                              <TableRow 
-                                key={vaccine.id}
-                                data-testid={`vaccine-${vaccine.id}`}
-                              >
+                              <TableRow key={vaccine.id} data-testid={`vaccine-${vaccine.id}`}>
                                 <TableCell className="font-medium">
                                   {vaccine.itemName}
                                   {vaccine.lotNumber && (
@@ -308,35 +309,38 @@ export default function FosterAnimalMedicalPage() {
                   )}
                 </CardContent>
               </Card>
+            </>
+          )}
 
-              {/* Important Notes */}
-              <Card className="bg-muted/50">
-                <CardHeader>
-                  <CardTitle className="text-base">Important Reminders</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2 text-sm">
-                  <div className="flex items-start gap-2">
-                    <AlertCircle className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                    <p>
-                      For medical emergencies, contact your rescue coordinator immediately or call the emergency contact listed in your animal's profile.
-                    </p>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <Pill className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                    <p>
-                      Always administer medications exactly as prescribed. Never adjust dosages without veterinary approval.
-                    </p>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <Syringe className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                    <p>
-                      If you notice any vaccine is overdue or due soon, please notify your foster coordinator.
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-      </main>
-    </div>
+          {/* Important Notes */}
+          <Card className="bg-muted/50">
+            <CardHeader>
+              <CardTitle className="text-base">Important Reminders</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                <p>
+                  For medical emergencies, contact your rescue coordinator immediately or call the emergency contact listed in your animal's profile.
+                </p>
+              </div>
+              <div className="flex items-start gap-2">
+                <Pill className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                <p>
+                  Always administer medications exactly as prescribed. Never adjust dosages without veterinary approval.
+                </p>
+              </div>
+              <div className="flex items-start gap-2">
+                <Syringe className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                <p>
+                  If you notice any vaccine is overdue or due soon, please notify your foster coordinator.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+        </div>
+      </div>
+    </DashboardLayout>
   );
 }
