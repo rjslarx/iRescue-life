@@ -158,6 +158,12 @@ export async function seedDefaultPagePermissions(tenantId: string) {
       description: 'Transfer animals between rescue organizations',
       allowedRoles: ['admin', 'board_member', 'staff'],
     },
+    {
+      pageId: 'tutorials',
+      displayName: 'Help & Training',
+      description: 'Access training videos and reference documentation',
+      allowedRoles: ['admin', 'board_member', 'staff', 'foster', 'volunteer'],
+    },
   ];
 
   try {
@@ -192,6 +198,12 @@ const NEW_PAGE_PERMISSIONS = [
     displayName: 'Network Transfers',
     description: 'Transfer animals between rescue organizations',
     allowedRoles: ['admin', 'board_member', 'staff'] as ('admin' | 'board_member' | 'staff' | 'foster' | 'volunteer')[],
+  },
+  {
+    pageId: 'tutorials',
+    displayName: 'Help & Training',
+    description: 'Access training videos and reference documentation',
+    allowedRoles: ['admin', 'board_member', 'staff', 'foster', 'volunteer'] as ('admin' | 'board_member' | 'staff' | 'foster' | 'volunteer')[],
   },
 ];
 
