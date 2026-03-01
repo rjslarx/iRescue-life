@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -39,7 +40,7 @@ import { z } from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import {
   Loader2, Plus, Edit, Trash2, Play, Video, BookOpen,
-  ExternalLink, FileText, Upload, Download, File,
+  ExternalLink, FileText, Upload, Download, File, Lock,
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -58,6 +59,76 @@ const CATEGORIES = [
   { value: "other", label: "Other" },
 ] as const;
 
+const ROLES = [
+  { value: "admin", label: "Admin" },
+  { value: "board_member", label: "Board Member" },
+  { value: "staff", label: "Staff" },
+  { value: "foster", label: "Foster" },
+  { value: "volunteer", label: "Volunteer" },
+] as const;
+
+type RoleValue = typeof ROLES[number]["value"];
+
+const VISIBLE_TO_ROLES_SCHEMA = z.array(z.enum(["admin", "board_member", "staff", "foster", "volunteer"])).optional();
+
+// ── Role Picker ────────────────────────────────────────────────────────────────
+
+function RolePicker({
+  value,
+  onChange,
+}: {
+  value: RoleValue[];
+  onChange: (roles: RoleValue[]) => void;
+}) {
+  function toggle(role: RoleValue) {
+    if (value.includes(role)) {
+      onChange(value.filter(r => r !== role));
+    } else {
+      onChange([...value, role]);
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-1.5">
+        <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+        <span className="text-sm font-medium">Visible To</span>
+      </div>
+      <p className="text-xs text-muted-foreground">Leave all unchecked to show to everyone.</p>
+      <div className="grid grid-cols-2 gap-2 pt-1">
+        {ROLES.map(role => (
+          <label
+            key={role.value}
+            className="flex items-center gap-2 cursor-pointer select-none"
+            data-testid={`checkbox-role-${role.value}`}
+          >
+            <Checkbox
+              checked={value.includes(role.value)}
+              onCheckedChange={() => toggle(role.value)}
+            />
+            <span className="text-sm">{role.label}</span>
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Visibility badge helper ────────────────────────────────────────────────────
+
+function VisibilityBadge({ roles }: { roles: RoleValue[] | null | undefined }) {
+  if (!roles || roles.length === 0) return null;
+  const label = roles.length === ROLES.length
+    ? "All roles"
+    : roles.map(r => ROLES.find(ro => ro.value === r)?.label ?? r).join(" · ");
+  return (
+    <Badge variant="outline" className="w-fit gap-1 text-xs" data-testid="badge-visibility">
+      <Lock className="h-3 w-3" />
+      {label}
+    </Badge>
+  );
+}
+
 // ── Video helpers ──────────────────────────────────────────────────────────────
 
 const tutorialFormSchema = z.object({
@@ -66,6 +137,7 @@ const tutorialFormSchema = z.object({
   youtubeUrl: z.string().min(1, "Video URL is required").url("Must be a valid URL"),
   category: z.enum(["getting-started", "animals", "medical", "fosters", "volunteers", "communications", "finance", "website", "settings", "other"]),
   sortOrder: z.coerce.number().int().min(0).default(0),
+  visibleToRoles: VISIBLE_TO_ROLES_SCHEMA,
 });
 type TutorialFormData = z.infer<typeof tutorialFormSchema>;
 
@@ -116,6 +188,7 @@ const docFormSchema = z.object({
   description: z.string().optional(),
   category: z.enum(["getting-started", "animals", "medical", "fosters", "volunteers", "communications", "finance", "website", "settings", "other"]),
   sortOrder: z.coerce.number().int().min(0).default(0),
+  visibleToRoles: VISIBLE_TO_ROLES_SCHEMA,
 });
 type DocFormData = z.infer<typeof docFormSchema>;
 
@@ -165,11 +238,14 @@ export default function TutorialsPage() {
   // ── Video form ───────────────────────────────────────────────────────────────
   const videoForm = useForm<TutorialFormData>({
     resolver: zodResolver(tutorialFormSchema),
-    defaultValues: { title: "", description: "", youtubeUrl: "", category: "getting-started", sortOrder: 0 },
+    defaultValues: { title: "", description: "", youtubeUrl: "", category: "getting-started", sortOrder: 0, visibleToRoles: [] },
   });
 
   const createVideoMutation = useMutation({
-    mutationFn: async (data: TutorialFormData) => (await apiRequest('POST', '/api/tutorials', data)).json(),
+    mutationFn: async (data: TutorialFormData) => (await apiRequest('POST', '/api/tutorials', {
+      ...data,
+      visibleToRoles: data.visibleToRoles?.length ? data.visibleToRoles : null,
+    })).json(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/tutorials'] });
       toast({ title: "Tutorial added" });
@@ -180,7 +256,10 @@ export default function TutorialsPage() {
 
   const updateVideoMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Partial<TutorialFormData> }) =>
-      (await apiRequest('PATCH', `/api/tutorials/${id}`, data)).json(),
+      (await apiRequest('PATCH', `/api/tutorials/${id}`, {
+        ...data,
+        visibleToRoles: data.visibleToRoles?.length ? data.visibleToRoles : null,
+      })).json(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/tutorials'] });
       toast({ title: "Tutorial updated" });
@@ -203,7 +282,7 @@ export default function TutorialsPage() {
   function closeVideoDialog() {
     setVideoDialogOpen(false);
     setEditingTutorial(null);
-    videoForm.reset({ title: "", description: "", youtubeUrl: "", category: "getting-started", sortOrder: 0 });
+    videoForm.reset({ title: "", description: "", youtubeUrl: "", category: "getting-started", sortOrder: 0, visibleToRoles: [] });
   }
 
   function handleEditVideo(tutorial: Tutorial) {
@@ -214,6 +293,7 @@ export default function TutorialsPage() {
       youtubeUrl: tutorial.youtubeUrl,
       category: tutorial.category as any,
       sortOrder: tutorial.sortOrder,
+      visibleToRoles: (tutorial.visibleToRoles as RoleValue[]) || [],
     });
     setVideoDialogOpen(true);
   }
@@ -229,12 +309,15 @@ export default function TutorialsPage() {
   // ── Document form ────────────────────────────────────────────────────────────
   const docForm = useForm<DocFormData>({
     resolver: zodResolver(docFormSchema),
-    defaultValues: { title: "", description: "", category: "getting-started", sortOrder: 0 },
+    defaultValues: { title: "", description: "", category: "getting-started", sortOrder: 0, visibleToRoles: [] },
   });
 
   const createDocMutation = useMutation({
     mutationFn: async (data: DocFormData & { fileUrl: string; fileName: string; mimeType: string }) =>
-      (await apiRequest('POST', '/api/help-documents', data)).json(),
+      (await apiRequest('POST', '/api/help-documents', {
+        ...data,
+        visibleToRoles: data.visibleToRoles?.length ? data.visibleToRoles : null,
+      })).json(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/help-documents'] });
       toast({ title: "Document uploaded" });
@@ -245,7 +328,10 @@ export default function TutorialsPage() {
 
   const updateDocMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Partial<DocFormData> }) =>
-      (await apiRequest('PATCH', `/api/help-documents/${id}`, data)).json(),
+      (await apiRequest('PATCH', `/api/help-documents/${id}`, {
+        ...data,
+        visibleToRoles: data.visibleToRoles?.length ? data.visibleToRoles : null,
+      })).json(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/help-documents'] });
       toast({ title: "Document updated" });
@@ -270,7 +356,7 @@ export default function TutorialsPage() {
     setEditingDoc(null);
     setSelectedFile(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
-    docForm.reset({ title: "", description: "", category: "getting-started", sortOrder: 0 });
+    docForm.reset({ title: "", description: "", category: "getting-started", sortOrder: 0, visibleToRoles: [] });
   }
 
   function handleEditDoc(doc: HelpDocument) {
@@ -280,6 +366,7 @@ export default function TutorialsPage() {
       description: doc.description || "",
       category: doc.category as any,
       sortOrder: doc.sortOrder,
+      visibleToRoles: (doc.visibleToRoles as RoleValue[]) || [],
     });
     setDocDialogOpen(true);
   }
@@ -485,7 +572,7 @@ export default function TutorialsPage() {
 
         {/* ── VIDEO DIALOG ──────────────────────────────────────────────────── */}
         <Dialog open={videoDialogOpen} onOpenChange={(open) => !open && closeVideoDialog()}>
-          <DialogContent className="max-w-lg">
+          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{editingTutorial ? "Edit Video" : "Add Video"}</DialogTitle>
               <DialogDescription>
@@ -557,6 +644,21 @@ export default function TutorialsPage() {
                 />
                 <FormField
                   control={videoForm.control}
+                  name="visibleToRoles"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        <RolePicker
+                          value={(field.value as RoleValue[]) || []}
+                          onChange={field.onChange}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={videoForm.control}
                   name="sortOrder"
                   render={({ field }) => (
                     <FormItem>
@@ -582,7 +684,7 @@ export default function TutorialsPage() {
 
         {/* ── DOCUMENT DIALOG ───────────────────────────────────────────────── */}
         <Dialog open={docDialogOpen} onOpenChange={(open) => !open && closeDocDialog()}>
-          <DialogContent className="max-w-lg">
+          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{editingDoc ? "Edit Document" : "Upload Document"}</DialogTitle>
               <DialogDescription>
@@ -634,6 +736,21 @@ export default function TutorialsPage() {
                       <FormLabel>Description (optional)</FormLabel>
                       <FormControl>
                         <Textarea placeholder="A brief description of this document..." {...field} data-testid="input-doc-description" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={docForm.control}
+                  name="visibleToRoles"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        <RolePicker
+                          value={(field.value as RoleValue[]) || []}
+                          onChange={field.onChange}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -786,9 +903,12 @@ function TutorialCard({
             </div>
           )}
         </div>
-        <Badge variant="secondary" className="w-fit">
-          {CATEGORIES.find(c => c.value === tutorial.category)?.label || tutorial.category}
-        </Badge>
+        <div className="flex flex-wrap gap-1.5">
+          <Badge variant="secondary" className="w-fit">
+            {CATEGORIES.find(c => c.value === tutorial.category)?.label || tutorial.category}
+          </Badge>
+          {isAdmin && <VisibilityBadge roles={tutorial.visibleToRoles as RoleValue[] | null} />}
+        </div>
       </CardHeader>
 
       {tutorial.description && (
@@ -840,7 +960,10 @@ function DocumentCard({
             </div>
           )}
         </div>
-        <Badge variant="secondary" className="w-fit">{getCategoryLabel(doc.category)}</Badge>
+        <div className="flex flex-wrap gap-1.5">
+          <Badge variant="secondary" className="w-fit">{getCategoryLabel(doc.category)}</Badge>
+          {isAdmin && <VisibilityBadge roles={doc.visibleToRoles as RoleValue[] | null} />}
+        </div>
       </CardHeader>
 
       {doc.description && (

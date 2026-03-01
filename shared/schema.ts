@@ -4835,6 +4835,7 @@ export const tutorials = pgTable("tutorials", {
   category: text("category").notNull().$type<"getting-started" | "animals" | "medical" | "fosters" | "volunteers" | "communications" | "finance" | "website" | "settings" | "other">(),
   sortOrder: integer("sort_order").notNull().default(0),
   isGlobal: boolean("is_global").notNull().default(false),
+  visibleToRoles: text("visible_to_roles").array().$type<("admin" | "board_member" | "staff" | "foster" | "volunteer")[]>(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -4857,6 +4858,7 @@ export const helpDocuments = pgTable("help_documents", {
   fileName: text("file_name").notNull(),
   mimeType: text("mime_type"),
   sortOrder: integer("sort_order").notNull().default(0),
+  visibleToRoles: text("visible_to_roles").array().$type<("admin" | "board_member" | "staff" | "foster" | "volunteer")[]>(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

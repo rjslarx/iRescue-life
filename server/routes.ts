@@ -37659,16 +37659,31 @@ The user asking is a tenant administrator or staff member.`;
   app.get('/api/tutorials', requireTenant, requireAuth, async (req, res, next) => {
     try {
       const { tutorials } = await import('@shared/schema');
-      
+      const userRoles = req.user!.roles;
+      const isAdmin = userRoles.includes('admin') || userRoles.includes('owner');
+
+      const tenantCondition = or(
+        eq(tutorials.tenantId, req.tenant!.id),
+        eq(tutorials.isGlobal, true)
+      );
+
+      // Non-admins only see items where visibleToRoles is null/empty OR overlaps their roles
+      const visibilityCondition = isAdmin
+        ? undefined
+        : or(
+            isNull(tutorials.visibleToRoles),
+            sql`coalesce(array_length(${tutorials.visibleToRoles}, 1), 0) = 0`,
+            sql`${tutorials.visibleToRoles} && ARRAY[${sql.raw(userRoles.map((r: string) => `'${r}'`).join(','))}]::text[]`
+          );
+
+      const whereClause = visibilityCondition
+        ? and(tenantCondition, visibilityCondition)
+        : tenantCondition;
+
       const results = await db
-        .select({ id: tutorials.id, tenantId: tutorials.tenantId, title: tutorials.title, description: tutorials.description, youtubeUrl: tutorials.youtubeUrl, category: tutorials.category, sortOrder: tutorials.sortOrder, isGlobal: tutorials.isGlobal })
+        .select({ id: tutorials.id, tenantId: tutorials.tenantId, title: tutorials.title, description: tutorials.description, youtubeUrl: tutorials.youtubeUrl, category: tutorials.category, sortOrder: tutorials.sortOrder, isGlobal: tutorials.isGlobal, visibleToRoles: tutorials.visibleToRoles })
         .from(tutorials)
-        .where(
-          or(
-            eq(tutorials.tenantId, req.tenant!.id),
-            eq(tutorials.isGlobal, true)
-          )
-        )
+        .where(whereClause)
         .orderBy(tutorials.sortOrder, tutorials.createdAt);
 
       res.json({ tutorials: results });
@@ -37713,6 +37728,7 @@ The user asking is a tenant administrator or staff member.`;
         youtubeUrl: z.string().url().optional(),
         category: z.string().max(100).optional(),
         sortOrder: z.coerce.number().int().min(0).max(9999).optional(),
+        visibleToRoles: z.array(z.enum(['admin', 'board_member', 'staff', 'foster', 'volunteer'])).nullable().optional(),
       }).strict(); // Reject any extra fields
 
       const validatedData = updateSchema.parse(req.body);
@@ -37724,6 +37740,7 @@ The user asking is a tenant administrator or staff member.`;
       if (validatedData.youtubeUrl !== undefined) updateFields.youtubeUrl = validatedData.youtubeUrl;
       if (validatedData.category !== undefined) updateFields.category = validatedData.category;
       if (validatedData.sortOrder !== undefined) updateFields.sortOrder = validatedData.sortOrder;
+      if (validatedData.visibleToRoles !== undefined) updateFields.visibleToRoles = validatedData.visibleToRoles?.length ? validatedData.visibleToRoles : null;
 
       const [updated] = await db
         .update(tutorials)
@@ -37774,15 +37791,32 @@ The user asking is a tenant administrator or staff member.`;
     app.get('/api/help-documents', requireTenant, requireAuth, async (req, res, next) => {
       try {
         const { helpDocuments } = await import('@shared/schema');
+        const userRoles = req.user!.roles;
+        const isAdmin = userRoles.includes('admin') || userRoles.includes('owner');
+
+        const tenantCondition = eq(helpDocuments.tenantId, req.tenant!.id);
+
+        // Non-admins only see items where visibleToRoles is null/empty OR overlaps their roles
+        const visibilityCondition = isAdmin
+          ? undefined
+          : or(
+              isNull(helpDocuments.visibleToRoles),
+              sql`coalesce(array_length(${helpDocuments.visibleToRoles}, 1), 0) = 0`,
+              sql`${helpDocuments.visibleToRoles} && ARRAY[${sql.raw(userRoles.map((r: string) => `'${r}'`).join(','))}]::text[]`
+            );
+
+        const whereClause = visibilityCondition
+          ? and(tenantCondition, visibilityCondition)
+          : tenantCondition;
+
         const results = await db
           .select()
           .from(helpDocuments)
-          .where(eq(helpDocuments.tenantId, req.tenant!.id))
+          .where(whereClause)
           .orderBy(helpDocuments.sortOrder, helpDocuments.createdAt);
         res.json({ documents: results });
       } catch (error) { next(error); }
     });
-
     // POST /api/help-documents - Create a help document record (admin only)
     app.post('/api/help-documents', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
       try {
@@ -37802,9 +37836,15 @@ The user asking is a tenant administrator or staff member.`;
           description: z.string().max(1000).optional(),
           category: z.string().max(100).optional(),
           sortOrder: z.coerce.number().int().min(0).max(9999).optional(),
+          visibleToRoles: z.array(z.enum(['admin', 'board_member', 'staff', 'foster', 'volunteer'])).nullable().optional(),
         }).strict();
         const validatedData = updateSchema.parse(req.body);
-        const updateFields: Record<string, any> = { updatedAt: new Date(), ...validatedData };
+        const updateFields: Record<string, any> = { updatedAt: new Date() };
+        if (validatedData.title !== undefined) updateFields.title = validatedData.title;
+        if (validatedData.description !== undefined) updateFields.description = validatedData.description;
+        if (validatedData.category !== undefined) updateFields.category = validatedData.category;
+        if (validatedData.sortOrder !== undefined) updateFields.sortOrder = validatedData.sortOrder;
+        if (validatedData.visibleToRoles !== undefined) updateFields.visibleToRoles = validatedData.visibleToRoles?.length ? validatedData.visibleToRoles : null;
         const [updated] = await db
           .update(helpDocuments)
           .set(updateFields)
@@ -37814,7 +37854,6 @@ The user asking is a tenant administrator or staff member.`;
         res.json({ document: updated });
       } catch (error) { next(error); }
     });
-
     // DELETE /api/help-documents/:id - Delete a help document (admin only)
     app.delete('/api/help-documents/:id', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
       try {

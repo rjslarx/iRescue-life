@@ -1,7 +1,7 @@
 # Multi-Tenant Animal Rescue SaaS Platform
 
 ## Overview
-The Multi-Tenant Animal Rescue SaaS Platform is a comprehensive SaaS solution for animal rescue organizations. It provides each tenant with a custom subdomain, a public-facing website for animal showcasing and donations, and a secure internal portal for staff. The platform centralizes operations, improves efficiency in adoption management, financial tracking, volunteer coordination, medical record management, and communication, aiming to enhance animal welfare efforts. It supports progressive web apps (PWA), AI assistance, and IoT integration for advanced shelter monitoring.
+The Multi-Tenant Animal Rescue SaaS Platform is a comprehensive SaaS solution designed to centralize and streamline operations for animal rescue organizations. It provides each tenant with a custom subdomain, a public-facing website for showcasing animals and accepting donations, and a secure internal portal for staff. The platform aims to improve efficiency in adoption management, financial tracking, volunteer coordination, medical record management, and communication, ultimately enhancing animal welfare efforts. Key capabilities include PWA support, AI assistance, and IoT integration for advanced shelter monitoring.
 
 ## User Preferences
 - Must use PostgreSQL database (NOT Firebase)
@@ -10,46 +10,42 @@ The Multi-Tenant Animal Rescue SaaS Platform is a comprehensive SaaS solution fo
 - Single database schema with tenant_id foreign keys (NOT separate schemas per tenant)
 
 ## System Architecture
-The platform features a React, TypeScript, and Vite frontend with Wouter for routing, TanStack Query for data management, Tailwind CSS for styling, and shadcn/ui for UI components. The backend is an Express and Node.js application, written in TypeScript, interacting with PostgreSQL via Drizzle ORM.
+The platform is built with a React, TypeScript, and Vite frontend, utilizing Wouter for routing, TanStack Query for data management, Tailwind CSS for styling, and shadcn/ui for UI components. The backend is an Express and Node.js application, written in TypeScript, interacting with PostgreSQL via Drizzle ORM.
 
 **UI/UX Decisions:**
-Design emphasizes mobile-first responsiveness, WCAG accessibility, and SEO. Key UI elements include a customizable Command Center dashboard with real-time activity and role-based widgets, a configurable "Quick Actions" sidebar, breadcrumbs, and a drag-and-drop kennel layout editor. Public-facing sites offer customizable hero layouts.
+Design principles prioritize mobile-first responsiveness, WCAG accessibility, and SEO. Notable UI elements include a customizable Command Center dashboard with real-time activity and role-based widgets, a configurable "Quick Actions" sidebar, breadcrumbs, and a drag-and-drop kennel layout editor. Public-facing websites offer customizable hero layouts.
 
 **Technical Implementations:**
-Multi-tenancy is implemented using `tenant_id` foreign keys in a single PostgreSQL database, supporting hybrid URLs. Authentication uses email/password with bcrypt, Express sessions, JWTs, token-based password reset, user invitation, and TOTP MFA for platform admins. A tenant-scoped Role-Based Access Control (RBAC) system enables dynamic role switching.
+Multi-tenancy is achieved through `tenant_id` foreign keys in a single PostgreSQL database, supporting hybrid URLs. Authentication employs email/password with bcrypt, Express sessions, JWTs, token-based password reset, user invitation, and TOTP MFA for platform administrators. A tenant-scoped Role-Based Access Control (RBAC) system allows for dynamic role switching.
 
 Core functionalities include:
-- Animal management, adoption application pipelines (Kanban workflow), and financial management (Stripe integration).
-- Contact management, Happy Tails, supply registry, expenditure tracking, event and volunteer coordination.
-- Medical records management (including a medical pipeline dashboard and preventative care backfill), and document management.
-- Native e-signature system for contracts with custom templates and legally verifiable PDF generation.
+- Comprehensive animal management, Kanban-workflow-driven adoption application pipelines, and financial management with Stripe integration.
+- Contact management, "Happy Tails" success stories, supply registry, expenditure tracking, event and volunteer coordination.
+- Medical records management, including a medical pipeline dashboard and preventative care backfill, alongside document management.
+- A native e-signature system for contracts, featuring custom templates and legally verifiable PDF generation.
 - Automated daily backups of tenant files to Google Drive and PostgreSQL database backups to Google Cloud Storage.
-- Stripe Embedded Components for transaction, payout, and balance display, supporting platform fees and "Donor Covers Fees".
-- Client and server-side detection for photo uploads from cloud services.
+- Integration of Stripe Embedded Components for transaction, payout, and balance display, supporting platform fees and "Donor Covers Fees" options.
+- Client and server-side detection for photo uploads from various cloud services.
 - Automated email and optional SMS notifications for adopters regarding overdue or upcoming preventative care.
-- **SMS Communications Log**: Full audit trail of all outbound/inbound SMS via Twilio. `sms_message_logs` table records every send (outbound) and receive (inbound) with `recipientUserId` and `relatedAnimalId` for enriched context. `POST /api/webhooks/twilio/status` receives Twilio delivery callbacks (delivered/failed) and updates log status. `GET /api/sms/logs` returns filtered, joined logs (recipient name, animal name). "SMS Log" tab in CommunicationsPage.tsx shows direction, type, recipient, animal, message preview, status badges, and a detail dialog. All compliance reminder sendSms() call sites pass recipient userId + animal ID.
+- A full audit trail for all inbound and outbound SMS communications via Twilio, with detailed logging and contextual information.
 - A mobile-first Foster Portal (My Fosters) for foster parents, including medication task logging.
-- Medication Plan & Task System for staff to create plans and track completion by fosters.
-- Subscription Feature Flags to support different subscription tiers by showing/hiding features.
-- Centralized Notification Preferences system for admin-configurable event-based notifications across various categories.
-- **3-Pillar Animal Architecture:**
-    - **Status (Lifecycle):** 8 statuses, including terminal statuses that trigger automated actions (e.g., cancel medical tasks).
-    - **Location (Physical Whereabouts):** `locationType` and `locationName` fields, with kennel assignments for shelter animals.
-    - **Badges (Boolean Warning Flags):** Medical, behavioral, and compatibility warning icons displayed on animal cards.
+- A Medication Plan & Task System for staff to create and track foster completion of medication plans.
+- Subscription Feature Flags to enable differentiated features based on subscription tiers.
+- A centralized Notification Preferences system allowing admins to configure event-based notifications across categories.
+- **3-Pillar Animal Architecture:** Structuring animal data by `Status` (lifecycle), `Location` (physical whereabouts and kennel assignments), and `Badges` (boolean warning flags for medical, behavioral, and compatibility issues).
 - Configurable Stripe checkout integration for owner surrender fees.
 - Preventative Care Coverage Tracking, automatically updating `medicalDueDates` based on product coverage.
-- Smart Add Medical Order Modal for Computerized Provider Order Entry (CPOE) on the Animal Medical Profile page, offering active order context, quick picks, autocomplete search, and **species-aware catalog filtering** (Dog animals only see Dog/Both preventatives; Cat animals only see Cat/Both).
-- **Expanded Medical Catalog**: `medical_catalog` now carries `species_target`, `default_route`, and `manufacturer` per item. 20 specific preventative products replace the old generic list, each with correct species targeting, administration route, and manufacturer (for grant reporting). Manufacturer is stored internally but intentionally hidden from CPOE search UI. `preventative_care_records` stores `administration_route`. `preventative_care_types` stores `manufacturer` for the 8 seeded platform-wide care types.
-- **CPOE → Preventative Care auto-fill**: When a preventative is selected via CPOE, `AddPreventativeCareDialog` pre-fills the Administration Route (Oral/PO, Topical, Collar) and Manufacturer. Standalone path auto-fills only Manufacturer from the selected care type; route remains blank for manual selection.
+- A "Smart Add Medical Order Modal" (CPOE) on the Animal Medical Profile page, offering active order context, quick picks, autocomplete search, and species-aware catalog filtering for preventatives.
+- An expanded `medical_catalog` supporting `species_target`, `default_route`, and `manufacturer` for enhanced preventative care management, including auto-filling during CPOE.
 - CPOE Medical Catalog & Order Sets for managing orderable items (medications, vaccines, labs) and bulk protocol groups.
-- Age-Aware Puppy Protocol Automation for intelligent scheduling of puppy vaccinations and preventative care based on DOB.
+- Age-Aware Puppy Protocol Automation for intelligent scheduling of puppy vaccinations and preventative care.
 - Automated Adoption Packet Generator for professional, certificate-style PDFs of vaccination history, preventative care, and microchip information, generated during adoption finalization.
-- **Network Transfer Engine (Clone-and-Link):** Tenant-to-Tenant animal transfers using a clone-and-link model: (1) Tenant A's original record becomes `transported` (terminal, read-only, full medical records preserved), (2) Tenant B receives a cloned animal with new UUID, new `local_shelter_id`, and copies of all COMPLETED medical records (vaccines, preventive care with `status='given'`, microchips, medical files, and medical exams with `status='completed'`), (3) Clone is linked back to original via `source_animal_id` field. Animals with `source_animal_id` show a "Transferred In" indicator in the UI.
-- **Two-Layer Animal Identity:** Each animal has (1) a UUID primary key (`id`) as the global permanent identifier and (2) a `local_shelter_id` (format: `D-26-0015`) as the human-readable per-tenant sequential identifier. The generator utility (`server/utils/shelterId.ts`) creates IDs scoped to `(tenant, species initial, year)`. The old globally-unique `animalId` field is preserved for backward compatibility but no longer displayed. New field `transfer_network_id` (text, nullable) tracks the partner org name for off-platform transfers.
-- **Unified Daily Medical Roster:** Aggregated daily view of all pending medical tasks across 5 tables (medication doses, preventative care, exams, procedures, diagnostics). Two-column layout with month-view calendar (badge dots on days with pending items) and categorized roster. Three action sections: (A) In-House Meds & Preventatives with checkbox bulk "Mark Given", (B) Vet Visits & Surgeries with "Log Completion" dialog (cost, notes), (C) Labs & Diagnostics with "Enter Results" dialog (Positive/Negative/Inconclusive). API: `GET /api/daily-roster`, `GET /api/daily-roster/calendar`, `POST /api/daily-roster/bulk-mark-given`. Page: `DailyRosterPage.tsx`. Sidebar: Operations > Daily Roster.
-- **Medical Pipeline ↔ Daily Roster Sync (fixed):** Three data-consistency gaps resolved: (1) `AddPreventativeCareDialog` now always sends `createFollowUp: false` — prevents phantom duplicate `status='pending'` records from being created when a next-due-date is set; (2) `GET /api/medical/preventative-care/coming-due` now queries `vaccine_records` (via `dateDue`) in parallel with `preventative_care_records`, merging and sorting both sets into overdue/dueToday/comingSoon — vaccines now appear in the Medical Pipeline Preventative tab; (3) Daily Roster shelter location filter changed from `eq(locationType,'shelter')` to `or(eq(locationType,'shelter'), isNull(locationType))` to match the Medical Pipeline's inclusive definition, so animals with null locationType appear under "Shelter" in both views. Note: `animals` table has `locationType` and `locationName` fields — there is no `animals.location` field.
-- **CPOE Consolidated Entry Point:** `AddMedicalOrderDialog` now includes a "Preventative Protocols" quick-pick section alongside Order Sets, exposing all 5 protocols (Adult Dog Standard, Adult Cat Standard, Kitten Protocol, Intake Default – Dog, Intake Default – Cat). Selecting a protocol shows a review card with item list and "Mark all items as given today" checkbox before applying via `POST /api/animals/:id/preventative-care/apply-protocol`. The Preventative tab header also has an "+ Add Record" shortcut button that opens the CPOE dialog directly, making the tab self-sufficient without scrolling to the global CPOE button.
-- **Fundraiser / Event Sales Module (Full Campaign Pages):** `fundraiser_events` and `fundraiser_orders` tables with Stripe Connect checkout, inventory caps, and pickup time tracking. Events now support `imageUrl` (hero image uploaded via `POST /api/fundraiser-events/images/upload` using `TenantFileStorage` with `public` ACL) and `bodyContent` (long-form campaign description). Public campaign page at `/donate/event/:eventId` redesigned as a full landing page: full-bleed hero image with dark gradient wash, title/description overlay, body content paragraphs, pickup time badges, and embedded checkout form. Public listing page at `/fundraisers` shows all active events as cards (image, title, price, "Order Now"). Admin event management at `/dashboard/fundraisers` includes the `ObjectUploader`-style image upload and body content textarea in the create/edit dialog. `PublicHeader` conditionally shows a "Fundraisers" nav link (desktop and mobile) when active events exist. Fulfillment dashboard at `/dashboard/fundraisers/:eventId` with summary stats, filter tabs, optimistic pickup checkboxes, and 30s auto-refetch. Stripe webhook branch at `checkout.session.completed` marks orders paid. **Important routing note:** Wouter `<Router base={basePath}>` prepends tenant prefix automatically — `<Link>` hrefs must NOT include `basePath` (use `/donate/event/:id`, not `${basePath}/donate/event/:id`).
+- **Network Transfer Engine (Clone-and-Link):** Facilitates tenant-to-tenant animal transfers by cloning records and linking them, preserving medical history while creating a new local identity.
+- **Two-Layer Animal Identity:** Each animal has a global UUID (`id`) and a tenant-specific human-readable `local_shelter_id` (e.g., `D-26-0015`), with a `transfer_network_id` for off-platform transfers.
+- **Unified Daily Medical Roster:** Provides an aggregated daily view of all pending medical tasks across various categories, with a month-view calendar and categorized roster for efficient task management and completion.
+- **Fundraiser / Event Sales Module:** Enables full campaign pages with Stripe Connect checkout, inventory caps, and pickup time tracking, supporting custom images and rich content for public-facing event pages and an administrative fulfillment dashboard.
+- **Help & Training Module:** Offers a two-tab page for videos and documents, with admin CRUD capabilities and per-item role visibility for controlling access to training materials.
+- **TNR (Trap-Neuter-Return) Log Module:** Integrates TNR record management within the existing animal data structure, enabling per-tenant activation, specific APIs for TNR records, and attachment capabilities.
 
 ## External Dependencies
 - **Stripe:** Payment processing and financial management.
@@ -72,20 +68,3 @@ Core functionalities include:
 - **express-rate-limit:** Request limiting.
 - **node-cron:** Task scheduling.
 - **Twilio (optional):** SMS notifications.
-
-## Help & Training Module
-  - **Two-tab page** at `/dashboard/tutorials` — "Videos" tab and "Documents" tab; sidebar label is "Help & Training" (BookOpen icon)
-  - **Videos tab**: Admin CRUD for video links. Any HTTPS URL accepted (not just YouTube). YouTube URLs embed a thumbnail + play-in-place; non-YouTube URLs show a "Watch Video" external link button. Table: `tutorials`. Routes: `GET/POST /api/tutorials`, `PATCH/DELETE /api/tutorials/:id`.
-  - **Documents tab**: Admin can upload PDFs, Word docs, and images via `POST /api/documents/upload` (returns `uploadedPaths`), then save metadata to `POST /api/help-documents`. Staff can view and download. Table: `help_documents` (tenant-scoped). Routes: `GET/POST /api/help-documents`, `PATCH/DELETE /api/help-documents/:id` (admin only).
-  - Page: `TutorialsPage.tsx`
-
-  ## TNR (Trap-Neuter-Return) Log Module
-- Uses `record_type='tnr'` discriminator on the `animals` table (no separate table)
-- Enabled per-tenant via `tnr_enabled` column on `tenants` table (toggle in Settings → Integrations)
-- Routes: `GET/POST /api/tnr-records`, `POST /api/tnr-records/batch`, `PATCH /api/tnr-records/:id`, `DELETE /api/tnr-records/:id`, `PATCH /api/tnr-records/:id/convert`
-- TNR records are excluded from all standard animal pipeline filters
-- Settings toggle: `PATCH /api/tenant/settings/tnr` (dedicated endpoint)
-- Page: `TnrLogPage.tsx`, Sidebar: Operations > TNR Log (conditional on `tnr_enabled`)
-- Date formatting: uses `formatDate()` helper (splits YYYY-MM-DD string directly — no `new Date()` to avoid UTC off-by-one)
-- Print: `doPrintMonth()` removes body class; `doPrintRow()` adds `tnr-printing-row` to body → hides `.tnr-main-content`, shows `.print-only`
-- **TNR Attachments**: Each saved TNR row has a paperclip icon button that opens a `TnrAttachmentsDrawer` (right Sheet). Reuses the existing `medical_files` table and `server/routes/medicalFileUpload.ts` endpoints. The `description` field stores the category label ("Photo", "Rabies Certificate", "Medical Note"). Badge count shown on the button when files exist. Upload supports both Replit Object Storage (signed URL) and Google Drive (server-side) paths.
