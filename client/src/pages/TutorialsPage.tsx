@@ -380,6 +380,11 @@ export default function TutorialsPage() {
       toast({ title: "Please select a file", variant: "destructive" });
       return;
     }
+    const allowedMimeTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedMimeTypes.includes(selectedFile.type) && !selectedFile.type.startsWith('image/')) {
+      toast({ title: 'Unsupported file type', description: 'Please upload a PDF or image file. Word documents and other formats cannot be previewed in the browser.', variant: 'destructive' });
+      return;
+    }
     setUploading(true);
     try {
       const formData = new FormData();
@@ -770,7 +775,7 @@ export default function TutorialsPage() {
                       ) : (
                         <>
                           <p className="text-sm font-medium">Click to select a file</p>
-                          <p className="text-xs text-muted-foreground">PDF, DOC, DOCX, images — up to 15 MB</p>
+                          <p className="text-xs text-muted-foreground">PDF or image files (JPG, PNG, GIF, WebP) — up to 15 MB</p>
                         </>
                       )}
                     </div>
@@ -778,7 +783,7 @@ export default function TutorialsPage() {
                       ref={fileInputRef}
                       type="file"
                       className="hidden"
-                      accept=".pdf,.doc,.docx,.txt,.rtf,.jpg,.jpeg,.png,.gif,.webp"
+                      accept=".pdf,.jpg,.jpeg,.png,.gif,.webp"
                       onChange={e => setSelectedFile(e.target.files?.[0] ?? null)}
                       data-testid="input-doc-file"
                     />
