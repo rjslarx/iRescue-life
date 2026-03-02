@@ -31574,7 +31574,7 @@ Email: ${application.applicantEmail || ''}`
         ))
         .orderBy(desc(medicalDoses.givenAt));
 
-      const adminIds = [...new Set(rawDoses.map(d => d.administeredBy).filter(Boolean))] as string[];
+      const adminIds = [...new Set(rawDoses.map(d => d.medical_doses.administeredBy).filter(Boolean))] as string[];
       let userNameMap: Record<string, string> = {};
       if (adminIds.length > 0) {
         const adminUsers = await db
@@ -31585,17 +31585,17 @@ Email: ${application.applicantEmail || ''}`
       }
 
       const doses = rawDoses.map(d => ({
-        id: d.id,
-        prescriptionId: d.prescriptionId,
-        dueDate: d.dueDate,
-        status: d.status,
-        givenAt: d.givenAt,
-        administeredBy: d.administeredBy,
-        completionMethod: d.completionMethod,
-        notes: d.notes,
-        unableReason: d.unableReason,
-        createdAt: d.createdAt,
-        administeredByName: d.administeredBy ? (userNameMap[d.administeredBy] || null) : null,
+        id: d.medical_doses.id,
+        prescriptionId: d.medical_doses.prescriptionId,
+        dueDate: d.medical_doses.dueDate,
+        status: d.medical_doses.status,
+        givenAt: d.medical_doses.givenAt,
+        administeredBy: d.medical_doses.administeredBy,
+        completionMethod: d.medical_doses.completionMethod,
+        notes: d.medical_doses.notes,
+        unableReason: d.medical_doses.unableReason,
+        createdAt: d.medical_doses.createdAt,
+        administeredByName: d.medical_doses.administeredBy ? (userNameMap[d.medical_doses.administeredBy] || null) : null,
       }));
 
       res.json({ doses });
