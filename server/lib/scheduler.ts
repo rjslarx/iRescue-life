@@ -66,7 +66,7 @@ export function initializeScheduler() {
 
   console.log(`✓ Medical reminders scheduled for: ${medicalReminderSchedule} (UTC)`);
 
-  const dailyBriefingEmailSchedule = process.env.DAILY_BRIEFING_EMAIL_SCHEDULE || "0 7 * * *";
+  const dailyBriefingEmailSchedule = process.env.DAILY_BRIEFING_EMAIL_SCHEDULE || "0 5 * * *";
   cron.schedule(dailyBriefingEmailSchedule, async () => {
     console.log("📋 Running daily briefing emails...");
     try {
