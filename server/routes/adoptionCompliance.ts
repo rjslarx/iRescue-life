@@ -9,9 +9,11 @@ import {
   adoptionCheckoutSessions,
   adoptionContracts,
   microchipRecords,
+  adopterHelpRequests,
+  users,
   COMPLIANCE_OBLIGATION_TYPES,
 } from '@shared/schema';
-import { eq, and, or, ilike, desc, sql, inArray } from 'drizzle-orm';
+import { eq, and, or, ilike, desc, sql, inArray, ne } from 'drizzle-orm';
 import { z } from 'zod';
 
 const router = Router();
@@ -169,6 +171,14 @@ router.get(
         return completedDate.toDateString() === now.toDateString();
       });
 
+      const pendingHelpRequests = await db
+        .select({ id: adopterHelpRequests.id })
+        .from(adopterHelpRequests)
+        .where(and(
+          eq(adopterHelpRequests.tenantId, tenantId),
+          eq(adopterHelpRequests.status, 'pending'),
+        ));
+
       res.json({
         stats: {
           totalActiveReminders: pending.length,
@@ -182,6 +192,7 @@ router.get(
               : 100,
           atRiskCount: atRiskAdopters.length,
           pendingReviewCount: customObligations.length,
+          helpRequestCount: pendingHelpRequests.length,
         },
         overdue: overdueEnriched.slice(0, 25),
         upcoming: upcomingEnriched.slice(0, 25),
@@ -658,6 +669,77 @@ router.post(
         .returning();
 
       res.status(201).json({ obligation: created });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+router.get(
+  '/help-requests',
+  requireTenant,
+  requireAuth,
+  requireRole('admin', 'staff', 'owner', 'manager'),
+  async (req, res, next) => {
+    try {
+      const tenantId = req.tenant!.id;
+
+      const requests = await db
+        .select({
+          id: adopterHelpRequests.id,
+          adopterName: adopterHelpRequests.adopterName,
+          adopterPhone: adopterHelpRequests.adopterPhone,
+          animalId: adopterHelpRequests.animalId,
+          animalName: adopterHelpRequests.animalName,
+          message: adopterHelpRequests.message,
+          status: adopterHelpRequests.status,
+          resolvedByName: users.fullName,
+          resolvedAt: adopterHelpRequests.resolvedAt,
+          createdAt: adopterHelpRequests.createdAt,
+        })
+        .from(adopterHelpRequests)
+        .leftJoin(users, eq(users.id, adopterHelpRequests.resolvedBy))
+        .where(eq(adopterHelpRequests.tenantId, tenantId))
+        .orderBy(desc(adopterHelpRequests.createdAt))
+        .limit(50);
+
+      res.json({ requests });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+router.patch(
+  '/help-requests/:id/resolve',
+  requireTenant,
+  requireAuth,
+  requireRole('admin', 'staff', 'owner', 'manager'),
+  async (req, res, next) => {
+    try {
+      const tenantId = req.tenant!.id;
+      const requestId = req.params.id;
+      const userId = req.user!.id;
+
+      const [updated] = await db
+        .update(adopterHelpRequests)
+        .set({
+          status: 'resolved',
+          resolvedBy: userId,
+          resolvedAt: new Date(),
+        })
+        .where(and(
+          eq(adopterHelpRequests.id, requestId),
+          eq(adopterHelpRequests.tenantId, tenantId),
+          ne(adopterHelpRequests.status, 'resolved'),
+        ))
+        .returning();
+
+      if (!updated) {
+        return res.status(404).json({ error: 'Help request not found or already resolved' });
+      }
+
+      res.json({ request: updated });
     } catch (error) {
       next(error);
     }

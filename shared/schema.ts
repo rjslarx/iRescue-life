@@ -2055,7 +2055,7 @@ export const fosterUpdates = pgTable("foster_updates", {
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
   fosterId: uuid("foster_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
   animalId: uuid("animal_id").notNull().references(() => animals.id, { onDelete: 'cascade' }),
-  updateType: text("update_type").notNull().$type<"medical_concern" | "behavioral_note" | "general_update" | "photo_update" | "help_request">(),
+  updateType: text("update_type").notNull().$type<"medical_concern" | "behavioral_note" | "general_update" | "photo_update">(),
   description: text("description").notNull(),
   photoUrls: text("photo_urls").array(),
   source: text("source").notNull().default("portal").$type<"portal" | "sms">(),
@@ -5896,6 +5896,30 @@ export const insertComplianceObligationSchema = createInsertSchema(complianceObl
 });
 export type InsertComplianceObligation = z.infer<typeof insertComplianceObligationSchema>;
 export type ComplianceObligation = typeof complianceObligations.$inferSelect;
+
+export const adopterHelpRequests = pgTable("adopter_help_requests", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  adopterContactId: uuid("adopter_contact_id").references(() => contacts.id, { onDelete: 'set null' }),
+  adopterName: text("adopter_name").notNull(),
+  adopterPhone: text("adopter_phone").notNull(),
+  animalId: uuid("animal_id").references(() => animals.id, { onDelete: 'set null' }),
+  animalName: text("animal_name"),
+  message: text("message").notNull(),
+  status: text("status").notNull().default("pending").$type<"pending" | "in_progress" | "resolved">(),
+  resolvedBy: uuid("resolved_by").references(() => users.id, { onDelete: 'set null' }),
+  resolvedAt: timestamp("resolved_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertAdopterHelpRequestSchema = createInsertSchema(adopterHelpRequests).omit({
+  id: true,
+  resolvedBy: true,
+  resolvedAt: true,
+  createdAt: true,
+});
+export type InsertAdopterHelpRequest = z.infer<typeof insertAdopterHelpRequestSchema>;
+export type AdopterHelpRequest = typeof adopterHelpRequests.$inferSelect;
 
 export const medicalCatalog = pgTable("medical_catalog", {
   id: uuid("id").primaryKey().defaultRandom(),

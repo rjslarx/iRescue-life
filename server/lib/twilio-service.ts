@@ -1,6 +1,6 @@
 import twilio from 'twilio';
 import { db } from '../db';
-import { tenants, smsMessageLogs, smsProxySessions, transportEvents, users, fosterAnimals, supplyRequests, fosterUpdates, medicationTasks, complianceReminders, animals, contacts, adoptionCheckoutSessions } from '@shared/schema';
+import { tenants, smsMessageLogs, smsProxySessions, transportEvents, users, fosterAnimals, supplyRequests, fosterUpdates, medicationTasks, complianceReminders, animals, contacts, adoptionCheckoutSessions, adopterHelpRequests } from '@shared/schema';
 import { eq, and, desc, gte, isNotNull, inArray, or } from 'drizzle-orm';
 import { decrypt, encrypt } from './encryption';
 
@@ -551,31 +551,22 @@ export async function handleIncomingSms(
         if (adopterMatch.length > 0) {
           const adopter = adopterMatch[0];
 
-          let routeToUserId = adopter.staffInitiatedBy;
-          if (!routeToUserId) {
-            const [adminUser] = await db
-              .select({ id: users.id })
-              .from(users)
-              .where(and(eq(users.tenantId, tenant.id), eq(users.role, 'admin')))
-              .limit(1);
-            routeToUserId = adminUser?.id ?? null;
-          }
+          const [animalRecord] = await db
+            .select({ name: animals.name })
+            .from(animals)
+            .where(eq(animals.id, adopter.animalId))
+            .limit(1);
 
-          if (routeToUserId) {
-            await db.insert(fosterUpdates).values({
-              tenantId: tenant.id,
-              fosterId: routeToUserId,
-              animalId: adopter.animalId,
-              updateType: 'help_request',
-              description: `HELP request from adopter ${adopter.contactName} (${fromNumber}): ${body}`,
-              photoUrls: [],
-              source: 'sms',
-              priority: 'urgent',
-              status: 'pending',
-            });
-          } else {
-            console.warn(`[TWILIO] HELP request from ${fromNumber} but no staff user to route to for tenant ${tenant.id}`);
-          }
+          await db.insert(adopterHelpRequests).values({
+            tenantId: tenant.id,
+            adopterContactId: adopter.contactId,
+            adopterName: adopter.contactName,
+            adopterPhone: fromNumber,
+            animalId: adopter.animalId,
+            animalName: animalRecord?.name ?? null,
+            message: body,
+            status: 'pending',
+          });
 
           const config = await getTwilioConfig(tenant.id);
           if (config) {

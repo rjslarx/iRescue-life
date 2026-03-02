@@ -6,9 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AlertTriangle, FileText, ClipboardCheck, UserX, Clock, Search, CheckCircle, ChevronRight, Loader2 } from "lucide-react";
+import { AlertTriangle, FileText, ClipboardCheck, UserX, Clock, Search, CheckCircle, ChevronRight, Loader2, MessageCircle, Phone, Check } from "lucide-react";
 import { Link } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useMutation } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
 
 interface ComplianceObligation {
   id: string;
@@ -33,6 +36,19 @@ interface AtRiskAdopter {
   obligations: ComplianceObligation[];
 }
 
+interface HelpRequest {
+  id: string;
+  adopterName: string;
+  adopterPhone: string;
+  animalId: string | null;
+  animalName: string | null;
+  message: string;
+  status: string;
+  resolvedByName: string | null;
+  resolvedAt: string | null;
+  createdAt: string;
+}
+
 interface AdopterComplianceResponse {
   stats: {
     totalActiveReminders: number;
@@ -41,6 +57,7 @@ interface AdopterComplianceResponse {
     complianceRate: number;
     atRiskCount: number;
     pendingReviewCount: number;
+    helpRequestCount: number;
   };
   overdue: ComplianceObligation[];
   upcoming: ComplianceObligation[];
@@ -71,6 +88,7 @@ interface AlumniResult {
 
 export default function ComplianceWidget() {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [alumniSearch, setAlumniSearch] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -78,6 +96,29 @@ export default function ComplianceWidget() {
     queryKey: ['/api/dashboard/adopter-compliance'],
     enabled: !!user && user.activeRole !== 'foster',
   });
+
+  const { data: helpData } = useQuery<{ requests: HelpRequest[] }>({
+    queryKey: ['/api/dashboard/adopter-compliance', 'help-requests'],
+    queryFn: async () => {
+      const res = await fetch('/api/dashboard/adopter-compliance/help-requests');
+      if (!res.ok) throw new Error('Failed to load help requests');
+      return res.json();
+    },
+    enabled: !!user && user.activeRole !== 'foster',
+  });
+
+  const resolveHelpMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest('PATCH', `/api/dashboard/adopter-compliance/help-requests/${id}/resolve`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/dashboard/adopter-compliance'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/dashboard/adopter-compliance', 'help-requests'] });
+      toast({ title: "Help request resolved" });
+    },
+  });
+
+  const pendingHelpRequests = (helpData?.requests || []).filter(r => r.status === 'pending');
 
   const { data: alumniData, isLoading: alumniLoading } = useQuery<{ results: AlumniResult[] }>({
     queryKey: ['/api/dashboard/adopter-compliance/alumni-search', searchTerm],
@@ -110,7 +151,7 @@ export default function ComplianceWidget() {
   }
 
   const stats = data?.stats;
-  const totalIssues = (stats?.totalOverdue || 0) + (stats?.atRiskCount || 0);
+  const totalIssues = (stats?.totalOverdue || 0) + (stats?.atRiskCount || 0) + pendingHelpRequests.length;
   const hasNoIssues = totalIssues === 0;
 
   return (
@@ -157,8 +198,8 @@ export default function ComplianceWidget() {
             {searchTerm && renderAlumniResults(alumniData?.results || [], alumniLoading)}
           </div>
         ) : (
-          <Tabs defaultValue="overdue" className="w-full">
-            <TabsList className="w-full grid grid-cols-5 h-auto">
+          <Tabs defaultValue={pendingHelpRequests.length > 0 ? "help" : "overdue"} className="w-full">
+            <TabsList className="w-full grid grid-cols-6 h-auto">
               <TabsTrigger value="overdue" className="text-xs py-1.5 px-1" data-testid="tab-overdue">
                 <span className="flex items-center gap-0.5">
                   <FileText className="h-3 w-3" />
@@ -199,6 +240,17 @@ export default function ComplianceWidget() {
                   {(data?.atRiskAdopters.length || 0) > 0 && (
                     <Badge variant="destructive" className="ml-0.5 h-4 min-w-4 px-1 text-xs">
                       {data?.atRiskAdopters.length}
+                    </Badge>
+                  )}
+                </span>
+              </TabsTrigger>
+              <TabsTrigger value="help" className="text-xs py-1.5 px-1" data-testid="tab-help">
+                <span className="flex items-center gap-0.5">
+                  <MessageCircle className="h-3 w-3" />
+                  <span className="hidden sm:inline">Help</span>
+                  {pendingHelpRequests.length > 0 && (
+                    <Badge variant="destructive" className="ml-0.5 h-4 min-w-4 px-1 text-xs">
+                      {pendingHelpRequests.length}
                     </Badge>
                   )}
                 </span>
@@ -315,6 +367,59 @@ export default function ComplianceWidget() {
                       <Badge variant="destructive" className="shrink-0">
                         {adopter.overdueCount} overdue
                       </Badge>
+                    </div>
+                  </div>
+                ))
+              )}
+            </TabsContent>
+
+            <TabsContent value="help" className="mt-3 space-y-2" data-testid="tab-content-help">
+              {pendingHelpRequests.length === 0 ? (
+                <div className="flex items-center justify-center py-4 text-center">
+                  <CheckCircle className="h-5 w-5 text-green-500 mr-2" />
+                  <span className="text-sm text-muted-foreground">No pending help requests</span>
+                </div>
+              ) : (
+                pendingHelpRequests.slice(0, 5).map((req) => (
+                  <div key={req.id} className="p-2 border border-amber-300/50 bg-amber-50 dark:bg-amber-950/20 rounded-md" data-testid={`help-request-${req.id}`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-sm font-medium truncate">{req.adopterName}</p>
+                          {req.animalName && (
+                            <Badge variant="secondary" className="text-xs shrink-0">{req.animalName}</Badge>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{req.message}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-xs text-muted-foreground">
+                            {new Date(req.createdAt).toLocaleDateString()} {new Date(req.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                          {req.adopterPhone && (
+                            <button
+                              className="text-xs text-primary hover:underline flex items-center gap-0.5"
+                              onClick={() => {
+                                navigator.clipboard.writeText(req.adopterPhone);
+                                toast({ title: "Phone copied", description: req.adopterPhone });
+                              }}
+                              data-testid={`button-copy-phone-help-${req.id}`}
+                            >
+                              <Phone className="h-3 w-3" />
+                              {req.adopterPhone}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => resolveHelpMutation.mutate(req.id)}
+                        disabled={resolveHelpMutation.isPending}
+                        data-testid={`button-resolve-help-${req.id}`}
+                      >
+                        <Check className="h-3 w-3 mr-1" />
+                        Resolve
+                      </Button>
                     </div>
                   </div>
                 ))
