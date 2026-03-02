@@ -627,7 +627,8 @@ export default function SitePermissionsPage() {
     return CALENDAR_TYPES.find(t => t.value === type)?.label || type;
   };
 
-  const animals = animalsData?.animals || [];
+  const TERMINAL_STATUSES = ['adopted', 'transported', 'deceased', 'returned_to_owner', 'returned_to_field'];
+  const animals = (animalsData?.animals || []).filter(a => !TERMINAL_STATUSES.includes(a.status));
   const users = usersData?.users || [];
   const medicalPermissions = medicalPermissionsData?.permissions || [];
   const globalMedicalPermissions = globalMedicalPermissionsData?.permissions || [];
