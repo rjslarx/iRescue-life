@@ -37532,6 +37532,9 @@ The user asking is a tenant administrator or staff member.`;
   const simpleImportRoutes = await import('./routes/simpleImport');
   app.use('/api/import', simpleImportRoutes.default);
 
+  const adoptedBackfillRoutes = await import('./routes/adoptedBackfill');
+  app.use('/api/import', adoptedBackfillRoutes.default);
+
   // Register medical file upload routes (for transport CVI documents)
   const medicalFileUploadRoutes = await import('./routes/medicalFileUpload');
   app.use('/api/animals', medicalFileUploadRoutes.default);

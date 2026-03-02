@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
@@ -20,6 +21,7 @@ import {
   FileSpreadsheet,
   Info,
   CheckCircle2,
+  PawPrint,
 } from "lucide-react";
 import DashboardLayout from "@/components/DashboardLayout";
 import type { Tenant } from "@shared/schema";
@@ -306,6 +308,315 @@ function RescueGroupsImporter() {
   );
 }
 
+const SPECIES_OPTIONS = ["Dog", "Cat", "Rabbit", "Small & Furry", "Horse", "Bird", "Scales, Fins & Other", "Barnyard"];
+
+const INITIAL_BACKFILL_FORM = {
+  animalName: "",
+  species: "",
+  breed: "",
+  age: "",
+  sex: "",
+  microchip: "",
+  neuterStatus: "",
+  adopterName: "",
+  adopterEmail: "",
+  adopterPhone: "",
+  adoptionDate: new Date().toISOString().split("T")[0],
+  rabiesDueDate: "",
+  dhppDueDate: "",
+  bordetellaDueDate: "",
+  heartwormDueDate: "",
+  fleaTickDueDate: "",
+  spayNeuterDate: "",
+};
+
+function AdoptedAnimalBackfill() {
+  const { toast } = useToast();
+  const [form, setForm] = useState(INITIAL_BACKFILL_FORM);
+
+  const mutation = useMutation({
+    mutationFn: async (data: typeof form) => {
+      const res = await apiRequest("POST", "/api/import/adopted-backfill", data);
+      return res.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Animal registered successfully",
+        description: `${data.animalName} (${data.localShelterId}) has been registered with adopter ${data.adopterName}. A Pet Portal invite has been sent.`,
+      });
+      setForm(INITIAL_BACKFILL_FORM);
+      queryClient.invalidateQueries({ queryKey: ["/api/animals"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to register animal",
+        description: error.message || "Please check the form and try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateField = (field: string, value: string) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.animalName || !form.species || !form.breed || !form.age || !form.adopterName || !form.adopterEmail || !form.adoptionDate) {
+      toast({
+        title: "Missing required fields",
+        description: "Please fill in all required fields before submitting.",
+        variant: "destructive",
+      });
+      return;
+    }
+    mutation.mutate(form);
+  };
+
+  return (
+    <Card data-testid="card-adopted-backfill">
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <PawPrint className="h-5 w-5" />
+          <CardTitle>Register Adopted Animals</CardTitle>
+        </div>
+        <CardDescription>
+          Register animals that were adopted before you joined the platform. The adopter will receive a magic link to access their Pet Portal and be enrolled in vaccine reminder notifications.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="space-y-4">
+            <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Animal Information</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="backfill-animal-name">Name *</Label>
+                <Input
+                  id="backfill-animal-name"
+                  value={form.animalName}
+                  onChange={(e) => updateField("animalName", e.target.value)}
+                  placeholder="e.g. Buddy"
+                  data-testid="input-backfill-animal-name"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="backfill-species">Species *</Label>
+                <Select value={form.species} onValueChange={(v) => updateField("species", v)}>
+                  <SelectTrigger id="backfill-species" data-testid="select-backfill-species">
+                    <SelectValue placeholder="Select species" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SPECIES_OPTIONS.map((s) => (
+                      <SelectItem key={s} value={s}>{s}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="backfill-breed">Breed *</Label>
+                <Input
+                  id="backfill-breed"
+                  value={form.breed}
+                  onChange={(e) => updateField("breed", e.target.value)}
+                  placeholder="e.g. Golden Retriever"
+                  data-testid="input-backfill-breed"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="backfill-age">Age *</Label>
+                <Input
+                  id="backfill-age"
+                  value={form.age}
+                  onChange={(e) => updateField("age", e.target.value)}
+                  placeholder="e.g. 3 years"
+                  data-testid="input-backfill-age"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="backfill-sex">Sex</Label>
+                <Select value={form.sex} onValueChange={(v) => updateField("sex", v)}>
+                  <SelectTrigger id="backfill-sex" data-testid="select-backfill-sex">
+                    <SelectValue placeholder="Select sex" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Male">Male</SelectItem>
+                    <SelectItem value="Female">Female</SelectItem>
+                    <SelectItem value="Unknown">Unknown</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="backfill-neuter">Spay/Neuter Status</Label>
+                <Select value={form.neuterStatus} onValueChange={(v) => updateField("neuterStatus", v)}>
+                  <SelectTrigger id="backfill-neuter" data-testid="select-backfill-neuter">
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="altered">Altered</SelectItem>
+                    <SelectItem value="intact">Intact</SelectItem>
+                    <SelectItem value="unknown">Unknown</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label htmlFor="backfill-microchip">Microchip Number</Label>
+                <Input
+                  id="backfill-microchip"
+                  value={form.microchip}
+                  onChange={(e) => updateField("microchip", e.target.value)}
+                  placeholder="Optional"
+                  data-testid="input-backfill-microchip"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Adopter Information</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="backfill-adopter-name">Full Name *</Label>
+                <Input
+                  id="backfill-adopter-name"
+                  value={form.adopterName}
+                  onChange={(e) => updateField("adopterName", e.target.value)}
+                  placeholder="e.g. Jane Smith"
+                  data-testid="input-backfill-adopter-name"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="backfill-adopter-email">Email *</Label>
+                <Input
+                  id="backfill-adopter-email"
+                  type="email"
+                  value={form.adopterEmail}
+                  onChange={(e) => updateField("adopterEmail", e.target.value)}
+                  placeholder="e.g. jane@example.com"
+                  data-testid="input-backfill-adopter-email"
+                />
+              </div>
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label htmlFor="backfill-adopter-phone">Phone</Label>
+                <Input
+                  id="backfill-adopter-phone"
+                  type="tel"
+                  value={form.adopterPhone}
+                  onChange={(e) => updateField("adopterPhone", e.target.value)}
+                  placeholder="Optional — enables SMS reminders"
+                  data-testid="input-backfill-adopter-phone"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Dates & Compliance</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="backfill-adoption-date">Adoption Date *</Label>
+                <Input
+                  id="backfill-adoption-date"
+                  type="date"
+                  value={form.adoptionDate}
+                  onChange={(e) => updateField("adoptionDate", e.target.value)}
+                  data-testid="input-backfill-adoption-date"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="backfill-rabies">Rabies Due Date</Label>
+                <Input
+                  id="backfill-rabies"
+                  type="date"
+                  value={form.rabiesDueDate}
+                  onChange={(e) => updateField("rabiesDueDate", e.target.value)}
+                  data-testid="input-backfill-rabies-due"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="backfill-dhpp">DHPP Due Date</Label>
+                <Input
+                  id="backfill-dhpp"
+                  type="date"
+                  value={form.dhppDueDate}
+                  onChange={(e) => updateField("dhppDueDate", e.target.value)}
+                  data-testid="input-backfill-dhpp-due"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="backfill-bordetella">Bordetella Due Date</Label>
+                <Input
+                  id="backfill-bordetella"
+                  type="date"
+                  value={form.bordetellaDueDate}
+                  onChange={(e) => updateField("bordetellaDueDate", e.target.value)}
+                  data-testid="input-backfill-bordetella-due"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="backfill-heartworm">Heartworm Due Date</Label>
+                <Input
+                  id="backfill-heartworm"
+                  type="date"
+                  value={form.heartwormDueDate}
+                  onChange={(e) => updateField("heartwormDueDate", e.target.value)}
+                  data-testid="input-backfill-heartworm-due"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="backfill-flea">Flea/Tick Due Date</Label>
+                <Input
+                  id="backfill-flea"
+                  type="date"
+                  value={form.fleaTickDueDate}
+                  onChange={(e) => updateField("fleaTickDueDate", e.target.value)}
+                  data-testid="input-backfill-flea-due"
+                />
+              </div>
+              {form.neuterStatus === "intact" && (
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label htmlFor="backfill-spay">Spay/Neuter Due Date</Label>
+                  <Input
+                    id="backfill-spay"
+                    type="date"
+                    value={form.spayNeuterDate}
+                    onChange={(e) => updateField("spayNeuterDate", e.target.value)}
+                    data-testid="input-backfill-spay-due"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+
+          <Alert>
+            <Info className="h-4 w-4" />
+            <AlertDescription>
+              The adopter will receive an email with a magic link to access their Pet Portal. Rabies and DHPP due dates create compliance obligations that the adopter must verify. All other due dates create preventative care records for internal tracking and automated reminders.
+            </AlertDescription>
+          </Alert>
+
+          <Button
+            type="submit"
+            disabled={mutation.isPending}
+            data-testid="button-backfill-submit"
+          >
+            {mutation.isPending ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Registering...
+              </>
+            ) : (
+              <>
+                <PawPrint className="h-4 w-4 mr-2" />
+                Register Adopted Animal
+              </>
+            )}
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function SecuritySettingsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -452,6 +763,8 @@ export default function SecuritySettingsPage() {
           )}
 
           <RescueGroupsImporter />
+
+          <AdoptedAnimalBackfill />
         </div>
       )}
     </DashboardLayout>
