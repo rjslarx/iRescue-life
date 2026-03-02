@@ -30901,6 +30901,7 @@ Email: ${application.applicantEmail || ''}`
           doseStatus: medicalDoses.status,
           doseGivenAt: medicalDoses.givenAt,
           doseAdministeredBy: medicalDoses.administeredBy,
+          doseCompletionMethod: medicalDoses.completionMethod,
           doseNotes: medicalDoses.notes,
           prescriptionId: medicalPrescriptions.id,
           prescriptionMedicationName: medicalPrescriptions.medicationName,
@@ -30936,6 +30937,7 @@ Email: ${application.applicantEmail || ''}`
           status: row.doseStatus,
           givenAt: row.doseGivenAt,
           administeredBy: row.doseAdministeredBy,
+          completionMethod: row.doseCompletionMethod,
           notes: row.doseNotes,
         },
         prescription: row.prescriptionId ? {
@@ -30981,6 +30983,7 @@ Email: ${application.applicantEmail || ''}`
           doseStatus: medicalDoses.status,
           doseGivenAt: medicalDoses.givenAt,
           doseAdministeredBy: medicalDoses.administeredBy,
+          doseCompletionMethod: medicalDoses.completionMethod,
           doseNotes: medicalDoses.notes,
           prescriptionId: medicalPrescriptions.id,
           prescriptionMedicationName: medicalPrescriptions.medicationName,
@@ -31015,6 +31018,7 @@ Email: ${application.applicantEmail || ''}`
           status: row.doseStatus,
           givenAt: row.doseGivenAt,
           administeredBy: row.doseAdministeredBy,
+          completionMethod: row.doseCompletionMethod,
           notes: row.doseNotes,
         },
         prescription: row.prescriptionId ? {

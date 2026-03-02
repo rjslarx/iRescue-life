@@ -1423,6 +1423,11 @@ export default function MedicalPipelinePage() {
                                           {isGiven ? 'Administered' : 'Marked'} at {format(new Date(dose.givenAt), 'h:mm a')}
                                         </p>
                                       )}
+                                      {dose.completionMethod && (
+                                        <Badge variant="secondary" className="text-xs mt-1 no-default-hover-elevate no-default-active-elevate" data-testid={`badge-completion-method-${dose.id}`}>
+                                          {dose.completionMethod === 'foster_sms' ? 'Confirmed via SMS' : 'Staff Override'}
+                                        </Badge>
+                                      )}
                                     </div>
                                     <div className="no-print flex gap-2 flex-wrap">
                                       {isPending && (
@@ -1569,6 +1574,11 @@ export default function MedicalPipelinePage() {
                                         <p className="text-xs text-muted-foreground">
                                           {isGiven ? 'Administered' : 'Marked'} at {format(new Date(dose.givenAt), 'h:mm a')}
                                         </p>
+                                      )}
+                                      {dose.completionMethod && (
+                                        <Badge variant="secondary" className="text-xs mt-1 no-default-hover-elevate no-default-active-elevate" data-testid={`badge-completion-method-${dose.id}`}>
+                                          {dose.completionMethod === 'foster_sms' ? 'Confirmed via SMS' : 'Staff Override'}
+                                        </Badge>
                                       )}
                                     </div>
                                     <div className="no-print flex gap-2 flex-wrap">
