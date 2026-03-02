@@ -1,21 +1,21 @@
 import { db } from "../db";
-import { 
+import {
   tenants,
-  volunteerOpportunities,
-  volunteerSignups,
-  type Tenant 
+  calendars,
+  calendarEvents,
+  contacts,
+  type Tenant,
 } from "@shared/schema";
-import { eq, and, gte, lte } from "drizzle-orm";
+import { eq, and, gte, lte, inArray } from "drizzle-orm";
 import { EmailService } from "../lib/email-service";
 import { format, addDays, startOfDay, endOfDay, parseISO } from "date-fns";
 
 interface VolunteerCommitment {
-  opportunityId: string;
-  title: string;
+  calendarName: string;
   date: string;
-  time: string;
+  startTime: string;
+  endTime: string;
   location: string;
-  signupDate: string;
 }
 
 interface DigestResult {
@@ -28,9 +28,6 @@ interface DigestResult {
 }
 
 export class VolunteerScheduleDigestService {
-  /**
-   * Send weekly schedule digest to all volunteers for a specific tenant
-   */
   static async sendTenantDigest(tenantId: string): Promise<DigestResult> {
     const result: DigestResult = {
       tenantId,
@@ -41,7 +38,6 @@ export class VolunteerScheduleDigestService {
       errors: [],
     };
 
-    // Get tenant settings
     const [tenant] = await db
       .select()
       .from(tenants)
@@ -56,76 +52,100 @@ export class VolunteerScheduleDigestService {
     const settings = tenant.volunteerDigestSettings || {};
     const daysAhead = settings.includeUpcomingDays || 7;
 
-    // Get upcoming volunteer opportunities
-    const now = new Date();
-    const startDate = format(startOfDay(now), 'yyyy-MM-dd');
-    const endDate = format(endOfDay(addDays(now, daysAhead)), 'yyyy-MM-dd');
-
-    const opportunities = await db
+    const volunteerCalendars = await db
       .select()
-      .from(volunteerOpportunities)
-      .where(eq(volunteerOpportunities.tenantId, tenantId));
+      .from(calendars)
+      .where(and(eq(calendars.tenantId, tenantId), eq(calendars.type, "volunteer")));
 
-    // Filter opportunities by date
-    const upcomingOpportunities = opportunities.filter(opp => {
-      const oppDate = opp.date;
-      return oppDate >= startDate && oppDate <= endDate;
-    });
-
-    if (upcomingOpportunities.length === 0) {
-      return result; // No upcoming opportunities, nothing to send
+    if (volunteerCalendars.length === 0) {
+      return result;
     }
 
-    // Get all signups for upcoming opportunities
-    const opportunityIds = upcomingOpportunities.map(o => o.id);
-    const signups = await db
+    const calendarMap = new Map(volunteerCalendars.map((c) => [c.id, c]));
+    const calendarIds = volunteerCalendars.map((c) => c.id);
+
+    const now = new Date();
+    const events = await db
       .select()
-      .from(volunteerSignups)
-      .where(eq(volunteerSignups.tenantId, tenantId));
+      .from(calendarEvents)
+      .where(
+        and(
+          eq(calendarEvents.tenantId, tenantId),
+          inArray(calendarEvents.calendarId, calendarIds),
+          gte(calendarEvents.startTime, startOfDay(now)),
+          lte(calendarEvents.startTime, endOfDay(addDays(now, daysAhead)))
+        )
+      );
 
-    // Filter signups for upcoming opportunities
-    const upcomingSignups = signups.filter(s => opportunityIds.includes(s.opportunityId));
+    if (events.length === 0) {
+      return result;
+    }
 
-    // Group signups by email
-    const signupsByEmail = new Map<string, VolunteerCommitment[]>();
-    
-    for (const signup of upcomingSignups) {
-      const opportunity = upcomingOpportunities.find(o => o.id === signup.opportunityId);
-      if (!opportunity) continue;
+    const contactIds = events
+      .map((e) => e.volunteerContactId)
+      .filter((id): id is string => !!id);
 
-      const email = signup.applicantEmail.toLowerCase();
+    const uniqueContactIds = [...new Set(contactIds)];
+    let contactMap = new Map<string, { name: string; email: string }>();
+
+    if (uniqueContactIds.length > 0) {
+      const contactRows = await db
+        .select({ id: contacts.id, name: contacts.name, email: contacts.email })
+        .from(contacts)
+        .where(inArray(contacts.id, uniqueContactIds));
+
+      contactMap = new Map(
+        contactRows
+          .filter((c) => c.email)
+          .map((c) => [c.id, { name: c.name, email: c.email! }])
+      );
+    }
+
+    const commitmentsByEmail = new Map<string, { name: string; commitments: VolunteerCommitment[] }>();
+
+    for (const event of events) {
+      const cal = calendarMap.get(event.calendarId);
+      if (!cal) continue;
+
+      let volunteerEmail: string | null = null;
+      let volunteerName: string = '';
+
+      if (event.volunteerContactId && contactMap.has(event.volunteerContactId)) {
+        const contact = contactMap.get(event.volunteerContactId)!;
+        volunteerEmail = contact.email.toLowerCase();
+        volunteerName = contact.name;
+      }
+
+      if (!volunteerEmail) continue;
+
       const commitment: VolunteerCommitment = {
-        opportunityId: signup.opportunityId,
-        title: opportunity.title,
-        date: opportunity.date,
-        time: opportunity.time,
-        location: opportunity.location,
-        signupDate: format(signup.createdAt, 'MMM d, yyyy'),
+        calendarName: cal.name,
+        date: format(event.startTime, 'yyyy-MM-dd'),
+        startTime: format(event.startTime, 'h:mm a'),
+        endTime: event.endTime ? format(event.endTime, 'h:mm a') : '',
+        location: event.location || '',
       };
 
-      if (!signupsByEmail.has(email)) {
-        signupsByEmail.set(email, []);
+      if (!commitmentsByEmail.has(volunteerEmail)) {
+        commitmentsByEmail.set(volunteerEmail, { name: volunteerName, commitments: [] });
       }
-      signupsByEmail.get(email)!.push(commitment);
+      commitmentsByEmail.get(volunteerEmail)!.commitments.push(commitment);
       result.totalCommitments++;
     }
 
-    result.volunteersWithCommitments = signupsByEmail.size;
+    result.volunteersWithCommitments = commitmentsByEmail.size;
 
-    // Send digest emails
     const emailService = await EmailService.forTenant(tenantId);
     if (!emailService) {
       result.errors.push('Email service not configured');
       return result;
     }
 
-    for (const [email, commitments] of signupsByEmail) {
+    for (const [email, { name, commitments }] of commitmentsByEmail) {
       try {
-        // Sort commitments by date
         commitments.sort((a, b) => a.date.localeCompare(b.date));
 
-        // Generate email content
-        const html = this.generateDigestHtml(tenant, commitments, daysAhead);
+        const html = this.generateDigestHtml(tenant, name, commitments, daysAhead);
         const subject = `Your Volunteer Schedule for the Week - ${tenant.name}`;
 
         await emailService.send({
@@ -140,7 +160,6 @@ export class VolunteerScheduleDigestService {
       }
     }
 
-    // Update last sent timestamp
     await db.update(tenants)
       .set({
         volunteerDigestSettings: {
@@ -153,27 +172,27 @@ export class VolunteerScheduleDigestService {
     return result;
   }
 
-  /**
-   * Generate HTML content for the digest email
-   */
   private static generateDigestHtml(
     tenant: Tenant,
+    volunteerName: string,
     commitments: VolunteerCommitment[],
     daysAhead: number
   ): string {
-    const commitmentsHtml = commitments.map(c => `
+    const greeting = volunteerName ? `Hi ${volunteerName.split(' ')[0]},` : 'Hi there,';
+
+    const commitmentsHtml = commitments.map(c => {
+      const timeDisplay = c.endTime ? `${c.startTime} - ${c.endTime}` : c.startTime;
+      return `
       <tr>
         <td style="padding: 12px; border-bottom: 1px solid #eee;">
-          <strong style="color: #333;">${c.title}</strong><br>
+          <strong style="color: #333;">${c.calendarName}</strong><br>
           <span style="color: #666; font-size: 14px;">
-            ${this.formatDate(c.date)} at ${c.time}
+            ${this.formatDate(c.date)} at ${timeDisplay}
           </span><br>
-          <span style="color: #888; font-size: 13px;">
-            ${c.location}
-          </span>
+          ${c.location ? `<span style="color: #888; font-size: 13px;">${c.location}</span>` : ''}
         </td>
       </tr>
-    `).join('');
+    `}).join('');
 
     return `
       <!DOCTYPE html>
@@ -191,7 +210,7 @@ export class VolunteerScheduleDigestService {
         </div>
         
         <div style="background: #fff; border: 1px solid #eee; border-top: none; border-radius: 0 0 10px 10px; padding: 20px;">
-          <p style="margin-top: 0;">Hi there,</p>
+          <p style="margin-top: 0;">${greeting}</p>
           
           <p>Here's a summary of your upcoming volunteer commitments at <strong>${tenant.name}</strong>:</p>
           
@@ -223,9 +242,6 @@ export class VolunteerScheduleDigestService {
     `;
   }
 
-  /**
-   * Format date for display
-   */
   private static formatDate(dateStr: string): string {
     try {
       const date = parseISO(dateStr);
@@ -235,15 +251,11 @@ export class VolunteerScheduleDigestService {
     }
   }
 
-  /**
-   * Check and send digests for all tenants that are due
-   */
   static async checkAndSendAllDigests(): Promise<DigestResult[]> {
     const now = new Date();
     const currentDayOfWeek = format(now, 'EEEE').toLowerCase() as "sunday" | "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday";
     const currentTime = format(now, 'HH:mm');
 
-    // Get all active tenants with digest enabled
     const allTenants = await db
       .select()
       .from(tenants)
@@ -254,18 +266,15 @@ export class VolunteerScheduleDigestService {
     for (const tenant of allTenants) {
       const settings = tenant.volunteerDigestSettings;
       
-      // Skip if digest not enabled
       if (!settings?.enabled) {
         continue;
       }
 
-      // Check if today is the right day
       const targetDay = settings.dayOfWeek || 'sunday';
       if (currentDayOfWeek !== targetDay) {
         continue;
       }
 
-      // Check if it's within 30 minutes of the send time
       const targetTime = settings.sendTime || '08:00';
       const [targetHour, targetMinute] = targetTime.split(':').map(Number);
       const [currentHour, currentMinute] = currentTime.split(':').map(Number);
@@ -277,7 +286,6 @@ export class VolunteerScheduleDigestService {
         continue;
       }
 
-      // Check if already sent today
       if (settings.lastSentAt) {
         const lastSentDate = format(new Date(settings.lastSentAt), 'yyyy-MM-dd');
         const today = format(now, 'yyyy-MM-dd');
@@ -286,7 +294,6 @@ export class VolunteerScheduleDigestService {
         }
       }
 
-      // Send digest for this tenant
       try {
         const result = await this.sendTenantDigest(tenant.id);
         results.push(result);
@@ -307,9 +314,6 @@ export class VolunteerScheduleDigestService {
     return results;
   }
 
-  /**
-   * Manually trigger digest for a tenant (for testing)
-   */
   static async triggerManualDigest(tenantId: string): Promise<DigestResult> {
     return this.sendTenantDigest(tenantId);
   }
