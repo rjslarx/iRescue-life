@@ -15,6 +15,8 @@ import {
   complianceReminders,
   calendarEvents,
   calendars,
+  adopterHelpRequests,
+  complianceObligations,
 } from '@shared/schema';
 import { eq, and, or, sql, inArray, lt, isNotNull } from 'drizzle-orm';
 import { EmailService } from '../lib/email-service';
@@ -84,6 +86,21 @@ interface CalendarItem {
   location: string | null;
 }
 
+interface HelpRequestItem {
+  adopterName: string;
+  animalName: string | null;
+  message: string;
+  createdAt: string;
+}
+
+interface OverdueObligationItem {
+  adopterName: string;
+  animalName: string;
+  obligationType: string;
+  label: string;
+  contractualDueDate: string;
+}
+
 interface BriefingData {
   tenantName: string;
   date: string;
@@ -92,9 +109,12 @@ interface BriefingData {
   exams: ExamItem[];
   diagnostics: DiagnosticItem[];
   procedures: ProcedureItem[];
-  overdueCare: OverdueCareItem[];
+  shelterOverdueCare: OverdueCareItem[];
+  fosterOverdueCare: OverdueCareItem[];
   complianceAlerts: ComplianceAlert[];
   calendarItems: CalendarItem[];
+  helpRequests: HelpRequestItem[];
+  overdueObligations: OverdueObligationItem[];
 }
 
 async function gatherBriefingData(tenantId: string): Promise<BriefingData | null> {
@@ -354,14 +374,25 @@ async function gatherBriefingData(tenantId: string): Promise<BriefingData | null
       isNotNull(preventativeCareRecords.nextDueDate),
       sql`${preventativeCareRecords.nextDueDate} < ${todayStart}`
     ))
-    .limit(20);
+    .limit(30);
 
-  const overdueCare: OverdueCareItem[] = overdueRows.map(r => ({
-    animalName: r.animalName,
-    animalId: r.animalId,
-    careName: r.careName,
-    nextDueDate: r.nextDueDate?.toISOString().split('T')[0] || '',
-  }));
+  const fosterAnimalIdSet = new Set(fosterAnimalIds);
+  const shelterOverdueCare: OverdueCareItem[] = [];
+  const fosterOverdueCare: OverdueCareItem[] = [];
+
+  for (const r of overdueRows) {
+    const item: OverdueCareItem = {
+      animalName: r.animalName,
+      animalId: r.animalId,
+      careName: r.careName,
+      nextDueDate: r.nextDueDate?.toISOString().split('T')[0] || '',
+    };
+    if (fosterAnimalIdSet.has(r.animalId)) {
+      fosterOverdueCare.push(item);
+    } else {
+      shelterOverdueCare.push(item);
+    }
+  }
 
   const complianceRows = await db
     .select({
@@ -429,6 +460,60 @@ async function gatherBriefingData(tenantId: string): Promise<BriefingData | null
     location: r.location,
   }));
 
+  const helpRequestRows = await db
+    .select({
+      adopterName: adopterHelpRequests.adopterName,
+      animalName: adopterHelpRequests.animalName,
+      message: adopterHelpRequests.message,
+      createdAt: adopterHelpRequests.createdAt,
+    })
+    .from(adopterHelpRequests)
+    .where(and(
+      eq(adopterHelpRequests.tenantId, tenantId),
+      eq(adopterHelpRequests.status, 'pending')
+    ))
+    .limit(20);
+
+  const helpRequests: HelpRequestItem[] = helpRequestRows.map(r => ({
+    adopterName: r.adopterName,
+    animalName: r.animalName,
+    message: r.message,
+    createdAt: r.createdAt.toISOString(),
+  }));
+
+  const overdueObligationRows = await db
+    .select({
+      adopterName: complianceObligations.adopterName,
+      obligationType: complianceObligations.obligationType,
+      label: complianceObligations.label,
+      contractualDueDate: complianceObligations.contractualDueDate,
+      animalId: complianceObligations.animalId,
+    })
+    .from(complianceObligations)
+    .where(and(
+      eq(complianceObligations.tenantId, tenantId),
+      eq(complianceObligations.status, 'overdue')
+    ))
+    .limit(20);
+
+  let obligationAnimalMap = new Map<string, string>();
+  if (overdueObligationRows.length > 0) {
+    const oblAnimalIds = [...new Set(overdueObligationRows.map(r => r.animalId))];
+    const oblAnimalRows = await db
+      .select({ id: animals.id, name: animals.name })
+      .from(animals)
+      .where(inArray(animals.id, oblAnimalIds));
+    obligationAnimalMap = new Map(oblAnimalRows.map(a => [a.id, a.name]));
+  }
+
+  const overdueObligations: OverdueObligationItem[] = overdueObligationRows.map(r => ({
+    adopterName: r.adopterName,
+    animalName: obligationAnimalMap.get(r.animalId) || 'Unknown',
+    obligationType: r.obligationType,
+    label: r.label,
+    contractualDueDate: r.contractualDueDate,
+  }));
+
   return {
     tenantName: tenant.name,
     date: todayStr,
@@ -437,9 +522,12 @@ async function gatherBriefingData(tenantId: string): Promise<BriefingData | null
     exams,
     diagnostics,
     procedures,
-    overdueCare,
+    shelterOverdueCare,
+    fosterOverdueCare,
     complianceAlerts,
     calendarItems,
+    helpRequests,
+    overdueObligations,
   };
 }
 
@@ -470,16 +558,16 @@ function formatDate(dateStr: string): string {
 function renderSection(title: string, icon: string, color: string, badgeColor: string, count: number, rowsHtml: string): string {
   if (count === 0) return '';
   return `
-    <tr><td style="padding: 0 0 16px 0;">
+    <tr><td style="padding: 0 0 12px 0;">
       <table width="100%" cellpadding="0" cellspacing="0" style="border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
         <tr>
-          <td style="background-color: ${color}; padding: 12px 16px;">
+          <td style="background-color: ${color}; padding: 10px 16px;">
             <table width="100%" cellpadding="0" cellspacing="0"><tr>
-              <td style="font-size: 15px; font-weight: 600; color: #1f2937;">
+              <td style="font-size: 14px; font-weight: 600; color: #1f2937;">
                 ${icon} ${title}
               </td>
               <td align="right">
-                <span style="display: inline-block; background-color: ${badgeColor}; color: #fff; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 10px;">
+                <span style="display: inline-block; background-color: ${badgeColor}; color: #fff; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px;">
                   ${count}
                 </span>
               </td>
@@ -503,27 +591,34 @@ function renderRow(cells: string[], isAlt: boolean): string {
   </tr>`;
 }
 
+function renderPillarHeader(title: string, bgColor: string, textColor: string, itemCount: number): string {
+  if (itemCount === 0) return '';
+  return `
+    <tr><td style="padding: 16px 0 8px 0;">
+      <table width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+          <td style="padding: 10px 16px; background-color: ${bgColor}; border-radius: 6px;">
+            <table width="100%" cellpadding="0" cellspacing="0"><tr>
+              <td style="font-size: 16px; font-weight: 700; color: ${textColor}; letter-spacing: 0.5px;">
+                ${title}
+              </td>
+              <td align="right">
+                <span style="font-size: 13px; color: ${textColor}; opacity: 0.8;">
+                  ${itemCount} item${itemCount !== 1 ? 's' : ''}
+                </span>
+              </td>
+            </tr></table>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  `;
+}
+
 function composeHtmlEmail(data: BriefingData): string {
   const dateDisplay = formatDate(data.date);
 
-  let missedRows = '';
-  data.missedFosterMeds.forEach((m, i) => {
-    missedRows += renderRow([
-      `<strong>${escapeHtml(m.animalName)}</strong>`,
-      escapeHtml(m.drugName),
-      escapeHtml(m.fosterName),
-      m.scheduledTime ? escapeHtml(m.scheduledTime) : '--',
-    ], i % 2 === 1);
-  });
-  const missedHeader = data.missedFosterMeds.length > 0
-    ? `<tr style="background-color: #fef2f2;">
-        <td style="padding: 6px 16px; font-size: 12px; font-weight: 600; color: #991b1b; text-transform: uppercase; border-bottom: 1px solid #fecaca;">Animal</td>
-        <td style="padding: 6px 16px; font-size: 12px; font-weight: 600; color: #991b1b; text-transform: uppercase; border-bottom: 1px solid #fecaca;">Medication</td>
-        <td style="padding: 6px 16px; font-size: 12px; font-weight: 600; color: #991b1b; text-transform: uppercase; border-bottom: 1px solid #fecaca;">Foster</td>
-        <td style="padding: 6px 16px; font-size: 12px; font-weight: 600; color: #991b1b; text-transform: uppercase; border-bottom: 1px solid #fecaca;">Time</td>
-      </tr>`
-    : '';
-
+  // --- SHELTER sections ---
   let surgeryRows = '';
   data.surgeries.forEach((s, i) => {
     const label = s.neuterStatus === 'intact' ? 'Spay/Neuter' : 'Surgery';
@@ -561,12 +656,32 @@ function composeHtmlEmail(data: BriefingData): string {
     ], i % 2 === 1);
   });
 
-  let overdueRows = '';
-  data.overdueCare.forEach((o, i) => {
-    overdueRows += renderRow([
+  let shelterOverdueRows = '';
+  data.shelterOverdueCare.forEach((o, i) => {
+    shelterOverdueRows += renderRow([
       `<strong>${escapeHtml(o.animalName)}</strong>`,
       escapeHtml(o.careName),
       o.nextDueDate,
+    ], i % 2 === 1);
+  });
+
+  let calendarRowsHtml = '';
+  data.calendarItems.forEach((e, i) => {
+    calendarRowsHtml += renderRow([
+      `<strong>${escapeHtml(e.title)}</strong>`,
+      formatTime(e.startTime),
+      e.location ? escapeHtml(e.location) : '--',
+    ], i % 2 === 1);
+  });
+
+  // --- FOSTER sections ---
+  let missedRows = '';
+  data.missedFosterMeds.forEach((m, i) => {
+    missedRows += renderRow([
+      `<strong>${escapeHtml(m.animalName)}</strong>`,
+      escapeHtml(m.drugName),
+      escapeHtml(m.fosterName),
+      m.scheduledTime ? escapeHtml(m.scheduledTime) : '--',
     ], i % 2 === 1);
   });
 
@@ -581,28 +696,72 @@ function composeHtmlEmail(data: BriefingData): string {
     ], i % 2 === 1);
   });
 
-  let calendarRowsHtml = '';
-  data.calendarItems.forEach((e, i) => {
-    calendarRowsHtml += renderRow([
-      `<strong>${escapeHtml(e.title)}</strong>`,
-      formatTime(e.startTime),
-      e.location ? escapeHtml(e.location) : '--',
+  let fosterOverdueRows = '';
+  data.fosterOverdueCare.forEach((o, i) => {
+    fosterOverdueRows += renderRow([
+      `<strong>${escapeHtml(o.animalName)}</strong>`,
+      escapeHtml(o.careName),
+      o.nextDueDate,
     ], i % 2 === 1);
   });
 
-  const totalItems = data.missedFosterMeds.length + data.surgeries.length + data.exams.length +
-    data.diagnostics.length + data.procedures.length + data.overdueCare.length +
-    data.complianceAlerts.length + data.calendarItems.length;
+  // --- ADOPTED sections ---
+  let helpRequestRowsHtml = '';
+  data.helpRequests.forEach((h, i) => {
+    const truncatedMsg = h.message.length > 60 ? h.message.substring(0, 57) + '...' : h.message;
+    helpRequestRowsHtml += renderRow([
+      `<strong>${escapeHtml(h.adopterName)}</strong>`,
+      h.animalName ? escapeHtml(h.animalName) : '--',
+      escapeHtml(truncatedMsg),
+    ], i % 2 === 1);
+  });
 
-  const summaryItems: string[] = [];
-  if (data.missedFosterMeds.length > 0) summaryItems.push(`${data.missedFosterMeds.length} missed foster med(s)`);
-  if (data.surgeries.length > 0) summaryItems.push(`${data.surgeries.length} surgery(ies)`);
-  if (data.exams.length > 0) summaryItems.push(`${data.exams.length} exam(s)`);
-  if (data.diagnostics.length > 0) summaryItems.push(`${data.diagnostics.length} diagnostic(s)`);
-  if (data.procedures.length > 0) summaryItems.push(`${data.procedures.length} procedure(s)`);
-  if (data.overdueCare.length > 0) summaryItems.push(`${data.overdueCare.length} overdue care item(s)`);
-  if (data.complianceAlerts.length > 0) summaryItems.push(`${data.complianceAlerts.length} compliance alert(s)`);
-  if (data.calendarItems.length > 0) summaryItems.push(`${data.calendarItems.length} event(s)`);
+  let overdueObligationRowsHtml = '';
+  data.overdueObligations.forEach((o, i) => {
+    const typeLabel = o.obligationType === 'spay_neuter' ? 'Spay/Neuter' : o.label;
+    const isSpayNeuter = o.obligationType === 'spay_neuter';
+    overdueObligationRowsHtml += renderRow([
+      `<strong>${escapeHtml(o.adopterName)}</strong>`,
+      escapeHtml(o.animalName),
+      isSpayNeuter
+        ? `<span style="color: #dc2626; font-weight: 600;">${escapeHtml(typeLabel)}</span>`
+        : escapeHtml(typeLabel),
+      o.contractualDueDate,
+    ], i % 2 === 1);
+  });
+
+  // --- Counts ---
+  const shelterCount = data.surgeries.length + data.exams.length + data.diagnostics.length +
+    data.procedures.length + data.shelterOverdueCare.length + data.calendarItems.length;
+  const fosterCount = data.missedFosterMeds.length + data.complianceAlerts.length + data.fosterOverdueCare.length;
+  const adoptedCount = data.helpRequests.length + data.overdueObligations.length;
+  const totalItems = shelterCount + fosterCount + adoptedCount;
+
+  // --- Summary ---
+  const summaryParts: string[] = [];
+  if (shelterCount > 0) summaryParts.push(`${shelterCount} shelter`);
+  if (fosterCount > 0) summaryParts.push(`${fosterCount} foster`);
+  if (adoptedCount > 0) summaryParts.push(`${adoptedCount} adopted`);
+
+  // --- Shelter pillar HTML ---
+  const shelterSectionsHtml =
+    renderSection('Surgeries Today', '[S]', '#fefce8', '#ca8a04', data.surgeries.length, surgeryRows) +
+    renderSection('Medical Exams Today', '[E]', '#ecfdf5', '#059669', data.exams.length, examRows) +
+    renderSection('Diagnostics & Labs Today', '[D]', '#eff6ff', '#2563eb', data.diagnostics.length, diagRows) +
+    renderSection('Procedures Today', '[P]', '#fdf4ff', '#9333ea', data.procedures.length, procRows) +
+    renderSection('Overdue Preventative Care', '[OD]', '#fff7ed', '#ea580c', data.shelterOverdueCare.length, shelterOverdueRows) +
+    renderSection('Calendar Events Today', '[C]', '#f5f3ff', '#7c3aed', data.calendarItems.length, calendarRowsHtml);
+
+  // --- Foster pillar HTML ---
+  const fosterSectionsHtml =
+    renderSection('Missed Foster Medications (Yesterday)', '[!]', '#fef2f2', '#dc2626', data.missedFosterMeds.length, missedRows) +
+    renderSection('Foster Compliance Alerts', '[!]', '#fef2f2', '#dc2626', data.complianceAlerts.length, complianceRows) +
+    renderSection('Overdue Preventative Care (Foster)', '[OD]', '#fff7ed', '#ea580c', data.fosterOverdueCare.length, fosterOverdueRows);
+
+  // --- Adopted pillar HTML ---
+  const adoptedSectionsHtml =
+    renderSection('Pending Help Requests', '[?]', '#fef2f2', '#dc2626', data.helpRequests.length, helpRequestRowsHtml) +
+    renderSection('Overdue Compliance Obligations', '[!]', '#fff7ed', '#ea580c', data.overdueObligations.length, overdueObligationRowsHtml);
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -635,7 +794,7 @@ function composeHtmlEmail(data: BriefingData): string {
           <p style="margin: 0; font-size: 13px; color: #6b7280; line-height: 1.5;">
             ${totalItems === 0
               ? 'All clear today -- no urgent items.'
-              : `Today's overview: ${summaryItems.join(', ')}.`
+              : `Today's overview: ${summaryParts.join(', ')} item${totalItems !== 1 ? 's' : ''} requiring attention.`
             }
           </p>
         </td></tr>
@@ -643,70 +802,12 @@ function composeHtmlEmail(data: BriefingData): string {
         <!-- Body -->
         <tr><td style="background-color: #ffffff; padding: 24px 32px;">
           <table width="100%" cellpadding="0" cellspacing="0">
-            ${renderSection(
-              'Missed Foster Medications (Yesterday)',
-              '[!]',
-              '#fef2f2',
-              '#dc2626',
-              data.missedFosterMeds.length,
-              missedHeader + missedRows
-            )}
-            ${renderSection(
-              'Surgeries Today',
-              '[S]',
-              '#fefce8',
-              '#d97706',
-              data.surgeries.length,
-              surgeryRows
-            )}
-            ${renderSection(
-              'Medical Exams Today',
-              '[E]',
-              '#f0fdf4',
-              '#16a34a',
-              data.exams.length,
-              examRows
-            )}
-            ${renderSection(
-              'Diagnostics & Labs Today',
-              '[D]',
-              '#eff6ff',
-              '#2563eb',
-              data.diagnostics.length,
-              diagRows
-            )}
-            ${renderSection(
-              'Procedures Today',
-              '[P]',
-              '#fdf4ff',
-              '#9333ea',
-              data.procedures.length,
-              procRows
-            )}
-            ${renderSection(
-              'Overdue Preventative Care',
-              '[OD]',
-              '#fff7ed',
-              '#ea580c',
-              data.overdueCare.length,
-              overdueRows
-            )}
-            ${renderSection(
-              'Foster Compliance Alerts',
-              '[!]',
-              '#fef2f2',
-              '#dc2626',
-              data.complianceAlerts.length,
-              complianceRows
-            )}
-            ${renderSection(
-              'Calendar Events Today',
-              '[C]',
-              '#f5f3ff',
-              '#7c3aed',
-              data.calendarItems.length,
-              calendarRowsHtml
-            )}
+            ${renderPillarHeader('SHELTER', '#e0f2fe', '#0c4a6e', shelterCount)}
+            ${shelterSectionsHtml}
+            ${renderPillarHeader('FOSTER', '#fce7f3', '#831843', fosterCount)}
+            ${fosterSectionsHtml}
+            ${renderPillarHeader('ADOPTED', '#fef3c7', '#78350f', adoptedCount)}
+            ${adoptedSectionsHtml}
             ${totalItems === 0 ? `
             <tr><td style="padding: 32px 0; text-align: center;">
               <p style="font-size: 16px; color: #6b7280;">All clear for today!</p>
@@ -734,74 +835,124 @@ function composePlainTextEmail(data: BriefingData): string {
   lines.push(`${formatDate(data.date)}`);
   lines.push('');
 
-  if (data.missedFosterMeds.length > 0) {
-    lines.push(`--- MISSED FOSTER MEDICATIONS (Yesterday) [${data.missedFosterMeds.length}] ---`);
-    data.missedFosterMeds.forEach(m => {
-      lines.push(`  ${m.animalName} - ${m.drugName} (Foster: ${m.fosterName})${m.scheduledTime ? ` at ${m.scheduledTime}` : ''}`);
-    });
+  const shelterCount = data.surgeries.length + data.exams.length + data.diagnostics.length +
+    data.procedures.length + data.shelterOverdueCare.length + data.calendarItems.length;
+  const fosterCount = data.missedFosterMeds.length + data.complianceAlerts.length + data.fosterOverdueCare.length;
+  const adoptedCount = data.helpRequests.length + data.overdueObligations.length;
+
+  if (shelterCount > 0) {
+    lines.push(`==============================`);
+    lines.push(`  SHELTER (${shelterCount} items)`);
+    lines.push(`==============================`);
     lines.push('');
+
+    if (data.surgeries.length > 0) {
+      lines.push(`--- SURGERIES TODAY [${data.surgeries.length}] ---`);
+      data.surgeries.forEach(s => {
+        lines.push(`  ${s.animalName} - ${s.neuterStatus === 'intact' ? 'Spay/Neuter' : 'Surgery'} (${s.species})`);
+      });
+      lines.push('');
+    }
+
+    if (data.exams.length > 0) {
+      lines.push(`--- MEDICAL EXAMS TODAY [${data.exams.length}] ---`);
+      data.exams.forEach(e => {
+        lines.push(`  ${e.animalName} - ${e.examType} (${e.performedBy})`);
+      });
+      lines.push('');
+    }
+
+    if (data.diagnostics.length > 0) {
+      lines.push(`--- DIAGNOSTICS & LABS TODAY [${data.diagnostics.length}] ---`);
+      data.diagnostics.forEach(d => {
+        lines.push(`  ${d.animalName} - ${d.testName}`);
+      });
+      lines.push('');
+    }
+
+    if (data.procedures.length > 0) {
+      lines.push(`--- PROCEDURES TODAY [${data.procedures.length}] ---`);
+      data.procedures.forEach(p => {
+        lines.push(`  ${p.animalName} - ${p.procedureName}${p.veterinarian ? ` (Dr. ${p.veterinarian})` : ''}`);
+      });
+      lines.push('');
+    }
+
+    if (data.shelterOverdueCare.length > 0) {
+      lines.push(`--- OVERDUE PREVENTATIVE CARE [${data.shelterOverdueCare.length}] ---`);
+      data.shelterOverdueCare.forEach(o => {
+        lines.push(`  ${o.animalName} - ${o.careName} (due: ${o.nextDueDate})`);
+      });
+      lines.push('');
+    }
+
+    if (data.calendarItems.length > 0) {
+      lines.push(`--- CALENDAR EVENTS TODAY [${data.calendarItems.length}] ---`);
+      data.calendarItems.forEach(e => {
+        lines.push(`  ${e.title} at ${formatTime(e.startTime)}${e.location ? ` - ${e.location}` : ''}`);
+      });
+      lines.push('');
+    }
   }
 
-  if (data.surgeries.length > 0) {
-    lines.push(`--- SURGERIES TODAY [${data.surgeries.length}] ---`);
-    data.surgeries.forEach(s => {
-      lines.push(`  ${s.animalName} - ${s.neuterStatus === 'intact' ? 'Spay/Neuter' : 'Surgery'} (${s.species})`);
-    });
+  if (fosterCount > 0) {
+    lines.push(`==============================`);
+    lines.push(`  FOSTER (${fosterCount} items)`);
+    lines.push(`==============================`);
     lines.push('');
+
+    if (data.missedFosterMeds.length > 0) {
+      lines.push(`--- MISSED FOSTER MEDICATIONS (Yesterday) [${data.missedFosterMeds.length}] ---`);
+      data.missedFosterMeds.forEach(m => {
+        lines.push(`  ${m.animalName} - ${m.drugName} (Foster: ${m.fosterName})${m.scheduledTime ? ` at ${m.scheduledTime}` : ''}`);
+      });
+      lines.push('');
+    }
+
+    if (data.complianceAlerts.length > 0) {
+      lines.push(`--- FOSTER COMPLIANCE ALERTS [${data.complianceAlerts.length}] ---`);
+      data.complianceAlerts.forEach(c => {
+        const stateLabel = c.state === 'requires_intervention' ? 'NEEDS INTERVENTION' : 'OVERDUE';
+        lines.push(`  ${c.animalName} - ${c.careName} (Foster: ${c.fosterName}) [${stateLabel}]`);
+      });
+      lines.push('');
+    }
+
+    if (data.fosterOverdueCare.length > 0) {
+      lines.push(`--- OVERDUE PREVENTATIVE CARE (Foster) [${data.fosterOverdueCare.length}] ---`);
+      data.fosterOverdueCare.forEach(o => {
+        lines.push(`  ${o.animalName} - ${o.careName} (due: ${o.nextDueDate})`);
+      });
+      lines.push('');
+    }
   }
 
-  if (data.exams.length > 0) {
-    lines.push(`--- MEDICAL EXAMS TODAY [${data.exams.length}] ---`);
-    data.exams.forEach(e => {
-      lines.push(`  ${e.animalName} - ${e.examType} (${e.performedBy})`);
-    });
+  if (adoptedCount > 0) {
+    lines.push(`==============================`);
+    lines.push(`  ADOPTED (${adoptedCount} items)`);
+    lines.push(`==============================`);
     lines.push('');
+
+    if (data.helpRequests.length > 0) {
+      lines.push(`--- PENDING HELP REQUESTS [${data.helpRequests.length}] ---`);
+      data.helpRequests.forEach(h => {
+        const truncatedMsg = h.message.length > 60 ? h.message.substring(0, 57) + '...' : h.message;
+        lines.push(`  ${h.adopterName}${h.animalName ? ` (${h.animalName})` : ''} - "${truncatedMsg}"`);
+      });
+      lines.push('');
+    }
+
+    if (data.overdueObligations.length > 0) {
+      lines.push(`--- OVERDUE COMPLIANCE OBLIGATIONS [${data.overdueObligations.length}] ---`);
+      data.overdueObligations.forEach(o => {
+        const typeLabel = o.obligationType === 'spay_neuter' ? 'SPAY/NEUTER' : o.label;
+        lines.push(`  ${o.adopterName} - ${o.animalName} - ${typeLabel} (due: ${o.contractualDueDate})`);
+      });
+      lines.push('');
+    }
   }
 
-  if (data.diagnostics.length > 0) {
-    lines.push(`--- DIAGNOSTICS & LABS TODAY [${data.diagnostics.length}] ---`);
-    data.diagnostics.forEach(d => {
-      lines.push(`  ${d.animalName} - ${d.testName}`);
-    });
-    lines.push('');
-  }
-
-  if (data.procedures.length > 0) {
-    lines.push(`--- PROCEDURES TODAY [${data.procedures.length}] ---`);
-    data.procedures.forEach(p => {
-      lines.push(`  ${p.animalName} - ${p.procedureName}${p.veterinarian ? ` (Dr. ${p.veterinarian})` : ''}`);
-    });
-    lines.push('');
-  }
-
-  if (data.overdueCare.length > 0) {
-    lines.push(`--- OVERDUE PREVENTATIVE CARE [${data.overdueCare.length}] ---`);
-    data.overdueCare.forEach(o => {
-      lines.push(`  ${o.animalName} - ${o.careName} (due: ${o.nextDueDate})`);
-    });
-    lines.push('');
-  }
-
-  if (data.complianceAlerts.length > 0) {
-    lines.push(`--- FOSTER COMPLIANCE ALERTS [${data.complianceAlerts.length}] ---`);
-    data.complianceAlerts.forEach(c => {
-      const stateLabel = c.state === 'requires_intervention' ? 'NEEDS INTERVENTION' : 'OVERDUE';
-      lines.push(`  ${c.animalName} - ${c.careName} (Foster: ${c.fosterName}) [${stateLabel}]`);
-    });
-    lines.push('');
-  }
-
-  if (data.calendarItems.length > 0) {
-    lines.push(`--- CALENDAR EVENTS TODAY [${data.calendarItems.length}] ---`);
-    data.calendarItems.forEach(e => {
-      lines.push(`  ${e.title} at ${formatTime(e.startTime)}${e.location ? ` - ${e.location}` : ''}`);
-    });
-    lines.push('');
-  }
-
-  const totalItems = data.missedFosterMeds.length + data.surgeries.length + data.exams.length +
-    data.diagnostics.length + data.procedures.length + data.overdueCare.length +
-    data.complianceAlerts.length + data.calendarItems.length;
+  const totalItems = shelterCount + fosterCount + adoptedCount;
 
   if (totalItems === 0) {
     lines.push('All clear for today! No urgent items or scheduled tasks.');
@@ -857,9 +1008,11 @@ export async function sendDailyBriefingForTenant(tenantId: string): Promise<{ se
     const html = composeHtmlEmail(data);
     const text = composePlainTextEmail(data);
 
-    const totalItems = data.missedFosterMeds.length + data.surgeries.length + data.exams.length +
-      data.diagnostics.length + data.procedures.length + data.overdueCare.length +
-      data.complianceAlerts.length + data.calendarItems.length;
+    const shelterCount = data.surgeries.length + data.exams.length + data.diagnostics.length +
+      data.procedures.length + data.shelterOverdueCare.length + data.calendarItems.length;
+    const fosterCount = data.missedFosterMeds.length + data.complianceAlerts.length + data.fosterOverdueCare.length;
+    const adoptedCount = data.helpRequests.length + data.overdueObligations.length;
+    const totalItems = shelterCount + fosterCount + adoptedCount;
 
     const subject = totalItems > 0
       ? `Daily Briefing: ${totalItems} item${totalItems !== 1 ? 's' : ''} for ${formatDate(data.date)}`
