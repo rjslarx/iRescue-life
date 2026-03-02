@@ -5,7 +5,7 @@ import {
   platformAnnouncements, platformSettings,
   insertTenantSchema, insertFeatureFlagSchema,
   insertPlatformAnnouncementSchema, insertPlatformSettingSchema,
-  applications, donations, volunteerOpportunities
+  applications, donations, volunteerOpportunities, fosterAnimals
 } from '@shared/schema';
 import { requireAuth } from '../middleware/auth';
 import { requirePlatformAdmin } from '../middleware/tenant';
@@ -478,11 +478,41 @@ router.get('/stats', async (req, res, next) => {
       .from(users)
       .where(newUsersWhere);
 
+    const [activeFostersResult] = await db
+      .select({ count: count() })
+      .from(fosterAnimals)
+      .where(eq(fosterAnimals.status, 'active'));
+
+    let mrr = 0;
+    try {
+      if (stripe) {
+        const subscriptions = await stripe.subscriptions.list({
+          status: 'active',
+          limit: 100,
+        });
+        for (const sub of subscriptions.data) {
+          for (const item of sub.items.data) {
+            const amount = item.price?.unit_amount || 0;
+            const interval = item.price?.recurring?.interval;
+            if (interval === 'year') {
+              mrr += Math.round(amount / 12);
+            } else {
+              mrr += amount;
+            }
+          }
+        }
+      }
+    } catch (stripeErr) {
+      console.error('[Platform] Error fetching MRR from Stripe:', stripeErr);
+    }
+
     res.json({
       totalTenants: totalTenantsResult.count,
       activeTenants: activeTenantsResult.count,
       totalUsers: totalUsersResult.count,
       totalAnimals: totalAnimalsResult.count,
+      totalActiveFosters: activeFostersResult.count,
+      mrr,
       recentActivity: {
         newTenantsThisMonth: newTenantsResult.count,
         newUsersThisMonth: newUsersResult.count,
@@ -511,6 +541,8 @@ router.get('/tenants', async (req, res, next) => {
         isActive: tenants.isActive,
         createdAt: tenants.createdAt,
         platformFeePercent: tenants.platformFeePercent,
+        subscriptionStatus: tenants.subscriptionStatus,
+        twilioAccountSidEncrypted: tenants.twilioAccountSidEncrypted,
       })
       .from(tenants)
       .where(sql`${tenants.subdomain} != 'platform'`)
@@ -531,6 +563,8 @@ router.get('/tenants', async (req, res, next) => {
 
         return {
           ...tenant,
+          twilioAccountSidEncrypted: undefined,
+          twilioStatus: tenant.twilioAccountSidEncrypted ? 'connected' : 'not_configured',
           stats: {
             userCount: userCountResult.count,
             animalCount: animalCountResult.count,

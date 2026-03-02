@@ -4,7 +4,7 @@ import { PlatformAdminSidebar } from "@/components/PlatformAdminSidebar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePlatformAdmin } from "@/hooks/usePlatformAdmin";
-import { Building2, Users, PawPrint, Activity } from "lucide-react";
+import { Building2, Users, PawPrint, Activity, Heart, DollarSign } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface PlatformStats {
@@ -12,6 +12,8 @@ interface PlatformStats {
   activeTenants: number;
   totalUsers: number;
   totalAnimals: number;
+  totalActiveFosters: number;
+  mrr: number;
   recentActivity: {
     newTenantsThisMonth: number;
     newUsersThisMonth: number;
@@ -61,9 +63,9 @@ export default function PlatformDashboard() {
                 </div>
               ) : stats ? (
                 <>
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                     <Card data-testid="card-total-tenants">
-                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Total Tenants</CardTitle>
                         <Building2 className="h-4 w-4 text-muted-foreground" />
                       </CardHeader>
@@ -76,7 +78,7 @@ export default function PlatformDashboard() {
                     </Card>
 
                     <Card data-testid="card-total-users">
-                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Total Users</CardTitle>
                         <Users className="h-4 w-4 text-muted-foreground" />
                       </CardHeader>
@@ -89,7 +91,7 @@ export default function PlatformDashboard() {
                     </Card>
 
                     <Card data-testid="card-total-animals">
-                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Total Animals</CardTitle>
                         <PawPrint className="h-4 w-4 text-muted-foreground" />
                       </CardHeader>
@@ -101,8 +103,36 @@ export default function PlatformDashboard() {
                       </CardContent>
                     </Card>
 
+                    <Card data-testid="card-active-fosters">
+                      <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Active Fosters</CardTitle>
+                        <Heart className="h-4 w-4 text-muted-foreground" />
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold" data-testid="stat-active-fosters">{stats.totalActiveFosters}</div>
+                        <p className="text-xs text-muted-foreground">
+                          Animals in foster care
+                        </p>
+                      </CardContent>
+                    </Card>
+
+                    <Card data-testid="card-mrr">
+                      <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Monthly Recurring Revenue</CardTitle>
+                        <DollarSign className="h-4 w-4 text-muted-foreground" />
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold" data-testid="stat-mrr">
+                          ${(stats.mrr / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          From active subscriptions
+                        </p>
+                      </CardContent>
+                    </Card>
+
                     <Card data-testid="card-new-tenants">
-                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">New This Month</CardTitle>
                         <Activity className="h-4 w-4 text-muted-foreground" />
                       </CardHeader>

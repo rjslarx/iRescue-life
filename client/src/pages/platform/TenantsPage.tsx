@@ -15,7 +15,7 @@ import { usePlatformAdmin } from "@/hooks/usePlatformAdmin";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Building2, Users, PawPrint, CheckCircle, XCircle, Plus, Edit, UserCircle, Globe, Send, Loader2, ShieldCheck, ShieldX } from "lucide-react";
+import { Building2, Users, PawPrint, CheckCircle, XCircle, Plus, Edit, UserCircle, Globe, Send, Loader2, ShieldCheck, ShieldX, Phone, CreditCard } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
@@ -29,6 +29,8 @@ interface Tenant {
   isActive: boolean;
   createdAt: string;
   platformFeePercent: number | null;
+  subscriptionStatus: string;
+  twilioStatus: string;
   stats: {
     userCount: number;
     animalCount: number;
@@ -314,6 +316,32 @@ export default function TenantsPage() {
                           {tenant.contactEmail && (
                             <div className="text-muted-foreground">{tenant.contactEmail}</div>
                           )}
+                          <div className="flex items-center gap-2 flex-wrap pt-1">
+                            <Badge
+                              variant={
+                                tenant.subscriptionStatus === 'active' ? 'default' :
+                                tenant.subscriptionStatus === 'trial' ? 'secondary' :
+                                tenant.subscriptionStatus === 'pending' ? 'secondary' : 'destructive'
+                              }
+                              className="text-[10px]"
+                              data-testid={`tenant-subscription-${tenant.subdomain}`}
+                            >
+                              <CreditCard className="h-2.5 w-2.5 mr-1" />
+                              {tenant.subscriptionStatus === 'active' ? 'Active' :
+                               tenant.subscriptionStatus === 'trial' ? 'Trial' :
+                               tenant.subscriptionStatus === 'cancelled' ? 'Cancelled' :
+                               tenant.subscriptionStatus === 'suspended' ? 'Suspended' :
+                               tenant.subscriptionStatus === 'pending' ? 'Pending' : 'Active'}
+                            </Badge>
+                            <Badge
+                              variant={tenant.twilioStatus === 'connected' ? 'default' : 'secondary'}
+                              className="text-[10px]"
+                              data-testid={`tenant-twilio-${tenant.subdomain}`}
+                            >
+                              <Phone className="h-2.5 w-2.5 mr-1" />
+                              {tenant.twilioStatus === 'connected' ? 'SMS Connected' : 'SMS Not Configured'}
+                            </Badge>
+                          </div>
                           <div className="flex items-center gap-4 pt-2">
                             <div className="flex items-center gap-1">
                               <Users className="h-3 w-3 text-muted-foreground" />
