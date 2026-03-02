@@ -87,11 +87,21 @@ export function useSEO(config: SEOConfig) {
       }
     });
 
+    const canonicalLink = document.querySelector('link[rel="canonical"]') as HTMLLinkElement;
+    const originalCanonical = canonicalLink?.getAttribute('href') || '';
+    if (canonicalLink && currentUrl) {
+      canonicalLink.setAttribute('href', currentUrl);
+    }
+
     return () => {
       document.title = originalTitle;
       
       const ownedElements = document.querySelectorAll(`meta[${SEO_OWNER_ATTR}="${currentInstanceId}"]`);
       ownedElements.forEach(el => el.remove());
+
+      if (canonicalLink && originalCanonical) {
+        canonicalLink.setAttribute('href', originalCanonical);
+      }
     };
   }, [config.title, config.description, config.image, config.url, config.type, config.siteName]);
 }

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Switch, Route, Link, Redirect, Router as WouterRouter } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -507,11 +507,21 @@ function DemoPage() {
   );
 }
 
+function useCanonicalUrl() {
+  useEffect(() => {
+    const canonicalLink = document.querySelector('link[rel="canonical"]') as HTMLLinkElement;
+    if (canonicalLink) {
+      canonicalLink.setAttribute('href', window.location.href);
+    }
+  });
+}
+
 function AppContent() {
   usePageTracking();
   useVisitTracking();
   usePWAManifest();
   useTenantBranding();
+  useCanonicalUrl();
   const { basePath } = useTenant();
   
   return (
