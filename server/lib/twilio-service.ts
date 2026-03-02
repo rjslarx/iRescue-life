@@ -353,19 +353,52 @@ export async function identifyFosterByPhone(fromNumber: string, toNumber: string
 
 const SUPPLY_KEYWORD_REGEX = /\b(supply|supplies|need|needs|out of|running low|ran out|can you send|can you bring)\b/i;
 
+function levenshtein(a: string, b: string): number {
+  const m = a.length, n = b.length;
+  const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = a[i - 1] === b[j - 1]
+        ? dp[i - 1][j - 1]
+        : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+    }
+  }
+  return dp[m][n];
+}
+
+const DONE_KEYWORDS = ['DONE', 'YES', 'CONFIRMED'];
+
+function isDoneMatch(input: string): boolean {
+  return DONE_KEYWORDS.includes(input);
+}
+
+function isFuzzyDoneMatch(input: string): boolean {
+  if (input.length < 2 || input.length > 12) return false;
+  for (const keyword of DONE_KEYWORDS) {
+    if (levenshtein(input, keyword) <= 2) return true;
+  }
+  return false;
+}
+
 export async function handleIncomingSms(
   fromNumber: string,
   toNumber: string,
   body: string,
   mediaUrls: string[] = []
-): Promise<{ success: boolean; routedAs?: 'supply_request' | 'foster_update' | null; message?: string }> {
+): Promise<{ success: boolean; routedAs?: 'supply_request' | 'foster_update' | 'medication_confirmed' | 'fuzzy_done_hint' | null; message?: string }> {
   const normalizedBody = body.trim().toUpperCase();
   
-  if (normalizedBody === 'DONE' || normalizedBody === 'YES' || normalizedBody === 'CONFIRMED') {
+  if (isDoneMatch(normalizedBody) || isFuzzyDoneMatch(normalizedBody)) {
     const handled = await handleComplianceConfirmationReply(fromNumber);
     if (handled.success) {
-      return { ...handled, routedAs: null };
+      return { ...handled, routedAs: 'medication_confirmed' };
     }
+  }
+
+  if (!isDoneMatch(normalizedBody) && isFuzzyDoneMatch(normalizedBody)) {
+    return { success: true, routedAs: 'fuzzy_done_hint', message: 'Close match to DONE detected' };
   }
 
   // Identify if the sender is a registered foster parent with an active animal
@@ -724,7 +757,7 @@ async function handleComplianceConfirmationReply(
         .where(and(
           or(...phonePatterns2.map(p => eq(smsMessageLogs.toNumber, p))),
           eq(smsMessageLogs.direction, 'outbound'),
-          eq(smsMessageLogs.messageType, 'reminder'),
+          or(eq(smsMessageLogs.messageType, 'reminder'), eq(smsMessageLogs.messageType, 'foster_nudge')),
           gte(smsMessageLogs.createdAt, fourHoursAgo),
           isNotNull(smsMessageLogs.relatedTaskIds)
         ))

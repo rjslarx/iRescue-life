@@ -22323,9 +22323,12 @@ Submitted: ${new Date().toLocaleString()}
 
       const result = await handleIncomingSms(From, To, Body || '', mediaUrls);
       
-      // Return TwiML response — send friendly auto-reply for routed foster messages
       res.set('Content-Type', 'text/xml');
-      if (result.routedAs === 'supply_request') {
+      if (result.routedAs === 'medication_confirmed') {
+        res.send('<?xml version="1.0" encoding="UTF-8"?><Response><Message>Got it, thanks! Meds confirmed.</Message></Response>');
+      } else if (result.routedAs === 'fuzzy_done_hint') {
+        res.send('<?xml version="1.0" encoding="UTF-8"?><Response><Message>Did you mean DONE? Reply DONE to confirm meds were given.</Message></Response>');
+      } else if (result.routedAs === 'supply_request') {
         res.send('<?xml version="1.0" encoding="UTF-8"?><Response><Message>Got it! Your supply request has been logged. The team will follow up soon.</Message></Response>');
       } else if (result.routedAs === 'foster_update') {
         res.send('<?xml version="1.0" encoding="UTF-8"?><Response><Message>Thanks for the update! Your message has been received by the rescue team.</Message></Response>');
