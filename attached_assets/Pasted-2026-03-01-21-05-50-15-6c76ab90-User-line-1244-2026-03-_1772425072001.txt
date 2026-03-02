@@ -1,0 +1,144 @@
+2026-03-01 21:05:50.15
+6c76ab90
+User
+line: '1244',
+2026-03-01 21:05:50.15
+6c76ab90
+User
+length: 94,
+2026-03-01 21:05:50.15
+6c76ab90
+User
+code: '42601',
+2026-03-01 21:05:50.15
+6c76ab90
+User
+severity: 'ERROR',
+2026-03-01 21:05:50.15
+6c76ab90
+User
+schema: undefined,
+2026-03-01 21:05:50.15
+6c76ab90
+User
+internalPosition: undefined,
+2026-03-01 21:05:50.15
+6c76ab90
+User
+routine: 'scanner_yyerror'
+2026-03-01 21:05:50.15
+6c76ab90
+User
+position: '23',
+2026-03-01 21:05:50.15
+6c76ab90
+User
+constraint: undefined,
+2026-03-01 21:05:50.15
+6c76ab90
+User
+detail: undefined,
+2026-03-01 21:05:50.15
+6c76ab90
+User
+internalQuery: undefined,
+2026-03-01 21:25:27.57
+6c76ab90
+User
+at /home/runner/workspace/node_modules/pg-pool/index.js:45:11
+2026-03-01 21:25:27.57
+6c76ab90
+User
+routine: 'scanner_yyerror'
+2026-03-01 21:25:27.57
+6c76ab90
+User
+severity: 'ERROR',
+2026-03-01 21:25:27.57
+6c76ab90
+User
+file: 'scan.l',
+2026-03-01 21:25:27.57
+6c76ab90
+User
+constraint: undefined,
+2026-03-01 21:25:27.57
+6c76ab90
+User
+internalPosition: undefined,
+2026-03-01 21:25:27.57
+6c76ab90
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-03-01 21:25:27.57
+6c76ab90
+User
+length: 94,
+2026-03-01 21:25:27.57
+6c76ab90
+User
+dataType: undefined,
+2026-03-01 21:25:27.57
+6c76ab90
+User
+code: '42601',
+2026-03-01 21:25:27.57
+6c76ab90
+User
+line: '1244',
+2026-03-01 21:25:27.57
+6c76ab90
+User
+}
+2026-03-01 21:25:27.57
+6c76ab90
+User
+at async file:///home/runner/workspace/dist/index.js:64995:11 {
+2026-03-01 21:25:27.57
+6c76ab90
+User
+[PreventativeCare] Failed to update medicalDueDates cache: error: syntax error at or near "where"
+2026-03-01 21:25:27.57
+6c76ab90
+User
+detail: undefined,
+2026-03-01 21:35:09.68
+6c76ab90
+User
+hint: undefined,
+2026-03-01 21:35:09.68
+6c76ab90
+User
+at /home/runner/workspace/node_modules/pg-pool/index.js:45:11
+2026-03-01 21:35:09.68
+6c76ab90
+User
+[PreventativeCare] Failed to update medicalDueDates cache: error: syntax error at or near "where"
+2026-03-01 21:35:09.68
+6c76ab90
+User
+schema: undefined,
+2026-03-01 21:35:09.68
+6c76ab90
+User
+column: undefined,
+2026-03-01 21:35:09.68
+6c76ab90
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-03-01 21:35:09.68
+6c76ab90
+User
+table: undefined,
+2026-03-01 21:35:09.68
+6c76ab90
+User
+internalPosition: undefined,
+2026-03-01 21:35:09.68
+6c76ab90
+User
+at async file:///home/runner/workspace/dist/index.js:64995:11 {
+2026-03-01 21:35:09.68
+6c76ab90
+User
+length: 94,

@@ -32664,10 +32664,12 @@ Email: ${application.applicantEmail || ''}`
             }
           }
 
-          await db
-            .update(animals)
-            .set({ medicalDueDates: updatedDueDates })
-            .where(eq(animals.id, data.animalId));
+          if (updatedDueDates && typeof updatedDueDates === 'object' && Object.keys(updatedDueDates).length > 0) {
+            await db
+              .update(animals)
+              .set({ medicalDueDates: updatedDueDates })
+              .where(eq(animals.id, data.animalId));
+          }
         } catch (cacheError) {
           console.error('[PreventativeCare] Failed to update medicalDueDates cache:', cacheError);
         }
@@ -32819,7 +32821,9 @@ Email: ${application.applicantEmail || ''}`
             .where(eq(animals.id, animalId))
             .limit(1);
           const merged = { ...((existingAnimal?.medicalDueDates as any) || {}), ...dueDates };
-          await db.update(animals).set({ medicalDueDates: merged }).where(eq(animals.id, animalId));
+          if (merged && typeof merged === 'object' && Object.keys(merged).length > 0) {
+            await db.update(animals).set({ medicalDueDates: merged }).where(eq(animals.id, animalId));
+          }
         }
       } catch (cacheError) {
         console.error('[PreventativeCare] Failed to update medicalDueDates cache (batch):', cacheError);
@@ -33060,7 +33064,9 @@ Email: ${application.applicantEmail || ''}`
             .where(eq(animals.id, animalId))
             .limit(1);
           const merged = { ...((existingAnimal?.medicalDueDates as any) || {}), ...protocolDueDates };
-          await db.update(animals).set({ medicalDueDates: merged }).where(eq(animals.id, animalId));
+          if (merged && typeof merged === 'object' && Object.keys(merged).length > 0) {
+            await db.update(animals).set({ medicalDueDates: merged }).where(eq(animals.id, animalId));
+          }
         }
       } catch (cacheError) {
         console.error('[PreventativeCare] Failed to update medicalDueDates cache (protocol):', cacheError);

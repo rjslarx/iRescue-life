@@ -234,7 +234,9 @@ export async function applyPuppyProtocol(
           .where(eq(animals.id, animalId))
           .limit(1);
         const merged = { ...((existingAnimal?.medicalDueDates as any) || {}), ...dueDateUpdates };
-        await db.update(animals).set({ medicalDueDates: merged }).where(eq(animals.id, animalId));
+        if (merged && typeof merged === 'object' && Object.keys(merged).length > 0) {
+          await db.update(animals).set({ medicalDueDates: merged }).where(eq(animals.id, animalId));
+        }
       }
     } catch (cacheError) {
       console.error('[PuppyProtocol] Failed to update medicalDueDates cache:', cacheError);
