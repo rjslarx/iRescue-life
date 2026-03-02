@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, Edit, Trash2, GripVertical, Save, FileText, MessageSquare, Download, AlertTriangle } from "lucide-react";
+import { Plus, Edit, Trash2, GripVertical, Save, FileText, MessageSquare, Download, AlertTriangle, Filter } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   DndContext,
@@ -110,6 +110,12 @@ function SortableFieldItem({
           <Badge variant="outline" className="text-xs capitalize">
             {field.fieldType}
           </Badge>
+          {field.speciesFilter && field.speciesFilter !== 'all' && (
+            <Badge variant="secondary" className="text-xs">
+              <Filter className="w-3 h-3 mr-1" />
+              {field.speciesFilter}
+            </Badge>
+          )}
         </div>
         {field.helpText && (
           <p className="text-sm text-muted-foreground">{field.helpText}</p>
@@ -151,6 +157,18 @@ function SortableFieldItem({
   );
 }
 
+const SPECIES_FILTER_OPTIONS = [
+  { value: "all", label: "All Species" },
+  { value: "Dog", label: "Dog" },
+  { value: "Cat", label: "Cat" },
+  { value: "Rabbit", label: "Rabbit" },
+  { value: "Small & Furry", label: "Small & Furry" },
+  { value: "Horse", label: "Horse" },
+  { value: "Bird", label: "Bird" },
+  { value: "Scales, Fins & Other", label: "Scales, Fins & Other" },
+  { value: "Barnyard", label: "Barnyard" },
+];
+
 const formFieldSchema = z.object({
   label: z.string().min(1, "Label is required"),
   fieldType: z.enum(['text', 'textarea', 'select', 'radio', 'checkbox', 'photo']),
@@ -160,6 +178,7 @@ const formFieldSchema = z.object({
   helpText: z.string().optional(),
   textAbove: z.string().optional(),
   textBelow: z.string().optional(),
+  speciesFilter: z.string().default("all"),
   order: z.number().default(0),
 });
 
@@ -237,6 +256,7 @@ export default function AdoptionFormSettingsPage() {
       helpText: "",
       textAbove: "",
       textBelow: "",
+      speciesFilter: "all",
       order: data?.fields?.length || 0,
     },
   });
@@ -355,6 +375,7 @@ export default function AdoptionFormSettingsPage() {
         helpText: field.helpText || "",
         textAbove: field.textAbove || "",
         textBelow: field.textBelow || "",
+        speciesFilter: field.speciesFilter || "all",
         order: field.order,
       });
     } else {
@@ -368,6 +389,7 @@ export default function AdoptionFormSettingsPage() {
         helpText: "",
         textAbove: "",
         textBelow: "",
+        speciesFilter: "all",
         order: data?.fields?.length || 0,
       });
     }
@@ -535,6 +557,34 @@ export default function AdoptionFormSettingsPage() {
                     </Select>
                     <FormDescription>
                       How applicants will answer this question
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="speciesFilter"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Show For Species</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value || "all"}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-species-filter">
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {SPECIES_FILTER_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>
+                      Choose which species this question applies to, or "All Species" to show it on every application
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

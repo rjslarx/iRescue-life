@@ -53,9 +53,19 @@ export function PublicAdoptionDialog({ animal, open, onOpenChange }: PublicAdopt
   const { tenant } = useTenant();
   const { gclid, clearGclid } = useGoogleClickId();
 
-  // Load custom form fields
+  const speciesParam = animal?.species || '';
   const { data: customFieldsData } = useQuery<{ fields: AdoptionFormField[] }>({
-    queryKey: ['/api/adoption-form-fields'],
+    queryKey: ['/api/adoption-form-fields', { species: speciesParam }],
+    queryFn: async () => {
+      const baseUrl = speciesParam
+        ? `/api/adoption-form-fields?species=${encodeURIComponent(speciesParam)}`
+        : '/api/adoption-form-fields';
+      const url = buildTenantUrl(baseUrl);
+      const headers = getTenantHeaders();
+      const res = await fetch(url, { credentials: 'include', headers });
+      if (!res.ok) throw new Error('Failed to load form fields');
+      return res.json();
+    },
   });
 
   // Load form intro text

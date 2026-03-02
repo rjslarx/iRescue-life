@@ -728,6 +728,7 @@ export const adoptionFormFields = pgTable("adoption_form_fields", {
   textAbove: text("text_above"), // Custom text displayed above this question
   textBelow: text("text_below"), // Custom text displayed below this question
   order: integer("order").notNull().default(0), // Display order
+  speciesFilter: text("species_filter").notNull().default("all"),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),

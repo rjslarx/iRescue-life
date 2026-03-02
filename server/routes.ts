@@ -13347,7 +13347,23 @@ ${renderedHtml}
   app.get('/api/adoption-form-fields', requireTenant, async (req, res, next) => {
     try {
       const { adoptionFormFields } = await import('@shared/schema');
+      const { or } = await import('drizzle-orm');
       
+      const speciesParam = req.query.species as string | undefined;
+      
+      const conditions = [
+        eq(adoptionFormFields.tenantId, req.tenant!.id),
+        eq(adoptionFormFields.isActive, true),
+      ];
+      
+      if (speciesParam) {
+        conditions.push(
+          or(
+            eq(adoptionFormFields.speciesFilter, 'all'),
+            eq(adoptionFormFields.speciesFilter, speciesParam)
+          )!
+        );
+      }
       
       const fields = await db.select({
         id: adoptionFormFields.id,
@@ -13361,13 +13377,11 @@ ${renderedHtml}
         textAbove: adoptionFormFields.textAbove,
         textBelow: adoptionFormFields.textBelow,
         order: adoptionFormFields.order,
+        speciesFilter: adoptionFormFields.speciesFilter,
         isActive: adoptionFormFields.isActive,
       })
         .from(adoptionFormFields)
-        .where(and(
-          eq(adoptionFormFields.tenantId, req.tenant!.id),
-          eq(adoptionFormFields.isActive, true)
-        ))
+        .where(and(...conditions))
         .orderBy(adoptionFormFields.order);
       
       res.json({ fields });
@@ -13416,6 +13430,7 @@ ${renderedHtml}
         textAbove: z.string().nullable().optional(),
         textBelow: z.string().nullable().optional(),
         order: z.number().optional(),
+        speciesFilter: z.string().optional(),
         isActive: z.boolean().optional(),
       });
       
@@ -13500,6 +13515,7 @@ ${renderedHtml}
         textAbove: resolveTemplatePlaceholders(f.textAbove, tenantName) || null,
         textBelow: resolveTemplatePlaceholders(f.textBelow, tenantName) || null,
         order: f.order,
+        speciesFilter: f.speciesFilter || 'all',
         isActive: true,
       }));
 

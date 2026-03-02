@@ -19,7 +19,7 @@ Design principles prioritize mobile-first responsiveness, WCAG accessibility, an
 Multi-tenancy is achieved through `tenant_id` foreign keys in a single PostgreSQL database, supporting hybrid URLs. Authentication employs email/password with bcrypt, Express sessions, JWTs, token-based password reset, user invitation, and TOTP MFA for platform administrators. A tenant-scoped Role-Based Access Control (RBAC) system allows for dynamic role switching.
 
 Core functionalities include:
-- Comprehensive animal management, Kanban-workflow-driven adoption application pipelines, and financial management with Stripe integration.
+- Comprehensive animal management, Kanban-workflow-driven adoption application pipelines, and financial management with Stripe integration. Adoption form fields support a `speciesFilter` column (`all`, `Dog`, `Cat`, etc.) enabling species-specific questions — the public adoption dialog filters fields by the animal's species, and the admin Form Settings page includes a "Show For Species" dropdown per question.
 - Contact management, "Happy Tails" success stories, supply registry, expenditure tracking, event and volunteer coordination.
 - Medical records management, including a medical pipeline dashboard and preventative care backfill, alongside document management.
 - A native e-signature system for contracts, featuring custom templates and legally verifiable PDF generation.
