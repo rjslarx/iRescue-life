@@ -34509,7 +34509,7 @@ Email: ${application.applicantEmail || ''}`
         .from(globalMedicalRecordRolePermissions)
         .where(eq(globalMedicalRecordRolePermissions.tenantId, req.tenant!.id));
 
-      res.json({ globalPermissions: permissions });
+      res.json({ permissions: permissions });
     } catch (error) {
       next(error);
     }
