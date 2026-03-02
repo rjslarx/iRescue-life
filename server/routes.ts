@@ -1429,6 +1429,7 @@ Crawl-delay: 1
       }
       next(error);
     }
+  });
 
   /**
    * POST /api/platform/login
@@ -1559,7 +1560,6 @@ Crawl-delay: 1
         error: error.message || 'Login failed' 
       });
     }
-  });
   });
 
   /**
