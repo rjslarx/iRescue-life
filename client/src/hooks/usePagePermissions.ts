@@ -21,8 +21,8 @@ interface UserPagePermission {
 const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
   volunteer: ['calendar', 'volunteers', 'animals', 'tutorials', 'my-account'],
   foster: ['my-fosters', 'animals', 'tutorials', 'kennels', 'my-account'],
-  staff: ['dashboard', 'animals', 'applications', 'foster-management', 'volunteers', 'calendar', 'kennels', 'medical-tasks', 'tutorials', 'my-account'],
-  board_member: ['dashboard', 'animals', 'applications', 'foster-management', 'volunteers', 'calendar', 'finance', 'grants', 'donors', 'analytics', 'reports', 'kennels', 'medical-tasks', 'tutorials', 'my-account'],
+  staff: ['dashboard', 'animals', 'applications', 'foster-management', 'volunteers', 'calendar', 'kennels', 'medical-tasks', 'daily-roster', 'tutorials', 'my-account'],
+  board_member: ['dashboard', 'animals', 'applications', 'foster-management', 'volunteers', 'calendar', 'finance', 'grants', 'donors', 'analytics', 'reports', 'kennels', 'medical-tasks', 'daily-roster', 'tutorials', 'my-account'],
 };
 
 /**

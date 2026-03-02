@@ -170,6 +170,12 @@ export async function seedDefaultPagePermissions(tenantId: string) {
       description: 'Foster parent view of assigned animals and medical information',
       allowedRoles: ['admin', 'board_member', 'staff', 'foster'],
     },
+    {
+      pageId: 'daily-roster',
+      displayName: 'Daily Roster',
+      description: 'View and complete daily medical roster tasks',
+      allowedRoles: ['admin', 'board_member', 'staff'],
+    },
   ];
 
   try {
@@ -222,6 +228,12 @@ const NEW_PAGE_PERMISSIONS = [
     displayName: 'Communications Switchboard',
     description: 'Monitor all outbound SMS and email communications with scheduling controls',
     allowedRoles: ['admin'] as ('admin' | 'board_member' | 'staff' | 'foster' | 'volunteer')[],
+  },
+  {
+    pageId: 'daily-roster',
+    displayName: 'Daily Roster',
+    description: 'View and complete daily medical roster tasks',
+    allowedRoles: ['admin', 'board_member', 'staff'] as ('admin' | 'board_member' | 'staff' | 'foster' | 'volunteer')[],
   },
 ];
 
