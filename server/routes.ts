@@ -3865,6 +3865,8 @@ Crawl-delay: 1
         medicalExams,
         medicalDoses,
         medicalPrescriptions,
+        medicationTasks,
+        medicationPlans,
         fosterAnimals,
         users,
         complianceReminders,
@@ -4241,6 +4243,75 @@ Crawl-delay: 1
         }
       }
 
+      // 6b. Missed foster medication tasks from yesterday
+      const yesterdayStart = new Date(todayStart);
+      yesterdayStart.setDate(yesterdayStart.getDate() - 1);
+      const yesterdayEnd = new Date(todayStart);
+      yesterdayEnd.setMilliseconds(-1);
+      const yesterdayStr = yesterdayStart.toISOString().split('T')[0];
+
+      const missedMedTasks = await db
+        .select({
+          animalId: medicationTasks.animalId,
+          animalName: animals.name,
+          drugName: medicationPlans.drugName,
+          fosterName: users.fullName,
+          scheduledTime: medicationTasks.scheduledTime,
+        })
+        .from(medicationTasks)
+        .innerJoin(medicationPlans, eq(medicationTasks.planId, medicationPlans.id))
+        .innerJoin(animals, eq(medicationTasks.animalId, animals.id))
+        .innerJoin(fosterAnimals, and(
+          eq(fosterAnimals.animalId, animals.id),
+          eq(fosterAnimals.tenantId, req.tenant!.id),
+          eq(fosterAnimals.status, 'active')
+        ))
+        .innerJoin(users, eq(users.id, fosterAnimals.fosterId))
+        .where(and(
+          eq(medicationTasks.tenantId, req.tenant!.id),
+          eq(medicationTasks.status, 'pending'),
+          eq(medicationTasks.scheduledDate, yesterdayStr)
+        ));
+
+      const missedMedDoses = await db
+        .select({
+          animalId: animals.id,
+          animalName: animals.name,
+          drugName: medicalPrescriptions.medicationName,
+          fosterName: users.fullName,
+        })
+        .from(medicalDoses)
+        .innerJoin(medicalPrescriptions, eq(medicalDoses.prescriptionId, medicalPrescriptions.id))
+        .innerJoin(animals, eq(medicalPrescriptions.animalId, animals.id))
+        .innerJoin(fosterAnimals, and(
+          eq(fosterAnimals.animalId, animals.id),
+          eq(fosterAnimals.tenantId, req.tenant!.id),
+          eq(fosterAnimals.status, 'active')
+        ))
+        .innerJoin(users, eq(users.id, fosterAnimals.fosterId))
+        .where(and(
+          eq(medicalDoses.tenantId, req.tenant!.id),
+          eq(medicalDoses.status, 'due'),
+          gte(medicalDoses.dueDate, yesterdayStart),
+          lte(medicalDoses.dueDate, yesterdayEnd)
+        ));
+
+      const seenMissedMeds = new Set<string>();
+      const missedFosterMeds: Array<{ animalId: string; animalName: string; drugName: string; fosterName: string; scheduledTime?: string }> = [];
+      for (const item of [...missedMedTasks, ...missedMedDoses]) {
+        const key = `${item.animalId}|${item.drugName}`;
+        if (!seenMissedMeds.has(key)) {
+          seenMissedMeds.add(key);
+          missedFosterMeds.push({
+            animalId: item.animalId,
+            animalName: item.animalName,
+            drugName: item.drugName,
+            fosterName: item.fosterName || 'Unknown',
+            scheduledTime: 'scheduledTime' in item ? item.scheduledTime : undefined,
+          });
+        }
+      }
+
       // 7. Bio/photo follow-ups: pending bio_photo compliance reminders
       const bioPhotoReminders = await db
         .select({
@@ -4342,6 +4413,7 @@ Crawl-delay: 1
           vetEvents: vetEventsToday,
           overdue: overdueData,
           fosterNonCompliance,
+          missedFosterMeds,
           fosterBioPhotoFollowUps,
           adopterConfirmationsPendingReview: pendingConfirmationsRaw,
           adopterObligationsPendingReview: pendingObligationsRaw,
@@ -4355,7 +4427,7 @@ Crawl-delay: 1
           vetEvents: vetEventsTomorrow,
         },
         summary: {
-          urgentCount: surgeriesToday.length + transportsToday.length + overdueData.length + fosterNonCompliance.length + pendingObligationsRaw.length,
+          urgentCount: surgeriesToday.length + transportsToday.length + overdueData.length + fosterNonCompliance.length + missedFosterMeds.length + pendingObligationsRaw.length,
           medicalTodayCount: medicalToday.length,
           medicalTomorrowCount: medicalTomorrow.length,
           calendarTodayCount: calendarToday.length,

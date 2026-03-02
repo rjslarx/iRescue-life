@@ -66,6 +66,27 @@ export function initializeScheduler() {
 
   console.log(`✓ Medical reminders scheduled for: ${medicalReminderSchedule} (UTC)`);
 
+  const dailyBriefingEmailSchedule = process.env.DAILY_BRIEFING_EMAIL_SCHEDULE || "0 7 * * *";
+  cron.schedule(dailyBriefingEmailSchedule, async () => {
+    console.log("📋 Running daily briefing emails...");
+    try {
+      const { sendDailyBriefingForAllTenants } = await import("../services/daily-briefing-email");
+      const result = await sendDailyBriefingForAllTenants();
+      if (result.sent > 0) {
+        console.log(`✓ Daily briefing: ${result.sent} email(s) sent`);
+      }
+      if (result.errors.length > 0) {
+        console.warn(`⚠️ Daily briefing errors: ${result.errors.slice(0, 5).join('; ')}${result.errors.length > 5 ? ` (+${result.errors.length - 5} more)` : ''}`);
+      }
+    } catch (error) {
+      console.error(`❌ Daily briefing emails failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }, {
+    timezone: "UTC"
+  });
+
+  console.log(`✓ Daily briefing email scheduled for: ${dailyBriefingEmailSchedule} (UTC)`);
+
   // Schedule onboarding emails daily at 10:00 AM UTC
   // "0 10 * * *" means: at minute 0, hour 10, every day
   // This sends Day 2 follow-up emails to encourage engagement

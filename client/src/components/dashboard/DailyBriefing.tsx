@@ -68,6 +68,14 @@ interface VetEvent {
   animalId: string;
 }
 
+interface MissedFosterMed {
+  animalId: string;
+  animalName: string;
+  drugName: string;
+  fosterName: string;
+  scheduledTime?: string;
+}
+
 interface FosterNonComplianceAlert {
   animalId: string;
   animalName: string;
@@ -118,6 +126,7 @@ interface DailyBriefingData {
     calendar: CalendarEvent[];
     vetEvents: VetEvent[];
     overdue: MedicalTask[];
+    missedFosterMeds?: MissedFosterMed[];
     fosterNonCompliance?: FosterNonComplianceAlert[];
     fosterBioPhotoFollowUps?: FosterBioPhotoFollowUp[];
     adopterConfirmationsPendingReview?: AdopterConfirmationPendingReview[];
@@ -186,6 +195,7 @@ export function DailyBriefing() {
     );
   }
 
+  const hasMissedFosterMeds = (data?.today.missedFosterMeds?.length ?? 0) > 0;
   const hasFosterNonCompliance = (data?.today.fosterNonCompliance?.length ?? 0) > 0;
   const hasFosterBioPhoto = (data?.today.fosterBioPhotoFollowUps?.length ?? 0) > 0;
   const hasAdopterObligations = (data?.today.adopterObligationsPendingReview?.length ?? 0) > 0;
@@ -196,6 +206,7 @@ export function DailyBriefing() {
     data.today.surgeries.length > 0 || 
     data.today.transports.length > 0 || 
     data.today.overdue.length > 0 ||
+    hasMissedFosterMeds ||
     hasFosterNonCompliance ||
     hasAdopterObligations
   );
@@ -297,6 +308,27 @@ export function DailyBriefing() {
                             </p>
                             <p className="text-xs text-muted-foreground truncate">
                               Adopter compliance verification needed
+                            </p>
+                          </div>
+                          <ChevronRight className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                        </div>
+                      </Link>
+                    ))}
+                    {data?.today.missedFosterMeds?.map((med, idx) => (
+                      <Link
+                        key={`missed-med-${med.animalId}-${idx}`}
+                        href={`/dashboard/animals/${med.animalId}/medical`}
+                        className="block"
+                        data-testid={`link-missed-foster-med-${med.animalId}-${idx}`}
+                      >
+                        <div className="flex items-center gap-2 p-2 rounded-md bg-destructive/10 hover-elevate cursor-pointer">
+                          <Pill className="h-3 w-3 text-destructive flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">
+                              Missed: {med.animalName} - {med.drugName}
+                            </p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              Foster: {med.fosterName}{med.scheduledTime ? ` at ${med.scheduledTime}` : ''}
                             </p>
                           </div>
                           <ChevronRight className="h-3 w-3 text-muted-foreground flex-shrink-0" />
