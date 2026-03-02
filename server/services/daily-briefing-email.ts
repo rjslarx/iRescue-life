@@ -17,6 +17,8 @@ import {
   calendars,
   adopterHelpRequests,
   complianceObligations,
+  fosterUpdates,
+  fosterPhotos,
 } from '@shared/schema';
 import { eq, and, or, sql, inArray, lt, isNotNull } from 'drizzle-orm';
 import { EmailService } from '../lib/email-service';
@@ -101,6 +103,20 @@ interface OverdueObligationItem {
   contractualDueDate: string;
 }
 
+interface FosterUpdateItem {
+  animalName: string;
+  fosterName: string;
+  updateType: string;
+  priority: string;
+  description: string;
+}
+
+interface FosterPhotoItem {
+  animalName: string;
+  fosterName: string;
+  caption: string | null;
+}
+
 interface BriefingData {
   tenantName: string;
   date: string;
@@ -115,6 +131,8 @@ interface BriefingData {
   calendarItems: CalendarItem[];
   helpRequests: HelpRequestItem[];
   overdueObligations: OverdueObligationItem[];
+  recentFosterUpdates: FosterUpdateItem[];
+  recentFosterPhotos: FosterPhotoItem[];
 }
 
 async function gatherBriefingData(tenantId: string): Promise<BriefingData | null> {
@@ -514,6 +532,81 @@ async function gatherBriefingData(tenantId: string): Promise<BriefingData | null
     contractualDueDate: r.contractualDueDate,
   }));
 
+  const yesterdayStartTime = new Date(yesterdayStr + 'T00:00:00.000Z');
+  const yesterdayEndTime = new Date(yesterdayStr + 'T23:59:59.999Z');
+
+  const fosterUpdateRows = await db
+    .select({
+      animalId: fosterUpdates.animalId,
+      fosterId: fosterUpdates.fosterId,
+      updateType: fosterUpdates.updateType,
+      priority: fosterUpdates.priority,
+      description: fosterUpdates.description,
+    })
+    .from(fosterUpdates)
+    .where(and(
+      eq(fosterUpdates.tenantId, tenantId),
+      sql`${fosterUpdates.createdAt} >= ${yesterdayStartTime}`,
+      sql`${fosterUpdates.createdAt} <= ${yesterdayEndTime}`
+    ))
+    .limit(20);
+
+  const fosterPhotoRows = await db
+    .select({
+      animalId: fosterPhotos.animalId,
+      fosterId: fosterPhotos.fosterId,
+      caption: fosterPhotos.caption,
+    })
+    .from(fosterPhotos)
+    .where(and(
+      eq(fosterPhotos.tenantId, tenantId),
+      sql`${fosterPhotos.createdAt} >= ${yesterdayStartTime}`,
+      sql`${fosterPhotos.createdAt} <= ${yesterdayEndTime}`
+    ))
+    .limit(20);
+
+  const allFosterActivityAnimalIds = [...new Set([
+    ...fosterUpdateRows.map(r => r.animalId),
+    ...fosterPhotoRows.map(r => r.animalId),
+  ])];
+  const allFosterActivityUserIds = [...new Set([
+    ...fosterUpdateRows.map(r => r.fosterId),
+    ...fosterPhotoRows.map(r => r.fosterId),
+  ])];
+
+  let fosterActivityAnimalMap = new Map<string, string>();
+  let fosterActivityUserMap = new Map<string, string>();
+
+  if (allFosterActivityAnimalIds.length > 0) {
+    const faAnimals = await db
+      .select({ id: animals.id, name: animals.name })
+      .from(animals)
+      .where(inArray(animals.id, allFosterActivityAnimalIds));
+    fosterActivityAnimalMap = new Map(faAnimals.map(a => [a.id, a.name]));
+  }
+
+  if (allFosterActivityUserIds.length > 0) {
+    const faUsers = await db
+      .select({ id: users.id, fullName: users.fullName })
+      .from(users)
+      .where(inArray(users.id, allFosterActivityUserIds));
+    fosterActivityUserMap = new Map(faUsers.map(u => [u.id, u.fullName || 'Unknown']));
+  }
+
+  const recentFosterUpdates: FosterUpdateItem[] = fosterUpdateRows.map(r => ({
+    animalName: fosterActivityAnimalMap.get(r.animalId) || 'Unknown',
+    fosterName: fosterActivityUserMap.get(r.fosterId) || 'Unknown',
+    updateType: r.updateType,
+    priority: r.priority,
+    description: r.description,
+  }));
+
+  const recentFosterPhotos: FosterPhotoItem[] = fosterPhotoRows.map(r => ({
+    animalName: fosterActivityAnimalMap.get(r.animalId) || 'Unknown',
+    fosterName: fosterActivityUserMap.get(r.fosterId) || 'Unknown',
+    caption: r.caption,
+  }));
+
   return {
     tenantName: tenant.name,
     date: todayStr,
@@ -528,6 +621,8 @@ async function gatherBriefingData(tenantId: string): Promise<BriefingData | null
     calendarItems,
     helpRequests,
     overdueObligations,
+    recentFosterUpdates,
+    recentFosterPhotos,
   };
 }
 
@@ -705,6 +800,36 @@ function composeHtmlEmail(data: BriefingData): string {
     ], i % 2 === 1);
   });
 
+  const updateTypeLabels: Record<string, string> = {
+    medical_concern: 'Medical Concern',
+    behavioral_note: 'Behavioral Note',
+    general_update: 'General Update',
+    photo_update: 'Photo Update',
+  };
+
+  let fosterUpdateRows = '';
+  data.recentFosterUpdates.forEach((u, i) => {
+    const typeLabel = updateTypeLabels[u.updateType] || u.updateType;
+    const truncDesc = u.description.length > 80 ? u.description.substring(0, 77) + '...' : u.description;
+    const isUrgent = u.priority === 'urgent' || u.priority === 'high' || u.updateType === 'medical_concern';
+    const priorityStyle = isUrgent ? ' style="color: #dc2626; font-weight: 600;"' : '';
+    fosterUpdateRows += renderRow([
+      `<strong>${escapeHtml(u.animalName)}</strong>`,
+      escapeHtml(u.fosterName),
+      `<span${priorityStyle}>${escapeHtml(typeLabel)}</span>`,
+      escapeHtml(truncDesc),
+    ], i % 2 === 1);
+  });
+
+  let fosterPhotoRowsHtml = '';
+  data.recentFosterPhotos.forEach((p, i) => {
+    fosterPhotoRowsHtml += renderRow([
+      `<strong>${escapeHtml(p.animalName)}</strong>`,
+      escapeHtml(p.fosterName),
+      p.caption ? escapeHtml(p.caption.length > 60 ? p.caption.substring(0, 57) + '...' : p.caption) : '--',
+    ], i % 2 === 1);
+  });
+
   // --- ADOPTED sections ---
   let helpRequestRowsHtml = '';
   data.helpRequests.forEach((h, i) => {
@@ -733,7 +858,8 @@ function composeHtmlEmail(data: BriefingData): string {
   // --- Counts ---
   const shelterCount = data.surgeries.length + data.exams.length + data.diagnostics.length +
     data.procedures.length + data.shelterOverdueCare.length + data.calendarItems.length;
-  const fosterCount = data.missedFosterMeds.length + data.complianceAlerts.length + data.fosterOverdueCare.length;
+  const fosterCount = data.missedFosterMeds.length + data.complianceAlerts.length + data.fosterOverdueCare.length +
+    data.recentFosterUpdates.length + data.recentFosterPhotos.length;
   const adoptedCount = data.helpRequests.length + data.overdueObligations.length;
   const totalItems = shelterCount + fosterCount + adoptedCount;
 
@@ -756,7 +882,9 @@ function composeHtmlEmail(data: BriefingData): string {
   const fosterSectionsHtml =
     renderSection('Missed Foster Medications (Yesterday)', '[!]', '#fef2f2', '#dc2626', data.missedFosterMeds.length, missedRows) +
     renderSection('Foster Compliance Alerts', '[!]', '#fef2f2', '#dc2626', data.complianceAlerts.length, complianceRows) +
-    renderSection('Overdue Preventative Care (Foster)', '[OD]', '#fff7ed', '#ea580c', data.fosterOverdueCare.length, fosterOverdueRows);
+    renderSection('Overdue Preventative Care (Foster)', '[OD]', '#fff7ed', '#ea580c', data.fosterOverdueCare.length, fosterOverdueRows) +
+    renderSection('Foster Updates (Yesterday)', '[U]', '#eff6ff', '#2563eb', data.recentFosterUpdates.length, fosterUpdateRows) +
+    renderSection('New Foster Photos (Yesterday)', '[P]', '#f0fdf4', '#16a34a', data.recentFosterPhotos.length, fosterPhotoRowsHtml);
 
   // --- Adopted pillar HTML ---
   const adoptedSectionsHtml =
@@ -837,7 +965,8 @@ function composePlainTextEmail(data: BriefingData): string {
 
   const shelterCount = data.surgeries.length + data.exams.length + data.diagnostics.length +
     data.procedures.length + data.shelterOverdueCare.length + data.calendarItems.length;
-  const fosterCount = data.missedFosterMeds.length + data.complianceAlerts.length + data.fosterOverdueCare.length;
+  const fosterCount = data.missedFosterMeds.length + data.complianceAlerts.length + data.fosterOverdueCare.length +
+    data.recentFosterUpdates.length + data.recentFosterPhotos.length;
   const adoptedCount = data.helpRequests.length + data.overdueObligations.length;
 
   if (shelterCount > 0) {
@@ -922,6 +1051,33 @@ function composePlainTextEmail(data: BriefingData): string {
       lines.push(`--- OVERDUE PREVENTATIVE CARE (Foster) [${data.fosterOverdueCare.length}] ---`);
       data.fosterOverdueCare.forEach(o => {
         lines.push(`  ${o.animalName} - ${o.careName} (due: ${o.nextDueDate})`);
+      });
+      lines.push('');
+    }
+
+    if (data.recentFosterUpdates.length > 0) {
+      lines.push(`--- FOSTER UPDATES (Yesterday) [${data.recentFosterUpdates.length}] ---`);
+      const updateLabels: Record<string, string> = {
+        medical_concern: 'Medical Concern',
+        behavioral_note: 'Behavioral Note',
+        general_update: 'General Update',
+        photo_update: 'Photo Update',
+      };
+      data.recentFosterUpdates.forEach(u => {
+        const typeLabel = updateLabels[u.updateType] || u.updateType;
+        const truncDesc = u.description.length > 60 ? u.description.substring(0, 57) + '...' : u.description;
+        const urgentFlag = (u.priority === 'urgent' || u.priority === 'high' || u.updateType === 'medical_concern') ? ' [!]' : '';
+        lines.push(`  ${u.animalName} - ${typeLabel}${urgentFlag} (Foster: ${u.fosterName})`);
+        lines.push(`    "${truncDesc}"`);
+      });
+      lines.push('');
+    }
+
+    if (data.recentFosterPhotos.length > 0) {
+      lines.push(`--- NEW FOSTER PHOTOS (Yesterday) [${data.recentFosterPhotos.length}] ---`);
+      data.recentFosterPhotos.forEach(p => {
+        const captionStr = p.caption ? ` - "${p.caption.length > 40 ? p.caption.substring(0, 37) + '...' : p.caption}"` : '';
+        lines.push(`  ${p.animalName} (Foster: ${p.fosterName})${captionStr}`);
       });
       lines.push('');
     }
@@ -1010,7 +1166,8 @@ export async function sendDailyBriefingForTenant(tenantId: string): Promise<{ se
 
     const shelterCount = data.surgeries.length + data.exams.length + data.diagnostics.length +
       data.procedures.length + data.shelterOverdueCare.length + data.calendarItems.length;
-    const fosterCount = data.missedFosterMeds.length + data.complianceAlerts.length + data.fosterOverdueCare.length;
+    const fosterCount = data.missedFosterMeds.length + data.complianceAlerts.length + data.fosterOverdueCare.length +
+      data.recentFosterUpdates.length + data.recentFosterPhotos.length;
     const adoptedCount = data.helpRequests.length + data.overdueObligations.length;
     const totalItems = shelterCount + fosterCount + adoptedCount;
 
