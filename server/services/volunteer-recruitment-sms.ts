@@ -2,25 +2,21 @@ import { db } from "../db";
 import {
   tenants,
   calendars,
-  volunteerOpportunities,
-  volunteerSignups,
+  calendarEvents,
   volunteerThresholdAlertHistory,
   users,
   type Tenant,
 } from "@shared/schema";
 import { eq, and, gte, lte, inArray, sql } from "drizzle-orm";
 import { sendSms, isTwilioEnabled } from "../lib/twilio-service";
-import { format, addDays, startOfDay, endOfDay, parseISO } from "date-fns";
+import { format, addDays, startOfDay, endOfDay, parseISO, eachDayOfInterval } from "date-fns";
 
-interface ShortageInfo {
-  opportunityId: string;
-  title: string;
-  date: string;
-  time: string;
+interface DayShortageInfo {
   calendarId: string;
   calendarName: string;
+  date: string;
   minVolunteersRequired: number;
-  slotsFilled: number;
+  signedUpCount: number;
   shortage: number;
   signedUpNames: string[];
 }
@@ -36,14 +32,79 @@ interface WeeklyDigestResult {
 interface UrgentAlertResult {
   tenantId: string;
   smsSent: number;
-  urgentOpportunitiesAlerted: number;
+  urgentDaysAlerted: number;
   errors: string[];
 }
 
 export class VolunteerRecruitmentSmsService {
-  /**
-   * Send weekly grouped digest SMS for a specific tenant
-   */
+  private static async getCalendarDayShortages(
+    tenantId: string,
+    targetCalendars: typeof calendars.$inferSelect[],
+    startDate: Date,
+    endDate: Date,
+    defaultMin: number
+  ): Promise<DayShortageInfo[]> {
+    const calendarMap = new Map(targetCalendars.map((c) => [c.id, c]));
+    const calendarIds = targetCalendars.map((c) => c.id);
+
+    const events = await db
+      .select()
+      .from(calendarEvents)
+      .where(
+        and(
+          eq(calendarEvents.tenantId, tenantId),
+          inArray(calendarEvents.calendarId, calendarIds),
+          gte(calendarEvents.startTime, startOfDay(startDate)),
+          lte(calendarEvents.startTime, endOfDay(endDate))
+        )
+      );
+
+    const allDays = eachDayOfInterval({ start: startOfDay(startDate), end: startOfDay(endDate) });
+
+    const shortages: DayShortageInfo[] = [];
+
+    for (const cal of targetCalendars) {
+      const minRequired = cal.minVolunteersRequired ?? defaultMin;
+
+      for (const day of allDays) {
+        const dayStr = format(day, "yyyy-MM-dd");
+        const dayStart = startOfDay(day);
+        const dayEnd = endOfDay(day);
+
+        const dayEvents = events.filter(
+          (e) =>
+            e.calendarId === cal.id &&
+            e.startTime >= dayStart &&
+            e.startTime <= dayEnd
+        );
+
+        const signedUpCount = dayEvents.length;
+
+        if (signedUpCount < minRequired) {
+          const names = dayEvents
+            .map((e) => {
+              if (e.manualVolunteerName) return e.manualVolunteerName.trim();
+              const titleMatch = e.title?.match(/^(.+?)\s*-\s*Signup$/i);
+              return titleMatch ? titleMatch[1].trim() : e.title || "";
+            })
+            .filter(Boolean);
+
+          shortages.push({
+            calendarId: cal.id,
+            calendarName: cal.name,
+            date: dayStr,
+            minVolunteersRequired: minRequired,
+            signedUpCount,
+            shortage: minRequired - signedUpCount,
+            signedUpNames: names,
+          });
+        }
+      }
+    }
+
+    return shortages;
+  }
+
   static async sendWeeklyDigest(tenantId: string): Promise<WeeklyDigestResult> {
     const result: WeeklyDigestResult = {
       tenantId,
@@ -64,7 +125,6 @@ export class VolunteerRecruitmentSmsService {
       return result;
     }
 
-    // Guard: prevent double-send on same day
     if (settings.lastWeeklyDigestAt) {
       const lastSentDate = format(new Date(settings.lastWeeklyDigestAt), "yyyy-MM-dd");
       const today = format(new Date(), "yyyy-MM-dd");
@@ -73,7 +133,6 @@ export class VolunteerRecruitmentSmsService {
       }
     }
 
-    // Load volunteer-type calendars
     const allVolunteerCalendars = await db
       .select()
       .from(calendars)
@@ -89,63 +148,18 @@ export class VolunteerRecruitmentSmsService {
       return result;
     }
 
-    const calendarMap = new Map(targetCalendars.map((c) => [c.id, c]));
-    const calendarIds = targetCalendars.map((c) => c.id);
-
-    // Load upcoming opportunities within next 7 days
     const now = new Date();
-    const startDateStr = format(startOfDay(now), "yyyy-MM-dd");
-    const endDateStr = format(endOfDay(addDays(now, 7)), "yyyy-MM-dd");
-
-    const opportunities = await db
-      .select()
-      .from(volunteerOpportunities)
-      .where(
-        and(
-          eq(volunteerOpportunities.tenantId, tenantId),
-          inArray(volunteerOpportunities.calendarId as any, calendarIds)
-        )
-      );
-
-    const upcomingOpps = opportunities.filter(
-      (o) => o.date >= startDateStr && o.date <= endDateStr
-    );
-
     const defaultMin = settings.minimumVolunteers ?? 2;
 
-    // Find shortages
-    const shortages: ShortageInfo[] = [];
-    for (const opp of upcomingOpps) {
-      const cal = opp.calendarId ? calendarMap.get(opp.calendarId) : undefined;
-      const minRequired = cal?.minVolunteersRequired ?? defaultMin;
-      const filled = opp.slotsFilled;
-
-      if (filled < minRequired) {
-        // Load signups for names
-        const sigs = await db
-          .select({ applicantName: volunteerSignups.applicantName, userId: volunteerSignups.userId })
-          .from(volunteerSignups)
-          .where(eq(volunteerSignups.opportunityId, opp.id));
-
-        const names = sigs.map((s) => s.applicantName).filter(Boolean) as string[];
-
-        shortages.push({
-          opportunityId: opp.id,
-          title: opp.title,
-          date: opp.date,
-          time: opp.time,
-          calendarId: opp.calendarId ?? "",
-          calendarName: cal?.name ?? "Volunteer Shift",
-          minVolunteersRequired: minRequired,
-          slotsFilled: filled,
-          shortage: minRequired - filled,
-          signedUpNames: names,
-        });
-      }
-    }
+    const shortages = await this.getCalendarDayShortages(
+      tenantId,
+      targetCalendars,
+      now,
+      addDays(now, 7),
+      defaultMin
+    );
 
     if (shortages.length === 0) {
-      // No shortages — still update lastWeeklyDigestAt so we don't re-check today
       await db
         .update(tenants)
         .set({
@@ -160,15 +174,13 @@ export class VolunteerRecruitmentSmsService {
 
     result.shortageCount = shortages.length;
 
-    // Group by calendar name
-    const byCalendar = new Map<string, ShortageInfo[]>();
+    const byCalendar = new Map<string, DayShortageInfo[]>();
     for (const s of shortages) {
       if (!byCalendar.has(s.calendarName)) byCalendar.set(s.calendarName, []);
       byCalendar.get(s.calendarName)!.push(s);
     }
     result.calendarsIncluded = Array.from(byCalendar.keys());
 
-    // Build SMS body
     const orgName = tenant.name;
     const orgDomain = tenant.domain ? `https://${tenant.domain}` : "";
     const signupUrl = orgDomain ? `${orgDomain}/volunteer` : "our website";
@@ -181,13 +193,12 @@ export class VolunteerRecruitmentSmsService {
           const dayLabel = format(parseISO(s.date), "EEE M/d");
           return `${dayLabel} (need ${s.shortage})`;
         });
-      lines.push(`• ${calName}: ${dayParts.join(", ")}`);
+      lines.push(`${calName}: ${dayParts.join(", ")}`);
     }
     lines.push(`Sign up: ${signupUrl}`);
 
     const message = lines.join("\n");
 
-    // Find opted-in recipients
     if (!(await isTwilioEnabled(tenantId))) {
       return result;
     }
@@ -214,7 +225,6 @@ export class VolunteerRecruitmentSmsService {
       }
     }
 
-    // Update lastWeeklyDigestAt
     await db
       .update(tenants)
       .set({
@@ -228,14 +238,11 @@ export class VolunteerRecruitmentSmsService {
     return result;
   }
 
-  /**
-   * Send urgent personalized SMS for opportunities that are X days away and understaffed
-   */
   static async sendUrgentAlerts(tenantId: string): Promise<UrgentAlertResult> {
     const result: UrgentAlertResult = {
       tenantId,
       smsSent: 0,
-      urgentOpportunitiesAlerted: 0,
+      urgentDaysAlerted: 0,
       errors: [],
     };
 
@@ -255,9 +262,8 @@ export class VolunteerRecruitmentSmsService {
     }
 
     const daysOut = settings.urgentAlertDaysOut ?? 2;
-    const targetDate = format(addDays(new Date(), daysOut), "yyyy-MM-dd");
+    const targetDate = addDays(new Date(), daysOut);
 
-    // Load volunteer-type calendars
     const allVolunteerCalendars = await db
       .select()
       .from(calendars)
@@ -273,27 +279,18 @@ export class VolunteerRecruitmentSmsService {
       return result;
     }
 
-    const calendarMap = new Map(targetCalendars.map((c) => [c.id, c]));
-    const calendarIds = targetCalendars.map((c) => c.id);
     const defaultMin = settings.minimumVolunteers ?? 2;
 
-    const opportunities = await db
-      .select()
-      .from(volunteerOpportunities)
-      .where(
-        and(
-          eq(volunteerOpportunities.tenantId, tenantId),
-          inArray(volunteerOpportunities.calendarId as any, calendarIds)
-        )
-      );
+    const shortages = await this.getCalendarDayShortages(
+      tenantId,
+      targetCalendars,
+      targetDate,
+      targetDate,
+      defaultMin
+    );
 
-    const targetOpps = opportunities.filter((o) => o.date === targetDate);
+    if (shortages.length === 0) return result;
 
-    const orgName = tenant.name;
-    const orgDomain = tenant.domain ? `https://${tenant.domain}` : "";
-    const signupUrl = orgDomain ? `${orgDomain}/volunteer` : "our website";
-
-    // Duplicate-alert guard: check today's sent alerts for this tenant
     const todayStart = startOfDay(new Date());
     const sentTodayRows = await db
       .select({ opportunityId: volunteerThresholdAlertHistory.opportunityId })
@@ -306,7 +303,6 @@ export class VolunteerRecruitmentSmsService {
       );
     const sentTodayIds = new Set(sentTodayRows.map((r) => r.opportunityId).filter(Boolean));
 
-    // Find opted-in recipients
     const allUsers = await db
       .select()
       .from(users)
@@ -322,34 +318,25 @@ export class VolunteerRecruitmentSmsService {
 
     if (recipients.length === 0) return result;
 
-    for (const opp of targetOpps) {
-      if (sentTodayIds.has(opp.id)) continue;
+    const orgName = tenant.name;
+    const orgDomain = tenant.domain ? `https://${tenant.domain}` : "";
+    const signupUrl = orgDomain ? `${orgDomain}/volunteer` : "our website";
 
-      const cal = opp.calendarId ? calendarMap.get(opp.calendarId) : undefined;
-      const minRequired = cal?.minVolunteersRequired ?? defaultMin;
-      const filled = opp.slotsFilled;
+    for (const shortage of shortages) {
+      const dedupKey = `${shortage.calendarId}:${shortage.date}`;
+      if (sentTodayIds.has(dedupKey)) continue;
 
-      if (filled >= minRequired) continue;
-
-      const shortage = minRequired - filled;
-
-      // Load signups to get names
-      const sigs = await db
-        .select({ applicantName: volunteerSignups.applicantName })
-        .from(volunteerSignups)
-        .where(eq(volunteerSignups.opportunityId, opp.id));
-
-      const names = sigs.map((s) => s.applicantName).filter(Boolean) as string[];
-      const calName = cal?.name ?? opp.title;
-      const dayLabel = format(parseISO(opp.date), "EEEE M/d");
+      const dayLabel = format(parseISO(shortage.date), "EEEE M/d");
+      const { signedUpCount, minVolunteersRequired, calendarName, signedUpNames } = shortage;
+      const shortageCount = shortage.shortage;
 
       let message: string;
-      if (filled === 0) {
-        message = `${orgName}: ${calName} on ${dayLabel} has 0 volunteers signed up! We need ${minRequired}. Sign up: ${signupUrl}`;
-      } else if (filled === 1 && names.length === 1) {
-        message = `${orgName}: We only have 1 volunteer for ${calName} on ${dayLabel}! Please sign up to help ${names[0]}. Sign up: ${signupUrl}`;
+      if (signedUpCount === 0) {
+        message = `${orgName}: ${calendarName} on ${dayLabel} has 0 volunteers signed up! We need ${minVolunteersRequired}. Sign up: ${signupUrl}`;
+      } else if (signedUpCount === 1 && signedUpNames.length === 1) {
+        message = `${orgName}: We only have 1 volunteer for ${calendarName} on ${dayLabel}! Please sign up to help ${signedUpNames[0]}. Sign up: ${signupUrl}`;
       } else {
-        message = `${orgName}: ${calName} on ${dayLabel} needs ${shortage} more volunteer${shortage !== 1 ? "s" : ""} (${filled}/${minRequired} signed up). Sign up: ${signupUrl}`;
+        message = `${orgName}: ${calendarName} on ${dayLabel} needs ${shortageCount} more volunteer${shortageCount !== 1 ? "s" : ""} (${signedUpCount}/${minVolunteersRequired} signed up). Sign up: ${signupUrl}`;
       }
 
       let smsSentCount = 0;
@@ -363,34 +350,29 @@ export class VolunteerRecruitmentSmsService {
         }
       }
 
-      // Log to alert history to prevent double-send
       try {
         await db.insert(volunteerThresholdAlertHistory).values({
           alertId: "00000000-0000-0000-0000-000000000000",
           tenantId,
           alertDate: new Date(),
-          opportunityId: opp.id,
-          opportunityTitle: opp.title,
-          currentVolunteers: filled,
-          minimumRequired: minRequired,
+          opportunityId: dedupKey,
+          opportunityTitle: `${calendarName} - ${dayLabel}`,
+          currentVolunteers: signedUpCount,
+          minimumRequired: minVolunteersRequired,
           pushSent: 0,
           smsSent: smsSentCount,
           emailSent: 0,
           totalRecipients: recipients.length,
         });
       } catch (_) {
-        // History logging is best-effort
       }
 
-      result.urgentOpportunitiesAlerted++;
+      result.urgentDaysAlerted++;
     }
 
     return result;
   }
 
-  /**
-   * Check and run all active tenants for a given mode
-   */
   static async checkAndRunAllTenants(mode: "weekly" | "urgent"): Promise<void> {
     const allTenants = await db
       .select({ id: tenants.id, name: tenants.name, volunteerRecruitmentSmsSettings: tenants.volunteerRecruitmentSmsSettings })
@@ -404,13 +386,11 @@ export class VolunteerRecruitmentSmsService {
       if (mode === "weekly") {
         if (!settings.weeklyDigestEnabled) continue;
 
-        // Check day of week
         const now = new Date();
         const currentDay = format(now, "EEE").toLowerCase() as "sun" | "mon" | "tue" | "wed" | "thu" | "fri" | "sat";
         const targetDay = settings.weeklyDigestDayOfWeek ?? "thu";
         if (currentDay !== targetDay) continue;
 
-        // Check time window (within 30 min of configured time)
         const targetTime = settings.weeklyDigestTime ?? "09:00";
         const [th, tm] = targetTime.split(":").map(Number);
         const [ch, cm] = format(now, "HH:mm").split(":").map(Number);
@@ -430,7 +410,7 @@ export class VolunteerRecruitmentSmsService {
         try {
           const res = await this.sendUrgentAlerts(tenant.id);
           if (res.smsSent > 0) {
-            console.log(`[Volunteer Recruitment SMS] Urgent alerts for ${tenant.name}: ${res.smsSent} SMS, ${res.urgentOpportunitiesAlerted} opportunities`);
+            console.log(`[Volunteer Recruitment SMS] Urgent alerts for ${tenant.name}: ${res.smsSent} SMS, ${res.urgentDaysAlerted} calendar-days`);
           }
         } catch (err: any) {
           console.error(`[Volunteer Recruitment SMS] Urgent alert error for ${tenant.name}:`, err.message);
