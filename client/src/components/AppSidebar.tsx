@@ -85,6 +85,7 @@ import {
   BookOpen,
   Video,
   Activity,
+  Megaphone,
 } from "lucide-react";
 
 interface AppSidebarProps {
@@ -311,12 +312,19 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
       defaultOpen: false,
     },
     {
+      title: "Fundraising",
+      items: [
+        { title: "Fundraising Hub", url: "/dashboard/fundraising", icon: Megaphone },
+        { title: "Donation Links", url: "/dashboard/donation-links", icon: DollarSign },
+        { title: "Fundraisers", url: "/dashboard/fundraisers", icon: TicketPercent },
+        { title: "Event Ticket Sales", url: "/dashboard/event-ticket-sales", icon: Ticket },
+      ],
+      defaultOpen: false,
+    },
+    {
       title: "Administration",
       items: [
         { title: "Finance", url: "/dashboard/finance", icon: DollarSign },
-        { title: "Fundraisers", url: "/dashboard/fundraisers", icon: TicketPercent },
-        { title: "Event Ticket Sales", url: "/dashboard/event-ticket-sales", icon: Ticket },
-        { title: "Donation Links", url: "/dashboard/donation-links", icon: DollarSign },
         { title: "Grants", url: "/dashboard/grants", icon: Briefcase, proOnly: true },
         { title: "Calendar", url: "/dashboard/calendar", icon: Calendar },
         { title: "Calendar Management", url: "/dashboard/calendar-management", icon: CalendarCog },
@@ -394,12 +402,19 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
       defaultOpen: false,
     },
     {
+      title: "Fundraising",
+      items: [
+        { title: "Fundraising Hub", url: "/dashboard/fundraising", icon: Megaphone },
+        { title: "Donation Links", url: "/dashboard/donation-links", icon: DollarSign },
+        { title: "Fundraisers", url: "/dashboard/fundraisers", icon: TicketPercent },
+        { title: "Event Ticket Sales", url: "/dashboard/event-ticket-sales", icon: Ticket },
+      ],
+      defaultOpen: false,
+    },
+    {
       title: "Content & Reports",
       items: [
         { title: "Finance", url: "/dashboard/finance", icon: DollarSign },
-        { title: "Fundraisers", url: "/dashboard/fundraisers", icon: TicketPercent },
-        { title: "Event Ticket Sales", url: "/dashboard/event-ticket-sales", icon: Ticket },
-        { title: "Donation Links", url: "/dashboard/donation-links", icon: DollarSign },
         { title: "Grants", url: "/dashboard/grants", icon: Briefcase, proOnly: true },
         { title: "Supply Registry", url: "/dashboard/supplies", icon: ShoppingCart },
         { title: "Communications", url: "/dashboard/communications", icon: Mail },
@@ -518,6 +533,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
     '/dashboard/foster-management': 'foster-management',
     '/dashboard/team': 'team',
     '/dashboard/finance': 'finance',
+    '/dashboard/fundraising': 'finance',
     '/dashboard/fundraisers': 'finance',
     '/dashboard/donation-links': 'finance',
     '/dashboard/grants': 'grants',

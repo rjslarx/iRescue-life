@@ -144,6 +144,7 @@ import PlatformForgotPasswordPage from "@/pages/platform/PlatformForgotPasswordP
 import PlatformResetPasswordPage from "@/pages/platform/PlatformResetPasswordPage";
 import TransfersPage from "@/pages/TransfersPage";
 import EventTicketSalesPage from "@/pages/EventTicketSalesPage";
+import FundraisingHubPage from "@/pages/FundraisingHubPage";
 import TenantAuditLogsPage from "@/pages/TenantAuditLogsPage";
 import TenantSignupPage from "@/pages/TenantSignupPage";
 import SignupSuccessPage from "@/pages/platform/SignupSuccessPage";
@@ -263,6 +264,7 @@ function RouterSwitch() {
       <ProtectedRoute path="/dashboard/analytics" pageId="analytics" component={Analytics} />
       <ProtectedRoute path="/dashboard/finance" pageId="finance" component={FinancePage} />
       <ProtectedRoute path="/dashboard/donation-links" pageId="finance" component={DonationLinksPage} />
+      <ProtectedRoute path="/dashboard/fundraising" pageId="finance" component={FundraisingHubPage} />
       <ProtectedRoute path="/dashboard/fundraisers/:eventId" pageId="finance" component={FundraiserFulfillmentPage} />
       <ProtectedRoute path="/dashboard/fundraisers" pageId="finance" component={FundraisersPage} />
       <ProtectedRoute path="/dashboard/grants" pageId="grants" component={GrantsPage} proOnly proFeatureName="Grants" />
