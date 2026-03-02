@@ -379,6 +379,27 @@ export function initializeScheduler() {
 
   console.log(`✓ Hourly medication SMS digest scheduled: 0 * * * * (UTC)`);
 
+  const fosterNudgeSchedule = process.env.FOSTER_NUDGE_SCHEDULE || "0 17 * * *";
+  cron.schedule(fosterNudgeSchedule, async () => {
+    console.log("💊 Running foster evening nudge reminders...");
+    try {
+      const { sendFosterNudgeForAllTenants } = await import("../services/medicationSmsDigest");
+      const result = await sendFosterNudgeForAllTenants();
+      if (result.sent > 0) {
+        console.log(`✓ Foster nudge: ${result.sent} SMS sent`);
+      }
+      if (result.errors.length > 0) {
+        console.warn(`⚠️ Foster nudge errors: ${result.errors.slice(0, 5).join('; ')}${result.errors.length > 5 ? ` (+${result.errors.length - 5} more)` : ''}`);
+      }
+    } catch (error) {
+      console.error(`❌ Foster nudge reminders failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }, {
+    timezone: "UTC"
+  });
+
+  console.log(`✓ Foster evening nudge scheduled for: ${fosterNudgeSchedule} (UTC)`);
+
   // Schedule foster appointment reminders daily at 14:00 UTC (10 AM Eastern)
   // Sends 24-hour advance reminder SMS to fosters whose animal has a pending exam tomorrow
   cron.schedule("0 14 * * *", async () => {
