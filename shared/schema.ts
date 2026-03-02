@@ -1880,6 +1880,7 @@ export const medicalDoses = pgTable("medical_doses", {
   status: text("status").notNull().default("due").$type<"due" | "given" | "skipped" | "missed" | "unable">(),
   givenAt: timestamp("given_at"),
   administeredBy: uuid("administered_by").references(() => users.id),
+  completionMethod: text("completion_method").$type<"foster_sms" | "staff_override" | null>(),
   notes: text("notes"),
   unableReason: text("unable_reason").$type<"animal_sick" | "unable_to_swallow" | "other">(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -5113,6 +5114,8 @@ export const preventativeCareRecords = pgTable("preventative_care_records", {
   notes: text("notes"),
   // Metadata
   createdBy: uuid("created_by").references(() => users.id),
+  completedByUserId: uuid("completed_by_user_id").references(() => users.id, { onDelete: 'set null' }),
+  completionMethod: text("completion_method").$type<"foster_sms" | "staff_override" | null>(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -5120,6 +5123,8 @@ export const preventativeCareRecords = pgTable("preventative_care_records", {
 export const insertPreventativeCareRecordSchema = createInsertSchema(preventativeCareRecords).omit({
   id: true,
   createdBy: true,
+  completedByUserId: true,
+  completionMethod: true,
   createdAt: true,
   updatedAt: true,
 }).extend({
@@ -5695,6 +5700,7 @@ export const medicationTasks = pgTable("medication_tasks", {
   status: text("status").notNull().default("pending").$type<"pending" | "given" | "skipped">(),
   completedAt: timestamp("completed_at"),
   completedBy: uuid("completed_by").references(() => users.id, { onDelete: 'set null' }),
+  completionMethod: text("completion_method").$type<"foster_sms" | "staff_override" | null>(),
   skipReason: text("skip_reason"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
@@ -5703,6 +5709,7 @@ export const insertMedicationTaskSchema = createInsertSchema(medicationTasks).om
   id: true,
   completedAt: true,
   completedBy: true,
+  completionMethod: true,
   skipReason: true,
   createdAt: true,
 });

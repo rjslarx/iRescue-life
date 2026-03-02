@@ -1245,6 +1245,11 @@ export default function AnimalMedicalPage() {
                                       {entry.data.status === 'given' ? 'Administered' : entry.data.status === 'skipped' ? 'Skipped' : 'Unable to administer'}
                                       {entry.data.administeredByName ? ` by ${entry.data.administeredByName}` : ''}
                                     </p>
+                                    {entry.data.completionMethod && (
+                                      <Badge variant="secondary" className="text-xs mt-1 no-default-hover-elevate no-default-active-elevate">
+                                        {entry.data.completionMethod === 'foster_sms' ? 'Confirmed via SMS' : 'Staff Override'}
+                                      </Badge>
+                                    )}
                                     {entry.data.notes && (
                                       <p className="text-sm mt-1 italic text-muted-foreground">{entry.data.notes}</p>
                                     )}
@@ -2490,13 +2495,22 @@ export default function AnimalMedicalPage() {
                         </div>
                       </div>
                     </CardHeader>
-                    {(record.administeredBy || record.notes || record.lotNumber || record.manufacturer) && (
+                    {(record.administeredBy || record.notes || record.lotNumber || record.manufacturer || record.completionMethod) && (
                       <CardContent>
                         <div className="grid grid-cols-2 gap-4 text-sm">
                           {record.administeredBy && (
                             <div>
                               <span className="text-muted-foreground">Administered By:</span>
                               <span className="ml-2">{record.administeredBy}</span>
+                            </div>
+                          )}
+                          {record.completionMethod && (
+                            <div>
+                              <Badge variant="secondary" className="text-xs no-default-hover-elevate no-default-active-elevate" data-testid={`badge-prev-care-method-${record.id}`}>
+                                {record.completionMethod === 'foster_sms'
+                                  ? `Confirmed via SMS${record.completedByName ? ` by ${record.completedByName}` : ''}`
+                                  : `Manually cleared${record.completedByName ? ` by ${record.completedByName}` : ''}`}
+                              </Badge>
                             </div>
                           )}
                           {record.lotNumber && (
@@ -3306,6 +3320,11 @@ function PrescriptionDoseHistory({ prescriptionId, onAdministerDose, isAdministe
               </div>
               {dose.administeredByName && (
                 <p className="text-xs text-muted-foreground mt-0.5">By: {dose.administeredByName}</p>
+              )}
+              {dose.completionMethod && (
+                <Badge variant="secondary" className="text-xs mt-0.5 no-default-hover-elevate no-default-active-elevate" data-testid={`badge-completion-method-${dose.id}`}>
+                  {dose.completionMethod === 'foster_sms' ? `Confirmed via SMS${dose.administeredByName ? ` by ${dose.administeredByName}` : ''}` : `Manually cleared${dose.administeredByName ? ` by ${dose.administeredByName}` : ''}`}
+                </Badge>
               )}
               {dose.notes && (
                 <p className="text-xs text-muted-foreground mt-0.5">{dose.notes}</p>

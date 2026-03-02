@@ -732,14 +732,15 @@ async function handleComplianceConfirmationReply(
         .limit(1);
 
       if (digestLog?.relatedTaskIds && digestLog.relatedTaskIds.length > 0) {
+        const fosterUserId = matchingUsers[0]?.id || null;
         await db
           .update(medicationTasks)
-          .set({ status: 'given', completedAt: new Date() })
+          .set({ status: 'given', completedAt: new Date(), completedBy: fosterUserId, completionMethod: 'foster_sms' })
           .where(and(
             inArray(medicationTasks.id, digestLog.relatedTaskIds),
             eq(medicationTasks.status, 'pending')
           ));
-        console.log(`[TWILIO] Marked ${digestLog.relatedTaskIds.length} medication task(s) as given via DONE reply from ${fromNumber}`);
+        console.log(`[TWILIO] Marked ${digestLog.relatedTaskIds.length} medication task(s) as given via DONE reply from ${fromNumber} (foster_sms)`);
         return { success: true, message: `Medication batch (${digestLog.relatedTaskIds.length} tasks) marked as given via SMS reply` };
       }
 

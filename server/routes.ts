@@ -31512,6 +31512,7 @@ Email: ${application.applicantEmail || ''}`
         status: d.status,
         givenAt: d.givenAt,
         administeredBy: d.administeredBy,
+        completionMethod: d.completionMethod,
         notes: d.notes,
         unableReason: d.unableReason,
         createdAt: d.createdAt,
@@ -33212,7 +33213,22 @@ Email: ${application.applicantEmail || ''}`
         ))
         .orderBy(desc(preventativeCareRecords.dateAdministered));
 
-      res.json({ records });
+      const completedByIds = [...new Set(records.map(r => r.completedByUserId).filter(Boolean))] as string[];
+      let completedByNameMap: Record<string, string> = {};
+      if (completedByIds.length > 0) {
+        const completedByUsers = await db
+          .select({ id: users.id, fullName: users.fullName })
+          .from(users)
+          .where(inArray(users.id, completedByIds));
+        completedByNameMap = Object.fromEntries(completedByUsers.map(u => [u.id, u.fullName]));
+      }
+
+      const enrichedRecords = records.map(r => ({
+        ...r,
+        completedByName: r.completedByUserId ? (completedByNameMap[r.completedByUserId] || null) : null,
+      }));
+
+      res.json({ records: enrichedRecords });
     } catch (error) {
       next(error);
     }
@@ -39801,7 +39817,7 @@ The user asking is a tenant administrator or staff member.`;
 
         if (doseIds.length > 0) {
           const result = await db.update(medicalDoses)
-            .set({ status: 'given', givenAt: now, administeredBy: userId })
+            .set({ status: 'given', givenAt: now, administeredBy: userId, completionMethod: 'staff_override' })
             .where(and(
               eq(medicalDoses.tenantId, tenantId),
               inArray(medicalDoses.id, doseIds),
@@ -39838,7 +39854,7 @@ The user asking is a tenant administrator or staff member.`;
               const intervalDays = candidate.careTypeId ? (intervalMap.get(candidate.careTypeId) ?? null) : null;
               const newNextDueDate = intervalDays != null ? new Date(now.getTime() + intervalDays * 86400000) : null;
               await db.update(preventativeCareRecords)
-                .set({ dateAdministered: now, nextDueDate: newNextDueDate, updatedAt: now })
+                .set({ dateAdministered: now, nextDueDate: newNextDueDate, updatedAt: now, completedByUserId: userId, completionMethod: 'staff_override' })
                 .where(and(
                   eq(preventativeCareRecords.tenantId, tenantId),
                   eq(preventativeCareRecords.id, candidate.id),
