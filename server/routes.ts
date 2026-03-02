@@ -4377,7 +4377,7 @@ Crawl-delay: 1
           ))
           .limit(10),
 
-        // Overdue spay/neuter obligations — no proof uploaded, past contractual due date
+        // Overdue spay/neuter obligations — no proof uploaded, past contractual due date (pending or escalated to overdue)
         db.select({
           obligationId: coTable.id,
           animalId: coTable.animalId,
@@ -4392,7 +4392,7 @@ Crawl-delay: 1
           .where(and(
             eq(coTable.tenantId, req.tenant!.id),
             eq(coTable.obligationType, 'spay_neuter'),
-            eq(coTable.status, 'pending'),
+            or(eq(coTable.status, 'pending'), eq(coTable.status, 'overdue')),
             isNull(coTable.proofDocumentUrl),
             ltOp(coTable.contractualDueDate, new Date().toISOString().split('T')[0]),
           ))

@@ -2055,7 +2055,7 @@ export const fosterUpdates = pgTable("foster_updates", {
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
   fosterId: uuid("foster_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
   animalId: uuid("animal_id").notNull().references(() => animals.id, { onDelete: 'cascade' }),
-  updateType: text("update_type").notNull().$type<"medical_concern" | "behavioral_note" | "general_update" | "photo_update">(),
+  updateType: text("update_type").notNull().$type<"medical_concern" | "behavioral_note" | "general_update" | "photo_update" | "help_request">(),
   description: text("description").notNull(),
   photoUrls: text("photo_urls").array(),
   source: text("source").notNull().default("portal").$type<"portal" | "sms">(),
@@ -3231,7 +3231,7 @@ export const scheduledCommunications = pgTable("scheduled_communications", {
   animalName: text("animal_name").notNull(),
   // Scheduling
   sendDate: timestamp("send_date").notNull(),
-  messageType: text("message_type").notNull().$type<"3_days" | "3_weeks" | "3_months">(),
+  messageType: text("message_type").notNull().$type<"3_days" | "3_weeks" | "3_months" | "7_days_microchip">(),
   // Status tracking
   status: text("status").notNull().default("pending").$type<"pending" | "sent" | "cancelled">(),
   sentAt: timestamp("sent_at"),
@@ -5865,7 +5865,7 @@ export const COMPLIANCE_OBLIGATION_TYPES = [
 ] as const;
 export type ComplianceObligationType = typeof COMPLIANCE_OBLIGATION_TYPES[number];
 
-export const COMPLIANCE_STATUSES = ['pending', 'completed', 'waived'] as const;
+export const COMPLIANCE_STATUSES = ['pending', 'completed', 'waived', 'overdue'] as const;
 export type ComplianceStatus = typeof COMPLIANCE_STATUSES[number];
 
 export const complianceObligations = pgTable("compliance_obligations", {

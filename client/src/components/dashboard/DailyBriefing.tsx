@@ -244,16 +244,19 @@ export function DailyBriefing() {
             <div className="space-y-4">
               {hasSpayNeuterOverdue && (
                 <div
-                  className="rounded-md border border-destructive bg-destructive/10 p-3"
+                  className="rounded-md border-2 border-destructive bg-destructive/15 p-3"
                   data-testid="section-spay-neuter-overdue"
                 >
                   <div className="flex items-center gap-2 mb-2">
                     <AlertTriangle className="h-4 w-4 text-destructive flex-shrink-0" />
-                    <span className="text-sm font-semibold text-destructive">Spay/Neuter Compliance Alert</span>
+                    <span className="text-sm font-bold text-destructive">Compliance Breach: Spay/Neuter</span>
                     <Badge variant="destructive" className="text-xs ml-auto">
                       {data?.today.spayNeuterOverdue?.length}
                     </Badge>
                   </div>
+                  <p className="text-xs text-destructive/80 mb-2">
+                    Contractual deadline passed with no proof uploaded. Follow up required.
+                  </p>
                   <div className="space-y-1">
                     {data?.today.spayNeuterOverdue?.map((item) => (
                       <div

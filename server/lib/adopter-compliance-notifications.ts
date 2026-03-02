@@ -674,6 +674,184 @@ export async function sendAnnualVaccineReminders(tenantId: string): Promise<{ se
   return result;
 }
 
+// ─── Spay/Neuter Breach Escalation ──────────────────────────────────────────
+
+export async function escalateOverdueSpayNeuter(tenantId: string): Promise<{ escalated: number; notified: number; errors: string[] }> {
+  const result = { escalated: 0, notified: 0, errors: [] as string[] };
+
+  try {
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    const overdueObligations = await db
+      .select({
+        id: complianceObligations.id,
+        animalId: complianceObligations.animalId,
+        adopterName: complianceObligations.adopterName,
+        adopterEmail: complianceObligations.adopterEmail,
+        adopterPhone: complianceObligations.adopterPhone,
+        contractualDueDate: complianceObligations.contractualDueDate,
+        animalName: animals.name,
+      })
+      .from(complianceObligations)
+      .innerJoin(animals, eq(animals.id, complianceObligations.animalId))
+      .where(and(
+        eq(complianceObligations.tenantId, tenantId),
+        eq(complianceObligations.obligationType, 'spay_neuter'),
+        eq(complianceObligations.status, 'pending'),
+        isNull(complianceObligations.proofDocumentUrl),
+        lt(complianceObligations.contractualDueDate, todayStr),
+      ));
+
+    if (overdueObligations.length === 0) return result;
+
+    const [tenantRecord] = await db
+      .select({ subdomain: tenants.subdomain, customDomain: tenants.customDomain, name: tenants.name })
+      .from(tenants)
+      .where(eq(tenants.id, tenantId))
+      .limit(1);
+
+    for (const obligation of overdueObligations) {
+      try {
+        await db
+          .update(complianceObligations)
+          .set({ status: 'overdue', updatedAt: new Date() })
+          .where(eq(complianceObligations.id, obligation.id));
+        result.escalated++;
+        console.log(`[SpayNeuterBreach] Escalated obligation ${obligation.id} for ${obligation.animalName} to overdue`);
+
+        const portalUrl = tenantRecord
+          ? buildPortalUrl(tenantRecord, '/my-pets')
+          : 'https://irescue.life/my-pets';
+        const firstName = obligation.adopterName.split(' ')[0];
+        const formattedDate = new Date(obligation.contractualDueDate).toLocaleDateString('en-US', {
+          month: 'long', day: 'numeric', year: 'numeric',
+        });
+
+        // Dedup: skip if we already sent a breach notification to this phone in the last 7 days
+        let skipSms = false;
+        let skipEmail = false;
+        if (obligation.adopterPhone) {
+          const sevenDaysAgo = new Date();
+          sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+          const recentSms = await db
+            .select({ id: smsMessageLogs.id })
+            .from(smsMessageLogs)
+            .where(and(
+              eq(smsMessageLogs.tenantId, tenantId),
+              eq(smsMessageLogs.direction, 'outbound'),
+              eq(smsMessageLogs.toNumber, obligation.adopterPhone),
+              gte(smsMessageLogs.createdAt, sevenDaysAgo),
+              like(smsMessageLogs.body, '%spay/neuter was due%'),
+            ))
+            .limit(1);
+          if (recentSms.length > 0) skipSms = true;
+        }
+
+        const recentNotif = await db
+          .select({ id: adopterNotificationLogs.id })
+          .from(adopterNotificationLogs)
+          .where(and(
+            eq(adopterNotificationLogs.tenantId, tenantId),
+            eq(adopterNotificationLogs.animalId, obligation.animalId),
+            eq(adopterNotificationLogs.notificationType, 'spay_neuter_breach'),
+            sql`${adopterNotificationLogs.sentAt} > NOW() - INTERVAL '7 days'`,
+          ))
+          .limit(1);
+        if (recentNotif.length > 0) skipEmail = true;
+
+        const breachMessage = `Important: ${obligation.animalName}'s spay/neuter procedure was due on ${formattedDate} and we haven't received proof yet. Please upload a photo of your vet receipt in your Adopter Portal: ${portalUrl} — or contact us if you need help scheduling.`;
+
+        if (obligation.adopterPhone && !skipSms) {
+          try {
+            await sendSms(tenantId, obligation.adopterPhone, breachMessage, 'reminder', {
+              relatedAnimalId: obligation.animalId,
+            });
+            result.notified++;
+          } catch (smsErr) {
+            result.errors.push(`SMS breach notification failed for ${obligation.adopterPhone}: ${smsErr instanceof Error ? smsErr.message : 'Unknown'}`);
+          }
+        }
+
+        if (obligation.adopterEmail && !skipEmail) {
+          try {
+            const emailService = await EmailService.forTenant(tenantId);
+            if (emailService) {
+              await emailService.send({
+                to: obligation.adopterEmail,
+                subject: `Action Required: ${obligation.animalName}'s Spay/Neuter is Overdue`,
+                html: `
+                  <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #374151;">
+                    <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+                      <h2 style="color: #dc2626; margin: 0 0 12px 0;">Spay/Neuter Compliance Overdue</h2>
+                      <p>Hi ${firstName},</p>
+                      <p>Our records show that <strong>${obligation.animalName}</strong>'s spay/neuter procedure was required by <strong>${formattedDate}</strong>, and we haven't received proof of completion yet.</p>
+                      <p>This is a contractual requirement of your adoption agreement. Please:</p>
+                      <ol>
+                        <li>Schedule the procedure with your veterinarian if not already done</li>
+                        <li>Upload a photo of the vet receipt to your Adopter Portal</li>
+                      </ol>
+                    </div>
+                    <div style="text-align: center; margin: 24px 0;">
+                      <a href="${portalUrl}" style="display: inline-block; background: #dc2626; color: white; text-decoration: none; padding: 12px 32px; border-radius: 8px; font-size: 15px; font-weight: 600;">
+                        Upload Proof Now
+                      </a>
+                    </div>
+                    <p style="font-size: 13px; color: #6b7280;">If you need help scheduling or have questions, please contact us at ${tenantRecord?.name || 'the rescue'}. We're here to help!</p>
+                  </div>
+                `,
+              });
+
+              await db.insert(adopterNotificationLogs).values({
+                tenantId,
+                userId: '',
+                animalId: obligation.animalId,
+                notificationType: 'spay_neuter_breach',
+                channel: 'email',
+                subject: `Spay/Neuter Compliance Overdue: ${obligation.animalName}`,
+                message: breachMessage,
+                itemId: obligation.id,
+              });
+              result.notified++;
+            }
+          } catch (emailErr) {
+            result.errors.push(`Email breach notification failed for ${obligation.adopterEmail}: ${emailErr instanceof Error ? emailErr.message : 'Unknown'}`);
+          }
+        }
+      } catch (err) {
+        result.errors.push(`Obligation ${obligation.id}: ${err instanceof Error ? err.message : 'Unknown'}`);
+      }
+    }
+  } catch (err) {
+    result.errors.push(`Tenant ${tenantId}: ${err instanceof Error ? err.message : 'Unknown'}`);
+  }
+
+  return result;
+}
+
+export async function escalateOverdueSpayNeuterForAllTenants(): Promise<{ escalated: number; notified: number; errors: string[] }> {
+  const activeTenants = await db
+    .select({ id: tenants.id })
+    .from(tenants)
+    .where(eq(tenants.isActive, true));
+
+  let totalEscalated = 0;
+  let totalNotified = 0;
+  const allErrors: string[] = [];
+
+  for (const tenant of activeTenants) {
+    try {
+      const r = await escalateOverdueSpayNeuter(tenant.id);
+      totalEscalated += r.escalated;
+      totalNotified += r.notified;
+      allErrors.push(...r.errors);
+    } catch (err) {
+      allErrors.push(`Tenant ${tenant.id}: ${err instanceof Error ? err.message : 'Unknown'}`);
+    }
+  }
+
+  return { escalated: totalEscalated, notified: totalNotified, errors: allErrors };
+}
+
 export async function sendAnnualVaccineRemindersForAllTenants(): Promise<{ sent: number; errors: string[] }> {
   const activeTenants = await db
     .select({ id: tenants.id })

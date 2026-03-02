@@ -1,0 +1,29 @@
+Post-adoption compliance is historically the biggest "black hole" in animal rescue. Once the dog leaves the building, shelter staff are usually too overwhelmed with new intakes to chase down a new owner for a spay/neuter receipt.
+Automating this is one of the highest-value features your software offers. You want to divide your Adopter Compliance Engine into two specific tracks: Legal/Medical Compliance and Retention (Return Prevention).
+Here is the master checklist for what your system should monitor and the exact automated notifications it should send to adopters:
+Track 1: Legal & Medical Compliance (The "Must-Dos")
+This track protects the rescue legally and ensures the animal is receiving required veterinary care.
+1. Spay/Neuter Enforcement (The #1 Priority)
+ * The Rule: Many rescues adopt out puppies at 8 weeks old with a legally binding contract stating the dog must be altered by 6 months of age.
+ * The Notification: 14 days before the contract's spay_neuter_due_date, the system texts/emails the adopter: "Hi [Name]! A friendly reminder from the rescue that [Animal]'s spay/neuter procedure is required by [Date]. Please tap here to upload a photo of your vet receipt: [Portal Link]"
+ * The Monitoring: If the date passes and no document is uploaded, it triggers a red "Compliance Breach" alert on the Shelter Manager's Daily Briefing dashboard so they can call the adopter.
+2. Annual Vaccine Reminders
+ * The Rule: Adopters often forget when their pet's 1-Year Rabies or DHPP/FVRCP vaccines expire.
+ * The Notification: 11 months after the pet's last recorded annual vaccines, the system sends: "Hi [Name]! Can you believe it's almost been a year? This is a reminder that [Animal] will be due for their annual vet checkup and Rabies vaccine next month!"
+3. Microchip Registration Verification
+ * The Rule: A microchip is useless if the adopter never registers their phone number to it.
+ * The Notification: 7 days post-adoption: "Hi [Name]! Please ensure you have registered [Animal]'s microchip ([Microchip Number]) with [Brand]. This is critical if they ever get lost!"
+Track 2: Retention Monitoring (The "3-3-3 Rule")
+This track is designed to prevent "bounce backs" (when an adopter returns a dog because they are overwhelmed). The industry standard for rescue dog decompression is the "3-3-3 Rule" (3 Days, 3 Weeks, 3 Months).
+1. The 3-Day Check-in (The Overwhelm Phase)
+ * The Notification: "Hi [Name]! It's been 3 days! [Animal] is likely feeling overwhelmed as they decompress. Remember to keep things quiet, positive, and stick to a routine. Need advice? Reply HELP to connect with our behavior team."
+ * The Monitoring: If they reply HELP, Twilio routes this directly to your staff's dashboard so you can intervene before they give up and return the dog.
+2. The 3-Week Check-in (The Routine Phase)
+ * The Notification: "Happy 3 Weeks! [Animal] should be settling into your daily routine and showing their true personality now. We'd love to see how they are doing—reply with a photo!"
+3. The 3-Month Check-in (The Anniversary Phase)
+ * The Notification: "Happy 3-Month Rescue Anniversary to [Animal]! Thank you for giving them a forever home. 🐾"
+How the Staff Monitors This (The Dashboard Loop)
+For the software to work, the rescue staff needs a clean place to monitor these actions.
+When an adopter uses their Adopter Portal to upload a Spay/Neuter vet receipt, the system should change the status in your adopter_compliance table to pending_review.
+On the main Command Center, the staff sees an alert: "Review Spay/Neuter Proof for Barnaby." They click it, look at the uploaded image of the vet receipt, click "Approve", and the compliance loop is officially closed.
+Would you like me to draft the exact Replit prompt to build the Adopter Notification Cron Job that fires off these specific text messages automatically, or are we ready to jump into the Super Admin / Platform Owner Dashboard?

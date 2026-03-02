@@ -485,6 +485,7 @@ export function initializeScheduler() {
         runAdopterComplianceForAllTenants,
         sendSpayNeuterWarningsForAllTenants,
         sendAnnualVaccineRemindersForAllTenants,
+        escalateOverdueSpayNeuterForAllTenants,
       } = await import("./adopter-compliance-notifications");
 
       // 1. Core vaccine/preventative compliance reminders
@@ -499,7 +500,12 @@ export function initializeScheduler() {
       if (snResult.sent > 0) console.log(`✓ Spay/neuter warnings: ${snResult.sent} SMS sent`);
       if (snResult.errors.length > 0) console.warn(`Spay/neuter warning errors: ${snResult.errors.slice(0, 3).join('; ')}`);
 
-      // 3. Annual vaccine planning reminder SMS (11-month mark)
+      // 3. Spay/Neuter breach escalation (overdue with no proof)
+      const breachResult = await escalateOverdueSpayNeuterForAllTenants();
+      if (breachResult.escalated > 0) console.log(`✓ Spay/neuter breaches: ${breachResult.escalated} escalated, ${breachResult.notified} notified`);
+      if (breachResult.errors.length > 0) console.warn(`Spay/neuter breach errors: ${breachResult.errors.slice(0, 3).join('; ')}`);
+
+      // 4. Annual vaccine planning reminder SMS (11-month mark)
       const avResult = await sendAnnualVaccineRemindersForAllTenants();
       if (avResult.sent > 0) console.log(`✓ Annual vaccine reminders: ${avResult.sent} SMS sent`);
       if (avResult.errors.length > 0) console.warn(`Annual vaccine reminder errors: ${avResult.errors.slice(0, 3).join('; ')}`);

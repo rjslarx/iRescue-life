@@ -1,5 +1,5 @@
 import { db } from '../db';
-import { scheduledCommunications, animals, tenants, adoptionCheckoutSessions, contacts } from '@shared/schema';
+import { scheduledCommunications, animals, tenants, adoptionCheckoutSessions, contacts, microchipRecords } from '@shared/schema';
 import { eq, and, lte, ne } from 'drizzle-orm';
 import { EmailService } from './email-service';
 import { sendSms } from './twilio-service';
@@ -144,6 +144,90 @@ const emailTemplates = {
   },
 };
 
+const microchipManufacturerNames: Record<string, string> = {
+  homeagain: 'HomeAgain',
+  '24petwatch': '24PetWatch',
+  fi: 'Fi',
+  akc: 'AKC Reunite',
+  avid: 'AVID',
+  foundanimals: 'Found Animals',
+  petlink: 'PetLink',
+  other: 'Other',
+};
+
+const microchipRegistrationUrls: Record<string, string> = {
+  homeagain: 'https://www.homeagain.com',
+  '24petwatch': 'https://www.24petwatch.com',
+  fi: 'https://tryfi.com',
+  akc: 'https://www.akcreunite.org',
+  avid: 'https://www.avidid.com',
+  foundanimals: 'https://www.foundanimals.org',
+  petlink: 'https://www.petlink.net',
+  other: 'https://www.freepetchipregistry.com',
+};
+
+function getMicrochipEmailTemplate(
+  adopterName: string,
+  animalName: string,
+  tenantName: string,
+  microchipNumber: string,
+  manufacturer: string
+) {
+  const mfgName = microchipManufacturerNames[manufacturer] || manufacturer;
+  const registrationUrl = microchipRegistrationUrls[manufacturer] || microchipRegistrationUrls.other;
+
+  return {
+    subject: `Action Required: Register ${animalName}'s Microchip`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #2563eb;">Register ${animalName}'s Microchip in Your Name</h2>
+        
+        <p>Dear ${adopterName},</p>
+        
+        <p>It's been one week since you adopted ${animalName} - congratulations! There's one important step 
+        to make sure ${animalName} can always find their way back to you: <strong>registering their microchip 
+        in your name</strong>.</p>
+        
+        <div style="background-color: #eff6ff; border-left: 4px solid #3b82f6; padding: 15px; margin: 20px 0;">
+          <h3 style="color: #1e40af; margin-top: 0;">Microchip Details</h3>
+          <table style="width: 100%; border-collapse: collapse;">
+            <tr>
+              <td style="padding: 5px 10px; font-weight: bold; color: #1e3a8a;">Microchip Number:</td>
+              <td style="padding: 5px 10px; font-family: monospace; font-size: 16px;">${microchipNumber}</td>
+            </tr>
+            <tr>
+              <td style="padding: 5px 10px; font-weight: bold; color: #1e3a8a;">Manufacturer:</td>
+              <td style="padding: 5px 10px;">${mfgName}</td>
+            </tr>
+          </table>
+        </div>
+
+        <h3 style="color: #2563eb;">How to Register:</h3>
+        <ol>
+          <li>Visit <a href="${registrationUrl}" style="color: #2563eb;">${mfgName}'s registration website</a></li>
+          <li>Enter the microchip number: <strong>${microchipNumber}</strong></li>
+          <li>Update the contact information to your current name, address, and phone number</li>
+          <li>Save your registration confirmation for your records</li>
+        </ol>
+
+        <div style="background-color: #fef2f2; border-left: 4px solid #ef4444; padding: 15px; margin: 20px 0;">
+          <h3 style="color: #991b1b; margin-top: 0;">Why This Matters</h3>
+          <p style="margin: 5px 0; color: #7f1d1d;">A microchip only works if the registration is up to date. 
+          Without your current contact information linked to the chip, a found pet cannot be returned to you. 
+          This takes less than 5 minutes and could save ${animalName}'s life.</p>
+        </div>
+
+        <p>If you have any trouble with the registration process, please don't hesitate to contact us for help.</p>
+        
+        <p style="margin-top: 30px;">
+          Thank you for keeping ${animalName} safe,<br>
+          <strong>The ${tenantName} Team</strong>
+        </p>
+      </div>
+    `,
+  };
+}
+
 /**
  * Process scheduled retention emails for all tenants
  * Runs daily to send 3-3-3 Rule emails
@@ -207,19 +291,55 @@ export async function runRetentionEmailsJob(): Promise<RetentionEmailResult> {
           continue;
         }
 
-        // Get template for this message type
-        const template = emailTemplates[comm.messageType as keyof typeof emailTemplates];
-        if (!template) {
-          result.errors.push(`Unknown message type: ${comm.messageType}`);
-          continue;
-        }
+        if (comm.messageType === '7_days_microchip') {
+          const [chipRecord] = await db
+            .select()
+            .from(microchipRecords)
+            .where(and(
+              eq(microchipRecords.animalId, comm.animalId),
+              eq(microchipRecords.tenantId, comm.tenantId)
+            ))
+            .limit(1);
 
-        // Send the email
-        await emailService.send({
-          to: comm.adopterEmail,
-          subject: template.subject(comm.animalName),
-          html: template.html(comm.adopterName, comm.animalName, tenant.name),
-        });
+          if (!chipRecord) {
+            console.log(`[Retention] No microchip record for ${comm.animalName} (${comm.animalId}) — cancelling 7_days_microchip reminder`);
+            await db
+              .update(scheduledCommunications)
+              .set({
+                status: 'cancelled',
+                cancelReason: 'No microchip record found for animal',
+              })
+              .where(eq(scheduledCommunications.id, comm.id));
+            result.emailsCancelled++;
+            continue;
+          }
+
+          const chipTemplate = getMicrochipEmailTemplate(
+            comm.adopterName,
+            comm.animalName,
+            tenant.name,
+            chipRecord.microchipNumber,
+            chipRecord.manufacturer
+          );
+
+          await emailService.send({
+            to: comm.adopterEmail,
+            subject: chipTemplate.subject,
+            html: chipTemplate.html,
+          });
+        } else {
+          const template = emailTemplates[comm.messageType as keyof typeof emailTemplates];
+          if (!template) {
+            result.errors.push(`Unknown message type: ${comm.messageType}`);
+            continue;
+          }
+
+          await emailService.send({
+            to: comm.adopterEmail,
+            subject: template.subject(comm.animalName),
+            html: template.html(comm.adopterName, comm.animalName, tenant.name),
+          });
+        }
 
         // Mark as sent
         await db
@@ -250,10 +370,26 @@ export async function runRetentionEmailsJob(): Promise<RetentionEmailResult> {
 
             if (adopterContact?.phone) {
               const firstName = comm.adopterName.split(' ')[0];
+              let microchipSmsExtra = '';
+              if (comm.messageType === '7_days_microchip') {
+                const [chipForSms] = await db
+                  .select({ microchipNumber: microchipRecords.microchipNumber, manufacturer: microchipRecords.manufacturer })
+                  .from(microchipRecords)
+                  .where(and(
+                    eq(microchipRecords.animalId, comm.animalId),
+                    eq(microchipRecords.tenantId, comm.tenantId)
+                  ))
+                  .limit(1);
+                if (chipForSms) {
+                  const mfgName = microchipManufacturerNames[chipForSms.manufacturer] || chipForSms.manufacturer;
+                  microchipSmsExtra = `Hi ${firstName}! Reminder: Please register ${comm.animalName}'s microchip (${chipForSms.microchipNumber}) in your name at ${mfgName}'s website. This ensures ${comm.animalName} can always be returned to you if lost.`;
+                }
+              }
               const smsTemplates: Record<string, string> = {
                 '3_days': `Hi ${firstName}! It's been 3 days with ${comm.animalName}. They're still decompressing — keep things calm and quiet. Reply HELP if you need advice from our team!`,
                 '3_weeks': `Happy 3 Weeks with ${comm.animalName}! They should be settling into their routine now. We'd love to see a photo — reply with a pic!`,
                 '3_months': `Happy 3 Month Rescue Anniversary to ${comm.animalName}! Thank you for giving them a forever home!`,
+                '7_days_microchip': microchipSmsExtra,
               };
               const smsBody = smsTemplates[comm.messageType];
               if (smsBody) {

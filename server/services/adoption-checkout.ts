@@ -1740,7 +1740,7 @@ export async function finalizeAdoption(sessionId: string): Promise<void> {
     const month3 = new Date(now);
     month3.setDate(month3.getDate() + 90);
 
-    await db.insert(scheduledCommunications).values([
+    const commValues: any[] = [
       {
         tenantId: session.tenantId,
         adoptionId: session.id,
@@ -1774,7 +1774,35 @@ export async function finalizeAdoption(sessionId: string): Promise<void> {
         messageType: '3_months',
         status: 'pending',
       },
-    ]);
+    ];
+
+    const { microchipRecords } = await import('@shared/schema');
+    const [chipRecord] = await db
+      .select()
+      .from(microchipRecords)
+      .where(and(
+        eq(microchipRecords.animalId, session.animalId),
+        eq(microchipRecords.tenantId, session.tenantId)
+      ))
+      .limit(1);
+
+    if (chipRecord) {
+      const day7 = new Date(now);
+      day7.setDate(day7.getDate() + 7);
+      commValues.push({
+        tenantId: session.tenantId,
+        adoptionId: session.id,
+        animalId: session.animalId,
+        adopterEmail: recipientEmail,
+        adopterName: recipientName,
+        animalName: animal.name,
+        sendDate: day7,
+        messageType: '7_days_microchip',
+        status: 'pending',
+      });
+    }
+
+    await db.insert(scheduledCommunications).values(commValues);
   }
 
   // Send confirmation email with PDF attachments

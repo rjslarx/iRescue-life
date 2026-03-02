@@ -1,6 +1,6 @@
 import twilio from 'twilio';
 import { db } from '../db';
-import { tenants, smsMessageLogs, smsProxySessions, transportEvents, users, fosterAnimals, supplyRequests, fosterUpdates, medicationTasks, complianceReminders, animals } from '@shared/schema';
+import { tenants, smsMessageLogs, smsProxySessions, transportEvents, users, fosterAnimals, supplyRequests, fosterUpdates, medicationTasks, complianceReminders, animals, contacts, adoptionCheckoutSessions } from '@shared/schema';
 import { eq, and, desc, gte, isNotNull, inArray, or } from 'drizzle-orm';
 import { decrypt, encrypt } from './encryption';
 
@@ -387,7 +387,7 @@ export async function handleIncomingSms(
   toNumber: string,
   body: string,
   mediaUrls: string[] = []
-): Promise<{ success: boolean; routedAs?: 'supply_request' | 'foster_update' | 'medication_confirmed' | 'fuzzy_done_hint' | null; message?: string }> {
+): Promise<{ success: boolean; routedAs?: 'supply_request' | 'foster_update' | 'medication_confirmed' | 'fuzzy_done_hint' | 'adopter_help_request' | null; message?: string }> {
   const normalizedBody = body.trim().toUpperCase();
   
   if (isDoneMatch(normalizedBody) || isFuzzyDoneMatch(normalizedBody)) {
@@ -512,6 +512,87 @@ export async function handleIncomingSms(
       console.error('[TWILIO] Error routing foster SMS to DB:', routingError);
       // Return success so Twilio doesn't retry — message was received, just not stored
       return { success: true, routedAs: null, message: 'Routing error' };
+    }
+  }
+
+  if (normalizedBody === 'HELP' || normalizedBody.startsWith('HELP ')) {
+    try {
+      const [tenant] = await db
+        .select({ id: tenants.id })
+        .from(tenants)
+        .where(eq(tenants.twilioPhoneNumber, toNumber))
+        .limit(1);
+
+      if (tenant) {
+        const adopterMatch = await db
+          .select({
+            contactId: contacts.id,
+            contactName: contacts.name,
+            sessionId: adoptionCheckoutSessions.id,
+            animalId: adoptionCheckoutSessions.animalId,
+            staffInitiatedBy: adoptionCheckoutSessions.staffInitiatedBy,
+          })
+          .from(contacts)
+          .innerJoin(
+            adoptionCheckoutSessions,
+            and(
+              eq(adoptionCheckoutSessions.adopterContactId, contacts.id),
+              eq(adoptionCheckoutSessions.tenantId, tenant.id),
+              eq(adoptionCheckoutSessions.status, 'completed')
+            )
+          )
+          .where(and(
+            eq(contacts.tenantId, tenant.id),
+            eq(contacts.phone, fromNumber)
+          ))
+          .orderBy(desc(adoptionCheckoutSessions.createdAt))
+          .limit(1);
+
+        if (adopterMatch.length > 0) {
+          const adopter = adopterMatch[0];
+
+          let routeToUserId = adopter.staffInitiatedBy;
+          if (!routeToUserId) {
+            const [adminUser] = await db
+              .select({ id: users.id })
+              .from(users)
+              .where(and(eq(users.tenantId, tenant.id), eq(users.role, 'admin')))
+              .limit(1);
+            routeToUserId = adminUser?.id ?? null;
+          }
+
+          if (routeToUserId) {
+            await db.insert(fosterUpdates).values({
+              tenantId: tenant.id,
+              fosterId: routeToUserId,
+              animalId: adopter.animalId,
+              updateType: 'help_request',
+              description: `HELP request from adopter ${adopter.contactName} (${fromNumber}): ${body}`,
+              photoUrls: [],
+              source: 'sms',
+              priority: 'urgent',
+              status: 'pending',
+            });
+          } else {
+            console.warn(`[TWILIO] HELP request from ${fromNumber} but no staff user to route to for tenant ${tenant.id}`);
+          }
+
+          const config = await getTwilioConfig(tenant.id);
+          if (config) {
+            const client = createTwilioClient(config);
+            try {
+              await sendWithFallback(client, config, fromNumber, "We got your message! A team member will reach out shortly.");
+            } catch (replyErr) {
+              console.error('[TWILIO] Failed to send HELP auto-reply:', replyErr);
+            }
+          }
+
+          console.log(`[TWILIO] Adopter HELP request from ${fromNumber}, contact ${adopter.contactId}`);
+          return { success: true, routedAs: 'adopter_help_request' };
+        }
+      }
+    } catch (helpErr) {
+      console.error('[TWILIO] Error routing adopter HELP keyword:', helpErr);
     }
   }
 
