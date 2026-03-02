@@ -27645,17 +27645,18 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
             });
           }
         }
-        // Return calendars with granular permission info
-        const calendarsWithPermissions = allCalendars.map(cal => {
-          const perms = permissionMap.get(cal.id);
-          return {
-            ...cal,
-            canEdit: perms?.canEdit ?? false,
-            canAdd: perms?.canAdd ?? false,
-            canDelete: perms?.canDelete ?? false,
-            canAssignOthers: perms?.canAssignOthers ?? false,
-          };
-        });
+        const calendarsWithPermissions = allCalendars
+          .filter(cal => permissionMap.has(cal.id))
+          .map(cal => {
+            const perms = permissionMap.get(cal.id)!;
+            return {
+              ...cal,
+              canEdit: perms.canEdit,
+              canAdd: perms.canAdd,
+              canDelete: perms.canDelete,
+              canAssignOthers: perms.canAssignOthers,
+            };
+          });
         return res.json({ calendars: calendarsWithPermissions });
       }
 
