@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
-import { Loader2, Bell, Mail, Plus, X, Save, Users, FileText, PawPrint, Heart, Truck, ChevronDown, ChevronUp, MessageSquare } from "lucide-react";
+import { Loader2, Bell, Mail, Plus, X, Save, Users, FileText, PawPrint, Heart, Truck, ChevronDown, ChevronUp, MessageSquare, Sunrise } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { NOTIFICATION_EVENT_LABELS, NOTIFICATION_EVENT_KEYS } from "@shared/schema";
@@ -57,6 +57,106 @@ const CATEGORY_ORDER = [
 ];
 
 const E164_REGEX = /^\+[1-9]\d{7,14}$/;
+
+const BRIEFING_ROLE_OPTIONS = [
+  { value: "admin", label: "Admin" },
+  { value: "owner", label: "Owner" },
+  { value: "staff", label: "Staff" },
+  { value: "board_member", label: "Board Member" },
+];
+
+function DailyBriefingRecipientsCard() {
+  const { toast } = useToast();
+  const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
+  const [initialized, setInitialized] = useState(false);
+
+  const { data, isLoading } = useQuery<{ briefingRecipientRoles: string[] }>({
+    queryKey: ['/api/tenant/settings/briefing-recipients'],
+  });
+
+  useEffect(() => {
+    if (data && !initialized) {
+      setSelectedRoles(data.briefingRecipientRoles || ['admin']);
+      setInitialized(true);
+    }
+  }, [data, initialized]);
+
+  const saveMutation = useMutation({
+    mutationFn: async (roles: string[]) => {
+      return await apiRequest('PATCH', '/api/tenant/settings/briefing-recipients', { briefingRecipientRoles: roles });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/tenant/settings/briefing-recipients'] });
+      toast({ title: "Briefing recipients updated", description: "Daily briefing email will be sent to the selected roles." });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error updating recipients", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const hasChanges = initialized && JSON.stringify(selectedRoles.sort()) !== JSON.stringify((data?.briefingRecipientRoles || ['admin']).sort());
+
+  const toggleRole = (role: string) => {
+    setSelectedRoles(prev => {
+      if (prev.includes(role)) {
+        if (prev.length === 1) return prev;
+        return prev.filter(r => r !== role);
+      }
+      return [...prev, role];
+    });
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Sunrise className="h-5 w-5" />
+              Daily Briefing Email
+            </CardTitle>
+            <CardDescription className="mt-1">
+              Choose which roles receive the automated daily briefing email each morning.
+            </CardDescription>
+          </div>
+          {hasChanges && (
+            <Button
+              onClick={() => saveMutation.mutate(selectedRoles)}
+              disabled={saveMutation.isPending}
+              data-testid="button-save-briefing-recipients"
+            >
+              {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+              Save
+            </Button>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="flex items-center justify-center py-6">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-4">
+            {BRIEFING_ROLE_OPTIONS.map(role => (
+              <label
+                key={role.value}
+                className="flex items-center gap-2 cursor-pointer"
+                data-testid={`checkbox-briefing-role-${role.value}`}
+              >
+                <Checkbox
+                  checked={selectedRoles.includes(role.value)}
+                  onCheckedChange={() => toggleRole(role.value)}
+                />
+                <span className="text-sm">{role.label}</span>
+              </label>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function NotificationPreferencesSettings({ twilioEnabled }: NotificationPreferencesSettingsProps) {
   const { toast } = useToast();
@@ -259,6 +359,7 @@ export default function NotificationPreferencesSettings({ twilioEnabled }: Notif
 
   return (
     <div className="space-y-4">
+      <DailyBriefingRecipientsCard />
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between gap-4 flex-wrap">

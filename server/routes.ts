@@ -41813,6 +41813,29 @@ The user asking is a tenant administrator or staff member.`;
     } catch (error) { next(error); }
   });
 
+  app.get('/api/tenant/settings/briefing-recipients', requireTenant, requireAuth, requireRole('admin', 'owner'), async (req, res, next) => {
+    try {
+      const [tenant] = await db.select({ briefingRecipientRoles: tenants.briefingRecipientRoles }).from(tenants).where(eq(tenants.id, req.tenant!.id));
+      res.json({ briefingRecipientRoles: tenant?.briefingRecipientRoles ?? ['admin'] });
+    } catch (error) { next(error); }
+  });
+
+  app.patch('/api/tenant/settings/briefing-recipients', requireTenant, requireAuth, requireRole('admin', 'owner'), async (req, res, next) => {
+    try {
+      const { briefingRecipientRoles } = req.body;
+      const validRoles = ['admin', 'staff', 'board_member', 'owner'];
+      if (!Array.isArray(briefingRecipientRoles) || briefingRecipientRoles.length === 0 ||
+          !briefingRecipientRoles.every(r => validRoles.includes(r))) {
+        return res.status(400).json({ error: 'briefingRecipientRoles must be a non-empty array of valid roles' });
+      }
+      const [updated] = await db.update(tenants)
+        .set({ briefingRecipientRoles })
+        .where(eq(tenants.id, req.tenant!.id))
+        .returning({ briefingRecipientRoles: tenants.briefingRecipientRoles });
+      res.json({ briefingRecipientRoles: updated.briefingRecipientRoles });
+    } catch (error) { next(error); }
+  });
+
   /**
    * GET /api/communications/queue/:id/recipient-info
    * Look up recipient contact info for channel conversion

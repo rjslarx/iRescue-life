@@ -823,18 +823,27 @@ export async function sendDailyBriefingForTenant(tenantId: string): Promise<{ se
       return { sent: 0, errors: ['Tenant not found'] };
     }
 
+    const [tenantSettings] = await db
+      .select({ briefingRecipientRoles: tenants.briefingRecipientRoles })
+      .from(tenants)
+      .where(eq(tenants.id, tenantId))
+      .limit(1);
+
+    const recipientRoles = tenantSettings?.briefingRecipientRoles?.length
+      ? tenantSettings.briefingRecipientRoles
+      : ['admin'];
+
     const staffUsers = await db
       .select({ email: users.email, fullName: users.fullName, roles: users.roles })
       .from(users)
       .where(and(
         eq(users.tenantId, tenantId),
         eq(users.isActive, true),
-        sql`(${users.roles} && ARRAY['admin', 'staff', 'board_member']::text[])`
+        sql`(${users.roles} && ${sql.raw(`ARRAY[${recipientRoles.map(r => `'${r}'`).join(',')}]::text[]`)})`
       ));
 
-    const recipients = staffUsers
-      .filter(u => u.email)
-      .map(u => u.email);
+    const uniqueEmails = [...new Set(staffUsers.filter(u => u.email).map(u => u.email))];
+    const recipients = uniqueEmails;
 
     if (recipients.length === 0) {
       return { sent: 0, errors: [] };

@@ -307,6 +307,7 @@ export const tenants = pgTable("tenants", {
   jotformSurrenderUrl: text("jotform_surrender_url"),
   
   commsPaused: boolean("comms_paused").notNull().default(false),
+  briefingRecipientRoles: text("briefing_recipient_roles").array().default(sql`ARRAY['admin']::text[]`),
   
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
