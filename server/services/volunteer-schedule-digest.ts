@@ -3,7 +3,7 @@ import {
   tenants,
   calendars,
   calendarEvents,
-  contacts,
+  users,
   type Tenant,
 } from "@shared/schema";
 import { eq, and, gte, lte, inArray } from "drizzle-orm";
@@ -81,23 +81,23 @@ export class VolunteerScheduleDigestService {
       return result;
     }
 
-    const contactIds = events
+    const volunteerUserIds = events
       .map((e) => e.volunteerContactId)
       .filter((id): id is string => !!id);
 
-    const uniqueContactIds = [...new Set(contactIds)];
-    let contactMap = new Map<string, { name: string; email: string }>();
+    const uniqueUserIds = [...new Set(volunteerUserIds)];
+    let userMap = new Map<string, { name: string; email: string }>();
 
-    if (uniqueContactIds.length > 0) {
-      const contactRows = await db
-        .select({ id: contacts.id, name: contacts.name, email: contacts.email })
-        .from(contacts)
-        .where(inArray(contacts.id, uniqueContactIds));
+    if (uniqueUserIds.length > 0) {
+      const userRows = await db
+        .select({ id: users.id, fullName: users.fullName, email: users.email })
+        .from(users)
+        .where(inArray(users.id, uniqueUserIds));
 
-      contactMap = new Map(
-        contactRows
-          .filter((c) => c.email)
-          .map((c) => [c.id, { name: c.name, email: c.email! }])
+      userMap = new Map(
+        userRows
+          .filter((u) => u.email)
+          .map((u) => [u.id, { name: u.fullName || u.email, email: u.email }])
       );
     }
 
@@ -110,10 +110,10 @@ export class VolunteerScheduleDigestService {
       let volunteerEmail: string | null = null;
       let volunteerName: string = '';
 
-      if (event.volunteerContactId && contactMap.has(event.volunteerContactId)) {
-        const contact = contactMap.get(event.volunteerContactId)!;
-        volunteerEmail = contact.email.toLowerCase();
-        volunteerName = contact.name;
+      if (event.volunteerContactId && userMap.has(event.volunteerContactId)) {
+        const volunteer = userMap.get(event.volunteerContactId)!;
+        volunteerEmail = volunteer.email.toLowerCase();
+        volunteerName = volunteer.name;
       }
 
       if (!volunteerEmail) continue;
