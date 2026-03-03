@@ -3,12 +3,33 @@ import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { FileText, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { format, addMonths } from "date-fns";
+import { format, addMonths, addDays, addYears, addWeeks } from "date-fns";
 
 function formatDateSafe(value: string | Date, fmt: string = 'MM/dd/yyyy'): string {
   const d = typeof value === 'string' ? new Date(value) : value;
   const dateStr = d.toISOString().split('T')[0];
   return format(new Date(dateStr + 'T12:00:00'), fmt);
+}
+
+function extrapolateNextDue(lastGiven: string | Date, frequency: string): Date | null {
+  const freq = frequency.toUpperCase();
+  const base = typeof lastGiven === 'string' ? new Date(lastGiven) : lastGiven;
+  switch (freq) {
+    case 'SID': return addDays(base, 1);
+    case 'BID': return addDays(base, 1);
+    case 'TID': return addDays(base, 1);
+    case 'QID': return addDays(base, 1);
+    case 'EOD': return addDays(base, 2);
+    case 'WEEKLY': return addWeeks(base, 1);
+    case 'BIWEEKLY': return addWeeks(base, 2);
+    case 'MONTHLY': return addMonths(base, 1);
+    case 'Q6M': return addMonths(base, 6);
+    case 'ANNUALLY': return addYears(base, 1);
+    case 'ONCE':
+    case 'PRN':
+      return null;
+    default: return null;
+  }
 }
 
 function calculateDueDate(record: any, dateField: string, dueField: string, durationField?: string): string {
@@ -395,6 +416,16 @@ export default function MedicalTransferPacket({
               nextDueDisplay = '\u2014';
             } else {
               nextDueDisplay = formatDateSafe(nextDue);
+            }
+          }
+          if (nextDueDisplay === '\u2014' && rx.lastGivenAt && rx.frequency) {
+            const isOngoing = !rx.endDate || (rx.startDate &&
+              formatDateSafe(rx.endDate, 'yyyy-MM-dd') === formatDateSafe(rx.startDate, 'yyyy-MM-dd'));
+            if (isOngoing) {
+              const extrapolated = extrapolateNextDue(rx.lastGivenAt, rx.frequency);
+              if (extrapolated) {
+                nextDueDisplay = formatDateSafe(extrapolated);
+              }
             }
           }
           medicationTableData.push([
