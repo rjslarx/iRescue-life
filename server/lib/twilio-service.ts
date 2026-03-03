@@ -203,6 +203,16 @@ export async function sendSms(
     };
   }
 
+  const nowUtc = new Date();
+  const cstHour = (nowUtc.getUTCHours() - 6 + 24) % 24;
+  if (cstHour >= 20 || cstHour < 6) {
+    return {
+      number: toNumber,
+      status: 'failed',
+      error: 'SMS blocked: quiet hours (8 PM – 6 AM CST)',
+    };
+  }
+
   const config = await getTwilioConfig(tenantId);
   if (!config) {
     return {
