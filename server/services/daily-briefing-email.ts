@@ -117,12 +117,29 @@ interface FosterPhotoItem {
   caption: string | null;
 }
 
+interface ShelterMissedMed {
+  animalName: string;
+  animalId: string;
+  drugName: string;
+  scheduledTime?: string;
+}
+
+interface OverdueExamItem {
+  animalName: string;
+  animalId: string;
+  examType: string;
+  scheduledDate: string;
+  performedBy: string;
+}
+
 interface BriefingData {
   tenantName: string;
   date: string;
   missedFosterMeds: MissedFosterMed[];
+  shelterMissedMeds: ShelterMissedMed[];
   surgeries: SurgeryItem[];
   exams: ExamItem[];
+  overdueExams: OverdueExamItem[];
   diagnostics: DiagnosticItem[];
   procedures: ProcedureItem[];
   shelterOverdueCare: OverdueCareItem[];
@@ -291,6 +308,119 @@ async function gatherBriefingData(tenantId: string): Promise<BriefingData | null
     }
   }
 
+  const shelterMissedMeds: ShelterMissedMed[] = [];
+  const yesterdayDoseStart = new Date(yesterdayStr + 'T00:00:00.000Z');
+
+  const shelterMissedDoses = await db
+    .select({
+      prescriptionId: medicalDoses.prescriptionId,
+      dueDate: medicalDoses.dueDate,
+    })
+    .from(medicalDoses)
+    .where(and(
+      eq(medicalDoses.tenantId, tenantId),
+      eq(medicalDoses.status, 'due'),
+      sql`${medicalDoses.dueDate} >= ${yesterdayDoseStart}`,
+      sql`${medicalDoses.dueDate} < ${todayStart}`
+    ));
+
+  if (shelterMissedDoses.length > 0) {
+    const prescIds = [...new Set(shelterMissedDoses.map(d => d.prescriptionId))];
+    const prescRows = await db
+      .select({
+        id: medicalPrescriptions.id,
+        animalId: medicalPrescriptions.animalId,
+        medicationName: medicalPrescriptions.medicationName,
+      })
+      .from(medicalPrescriptions)
+      .where(inArray(medicalPrescriptions.id, prescIds));
+
+    const shelterPrescriptions = prescRows.filter(p => !fosterAnimalIds.includes(p.animalId));
+
+    if (shelterPrescriptions.length > 0) {
+      const sAnimalIds = [...new Set(shelterPrescriptions.map(p => p.animalId))];
+      const sAnimalRows = await db
+        .select({ id: animals.id, name: animals.name })
+        .from(animals)
+        .where(inArray(animals.id, sAnimalIds));
+      const sAnimalMap = new Map(sAnimalRows.map(a => [a.id, a.name]));
+
+      const doseByPresc = new Map<string, Date | null>();
+      for (const dose of shelterMissedDoses) {
+        if (!doseByPresc.has(dose.prescriptionId)) {
+          doseByPresc.set(dose.prescriptionId, dose.dueDate);
+        }
+      }
+
+      for (const presc of shelterPrescriptions) {
+        const alreadyListed = shelterMissedMeds.some(m => m.animalId === presc.animalId && m.drugName === presc.medicationName);
+        if (!alreadyListed) {
+          const dueDate = doseByPresc.get(presc.id);
+          let timeStr: string | undefined;
+          if (dueDate) {
+            const h = dueDate.getUTCHours();
+            const m = dueDate.getUTCMinutes();
+            if (h !== 0 || m !== 0) {
+              const ampm = h >= 12 ? 'PM' : 'AM';
+              const h12 = h % 12 || 12;
+              timeStr = `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
+            }
+          }
+          shelterMissedMeds.push({
+            animalName: sAnimalMap.get(presc.animalId) || 'Unknown',
+            animalId: presc.animalId,
+            drugName: presc.medicationName,
+            scheduledTime: timeStr,
+          });
+        }
+      }
+    }
+  }
+
+  const shelterMissedTasks = await db
+    .select({
+      animalId: medicationTasks.animalId,
+      planId: medicationTasks.planId,
+      scheduledTime: medicationTasks.scheduledTime,
+    })
+    .from(medicationTasks)
+    .where(and(
+      eq(medicationTasks.tenantId, tenantId),
+      eq(medicationTasks.status, 'pending'),
+      eq(medicationTasks.scheduledDate, yesterdayStr),
+    ));
+
+  if (shelterMissedTasks.length > 0) {
+    const nonFosterTasks = shelterMissedTasks.filter(t => !fosterAnimalIds.includes(t.animalId));
+    if (nonFosterTasks.length > 0) {
+      const planIds = [...new Set(nonFosterTasks.map(t => t.planId))];
+      const plans = await db
+        .select({ id: medicationPlans.id, drugName: medicationPlans.drugName })
+        .from(medicationPlans)
+        .where(inArray(medicationPlans.id, planIds));
+      const planMap = new Map(plans.map(p => [p.id, p.drugName]));
+
+      const animalIds = [...new Set(nonFosterTasks.map(t => t.animalId))];
+      const animalRows = await db
+        .select({ id: animals.id, name: animals.name })
+        .from(animals)
+        .where(inArray(animals.id, animalIds));
+      const animalMap = new Map(animalRows.map(a => [a.id, a.name]));
+
+      for (const task of nonFosterTasks) {
+        const alreadyListed = shelterMissedMeds.some(m => m.animalId === task.animalId && m.drugName === (planMap.get(task.planId) || 'medication'));
+        if (!alreadyListed) {
+          shelterMissedMeds.push({
+            animalName: animalMap.get(task.animalId) || 'Unknown',
+            animalId: task.animalId,
+            drugName: planMap.get(task.planId) || 'medication',
+            scheduledTime: task.scheduledTime,
+          });
+        }
+      }
+    }
+  }
+
   const surgeryRows = await db
     .select({
       id: animals.id,
@@ -331,6 +461,31 @@ async function gatherBriefingData(tenantId: string): Promise<BriefingData | null
     animalName: r.animalName,
     animalId: r.animalId,
     examType: r.examType,
+    performedBy: r.performedBy,
+  }));
+
+  const overdueExamRows = await db
+    .select({
+      animalId: medicalExams.animalId,
+      examType: medicalExams.examType,
+      performedBy: medicalExams.performedBy,
+      examDate: medicalExams.examDate,
+      animalName: animals.name,
+    })
+    .from(medicalExams)
+    .innerJoin(animals, eq(medicalExams.animalId, animals.id))
+    .where(and(
+      eq(medicalExams.tenantId, tenantId),
+      eq(medicalExams.status, 'pending'),
+      sql`${medicalExams.examDate} < ${todayStart}`
+    ))
+    .limit(20);
+
+  const overdueExams: OverdueExamItem[] = overdueExamRows.map(r => ({
+    animalName: r.animalName,
+    animalId: r.animalId,
+    examType: r.examType,
+    scheduledDate: r.examDate?.toISOString().split('T')[0] || '',
     performedBy: r.performedBy,
   }));
 
@@ -611,8 +766,10 @@ async function gatherBriefingData(tenantId: string): Promise<BriefingData | null
     tenantName: tenant.name,
     date: todayStr,
     missedFosterMeds,
+    shelterMissedMeds,
     surgeries,
     exams,
+    overdueExams,
     diagnostics,
     procedures,
     shelterOverdueCare,
@@ -724,6 +881,15 @@ function composeHtmlEmail(data: BriefingData): string {
     ], i % 2 === 1);
   });
 
+  let shelterMissedMedRows = '';
+  data.shelterMissedMeds.forEach((m, i) => {
+    shelterMissedMedRows += renderRow([
+      `<strong>${escapeHtml(m.animalName)}</strong>`,
+      escapeHtml(m.drugName),
+      m.scheduledTime ? escapeHtml(m.scheduledTime) : '--',
+    ], i % 2 === 1);
+  });
+
   let examRows = '';
   data.exams.forEach((e, i) => {
     const examType = e.examType.charAt(0).toUpperCase() + e.examType.slice(1);
@@ -731,6 +897,17 @@ function composeHtmlEmail(data: BriefingData): string {
       `<strong>${escapeHtml(e.animalName)}</strong>`,
       escapeHtml(examType),
       escapeHtml(e.performedBy),
+    ], i % 2 === 1);
+  });
+
+  let overdueExamRowsHtml = '';
+  data.overdueExams.forEach((e, i) => {
+    const examType = e.examType.charAt(0).toUpperCase() + e.examType.slice(1);
+    overdueExamRowsHtml += renderRow([
+      `<strong>${escapeHtml(e.animalName)}</strong>`,
+      escapeHtml(examType),
+      e.scheduledDate,
+      e.performedBy ? escapeHtml(e.performedBy) : '--',
     ], i % 2 === 1);
   });
 
@@ -856,7 +1033,8 @@ function composeHtmlEmail(data: BriefingData): string {
   });
 
   // --- Counts ---
-  const shelterCount = data.surgeries.length + data.exams.length + data.diagnostics.length +
+  const shelterCount = data.shelterMissedMeds.length + data.surgeries.length + data.exams.length +
+    data.overdueExams.length + data.diagnostics.length +
     data.procedures.length + data.shelterOverdueCare.length + data.calendarItems.length;
   const fosterCount = data.missedFosterMeds.length + data.complianceAlerts.length + data.fosterOverdueCare.length +
     data.recentFosterUpdates.length + data.recentFosterPhotos.length;
@@ -871,8 +1049,10 @@ function composeHtmlEmail(data: BriefingData): string {
 
   // --- Shelter pillar HTML ---
   const shelterSectionsHtml =
+    renderSection('Missed Shelter Medications (Yesterday)', '[!]', '#fef2f2', '#dc2626', data.shelterMissedMeds.length, shelterMissedMedRows) +
     renderSection('Surgeries Today', '[S]', '#fefce8', '#ca8a04', data.surgeries.length, surgeryRows) +
     renderSection('Medical Exams Today', '[E]', '#ecfdf5', '#059669', data.exams.length, examRows) +
+    renderSection('Overdue Medical Exams', '[OE]', '#fef2f2', '#dc2626', data.overdueExams.length, overdueExamRowsHtml) +
     renderSection('Diagnostics & Labs Today', '[D]', '#eff6ff', '#2563eb', data.diagnostics.length, diagRows) +
     renderSection('Procedures Today', '[P]', '#fdf4ff', '#9333ea', data.procedures.length, procRows) +
     renderSection('Overdue Preventative Care', '[OD]', '#fff7ed', '#ea580c', data.shelterOverdueCare.length, shelterOverdueRows) +
@@ -963,7 +1143,8 @@ function composePlainTextEmail(data: BriefingData): string {
   lines.push(`${formatDate(data.date)}`);
   lines.push('');
 
-  const shelterCount = data.surgeries.length + data.exams.length + data.diagnostics.length +
+  const shelterCount = data.shelterMissedMeds.length + data.surgeries.length + data.exams.length +
+    data.overdueExams.length + data.diagnostics.length +
     data.procedures.length + data.shelterOverdueCare.length + data.calendarItems.length;
   const fosterCount = data.missedFosterMeds.length + data.complianceAlerts.length + data.fosterOverdueCare.length +
     data.recentFosterUpdates.length + data.recentFosterPhotos.length;
@@ -974,6 +1155,14 @@ function composePlainTextEmail(data: BriefingData): string {
     lines.push(`  SHELTER (${shelterCount} items)`);
     lines.push(`==============================`);
     lines.push('');
+
+    if (data.shelterMissedMeds.length > 0) {
+      lines.push(`--- MISSED SHELTER MEDICATIONS (Yesterday) [${data.shelterMissedMeds.length}] ---`);
+      data.shelterMissedMeds.forEach(m => {
+        lines.push(`  ${m.animalName} - ${m.drugName}${m.scheduledTime ? ` at ${m.scheduledTime}` : ''}`);
+      });
+      lines.push('');
+    }
 
     if (data.surgeries.length > 0) {
       lines.push(`--- SURGERIES TODAY [${data.surgeries.length}] ---`);
@@ -987,6 +1176,14 @@ function composePlainTextEmail(data: BriefingData): string {
       lines.push(`--- MEDICAL EXAMS TODAY [${data.exams.length}] ---`);
       data.exams.forEach(e => {
         lines.push(`  ${e.animalName} - ${e.examType} (${e.performedBy})`);
+      });
+      lines.push('');
+    }
+
+    if (data.overdueExams.length > 0) {
+      lines.push(`--- OVERDUE MEDICAL EXAMS [${data.overdueExams.length}] ---`);
+      data.overdueExams.forEach(e => {
+        lines.push(`  ${e.animalName} - ${e.examType} (scheduled: ${e.scheduledDate})${e.performedBy ? ` (${e.performedBy})` : ''}`);
       });
       lines.push('');
     }
@@ -1164,7 +1361,8 @@ export async function sendDailyBriefingForTenant(tenantId: string): Promise<{ se
     const html = composeHtmlEmail(data);
     const text = composePlainTextEmail(data);
 
-    const shelterCount = data.surgeries.length + data.exams.length + data.diagnostics.length +
+    const shelterCount = data.shelterMissedMeds.length + data.surgeries.length + data.exams.length +
+      data.overdueExams.length + data.diagnostics.length +
       data.procedures.length + data.shelterOverdueCare.length + data.calendarItems.length;
     const fosterCount = data.missedFosterMeds.length + data.complianceAlerts.length + data.fosterOverdueCare.length +
       data.recentFosterUpdates.length + data.recentFosterPhotos.length;
@@ -1196,9 +1394,12 @@ export async function sendDailyBriefingForTenant(tenantId: string): Promise<{ se
   }
 }
 
+const briefingSentDates = new Map<string, string>();
+
 export async function sendDailyBriefingForAllTenants(): Promise<{ sent: number; errors: string[] }> {
   let sent = 0;
   const errors: string[] = [];
+  const todayUTC = new Date().toISOString().split('T')[0];
 
   try {
     const activeTenants = await db
@@ -1207,9 +1408,18 @@ export async function sendDailyBriefingForAllTenants(): Promise<{ sent: number; 
       .where(eq(tenants.isActive, true));
 
     for (const tenant of activeTenants) {
+      const lastSentDate = briefingSentDates.get(tenant.id);
+      if (lastSentDate === todayUTC) {
+        continue;
+      }
+
       const result = await sendDailyBriefingForTenant(tenant.id);
       sent += result.sent;
       errors.push(...result.errors.map(e => `[${tenant.id}] ${e}`));
+
+      if (result.sent > 0) {
+        briefingSentDates.set(tenant.id, todayUTC);
+      }
     }
   } catch (error) {
     errors.push(error instanceof Error ? error.message : 'Unknown error');
