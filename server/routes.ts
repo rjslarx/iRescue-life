@@ -32437,7 +32437,116 @@ Email: ${application.applicantEmail || ''}`
         .where(and(...whereConditions))
         .orderBy(asc(preventativeCareTypes.sortOrder), asc(preventativeCareTypes.name));
 
-      res.json({ types });
+      // Deduplicate: tenant overrides take precedence over platform defaults
+      const tenantOverrideKeys = new Set(
+        types
+          .filter((t: any) => t.tenantId === req.tenant!.id)
+          .map((t: any) => `${t.name}::${t.category}`)
+      );
+      const deduped = types.filter((t: any) => {
+        if (t.tenantId) return true;
+        return !tenantOverrideKeys.has(`${t.name}::${t.category}`);
+      });
+
+      res.json({ types: deduped });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * PATCH /api/medical/preventative-care/types/intervals
+   * Batch-update default and puppy interval days for care types.
+   * If a type is a platform default (tenantId is null), clone it as a tenant-specific override.
+   */
+  app.patch('/api/medical/preventative-care/types/intervals', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const userRoles = req.user?.roles || [];
+      if (!userRoles.includes("admin") && !userRoles.includes("owner")) {
+        return res.status(403).json({ message: "Only admins and owners can update medical protocols" });
+      }
+
+      const { preventativeCareTypes } = await import('@shared/schema');
+      const { z } = await import('zod');
+
+      const updateItemSchema = z.object({
+        id: z.string().uuid(),
+        defaultIntervalDays: z.number().int().min(1).nullable(),
+        puppyIntervalDays: z.number().int().min(1).nullable(),
+      });
+      const bodySchema = z.object({
+        updates: z.array(updateItemSchema).min(1),
+      });
+
+      const parsed = bodySchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: 'Invalid request', errors: parsed.error.flatten().fieldErrors });
+      }
+
+      let updatedCount = 0;
+      for (const update of parsed.data.updates) {
+        const [existing] = await db
+          .select()
+          .from(preventativeCareTypes)
+          .where(eq(preventativeCareTypes.id, update.id));
+
+        if (!existing) continue;
+
+        if (existing.tenantId && existing.tenantId !== req.tenant!.id) {
+          continue;
+        }
+
+        if (!existing.tenantId) {
+          const [tenantOverride] = await db
+            .select()
+            .from(preventativeCareTypes)
+            .where(and(
+              eq(preventativeCareTypes.tenantId, req.tenant!.id),
+              eq(preventativeCareTypes.name, existing.name),
+              eq(preventativeCareTypes.category, existing.category)
+            ));
+
+          if (tenantOverride) {
+            await db
+              .update(preventativeCareTypes)
+              .set({
+                defaultIntervalDays: update.defaultIntervalDays,
+                puppyIntervalDays: update.puppyIntervalDays,
+              })
+              .where(eq(preventativeCareTypes.id, tenantOverride.id));
+          } else {
+            await db
+              .insert(preventativeCareTypes)
+              .values({
+                tenantId: req.tenant!.id,
+                name: existing.name,
+                category: existing.category,
+                targetSpecies: existing.targetSpecies,
+                isCore: existing.isCore,
+                defaultIntervalDays: update.defaultIntervalDays,
+                puppyIntervalDays: update.puppyIntervalDays,
+                coversHeartworm: existing.coversHeartworm,
+                coversFleaTick: existing.coversFleaTick,
+                description: existing.description,
+                sortOrder: existing.sortOrder,
+                isActive: existing.isActive,
+                manufacturer: existing.manufacturer,
+              });
+          }
+          updatedCount++;
+        } else {
+          await db
+            .update(preventativeCareTypes)
+            .set({
+              defaultIntervalDays: update.defaultIntervalDays,
+              puppyIntervalDays: update.puppyIntervalDays,
+            })
+            .where(eq(preventativeCareTypes.id, update.id));
+          updatedCount++;
+        }
+      }
+
+      res.json({ message: `Updated ${updatedCount} protocol(s)`, updatedCount });
     } catch (error) {
       next(error);
     }
@@ -32643,7 +32752,17 @@ Email: ${application.applicantEmail || ''}`
           .where(eq(preventativeCareTypes.id, data.careTypeId))
           .limit(1);
         if (careType) {
-          intervalDays = careType.defaultIntervalDays;
+          // Age-aware interval: use puppyIntervalDays if animal is under 6 months
+          let usePuppyInterval = false;
+          if (careType.puppyIntervalDays != null && data.animalId) {
+            const [animalForAge] = await db.select({ dateOfBirth: animals.dateOfBirth }).from(animals).where(eq(animals.id, data.animalId)).limit(1);
+            if (animalForAge?.dateOfBirth) {
+              const ageMs = Date.now() - new Date(animalForAge.dateOfBirth).getTime();
+              const sixMonthsMs = 6 * 30.44 * 24 * 60 * 60 * 1000;
+              usePuppyInterval = ageMs < sixMonthsMs;
+            }
+          }
+          intervalDays = usePuppyInterval ? careType.puppyIntervalDays : careType.defaultIntervalDays;
           careTypeInfo = { coversHeartworm: careType.coversHeartworm, coversFleaTick: careType.coversFleaTick };
           if (!data.careName) {
             resolvedCareName = careType.name;

@@ -5069,6 +5069,7 @@ export const preventativeCareTypes = pgTable("preventative_care_types", {
   targetSpecies: text("target_species").notNull().$type<"Dog" | "Cat" | "Both">(),
   isCore: boolean("is_core").notNull().default(false), // Core = required for compliance
   defaultIntervalDays: integer("default_interval_days"), // null = one-time (e.g., microchip)
+  puppyIntervalDays: integer("puppy_interval_days"), // null = use defaultIntervalDays for all ages
   coversHeartworm: boolean("covers_heartworm").notNull().default(false),
   coversFleaTick: boolean("covers_flea_tick").notNull().default(false),
   description: text("description"), // Optional notes for staff

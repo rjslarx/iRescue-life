@@ -51,6 +51,7 @@ import NotificationsSettingsPage from "@/pages/NotificationsSettingsPage";
 import IntegrationsSettingsPage from "@/pages/IntegrationsSettingsPage";
 import BillingSettingsPage from "@/pages/BillingSettingsPage";
 import SecuritySettingsPage from "@/pages/SecuritySettingsPage";
+import MedicalSettingsPage from "@/pages/MedicalSettingsPage";
 import DataBackupsPage from "@/pages/DataBackupsPage";
 import MyAccountPage from "@/pages/MyAccountPage";
 import ContentPagesPage from "@/pages/ContentPagesPage";
@@ -321,6 +322,7 @@ function RouterSwitch() {
       <ProtectedRoute path="/dashboard/settings/integrations" pageId="branding" component={IntegrationsSettingsPage} />
       <ProtectedRoute path="/dashboard/settings/billing" pageId="branding" component={BillingSettingsPage} />
       <ProtectedRoute path="/dashboard/settings/security" pageId="branding" component={SecuritySettingsPage} />
+      <ProtectedRoute path="/dashboard/settings/medical" pageId="branding" component={MedicalSettingsPage} />
       <ProtectedRoute path="/dashboard/settings" pageId="branding" component={SettingsPage} />
       <ProtectedRoute path="/dashboard/data-backups" pageId="data-backups" component={DataBackupsPage} />
       <ProtectedRoute path="/dashboard/platform-integrations" pageId="platform-integrations" component={PlatformIntegrationsPage} />

@@ -347,6 +347,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
       items: [
         { title: "Branding", url: "/dashboard/settings/branding", icon: Palette },
         { title: "Notifications", url: "/dashboard/settings/notifications", icon: Bell },
+        { title: "Medical Protocols", url: "/dashboard/settings/medical", icon: Stethoscope },
         { title: "Integrations", url: "/dashboard/settings/integrations", icon: Plug2 },
         { title: "Billing", url: "/dashboard/settings/billing", icon: CreditCard },
         { title: "Security & Access", url: "/dashboard/settings/security", icon: ShieldCheck },
@@ -436,6 +437,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
       items: [
         { title: "Branding", url: "/dashboard/settings/branding", icon: Palette },
         { title: "Notifications", url: "/dashboard/settings/notifications", icon: Bell },
+        { title: "Medical Protocols", url: "/dashboard/settings/medical", icon: Stethoscope },
         { title: "Integrations", url: "/dashboard/settings/integrations", icon: Plug2 },
         { title: "Billing", url: "/dashboard/settings/billing", icon: CreditCard },
         { title: "Security & Access", url: "/dashboard/settings/security", icon: ShieldCheck },
@@ -566,6 +568,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
     '/dashboard/settings/integrations': 'branding',
     '/dashboard/settings/billing': 'branding',
     '/dashboard/settings/security': 'branding',
+    '/dashboard/settings/medical': 'branding',
     '/dashboard/my-fosters': 'my-fosters',
     '/dashboard/foster-mobile': 'my-fosters',
     '/dashboard/opportunities': 'volunteers',
