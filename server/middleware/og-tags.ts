@@ -68,7 +68,15 @@ export async function injectOGTags(req: Request, res: Response, next: NextFuncti
   const baseUrl = isCustomDomain
     ? `${req.protocol}://${tenant.customDomain}`
     : `${req.protocol}://${req.get('host')}`;
-  const defaultImage = `${baseUrl}/icon-512.png`;
+
+  const resolveImageUrl = (imgUrl: string | null | undefined): string | null => {
+    if (!imgUrl) return null;
+    if (imgUrl.startsWith('http://') || imgUrl.startsWith('https://')) return imgUrl;
+    return `${baseUrl}${imgUrl.startsWith('/') ? '' : '/'}${imgUrl}`;
+  };
+
+  const tenantImage = resolveImageUrl(tenant.logoUrl) || resolveImageUrl(tenant.heroImageUrl);
+  const defaultImage = tenantImage || `${baseUrl}/icon-512.png`;
 
   let ogData: { title: string; description: string; image: string } | null = null;
 
@@ -286,50 +294,46 @@ export async function injectOGTags(req: Request, res: Response, next: NextFuncti
     if (!ogData) {
       const animalMatch = url.match(/^\/animal\/([a-zA-Z0-9-]+)/);
 
-      if (!animalMatch) {
-        console.log(`[OG-TAGS] No pattern match for stripped URL: ${url} (original: ${req.originalUrl})`);
-        return next();
-      }
+      if (animalMatch) {
+        console.log(`[OG-TAGS] Processing animal: tenant=${tenant.subdomain}, url=${url}`);
+        const animalId = animalMatch[1];
 
-      console.log(`[OG-TAGS] Processing animal: tenant=${tenant.subdomain}, url=${url}`);
-      const animalId = animalMatch[1];
+        if (uuidRegex.test(animalId)) {
+          const animal = await db.select().from(animals)
+            .where(and(
+              eq(animals.id, animalId),
+              eq(animals.tenantId, tenant.id)
+            ))
+            .limit(1);
 
-      if (!uuidRegex.test(animalId)) {
-        console.log(`[OG-TAGS] Invalid UUID for animal: ${animalId}`);
-        return next();
-      }
+          if (animal.length) {
+            const animalData = animal[0];
+            const photoUrls = animalData.photoUrls as string[] | null;
+            let image = defaultImage;
 
-      const animal = await db.select().from(animals)
-        .where(and(
-          eq(animals.id, animalId),
-          eq(animals.tenantId, tenant.id)
-        ))
-        .limit(1);
+            if (photoUrls && photoUrls.length > 0 && photoUrls[0]) {
+              image = resolveImageUrl(photoUrls[0]) || defaultImage;
+            }
 
-      if (!animal.length) {
-        return next();
-      }
-
-      const animalData = animal[0];
-      const photoUrls = animalData.photoUrls as string[] | null;
-      let image = defaultImage;
-
-      if (photoUrls && photoUrls.length > 0 && photoUrls[0]) {
-        const firstPhoto = photoUrls[0];
-        if (firstPhoto.startsWith('http://') || firstPhoto.startsWith('https://')) {
-          image = firstPhoto;
-        } else {
-          image = `${baseUrl}${firstPhoto.startsWith('/') ? '' : '/'}${firstPhoto}`;
+            ogData = {
+              title: `Meet ${animalData.name} - ${animalData.breed} | ${tenant.name}`,
+              description: animalData.bio
+                ? animalData.bio.slice(0, 200) + (animalData.bio.length > 200 ? '...' : '')
+                : `${animalData.name} is a ${animalData.age} year old ${animalData.breed} looking for a forever home at ${tenant.name}.`,
+              image,
+            };
+          }
         }
       }
+    }
 
+    if (!ogData) {
       ogData = {
-        title: `Meet ${animalData.name} - ${animalData.breed} | ${tenant.name}`,
-        description: animalData.bio
-          ? animalData.bio.slice(0, 200) + (animalData.bio.length > 200 ? '...' : '')
-          : `${animalData.name} is a ${animalData.age} year old ${animalData.breed} looking for a forever home at ${tenant.name}.`,
-        image,
+        title: tenant.name,
+        description: tenant.tagline || `${tenant.name} - Adopt, Foster, Donate. Help animals find their forever homes.`,
+        image: defaultImage,
       };
+      console.log(`[OG-TAGS] Using tenant fallback for: ${url} (tenant=${tenant.subdomain})`);
     }
 
     const canonicalUrl = isCustomDomain
