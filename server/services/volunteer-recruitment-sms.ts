@@ -262,7 +262,8 @@ export class VolunteerRecruitmentSmsService {
     }
 
     const daysOut = settings.urgentAlertDaysOut ?? 2;
-    const targetDate = addDays(new Date(), daysOut);
+    const now = new Date();
+    const endDate = addDays(now, daysOut);
 
     const allVolunteerCalendars = await db
       .select()
@@ -284,8 +285,8 @@ export class VolunteerRecruitmentSmsService {
     const shortages = await this.getCalendarDayShortages(
       tenantId,
       targetCalendars,
-      targetDate,
-      targetDate,
+      now,
+      endDate,
       defaultMin
     );
 
