@@ -32553,6 +32553,134 @@ Email: ${application.applicantEmail || ''}`
   });
 
   /**
+   * POST /api/medical/preventative-care/types
+   * Create a new tenant-specific preventative care product.
+   */
+  app.post('/api/medical/preventative-care/types', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const userRoles = req.user?.roles || [];
+      if (!userRoles.includes("admin") && !userRoles.includes("owner")) {
+        return res.status(403).json({ message: "Only admins and owners can add medical products" });
+      }
+
+      const { preventativeCareTypes } = await import('@shared/schema');
+      const { z } = await import('zod');
+
+      const bodySchema = z.object({
+        name: z.string().min(1).max(200),
+        targetSpecies: z.enum(["Dog", "Cat", "Both"]).default("Both"),
+        defaultIntervalDays: z.number().int().min(1),
+        puppyIntervalDays: z.number().int().min(1).nullable().default(null),
+        coversHeartworm: z.boolean().default(false),
+        coversFleaTick: z.boolean().default(false),
+        manufacturer: z.string().max(200).nullable().default(null),
+        description: z.string().max(1000).nullable().default(null),
+      });
+
+      const parsed = bodySchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid request", errors: parsed.error.flatten().fieldErrors });
+      }
+
+      const data = parsed.data;
+      const trimmedName = data.name.trim();
+      const { targetSpecies, defaultIntervalDays, puppyIntervalDays, coversHeartworm, coversFleaTick, manufacturer, description } = data;
+
+      const existing = await db
+        .select()
+        .from(preventativeCareTypes)
+        .where(and(
+          sql`LOWER(${preventativeCareTypes.name}) = LOWER(${trimmedName})`,
+          eq(preventativeCareTypes.category, "parasite_prevention"),
+          or(
+            isNull(preventativeCareTypes.tenantId),
+            eq(preventativeCareTypes.tenantId, req.tenant!.id)
+          )
+        ));
+
+      if (existing.length > 0) {
+        return res.status(409).json({ message: "A product with this name already exists" });
+      }
+
+      const maxSort = await db
+        .select({ max: sql`COALESCE(MAX(sort_order), 0)` })
+        .from(preventativeCareTypes)
+        .where(or(
+          isNull(preventativeCareTypes.tenantId),
+          eq(preventativeCareTypes.tenantId, req.tenant!.id)
+        ));
+      const nextSort = (Number(maxSort[0]?.max) || 0) + 10;
+
+      const [created] = await db
+        .insert(preventativeCareTypes)
+        .values({
+          tenantId: req.tenant!.id,
+          name: trimmedName,
+          category: "parasite_prevention",
+          targetSpecies,
+          isCore: false,
+          defaultIntervalDays,
+          puppyIntervalDays,
+          coversHeartworm,
+          coversFleaTick,
+          manufacturer,
+          description,
+          sortOrder: nextSort,
+          isActive: true,
+        })
+        .returning();
+
+      res.status(201).json({ type: created });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * DELETE /api/medical/preventative-care/types/:id
+   * Delete a tenant-specific preventative care product. Cannot delete platform defaults.
+   */
+  app.delete('/api/medical/preventative-care/types/:id', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const userRoles = req.user?.roles || [];
+      if (!userRoles.includes("admin") && !userRoles.includes("owner")) {
+        return res.status(403).json({ message: "Only admins and owners can delete medical products" });
+      }
+
+      const { preventativeCareTypes } = await import('@shared/schema');
+
+      const [existing] = await db
+        .select()
+        .from(preventativeCareTypes)
+        .where(eq(preventativeCareTypes.id, req.params.id));
+
+      if (!existing) {
+        return res.status(404).json({ message: "Product not found" });
+      }
+
+      if (!existing.tenantId) {
+        return res.status(403).json({ message: "Cannot delete platform default products" });
+      }
+
+      if (existing.category !== "parasite_prevention") {
+        return res.status(400).json({ message: "Only parasite prevention products can be managed here" });
+      }
+
+      if (existing.tenantId !== req.tenant!.id) {
+        return res.status(403).json({ message: "Cannot delete products from another organization" });
+      }
+
+      await db
+        .delete(preventativeCareTypes)
+        .where(eq(preventativeCareTypes.id, req.params.id));
+
+      res.json({ message: "Product deleted" });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * GET /api/medical/preventative-care/coming-due
    * Get preventative care coming due (overdue, due today, coming due in 7 days)
    */

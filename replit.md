@@ -53,6 +53,7 @@ Core functionalities include:
 - **Foster Medication SMS Escalation:** A 3-step system of hourly digests, evening nudges, and dashboard alerts for unconfirmed tasks, with fuzzy matching for replies.
 - **Adopted Animal Backfill:** A manual entry form for rescues to register previously adopted animals, creating necessary records and sending welcome emails.
 - **Adopter Compliance Engine:** Full post-adoption compliance tracking including microchip registration reminders, HELP keyword routing, and spay/neuter breach escalation with automated notifications and dashboard alerts.
+- **Medical Protocol Engine:** Tenant-customizable treatment intervals via Settings > Medical Protocols page. Supports `puppyIntervalDays` for age-aware scheduling (under 6 months). Platform defaults are shared; tenants can override intervals (clone-on-first-edit) or add custom products (tenant-scoped). Products grouped by Dewormer/Flea & Tick/Heartworm coverage.
 
 ## External Dependencies
 - **Stripe:** Payment processing and financial management.
