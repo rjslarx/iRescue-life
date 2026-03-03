@@ -4,12 +4,13 @@ import {
   calendars,
   calendarEvents,
   volunteerThresholdAlertHistory,
+  smsMessageLogs,
   users,
   type Tenant,
 } from "@shared/schema";
-import { eq, and, gte, lte, inArray, sql } from "drizzle-orm";
+import { eq, and, gte, lte, inArray, sql, or } from "drizzle-orm";
 import { sendSms, isTwilioEnabled } from "../lib/twilio-service";
-import { format, addDays, startOfDay, endOfDay, parseISO, eachDayOfInterval } from "date-fns";
+import { format, addDays, startOfDay, endOfDay, parseISO, eachDayOfInterval, subHours } from "date-fns";
 
 interface DayShortageInfo {
   calendarId: string;
@@ -37,6 +38,27 @@ interface UrgentAlertResult {
 }
 
 export class VolunteerRecruitmentSmsService {
+  private static async hasRecruitmentSmsSentInLast24Hours(tenantId: string): Promise<boolean> {
+    const cutoff = subHours(new Date(), 24);
+    const recent = await db
+      .select({ id: smsMessageLogs.id })
+      .from(smsMessageLogs)
+      .where(
+        and(
+          eq(smsMessageLogs.tenantId, tenantId),
+          eq(smsMessageLogs.direction, 'outbound'),
+          eq(smsMessageLogs.status, 'sent'),
+          gte(smsMessageLogs.createdAt, cutoff),
+          or(
+            eq(smsMessageLogs.messageType, 'volunteer_recruitment_weekly'),
+            eq(smsMessageLogs.messageType, 'volunteer_recruitment_urgent')
+          )
+        )
+      )
+      .limit(1);
+    return recent.length > 0;
+  }
+
   private static async getCalendarDayShortages(
     tenantId: string,
     targetCalendars: typeof calendars.$inferSelect[],
@@ -125,12 +147,8 @@ export class VolunteerRecruitmentSmsService {
       return result;
     }
 
-    if (settings.lastWeeklyDigestAt) {
-      const lastSentDate = format(new Date(settings.lastWeeklyDigestAt), "yyyy-MM-dd");
-      const today = format(new Date(), "yyyy-MM-dd");
-      if (lastSentDate === today) {
-        return result;
-      }
+    if (await this.hasRecruitmentSmsSentInLast24Hours(tenantId)) {
+      return result;
     }
 
     const allVolunteerCalendars = await db
@@ -254,6 +272,10 @@ export class VolunteerRecruitmentSmsService {
 
     const settings = tenant.volunteerRecruitmentSmsSettings;
     if (!settings?.enabled || !settings?.urgentAlertEnabled) {
+      return result;
+    }
+
+    if (await this.hasRecruitmentSmsSentInLast24Hours(tenantId)) {
       return result;
     }
 
@@ -405,11 +427,6 @@ export class VolunteerRecruitmentSmsService {
         const currentDay = format(now, "EEE").toLowerCase() as "sun" | "mon" | "tue" | "wed" | "thu" | "fri" | "sat";
         const targetDay = settings.weeklyDigestDayOfWeek ?? "thu";
         if (currentDay !== targetDay) continue;
-
-        const targetTime = settings.weeklyDigestTime ?? "09:00";
-        const [th, tm] = targetTime.split(":").map(Number);
-        const [ch, cm] = format(now, "HH:mm").split(":").map(Number);
-        if (Math.abs(th * 60 + tm - (ch * 60 + cm)) > 30) continue;
 
         try {
           const res = await this.sendWeeklyDigest(tenant.id);
