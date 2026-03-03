@@ -1,7 +1,8 @@
 import twilio from 'twilio';
 import { db } from '../db';
-import { tenants, smsMessageLogs, smsProxySessions, transportEvents, users, fosterAnimals, supplyRequests, fosterUpdates, medicationTasks, complianceReminders, animals, contacts, adoptionCheckoutSessions, adopterHelpRequests } from '@shared/schema';
-import { eq, and, desc, gte, isNotNull, inArray, or } from 'drizzle-orm';
+import { tenants, smsMessageLogs, smsProxySessions, transportEvents, users, fosterAnimals, supplyRequests, fosterUpdates, medicationTasks, complianceReminders, animals, contacts, adoptionCheckoutSessions, adopterHelpRequests, calendars, calendarEvents } from '@shared/schema';
+import { eq, and, desc, gte, lte, isNotNull, inArray, or, sql } from 'drizzle-orm';
+import { startOfDay, endOfDay, eachDayOfInterval, addDays, format, parseISO } from 'date-fns';
 import { decrypt, encrypt } from './encryption';
 
 interface TwilioConfig {
@@ -397,7 +398,7 @@ export async function handleIncomingSms(
   toNumber: string,
   body: string,
   mediaUrls: string[] = []
-): Promise<{ success: boolean; routedAs?: 'supply_request' | 'foster_update' | 'medication_confirmed' | 'fuzzy_done_hint' | 'adopter_help_request' | null; message?: string }> {
+): Promise<{ success: boolean; routedAs?: 'supply_request' | 'foster_update' | 'medication_confirmed' | 'fuzzy_done_hint' | 'adopter_help_request' | 'volunteer_signup' | 'volunteer_signup_full' | 'volunteer_signup_duplicate' | null; message?: string; signupDetails?: { calendarName: string; dayLabel: string } }> {
   const normalizedBody = body.trim().toUpperCase();
   
   if (isDoneMatch(normalizedBody) || isFuzzyDoneMatch(normalizedBody)) {
@@ -594,6 +595,188 @@ export async function handleIncomingSms(
       }
     } catch (helpErr) {
       console.error('[TWILIO] Error routing adopter HELP keyword:', helpErr);
+    }
+  }
+
+  // Volunteer signup via SMS reply (SIGNUP, SIGN UP, or a number like "1", "2")
+  const isSignupKeyword = normalizedBody === 'SIGNUP' || normalizedBody === 'SIGN UP' || normalizedBody === 'SIGNMEUP';
+  const numericReply = /^\d+$/.test(normalizedBody) ? parseInt(normalizedBody, 10) : null;
+
+  if (isSignupKeyword || numericReply !== null) {
+    try {
+      const [tenant] = await db
+        .select({ id: tenants.id, name: tenants.name, volunteerRecruitmentSmsSettings: tenants.volunteerRecruitmentSmsSettings })
+        .from(tenants)
+        .where(eq(tenants.twilioPhoneNumber, toNumber))
+        .limit(1);
+
+      if (tenant) {
+        const settings = tenant.volunteerRecruitmentSmsSettings as any;
+        if (settings?.enabled && settings?.urgentAlertEnabled) {
+          // For numeric replies, only proceed if a recent urgent alert was sent to this phone (within 24h)
+          if (numericReply !== null && !isSignupKeyword) {
+            const recentAlertCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+            const [recentAlert] = await db
+              .select({ id: smsMessageLogs.id })
+              .from(smsMessageLogs)
+              .where(and(
+                eq(smsMessageLogs.tenantId, tenant.id),
+                eq(smsMessageLogs.toNumber, fromNumber),
+                eq(smsMessageLogs.messageType, 'volunteer_recruitment_urgent'),
+                eq(smsMessageLogs.direction, 'outbound'),
+                gte(smsMessageLogs.createdAt, recentAlertCutoff)
+              ))
+              .limit(1);
+
+            if (!recentAlert) {
+              // No recent urgent alert to this phone — don't intercept numeric reply
+              throw new Error('NO_RECENT_ALERT');
+            }
+          }
+
+          const [user] = await db
+            .select({ id: users.id, fullName: users.fullName })
+            .from(users)
+            .where(and(eq(users.tenantId, tenant.id), eq(users.phone, fromNumber)))
+            .limit(1);
+
+          if (user) {
+            const daysOut = settings.urgentAlertDaysOut ?? 2;
+            const now = new Date();
+            const scanEnd = addDays(now, daysOut);
+
+            const volunteerCalendars = await db
+              .select()
+              .from(calendars)
+              .where(and(eq(calendars.tenantId, tenant.id), eq(calendars.type, "volunteer"), eq(calendars.isActive, true)));
+
+            const watchedIds: string[] = settings.watchedCalendarIds || [];
+            const targetCalendars = watchedIds.length > 0
+              ? volunteerCalendars.filter((c) => watchedIds.includes(c.id))
+              : volunteerCalendars;
+
+            if (targetCalendars.length > 0) {
+              const calendarIds = targetCalendars.map((c) => c.id);
+              const events = await db
+                .select()
+                .from(calendarEvents)
+                .where(and(
+                  eq(calendarEvents.tenantId, tenant.id),
+                  inArray(calendarEvents.calendarId, calendarIds),
+                  gte(calendarEvents.startTime, startOfDay(now)),
+                  lte(calendarEvents.startTime, endOfDay(scanEnd))
+                ));
+
+              const allDays = eachDayOfInterval({ start: startOfDay(now), end: startOfDay(scanEnd) });
+              const defaultMin = settings.minimumVolunteers ?? 2;
+
+              interface ShortageInfo {
+                calendarId: string;
+                calendarName: string;
+                date: string;
+                shortage: number;
+              }
+
+              const currentShortages: ShortageInfo[] = [];
+              for (const cal of targetCalendars) {
+                const minRequired = cal.minVolunteersRequired ?? defaultMin;
+                for (const day of allDays) {
+                  const dayStart = startOfDay(day);
+                  const dayEnd = endOfDay(day);
+                  const dayEvents = events.filter(
+                    (e) => e.calendarId === cal.id && e.startTime >= dayStart && e.startTime <= dayEnd
+                  );
+                  if (dayEvents.length < minRequired) {
+                    currentShortages.push({
+                      calendarId: cal.id,
+                      calendarName: cal.name,
+                      date: format(day, "yyyy-MM-dd"),
+                      shortage: minRequired - dayEvents.length,
+                    });
+                  }
+                }
+              }
+
+              currentShortages.sort((a, b) => a.date.localeCompare(b.date));
+
+              if (currentShortages.length === 0) {
+                return { success: true, routedAs: 'volunteer_signup_full' };
+              }
+
+              let selectedShortage: ShortageInfo;
+              if (numericReply !== null && numericReply >= 1 && numericReply <= currentShortages.length) {
+                selectedShortage = currentShortages[numericReply - 1];
+              } else if (isSignupKeyword) {
+                selectedShortage = currentShortages[0];
+              } else {
+                return { success: true, routedAs: 'volunteer_signup_full' };
+              }
+
+              const shiftDate = parseISO(selectedShortage.date);
+              const existingSignup = events.find(
+                (e) =>
+                  e.calendarId === selectedShortage.calendarId &&
+                  e.volunteerContactId === user.id &&
+                  e.startTime >= startOfDay(shiftDate) &&
+                  e.startTime <= endOfDay(shiftDate)
+              );
+
+              const dayLabel = format(shiftDate, "EEEE M/d");
+
+              if (existingSignup) {
+                return {
+                  success: true,
+                  routedAs: 'volunteer_signup_duplicate',
+                  signupDetails: { calendarName: selectedShortage.calendarName, dayLabel },
+                };
+              }
+
+              const cal = targetCalendars.find((c) => c.id === selectedShortage.calendarId)!;
+              const formSettings = cal.eventFormSettings as any;
+              const dayOfWeek = shiftDate.getDay();
+              const fixedTime = formSettings?.fixedDayTimes?.[dayOfWeek];
+
+              let shiftStart: Date;
+              let shiftEnd: Date;
+              if (fixedTime?.enabled && fixedTime.startTime && fixedTime.endTime) {
+                const [sh, sm] = fixedTime.startTime.split(":").map(Number);
+                const [eh, em] = fixedTime.endTime.split(":").map(Number);
+                shiftStart = new Date(shiftDate);
+                shiftStart.setHours(sh, sm, 0, 0);
+                shiftEnd = new Date(shiftDate);
+                shiftEnd.setHours(eh, em, 0, 0);
+              } else {
+                shiftStart = new Date(shiftDate);
+                shiftStart.setHours(9, 0, 0, 0);
+                shiftEnd = new Date(shiftDate);
+                shiftEnd.setHours(17, 0, 0, 0);
+              }
+
+              await db.insert(calendarEvents).values({
+                calendarId: selectedShortage.calendarId,
+                tenantId: tenant.id,
+                title: `${user.fullName} - Signup`,
+                description: "Signed up via SMS reply",
+                startTime: shiftStart,
+                endTime: shiftEnd,
+                volunteerContactId: user.id,
+                createdBy: user.id,
+              });
+
+              console.log(`[TWILIO] Volunteer SMS signup: ${user.fullName} -> ${selectedShortage.calendarName} on ${dayLabel}`);
+              return {
+                success: true,
+                routedAs: 'volunteer_signup',
+                signupDetails: { calendarName: selectedShortage.calendarName, dayLabel },
+              };
+            }
+          }
+        }
+      }
+    } catch (signupErr: any) {
+      if (signupErr?.message !== 'NO_RECENT_ALERT') {
+        console.error('[TWILIO] Error handling volunteer SMS signup:', signupErr);
+      }
     }
   }
 

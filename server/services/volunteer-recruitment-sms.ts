@@ -323,43 +323,58 @@ export class VolunteerRecruitmentSmsService {
     const baseUrl = tenant.customDomain ? `https://${tenant.customDomain}` : (tenant.subdomain ? `https://${tenant.subdomain}.irescue.life` : "");
     const signupUrl = baseUrl ? `${baseUrl}/calendar` : "our website";
 
-    for (const shortage of shortages) {
-      const dedupKey = `${shortage.calendarId}:${shortage.date}`;
-      if (sentTodayIds.has(dedupKey)) continue;
+    const newShortages = shortages
+      .filter((s) => !sentTodayIds.has(`${s.calendarId}:${s.date}`))
+      .sort((a, b) => a.date.localeCompare(b.date));
 
-      const dayLabel = format(parseISO(shortage.date), "EEEE M/d");
-      const { signedUpCount, minVolunteersRequired, calendarName, signedUpNames } = shortage;
-      const shortageCount = shortage.shortage;
+    if (newShortages.length === 0) return result;
 
-      let message: string;
-      if (signedUpCount === 0) {
-        message = `🐕 ${orgName}: ${calendarName} on ${dayLabel} has 0 volunteers signed up! We need ${minVolunteersRequired}. Please sign up: ${signupUrl}`;
-      } else if (signedUpCount === 1 && signedUpNames.length === 1) {
-        message = `🐕 ${orgName}: We only have 1 volunteer for ${calendarName} on ${dayLabel}! Please sign up to help ${signedUpNames[0]}: ${signupUrl}`;
+    let message: string;
+    if (newShortages.length === 1) {
+      const s = newShortages[0];
+      const dayLabel = format(parseISO(s.date), "EEEE M/d");
+      if (s.signedUpCount === 0) {
+        message = `🐕 ${orgName}: ${s.calendarName} on ${dayLabel} has 0 volunteers signed up! We need ${s.minVolunteersRequired}.`;
+      } else if (s.signedUpCount === 1 && s.signedUpNames.length === 1) {
+        message = `🐕 ${orgName}: We only have 1 volunteer for ${s.calendarName} on ${dayLabel}! Please help ${s.signedUpNames[0]}.`;
       } else {
-        message = `🐕 ${orgName}: ${calendarName} on ${dayLabel} needs ${shortageCount} more volunteer${shortageCount !== 1 ? "s" : ""} (${signedUpCount}/${minVolunteersRequired} signed up). Please sign up: ${signupUrl}`;
+        message = `🐕 ${orgName}: ${s.calendarName} on ${dayLabel} needs ${s.shortage} more volunteer${s.shortage !== 1 ? "s" : ""} (${s.signedUpCount}/${s.minVolunteersRequired} signed up).`;
       }
+      message += `\nReply SIGNUP to claim this shift!\n${signupUrl}`;
+    } else {
+      const lines: string[] = [`🐕 ${orgName}: Volunteers needed!`];
+      newShortages.forEach((s, i) => {
+        const dayLabel = format(parseISO(s.date), "EEE M/d");
+        lines.push(`${i + 1}. ${s.calendarName} ${dayLabel} (need ${s.shortage})`);
+      });
+      lines.push(`Reply SIGNUP or a # to claim a shift!`);
+      lines.push(signupUrl);
+      message = lines.join("\n");
+    }
 
-      let smsSentCount = 0;
-      for (const recipient of recipients) {
-        try {
-          await sendSms(tenantId, recipient.phone!, message, "volunteer_recruitment_urgent");
-          smsSentCount++;
-          result.smsSent++;
-        } catch (err: any) {
-          result.errors.push(`Failed urgent SMS to ${recipient.phone}: ${err.message}`);
-        }
+    let smsSentCount = 0;
+    for (const recipient of recipients) {
+      try {
+        await sendSms(tenantId, recipient.phone!, message, "volunteer_recruitment_urgent");
+        smsSentCount++;
+        result.smsSent++;
+      } catch (err: any) {
+        result.errors.push(`Failed urgent SMS to ${recipient.phone}: ${err.message}`);
       }
+    }
 
+    for (const s of newShortages) {
+      const dedupKey = `${s.calendarId}:${s.date}`;
+      const dayLabel = format(parseISO(s.date), "EEEE M/d");
       try {
         await db.insert(volunteerThresholdAlertHistory).values({
           alertId: "00000000-0000-0000-0000-000000000000",
           tenantId,
           alertDate: new Date(),
           opportunityId: dedupKey,
-          opportunityTitle: `${calendarName} - ${dayLabel}`,
-          currentVolunteers: signedUpCount,
-          minimumRequired: minVolunteersRequired,
+          opportunityTitle: `${s.calendarName} - ${dayLabel}`,
+          currentVolunteers: s.signedUpCount,
+          minimumRequired: s.minVolunteersRequired,
           pushSent: 0,
           smsSent: smsSentCount,
           emailSent: 0,
@@ -367,7 +382,6 @@ export class VolunteerRecruitmentSmsService {
         });
       } catch (_) {
       }
-
       result.urgentDaysAlerted++;
     }
 

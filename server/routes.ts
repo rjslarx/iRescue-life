@@ -22420,6 +22420,12 @@ Submitted: ${new Date().toLocaleString()}
         res.send('<?xml version="1.0" encoding="UTF-8"?><Response><Message>Got it! Your supply request has been logged. The team will follow up soon.</Message></Response>');
       } else if (result.routedAs === 'foster_update') {
         res.send('<?xml version="1.0" encoding="UTF-8"?><Response><Message>Thanks for the update! Your message has been received by the rescue team.</Message></Response>');
+      } else if (result.routedAs === 'volunteer_signup' && result.signupDetails) {
+        res.send(`<?xml version="1.0" encoding="UTF-8"?><Response><Message>You're signed up for ${result.signupDetails.calendarName} on ${result.signupDetails.dayLabel}! Thanks!</Message></Response>`);
+      } else if (result.routedAs === 'volunteer_signup_duplicate' && result.signupDetails) {
+        res.send(`<?xml version="1.0" encoding="UTF-8"?><Response><Message>You're already signed up for ${result.signupDetails.calendarName} on ${result.signupDetails.dayLabel}!</Message></Response>`);
+      } else if (result.routedAs === 'volunteer_signup_full') {
+        res.send('<?xml version="1.0" encoding="UTF-8"?><Response><Message>All shifts are currently covered — thanks for being willing to help!</Message></Response>');
       } else {
         res.send('<?xml version="1.0" encoding="UTF-8"?><Response></Response>');
       }
