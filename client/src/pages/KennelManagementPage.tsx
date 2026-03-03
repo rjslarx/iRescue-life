@@ -193,6 +193,7 @@ export default function KennelManagementPage() {
   const [activeBuildingId, setActiveBuildingId] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<{ type: 'building' | 'row'; id: string } | null>(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [animalDialogOpen, setAnimalDialogOpen] = useState(false);
   const [selectedKennel, setSelectedKennel] = useState<{ buildingId: string; rowId: string; position: number; currentAnimalId?: string } | null>(null);
 
@@ -299,6 +300,7 @@ export default function KennelManagementPage() {
     
     setDeleteDialogOpen(false);
     setItemToDelete(null);
+    setDeleteConfirmText('');
   };
 
   const handleKennelClick = (buildingId: string, rowId: string, position: number) => {
@@ -695,19 +697,46 @@ export default function KennelManagementPage() {
       </div>
 
       {/* Delete Confirmation Dialog */}
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+      <AlertDialog open={deleteDialogOpen} onOpenChange={(open) => {
+        setDeleteDialogOpen(open);
+        if (!open) {
+          setDeleteConfirmText('');
+          setItemToDelete(null);
+        }
+      }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
             <AlertDialogDescription>
               {itemToDelete?.type === 'building' 
-                ? 'This will delete the building and all its rows. Animals will be unassigned from their kennels.'
+                ? 'This will permanently delete the building, all its rows, and unassign every animal in it. This action cannot be undone.'
                 : 'This will delete the row and unassign all animals in it.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {itemToDelete?.type === 'building' && activeBuilding && (
+            <div className="py-2">
+              <p className="text-sm text-muted-foreground mb-2">
+                Type <span className="font-semibold text-foreground">"{activeBuilding.name}"</span> to confirm deletion:
+              </p>
+              <input
+                type="text"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder={activeBuilding.name}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                data-testid="input-confirm-delete-building"
+                autoFocus
+              />
+            </div>
+          )}
           <AlertDialogFooter>
             <AlertDialogCancel data-testid="button-cancel-delete">Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} data-testid="button-confirm-delete">
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={itemToDelete?.type === 'building' && deleteConfirmText.toLowerCase() !== activeBuilding?.name?.toLowerCase()}
+              className={itemToDelete?.type === 'building' && deleteConfirmText.toLowerCase() !== activeBuilding?.name?.toLowerCase() ? 'opacity-50 pointer-events-none' : ''}
+              data-testid="button-confirm-delete"
+            >
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>
