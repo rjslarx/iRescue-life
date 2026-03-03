@@ -185,7 +185,7 @@ export class VolunteerRecruitmentSmsService {
     const baseUrl = tenant.customDomain ? `https://${tenant.customDomain}` : (tenant.subdomain ? `https://${tenant.subdomain}.irescue.life` : "");
     const signupUrl = baseUrl ? `${baseUrl}/volunteer` : "our website";
 
-    const lines: string[] = [`${orgName} Volunteers Needed:`];
+    const lines: string[] = [`🐕 ${orgName} Volunteers Needed:`];
     for (const [calName, calShortages] of byCalendar) {
       const dayParts = calShortages
         .sort((a, b) => a.date.localeCompare(b.date))
@@ -195,7 +195,7 @@ export class VolunteerRecruitmentSmsService {
         });
       lines.push(`${calName}: ${dayParts.join(", ")}`);
     }
-    lines.push(`Sign up: ${signupUrl}`);
+    lines.push(`Please sign up: ${signupUrl}`);
 
     const message = lines.join("\n");
 
@@ -333,11 +333,11 @@ export class VolunteerRecruitmentSmsService {
 
       let message: string;
       if (signedUpCount === 0) {
-        message = `${orgName}: ${calendarName} on ${dayLabel} has 0 volunteers signed up! We need ${minVolunteersRequired}. Sign up: ${signupUrl}`;
+        message = `🐕 ${orgName}: ${calendarName} on ${dayLabel} has 0 volunteers signed up! We need ${minVolunteersRequired}. Please sign up: ${signupUrl}`;
       } else if (signedUpCount === 1 && signedUpNames.length === 1) {
-        message = `${orgName}: We only have 1 volunteer for ${calendarName} on ${dayLabel}! Please sign up to help ${signedUpNames[0]}. Sign up: ${signupUrl}`;
+        message = `🐕 ${orgName}: We only have 1 volunteer for ${calendarName} on ${dayLabel}! Please sign up to help ${signedUpNames[0]}: ${signupUrl}`;
       } else {
-        message = `${orgName}: ${calendarName} on ${dayLabel} needs ${shortageCount} more volunteer${shortageCount !== 1 ? "s" : ""} (${signedUpCount}/${minVolunteersRequired} signed up). Sign up: ${signupUrl}`;
+        message = `🐕 ${orgName}: ${calendarName} on ${dayLabel} needs ${shortageCount} more volunteer${shortageCount !== 1 ? "s" : ""} (${signedUpCount}/${minVolunteersRequired} signed up). Please sign up: ${signupUrl}`;
       }
 
       let smsSentCount = 0;
