@@ -1917,41 +1917,6 @@ export default function AnimalMedicalPage() {
                                 </AlertDialogFooter>
                               </AlertDialogContent>
                             </AlertDialog>
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              onClick={() => {
-                                setEditingPrescription(rx);
-                                setPrescriptionDialogOpen(true);
-                              }}
-                              data-testid={`button-edit-prescription-${rx.id}`}
-                            >
-                              <Edit className="w-4 h-4" />
-                            </Button>
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button variant="ghost" size="sm" data-testid={`button-delete-prescription-${rx.id}`}>
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Delete Medication</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Are you sure you want to delete "{rx.medicationName}"? This will also remove all associated dose records. This action cannot be undone.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() => deletePrescriptionMutation.mutate(rx.id)}
-                                    data-testid={`button-confirm-delete-prescription-${rx.id}`}
-                                  >
-                                    Delete
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
                           </>
                         ) : (
                           <Button
@@ -1987,6 +1952,17 @@ export default function AnimalMedicalPage() {
                             Reorder
                           </Button>
                         )}
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          onClick={() => {
+                            setEditingPrescription(rx);
+                            setPrescriptionDialogOpen(true);
+                          }}
+                          data-testid={`button-edit-prescription-${rx.id}`}
+                        >
+                          <Edit className="w-4 h-4" />
+                        </Button>
                       </div>
                     </div>
                   </CardHeader>
