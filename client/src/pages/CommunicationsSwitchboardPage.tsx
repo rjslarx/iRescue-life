@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/table";
 import { Radio, Mail, Search, XCircle, ChevronLeft, ChevronRight, MessageSquare, AlertTriangle, ArrowLeftRight } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import DashboardLayout from "@/components/DashboardLayout";
 
 interface CommMessage {
   id: string;
@@ -354,7 +355,15 @@ export default function CommunicationsSwitchboardPage() {
   const pagination = feedQuery.data?.pagination;
 
   return (
-    <div className="flex flex-col gap-4 p-4 md:p-6 max-w-7xl mx-auto" data-testid="page-communications-switchboard">
+    <DashboardLayout
+      title="Communications Switchboard"
+      description="Monitor all outbound SMS and email communications"
+      breadcrumbs={[
+        { label: "Dashboard", href: "/dashboard" },
+        { label: "Communications Switchboard" },
+      ]}
+    >
+    <div className="flex flex-col gap-4" data-testid="page-communications-switchboard">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight" data-testid="text-page-title">Communications Switchboard</h1>
@@ -573,5 +582,6 @@ export default function CommunicationsSwitchboardPage() {
         />
       )}
     </div>
+    </DashboardLayout>
   );
 }
