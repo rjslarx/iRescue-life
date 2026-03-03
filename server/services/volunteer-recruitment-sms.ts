@@ -236,7 +236,7 @@ export class VolunteerRecruitmentSmsService {
 
     for (const recipient of recipients) {
       try {
-        await sendSms(tenantId, recipient.phone!, message, "volunteer_recruitment_weekly");
+        await sendSms(tenantId, recipient.phone!, message, "volunteer_recruitment_weekly", { skipOrgPrefix: true });
         result.smsSent++;
       } catch (err: any) {
         result.errors.push(`Failed to send to ${recipient.phone}: ${err.message}`);
@@ -377,7 +377,7 @@ export class VolunteerRecruitmentSmsService {
     let smsSentCount = 0;
     for (const recipient of recipients) {
       try {
-        await sendSms(tenantId, recipient.phone!, message, "volunteer_recruitment_urgent");
+        await sendSms(tenantId, recipient.phone!, message, "volunteer_recruitment_urgent", { skipOrgPrefix: true });
         smsSentCount++;
         result.smsSent++;
       } catch (err: any) {
