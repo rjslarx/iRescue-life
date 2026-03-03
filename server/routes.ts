@@ -6,7 +6,7 @@ import { requireAuth, requireRole, requireRoleOrPageAccess, requireProTier } fro
 import { loginUser, createTenantWithAdmin, createUser } from "./services/auth";
 import { PushNotificationService } from "./services/push-notifications";
 import { db } from "./db";
-import { tenants, users, demoRequests, insertDemoRequestSchema, smsMessageLogs, emailEvents, animals, platformIntegrations, newsletterCampaigns, newsletterSubscribers, happyTails, animalMergeHistory, activityLogs, medicalExams, medicalPrescriptions, medicalBills, medicalFiles, animalNotes, applications, adoptionCheckoutSessions, adoptions, partnerOrganizations, microchipRecords, surrenderRequests, surrenderFormFields, insertSurrenderRequestSchema, insertSurrenderFormFieldSchema, inboundEmails, calendars, careInstructionSnippets, fosterApplications, volunteerApplications, adoptionContracts, fosterAgreementSessions, volunteerAgreementSessions, surrenderAgreementSessions, customFormSubmissions, customForms, placementAgreementSessions, medicationTasks, medicationPlans, fosterAnimals, messageQueue } from "@shared/schema";
+import { tenants, users, demoRequests, insertDemoRequestSchema, smsMessageLogs, emailEvents, animals, platformIntegrations, newsletterCampaigns, newsletterSubscribers, happyTails, animalMergeHistory, activityLogs, medicalExams, medicalPrescriptions, medicalBills, medicalFiles, animalNotes, applications, adoptionCheckoutSessions, adoptions, partnerOrganizations, microchipRecords, surrenderRequests, surrenderFormFields, insertSurrenderRequestSchema, insertSurrenderFormFieldSchema, inboundEmails, calendars, careInstructionSnippets, fosterApplications, volunteerApplications, adoptionContracts, fosterAgreementSessions, volunteerAgreementSessions, surrenderAgreementSessions, customFormSubmissions, customForms, placementAgreementSessions, medicationTasks, medicationPlans, fosterAnimals, messageQueue, contacts } from "@shared/schema";
 import { eq, and, desc, asc, sql, inArray, lt, lte, gte, not, notInArray, or, ne, isNull, isNotNull } from "drizzle-orm";
 import { z } from "zod";
 import { authLimiter, signupLimiter, passwordResetLimiter, emailLimiter } from "./config/security";
@@ -41699,12 +41699,47 @@ The user asking is a tenant administrator or staff member.`;
           );
         }
 
+        const unresolvedPhones = smsRows
+          .filter(r => !r.recipientName && r.toNumber)
+          .map(r => r.toNumber);
+
+        const phoneNameMap = new Map();
+        if (unresolvedPhones.length > 0) {
+          const normalizePhone = (p) => p.replace(/\D/g, '').slice(-10);
+
+          const [userMatches, contactMatches] = await Promise.all([
+            db.select({ phone: users.phone, fullName: users.fullName })
+              .from(users)
+              .where(and(eq(users.tenantId, tenantId), isNotNull(users.phone))),
+            db.select({ phone: contacts.phone, name: contacts.name })
+              .from(contacts)
+              .where(and(eq(contacts.tenantId, tenantId), isNotNull(contacts.phone))),
+          ]);
+
+          for (const u of userMatches) {
+            if (u.phone && u.fullName) {
+              phoneNameMap.set(normalizePhone(u.phone), u.fullName);
+            }
+          }
+          for (const c of contactMatches) {
+            if (c.phone && c.name && !phoneNameMap.has(normalizePhone(c.phone))) {
+              phoneNameMap.set(normalizePhone(c.phone), c.name);
+            }
+          }
+        }
+
         for (const r of smsRows) {
+          let resolvedName = r.recipientName;
+          if (!resolvedName && r.toNumber) {
+            const normalizedTo = r.toNumber.replace(/\D/g, '').slice(-10);
+            resolvedName = phoneNameMap.get(normalizedTo) || null;
+          }
+
           results.push({
             id: r.id,
             channel: 'sms',
             direction: r.direction,
-            recipientName: r.recipientName || r.sentByName,
+            recipientName: resolvedName || r.sentByName || null,
             recipientAddress: r.toNumber,
             subject: null,
             body: r.body,
