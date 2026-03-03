@@ -5,13 +5,19 @@ import { FileText, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format, addMonths } from "date-fns";
 
+function formatDateSafe(value: string | Date, fmt: string = 'MM/dd/yyyy'): string {
+  const d = typeof value === 'string' ? new Date(value) : value;
+  const dateStr = d.toISOString().split('T')[0];
+  return format(new Date(dateStr + 'T12:00:00'), fmt);
+}
+
 function calculateDueDate(record: any, dateField: string, dueField: string, durationField?: string): string {
   if (record[dueField]) {
-    return format(new Date(record[dueField]), 'MM/dd/yyyy');
+    return formatDateSafe(record[dueField]);
   }
   if (durationField && record[durationField] && record[dateField]) {
     const calculated = addMonths(new Date(record[dateField]), record[durationField]);
-    return format(calculated, 'MM/dd/yyyy');
+    return formatDateSafe(calculated);
   }
   return 'N/A';
 }
@@ -190,7 +196,7 @@ export default function MedicalTransferPacket({
       const signalmentData = [
         ['Name', animal?.name || 'Unknown', 'ID', animal?.id?.substring(0, 8) || 'N/A'],
         ['Species', animal?.species || 'Unknown', 'Breed', animal?.breed || 'Unknown'],
-        ['Sex', animal?.petfinderGender || animal?.gender || 'Unknown', 'Age/DOB', animal?.dateOfBirth ? format(new Date(animal.dateOfBirth), 'MMM d, yyyy') : (animal?.age || 'Unknown')],
+        ['Sex', animal?.petfinderGender || animal?.gender || 'Unknown', 'Age/DOB', animal?.dateOfBirth ? formatDateSafe(animal.dateOfBirth, 'MMM d, yyyy') : (animal?.age || 'Unknown')],
         ['Color', animal?.primaryColor || animal?.color || 'Unknown', 'Weight', animal?.weight ? `${animal.weight} lbs` : 'Unknown'],
         ['Spay/Neuter', animal?.neuterStatus || 'Unknown', 'Microchip', animal?.microchipNumber || '']
       ];
@@ -238,7 +244,7 @@ export default function MedicalTransferPacket({
       // Convert /medical/vaccines to table format
       const medicalVaccinesFormatted = vaccines.map((v: any) => [
         v.vaccineName || 'Unknown',
-        v.dateGiven ? format(new Date(v.dateGiven), 'MM/dd/yyyy') : 'N/A',
+        v.dateGiven ? formatDateSafe(v.dateGiven) : 'N/A',
         calculateDueDate(v, 'dateGiven', 'dueDate', 'validDurationMonths'),
         v.manufacturer && v.lotNumber ? `${v.manufacturer} / ${v.lotNumber}` : (v.manufacturer || v.lotNumber || 'N/A'),
         v.administeredBy || v.clinicName || 'In-House'
@@ -247,7 +253,7 @@ export default function MedicalTransferPacket({
       // Convert preventative care vaccine records to table format
       const preventativeCareVaccinesFormatted = preventativeCareVaccines.map((v: any) => [
         v.careName || 'Unknown',
-        v.dateAdministered ? format(new Date(v.dateAdministered), 'MM/dd/yyyy') : 'N/A',
+        v.dateAdministered ? formatDateSafe(v.dateAdministered) : 'N/A',
         calculateDueDate(v, 'dateAdministered', 'nextDueDate'),
         v.manufacturer && v.lotNumber ? `${v.manufacturer} / ${v.lotNumber}` : (v.manufacturer || v.lotNumber || 'N/A'),
         v.administeredBy || v.clinicName || 'In-House'
@@ -302,7 +308,7 @@ export default function MedicalTransferPacket({
           const result = t.result || t.testResult || 'Pending';
           return [
             testName,
-            testDate ? format(new Date(testDate), 'MM/dd/yyyy') : 'N/A',
+            testDate ? formatDateSafe(testDate) : 'N/A',
             result.charAt(0).toUpperCase() + result.slice(1)
           ];
         });
@@ -367,7 +373,7 @@ export default function MedicalTransferPacket({
             p.careName || 'Unknown',
             'Preventative',
             '\u2014',
-            p.dateAdministered ? format(new Date(p.dateAdministered), 'MM/dd/yyyy') : 'N/A',
+            p.dateAdministered ? formatDateSafe(p.dateAdministered) : 'N/A',
             '\u2014',
             calculateDueDate(p, 'dateAdministered', 'nextDueDate')
           ]);
@@ -377,9 +383,9 @@ export default function MedicalTransferPacket({
         prescriptions.forEach((rx: any) => {
           let endDateDisplay = 'Ongoing';
           if (rx.endDate) {
-            const endDay = format(new Date(rx.endDate), 'yyyy-MM-dd');
-            const startDay = rx.startDate ? format(new Date(rx.startDate), 'yyyy-MM-dd') : '';
-            endDateDisplay = endDay === startDay ? '\u2014' : format(new Date(rx.endDate), 'MM/dd/yyyy');
+            const endDay = formatDateSafe(rx.endDate, 'yyyy-MM-dd');
+            const startDay = rx.startDate ? formatDateSafe(rx.startDate, 'yyyy-MM-dd') : '';
+            endDateDisplay = endDay === startDay ? '\u2014' : formatDateSafe(rx.endDate);
           }
           let nextDueDisplay = '\u2014';
           if (rx.nextScheduledDose) {
@@ -388,14 +394,14 @@ export default function MedicalTransferPacket({
             if (lastGiven && nextDue < lastGiven) {
               nextDueDisplay = '\u2014';
             } else {
-              nextDueDisplay = format(nextDue, 'MM/dd/yyyy');
+              nextDueDisplay = formatDateSafe(nextDue);
             }
           }
           medicationTableData.push([
             rx.medicationName || 'Unknown',
             rx.dosage || 'As directed',
-            rx.startDate ? format(new Date(rx.startDate), 'MM/dd/yyyy') : 'N/A',
-            rx.lastGivenAt ? format(new Date(rx.lastGivenAt), 'MM/dd/yyyy') : '\u2014',
+            rx.startDate ? formatDateSafe(rx.startDate) : 'N/A',
+            rx.lastGivenAt ? formatDateSafe(rx.lastGivenAt) : '\u2014',
             endDateDisplay,
             nextDueDisplay
           ]);
