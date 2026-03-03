@@ -13,8 +13,8 @@ import { initializeScheduler } from "./lib/scheduler";
 import { backfillNewPagePermissions } from "./services/page-permissions-seeding";
 import { seedPlatformPreventativeProtocols } from "./services/preventative-protocols-seeding";
 import { db } from "./db";
-import { medicalCatalog } from "@shared/schema";
-import { eq, and } from "drizzle-orm";
+import { medicalCatalog, medicalPrescriptions, medicalDoses } from "@shared/schema";
+import { eq, and, desc, sql } from "drizzle-orm";
 
 async function patchBravectoPlusInterval() {
   try {
@@ -28,6 +28,45 @@ async function patchBravectoPlusInterval() {
     console.log('[Startup] Bravecto Plus interval patch applied (60→56 days for any affected rows)');
   } catch (err) {
     console.error('[Startup] Bravecto Plus interval patch failed:', err);
+  }
+}
+
+async function backfillStaleNextScheduledDose() {
+  try {
+    const frequencyIntervals: Record<string, string> = {
+      MONTHLY: "1 month",
+      WEEKLY: "7 days",
+      BIWEEKLY: "14 days",
+      ANNUALLY: "1 year",
+      Q6M: "6 months",
+      EOD: "2 days",
+      SID: "1 day",
+      BID: "12 hours",
+    };
+
+    for (const [freq, interval] of Object.entries(frequencyIntervals)) {
+      const result = await db.execute(sql`
+        UPDATE medical_prescriptions mp
+        SET next_scheduled_dose = subq.last_given + INTERVAL '${sql.raw(interval)}'
+        FROM (
+          SELECT md.prescription_id, MAX(md.given_at) AS last_given
+          FROM medical_doses md
+          WHERE md.status = 'given' AND md.given_at IS NOT NULL
+          GROUP BY md.prescription_id
+        ) subq
+        WHERE mp.id = subq.prescription_id
+          AND UPPER(mp.frequency) = ${freq}
+          AND mp.next_scheduled_dose IS NOT NULL
+          AND mp.next_scheduled_dose < subq.last_given
+      `);
+      const count = (result as any)?.rowCount || 0;
+      if (count > 0) {
+        console.log(`[Startup] Backfilled ${count} stale nextScheduledDose for ${freq} prescriptions`);
+      }
+    }
+    console.log('[Startup] nextScheduledDose backfill complete');
+  } catch (err) {
+    console.error('[Startup] nextScheduledDose backfill failed:', err);
   }
 }
 
@@ -164,5 +203,8 @@ app.use((req, res, next) => {
 
     // Patch Bravecto Plus interval from 60 → 56 days across all tenants
     patchBravectoPlusInterval();
+
+    // Backfill stale nextScheduledDose for prescriptions where it's behind the last given dose
+    backfillStaleNextScheduledDose();
   });
 })();

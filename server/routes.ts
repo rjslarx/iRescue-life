@@ -31555,14 +31555,14 @@ Email: ${application.applicantEmail || ''}`
             eq(medicalPrescriptions.tenantId, req.tenant!.id)
           ));
 
-        if (prescription && prescription.frequency && prescription.frequency !== 'once') {
+        if (prescription && prescription.frequency && prescription.frequency.toUpperCase() !== 'ONCE') {
           const protocol: ProtocolTimes = {
             morning: req.tenant?.defaultMorningRounds || '08:00',
             midday: req.tenant?.defaultMiddayRounds || '13:00',
             evening: req.tenant?.defaultEveningRounds || '17:00',
           };
           const nextDose = computeNextScheduledDose(givenAtDate, prescription.frequency, protocol);
-          if (nextDose && (!prescription.endDate || nextDose <= new Date(prescription.endDate))) {
+          if (nextDose && (!prescription.endDate || isSameDayOrMissing(prescription.endDate, prescription.startDate) || nextDose <= new Date(prescription.endDate))) {
             await db
               .update(medicalPrescriptions)
               .set({ nextScheduledDose: nextDose })
@@ -31647,15 +31647,22 @@ Email: ${application.applicantEmail || ''}`
     return result;
   }
 
+
+  function isSameDayOrMissing(d1: Date | null, d2: Date | null): boolean {
+    if (!d1 || !d2) return true;
+    return d1.toISOString().split('T')[0] === d2.toISOString().split('T')[0];
+  }
+
   function computeNextScheduledDose(
     lastGivenAt: Date,
     frequency: string,
     protocol: ProtocolTimes = { morning: '08:00', midday: '13:00', evening: '17:00' }
   ): Date | null {
     const now = lastGivenAt;
+    const freq = frequency.toUpperCase();
 
     let roundTimes: string[];
-    switch (frequency) {
+    switch (freq) {
       case 'SID':
         roundTimes = [protocol.morning];
         break;
@@ -31679,21 +31686,34 @@ Email: ${application.applicantEmail || ''}`
         next.setDate(next.getDate() + 2);
         return setTimeOnDate(next, protocol.morning);
       }
-      case 'weekly': {
+      case 'WEEKLY': {
         const next = new Date(now);
         next.setDate(next.getDate() + 7);
         return setTimeOnDate(next, protocol.morning);
       }
-      case 'biweekly': {
+      case 'BIWEEKLY': {
         const next = new Date(now);
         next.setDate(next.getDate() + 14);
         return setTimeOnDate(next, protocol.morning);
       }
-      case 'monthly': {
+      case 'MONTHLY': {
         const next = new Date(now);
         next.setMonth(next.getMonth() + 1);
         return setTimeOnDate(next, protocol.morning);
       }
+      case 'ANNUALLY': {
+        const next = new Date(now);
+        next.setFullYear(next.getFullYear() + 1);
+        return setTimeOnDate(next, protocol.morning);
+      }
+      case 'Q6M': {
+        const next = new Date(now);
+        next.setMonth(next.getMonth() + 6);
+        return setTimeOnDate(next, protocol.morning);
+      }
+      case 'PRN':
+      case 'ONCE':
+        return null;
       default:
         return null;
     }
@@ -31765,14 +31785,14 @@ Email: ${application.applicantEmail || ''}`
         .returning();
 
       // Advance nextScheduledDose for recurring prescriptions
-      if (status === 'given' && prescription.frequency && prescription.frequency !== 'once') {
+      if (status === 'given' && prescription.frequency && prescription.frequency.toUpperCase() !== 'ONCE') {
         const protocol: ProtocolTimes = {
           morning: req.tenant?.defaultMorningRounds || '08:00',
           midday: req.tenant?.defaultMiddayRounds || '13:00',
           evening: req.tenant?.defaultEveningRounds || '17:00',
         };
         const nextDose = computeNextScheduledDose(givenAtDate, prescription.frequency, protocol);
-        if (nextDose && (!prescription.endDate || nextDose <= new Date(prescription.endDate))) {
+        if (nextDose && (!prescription.endDate || isSameDayOrMissing(prescription.endDate, prescription.startDate) || nextDose <= new Date(prescription.endDate))) {
           await db
             .update(medicalPrescriptions)
             .set({ nextScheduledDose: nextDose })

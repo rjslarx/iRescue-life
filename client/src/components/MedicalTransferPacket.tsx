@@ -375,13 +375,29 @@ export default function MedicalTransferPacket({
         
         // Add prescriptions (medications)
         prescriptions.forEach((rx: any) => {
+          let endDateDisplay = 'Ongoing';
+          if (rx.endDate) {
+            const endDay = format(new Date(rx.endDate), 'yyyy-MM-dd');
+            const startDay = rx.startDate ? format(new Date(rx.startDate), 'yyyy-MM-dd') : '';
+            endDateDisplay = endDay === startDay ? '\u2014' : format(new Date(rx.endDate), 'MM/dd/yyyy');
+          }
+          let nextDueDisplay = '\u2014';
+          if (rx.nextScheduledDose) {
+            const nextDue = new Date(rx.nextScheduledDose);
+            const lastGiven = rx.lastGivenAt ? new Date(rx.lastGivenAt) : null;
+            if (lastGiven && nextDue < lastGiven) {
+              nextDueDisplay = '\u2014';
+            } else {
+              nextDueDisplay = format(nextDue, 'MM/dd/yyyy');
+            }
+          }
           medicationTableData.push([
             rx.medicationName || 'Unknown',
             rx.dosage || 'As directed',
             rx.startDate ? format(new Date(rx.startDate), 'MM/dd/yyyy') : 'N/A',
             rx.lastGivenAt ? format(new Date(rx.lastGivenAt), 'MM/dd/yyyy') : '\u2014',
-            rx.endDate ? format(new Date(rx.endDate), 'MM/dd/yyyy') : 'Ongoing',
-            rx.nextScheduledDose ? format(new Date(rx.nextScheduledDose), 'MM/dd/yyyy') : '\u2014'
+            endDateDisplay,
+            nextDueDisplay
           ]);
         });
 
