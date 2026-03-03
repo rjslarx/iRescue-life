@@ -29222,7 +29222,15 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
         ))
         .orderBy(desc(medicalExams.examDate));
 
-      res.json({ exams });
+      const examEditorIds = [...new Set(exams.map((e: any) => e.lastEditedBy).filter(Boolean))] as string[];
+      let examEditorMap: Record<string, string> = {};
+      if (examEditorIds.length > 0) {
+        const editorUsers = await db.select({ id: users.id, name: users.fullName }).from(users).where(inArray(users.id, examEditorIds));
+        examEditorMap = Object.fromEntries(editorUsers.map(u => [u.id, u.name]));
+      }
+      const enrichedExams = exams.map((e: any) => ({ ...e, lastEditedByName: e.lastEditedBy ? (examEditorMap[e.lastEditedBy] || null) : null }));
+
+      res.json({ exams: enrichedExams });
     } catch (error) {
       next(error);
     }
@@ -29360,7 +29368,7 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
 
       const [exam] = await db
         .update(medicalExams)
-        .set(data)
+        .set({ ...data, lastEditedAt: new Date(), lastEditedBy: req.user!.id })
         .where(and(
           eq(medicalExams.id, req.params.examId),
           eq(medicalExams.tenantId, req.tenant!.id)
@@ -29456,12 +29464,21 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
         ))
         .orderBy(desc(vaccineRecords.dateGiven));
 
+      // Resolve editor names
+      const vaccEditorIds = [...new Set(rawVaccines.map((v: any) => v.lastEditedBy).filter(Boolean))] as string[];
+      let vaccEditorMap: Record<string, string> = {};
+      if (vaccEditorIds.length > 0) {
+        const eu = await db.select({ id: users.id, name: users.fullName }).from(users).where(inArray(users.id, vaccEditorIds));
+        vaccEditorMap = Object.fromEntries(eu.map(u => [u.id, u.name]));
+      }
+
       // Transform field names for frontend consistency
       const vaccines = rawVaccines.map(v => ({
         ...v,
         vaccineName: v.itemName,
         dueDate: v.dateDue,
         veterinarian: v.administeredBy,
+        lastEditedByName: v.lastEditedBy ? (vaccEditorMap[v.lastEditedBy] || null) : null,
       }));
 
       res.json({ vaccines });
@@ -29613,7 +29630,7 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
 
       const [vaccine] = await db
         .update(vaccineRecords)
-        .set(data)
+        .set({ ...data, lastEditedAt: new Date(), lastEditedBy: req.user!.id })
         .where(and(
           eq(vaccineRecords.id, req.params.vaccineId),
           eq(vaccineRecords.tenantId, req.tenant!.id)
@@ -30183,7 +30200,15 @@ Email: ${application.applicantEmail || ''}`
         ))
         .orderBy(desc(diagnosticTests.testDate));
 
-      res.json({ diagnostics });
+      const diagEditorIds = [...new Set(diagnostics.map((d: any) => d.lastEditedBy).filter(Boolean))] as string[];
+      let diagEditorMap: Record<string, string> = {};
+      if (diagEditorIds.length > 0) {
+        const eu = await db.select({ id: users.id, name: users.fullName }).from(users).where(inArray(users.id, diagEditorIds));
+        diagEditorMap = Object.fromEntries(eu.map(u => [u.id, u.name]));
+      }
+      const enrichedDiagnostics = diagnostics.map((d: any) => ({ ...d, lastEditedByName: d.lastEditedBy ? (diagEditorMap[d.lastEditedBy] || null) : null }));
+
+      res.json({ diagnostics: enrichedDiagnostics });
     } catch (error) {
       next(error);
     }
@@ -30312,7 +30337,7 @@ Email: ${application.applicantEmail || ''}`
 
       const [diagnostic] = await db
         .update(diagnosticTests)
-        .set(data)
+        .set({ ...data, lastEditedAt: new Date(), lastEditedBy: req.user!.id })
         .where(and(
           eq(diagnosticTests.id, req.params.diagnosticId),
           eq(diagnosticTests.tenantId, req.tenant!.id)
@@ -30408,7 +30433,15 @@ Email: ${application.applicantEmail || ''}`
         ))
         .orderBy(desc(procedureLogs.procedureDate));
 
-      res.json({ procedures });
+      const procEditorIds = [...new Set(procedures.map((p: any) => p.lastEditedBy).filter(Boolean))] as string[];
+      let procEditorMap: Record<string, string> = {};
+      if (procEditorIds.length > 0) {
+        const eu = await db.select({ id: users.id, name: users.fullName }).from(users).where(inArray(users.id, procEditorIds));
+        procEditorMap = Object.fromEntries(eu.map(u => [u.id, u.name]));
+      }
+      const enrichedProcedures = procedures.map((p: any) => ({ ...p, lastEditedByName: p.lastEditedBy ? (procEditorMap[p.lastEditedBy] || null) : null }));
+
+      res.json({ procedures: enrichedProcedures });
     } catch (error) {
       next(error);
     }
@@ -30543,7 +30576,7 @@ Email: ${application.applicantEmail || ''}`
 
       const [procedure] = await db
         .update(procedureLogs)
-        .set(data)
+        .set({ ...data, lastEditedAt: new Date(), lastEditedBy: req.user!.id })
         .where(and(
           eq(procedureLogs.id, req.params.procedureId),
           eq(procedureLogs.tenantId, req.tenant!.id)
@@ -30639,6 +30672,13 @@ Email: ${application.applicantEmail || ''}`
         ))
         .orderBy(desc(medicalPrescriptions.startDate));
 
+      const rxEditorIds = [...new Set(prescriptions.map((p: any) => p.lastEditedBy).filter(Boolean))] as string[];
+      let rxEditorMap: Record<string, string> = {};
+      if (rxEditorIds.length > 0) {
+        const eu = await db.select({ id: users.id, name: users.fullName }).from(users).where(inArray(users.id, rxEditorIds));
+        rxEditorMap = Object.fromEntries(eu.map(u => [u.id, u.name]));
+      }
+
       const prescriptionsWithLastGiven = await Promise.all(
         prescriptions.map(async (rx) => {
           const lastDose = await db
@@ -30654,6 +30694,7 @@ Email: ${application.applicantEmail || ''}`
           return {
             ...rx,
             lastGivenAt: lastDose[0]?.givenAt || null,
+            lastEditedByName: rx.lastEditedBy ? (rxEditorMap[rx.lastEditedBy] || null) : null,
           };
         })
       );
@@ -30892,7 +30933,7 @@ Email: ${application.applicantEmail || ''}`
 
       const [prescription] = await db
         .update(medicalPrescriptions)
-        .set(data)
+        .set({ ...data, lastEditedAt: new Date(), lastEditedBy: req.user!.id })
         .where(and(
           eq(medicalPrescriptions.id, req.params.prescriptionId),
           eq(medicalPrescriptions.tenantId, req.tenant!.id)
@@ -33599,9 +33640,17 @@ Email: ${application.applicantEmail || ''}`
         completedByNameMap = Object.fromEntries(completedByUsers.map(u => [u.id, u.fullName]));
       }
 
+      const pcEditorIds = [...new Set(records.map(r => r.lastEditedBy).filter(Boolean))] as string[];
+      let pcEditorMap: Record<string, string> = {};
+      if (pcEditorIds.length > 0) {
+        const eu = await db.select({ id: users.id, fullName: users.fullName }).from(users).where(inArray(users.id, pcEditorIds));
+        pcEditorMap = Object.fromEntries(eu.map(u => [u.id, u.fullName]));
+      }
+
       const enrichedRecords = records.map(r => ({
         ...r,
         completedByName: r.completedByUserId ? (completedByNameMap[r.completedByUserId] || null) : null,
+        lastEditedByName: r.lastEditedBy ? (pcEditorMap[r.lastEditedBy] || null) : null,
       }));
 
       res.json({ records: enrichedRecords });
@@ -33665,6 +33714,8 @@ Email: ${application.applicantEmail || ''}`
           ...(administrationRoute !== undefined && { administrationRoute }),
           nextDueDate,
           updatedAt: new Date(),
+          lastEditedAt: new Date(),
+          lastEditedBy: req.user!.id,
         })
         .where(eq(preventativeCareRecords.id, recordId))
         .returning();
@@ -33988,6 +34039,8 @@ Email: ${application.applicantEmail || ''}`
           plan: medicalExams.plan,
           structuredFields: medicalExams.structuredFields,
           createdAt: medicalExams.createdAt,
+          lastEditedAt: medicalExams.lastEditedAt,
+          lastEditedBy: medicalExams.lastEditedBy,
         }).from(medicalExams).where(and(
           eq(medicalExams.animalId, req.params.animalId),
           eq(medicalExams.tenantId, req.tenant!.id)
@@ -34003,6 +34056,8 @@ Email: ${application.applicantEmail || ''}`
           administeredBy: vaccineRecords.administeredBy,
           clinicName: vaccineRecords.clinicName,
           createdAt: vaccineRecords.createdAt,
+          lastEditedAt: vaccineRecords.lastEditedAt,
+          lastEditedBy: vaccineRecords.lastEditedBy,
         }).from(vaccineRecords).where(and(
           eq(vaccineRecords.animalId, req.params.animalId),
           eq(vaccineRecords.tenantId, req.tenant!.id)
@@ -34015,6 +34070,8 @@ Email: ${application.applicantEmail || ''}`
           result: diagnosticTests.result,
           notes: diagnosticTests.notes,
           createdAt: diagnosticTests.createdAt,
+          lastEditedAt: diagnosticTests.lastEditedAt,
+          lastEditedBy: diagnosticTests.lastEditedBy,
         }).from(diagnosticTests).where(and(
           eq(diagnosticTests.animalId, req.params.animalId),
           eq(diagnosticTests.tenantId, req.tenant!.id)
@@ -34027,6 +34084,8 @@ Email: ${application.applicantEmail || ''}`
           veterinarian: procedureLogs.veterinarian,
           notes: procedureLogs.notes,
           createdAt: procedureLogs.createdAt,
+          lastEditedAt: procedureLogs.lastEditedAt,
+          lastEditedBy: procedureLogs.lastEditedBy,
         }).from(procedureLogs).where(and(
           eq(procedureLogs.animalId, req.params.animalId),
           eq(procedureLogs.tenantId, req.tenant!.id)
@@ -34041,6 +34100,8 @@ Email: ${application.applicantEmail || ''}`
           endDate: medicalPrescriptions.endDate,
           notes: medicalPrescriptions.notes,
           createdAt: medicalPrescriptions.createdAt,
+          lastEditedAt: medicalPrescriptions.lastEditedAt,
+          lastEditedBy: medicalPrescriptions.lastEditedBy,
         }).from(medicalPrescriptions).where(and(
           eq(medicalPrescriptions.animalId, req.params.animalId),
           eq(medicalPrescriptions.tenantId, req.tenant!.id)
@@ -34080,13 +34141,35 @@ Email: ${application.applicantEmail || ''}`
         administeredByName: d.administeredBy ? (doseUserNameMap[d.administeredBy] || null) : null,
       }));
 
+      // Resolve editor names for audit trail
+      const allEditedByIds = [...new Set([
+        ...exams.map(e => e.lastEditedBy),
+        ...vaccines.map(v => v.lastEditedBy),
+        ...diagnostics.map(d => d.lastEditedBy),
+        ...procedures.map(p => p.lastEditedBy),
+        ...prescriptions.map(p => p.lastEditedBy),
+      ].filter(Boolean))] as string[];
+      let editorNameMap: Record<string, string> = {};
+      if (allEditedByIds.length > 0) {
+        const editorUsers = await db
+          .select({ id: users.id, name: users.fullName })
+          .from(users)
+          .where(inArray(users.id, allEditedByIds));
+        editorNameMap = Object.fromEntries(editorUsers.map(u => [u.id, u.name]));
+      }
+
+      const enrichRecord = (rec: any) => ({
+        ...rec,
+        lastEditedByName: rec.lastEditedBy ? (editorNameMap[rec.lastEditedBy] || null) : null,
+      });
+
       // Combine and sort by date
       const history = [
-        ...exams.map(e => ({ type: 'exam' as const, date: e.examDate, data: e })),
-        ...vaccines.map(v => ({ type: 'vaccine' as const, date: v.dateGiven, data: v })),
-        ...diagnostics.map(d => ({ type: 'diagnostic' as const, date: d.testDate, data: d })),
-        ...procedures.map(p => ({ type: 'procedure' as const, date: p.procedureDate, data: p })),
-        ...prescriptions.map(p => ({ type: 'prescription' as const, date: p.startDate, data: p })),
+        ...exams.map(e => ({ type: 'exam' as const, date: e.examDate, data: enrichRecord(e) })),
+        ...vaccines.map(v => ({ type: 'vaccine' as const, date: v.dateGiven, data: enrichRecord(v) })),
+        ...diagnostics.map(d => ({ type: 'diagnostic' as const, date: d.testDate, data: enrichRecord(d) })),
+        ...procedures.map(p => ({ type: 'procedure' as const, date: p.procedureDate, data: enrichRecord(p) })),
+        ...prescriptions.map(p => ({ type: 'prescription' as const, date: p.startDate, data: enrichRecord(p) })),
         ...enrichedDoses.filter(d => d.givenAt || d.dueDate).map(d => ({ type: 'dose' as const, date: (d.givenAt || d.dueDate)!, data: d })),
       ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 

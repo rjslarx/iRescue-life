@@ -1617,6 +1617,8 @@ export const medicalExams = pgTable("medical_exams", {
   }>(),
   createdBy: uuid("created_by").references(() => users.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  lastEditedAt: timestamp("last_edited_at"),
+  lastEditedBy: uuid("last_edited_by").references(() => users.id),
   billId: uuid("bill_id").references(() => medicalBills.id, { onDelete: 'set null' }),
   billVendor: text("bill_vendor"),
   billAmount: numeric("bill_amount", { precision: 10, scale: 2 }),
@@ -1632,6 +1634,8 @@ export const insertMedicalExamSchema = createInsertSchema(medicalExams).omit({
   tenantId: true,
   createdBy: true,
   createdAt: true,
+  lastEditedAt: true,
+  lastEditedBy: true,
 }).extend({
   examDate: z.coerce.date(),
   completedDate: z.coerce.date().optional().nullable(),
@@ -1661,6 +1665,8 @@ export const vaccineRecords = pgTable("vaccine_records", {
   anatomicalSite: text("anatomical_site"), // Injection site: Right Rear, Right Front, etc.
   createdBy: uuid("created_by").references(() => users.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  lastEditedAt: timestamp("last_edited_at"),
+  lastEditedBy: uuid("last_edited_by").references(() => users.id),
   billId: uuid("bill_id").references(() => medicalBills.id, { onDelete: 'set null' }),
   billVendor: text("bill_vendor"),
   billAmount: numeric("bill_amount", { precision: 10, scale: 2 }),
@@ -1676,6 +1682,8 @@ export const insertVaccineRecordSchema = createInsertSchema(vaccineRecords).omit
   tenantId: true,
   createdBy: true,
   createdAt: true,
+  lastEditedAt: true,
+  lastEditedBy: true,
 }).extend({
   dateGiven: z.coerce.date(),
   dateDue: z.union([z.coerce.date(), z.literal(""), z.null(), z.undefined()]).optional().transform((val) => (val === "" || val === null || val === undefined) ? null : val),
@@ -1763,6 +1771,8 @@ export const diagnosticTests = pgTable("diagnostic_tests", {
   notes: text("notes"),
   createdBy: uuid("created_by").references(() => users.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  lastEditedAt: timestamp("last_edited_at"),
+  lastEditedBy: uuid("last_edited_by").references(() => users.id),
   billId: uuid("bill_id").references(() => medicalBills.id, { onDelete: 'set null' }),
   billVendor: text("bill_vendor"),
   billAmount: numeric("bill_amount", { precision: 10, scale: 2 }),
@@ -1778,6 +1788,8 @@ export const insertDiagnosticTestSchema = createInsertSchema(diagnosticTests).om
   tenantId: true,
   createdBy: true,
   createdAt: true,
+  lastEditedAt: true,
+  lastEditedBy: true,
 }).extend({
   testDate: z.coerce.date(),
   billVendor: z.string().optional(),
@@ -1804,6 +1816,8 @@ export const procedureLogs = pgTable("procedure_logs", {
   completionNotes: text("completion_notes"),
   createdBy: uuid("created_by").references(() => users.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  lastEditedAt: timestamp("last_edited_at"),
+  lastEditedBy: uuid("last_edited_by").references(() => users.id),
   billId: uuid("bill_id").references(() => medicalBills.id, { onDelete: 'set null' }),
   billVendor: text("bill_vendor"),
   billAmount: numeric("bill_amount", { precision: 10, scale: 2 }),
@@ -1819,6 +1833,8 @@ export const insertProcedureLogSchema = createInsertSchema(procedureLogs).omit({
   tenantId: true,
   createdBy: true,
   createdAt: true,
+  lastEditedAt: true,
+  lastEditedBy: true,
 }).extend({
   procedureDate: z.coerce.date(),
   completedDate: z.coerce.date().optional().nullable(),
@@ -1849,6 +1865,8 @@ export const medicalPrescriptions = pgTable("medical_prescriptions", {
   requiresRefill: boolean("requires_refill").notNull().default(false), // If true, shows "REFILL NEEDED" warning on tasks
   createdBy: uuid("created_by").references(() => users.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  lastEditedAt: timestamp("last_edited_at"),
+  lastEditedBy: uuid("last_edited_by").references(() => users.id),
   billId: uuid("bill_id").references(() => medicalBills.id, { onDelete: 'set null' }),
   billVendor: text("bill_vendor"),
   billAmount: numeric("bill_amount", { precision: 10, scale: 2 }),
@@ -1865,6 +1883,8 @@ export const insertMedicalPrescriptionSchema = createInsertSchema(medicalPrescri
   tenantId: true,
   createdBy: true,
   createdAt: true,
+  lastEditedAt: true,
+  lastEditedBy: true,
 }).extend({
   startDate: z.coerce.date(),
   nextScheduledDose: z.coerce.date().optional(),
@@ -5121,6 +5141,8 @@ export const preventativeCareRecords = pgTable("preventative_care_records", {
   completionMethod: text("completion_method").$type<"foster_sms" | "staff_override" | null>(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  lastEditedAt: timestamp("last_edited_at"),
+  lastEditedBy: uuid("last_edited_by").references(() => users.id),
 });
 
 export const insertPreventativeCareRecordSchema = createInsertSchema(preventativeCareRecords).omit({
@@ -5130,6 +5152,8 @@ export const insertPreventativeCareRecordSchema = createInsertSchema(preventativ
   completionMethod: true,
   createdAt: true,
   updatedAt: true,
+  lastEditedAt: true,
+  lastEditedBy: true,
 }).extend({
   dateAdministered: z.coerce.date(),
   nextDueDate: z.union([z.coerce.date(), z.literal(""), z.null(), z.undefined()]).optional().transform((val) => (val === "" || val === null || val === undefined) ? null : val),

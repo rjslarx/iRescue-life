@@ -54,6 +54,8 @@ Core functionalities include:
 - **Adopted Animal Backfill:** A manual entry form for rescues to register previously adopted animals, creating necessary records and sending welcome emails.
 - **Adopter Compliance Engine:** Full post-adoption compliance tracking including microchip registration reminders, HELP keyword routing, and spay/neuter breach escalation with automated notifications and dashboard alerts.
 - **Medical Protocol Engine:** Tenant-customizable treatment intervals via Settings > Medical Protocols page. Supports `puppyIntervalDays` for age-aware scheduling (under 6 months). Platform defaults are shared; tenants can override intervals (clone-on-first-edit) or add custom products (tenant-scoped). Products grouped by Dewormer/Flea & Tick/Heartworm coverage.
+- **Medical Record Edit Audit Trail:** All six medical record tables (`medical_exams`, `vaccine_records`, `diagnostic_tests`, `procedure_logs`, `medical_prescriptions`, `preventative_care_records`) have `lastEditedAt` and `lastEditedBy` columns. PATCH endpoints auto-set these fields. History timeline and individual category tabs show "(Edited)" tooltips with editor name and date. Edit buttons on the History timeline allow authorized roles (admin, owner, manager, medical, staff) to edit records directly from the timeline.
+- **Transfer Packet Section 5:** "Upcoming Preventative & Medical Care" section added to the official Medical Transfer Packet PDF, listing all future-due items from preventative care, vaccines, and prescriptions sorted by due date.
 
 ## External Dependencies
 - **Stripe:** Payment processing and financial management.

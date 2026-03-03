@@ -551,6 +551,84 @@ export default function MedicalTransferPacket({
         yPos += 10;
       }
 
+      if (yPos + 20 > pageHeight - margin) {
+        yPos = startNewPage();
+      }
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.text('SECTION 5: UPCOMING PREVENTATIVE & MEDICAL CARE', margin, yPos);
+      yPos += 6;
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const upcomingItems: { name: string; type: string; dueDate: Date }[] = [];
+
+      preventativeCare.forEach((r: any) => {
+        const dueStr = r.nextDueDate;
+        if (dueStr) {
+          const due = new Date(dueStr);
+          if (due >= today) {
+            const rx = mergedPreventatives?.find((mp: any) => mp.id === r.id && mp._matchedRx);
+            const displayName = rx?._matchedRx?.medicationName || r.careName || 'Unknown';
+            upcomingItems.push({ name: displayName, type: 'Preventative', dueDate: due });
+          }
+        }
+      });
+
+      vaccines.forEach((v: any) => {
+        const dueStr = v.dateDue || v.dueDate;
+        if (dueStr) {
+          const due = new Date(dueStr);
+          if (due >= today) {
+            upcomingItems.push({ name: v.itemName || v.vaccineName || 'Unknown Vaccine', type: 'Vaccine', dueDate: due });
+          }
+        }
+      });
+
+      prescriptions.forEach((rx: any) => {
+        if (matchedRxIds.has(rx.id)) return;
+        const dueStr = rx.nextScheduledDose;
+        if (dueStr) {
+          const due = new Date(dueStr);
+          if (due >= today) {
+            upcomingItems.push({ name: rx.medicationName || 'Unknown Medication', type: 'Medication', dueDate: due });
+          }
+        }
+      });
+
+      upcomingItems.sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime());
+
+      if (upcomingItems.length > 0) {
+        const upcomingTableData = upcomingItems.map(item => [
+          item.name,
+          item.type,
+          formatDateSafe(item.dueDate)
+        ]);
+
+        pagesBeforeAutoTable = doc.getNumberOfPages();
+        autoTable(doc, {
+          startY: yPos,
+          head: [['Item Name', 'Type', 'Next Due Date']],
+          body: upcomingTableData,
+          theme: 'striped',
+          headStyles: { fillColor: [66, 66, 66], fontSize: 8 },
+          styles: { fontSize: 8, cellPadding: 2 },
+          margin: { left: margin, right: margin, top: autoTableMarginTop },
+          didDrawPage: function(data: any) {
+            const docPage = pagesBeforeAutoTable + data.pageNumber - 1;
+            if (docPage > 1) {
+              addContinuationHeader(doc);
+            }
+          }
+        });
+        yPos = (doc as any).lastAutoTable.finalY + 10;
+      } else {
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'italic');
+        doc.text('No upcoming preventative or medical care scheduled.', margin, yPos);
+        yPos += 10;
+      }
+
       const signatureBlockHeight = 50;
       if (yPos + signatureBlockHeight > pageHeight - margin) {
         yPos = startNewPage();

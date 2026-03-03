@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
@@ -1190,6 +1191,46 @@ export default function AnimalMedicalPage() {
                                     : formatDateOnly(entry.date)
                                   : 'Date unknown'}
                               </span>
+                              {entry.data.lastEditedAt && (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span className="text-xs text-muted-foreground italic cursor-help" data-testid={`text-edited-indicator-${entry.data.id}`}>
+                                      (Edited)
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Last edited by {entry.data.lastEditedByName || 'Unknown'} on {formatDateOnly(entry.data.lastEditedAt, 'MMM d, yyyy h:mm a')}</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              )}
+                              {entry.type !== 'dose' && user && ['admin', 'owner', 'manager', 'medical', 'staff'].includes(user.activeRole) && (
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="ml-auto"
+                                  data-testid={`button-edit-history-${entry.type}-${entry.data.id}`}
+                                  onClick={() => {
+                                    if (entry.type === 'exam') {
+                                      setEditingExam({ ...entry.data, soapFields: entry.data.soapFields || { subjective: entry.data.subjective, objective: entry.data.objective, assessment: entry.data.assessment, plan: entry.data.plan } });
+                                      setExamDialogOpen(true);
+                                    } else if (entry.type === 'vaccine') {
+                                      setEditingVaccine({ ...entry.data, vaccineName: entry.data.itemName || entry.data.vaccineName, dateGiven: entry.data.dateGiven, veterinarian: entry.data.administeredBy || entry.data.veterinarian });
+                                      setVaccineDialogOpen(true);
+                                    } else if (entry.type === 'diagnostic') {
+                                      setEditingDiagnostic(entry.data);
+                                      setDiagnosticDialogOpen(true);
+                                    } else if (entry.type === 'procedure') {
+                                      setEditingProcedure(entry.data);
+                                      setProcedureDialogOpen(true);
+                                    } else if (entry.type === 'prescription') {
+                                      setEditingPrescription(entry.data);
+                                      setPrescriptionDialogOpen(true);
+                                    }
+                                  }}
+                                >
+                                  <Edit className="w-4 h-4" />
+                                </Button>
+                              )}
                             </div>
                             <Card>
                               <CardContent className="pt-4">
@@ -1210,9 +1251,9 @@ export default function AnimalMedicalPage() {
                                 )}
                                 {entry.type === 'vaccine' && (
                                   <div>
-                                    <p className="font-medium">{entry.data.vaccineName}</p>
+                                    <p className="font-medium">{entry.data.itemName || entry.data.vaccineName}</p>
                                     <p className="text-sm text-muted-foreground">
-                                      Administered by {entry.data.veterinarian || 'Unknown'}
+                                      Administered by {entry.data.administeredBy || entry.data.veterinarian || 'Unknown'}
                                     </p>
                                   </div>
                                 )}
@@ -1300,6 +1341,16 @@ export default function AnimalMedicalPage() {
                               <Clock className="w-3 h-3 mr-1" />
                               Pending
                             </Badge>
+                          )}
+                          {exam.lastEditedAt && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="text-xs text-muted-foreground italic cursor-help" data-testid={`text-edited-exam-${exam.id}`}>(Edited)</span>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Last edited by {exam.lastEditedByName || 'Unknown'} on {formatDateOnly(exam.lastEditedAt, 'MMM d, yyyy h:mm a')}</p>
+                              </TooltipContent>
+                            </Tooltip>
                           )}
                         </div>
                         <p className="text-sm text-muted-foreground mt-1">
@@ -1408,10 +1459,20 @@ export default function AnimalMedicalPage() {
                   <CardHeader>
                     <div className="flex justify-between items-start">
                       <div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <CardTitle className="text-lg">{vaccine.vaccineName}</CardTitle>
                           {isExpired && (
                             <Badge variant="destructive" className="text-xs">Expired</Badge>
+                          )}
+                          {vaccine.lastEditedAt && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="text-xs text-muted-foreground italic cursor-help" data-testid={`text-edited-vaccine-${vaccine.id}`}>(Edited)</span>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Last edited by {vaccine.lastEditedByName || 'Unknown'} on {formatDateOnly(vaccine.lastEditedAt, 'MMM d, yyyy h:mm a')}</p>
+                              </TooltipContent>
+                            </Tooltip>
                           )}
                         </div>
                         <p className="text-sm text-muted-foreground mt-1">
@@ -1502,6 +1563,16 @@ export default function AnimalMedicalPage() {
                               <CheckCircle2 className="w-3 h-3 mr-1" />
                               Results In
                             </Badge>
+                          )}
+                          {test.lastEditedAt && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="text-xs text-muted-foreground italic cursor-help" data-testid={`text-edited-diagnostic-${test.id}`}>(Edited)</span>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Last edited by {test.lastEditedByName || 'Unknown'} on {formatDateOnly(test.lastEditedAt, 'MMM d, yyyy h:mm a')}</p>
+                              </TooltipContent>
+                            </Tooltip>
                           )}
                         </div>
                         <p className="text-sm text-muted-foreground mt-1">
@@ -1662,6 +1733,16 @@ export default function AnimalMedicalPage() {
                               Completed
                             </Badge>
                           )}
+                          {proc.lastEditedAt && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="text-xs text-muted-foreground italic cursor-help" data-testid={`text-edited-procedure-${proc.id}`}>(Edited)</span>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Last edited by {proc.lastEditedByName || 'Unknown'} on {formatDateOnly(proc.lastEditedAt, 'MMM d, yyyy h:mm a')}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          )}
                         </div>
                         <p className="text-sm text-muted-foreground mt-1">
                           {proc.status === 'pending' ? 'Scheduled: ' : ''}{formatDateOnly(proc.procedureDate)}
@@ -1770,6 +1851,16 @@ export default function AnimalMedicalPage() {
                             <Badge variant="outline" className="text-green-600 border-green-600">Active</Badge>
                           ) : (
                             <Badge variant="secondary">Completed</Badge>
+                          )}
+                          {rx.lastEditedAt && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="text-xs text-muted-foreground italic cursor-help" data-testid={`text-edited-prescription-${rx.id}`}>(Edited)</span>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Last edited by {rx.lastEditedByName || 'Unknown'} on {formatDateOnly(rx.lastEditedAt, 'MMM d, yyyy h:mm a')}</p>
+                              </TooltipContent>
+                            </Tooltip>
                           )}
                         </div>
                         <p className="text-sm text-muted-foreground mt-1">
@@ -2415,6 +2506,16 @@ export default function AnimalMedicalPage() {
                           )}
                           {careType && (
                             <Badge variant="outline">{careType.category}</Badge>
+                          )}
+                          {record.lastEditedAt && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="text-xs text-muted-foreground italic cursor-help" data-testid={`text-edited-preventative-${record.id}`}>(Edited)</span>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Last edited by {record.lastEditedByName || 'Unknown'} on {formatDateOnly(record.lastEditedAt, 'MMM d, yyyy h:mm a')}</p>
+                              </TooltipContent>
+                            </Tooltip>
                           )}
                           {isPending && (
                             <>
