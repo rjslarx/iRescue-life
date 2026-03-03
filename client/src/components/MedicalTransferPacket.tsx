@@ -72,21 +72,24 @@ export default function MedicalTransferPacket({
         vaccinesResponse,
         diagnosticsResponse,
         preventativeCareResponse,
-        prescriptionsResponse
+        prescriptionsResponse,
+        careTypesResponse
       ] = await Promise.all([
         fetch(`/api/animals/${animalId}`),
         fetch(`/api/animals/${animalId}/medical/vaccines`),
         fetch(`/api/animals/${animalId}/medical/diagnostics`),
         fetch(`/api/animals/${animalId}/preventative-care`),
-        fetch(`/api/animals/${animalId}/medical/prescriptions`)
+        fetch(`/api/animals/${animalId}/medical/prescriptions`),
+        fetch(`/api/medical/preventative-care/types`)
       ]);
 
-      const [animalData, vaccinesData, diagnosticsData, preventativeCareData, prescriptionsData] = await Promise.all([
+      const [animalData, vaccinesData, diagnosticsData, preventativeCareData, prescriptionsData, careTypesData] = await Promise.all([
         animalResponse.json(),
         vaccinesResponse.json(),
         diagnosticsResponse.json(),
         preventativeCareResponse.json(),
-        prescriptionsResponse.json()
+        prescriptionsResponse.json(),
+        careTypesResponse.json()
       ]);
 
       const animal = animalData.animal;
@@ -94,6 +97,7 @@ export default function MedicalTransferPacket({
       const diagnostics = diagnosticsData.diagnostics || [];
       const preventativeCare = preventativeCareData.records || [];
       const prescriptions = prescriptionsData.prescriptions || [];
+      const careTypes = careTypesData.types || [];
       const tenant = tenantData?.tenant;
 
       const jsPDFModule = await import('jspdf');
@@ -380,28 +384,113 @@ export default function MedicalTransferPacket({
 
       const preventatives = preventativeCare.filter((r: any) => r.careCategory === 'parasite_prevention');
 
-      // Combine preventatives with any active prescriptions
-      const hasPreventatives = preventatives.length > 0;
-      const hasPrescriptions = prescriptions.length > 0;
+      const getCoverageCategory = (ct: any): string => {
+        if (ct.coversHeartworm) return 'heartworm';
+        if (ct.coversFleaTick) return 'fleaTick';
+        return 'dewormer';
+      };
+
+      const productNameToCategory: Record<string, string> = {};
+      careTypes.filter((ct: any) => ct.category === 'parasite_prevention').forEach((ct: any) => {
+        productNameToCategory[ct.name.toLowerCase()] = getCoverageCategory(ct);
+      });
+
+      const preventativeCategory = (p: any): string | null => {
+        if (p.careTypeId) {
+          const ct = careTypes.find((t: any) => t.id === p.careTypeId);
+          if (ct) return getCoverageCategory(ct);
+        }
+        const name = (p.careName || '').toLowerCase();
+        if (name.includes('heartworm')) return 'heartworm';
+        if (name.includes('flea') || name.includes('tick')) return 'fleaTick';
+        if (name.includes('deworm') || name.includes('wormer')) return 'dewormer';
+        return null;
+      };
+
+      const rxCoverage = (rx: any): string | null => {
+        const medName = (rx.medicationName || '').toLowerCase();
+        if (productNameToCategory[medName]) return productNameToCategory[medName];
+        for (const [productName, cat] of Object.entries(productNameToCategory)) {
+          if (medName.includes(productName) || productName.includes(medName)) return cat;
+        }
+        if (medName.includes('heart')) return 'heartworm';
+        if (medName.includes('flea') || medName.includes('tick') || medName.includes('nexgard') || medName.includes('bravecto') || medName.includes('simparica')) return 'fleaTick';
+        if (medName.includes('deworm') || medName.includes('wormer') || medName.includes('panacur') || medName.includes('fenbendazole') || medName.includes('pyrantel')) return 'dewormer';
+        return null;
+      };
+
+      const matchedRxIds = new Set<string>();
+
+      const mergedPreventatives = preventatives.map((p: any) => {
+        const pCat = preventativeCategory(p);
+        if (!pCat) return p;
+
+        const candidates = prescriptions.filter((rx: any) => {
+          if (matchedRxIds.has(rx.id)) return false;
+          return rxCoverage(rx) === pCat;
+        });
+
+        if (candidates.length === 0) return p;
+
+        let matchingRx = candidates[0];
+        if (candidates.length > 1) {
+          const careName = (p.careName || '').toLowerCase();
+          const nameMatch = candidates.find((rx: any) => {
+            const medName = (rx.medicationName || '').toLowerCase();
+            return medName.includes(careName) || careName.includes(medName);
+          });
+          if (nameMatch) {
+            matchingRx = nameMatch;
+          } else {
+            return p;
+          }
+        }
+
+        matchedRxIds.add(matchingRx.id);
+        return { ...p, _matchedRx: matchingRx };
+      });
+
+      const unmatchedRx = prescriptions.filter((rx: any) => !matchedRxIds.has(rx.id));
+
+      const hasPreventatives = mergedPreventatives.length > 0;
+      const hasUnmatchedRx = unmatchedRx.length > 0;
       
-      if (hasPreventatives || hasPrescriptions) {
-        // Build combined medication table
+      if (hasPreventatives || hasUnmatchedRx) {
         const medicationTableData: string[][] = [];
         
-        // Add preventatives
-        preventatives.forEach((p: any) => {
-          medicationTableData.push([
-            p.careName || 'Unknown',
-            'Preventative',
-            '\u2014',
-            p.dateAdministered ? formatDateSafe(p.dateAdministered) : 'N/A',
-            '\u2014',
-            calculateDueDate(p, 'dateAdministered', 'nextDueDate')
-          ]);
+        mergedPreventatives.forEach((p: any) => {
+          const rx = p._matchedRx;
+          if (rx) {
+            const lastGiven = rx.lastGivenAt || p.dateAdministered;
+            const nextDue = p.nextDueDate || rx.nextScheduledDose;
+            let nextDueDisplay = '\u2014';
+            if (nextDue) {
+              nextDueDisplay = formatDateSafe(nextDue);
+            } else if (lastGiven && rx.frequency) {
+              const extrapolated = extrapolateNextDue(lastGiven, rx.frequency);
+              if (extrapolated) nextDueDisplay = formatDateSafe(extrapolated);
+            }
+            medicationTableData.push([
+              rx.medicationName || p.careName || 'Unknown',
+              rx.dosage || 'Preventative',
+              rx.startDate ? formatDateSafe(rx.startDate) : '\u2014',
+              lastGiven ? formatDateSafe(lastGiven) : 'N/A',
+              '\u2014',
+              nextDueDisplay
+            ]);
+          } else {
+            medicationTableData.push([
+              p.careName || 'Unknown',
+              'Preventative',
+              '\u2014',
+              p.dateAdministered ? formatDateSafe(p.dateAdministered) : 'N/A',
+              '\u2014',
+              calculateDueDate(p, 'dateAdministered', 'nextDueDate')
+            ]);
+          }
         });
         
-        // Add prescriptions (medications)
-        prescriptions.forEach((rx: any) => {
+        unmatchedRx.forEach((rx: any) => {
           let endDateDisplay = 'Ongoing';
           if (rx.endDate) {
             const endDay = formatDateSafe(rx.endDate, 'yyyy-MM-dd');
