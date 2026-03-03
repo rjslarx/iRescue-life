@@ -398,7 +398,7 @@ export async function handleIncomingSms(
   toNumber: string,
   body: string,
   mediaUrls: string[] = []
-): Promise<{ success: boolean; routedAs?: 'supply_request' | 'foster_update' | 'medication_confirmed' | 'fuzzy_done_hint' | 'adopter_help_request' | 'volunteer_signup' | 'volunteer_signup_full' | 'volunteer_signup_duplicate' | null; message?: string; signupDetails?: { calendarName: string; dayLabel: string } }> {
+): Promise<{ success: boolean; routedAs?: 'supply_request' | 'foster_update' | 'medication_confirmed' | 'fuzzy_done_hint' | 'adopter_help_request' | 'volunteer_signup' | 'volunteer_signup_full' | 'volunteer_signup_duplicate' | 'volunteer_signup_pick_number' | null; message?: string; signupDetails?: { calendarName: string; dayLabel: string } }> {
   const normalizedBody = body.trim().toUpperCase();
   
   if (isDoneMatch(normalizedBody) || isFuzzyDoneMatch(normalizedBody)) {
@@ -706,8 +706,18 @@ export async function handleIncomingSms(
               let selectedShortage: ShortageInfo;
               if (numericReply !== null && numericReply >= 1 && numericReply <= currentShortages.length) {
                 selectedShortage = currentShortages[numericReply - 1];
-              } else if (isSignupKeyword) {
+              } else if (isSignupKeyword && currentShortages.length === 1) {
                 selectedShortage = currentShortages[0];
+              } else if (isSignupKeyword && currentShortages.length > 1) {
+                const optionLines = currentShortages.map((s, i) => {
+                  const dl = format(parseISO(s.date), "EEE M/d");
+                  return `${i + 1}. ${s.calendarName} ${dl}`;
+                });
+                return {
+                  success: true,
+                  routedAs: 'volunteer_signup_pick_number',
+                  message: optionLines.join("\n"),
+                };
               } else {
                 return { success: true, routedAs: 'volunteer_signup_full' };
               }

@@ -347,7 +347,7 @@ export class VolunteerRecruitmentSmsService {
         const dayLabel = format(parseISO(s.date), "EEE M/d");
         lines.push(`${i + 1}. ${s.calendarName} ${dayLabel} (need ${s.shortage})`);
       });
-      lines.push(`Reply SIGNUP or a # to claim a shift!`);
+      lines.push(`Reply with a # to claim a shift!`);
       lines.push(signupUrl);
       message = lines.join("\n");
     }

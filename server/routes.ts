@@ -22424,6 +22424,8 @@ Submitted: ${new Date().toLocaleString()}
         res.send(`<?xml version="1.0" encoding="UTF-8"?><Response><Message>You're signed up for ${result.signupDetails.calendarName} on ${result.signupDetails.dayLabel}! Thanks!</Message></Response>`);
       } else if (result.routedAs === 'volunteer_signup_duplicate' && result.signupDetails) {
         res.send(`<?xml version="1.0" encoding="UTF-8"?><Response><Message>You're already signed up for ${result.signupDetails.calendarName} on ${result.signupDetails.dayLabel}!</Message></Response>`);
+      } else if (result.routedAs === 'volunteer_signup_pick_number') {
+        res.send(`<?xml version="1.0" encoding="UTF-8"?><Response><Message>Multiple shifts need help! Reply with a number:\n${result.message}</Message></Response>`);
       } else if (result.routedAs === 'volunteer_signup_full') {
         res.send('<?xml version="1.0" encoding="UTF-8"?><Response><Message>All shifts are currently covered — thanks for being willing to help!</Message></Response>');
       } else {
