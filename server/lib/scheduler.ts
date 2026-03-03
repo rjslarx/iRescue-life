@@ -543,7 +543,7 @@ export function initializeScheduler() {
 
   console.log(`Calendar share cleanup scheduled for: ${calendarShareCleanupSchedule} (UTC)`);
 
-  // Volunteer Recruitment SMS — weekly digest (once daily at 1 PM UTC / ~7 AM CST, service gates by day-of-week internally)
+  // Volunteer Recruitment SMS — weekly digest (once daily at 1 PM UTC / ~7 AM CST; service gates by day-of-week + 24h dedup)
   cron.schedule('0 13 * * *', async () => {
     try {
       await VolunteerRecruitmentSmsService.checkAndRunAllTenants('weekly');
@@ -553,7 +553,7 @@ export function initializeScheduler() {
   }, { timezone: "UTC" });
   console.log("✓ Volunteer recruitment weekly SMS scheduled: 0 13 * * * (UTC)");
 
-  // Volunteer Recruitment SMS — urgent alerts (once daily at noon UTC / ~6 AM CST)
+  // Volunteer Recruitment SMS — urgent alerts (once daily at noon UTC / ~6 AM CST; 24h dedup prevents double-sending)
   cron.schedule('0 12 * * *', async () => {
     try {
       await VolunteerRecruitmentSmsService.checkAndRunAllTenants('urgent');
