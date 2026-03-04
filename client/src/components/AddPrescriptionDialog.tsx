@@ -406,7 +406,7 @@ export function AddPrescriptionDialog({ animalId, open, onOpenChange, prescripti
               />
             </div>
 
-            {!isOneTime && watchedFrequency !== "PRN" && (
+            {(!isOneTime || !!prescription) && watchedFrequency !== "PRN" && (
               <FormField
                 control={form.control}
                 name="nextScheduledDose"
