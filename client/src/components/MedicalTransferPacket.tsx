@@ -462,7 +462,7 @@ export default function MedicalTransferPacket({
           const rx = p._matchedRx;
           if (rx) {
             const lastGiven = rx.lastGivenAt || p.dateAdministered;
-            const nextDue = p.nextDueDate || rx.nextScheduledDose;
+            const nextDue = rx.nextScheduledDose || p.nextDueDate;
             let nextDueDisplay = '\u2014';
             if (nextDue) {
               nextDueDisplay = formatDateSafe(nextDue);
