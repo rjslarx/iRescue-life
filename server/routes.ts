@@ -5247,6 +5247,7 @@ Crawl-delay: 1
           email: users.email,
           fullName: users.fullName,
           roles: users.roles,
+          tags: users.tags,
           phone: sql<string | null>`COALESCE(${users.phone}, ${contacts.phone})`,
           createdAt: users.createdAt,
           smsOptIn: users.smsOptIn,
@@ -5300,6 +5301,28 @@ Crawl-delay: 1
         .offset(offset);
 
       res.json({ logs });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get('/api/users/tags', requireTenant, requireAuth, requireRole('owner', 'admin', 'staff'), async (req, res, next) => {
+    try {
+      const { users } = await import('@shared/schema');
+      const result = await db
+        .select({ tags: users.tags })
+        .from(users)
+        .where(eq(users.tenantId, req.tenant!.id));
+      
+      const allTags = new Set<string>();
+      for (const row of result) {
+        if (row.tags) {
+          for (const tag of row.tags) {
+            if (tag) allTags.add(tag);
+          }
+        }
+      }
+      res.json({ tags: Array.from(allTags).sort() });
     } catch (error) {
       next(error);
     }
@@ -5373,6 +5396,7 @@ Crawl-delay: 1
       const updateSchema = z.object({
         roles: z.array(z.enum(['admin', 'board_member', 'staff', 'foster', 'volunteer'])).min(1).optional(),
         fullName: z.string().min(1).optional(),
+        tags: z.array(z.string().max(50)).max(20).optional(),
       });
 
       const data = updateSchema.parse(req.body);
@@ -5391,6 +5415,7 @@ Crawl-delay: 1
           email: users.email,
           fullName: users.fullName,
           roles: users.roles,
+          tags: users.tags,
           phone: users.phone,
           createdAt: users.createdAt,
         });

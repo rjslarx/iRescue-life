@@ -38,9 +38,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Loader2, UserPlus, Shield, Users as UsersIcon, Trash2, Mail, Clock, Send, Pencil, UserCheck, Copy, KeyRound, Bell, BellOff, MessageSquare, Smartphone } from "lucide-react";
+import { Loader2, UserPlus, Shield, Users as UsersIcon, Trash2, Mail, Clock, Send, Pencil, UserCheck, Copy, KeyRound, Bell, BellOff, MessageSquare, Smartphone, Tag, X, Plus, Filter } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Switch } from "@/components/ui/switch";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { UserPagePermissionsManager } from "@/components/UserPagePermissionsManager";
 
 interface User {
@@ -48,6 +49,7 @@ interface User {
   email: string;
   fullName: string;
   roles: Array<"owner" | "admin" | "board_member" | "staff" | "foster" | "volunteer">;
+  tags?: string[] | null;
   createdAt: Date;
   smsOptIn: boolean;
   dailySmsOptIn: boolean;
@@ -98,6 +100,8 @@ export default function TeamManagementPage() {
   const [invitationToCancel, setInvitationToCancel] = useState<Invitation | null>(null);
   const [editingInvitationEmail, setEditingInvitationEmail] = useState<{ id: string; email: string } | null>(null);
   const [selectedRoleTab, setSelectedRoleTab] = useState<string>("all");
+  const [selectedTagFilter, setSelectedTagFilter] = useState<string>("");
+  const [tagInput, setTagInput] = useState("");
 
   const [newInvitation, setNewInvitation] = useState({
     email: "",
@@ -130,6 +134,26 @@ export default function TeamManagementPage() {
   const { data: invitationsData, isLoading: isLoadingInvitations } = useQuery<InvitationsData>({
     queryKey: ['/api/invitations'],
     enabled: canAccessTeamData,
+  });
+
+  const { data: allTagsData } = useQuery<{ tags: string[] }>({
+    queryKey: ['/api/users/tags'],
+    enabled: canAccessTeamData,
+  });
+  const allTenantTags = allTagsData?.tags || [];
+
+  const updateTagsMutation = useMutation({
+    mutationFn: async ({ userId, tags }: { userId: string; tags: string[] }) => {
+      return await apiRequest("PATCH", `/api/users/${userId}`, { tags });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/users'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/users/tags'] });
+      toast({ title: "Tags updated" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to update tags", description: error.message, variant: "destructive" });
+    },
   });
 
   const sendInvitationMutation = useMutation({
@@ -330,11 +354,15 @@ export default function TeamManagementPage() {
   const invitations = invitationsData?.invitations || [];
 
   const filteredUsers = useMemo(() => {
-    if (selectedRoleTab === "all") {
-      return users;
+    let filtered = users;
+    if (selectedRoleTab !== "all") {
+      filtered = filtered.filter(user => user.roles.includes(selectedRoleTab as any));
     }
-    return users.filter(user => user.roles.includes(selectedRoleTab as any));
-  }, [users, selectedRoleTab]);
+    if (selectedTagFilter) {
+      filtered = filtered.filter(user => user.tags?.includes(selectedTagFilter));
+    }
+    return filtered;
+  }, [users, selectedRoleTab, selectedTagFilter]);
 
   const roleTabsData = useMemo(() => [
     { value: "all", label: "All Members", count: users.length },
@@ -752,17 +780,45 @@ export default function TeamManagementPage() {
     >
       <div className="flex-1 overflow-auto p-6">
         <Tabs value={selectedRoleTab} onValueChange={setSelectedRoleTab} className="w-full">
-          <TabsList className="mb-4">
-            {roleTabsData.map((tab) => (
-              <TabsTrigger 
-                key={tab.value} 
-                value={tab.value} 
-                data-testid={`tab-${tab.value}`}
-              >
-                {tab.label} ({tab.count})
-              </TabsTrigger>
-            ))}
-          </TabsList>
+          <div className="flex flex-col gap-3 mb-4">
+            <TabsList>
+              {roleTabsData.map((tab) => (
+                <TabsTrigger 
+                  key={tab.value} 
+                  value={tab.value} 
+                  data-testid={`tab-${tab.value}`}
+                >
+                  {tab.label} ({tab.count})
+                </TabsTrigger>
+              ))}
+            </TabsList>
+            {allTenantTags.length > 0 && (
+              <div className="flex items-center gap-2 flex-wrap">
+                <Filter className="h-4 w-4 text-muted-foreground shrink-0" />
+                <span className="text-sm text-muted-foreground shrink-0">Filter by tag:</span>
+                <Badge
+                  variant={!selectedTagFilter ? "default" : "outline"}
+                  className="cursor-pointer"
+                  onClick={() => setSelectedTagFilter("")}
+                  data-testid="tag-filter-all"
+                >
+                  All
+                </Badge>
+                {allTenantTags.map(tag => (
+                  <Badge
+                    key={tag}
+                    variant={selectedTagFilter === tag ? "default" : "outline"}
+                    className="cursor-pointer"
+                    onClick={() => setSelectedTagFilter(selectedTagFilter === tag ? "" : tag)}
+                    data-testid={`tag-filter-${tag}`}
+                  >
+                    <Tag className="h-3 w-3 mr-1" />
+                    {tag}
+                  </Badge>
+                ))}
+              </div>
+            )}
+          </div>
 
           {roleTabsData.map((tab) => (
             <TabsContent key={tab.value} value={tab.value}>
@@ -811,6 +867,66 @@ export default function TeamManagementPage() {
                                   {getRoleLabel(role)}
                                 </Badge>
                               ))}
+                            </div>
+                            <div className="flex flex-wrap gap-1 mt-2 items-center">
+                              {(user.tags || []).map(tag => (
+                                <Badge key={tag} variant="secondary" className="text-xs" data-testid={`badge-tag-mobile-${user.id}-${tag}`}>
+                                  <Tag className="h-3 w-3 mr-1" />
+                                  {tag}
+                                </Badge>
+                              ))}
+                              <Popover onOpenChange={(open) => { if (open) setTagInput(""); }}>
+                                <PopoverTrigger asChild>
+                                  <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" data-testid={`button-manage-tags-mobile-${user.id}`}>
+                                    <Plus className="h-3 w-3 mr-1" />
+                                    Tag
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-64 p-3" align="start">
+                                  <div className="space-y-3">
+                                    <p className="text-sm font-medium">Manage Tags</p>
+                                    <div className="flex flex-wrap gap-1">
+                                      {(user.tags || []).map(tag => (
+                                        <Badge key={tag} variant="secondary" className="text-xs">
+                                          {tag}
+                                          <button
+                                            className="ml-1 hover:text-destructive"
+                                            onClick={() => updateTagsMutation.mutate({ userId: user.id, tags: (user.tags || []).filter(t => t !== tag) })}
+                                            data-testid={`button-remove-tag-mobile-${user.id}-${tag}`}
+                                          >
+                                            <X className="h-3 w-3" />
+                                          </button>
+                                        </Badge>
+                                      ))}
+                                    </div>
+                                    <form onSubmit={(e) => {
+                                      e.preventDefault();
+                                      const trimmed = tagInput.trim();
+                                      if (trimmed && !(user.tags || []).includes(trimmed)) {
+                                        updateTagsMutation.mutate({ userId: user.id, tags: [...(user.tags || []), trimmed] });
+                                        setTagInput("");
+                                      }
+                                    }} className="flex gap-2">
+                                      <Input
+                                        value={tagInput}
+                                        onChange={(e) => setTagInput(e.target.value)}
+                                        placeholder="Add tag..."
+                                        className="h-8 text-sm"
+                                        list={`tag-suggestions-mobile-${user.id}`}
+                                        data-testid={`input-tag-mobile-${user.id}`}
+                                      />
+                                      <datalist id={`tag-suggestions-mobile-${user.id}`}>
+                                        {allTenantTags.filter(t => !(user.tags || []).includes(t)).map(t => (
+                                          <option key={t} value={t} />
+                                        ))}
+                                      </datalist>
+                                      <Button type="submit" size="sm" className="h-8 shrink-0" disabled={!tagInput.trim()} data-testid={`button-add-tag-mobile-${user.id}`}>
+                                        Add
+                                      </Button>
+                                    </form>
+                                  </div>
+                                </PopoverContent>
+                              </Popover>
                             </div>
                             <div className="flex items-center gap-2 mt-2">
                               <Tooltip>
@@ -1015,6 +1131,7 @@ export default function TeamManagementPage() {
                           <TableHead>Name</TableHead>
                           <TableHead>Email</TableHead>
                           <TableHead>Roles</TableHead>
+                          <TableHead>Tags</TableHead>
                           <TableHead>Notifications</TableHead>
                           <TableHead>Joined</TableHead>
                           <TableHead>Actions</TableHead>
@@ -1038,6 +1155,68 @@ export default function TeamManagementPage() {
                                       {getRoleLabel(role)}
                                     </Badge>
                                   ))}
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex flex-wrap gap-1 items-center">
+                                  {(user.tags || []).map(tag => (
+                                    <Badge key={tag} variant="secondary" className="text-xs" data-testid={`badge-tag-${user.id}-${tag}`}>
+                                      <Tag className="h-3 w-3 mr-1" />
+                                      {tag}
+                                    </Badge>
+                                  ))}
+                                  <Popover onOpenChange={(open) => { if (open) setTagInput(""); }}>
+                                    <PopoverTrigger asChild>
+                                      <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" data-testid={`button-manage-tags-${user.id}`}>
+                                        <Plus className="h-3 w-3 mr-1" />
+                                        Tag
+                                      </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-64 p-3" align="start">
+                                      <div className="space-y-3">
+                                        <p className="text-sm font-medium">Manage Tags</p>
+                                        <div className="flex flex-wrap gap-1">
+                                          {(user.tags || []).map(tag => (
+                                            <Badge key={tag} variant="secondary" className="text-xs">
+                                              {tag}
+                                              <button
+                                                className="ml-1 hover:text-destructive"
+                                                onClick={() => updateTagsMutation.mutate({ userId: user.id, tags: (user.tags || []).filter(t => t !== tag) })}
+                                                data-testid={`button-remove-tag-${user.id}-${tag}`}
+                                              >
+                                                <X className="h-3 w-3" />
+                                              </button>
+                                            </Badge>
+                                          ))}
+                                        </div>
+                                        <form onSubmit={(e) => {
+                                          e.preventDefault();
+                                          const trimmed = tagInput.trim();
+                                          if (trimmed && !(user.tags || []).includes(trimmed)) {
+                                            updateTagsMutation.mutate({ userId: user.id, tags: [...(user.tags || []), trimmed] });
+                                            setTagInput("");
+                                          }
+                                        }} className="flex gap-2">
+                                          <Input
+                                            value={tagInput}
+                                            onChange={(e) => setTagInput(e.target.value)}
+                                            placeholder="Add tag..."
+                                            className="h-8 text-sm"
+                                            list={`tag-suggestions-${user.id}`}
+                                            data-testid={`input-tag-${user.id}`}
+                                          />
+                                          <datalist id={`tag-suggestions-${user.id}`}>
+                                            {allTenantTags.filter(t => !(user.tags || []).includes(t)).map(t => (
+                                              <option key={t} value={t} />
+                                            ))}
+                                          </datalist>
+                                          <Button type="submit" size="sm" className="h-8 shrink-0" disabled={!tagInput.trim()} data-testid={`button-add-tag-${user.id}`}>
+                                            Add
+                                          </Button>
+                                        </form>
+                                      </div>
+                                    </PopoverContent>
+                                  </Popover>
                                 </div>
                               </TableCell>
                               <TableCell>
