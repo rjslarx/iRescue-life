@@ -350,6 +350,7 @@ export const users = pgTable("users", {
   hasKids: boolean("has_kids"), // Foster home has children
   hasFencedYard: boolean("has_fenced_yard"), // Foster home has fenced yard
   sizePreference: text("size_preference").$type<"small" | "medium" | "large" | "any">(), // Preferred animal size
+  tags: text("tags").array().default([]),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (table) => ({
   uniqueEmail: unique().on(table.tenantId, table.email),
