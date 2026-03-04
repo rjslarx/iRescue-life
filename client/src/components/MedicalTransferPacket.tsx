@@ -564,12 +564,12 @@ export default function MedicalTransferPacket({
       const upcomingItems: { name: string; type: string; dueDate: Date }[] = [];
 
       preventativeCare.forEach((r: any) => {
-        const dueStr = r.nextDueDate;
+        const matchedMp = mergedPreventatives?.find((mp: any) => mp.id === r.id && mp._matchedRx);
+        const dueStr = matchedMp?._matchedRx?.nextScheduledDose || r.nextDueDate;
         if (dueStr) {
           const due = new Date(dueStr);
           if (due >= today) {
-            const rx = mergedPreventatives?.find((mp: any) => mp.id === r.id && mp._matchedRx);
-            const displayName = rx?._matchedRx?.medicationName || r.careName || 'Unknown';
+            const displayName = matchedMp?._matchedRx?.medicationName || r.careName || 'Unknown';
             upcomingItems.push({ name: displayName, type: 'Preventative', dueDate: due });
           }
         }

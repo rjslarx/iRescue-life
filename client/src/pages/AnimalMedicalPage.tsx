@@ -1981,7 +1981,7 @@ export default function AnimalMedicalPage() {
                       {rx.nextScheduledDose && (
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Next Due:</span>
-                          <span className="font-medium">{format(new Date(rx.nextScheduledDose), 'MMM d, yyyy h:mm a')}</span>
+                          <span className="font-medium">{formatDateOnly(rx.nextScheduledDose)}</span>
                         </div>
                       )}
                       {rx.lastGivenAt && (
