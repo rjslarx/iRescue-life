@@ -4699,6 +4699,7 @@ export const broadcasts = pgTable("broadcasts", {
   sentAt: timestamp("sent_at"),
   sentBy: uuid("sent_by").references(() => users.id, { onDelete: 'set null' }),
   sentByName: text("sent_by_name"),
+  replyToNumber: text("reply_to_number"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

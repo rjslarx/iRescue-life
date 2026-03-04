@@ -80,6 +80,7 @@ export default function BroadcastsPage() {
   const [selectedChannels, setSelectedChannels] = useState<Channel[]>(["push"]);
   const [selectedRoles, setSelectedRoles] = useState<TargetRole[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
+  const [replyToNumber, setReplyToNumber] = useState("");
 
   const { data: channelStatus, isLoading: channelStatusLoading } = useQuery<ChannelStatus>({
     queryKey: ['/api/broadcasts/status'],
@@ -120,12 +121,14 @@ export default function BroadcastsPage() {
 
   const sendBroadcastMutation = useMutation({
     mutationFn: async () => {
+      const cleanedReplyTo = replyToNumber.replace(/\D/g, '');
       const response = await apiRequest('POST', '/api/broadcasts/send', {
         title,
         message,
         channels: selectedChannels,
         targetRoles: selectedRoles,
         templateId: selectedTemplateId || undefined,
+        replyToNumber: cleanedReplyTo.length === 10 ? cleanedReplyTo : undefined,
       });
       return response.json();
     },
@@ -383,6 +386,35 @@ export default function BroadcastsPage() {
                             </p>
                           </div>
                         </label>
+                      </div>
+                    )}
+
+                    {selectedChannels.includes('sms') && (
+                      <div className="space-y-2 pt-2 border-t">
+                        <Label htmlFor="replyToNumber">Reply-To Number (optional)</Label>
+                        <Input
+                          id="replyToNumber"
+                          type="tel"
+                          placeholder="(555) 123-4567"
+                          value={replyToNumber}
+                          onChange={(e) => {
+                            const raw = e.target.value.replace(/\D/g, '').slice(0, 10);
+                            let formatted = '';
+                            if (raw.length > 0) formatted += '(' + raw.slice(0, 3);
+                            if (raw.length >= 3) formatted += ') ' + raw.slice(3, 6);
+                            if (raw.length >= 6) formatted += '-' + raw.slice(6);
+                            setReplyToNumber(formatted || '');
+                          }}
+                          data-testid="input-reply-to-number"
+                        />
+                        <p className="text-xs text-muted-foreground" data-testid="text-reply-to-help">
+                          Recipients will see this number so they can reply directly to the coordinator instead of the system
+                        </p>
+                        {replyToNumber && replyToNumber.replace(/\D/g, '').length < 10 && (
+                          <p className="text-xs text-destructive" data-testid="text-reply-to-error">
+                            Please enter a full 10-digit phone number
+                          </p>
+                        )}
                       </div>
                     )}
                   </CardContent>

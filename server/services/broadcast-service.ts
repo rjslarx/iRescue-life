@@ -26,6 +26,7 @@ interface BroadcastRequest {
   targetRoles?: TargetRole[];
   targetUserIds?: string[];
   templateId?: string;
+  replyToNumber?: string;
   sentBy: { id: string; name: string };
 }
 
@@ -41,7 +42,7 @@ interface BroadcastResult {
 
 export class BroadcastService {
   static async sendBroadcast(request: BroadcastRequest): Promise<BroadcastResult> {
-    const { tenantId, title, message, channels, targetRoles, targetUserIds, templateId, sentBy } = request;
+    const { tenantId, title, message, channels, targetRoles, targetUserIds, templateId, replyToNumber, sentBy } = request;
 
     if (templateId) {
       const [template] = await db.select()
@@ -103,6 +104,7 @@ export class BroadcastService {
       channels,
       targetRoles,
       targetUserIds,
+      replyToNumber: replyToNumber || null,
       status: 'sending',
       sentBy: sentBy.id,
       sentByName: sentBy.name,
@@ -134,10 +136,15 @@ export class BroadcastService {
       }
 
       if (channels.includes('sms') && user.phone) {
+        let smsBody = `${title}: ${message}`;
+        if (replyToNumber) {
+          const formatted = `(${replyToNumber.slice(0,3)}) ${replyToNumber.slice(3,6)}-${replyToNumber.slice(6)}`;
+          smsBody += `\nReply to: ${formatted}`;
+        }
         const smsResult = await sendSms(
           tenantId,
           user.phone,
-          `${title}: ${message}`,
+          smsBody,
           'broadcast',
           { sentBy }
         );

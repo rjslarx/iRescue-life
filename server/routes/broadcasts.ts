@@ -38,6 +38,7 @@ router.post('/send', requireTenant, requireAuth, requireAdmin, async (req, res, 
       targetRoles: z.array(z.enum(['admin', 'board_member', 'staff', 'foster', 'volunteer'])).optional(),
       targetUserIds: z.array(z.string().uuid()).optional(),
       templateId: z.string().uuid().optional(),
+      replyToNumber: z.string().regex(/^\d{10}$/, 'Must be a 10-digit phone number').optional(),
     });
 
     const data = schema.parse(req.body);
@@ -54,6 +55,7 @@ router.post('/send', requireTenant, requireAuth, requireAdmin, async (req, res, 
       targetRoles: data.targetRoles,
       targetUserIds: data.targetUserIds,
       templateId: data.templateId,
+      replyToNumber: data.replyToNumber,
       sentBy: { id: req.user!.id, name: req.user!.fullName },
     });
 

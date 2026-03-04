@@ -48,6 +48,7 @@ Core functionalities include:
 - **Help & Training Module:** Offers a two-tab page for videos and documents with role-based visibility.
 - **TNR (Trap-Neuter-Return) Log Module:** Integrates TNR record management within existing animal data.
 - **Omnichannel Communications Switchboard:** A unified admin control panel for SMS logs and queued messages, including a "Pause Outbound Comms" kill switch and a "Convert Channel" modal.
+- **Broadcast Reply-To Number:** Optional coordinator phone number field on broadcast SMS notifications; recipients see "Reply to: (xxx) xxx-xxxx" appended to the message so they can respond directly to the coordinator.
 - **Daily Staff Briefing Email:** An automated HTML email providing a daily summary of shelter, foster, and adopted animal-related tasks and alerts, sent to configurable recipient roles.
 - **Volunteer SMS Signup:** Volunteers can sign up for open shifts via SMS.
 - **Foster Medication SMS Escalation:** A 3-step system of hourly digests, evening nudges, and dashboard alerts for unconfirmed tasks, with fuzzy matching for replies.
