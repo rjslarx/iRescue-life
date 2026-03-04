@@ -263,9 +263,51 @@ export default function MedicalTransferPacket({
       doc.text('SECTION 2: VACCINATION HISTORY', margin, yPos);
       yPos += 6;
 
-      // Combine vaccines from /medical/vaccines and preventative care vaccine records
-      const preventativeCareVaccines = preventativeCare.filter((r: any) => r.careCategory === 'vaccine');
-      
+      const isProtocolGenerated = (r: any) => !r.manufacturer && !r.lotNumber && (!r.administeredBy || r.administeredBy === '');
+
+      const normalizeVaccineName = (name: string): string => {
+        const n = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (n.includes('rabies')) return 'rabies';
+        if (n.includes('dhpp') || n.includes('da2pp') || n.includes('dapp') || n.includes('distemper')) return 'dhpp';
+        if (n.includes('bordetella')) return 'bordetella';
+        if (n.includes('leptospirosis') || n.includes('lepto')) return 'lepto';
+        if (n.includes('lyme')) return 'lyme';
+        if (n.includes('influenza') || n.includes('flu')) return 'influenza';
+        if (n.includes('parvo')) return 'parvo';
+        return n;
+      };
+
+      const realVaccineNames = new Set(vaccines.map((v: any) => normalizeVaccineName(v.vaccineName || v.itemName || '')));
+
+      const normalizeTestName = (name: string): string => {
+        const n = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (n.includes('heartworm')) return 'heartworm';
+        if (n.includes('fecal') || n.includes('fecaltest')) return 'fecal';
+        if (n.includes('snap') || n.includes('4dx')) return '4dx';
+        if (n.includes('felv') || n.includes('fiv')) return 'felvfiv';
+        return n;
+      };
+
+      const realDiagnosticNames = new Set(diagnostics.map((d: any) => normalizeTestName(d.testName || d.testType || '')));
+
+      const preventativeCareVaccines = preventativeCare.filter((r: any) => {
+        if (r.careCategory !== 'vaccine') return false;
+        if (isProtocolGenerated(r) && realVaccineNames.has(normalizeVaccineName(r.careName || ''))) return false;
+        return true;
+      });
+
+      const protocolVaccineIds = new Set(
+        preventativeCare
+          .filter((r: any) => r.careCategory === 'vaccine' && isProtocolGenerated(r) && realVaccineNames.has(normalizeVaccineName(r.careName || '')))
+          .map((r: any) => r.id)
+      );
+
+      const protocolTestIds = new Set(
+        preventativeCare
+          .filter((r: any) => r.careCategory === 'test' && isProtocolGenerated(r) && realDiagnosticNames.has(normalizeTestName(r.careName || '')))
+          .map((r: any) => r.id)
+      );
+
       // Convert /medical/vaccines to table format
       const medicalVaccinesFormatted = vaccines.map((v: any) => [
         v.vaccineName || 'Unknown',
@@ -323,7 +365,7 @@ export default function MedicalTransferPacket({
       doc.text('SECTION 3: DIAGNOSTIC TESTING', margin, yPos);
       yPos += 6;
 
-      const testRecords = preventativeCare.filter((r: any) => r.careCategory === 'test');
+      const testRecords = preventativeCare.filter((r: any) => r.careCategory === 'test' && !protocolTestIds.has(r.id));
       const allTests = [...diagnostics, ...testRecords];
 
       if (allTests.length > 0) {
@@ -564,6 +606,7 @@ export default function MedicalTransferPacket({
       const upcomingItems: { name: string; type: string; dueDate: Date }[] = [];
 
       preventativeCare.forEach((r: any) => {
+        if (protocolVaccineIds.has(r.id) || protocolTestIds.has(r.id)) return;
         const matchedMp = mergedPreventatives?.find((mp: any) => mp.id === r.id && mp._matchedRx);
         const dueStr = matchedMp?._matchedRx?.nextScheduledDose || r.nextDueDate;
         if (dueStr) {
