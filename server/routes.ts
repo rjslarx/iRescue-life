@@ -34622,11 +34622,14 @@ Email: ${application.applicantEmail || ''}`
         });
       }
       
+      const body = { ...req.body };
+      if (typeof body.billDate === 'string') body.billDate = new Date(body.billDate);
+      if (typeof body.dueDate === 'string') body.dueDate = new Date(body.dueDate);
       const data = insertMedicalBillSchema.omit({
         animalId: true,
         tenantId: true,
         createdBy: true,
-      }).parse(req.body);
+      }).parse(body);
 
       // Security: Validate grantId belongs to this tenant if provided
       if (data.grantId) {
@@ -34700,8 +34703,11 @@ Email: ${application.applicantEmail || ''}`
         });
       }
 
+      const body = { ...req.body };
+      if (typeof body.billDate === 'string') body.billDate = new Date(body.billDate);
+      if (typeof body.dueDate === 'string') body.dueDate = new Date(body.dueDate);
       const updateData = {
-        ...req.body,
+        ...body,
         updatedAt: new Date(),
       };
 
