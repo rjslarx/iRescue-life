@@ -201,7 +201,7 @@ export class VolunteerRecruitmentSmsService {
 
     const orgName = tenant.name;
     const baseUrl = tenant.customDomain ? `https://${tenant.customDomain}` : (tenant.subdomain ? `https://${tenant.subdomain}.irescue.life` : "");
-    const signupUrl = baseUrl ? `${baseUrl}/calendar` : "our website";
+    const signupUrl = baseUrl ? `${baseUrl}/dashboard/calendar` : "our website";
 
     const lines: string[] = [`🐕 ${orgName} Volunteers Needed:`];
     for (const [calName, calShortages] of byCalendar) {
@@ -343,7 +343,7 @@ export class VolunteerRecruitmentSmsService {
 
     const orgName = tenant.name;
     const baseUrl = tenant.customDomain ? `https://${tenant.customDomain}` : (tenant.subdomain ? `https://${tenant.subdomain}.irescue.life` : "");
-    const signupUrl = baseUrl ? `${baseUrl}/calendar` : "our website";
+    const signupUrl = baseUrl ? `${baseUrl}/dashboard/calendar` : "our website";
 
     const newShortages = shortages
       .filter((s) => !sentTodayIds.has(`${s.calendarId}:${s.date}`))
