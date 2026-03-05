@@ -428,9 +428,9 @@ export default function Dashboard() {
                   )}
                 </div>
 
-                {/* Right Column - Daily Briefing (1/3 width, scrollable) */}
+                {/* Right Column - Daily Briefing (1/3 width, scrollable, matches left column height) */}
                 {canViewDailyBriefing && (
-                  <div className="lg:col-span-1">
+                  <div className="lg:col-span-1 min-h-0">
                     <DailyBriefing />
                   </div>
                 )}
