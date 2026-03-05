@@ -567,6 +567,11 @@ export const animals = pgTable("animals", {
   // Canva flyer designs
   flyerUrls: text("flyer_urls").array(), // URLs of designed flyers (from Canva or manual uploads)
   canvaDesignId: text("canva_design_id"), // Canva design ID to allow editing existing flyer
+  // Preventative care due dates cache (heartworm, flea/tick, etc.)
+  medicalDueDates: jsonb("medical_due_dates").$type<{
+    heartwormDueDate?: string;
+    fleaTickDueDate?: string;
+  }>(),
   // Medical fund tracking (via Stripe donations)
   medicalFundGoal: decimal("medical_fund_goal", { precision: 10, scale: 2 }), // Target fundraising amount
   medicalFundRaised: decimal("medical_fund_raised", { precision: 10, scale: 2 }).default("0.00"), // Amount raised via donations
