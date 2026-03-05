@@ -25,7 +25,7 @@ const RESERVED_PATHS = [
   'applications', 'contacts', 'finances', 'kennels', 'calendar',
   'reports', 'help', 'docs', 'assets', 'static', 'public',
   'manifest.json', 'sw.js', 'favicon.ico', 'give', 'page',
-  'medical-fund', 'contract', 'collaboration', 'reset-password',
+  'medical-fund', 'contract', 'collaboration', 'reset-password', 'fundraise',
   'forgot-password', 'verify-email', 'unsubscribe', 'volunteer-waiver'
 ];
 

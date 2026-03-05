@@ -5298,6 +5298,51 @@ export const insertCampaignUpdateSchema = createInsertSchema(campaignUpdates).om
 export type InsertCampaignUpdate = z.infer<typeof insertCampaignUpdateSchema>;
 export type CampaignUpdate = typeof campaignUpdates.$inferSelect;
 
+export const peerCampaigns = pgTable("peer_campaigns", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  creatorName: text("creator_name").notNull(),
+  creatorEmail: text("creator_email").notNull(),
+  campaignTitle: text("campaign_title").notNull(),
+  campaignStory: text("campaign_story"),
+  goalAmount: integer("goal_amount").notNull(),
+  amountRaised: integer("amount_raised").notNull().default(0),
+  slug: text("slug").notNull(),
+  coverImageUrl: text("cover_image_url"),
+  isActive: boolean("is_active").notNull().default(true),
+  endsAt: timestamp("ends_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertPeerCampaignSchema = createInsertSchema(peerCampaigns).omit({
+  id: true,
+  amountRaised: true,
+  createdAt: true,
+});
+export type InsertPeerCampaign = z.infer<typeof insertPeerCampaignSchema>;
+export type PeerCampaign = typeof peerCampaigns.$inferSelect;
+
+export const peerCampaignDonations = pgTable("peer_campaign_donations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  peerCampaignId: uuid("peer_campaign_id").notNull().references(() => peerCampaigns.id, { onDelete: 'cascade' }),
+  donorName: text("donor_name").notNull(),
+  donorEmail: text("donor_email"),
+  amount: integer("amount").notNull(),
+  message: text("message"),
+  isAnonymous: boolean("is_anonymous").notNull().default(false),
+  stripeSessionId: text("stripe_session_id"),
+  paymentStatus: text("payment_status").$type<"pending" | "paid">().notNull().default("pending"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertPeerCampaignDonationSchema = createInsertSchema(peerCampaignDonations).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertPeerCampaignDonation = z.infer<typeof insertPeerCampaignDonationSchema>;
+export type PeerCampaignDonation = typeof peerCampaignDonations.$inferSelect;
+
 // Placement Agreement Templates - customizable per-animal foster placement agreement templates
 export const placementAgreementTemplates = pgTable("placement_agreement_templates", {
   id: serial("id").primaryKey(),

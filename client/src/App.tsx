@@ -79,6 +79,7 @@ import HappyTailsPage from "@/pages/HappyTailsPage";
 import TutorialsPage from "@/pages/TutorialsPage";
 import PlatformIntegrationsPage from "@/pages/PlatformIntegrationsPage";
 import ComplianceSettingsPage from "@/pages/ComplianceSettingsPage";
+import PeerCampaignPage from "@/pages/PeerCampaignPage";
 import PlatformLandingPage from "@/pages/PlatformLandingPage";
 import PlatformPrivacyPage from "@/pages/PlatformPrivacyPage";
 import PlatformTermsPage from "@/pages/PlatformTermsPage";
@@ -146,6 +147,7 @@ import PlatformResetPasswordPage from "@/pages/platform/PlatformResetPasswordPag
 import TransfersPage from "@/pages/TransfersPage";
 import EventTicketSalesPage from "@/pages/EventTicketSalesPage";
 import FundraisingHubPage from "@/pages/FundraisingHubPage";
+import PeerCampaignCreatePage from "@/pages/PeerCampaignCreatePage";
 import TenantAuditLogsPage from "@/pages/TenantAuditLogsPage";
 import TenantSignupPage from "@/pages/TenantSignupPage";
 import SignupSuccessPage from "@/pages/platform/SignupSuccessPage";
@@ -223,6 +225,7 @@ function RouterSwitch() {
       <Route path="/surrender" component={PublicSurrenderPage} />
       <Route path="/form-success/:formType" component={FormSuccessPage} />
       <Route path="/contact" component={PublicContactPage} />
+      <Route path="/fundraise/:slug" component={PeerCampaignPage} />
       <Route path="/fundraisers" component={PublicFundraisersPage} />
       <Route path="/donate/event/:eventId" component={FundraiserEventPage} />
       <Route path="/donate/:linkId" component={DonationLinkRedirectPage} />
@@ -234,6 +237,7 @@ function RouterSwitch() {
       <Route path="/campaigns/:campaignId" component={PublicCampaignPage} />
       <Route path="/campaign/:animalId" component={PublicCampaignPage} />
       <Route path="/campaign/:animalId/thank-you" component={DonationThankYouPage} />
+      <Route path="/fundraise" component={PeerCampaignCreatePage} />
       <Route path="/foster" component={FosterApplicationPage} />
       <Route path="/login" component={Login} />
       <Route path="/forgot-password" component={ForgotPasswordPage} />

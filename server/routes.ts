@@ -25288,7 +25288,30 @@ Submitted: ${new Date().toLocaleString()}
           console.log('[STRIPE-WEBHOOK] Processing checkout.session.completed event');
           const session = event.data.object as any;
 
-          // Fundraiser order fulfillment — early exit to avoid donation processing
+          // P2P Campaign donation fulfillment — early exit to avoid donation processing
+          if (session.metadata?.peerCampaignId) {
+            console.log('[STRIPE-WEBHOOK] P2P campaign donation received:', session.metadata.peerDonationId);
+            try {
+              const { peerCampaignDonations, peerCampaigns } = await import('@shared/schema');
+              await db
+                .update(peerCampaignDonations)
+                .set({ paymentStatus: 'paid' })
+                .where(eq(peerCampaignDonations.stripeSessionId, session.id));
+
+              const amountPaid = session.metadata.baseAmount ? parseInt(session.metadata.baseAmount) : (session.amount_total || 0);
+              await db
+                .update(peerCampaigns)
+                .set({ amountRaised: sql`${peerCampaigns.amountRaised} + ${amountPaid}` })
+                .where(eq(peerCampaigns.id, session.metadata.peerCampaignId));
+
+              console.log('[STRIPE-WEBHOOK] P2P campaign donation marked paid, amount:', amountPaid);
+            } catch (err) {
+              console.error('[STRIPE-WEBHOOK] Failed to process P2P campaign donation:', err);
+            }
+            break;
+          }
+
+                    // Fundraiser order fulfillment — early exit to avoid donation processing
           if (session.metadata?.fundraiser_event_id) {
             console.log('[STRIPE-WEBHOOK] Fundraiser order payment received:', session.metadata.fundraiser_order_id);
             try {
@@ -41830,6 +41853,329 @@ The user asking is a tenant administrator or staff member.`;
   });
 
   // ============================================================================
+  // Peer-to-Peer (P2P) Campaign Routes
+  // ============================================================================
+
+  /**
+   * POST /api/peer-campaigns
+   * Public: Create a new P2P fundraiser campaign
+   */
+  app.post('/api/peer-campaigns', requireTenant, async (req, res, next) => {
+    try {
+      const { peerCampaigns } = await import('@shared/schema');
+
+      const createSchema = z.object({
+        creatorName: z.string().min(1).max(200),
+        creatorEmail: z.string().email(),
+        campaignTitle: z.string().min(1).max(200),
+        campaignStory: z.string().max(5000).optional(),
+        goalAmount: z.number().int().min(100),
+        coverImageUrl: z.string().url().optional(),
+        endsAt: z.string().optional(),
+      });
+
+      const data = createSchema.parse(req.body);
+
+      let slug = data.campaignTitle
+        .toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, '')
+        .replace(/\s+/g, '-')
+        .replace(/-+/g, '-')
+        .substring(0, 60);
+
+      const [existing] = await db
+        .select({ id: peerCampaigns.id })
+        .from(peerCampaigns)
+        .where(and(eq(peerCampaigns.tenantId, req.tenant!.id), eq(peerCampaigns.slug, slug)))
+        .limit(1);
+
+      if (existing) {
+        slug = slug + '-' + Date.now().toString(36);
+      }
+
+      const [campaign] = await db.insert(peerCampaigns).values({
+        tenantId: req.tenant!.id,
+        creatorName: data.creatorName,
+        creatorEmail: data.creatorEmail,
+        campaignTitle: data.campaignTitle,
+        campaignStory: data.campaignStory || null,
+        goalAmount: data.goalAmount,
+        slug,
+        coverImageUrl: data.coverImageUrl || null,
+        endsAt: data.endsAt ? new Date(data.endsAt) : null,
+      }).returning();
+
+      res.json({ campaign });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/peer-campaigns/:slug
+   * Public: Get a campaign by slug for the landing page
+   */
+  app.get('/api/peer-campaigns/:slug', requireTenant, async (req, res, next) => {
+    try {
+      const { peerCampaigns, peerCampaignDonations } = await import('@shared/schema');
+
+      const [campaign] = await db
+        .select()
+        .from(peerCampaigns)
+        .where(and(
+          eq(peerCampaigns.tenantId, req.tenant!.id),
+          eq(peerCampaigns.slug, req.params.slug),
+          eq(peerCampaigns.isActive, true)
+        ))
+        .limit(1);
+
+      if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+
+      const donations = await db
+        .select({
+          donorName: peerCampaignDonations.donorName,
+          amount: peerCampaignDonations.amount,
+          message: peerCampaignDonations.message,
+          isAnonymous: peerCampaignDonations.isAnonymous,
+          createdAt: peerCampaignDonations.createdAt,
+        })
+        .from(peerCampaignDonations)
+        .where(and(
+          eq(peerCampaignDonations.peerCampaignId, campaign.id),
+          eq(peerCampaignDonations.paymentStatus, 'paid')
+        ))
+        .orderBy(desc(peerCampaignDonations.createdAt))
+        .limit(50);
+
+      res.json({ campaign, donations });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/peer-campaigns/:slug/checkout
+   * Public: Create a Stripe checkout session for donating to a P2P campaign
+   */
+  app.post('/api/peer-campaigns/:slug/checkout', requireTenant, async (req, res, next) => {
+    try {
+      const { peerCampaigns, peerCampaignDonations } = await import('@shared/schema');
+      const { stripeService } = await import('./lib/stripe-service');
+      const { calculatePlatformFee, calculateDonorCoversFees } = await import('./config/platform');
+
+      const checkoutSchema = z.object({
+        amount: z.number().int().min(100),
+        donorName: z.string().min(1),
+        donorEmail: z.string().email().optional(),
+        message: z.string().max(500).optional(),
+        isAnonymous: z.boolean().default(false),
+        donorCoversFees: z.boolean().default(false),
+      });
+
+      const data = checkoutSchema.parse(req.body);
+
+      const [campaign] = await db
+        .select()
+        .from(peerCampaigns)
+        .where(and(
+          eq(peerCampaigns.tenantId, req.tenant!.id),
+          eq(peerCampaigns.slug, req.params.slug),
+          eq(peerCampaigns.isActive, true)
+        ))
+        .limit(1);
+
+      if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+
+      const [tenant] = await db
+        .select()
+        .from(tenants)
+        .where(eq(tenants.id, req.tenant!.id))
+        .limit(1);
+
+      if (!tenant || !tenant.stripeEnabled) {
+        return res.status(400).json({ error: 'Stripe is not configured for this rescue' });
+      }
+
+      let chargeAmount = data.amount;
+      let feesCovered = 0;
+      if (data.donorCoversFees) {
+        const feeCalc = calculateDonorCoversFees(data.amount, tenant.subscriptionTier || 'free');
+        chargeAmount = feeCalc.totalAmount;
+        feesCovered = feeCalc.feesCovered;
+      }
+
+      const platformFeeAmount = calculatePlatformFee(chargeAmount, tenant.subscriptionTier || 'free');
+
+      const [donation] = await db.insert(peerCampaignDonations).values({
+        tenantId: req.tenant!.id,
+        peerCampaignId: campaign.id,
+        donorName: data.donorName,
+        donorEmail: data.donorEmail || null,
+        amount: data.amount,
+        message: data.message || null,
+        isAnonymous: data.isAnonymous,
+        paymentStatus: 'pending',
+      }).returning();
+
+      const host = req.get('host') || '';
+      const baseUrl = `${req.protocol}://${host}`;
+      const hasCustomDomain = (tenant as any).customDomain && host.includes((tenant as any).customDomain);
+      const tenantPath = hasCustomDomain ? '' : (tenant.subdomain ? `/${tenant.subdomain}` : '');
+
+      const session = await stripeService.createCheckoutSession(tenant, {
+        amount: chargeAmount,
+        currency: 'usd',
+        customerEmail: data.donorEmail,
+        isRecurring: false,
+        successUrl: `${baseUrl}${tenantPath}/fundraise/${campaign.slug}?donation=success`,
+        cancelUrl: `${baseUrl}${tenantPath}/fundraise/${campaign.slug}`,
+        platformFeeAmount: platformFeeAmount,
+        connectedAccountId: tenant.stripeConnectedAccountId || undefined,
+        metadata: {
+          peerCampaignId: campaign.id,
+          peerCampaignSlug: campaign.slug,
+          peerDonationId: donation.id,
+          donorName: data.donorName,
+          isAnonymous: data.isAnonymous.toString(),
+          baseAmount: data.amount.toString(),
+          chargeAmount: chargeAmount.toString(),
+          donorCoveredFees: data.donorCoversFees.toString(),
+          feesCovered: feesCovered.toString(),
+          platformFeeAmount: platformFeeAmount.toString(),
+        },
+      });
+
+      if (!session) {
+        return res.status(500).json({ error: 'Failed to create checkout session' });
+      }
+
+      await db.update(peerCampaignDonations)
+        .set({ stripeSessionId: session.id })
+        .where(eq(peerCampaignDonations.id, donation.id));
+
+      res.json({ sessionId: session.id, url: session.url });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/peer-campaigns
+   * Admin: List all P2P campaigns for the tenant
+   */
+  app.get('/api/peer-campaigns', requireTenant, requireAuth, requireRole('admin', 'owner', 'board_member', 'staff'), async (req, res, next) => {
+    try {
+      const { peerCampaigns, peerCampaignDonations } = await import('@shared/schema');
+
+      const campaigns = await db
+        .select()
+        .from(peerCampaigns)
+        .where(eq(peerCampaigns.tenantId, req.tenant!.id))
+        .orderBy(desc(peerCampaigns.createdAt));
+
+      const campaignIds = campaigns.map(c => c.id);
+      let donationCounts: Record<string, { count: number; total: number }> = {};
+
+      if (campaignIds.length > 0) {
+        const stats = await db
+          .select({
+            campaignId: peerCampaignDonations.peerCampaignId,
+            count: sql<number>`COUNT(*)`,
+            total: sql<number>`COALESCE(SUM(${peerCampaignDonations.amount}), 0)`,
+          })
+          .from(peerCampaignDonations)
+          .where(and(
+            eq(peerCampaignDonations.paymentStatus, 'paid'),
+            inArray(peerCampaignDonations.peerCampaignId, campaignIds)
+          ))
+          .groupBy(peerCampaignDonations.peerCampaignId);
+
+        stats.forEach(s => {
+          donationCounts[s.campaignId] = { count: Number(s.count), total: Number(s.total) };
+        });
+      }
+
+      const enriched = campaigns.map(c => ({
+        ...c,
+        donationCount: donationCounts[c.id]?.count || 0,
+        donationTotal: donationCounts[c.id]?.total || 0,
+      }));
+
+      res.json({ campaigns: enriched });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * PATCH /api/peer-campaigns/:id
+   * Admin: Update a P2P campaign (toggle active, edit details)
+   */
+  app.patch('/api/peer-campaigns/:id', requireTenant, requireAuth, requireRole('admin', 'owner', 'board_member'), async (req, res, next) => {
+    try {
+      const { peerCampaigns } = await import('@shared/schema');
+
+      const updateSchema = z.object({
+        isActive: z.boolean().optional(),
+        campaignTitle: z.string().min(1).max(200).optional(),
+        campaignStory: z.string().max(5000).optional(),
+        goalAmount: z.number().int().min(100).optional(),
+      });
+
+      const data = updateSchema.parse(req.body);
+
+      const [campaign] = await db
+        .update(peerCampaigns)
+        .set(data)
+        .where(and(
+          eq(peerCampaigns.id, req.params.id),
+          eq(peerCampaigns.tenantId, req.tenant!.id)
+        ))
+        .returning();
+
+      if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+
+      res.json({ campaign });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/peer-campaigns/:id/donations
+   * Admin: List donations for a specific P2P campaign
+   */
+  app.get('/api/peer-campaigns/:id/donations', requireTenant, requireAuth, requireRole('admin', 'owner', 'board_member', 'staff'), async (req, res, next) => {
+    try {
+      const { peerCampaignDonations, peerCampaigns } = await import('@shared/schema');
+
+      const [campaign] = await db
+        .select({ id: peerCampaigns.id })
+        .from(peerCampaigns)
+        .where(and(
+          eq(peerCampaigns.id, req.params.id),
+          eq(peerCampaigns.tenantId, req.tenant!.id)
+        ))
+        .limit(1);
+
+      if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+
+      const donations = await db
+        .select()
+        .from(peerCampaignDonations)
+        .where(and(
+          eq(peerCampaignDonations.peerCampaignId, req.params.id),
+          eq(peerCampaignDonations.paymentStatus, 'paid')
+        ))
+        .orderBy(desc(peerCampaignDonations.createdAt));
+
+      res.json({ donations });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+    // ============================================================================
   // TNR (Trap-Neuter-Return) Log Routes
   // ============================================================================
 
