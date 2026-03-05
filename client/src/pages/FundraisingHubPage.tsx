@@ -65,6 +65,7 @@ import {
   Share2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import DashboardLayout from "@/components/DashboardLayout";
 
 export default function FundraisingHubPage() {
   const { toast } = useToast();
@@ -78,15 +79,8 @@ export default function FundraisingHubPage() {
   const donationUrl = tenant?.stripeLink || "";
 
   return (
-    <div className="flex-1 overflow-auto p-4 md:p-6 space-y-6" data-testid="page-fundraising-hub">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight" data-testid="text-page-title">
-          Donation & Fundraising Hub
-        </h1>
-        <p className="text-muted-foreground mt-1" data-testid="text-page-subtitle">
-          Your centralized toolkit for managing donations, running campaigns, and maximizing fundraising impact.
-        </p>
-      </div>
+    <DashboardLayout title="Donation & Fundraising Hub" description="Your centralized toolkit for managing donations, running campaigns, and maximizing fundraising impact.">
+      <div className="space-y-6" data-testid="page-fundraising-hub">
 
       <Tabs defaultValue="toolkit" className="space-y-4">
         <TabsList data-testid="tabs-fundraising">
@@ -106,7 +100,8 @@ export default function FundraisingHubPage() {
           <CommunityFundraisersTab tenantSubdomain={tenant?.subdomain} />
         </TabsContent>
       </Tabs>
-    </div>
+      </div>
+    </DashboardLayout>
   );
 }
 
