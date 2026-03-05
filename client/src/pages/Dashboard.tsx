@@ -410,7 +410,7 @@ export default function Dashboard() {
               )}
 
               {/* Two-Column Layout: Left (2/3) for KPIs + Actions, Right (1/3) for Daily Briefing */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6" style={{ gridTemplateRows: 'minmax(0, 1fr)' }}>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Left Column - KPIs and Quick Actions */}
                 <div className="lg:col-span-2 space-y-6">
                   {/* Medical Snapshot - only show if user has explicit medical-tasks permission */}
@@ -428,10 +428,12 @@ export default function Dashboard() {
                   )}
                 </div>
 
-                {/* Right Column - Daily Briefing (1/3 width, scrollable, height capped to left column) */}
+                {/* Right Column - Daily Briefing (absolute positioned so only left column determines row height) */}
                 {canViewDailyBriefing && (
-                  <div className="lg:col-span-1 overflow-hidden" style={{ minHeight: 0 }}>
-                    <DailyBriefing />
+                  <div className="lg:col-span-1 relative">
+                    <div className="lg:absolute lg:inset-0 overflow-hidden">
+                      <DailyBriefing />
+                    </div>
                   </div>
                 )}
               </div>
