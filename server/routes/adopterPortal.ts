@@ -1591,6 +1591,8 @@ router.get('/admin/adopter-preview/:adopterId/pets', async (req: Request, res: R
         photoUrls: animals.photoUrls,
         adoptedAt: animals.adoptionDate,
         microchipNumber: animals.microchipNumber,
+        status: animals.status,
+        deceasedDate: animals.deceasedDate,
       })
       .from(animals)
       .innerJoin(
@@ -1602,7 +1604,10 @@ router.get('/admin/adopter-preview/:adopterId/pets', async (req: Request, res: R
           sql`LOWER(${applications.applicantEmail}) = ${adopterEmail}`
         )
       )
-      .where(eq(animals.tenantId, auth.tenantId))
+      .where(and(
+        eq(animals.tenantId, auth.tenantId),
+        inArray(animals.status, ['adopted', 'deceased'])
+      ))
       .orderBy(desc(animals.adoptionDate));
 
     res.json(adoptedAnimals);
