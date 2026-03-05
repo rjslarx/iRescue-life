@@ -105,6 +105,17 @@ export default function FundraisingHubPage() {
   );
 }
 
+function isCustomDomain(): boolean {
+  const hostname = window.location.hostname;
+  return !(
+    hostname === 'localhost' ||
+    hostname === '127.0.0.1' ||
+    hostname.includes('replit.dev') ||
+    hostname.endsWith('.replit.app') ||
+    hostname.endsWith('irescue.life')
+  );
+}
+
 function CommunityFundraisersTab({ tenantSubdomain }: { tenantSubdomain?: string }) {
   const { toast } = useToast();
   const [donationsDialogCampaignId, setDonationsDialogCampaignId] = useState<string | null>(null);
@@ -136,7 +147,8 @@ function CommunityFundraisersTab({ tenantSubdomain }: { tenantSubdomain?: string
 
   const handleCopyCreationLink = async () => {
     const base = window.location.origin;
-    const path = tenantSubdomain ? `/${tenantSubdomain}/fundraise` : "/fundraise";
+    const usePrefix = tenantSubdomain && !isCustomDomain();
+    const path = usePrefix ? `/${tenantSubdomain}/fundraise` : "/fundraise";
     try {
       await navigator.clipboard.writeText(`${base}${path}`);
       toast({ title: "Link copied", description: "Campaign creation link copied to clipboard." });
@@ -147,7 +159,8 @@ function CommunityFundraisersTab({ tenantSubdomain }: { tenantSubdomain?: string
 
   const handleViewPublicPage = (slug: string) => {
     const base = window.location.origin;
-    const path = tenantSubdomain ? `/${tenantSubdomain}/fundraise/${slug}` : `/fundraise/${slug}`;
+    const usePrefix = tenantSubdomain && !isCustomDomain();
+    const path = usePrefix ? `/${tenantSubdomain}/fundraise/${slug}` : `/fundraise/${slug}`;
     window.open(`${base}${path}`, "_blank");
   };
 
