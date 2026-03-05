@@ -430,7 +430,7 @@ export default function Dashboard() {
 
                 {/* Right Column - Daily Briefing (1/3 width, scrollable) */}
                 {canViewDailyBriefing && (
-                  <div className="lg:col-span-1" style={{ maxHeight: '500px' }}>
+                  <div className="lg:col-span-1">
                     <DailyBriefing />
                   </div>
                 )}
