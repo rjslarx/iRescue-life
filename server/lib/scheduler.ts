@@ -543,25 +543,25 @@ export function initializeScheduler() {
 
   console.log(`Calendar share cleanup scheduled for: ${calendarShareCleanupSchedule} (UTC)`);
 
-  // Volunteer Recruitment SMS — weekly digest (once daily at 1 PM UTC / ~7 AM CST; service gates by day-of-week + 24h dedup)
-  cron.schedule('0 13 * * *', async () => {
+  // Volunteer Recruitment SMS — weekly digest (once daily at 00:30 UTC / 6:30 PM CST; service gates by day-of-week + 24h dedup)
+  cron.schedule('30 0 * * *', async () => {
     try {
       await VolunteerRecruitmentSmsService.checkAndRunAllTenants('weekly');
     } catch (err: any) {
       console.error('[Scheduler] Volunteer recruitment weekly SMS error:', err.message);
     }
   }, { timezone: "UTC" });
-  console.log("✓ Volunteer recruitment weekly SMS scheduled: 0 13 * * * (UTC)");
+  console.log("✓ Volunteer recruitment weekly SMS scheduled: 30 0 * * * (UTC / 6:30 PM CST)");
 
-  // Volunteer Recruitment SMS — urgent alerts (once daily at noon UTC / ~6 AM CST; 24h dedup prevents double-sending)
-  cron.schedule('0 12 * * *', async () => {
+  // Volunteer Recruitment SMS — urgent alerts (once daily at 00:30 UTC / 6:30 PM CST; 24h dedup prevents double-sending)
+  cron.schedule('30 0 * * *', async () => {
     try {
       await VolunteerRecruitmentSmsService.checkAndRunAllTenants('urgent');
     } catch (err: any) {
       console.error('[Scheduler] Volunteer recruitment urgent SMS error:', err.message);
     }
   }, { timezone: "UTC" });
-  console.log("✓ Volunteer recruitment urgent SMS scheduled: 0 12 * * * (UTC)");
+  console.log("✓ Volunteer recruitment urgent SMS scheduled: 30 0 * * * (UTC / 6:30 PM CST)");
 
   // Log next scheduled run times
   const nextMidnight = new Date();
