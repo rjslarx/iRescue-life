@@ -9,7 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Menu, ChevronDown, Package, Heart, TicketPercent } from "lucide-react";
+import { Menu, ChevronDown, Package, Heart, TicketPercent, HeartHandshake } from "lucide-react";
 import type { CustomPage, SupplyItem, Tenant } from "@shared/schema";
 
 interface ActiveCampaign {
@@ -75,8 +75,8 @@ export default function PublicHeader({ rescueName, logoUrl }: PublicHeaderProps)
   const activeCampaigns = campaignsData?.campaigns || [];
   const hasActiveFundraisers = (fundraiserData?.events?.length || 0) > 0;
   
-  // Show "More" dropdown if there are custom pages, wishlist items, or active campaigns
-  const showMoreDropdown = navigationPages.length > 0 || hasWishlistItems || activeCampaigns.length > 0;
+  const hasStartFundraiser = true;
+  const showMoreDropdown = hasStartFundraiser || navigationPages.length > 0 || hasWishlistItems || activeCampaigns.length > 0;
   
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -142,6 +142,16 @@ export default function PublicHeader({ rescueName, logoUrl }: PublicHeaderProps)
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem asChild>
+                  <Link
+                    href="/fundraise"
+                    className="cursor-pointer w-full flex items-center gap-2"
+                    data-testid="link-nav-start-fundraiser"
+                  >
+                    <HeartHandshake className="h-4 w-4" />
+                    Start a Fundraiser
+                  </Link>
+                </DropdownMenuItem>
                 {hasActiveFundraisers && (
                   <DropdownMenuItem asChild>
                     <Link
@@ -294,6 +304,17 @@ export default function PublicHeader({ rescueName, logoUrl }: PublicHeaderProps)
               {(showMoreDropdown || hasActiveFundraisers) && (
                 <>
                   <div className="border-t my-2" />
+                  <Link href="/fundraise">
+                    <Button
+                      variant="ghost"
+                      className="w-full justify-start"
+                      data-testid="button-start-fundraiser-mobile"
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      <HeartHandshake className="h-4 w-4 mr-2" />
+                      Start a Fundraiser
+                    </Button>
+                  </Link>
                   {hasActiveFundraisers && (
                     <Link href="/fundraisers">
                       <Button
