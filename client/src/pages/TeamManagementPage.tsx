@@ -744,7 +744,10 @@ export default function TeamManagementPage() {
                     id="phone"
                     type="tel"
                     value={newInvitation.phone}
-                    onChange={(e) => setNewInvitation({ ...newInvitation, phone: e.target.value })}
+                    onChange={(e) => {
+                      const phone = e.target.value;
+                      setNewInvitation(prev => ({ ...prev, phone, sendSms: phone.trim().length > 0 }));
+                    }}
                     placeholder="(555) 123-4567"
                     data-testid="input-phone"
                   />
