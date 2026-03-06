@@ -7155,7 +7155,7 @@ Crawl-delay: 1
    * Generate a Petfinder-ready bio for an animal using AI based on personality tags
    * This endpoint works without requiring an existing animal ID (for new animal forms)
    */
-  app.post('/api/generate-bio', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+  app.post('/api/generate-bio', requireTenant, requireAuth, requireRoleOrPageAccess('animals', 'admin', 'staff'), async (req, res, next) => {
     try {
       const { generateAnimalBio } = await import('./services/aiAnimalBio');
       
@@ -7269,7 +7269,7 @@ Crawl-delay: 1
    * GET /api/animals/:id/foster-history
    * Get foster placement history for a specific animal with foster names and duration
    */
-  app.get('/api/animals/:id/foster-history', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+  app.get('/api/animals/:id/foster-history', requireTenant, requireAuth, requireRoleOrPageAccess('animals', 'admin', 'staff'), async (req, res, next) => {
     try {
       const { fosterAnimals, users } = await import('@shared/schema');
       
@@ -7307,7 +7307,7 @@ Crawl-delay: 1
    * GET /api/animals/:id/supply-requests
    * Get supply requests for a specific animal
    */
-  app.get('/api/animals/:id/supply-requests', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+  app.get('/api/animals/:id/supply-requests', requireTenant, requireAuth, requireRoleOrPageAccess('animals', 'admin', 'staff'), async (req, res, next) => {
     try {
       const { supplyRequests, users } = await import('@shared/schema');
       
@@ -7346,7 +7346,7 @@ Crawl-delay: 1
    * GET /api/animals/:id/foster-updates
    * Get foster updates for a specific animal
    */
-  app.get('/api/animals/:id/foster-updates', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+  app.get('/api/animals/:id/foster-updates', requireTenant, requireAuth, requireRoleOrPageAccess('animals', 'admin', 'staff'), async (req, res, next) => {
     try {
       const { fosterUpdates, users } = await import('@shared/schema');
       
@@ -7409,7 +7409,7 @@ Crawl-delay: 1
    * POST /api/animals
    * Create new animal (staff only)
    */
-  app.post('/api/animals', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+  app.post('/api/animals', requireTenant, requireAuth, requireRoleOrPageAccess('animals', 'admin', 'staff'), async (req, res, next) => {
     try {
       const { createAnimal } = await import('./services/animals');
       const { insertAnimalSchema } = await import('@shared/schema');
@@ -7855,7 +7855,7 @@ Crawl-delay: 1
    * PATCH /api/animals/:id/deceased
    * Mark animal as deceased (admin/staff only)
    */
-  app.patch('/api/animals/:id/deceased', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+  app.patch('/api/animals/:id/deceased', requireTenant, requireAuth, requireRoleOrPageAccess('animals', 'admin', 'staff'), async (req, res, next) => {
     try {
       const { animals } = await import('@shared/schema');
       const { z } = await import('zod');
@@ -7956,7 +7956,7 @@ Crawl-delay: 1
    * PATCH /api/animals/:id/quarantine
    * Set or clear quarantine status for an animal
    */
-  app.patch('/api/animals/:id/quarantine', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+  app.patch('/api/animals/:id/quarantine', requireTenant, requireAuth, requireRoleOrPageAccess('animals', 'admin', 'staff'), async (req, res, next) => {
     try {
       const { animals } = await import('@shared/schema');
       const { z } = await import('zod');
@@ -8000,7 +8000,7 @@ Crawl-delay: 1
    * POST /api/animals/:id/reclaim-payment
    * Create a Stripe PaymentIntent or record a manual payment for a reclaim fee
    */
-  app.post('/api/animals/:id/reclaim-payment', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+  app.post('/api/animals/:id/reclaim-payment', requireTenant, requireAuth, requireRoleOrPageAccess('animals', 'admin', 'staff'), async (req, res, next) => {
     try {
       const { animals } = await import('@shared/schema');
       const { z } = await import('zod');
@@ -8075,7 +8075,7 @@ Crawl-delay: 1
    * POST /api/animals/:id/reclaim
    * Process a Return to Owner (RTO) - link owner contact, record fee, change status
    */
-  app.post('/api/animals/:id/reclaim', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+  app.post('/api/animals/:id/reclaim', requireTenant, requireAuth, requireRoleOrPageAccess('animals', 'admin', 'staff'), async (req, res, next) => {
     try {
       const { animals, contacts, fosterAnimals, medicationTasks, medicationPlans, complianceObligations } = await import('@shared/schema');
       const { z } = await import('zod');
@@ -8309,7 +8309,7 @@ Crawl-delay: 1
    * Re-intake a previously adopted or deceased animal that has returned to the rescue
    * Resets status to intake and creates a new intake record
    */
-  app.post('/api/animals/:id/re-intake', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+  app.post('/api/animals/:id/re-intake', requireTenant, requireAuth, requireRoleOrPageAccess('animals', 'admin', 'staff'), async (req, res, next) => {
     try {
       const { animals, animalNotes } = await import('@shared/schema');
       const { z } = await import('zod');
@@ -9502,7 +9502,7 @@ Crawl-delay: 1
    * PATCH /api/animals/:id/kennel-assignment
    * Assign an animal to a specific kennel position
    */
-  app.patch('/api/animals/:id/kennel-assignment', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+  app.patch('/api/animals/:id/kennel-assignment', requireTenant, requireAuth, requireRoleOrPageAccess('animals', 'admin', 'staff'), async (req, res, next) => {
     try {
       const { animals } = await import('@shared/schema');
       
