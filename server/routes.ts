@@ -8531,7 +8531,7 @@ Crawl-delay: 1
    * Dedicated endpoint for uploading document files (PDF, DOC, DOCX, etc.)
    * Used by RTO reclaim flow for vet records and other document uploads
    */
-  app.post('/api/documents/upload', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+  app.post('/api/documents/upload', requireTenant, requireAuth, requireRoleOrPageAccess('animals', 'admin', 'staff'), async (req, res, next) => {
     try {
       const multer = (await import('multer')).default;
       const { TenantFileStorage } = await import('./lib/tenantFileStorage');
@@ -18757,13 +18757,13 @@ Submitted: ${new Date().toLocaleString()}
         internalNotesParts.push(`Behavioral Notes: ${surrenderRequest.behavioralIssues}`);
       }
 
-      const { documents } = await import('@shared/schema');
+      const { personDocuments } = await import('@shared/schema');
       const attachedDocs = await db.select()
-        .from(documents)
+        .from(personDocuments)
         .where(and(
-          eq(documents.tenantId, req.tenant!.id),
-          eq(documents.sourceTable, 'surrender_requests'),
-          eq(documents.sourceId, surrenderId)
+          eq(personDocuments.tenantId, req.tenant!.id),
+          eq(personDocuments.sourceTable, 'surrender_requests'),
+          eq(personDocuments.sourceId, surrenderId)
         ));
 
       res.json({
@@ -18804,9 +18804,9 @@ Submitted: ${new Date().toLocaleString()}
         },
         attachedDocuments: attachedDocs.map(doc => ({
           id: doc.id,
-          name: doc.name,
-          fileUrl: doc.fileUrl,
-          fileType: doc.fileType,
+          name: doc.title,
+          fileUrl: doc.objectPath || '',
+          fileType: doc.contentType || '',
         })),
       });
     } catch (error) {
