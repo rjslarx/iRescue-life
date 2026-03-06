@@ -108,6 +108,7 @@ export default function TeamManagementPage() {
     fullName: "",
     phone: "",
     roles: ["volunteer"] as Array<"admin" | "board_member" | "staff" | "foster" | "volunteer">,
+    sendSms: false,
   });
 
   // Open invite dialog if action=invite in URL
@@ -160,18 +161,22 @@ export default function TeamManagementPage() {
     mutationFn: async (invitationData: typeof newInvitation) => {
       return await apiRequest("POST", "/api/invitations", invitationData);
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['/api/invitations'] });
       setInviteDialogOpen(false);
+      const wasSms = variables.sendSms && variables.phone;
       setNewInvitation({
         email: "",
         fullName: "",
         phone: "",
         roles: ["volunteer"],
+        sendSms: false,
       });
       toast({
         title: "Invitation Sent",
-        description: "The invitation email has been sent successfully.",
+        description: wasSms
+          ? "The invitation has been sent via email and SMS."
+          : "The invitation email has been sent successfully.",
       });
     },
     onError: (error: Error) => {
@@ -184,14 +189,23 @@ export default function TeamManagementPage() {
   });
 
   const resendInvitationMutation = useMutation({
-    mutationFn: async (invitationId: string) => {
-      return await apiRequest("POST", `/api/invitations/${invitationId}/resend`);
+    mutationFn: async ({ invitationId, sendSms }: { invitationId: string; sendSms?: boolean }) => {
+      const res = await apiRequest("POST", `/api/invitations/${invitationId}/resend`, { sendSms: sendSms || false });
+      return { ...(await res.json()), requestedSms: sendSms || false };
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['/api/invitations'] });
+      let description = "The invitation email has been sent again.";
+      if (data.requestedSms) {
+        if (data.smsSent) {
+          description = "The invitation has been resent via email and SMS.";
+        } else if (data.smsError) {
+          description = `Email resent. SMS failed: ${data.smsError}`;
+        }
+      }
       toast({
         title: "Invitation Resent",
-        description: "The invitation email has been sent again.",
+        description,
       });
     },
     onError: (error: Error) => {
@@ -650,13 +664,25 @@ export default function TeamManagementPage() {
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => resendInvitationMutation.mutate(invitation.id)}
+                              onClick={() => resendInvitationMutation.mutate({ invitationId: invitation.id })}
                               disabled={resendInvitationMutation.isPending}
                               data-testid={`button-resend-${invitation.id}`}
                             >
                               <Send className="h-4 w-4 mr-1" />
-                              Resend
+                              Resend Email
                             </Button>
+                            {invitation.phone && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => resendInvitationMutation.mutate({ invitationId: invitation.id, sendSms: true })}
+                                disabled={resendInvitationMutation.isPending}
+                                data-testid={`button-resend-sms-${invitation.id}`}
+                              >
+                                <MessageSquare className="h-4 w-4 mr-1" />
+                                Resend SMS
+                              </Button>
+                            )}
                             <Button
                               size="sm"
                               variant="destructive"
@@ -721,6 +747,19 @@ export default function TeamManagementPage() {
                     onChange={(e) => setNewInvitation({ ...newInvitation, phone: e.target.value })}
                     placeholder="(555) 123-4567"
                     data-testid="input-phone"
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex flex-col gap-0.5">
+                    <Label htmlFor="send-sms" className="text-sm">Also send invite via SMS</Label>
+                    <span className="text-xs text-muted-foreground">Requires a phone number and Twilio to be configured</span>
+                  </div>
+                  <Switch
+                    id="send-sms"
+                    checked={newInvitation.sendSms}
+                    onCheckedChange={(checked) => setNewInvitation({ ...newInvitation, sendSms: checked })}
+                    disabled={!newInvitation.phone.trim()}
+                    data-testid="switch-send-sms"
                   />
                 </div>
                 <div>

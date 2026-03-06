@@ -5812,7 +5812,7 @@ Crawl-delay: 1
    */
   app.post('/api/invitations', requireTenant, requireAuth, requireRole('owner', 'admin'), async (req, res, next) => {
     try {
-      const { createInvitation, sendInvitationEmail } = await import('./services/invitations');
+      const { createInvitation, sendInvitationEmail, sendInvitationSms } = await import('./services/invitations');
       const { users } = await import('@shared/schema');
       
       const invitationSchema = z.object({
@@ -5820,6 +5820,7 @@ Crawl-delay: 1
         fullName: z.string().optional(),
         phone: z.string().optional(),
         roles: z.array(z.enum(['admin', 'board_member', 'staff', 'foster', 'volunteer'])).min(1),
+        sendSms: z.boolean().optional().default(false),
       });
 
       const data = invitationSchema.parse(req.body);
@@ -5841,6 +5842,21 @@ Crawl-delay: 1
         req.tenant!.name
       );
 
+      let smsSent = false;
+      if (data.sendSms && data.phone) {
+        try {
+          const smsResult = await sendInvitationSms(
+            req.tenant!.id,
+            { ...invitation, phone: data.phone },
+            inviter.fullName,
+            req.tenant!.name
+          );
+          smsSent = smsResult.success;
+        } catch (smsErr) {
+          console.warn('[Invitation] SMS send failed, email was still sent:', smsErr);
+        }
+      }
+
       try {
         const { createAuditLog } = await import('./audit');
         await createAuditLog({
@@ -5849,7 +5865,7 @@ Crawl-delay: 1
           action: 'user.invited',
           entityType: 'invitation',
           entityId: invitation.id,
-          metadata: { invitedEmail: invitation.email, role: invitation.role },
+          metadata: { invitedEmail: invitation.email, role: invitation.role, smsSent },
           req,
         });
       } catch (auditErr) {
@@ -5858,6 +5874,7 @@ Crawl-delay: 1
 
       res.json({
         success: true,
+        smsSent,
         invitation: {
           id: invitation.id,
           email: invitation.email,
@@ -5960,9 +5977,14 @@ Crawl-delay: 1
    */
   app.post('/api/invitations/:id/resend', requireTenant, requireAuth, requireRole('owner', 'admin'), async (req, res, next) => {
     try {
-      const { resendInvitation, sendInvitationEmail } = await import('./services/invitations');
+      const { resendInvitation, sendInvitationEmail, sendInvitationSms } = await import('./services/invitations');
       const { users } = await import('@shared/schema');
       
+      const resendSchema = z.object({
+        sendSms: z.boolean().optional().default(false),
+      }).optional().default({});
+      const { sendSms: sendViaSms } = resendSchema.parse(req.body);
+
       const invitation = await resendInvitation(req.params.id, req.tenant!.id);
       
       // Get inviter name for email - explicit field selection for dynamic import
@@ -5979,7 +6001,31 @@ Crawl-delay: 1
         req.tenant!.name
       );
 
-      res.json({ success: true });
+      let smsSent = false;
+      let smsError: string | null = null;
+      if (sendViaSms) {
+        if (!invitation.phone) {
+          smsError = 'No phone number on this invitation';
+        } else {
+          try {
+            const smsResult = await sendInvitationSms(
+              req.tenant!.id,
+              invitation,
+              inviter.fullName,
+              req.tenant!.name
+            );
+            smsSent = smsResult.success;
+            if (!smsResult.success) {
+              smsError = smsResult.error || 'SMS send failed';
+            }
+          } catch (smsErr: any) {
+            smsError = smsErr.message || 'SMS send failed';
+            console.warn('[Invitation Resend] SMS failed, email was still sent:', smsErr);
+          }
+        }
+      }
+
+      res.json({ success: true, smsSent, smsError });
     } catch (error) {
       next(error);
     }

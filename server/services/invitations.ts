@@ -466,6 +466,66 @@ export async function createAndSendVolunteerWelcome(
 }
 
 /**
+ * Send invitation via SMS
+ */
+export async function sendInvitationSms(
+  tenantId: string,
+  invitation: {
+    id: string;
+    phone?: string | null;
+    fullName: string | null;
+    roles: string[];
+    token: string;
+  },
+  inviterName: string,
+  tenantName: string
+) {
+  if (!invitation.phone) {
+    throw new Error('No phone number provided for SMS invitation');
+  }
+
+  const { sendSms, isTwilioEnabled } = await import('../lib/twilio-service');
+
+  const twilioReady = await isTwilioEnabled(tenantId);
+  if (!twilioReady) {
+    console.warn(`[Invitation SMS] Twilio not configured for tenant ${tenantId}, skipping SMS`);
+    return { success: false, error: 'Twilio not configured' };
+  }
+
+  const [tenant] = await db
+    .select({ subdomain: tenants.subdomain, customDomain: tenants.customDomain })
+    .from(tenants)
+    .where(eq(tenants.id, tenantId))
+    .limit(1);
+
+  const acceptUrl = buildInvitationUrl(invitation.token, tenant);
+
+  const roleLabels = invitation.roles
+    .map(role => {
+      const labels: Record<string, string> = {
+        admin: 'Admin',
+        board_member: 'Board Member',
+        staff: 'Staff',
+        foster: 'Foster',
+        volunteer: 'Volunteer',
+      };
+      return labels[role] || role;
+    })
+    .join(', ');
+
+  const greeting = invitation.fullName ? `Hi ${invitation.fullName}! ` : '';
+  const message = `${greeting}${inviterName} invited you to join ${tenantName} as ${roleLabels}. Set up your account here: ${acceptUrl}`;
+
+  const result = await sendSms(tenantId, invitation.phone, message, 'team_invitation', { skipOrgPrefix: true });
+
+  if (result.status === 'failed') {
+    return { success: false, error: result.error || 'SMS send failed' };
+  }
+
+  return { success: true };
+}
+
+/**
  * Construct the invitation accept URL based on tenant configuration
  * Uses custom domain if available, otherwise path-based routing
  * URL-encodes the token to prevent email quoted-printable encoding issues
