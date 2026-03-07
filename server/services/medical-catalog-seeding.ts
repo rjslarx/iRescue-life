@@ -132,6 +132,8 @@ const DEFAULT_CATALOG_ITEMS: CatalogSeedItem[] = [
   { name: 'Trifexis', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30, speciesTarget: 'Dog', defaultRoute: 'PO', manufacturer: 'Elanco' },
   { name: 'Credelio', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30, speciesTarget: 'Dog', defaultRoute: 'PO', manufacturer: 'Elanco' },
   { name: 'Seresto Collar (Dog)', category: 'Preventative', defaultFrequency: 'Every 8 months', defaultIntervalDays: 240, speciesTarget: 'Dog', defaultRoute: 'Collar', manufacturer: 'Elanco' },
+  { name: 'ProHeart 6', category: 'Preventative', defaultFrequency: 'Every 6 months', defaultIntervalDays: 180, speciesTarget: 'Dog', defaultRoute: 'Injection', manufacturer: 'Zoetis' },
+  { name: 'ProHeart 12', category: 'Preventative', defaultFrequency: 'Annually', defaultIntervalDays: 365, speciesTarget: 'Dog', defaultRoute: 'Injection', manufacturer: 'Zoetis' },
 
   // --- CAT PREVENTATIVES ---
   { name: 'Revolution Plus', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30, speciesTarget: 'Cat', defaultRoute: 'Topical', manufacturer: 'Zoetis' },

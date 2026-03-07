@@ -188,10 +188,29 @@ export function AddPreventativeCareDialog({
   useEffect(() => {
     if (initialValues?.careName && careTypes.length > 0 && open && !record) {
       const searchName = initialValues.careName!.toLowerCase();
+
+      const normalize = (s: string) =>
+        s.toLowerCase()
+          .replace(/\b(injection|oral|topical|chewable|tablet|chews|chew|plus|combo)\b/g, '')
+          .replace(/[^a-z0-9]/g, '')
+          .trim();
+
       let match = careTypes.find(t => t.name.toLowerCase() === searchName);
+
       if (!match) {
         match = careTypes.find(t => searchName.includes(t.name.toLowerCase()) || t.name.toLowerCase().includes(searchName));
       }
+
+      if (!match) {
+        const normalizedSearch = normalize(searchName);
+        match = careTypes.find(t => {
+          const normalizedType = normalize(t.name);
+          return normalizedSearch === normalizedType
+            || normalizedSearch.includes(normalizedType)
+            || normalizedType.includes(normalizedSearch);
+        });
+      }
+
       if (match) {
         form.setValue("careTypeId", match.id);
         setCareTypeMatched(true);
