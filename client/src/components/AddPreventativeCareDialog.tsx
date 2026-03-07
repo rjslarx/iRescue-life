@@ -295,7 +295,13 @@ export function AddPreventativeCareDialog({
 
   const isPending = createMutation.isPending || updateMutation.isPending;
 
-  const categoryOrder = ['Vaccines', 'Parasite Prevention', 'Diagnostics', 'Other'];
+  const categoryOrder = ['vaccine', 'parasite_prevention', 'test', 'other'] as const;
+  const categoryLabels: Record<string, string> = {
+    vaccine: 'Vaccines',
+    parasite_prevention: 'Parasite Prevention',
+    test: 'Diagnostics',
+    other: 'Other',
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -352,7 +358,7 @@ export function AddPreventativeCareDialog({
                             return (
                               <SelectGroup key={category}>
                                 <SelectLabel className="text-xs font-semibold text-muted-foreground">
-                                  {category}
+                                  {categoryLabels[category] || category}
                                 </SelectLabel>
                                 {types.map(type => (
                                   <SelectItem key={type.id} value={type.id}>
