@@ -173,7 +173,7 @@ export default function AnimalCard({
         <img 
           src={photoArray[currentPhotoIndex]} 
           alt={name}
-          className="w-full h-full object-cover object-top transition-opacity duration-500"
+          className="w-full h-full object-cover object-center transition-opacity duration-500"
           data-testid={`img-animal-${name.toLowerCase().replace(/\s/g, '-')}`}
         />
         {hasMultiplePhotos && (

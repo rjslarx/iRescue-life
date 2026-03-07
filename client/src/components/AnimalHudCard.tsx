@@ -131,7 +131,7 @@ export function AnimalHudCard({
               <img
                 src={animal.photoUrls![photoIdx]}
                 alt={`${animal.name} - Photo ${photoIdx + 1}`}
-                className="w-full h-full object-cover object-top absolute inset-0"
+                className="w-full h-full object-cover object-center absolute inset-0"
                 data-testid={`img-animal-photo-${animal.id}`}
               />
               {animal.photoUrls!.length > 1 && (
