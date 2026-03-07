@@ -543,25 +543,20 @@ export function initializeScheduler() {
 
   console.log(`Calendar share cleanup scheduled for: ${calendarShareCleanupSchedule} (UTC)`);
 
-  // Volunteer Recruitment SMS — weekly digest (once daily at 00:30 UTC / 6:30 PM CST; service gates by day-of-week + 24h dedup)
+  // Volunteer Recruitment SMS — weekly + urgent run sequentially to prevent race-condition duplicates
   cron.schedule('30 0 * * *', async () => {
     try {
       await VolunteerRecruitmentSmsService.checkAndRunAllTenants('weekly');
     } catch (err: any) {
       console.error('[Scheduler] Volunteer recruitment weekly SMS error:', err.message);
     }
-  }, { timezone: "UTC" });
-  console.log("✓ Volunteer recruitment weekly SMS scheduled: 30 0 * * * (UTC / 6:30 PM CST)");
-
-  // Volunteer Recruitment SMS — urgent alerts (once daily at 00:30 UTC / 6:30 PM CST; 24h dedup prevents double-sending)
-  cron.schedule('30 0 * * *', async () => {
     try {
       await VolunteerRecruitmentSmsService.checkAndRunAllTenants('urgent');
     } catch (err: any) {
       console.error('[Scheduler] Volunteer recruitment urgent SMS error:', err.message);
     }
   }, { timezone: "UTC" });
-  console.log("✓ Volunteer recruitment urgent SMS scheduled: 30 0 * * * (UTC / 6:30 PM CST)");
+  console.log("✓ Volunteer recruitment SMS (weekly + urgent) scheduled: 30 0 * * * (UTC / 6:30 PM CST)");
 
   // Log next scheduled run times
   const nextMidnight = new Date();
