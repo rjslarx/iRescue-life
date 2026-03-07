@@ -42320,7 +42320,16 @@ The user asking is a tenant administrator or staff member.`;
         // Generate unique IDs
         const animalId = `TNR-${Date.now()}-${i}`;
         const localShelterId = await generateLocalShelterId(req.tenant!.id, 'cat');
-        const catName = row.catName || row.name || `TNR-${(row.trapNumber || String(i + 1)).toUpperCase()}`;
+        let catName = row.catName || row.name || `TNR-${(row.trapNumber || String(i + 1)).toUpperCase()}`;
+
+        const [existingName] = await db.select({ id: animals.id })
+          .from(animals)
+          .where(and(eq(animals.tenantId, req.tenant!.id), sql`LOWER(${animals.name}) = ${catName.toLowerCase()}`))
+          .limit(1);
+        if (existingName) {
+          const dateStr = trapDate.toISOString().split('T')[0].replace(/-/g, '');
+          catName = `${catName}-${dateStr}-${i + 1}`;
+        }
 
         const [newAnimal] = await db.insert(animals).values({
           tenantId: req.tenant!.id,
