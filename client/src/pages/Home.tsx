@@ -10,6 +10,7 @@ import { useTenant } from "@/contexts/TenantContext";
 import MascotWidget from "@/components/MascotWidget";
 import AnimalCard from "@/components/AnimalCard";
 import MobileAnimalCarousel from "@/components/MobileAnimalCarousel";
+import MobileHeroSection from "@/components/MobileHeroSection";
 import MobileSponsorCarousel from "@/components/MobileSponsorCarousel";
 import { useIsMobile } from "@/hooks/use-mobile";
 import EventCard from "@/components/EventCard";
@@ -465,32 +466,50 @@ export default function Home() {
         />
       )}
 
-      <Hero 
-        rescueName={rescueName}
-        tagline={activeCampaign ? (activeCampaign.description || rescueTagline) : rescueTagline}
-        backgroundImage={activeCampaign?.imageUrl || rescueHeroImage}
-        mobileBackgroundImage={activeCampaign ? null : rescueMobileHeroImage}
-        onViewAnimals={activeCampaign
-          ? () => { window.location.href = `${basePath}/campaigns/${activeCampaign.id}`; }
-          : () => document.getElementById('animals')?.scrollIntoView({ behavior: 'smooth' })
-        }
-        onDonate={activeCampaign
-          ? () => { window.location.href = `${basePath}/campaigns/${activeCampaign.id}`; }
-          : () => setDonationDialogOpen(true)
-        }
-        actionCircle={activeCampaign ? undefined : (tenant?.actionCircle as any)}
-        heroLayoutType={activeCampaign ? 'none' : ((tenant?.heroLayoutType as 'none' | 'action_circle' | 'three_doors') || 'none')}
-        threeDoorsConfig={activeCampaign ? undefined : (tenant?.threeDoorsConfig as any)}
-        basePath={basePath}
-        heroHeadline={activeCampaign ? activeCampaign.title : tenant?.heroHeadline}
-        heroButtonText={activeCampaign ? "Help Now" : tenant?.heroButtonText}
-        heroButton2Text={activeCampaign ? "Donate Now" : tenant?.heroButton2Text}
-        heroFocalPoint={activeCampaign ? 'center' : (tenant?.heroFocalPoint as any)}
-      />
-      
-      {/* Spacer for Three Doors that extend below hero - only needed on larger screens */}
-      {!activeCampaign && tenant?.heroLayoutType === 'three_doors' && (
-        <div className="hidden sm:block h-32 bg-background" />
+      {isMobile ? (
+        <MobileHeroSection
+          heroImage={activeCampaign?.imageUrl || rescueHeroImage}
+          mobileHeroImage={activeCampaign ? null : rescueMobileHeroImage}
+          heroHeadline={activeCampaign ? activeCampaign.title : tenant?.heroHeadline}
+          rescueName={rescueName}
+          tagline={activeCampaign ? (activeCampaign.description || rescueTagline) : rescueTagline}
+          onDonate={activeCampaign
+            ? () => { window.location.href = `${basePath}/campaigns/${activeCampaign.id}`; }
+            : () => setDonationDialogOpen(true)
+          }
+          basePath={basePath}
+          threeDoorsConfig={activeCampaign ? undefined : (tenant?.threeDoorsConfig as any)}
+        />
+      ) : (
+        <>
+          <Hero 
+            rescueName={rescueName}
+            tagline={activeCampaign ? (activeCampaign.description || rescueTagline) : rescueTagline}
+            backgroundImage={activeCampaign?.imageUrl || rescueHeroImage}
+            mobileBackgroundImage={activeCampaign ? null : rescueMobileHeroImage}
+            onViewAnimals={activeCampaign
+              ? () => { window.location.href = `${basePath}/campaigns/${activeCampaign.id}`; }
+              : () => document.getElementById('animals')?.scrollIntoView({ behavior: 'smooth' })
+            }
+            onDonate={activeCampaign
+              ? () => { window.location.href = `${basePath}/campaigns/${activeCampaign.id}`; }
+              : () => setDonationDialogOpen(true)
+            }
+            actionCircle={activeCampaign ? undefined : (tenant?.actionCircle as any)}
+            heroLayoutType={activeCampaign ? 'none' : ((tenant?.heroLayoutType as 'none' | 'action_circle' | 'three_doors') || 'none')}
+            threeDoorsConfig={activeCampaign ? undefined : (tenant?.threeDoorsConfig as any)}
+            basePath={basePath}
+            heroHeadline={activeCampaign ? activeCampaign.title : tenant?.heroHeadline}
+            heroButtonText={activeCampaign ? "Help Now" : tenant?.heroButtonText}
+            heroButton2Text={activeCampaign ? "Donate Now" : tenant?.heroButton2Text}
+            heroFocalPoint={activeCampaign ? 'center' : (tenant?.heroFocalPoint as any)}
+          />
+          
+          {/* Spacer for Three Doors that extend below hero - only needed on larger screens */}
+          {!activeCampaign && tenant?.heroLayoutType === 'three_doors' && (
+            <div className="h-32 bg-background" />
+          )}
+        </>
       )}
 
       {upcomingEvents.length > 0 && (
