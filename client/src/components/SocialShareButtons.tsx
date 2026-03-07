@@ -110,14 +110,12 @@ export function SocialShareButtons({
     if (platform.name === "Email" || platform.name === "SMS") {
       window.location.href = shareUrl;
     } else if (platform.name === "Messenger") {
-      // Try fb-messenger:// protocol first, fall back to messenger.com for desktop
       const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
       if (isMobile) {
         window.location.href = shareUrl;
       } else {
-        // Desktop fallback to Facebook's share dialog (which can include Messenger)
-        const desktopUrl = `https://www.facebook.com/sharer/sharer.php?u=${shareParams.url}&quote=${shareParams.title}`;
-        window.open(desktopUrl, '_blank', 'width=600,height=400,noopener,noreferrer');
+        const desktopUrl = `https://www.messenger.com/new?link=${decodeURIComponent(shareParams.url)}`;
+        window.open(desktopUrl, '_blank', 'width=600,height=500,noopener,noreferrer');
       }
     } else {
       window.open(shareUrl, '_blank', 'width=600,height=400,noopener,noreferrer');

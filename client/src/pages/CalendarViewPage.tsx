@@ -592,11 +592,11 @@ export default function CalendarViewPage() {
         if (isMobile) {
           window.location.href = `fb-messenger://share/?link=${encodeURIComponent(imageUrl)}`;
         } else {
-          window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(imageUrl)}&quote=${encodeURIComponent(`${text}\n\nView full calendar: ${calendarPageUrl}`)}`, '_blank', 'width=600,height=500');
+          window.open(`https://www.messenger.com/new?link=${encodeURIComponent(imageUrl)}`, '_blank', 'width=600,height=500');
         }
         toast({
           title: "Sharing via Messenger",
-          description: isMobile ? "Opening Messenger app..." : "Share the link from Facebook...",
+          description: isMobile ? "Opening Messenger app..." : "Opening Messenger...",
         });
         break;
       case 'whatsapp':
