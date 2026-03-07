@@ -591,13 +591,23 @@ export default function CalendarViewPage() {
       case 'messenger':
         if (isMobile) {
           window.location.href = `fb-messenger://share/?link=${encodeURIComponent(imageUrl)}`;
+          toast({
+            title: "Sharing via Messenger",
+            description: "Opening Messenger app...",
+          });
         } else {
-          window.open(`https://www.messenger.com/new?link=${encodeURIComponent(imageUrl)}`, '_blank', 'width=600,height=500');
+          navigator.clipboard.writeText(imageUrl).then(() => {
+            toast({
+              title: "Link Copied",
+              description: "Calendar link copied to clipboard — paste it in your Messenger conversation.",
+            });
+          }).catch(() => {
+            toast({
+              title: "Share Link",
+              description: imageUrl,
+            });
+          });
         }
-        toast({
-          title: "Sharing via Messenger",
-          description: isMobile ? "Opening Messenger app..." : "Opening Messenger...",
-        });
         break;
       case 'whatsapp':
         if (isMobile) {

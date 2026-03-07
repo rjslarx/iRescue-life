@@ -114,8 +114,9 @@ export function SocialShareButtons({
       if (isMobile) {
         window.location.href = shareUrl;
       } else {
-        const desktopUrl = `https://www.messenger.com/new?link=${decodeURIComponent(shareParams.url)}`;
-        window.open(desktopUrl, '_blank', 'width=600,height=500,noopener,noreferrer');
+        const linkToCopy = decodeURIComponent(shareParams.url);
+        navigator.clipboard.writeText(linkToCopy).catch(() => {});
+        if (onShare) onShare(platform.name);
       }
     } else {
       window.open(shareUrl, '_blank', 'width=600,height=400,noopener,noreferrer');
