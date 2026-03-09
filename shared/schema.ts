@@ -6081,3 +6081,41 @@ export const insertMessageQueueSchema = createInsertSchema(messageQueue).omit({
 });
 export type InsertMessageQueue = z.infer<typeof insertMessageQueueSchema>;
 export type MessageQueue = typeof messageQueue.$inferSelect;
+
+export const votingContests = pgTable("voting_contests", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  title: text("title").notNull(),
+  slug: text("slug").notNull(),
+  description: text("description"),
+  imageUrl: text("image_url"),
+  startDate: timestamp("start_date"),
+  endDate: timestamp("end_date"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertVotingContestSchema = createInsertSchema(votingContests).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertVotingContest = z.infer<typeof insertVotingContestSchema>;
+export type VotingContest = typeof votingContests.$inferSelect;
+
+export const votingContestEntrants = pgTable("voting_contest_entrants", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  contestId: uuid("contest_id").notNull().references(() => votingContests.id, { onDelete: 'cascade' }),
+  name: text("name").notNull(),
+  photoUrl: text("photo_url"),
+  totalVotes: integer("total_votes").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertVotingContestEntrantSchema = createInsertSchema(votingContestEntrants).omit({
+  id: true,
+  createdAt: true,
+  totalVotes: true,
+});
+export type InsertVotingContestEntrant = z.infer<typeof insertVotingContestEntrantSchema>;
+export type VotingContestEntrant = typeof votingContestEntrants.$inferSelect;

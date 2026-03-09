@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import QRCode from "qrcode";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +20,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import {
   Command,
@@ -39,8 +40,12 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { ObjectUploader } from "@/components/ObjectUploader";
 import {
   Copy,
   Download,
@@ -63,9 +68,17 @@ import {
   Power,
   PowerOff,
   Share2,
+  Plus,
+  Trophy,
+  ArrowLeft,
+  Calendar,
+  Trash2,
+  Vote,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import DashboardLayout from "@/components/DashboardLayout";
+import type { VotingContest, VotingContestEntrant } from "@shared/schema";
 
 export default function FundraisingHubPage() {
   const { toast } = useToast();
@@ -86,6 +99,7 @@ export default function FundraisingHubPage() {
         <TabsList data-testid="tabs-fundraising">
           <TabsTrigger value="toolkit" data-testid="tab-toolkit">Toolkit</TabsTrigger>
           <TabsTrigger value="community" data-testid="tab-community-fundraisers">Community Fundraisers</TabsTrigger>
+          <TabsTrigger value="voting-contests" data-testid="tab-voting-contests">Voting Contests</TabsTrigger>
         </TabsList>
 
         <TabsContent value="toolkit">
@@ -98,6 +112,10 @@ export default function FundraisingHubPage() {
 
         <TabsContent value="community">
           <CommunityFundraisersTab tenantSubdomain={tenant?.subdomain} />
+        </TabsContent>
+
+        <TabsContent value="voting-contests">
+          <VotingContestsTab tenantSubdomain={tenant?.subdomain} />
         </TabsContent>
       </Tabs>
       </div>
@@ -650,6 +668,462 @@ function AnimalCampaignsCard({ onNavigate }: { onNavigate: (path: string) => voi
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function VotingContestsTab({ tenantSubdomain }: { tenantSubdomain?: string }) {
+  const { toast } = useToast();
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [managingContestId, setManagingContestId] = useState<string | null>(null);
+  const [addEntrantDialogOpen, setAddEntrantDialogOpen] = useState(false);
+  const [entrantName, setEntrantName] = useState("");
+  const [entrantPhotoUrls, setEntrantPhotoUrls] = useState<string[]>([]);
+
+  const [newTitle, setNewTitle] = useState("");
+  const [newDescription, setNewDescription] = useState("");
+  const [newStartDate, setNewStartDate] = useState("");
+  const [newEndDate, setNewEndDate] = useState("");
+  const [newImageUrl, setNewImageUrl] = useState("");
+
+  const { data: contestsData, isLoading } = useQuery<(VotingContest & { entrantCount?: number; totalVotesAll?: number })[]>({
+    queryKey: ["/api/voting-contests"],
+  });
+  const contests = contestsData || [];
+
+  const { data: managedContestData } = useQuery<VotingContest & { entrants: VotingContestEntrant[] }>({
+    queryKey: ["/api/voting-contests", managingContestId],
+    enabled: !!managingContestId,
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async (data: { title: string; description: string; startDate: string; endDate: string; imageUrl?: string }) => {
+      const res = await apiRequest("POST", "/api/voting-contests", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/voting-contests"] });
+      toast({ title: "Contest created" });
+      setCreateDialogOpen(false);
+      setNewTitle("");
+      setNewDescription("");
+      setNewStartDate("");
+      setNewEndDate("");
+      setNewImageUrl("");
+    },
+    onError: (err: Error) => {
+      toast({ title: "Failed to create contest", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/voting-contests/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/voting-contests"] });
+      toast({ title: "Contest deleted" });
+    },
+    onError: () => {
+      toast({ title: "Failed to delete contest", variant: "destructive" });
+    },
+  });
+
+  const toggleMutation = useMutation({
+    mutationFn: async ({ id, isActive }: { id: string; isActive: boolean }) => {
+      const res = await apiRequest("PATCH", `/api/voting-contests/${id}`, { isActive });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/voting-contests"] });
+      toast({ title: "Contest updated" });
+    },
+    onError: () => {
+      toast({ title: "Failed to update contest", variant: "destructive" });
+    },
+  });
+
+  const addEntrantMutation = useMutation({
+    mutationFn: async (data: { name: string; photoUrl?: string }) => {
+      const res = await apiRequest("POST", `/api/voting-contests/${managingContestId}/entrants`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/voting-contests", managingContestId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/voting-contests"] });
+      toast({ title: "Entrant added" });
+      setAddEntrantDialogOpen(false);
+      setEntrantName("");
+      setEntrantPhotoUrls([]);
+    },
+    onError: (err: Error) => {
+      toast({ title: "Failed to add entrant", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const removeEntrantMutation = useMutation({
+    mutationFn: async (entrantId: string) => {
+      await apiRequest("DELETE", `/api/voting-contest-entrants/${entrantId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/voting-contests", managingContestId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/voting-contests"] });
+      toast({ title: "Entrant removed" });
+    },
+    onError: () => {
+      toast({ title: "Failed to remove entrant", variant: "destructive" });
+    },
+  });
+
+  const handleCopyShareLink = async (slug: string) => {
+    const base = window.location.origin;
+    const usePrefix = tenantSubdomain && !isCustomDomain();
+    const path = usePrefix ? `/${tenantSubdomain}/contest/${slug}` : `/contest/${slug}`;
+    try {
+      await navigator.clipboard.writeText(`${base}${path}`);
+      toast({ title: "Link copied", description: "Public contest link copied to clipboard." });
+    } catch {
+      toast({ title: "Copy failed", variant: "destructive" });
+    }
+  };
+
+  const getContestStatus = (contest: VotingContest) => {
+    const now = new Date();
+    if (!contest.isActive) return "inactive";
+    if (contest.endDate && new Date(contest.endDate) < now) return "ended";
+    if (contest.startDate && new Date(contest.startDate) > now) return "scheduled";
+    return "active";
+  };
+
+  const handleCreateSubmit = () => {
+    if (!newTitle.trim()) return;
+    createMutation.mutate({
+      title: newTitle.trim(),
+      description: newDescription.trim(),
+      startDate: newStartDate,
+      endDate: newEndDate,
+      imageUrl: newImageUrl || undefined,
+    });
+  };
+
+  if (managingContestId && managedContestData) {
+    const contest = managedContestData;
+    const entrants = managedContestData.entrants || [];
+
+    return (
+      <div className="space-y-4" data-testid="section-manage-contest">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button variant="ghost" onClick={() => setManagingContestId(null)} data-testid="button-back-to-contests">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back
+          </Button>
+          <h2 className="text-lg font-semibold" data-testid="text-manage-contest-title">{contest.title}</h2>
+        </div>
+
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <p className="text-sm text-muted-foreground">{entrants.length} entrant{entrants.length !== 1 ? "s" : ""}</p>
+          <Button onClick={() => setAddEntrantDialogOpen(true)} data-testid="button-add-entrant">
+            <Plus className="mr-2 h-4 w-4" />
+            Add Entrant
+          </Button>
+        </div>
+
+        {entrants.length === 0 ? (
+          <Card>
+            <CardContent className="py-8">
+              <div className="flex flex-col items-center gap-3 text-center">
+                <div className="rounded-full bg-muted p-3">
+                  <Users className="h-6 w-6 text-muted-foreground" />
+                </div>
+                <p className="text-sm font-medium" data-testid="text-no-entrants">No entrants yet</p>
+                <p className="text-xs text-muted-foreground">Add entrants to this contest so supporters can vote for them.</p>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {entrants
+              .sort((a, b) => (b.totalVotes ?? 0) - (a.totalVotes ?? 0))
+              .map((entrant, idx) => (
+              <Card key={entrant.id} data-testid={`card-entrant-${entrant.id}`}>
+                <CardContent className="pt-6">
+                  <div className="flex items-start gap-3">
+                    <Avatar className="h-14 w-14 rounded-md">
+                      {entrant.photoUrl ? (
+                        <AvatarImage src={entrant.photoUrl} alt={entrant.name} />
+                      ) : null}
+                      <AvatarFallback className="rounded-md">{entrant.name.charAt(0).toUpperCase()}</AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="font-medium truncate" data-testid={`text-entrant-name-${entrant.id}`}>{entrant.name}</p>
+                        {idx === 0 && entrants.length > 1 && (
+                          <Trophy className="h-4 w-4 text-amber-500 shrink-0" />
+                        )}
+                      </div>
+                      <p className="text-2xl font-bold" data-testid={`text-entrant-votes-${entrant.id}`}>
+                        {(entrant.totalVotes ?? 0).toLocaleString()}
+                      </p>
+                      <p className="text-xs text-muted-foreground">votes</p>
+                    </div>
+                  </div>
+                </CardContent>
+                <CardFooter className="pt-0 justify-end">
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => removeEntrantMutation.mutate(entrant.id)}
+                    disabled={removeEntrantMutation.isPending}
+                    data-testid={`button-remove-entrant-${entrant.id}`}
+                  >
+                    <Trash2 className="h-4 w-4 text-muted-foreground" />
+                  </Button>
+                </CardFooter>
+              </Card>
+            ))}
+          </div>
+        )}
+
+        <Dialog open={addEntrantDialogOpen} onOpenChange={setAddEntrantDialogOpen}>
+          <DialogContent data-testid="dialog-add-entrant">
+            <DialogHeader>
+              <DialogTitle>Add Entrant</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <div className="space-y-2">
+                <Label>Name</Label>
+                <Input
+                  value={entrantName}
+                  onChange={(e) => setEntrantName(e.target.value)}
+                  placeholder="e.g., Luna the Labrador"
+                  data-testid="input-entrant-name"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Photo</Label>
+                <ObjectUploader
+                  value={entrantPhotoUrls}
+                  onChange={setEntrantPhotoUrls}
+                  maxFiles={1}
+                  data-testid="uploader-entrant-photo"
+                  buttonText="Upload Photo"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setAddEntrantDialogOpen(false)} data-testid="button-cancel-add-entrant">
+                Cancel
+              </Button>
+              <Button
+                onClick={() => addEntrantMutation.mutate({ name: entrantName, photoUrl: entrantPhotoUrls[0] || undefined })}
+                disabled={!entrantName.trim() || addEntrantMutation.isPending}
+                data-testid="button-submit-add-entrant"
+              >
+                {addEntrantMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Add Entrant
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4" data-testid="section-voting-contests">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
+          <Trophy className="h-5 w-5 text-amber-500" />
+          <h2 className="text-lg font-semibold">Voting Contests</h2>
+        </div>
+        <Button onClick={() => setCreateDialogOpen(true)} data-testid="button-create-contest">
+          <Plus className="mr-2 h-4 w-4" />
+          Create Contest
+        </Button>
+      </div>
+
+      <p className="text-sm text-muted-foreground">
+        Run gamified fundraising campaigns where $1 = 1 Vote. Supporters vote for their favorite entrant by donating.
+      </p>
+
+      {isLoading ? (
+        <div className="space-y-3">
+          {[1, 2, 3].map(i => (
+            <div key={i} className="h-28 rounded-md bg-muted animate-pulse" />
+          ))}
+        </div>
+      ) : contests.length === 0 ? (
+        <Card>
+          <CardContent className="py-8">
+            <div className="flex flex-col items-center gap-3 text-center">
+              <div className="rounded-full bg-muted p-3">
+                <Trophy className="h-6 w-6 text-muted-foreground" />
+              </div>
+              <p className="text-sm font-medium" data-testid="text-no-contests">No voting contests yet</p>
+              <p className="text-xs text-muted-foreground">Create your first contest to start a fun, gamified fundraiser.</p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {contests.map((contest) => {
+            const status = getContestStatus(contest);
+            const statusBadge = status === "active" ? (
+              <Badge variant="default" className="bg-green-600" data-testid={`badge-contest-status-${contest.id}`}>Active</Badge>
+            ) : status === "ended" ? (
+              <Badge variant="secondary" data-testid={`badge-contest-status-${contest.id}`}>Ended</Badge>
+            ) : status === "scheduled" ? (
+              <Badge variant="outline" data-testid={`badge-contest-status-${contest.id}`}>Scheduled</Badge>
+            ) : (
+              <Badge variant="secondary" data-testid={`badge-contest-status-${contest.id}`}>Inactive</Badge>
+            );
+
+            return (
+              <Card key={contest.id} data-testid={`card-contest-${contest.id}`}>
+                <CardHeader>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <CardTitle className="text-base truncate" data-testid={`text-contest-title-${contest.id}`}>{contest.title}</CardTitle>
+                      {contest.description && (
+                        <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{contest.description}</p>
+                      )}
+                    </div>
+                    {statusBadge}
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
+                    {(contest.startDate || contest.endDate) && (
+                      <div className="flex items-center gap-1">
+                        <Calendar className="h-3.5 w-3.5" />
+                        <span>
+                          {contest.startDate ? new Date(contest.startDate).toLocaleDateString() : "—"}
+                          {" — "}
+                          {contest.endDate ? new Date(contest.endDate).toLocaleDateString() : "—"}
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-1">
+                      <Users className="h-3.5 w-3.5" />
+                      <span data-testid={`text-entrant-count-${contest.id}`}>{(contest as any).entrantCount ?? 0} entrants</span>
+                    </div>
+                  </div>
+                </CardContent>
+                <CardFooter className="flex items-center justify-end gap-1 flex-wrap">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleCopyShareLink(contest.slug)}
+                    data-testid={`button-share-contest-${contest.id}`}
+                  >
+                    <Share2 className="mr-2 h-3.5 w-3.5" />
+                    Share Link
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setManagingContestId(contest.id)}
+                    data-testid={`button-manage-contest-${contest.id}`}
+                  >
+                    Manage
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => toggleMutation.mutate({ id: contest.id, isActive: !contest.isActive })}
+                    data-testid={`button-toggle-contest-${contest.id}`}
+                  >
+                    {contest.isActive ? <PowerOff className="h-4 w-4" /> : <Power className="h-4 w-4" />}
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => {
+                      if (confirm("Delete this contest? This cannot be undone.")) {
+                        deleteMutation.mutate(contest.id);
+                      }
+                    }}
+                    data-testid={`button-delete-contest-${contest.id}`}
+                  >
+                    <Trash2 className="h-4 w-4 text-muted-foreground" />
+                  </Button>
+                </CardFooter>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
+      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+        <DialogContent data-testid="dialog-create-contest">
+          <DialogHeader>
+            <DialogTitle>Create Voting Contest</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Title</Label>
+              <Input
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+                placeholder="e.g., Cutest Puppy Contest 2025"
+                data-testid="input-contest-title"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Description</Label>
+              <Textarea
+                value={newDescription}
+                onChange={(e) => setNewDescription(e.target.value)}
+                placeholder="Describe what this contest is about..."
+                className="resize-none"
+                data-testid="input-contest-description"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Start Date</Label>
+                <Input
+                  type="date"
+                  value={newStartDate}
+                  onChange={(e) => setNewStartDate(e.target.value)}
+                  data-testid="input-contest-start-date"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>End Date</Label>
+                <Input
+                  type="date"
+                  value={newEndDate}
+                  onChange={(e) => setNewEndDate(e.target.value)}
+                  data-testid="input-contest-end-date"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Image URL (optional)</Label>
+              <Input
+                value={newImageUrl}
+                onChange={(e) => setNewImageUrl(e.target.value)}
+                placeholder="https://..."
+                data-testid="input-contest-image-url"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateDialogOpen(false)} data-testid="button-cancel-create-contest">
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreateSubmit}
+              disabled={!newTitle.trim() || createMutation.isPending}
+              data-testid="button-submit-create-contest"
+            >
+              {createMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Create Contest
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }
 

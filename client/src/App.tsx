@@ -80,6 +80,7 @@ import TutorialsPage from "@/pages/TutorialsPage";
 import PlatformIntegrationsPage from "@/pages/PlatformIntegrationsPage";
 import ComplianceSettingsPage from "@/pages/ComplianceSettingsPage";
 import PeerCampaignPage from "@/pages/PeerCampaignPage";
+import VotingContestPage from "@/pages/VotingContestPage";
 import PlatformLandingPage from "@/pages/PlatformLandingPage";
 import PlatformPrivacyPage from "@/pages/PlatformPrivacyPage";
 import PlatformTermsPage from "@/pages/PlatformTermsPage";
@@ -237,6 +238,7 @@ function RouterSwitch() {
       <Route path="/campaigns/:campaignId" component={PublicCampaignPage} />
       <Route path="/campaign/:animalId" component={PublicCampaignPage} />
       <Route path="/campaign/:animalId/thank-you" component={DonationThankYouPage} />
+      <Route path="/contest/:slug" component={VotingContestPage} />
       <Route path="/fundraise" component={PeerCampaignCreatePage} />
       <Route path="/foster" component={FosterApplicationPage} />
       <Route path="/login" component={Login} />

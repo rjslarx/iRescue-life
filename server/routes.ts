@@ -25357,7 +25357,94 @@ Submitted: ${new Date().toLocaleString()}
             break;
           }
 
-                    // Fundraiser order fulfillment — early exit to avoid donation processing
+                    // Voting Contest vote fulfillment — early exit
+          if (session.metadata?.type === 'voting_contest' && session.metadata?.votingContestEntrantId) {
+            console.log('[STRIPE-WEBHOOK] Voting contest vote received for entrant:', session.metadata.votingContestEntrantId);
+            try {
+              const { votingContestEntrants } = await import('@shared/schema');
+
+              // Idempotency: check if this session was already processed
+              if (session.payment_intent) {
+                const existingPayment = await db
+                  .select({ id: payments.id })
+                  .from(payments)
+                  .where(eq(payments.stripePaymentIntentId, session.payment_intent))
+                  .limit(1)
+                  .then(rows => rows[0]);
+                if (existingPayment) {
+                  console.log('[STRIPE-WEBHOOK] Voting contest payment already processed (idempotency), skipping');
+                  break;
+                }
+              }
+
+              const newVotes = Math.floor((session.amount_total || 0) / 100);
+              if (newVotes > 0) {
+                // Validate entrant belongs to the correct tenant and contest
+                const [entrant] = await db
+                  .select()
+                  .from(votingContestEntrants)
+                  .where(and(
+                    eq(votingContestEntrants.id, session.metadata.votingContestEntrantId),
+                    eq(votingContestEntrants.tenantId, tenant.id)
+                  ))
+                  .limit(1);
+
+                if (!entrant) {
+                  console.error('[STRIPE-WEBHOOK] Voting entrant not found or tenant mismatch');
+                  break;
+                }
+
+                await db
+                  .update(votingContestEntrants)
+                  .set({ totalVotes: sql`${votingContestEntrants.totalVotes} + ${newVotes}` })
+                  .where(eq(votingContestEntrants.id, entrant.id));
+
+                // Record payment for idempotency
+                const customerEmail = session.customer_email || session.customer_details?.email;
+                if (session.payment_intent && customerEmail) {
+                  let donor = await db
+                    .select()
+                    .from(donors)
+                    .where(and(eq(donors.tenantId, tenant.id), eq(donors.email, customerEmail)))
+                    .limit(1)
+                    .then(rows => rows[0]);
+                  if (!donor) {
+                    [donor] = await db.insert(donors).values({
+                      tenantId: tenant.id,
+                      email: customerEmail,
+                      name: session.customer_details?.name || 'Contest Voter',
+                      totalDonated: session.amount_total || 0,
+                      lastDonationDate: new Date(),
+                    }).returning();
+                  } else {
+                    [donor] = await db.update(donors).set({
+                      totalDonated: (donor.totalDonated || 0) + (session.amount_total || 0),
+                      lastDonationDate: new Date(),
+                    }).where(eq(donors.id, donor.id)).returning();
+                  }
+                  await db.insert(payments).values({
+                    tenantId: tenant.id,
+                    donorId: donor.id,
+                    stripePaymentIntentId: session.payment_intent,
+                    stripeCheckoutSessionId: session.id,
+                    amount: session.amount_total || 0,
+                    currency: session.currency || 'usd',
+                    status: 'succeeded',
+                    paymentMethod: 'stripe',
+                    isRecurring: false,
+                    description: `${newVotes} vote(s) for ${entrant.name}`,
+                  });
+                }
+
+                console.log('[STRIPE-WEBHOOK] Added', newVotes, 'votes to entrant', entrant.id);
+              }
+            } catch (err) {
+              console.error('[STRIPE-WEBHOOK] Failed to process voting contest vote:', err);
+            }
+            break;
+          }
+
+          // Fundraiser order fulfillment — early exit to avoid donation processing
           if (session.metadata?.fundraiser_event_id) {
             console.log('[STRIPE-WEBHOOK] Fundraiser order payment received:', session.metadata.fundraiser_order_id);
             try {
@@ -42803,6 +42890,245 @@ The user asking is a tenant administrator or staff member.`;
       const [updated] = result;
 
       res.json({ success: true, message: updated });
+    } catch (error) { next(error); }
+  });
+
+
+  // ═══════════════════════════════════════════════════════════════════
+  // VOTING CONTEST ENGINE — "Vote with your Dollar" ($1 = 1 Vote)
+  // ═══════════════════════════════════════════════════════════════════
+
+  app.post('/api/voting-contests', requireTenant, requireAuth, requireRole('admin', 'owner', 'manager'), async (req, res, next) => {
+    try {
+      const { votingContests } = await import('@shared/schema');
+      const schema = z.object({
+        title: z.string().min(1).max(200),
+        description: z.string().max(2000).optional(),
+        imageUrl: z.string().url().optional().or(z.literal('')),
+        startDate: z.string().optional(),
+        endDate: z.string().optional(),
+      });
+      const data = schema.parse(req.body);
+      const slug = data.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-' + Date.now().toString(36);
+      const [contest] = await db.insert(votingContests).values({
+        tenantId: req.tenant!.id,
+        title: data.title,
+        slug,
+        description: data.description || null,
+        imageUrl: data.imageUrl || null,
+        startDate: data.startDate ? new Date(data.startDate) : null,
+        endDate: data.endDate ? new Date(data.endDate) : null,
+      }).returning();
+      res.json(contest);
+    } catch (error) { next(error); }
+  });
+
+  app.get('/api/voting-contests', requireTenant, requireAuth, requireRole('admin', 'owner', 'manager', 'staff'), async (req, res, next) => {
+    try {
+      const { votingContests, votingContestEntrants } = await import('@shared/schema');
+      const contests = await db
+        .select()
+        .from(votingContests)
+        .where(eq(votingContests.tenantId, req.tenant!.id))
+        .orderBy(desc(votingContests.createdAt));
+      const contestsWithCounts = await Promise.all(contests.map(async (c) => {
+        const [countRow] = await db
+          .select({ count: sql<number>`count(*)` })
+          .from(votingContestEntrants)
+          .where(eq(votingContestEntrants.contestId, c.id));
+        const [votesRow] = await db
+          .select({ total: sql<number>`coalesce(sum(total_votes), 0)` })
+          .from(votingContestEntrants)
+          .where(eq(votingContestEntrants.contestId, c.id));
+        return { ...c, entrantCount: Number(countRow?.count || 0), totalVotesAll: Number(votesRow?.total || 0) };
+      }));
+      res.json(contestsWithCounts);
+    } catch (error) { next(error); }
+  });
+
+  app.get('/api/voting-contests/:id', requireTenant, requireAuth, requireRole('admin', 'owner', 'manager', 'staff'), async (req, res, next) => {
+    try {
+      const { votingContests, votingContestEntrants } = await import('@shared/schema');
+      const [contest] = await db
+        .select()
+        .from(votingContests)
+        .where(and(eq(votingContests.id, req.params.id), eq(votingContests.tenantId, req.tenant!.id)))
+        .limit(1);
+      if (!contest) return res.status(404).json({ error: 'Contest not found' });
+      const entrants = await db
+        .select()
+        .from(votingContestEntrants)
+        .where(eq(votingContestEntrants.contestId, contest.id))
+        .orderBy(desc(votingContestEntrants.totalVotes));
+      res.json({ ...contest, entrants });
+    } catch (error) { next(error); }
+  });
+
+  app.patch('/api/voting-contests/:id', requireTenant, requireAuth, requireRole('admin', 'owner', 'manager'), async (req, res, next) => {
+    try {
+      const { votingContests } = await import('@shared/schema');
+      const schema = z.object({
+        title: z.string().min(1).max(200).optional(),
+        description: z.string().max(2000).optional(),
+        imageUrl: z.string().url().optional().or(z.literal('')).or(z.null()),
+        startDate: z.string().optional().or(z.null()),
+        endDate: z.string().optional().or(z.null()),
+        isActive: z.boolean().optional(),
+      });
+      const data = schema.parse(req.body);
+      const updateData: any = {};
+      if (data.title !== undefined) updateData.title = data.title;
+      if (data.description !== undefined) updateData.description = data.description;
+      if (data.imageUrl !== undefined) updateData.imageUrl = data.imageUrl || null;
+      if (data.startDate !== undefined) updateData.startDate = data.startDate ? new Date(data.startDate) : null;
+      if (data.endDate !== undefined) updateData.endDate = data.endDate ? new Date(data.endDate) : null;
+      if (data.isActive !== undefined) updateData.isActive = data.isActive;
+      const [updated] = await db
+        .update(votingContests)
+        .set(updateData)
+        .where(and(eq(votingContests.id, req.params.id), eq(votingContests.tenantId, req.tenant!.id)))
+        .returning();
+      if (!updated) return res.status(404).json({ error: 'Contest not found' });
+      res.json(updated);
+    } catch (error) { next(error); }
+  });
+
+  app.delete('/api/voting-contests/:id', requireTenant, requireAuth, requireRole('admin', 'owner', 'manager'), async (req, res, next) => {
+    try {
+      const { votingContests } = await import('@shared/schema');
+      const [deleted] = await db
+        .delete(votingContests)
+        .where(and(eq(votingContests.id, req.params.id), eq(votingContests.tenantId, req.tenant!.id)))
+        .returning();
+      if (!deleted) return res.status(404).json({ error: 'Contest not found' });
+      res.json({ success: true });
+    } catch (error) { next(error); }
+  });
+
+  app.post('/api/voting-contests/:id/entrants', requireTenant, requireAuth, requireRole('admin', 'owner', 'manager'), async (req, res, next) => {
+    try {
+      const { votingContests, votingContestEntrants } = await import('@shared/schema');
+      const [contest] = await db
+        .select()
+        .from(votingContests)
+        .where(and(eq(votingContests.id, req.params.id), eq(votingContests.tenantId, req.tenant!.id)))
+        .limit(1);
+      if (!contest) return res.status(404).json({ error: 'Contest not found' });
+      const schema = z.object({
+        name: z.string().min(1).max(200),
+        photoUrl: z.string().url().optional().or(z.literal('')),
+      });
+      const data = schema.parse(req.body);
+      const [entrant] = await db.insert(votingContestEntrants).values({
+        tenantId: req.tenant!.id,
+        contestId: contest.id,
+        name: data.name,
+        photoUrl: data.photoUrl || null,
+      }).returning();
+      res.json(entrant);
+    } catch (error) { next(error); }
+  });
+
+  app.delete('/api/voting-contest-entrants/:id', requireTenant, requireAuth, requireRole('admin', 'owner', 'manager'), async (req, res, next) => {
+    try {
+      const { votingContestEntrants } = await import('@shared/schema');
+      const [deleted] = await db
+        .delete(votingContestEntrants)
+        .where(and(eq(votingContestEntrants.id, req.params.id), eq(votingContestEntrants.tenantId, req.tenant!.id)))
+        .returning();
+      if (!deleted) return res.status(404).json({ error: 'Entrant not found' });
+      res.json({ success: true });
+    } catch (error) { next(error); }
+  });
+
+  // Public routes for voting contests
+  app.get('/api/public/voting-contest/:slug', requireTenant, async (req, res, next) => {
+    try {
+      const { votingContests, votingContestEntrants } = await import('@shared/schema');
+      const [contest] = await db
+        .select()
+        .from(votingContests)
+        .where(and(
+          eq(votingContests.tenantId, req.tenant!.id),
+          eq(votingContests.slug, req.params.slug),
+          eq(votingContests.isActive, true),
+        ))
+        .limit(1);
+      if (!contest) return res.status(404).json({ error: 'Contest not found' });
+      const entrants = await db
+        .select()
+        .from(votingContestEntrants)
+        .where(eq(votingContestEntrants.contestId, contest.id))
+        .orderBy(desc(votingContestEntrants.totalVotes));
+      const [tenant] = await db.select().from(tenants).where(eq(tenants.id, req.tenant!.id)).limit(1);
+      res.json({ ...contest, entrants, rescueName: tenant?.name || '' });
+    } catch (error) { next(error); }
+  });
+
+  app.post('/api/public/voting-contest/:entrantId/checkout', requireTenant, async (req, res, next) => {
+    try {
+      const { votingContestEntrants, votingContests } = await import('@shared/schema');
+      const { stripeService } = await import('./lib/stripe-service');
+      const { calculatePlatformFee } = await import('./config/platform');
+
+      const schema = z.object({ amount: z.number().int().min(1) });
+      const { amount } = schema.parse(req.body);
+      const amountCents = amount * 100;
+
+      const [entrant] = await db
+        .select()
+        .from(votingContestEntrants)
+        .where(and(eq(votingContestEntrants.id, req.params.entrantId), eq(votingContestEntrants.tenantId, req.tenant!.id)))
+        .limit(1);
+      if (!entrant) return res.status(404).json({ error: 'Entrant not found' });
+
+      const [contest] = await db
+        .select()
+        .from(votingContests)
+        .where(and(eq(votingContests.id, entrant.contestId), eq(votingContests.isActive, true)))
+        .limit(1);
+      if (!contest) return res.status(404).json({ error: 'Contest not active' });
+
+      // Enforce contest lifecycle dates server-side
+      const now = new Date();
+      if (contest.startDate && new Date(contest.startDate) > now) {
+        return res.status(400).json({ error: 'Contest has not started yet' });
+      }
+      if (contest.endDate && new Date(contest.endDate) < now) {
+        return res.status(400).json({ error: 'Contest has ended' });
+      }
+
+      const [tenant] = await db.select().from(tenants).where(eq(tenants.id, req.tenant!.id)).limit(1);
+      if (!tenant || !tenant.stripeEnabled) return res.status(400).json({ error: 'Stripe is not configured' });
+
+      const platformFeeAmount = calculatePlatformFee(amountCents, tenant.subscriptionTier || 'free');
+
+      const host = req.get('host') || '';
+      const baseUrl = `${req.protocol}://${host}`;
+      const hasCustomDomain = (tenant as any).customDomain && host.includes((tenant as any).customDomain);
+      const tenantPath = hasCustomDomain ? '' : (tenant.subdomain ? `/${tenant.subdomain}` : '');
+
+      const session = await stripeService.createCheckoutSession(tenant, {
+        amount: amountCents,
+        currency: 'usd',
+        isRecurring: false,
+        successUrl: `${baseUrl}${tenantPath}/contest/${contest.slug}?voted=success`,
+        cancelUrl: `${baseUrl}${tenantPath}/contest/${contest.slug}`,
+        platformFeeAmount,
+        connectedAccountId: tenant.stripeConnectedAccountId || undefined,
+        metadata: {
+          type: 'voting_contest',
+          votingContestEntrantId: entrant.id,
+          votingContestId: contest.id,
+          entrantName: entrant.name,
+          tenantId: tenant.id,
+          voteCount: amount.toString(),
+        },
+        description: `${amount} vote${amount === 1 ? '' : 's'} for ${entrant.name} — ${contest.title}`,
+      });
+
+      if (!session) return res.status(500).json({ error: 'Failed to create checkout session' });
+      res.json({ sessionId: session.id, url: session.url });
     } catch (error) { next(error); }
   });
 
