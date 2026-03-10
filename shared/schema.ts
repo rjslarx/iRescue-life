@@ -424,6 +424,16 @@ export const insertEmailEventSchema = createInsertSchema(emailEvents).omit({
 export type InsertEmailEvent = z.infer<typeof insertEmailEventSchema>;
 export type EmailEvent = typeof emailEvents.$inferSelect;
 
+export const dailyBriefingLogs = pgTable("daily_briefing_logs", {
+  id: serial("id").primaryKey(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  sentDate: text("sent_date").notNull(),
+  recipientCount: integer("recipient_count").notNull().default(0),
+  sentAt: timestamp("sent_at").notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("daily_briefing_logs_tenant_date_idx").on(table.tenantId, table.sentDate),
+]);
+
 // Kennel Buildings table - physical buildings/areas in the facility
 export const kennelBuildings = pgTable("kennel_buildings", {
   id: uuid("id").primaryKey().defaultRandom(),
