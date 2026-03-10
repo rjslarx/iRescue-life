@@ -174,13 +174,8 @@ export default function KanbanBoard({ applications, onMoveApplication, onAssignA
   }
 
   return (
-    <div className="w-full min-w-0 overflow-x-auto">
-      <div
-        className="grid gap-3"
-        style={{
-          gridTemplateColumns: `repeat(${kanbanStages.length}, minmax(280px, 1fr))`,
-        }}
-      >
+    <div className="w-full min-w-0">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {kanbanStages.map((stage) => {
           const stageApps = getApplicationsByStage(stage.id);
           return (
