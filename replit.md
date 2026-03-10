@@ -50,6 +50,7 @@ Core functionalities include:
 - **Omnichannel Communications Switchboard:** A unified admin control panel for SMS logs and queued messages, including a "Pause Outbound Comms" kill switch and a "Convert Channel" modal.
 - **Broadcast Reply-To Number:** Optional coordinator phone number field on broadcast SMS notifications; recipients see "Reply to: (xxx) xxx-xxxx" appended to the message so they can respond directly to the coordinator.
 - **Daily Staff Briefing Email:** An automated HTML email providing a daily summary of shelter, foster, and adopted animal-related tasks and alerts, sent to configurable recipient roles.
+- **Pending Applications Digest:** A daily scheduled email (7:00 AM UTC) alerting configured recipients to new/unreviewed applications across Adoption, Foster, Volunteer, and Intake pipelines. Uses the Notification Preferences system with per-pipeline event keys (`pending_adoption/foster/volunteer/intake_applications_digest`). Each recipient only receives counts for pipelines they're subscribed to. Emails sent individually per recipient.
 - **Volunteer SMS Signup:** Volunteers can sign up for open shifts via SMS.
 - **Foster Medication SMS Escalation:** A 3-step system of hourly digests, evening nudges, and dashboard alerts for unconfirmed tasks, with fuzzy matching for replies.
 - **Adopted Animal Backfill:** A manual entry form for rescues to register previously adopted animals, creating necessary records and sending welcome emails.

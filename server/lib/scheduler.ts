@@ -87,6 +87,27 @@ export function initializeScheduler() {
 
   console.log(`✓ Daily briefing email scheduled for: ${dailyBriefingEmailSchedule} (UTC)`);
 
+  const pendingAppsDigestSchedule = process.env.PENDING_APPS_DIGEST_SCHEDULE || "0 7 * * *";
+  cron.schedule(pendingAppsDigestSchedule, async () => {
+    console.log("📬 Running pending applications digest...");
+    try {
+      const { sendPendingApplicationsDigestForAllTenants } = await import("../services/pending-applications-digest");
+      const result = await sendPendingApplicationsDigestForAllTenants();
+      if (result.sent > 0) {
+        console.log(`✓ Pending apps digest: ${result.sent} email(s) sent`);
+      }
+      if (result.errors.length > 0) {
+        console.warn(`⚠️ Pending apps digest errors: ${result.errors.slice(0, 5).join('; ')}${result.errors.length > 5 ? ` (+${result.errors.length - 5} more)` : ''}`);
+      }
+    } catch (error) {
+      console.error(`❌ Pending apps digest failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }, {
+    timezone: "UTC"
+  });
+
+  console.log(`✓ Pending applications digest scheduled for: ${pendingAppsDigestSchedule} (UTC)`);
+
   // Schedule onboarding emails daily at 10:00 AM UTC
   // "0 10 * * *" means: at minute 0, hour 10, every day
   // This sends Day 2 follow-up emails to encourage engagement

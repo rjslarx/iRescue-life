@@ -45,6 +45,7 @@ const CATEGORY_ICONS: Record<string, typeof Bell> = {
   "Foster & Compliance": Heart,
   "Financial": Heart,
   "Operations": Truck,
+  "Pipeline Digests": Bell,
 };
 
 const CATEGORY_ORDER = [
@@ -54,6 +55,7 @@ const CATEGORY_ORDER = [
   "Foster & Compliance",
   "Financial",
   "Operations",
+  "Pipeline Digests",
 ];
 
 const E164_REGEX = /^\+[1-9]\d{7,14}$/;

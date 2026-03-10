@@ -5829,6 +5829,10 @@ export const NOTIFICATION_EVENT_KEYS = [
   "animal_transfer_received",
   "animal_transfer_accepted",
   "volunteer_activated",
+  "pending_adoption_applications_digest",
+  "pending_foster_applications_digest",
+  "pending_volunteer_applications_digest",
+  "pending_intake_applications_digest",
 ] as const;
 
 export type NotificationEventKey = typeof NOTIFICATION_EVENT_KEYS[number];
@@ -5855,6 +5859,10 @@ export const NOTIFICATION_EVENT_LABELS: Record<NotificationEventKey, { label: st
   contract_signed: { label: "Contract/agreement signed", category: "Operations" },
   animal_transfer_received: { label: "Incoming animal transfer request", category: "Animal Management" },
   animal_transfer_accepted: { label: "Animal transfer accepted", category: "Animal Management" },
+  pending_adoption_applications_digest: { label: "Pending adoption applications digest", category: "Pipeline Digests" },
+  pending_foster_applications_digest: { label: "Pending foster applications digest", category: "Pipeline Digests" },
+  pending_volunteer_applications_digest: { label: "Pending volunteer applications digest", category: "Pipeline Digests" },
+  pending_intake_applications_digest: { label: "Pending intake applications digest", category: "Pipeline Digests" },
 };
 
 export const NOTIFICATION_CHANNELS = ["email"] as const;
