@@ -55,11 +55,11 @@ const kanbanStages: PipelineStage[] = [
   { id: "new_applicant", label: "New Applicant", color: "bg-blue-500", icon: Users },
   { id: "orientation_scheduled", label: "Orientation Scheduled", color: "bg-yellow-500", icon: Calendar },
   { id: "waiver_needed", label: "Waiver Needed", color: "bg-orange-500", icon: FileSignature },
-  { id: "active_pool", label: "Active Pool", color: "bg-green-500", icon: UserCheck },
 ];
 
 const allStages: PipelineStage[] = [
   ...kanbanStages,
+  { id: "active_pool", label: "Active Pool", color: "bg-green-500", icon: UserCheck },
   { id: "rejected", label: "Rejected", color: "bg-red-500", icon: XCircle },
 ];
 
@@ -236,7 +236,8 @@ export default function VolunteerKanbanBoard({
   if (isMobile) {
     return (
       <MobilePipelineView
-        stages={allStages}
+        stages={kanbanStages}
+        moveTargetStages={allStages}
         cards={applications.map(appToCard)}
         getCardsByStage={getCardsByStage}
         onMoveCard={onMoveApplication ? handleMoveCard : undefined}
@@ -251,7 +252,7 @@ export default function VolunteerKanbanBoard({
       <div 
         className="grid gap-3"
         style={{ 
-          gridTemplateColumns: `repeat(${kanbanStages.length}, minmax(220px, 1fr))`,
+          gridTemplateColumns: `repeat(${kanbanStages.length}, minmax(280px, 1fr))`,
         }}
       >
         {kanbanStages.map((stage) => {
