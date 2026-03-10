@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -8,13 +8,17 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
-import { Loader2, Send, Link as LinkIcon, X, CheckCircle2, FileText, Star, Download, Mail } from "lucide-react";
+import { Loader2, Send, Link as LinkIcon, X, CheckCircle2, FileText, Star, Download, Mail, ChevronsUpDown, Check, UserPlus } from "lucide-react";
+import { cn } from "@/lib/utils";
 import type { Animal, Application, Grant, Tenant } from "@shared/schema";
 
 interface ContractTemplate {
@@ -32,7 +36,12 @@ const formSchema = z.object({
   grantId: z.string().optional(),
   contractTemplateId: z.string().optional(),
   coverFees: z.boolean().default(false),
-});
+  isFeeWaived: z.boolean().default(false),
+  feeWaiverReason: z.string().optional(),
+}).refine(
+  (data) => !data.isFeeWaived || (data.feeWaiverReason && data.feeWaiverReason.trim().length > 0),
+  { message: "Please provide a reason for waiving the fee", path: ["feeWaiverReason"] }
+);
 
 type FormData = z.infer<typeof formSchema>;
 
@@ -50,6 +59,10 @@ export function FinalizeAdoptionDialog({ open, onOpenChange, animal }: FinalizeA
   const [sessionCreated, setSessionCreated] = useState(false);
   const [downloadingPacket, setDownloadingPacket] = useState(false);
   const [emailingPacket, setEmailingPacket] = useState(false);
+  const [bypassMode, setBypassMode] = useState(false);
+  const [bypassComboOpen, setBypassComboOpen] = useState(false);
+  const [bypassSearch, setBypassSearch] = useState("");
+  const [originalFee, setOriginalFee] = useState(animal.adoptionFee || "200");
 
   const { data: tenantData } = useQuery<{ tenant: Tenant }>({
     queryKey: ['/api/tenant'],
@@ -58,6 +71,15 @@ export function FinalizeAdoptionDialog({ open, onOpenChange, animal }: FinalizeA
   const { data: applicationsData, isLoading: loadingApplications } = useQuery<{ applications: Application[] }>({
     queryKey: ['/api/animals', animal.id, 'applications'],
     enabled: open,
+  });
+
+  const { data: allApprovedData, isLoading: loadingAllApproved } = useQuery<{ applications: Application[] }>({
+    queryKey: ['/api/applications', { stage: 'approved' }],
+    queryFn: async () => {
+      const res = await apiRequest('GET', '/api/applications?stage=approved');
+      return res.json();
+    },
+    enabled: open && bypassMode,
   });
 
   const { data: grantsData } = useQuery<{ grants: Grant[] }>({
@@ -77,6 +99,20 @@ export function FinalizeAdoptionDialog({ open, onOpenChange, animal }: FinalizeA
     app => app.stage === 'approved'
   ) || [];
 
+  const allApprovedApplications = useMemo(() => {
+    const apps = allApprovedData?.applications || [];
+    const thisAnimalAppIds = new Set(approvedApplications.map(a => a.id));
+    return apps.filter(a => !thisAnimalAppIds.has(a.id));
+  }, [allApprovedData, approvedApplications]);
+
+  const filteredBypassApplicants = useMemo(() => {
+    if (!bypassSearch.trim()) return allApprovedApplications;
+    const search = bypassSearch.toLowerCase();
+    return allApprovedApplications.filter(
+      app => app.applicantName.toLowerCase().includes(search) || app.applicantEmail.toLowerCase().includes(search)
+    );
+  }, [allApprovedApplications, bypassSearch]);
+
   const activeGrants = grantsData?.grants.filter(
     grant => grant.status === 'active'
   ) || [];
@@ -89,6 +125,8 @@ export function FinalizeAdoptionDialog({ open, onOpenChange, animal }: FinalizeA
       donationBoost: "0",
       contractTemplateId: "",
       coverFees: false,
+      isFeeWaived: false,
+      feeWaiverReason: "",
     },
   });
 
@@ -106,6 +144,7 @@ export function FinalizeAdoptionDialog({ open, onOpenChange, animal }: FinalizeA
 
   const selectedGrantId = form.watch("grantId");
   const baseFee = form.watch("baseFee");
+  const isFeeWaived = form.watch("isFeeWaived");
 
   const selectedGrant = activeGrants.find(g => g.id === selectedGrantId);
 
@@ -117,6 +156,48 @@ export function FinalizeAdoptionDialog({ open, onOpenChange, animal }: FinalizeA
       form.setValue("baseFee", newFee.toFixed(2));
     }
   }, [selectedGrantId]);
+
+  useEffect(() => {
+    if (isFeeWaived) {
+      const currentFee = form.getValues("baseFee");
+      if (currentFee !== "0" && currentFee !== "0.00") {
+        setOriginalFee(currentFee);
+      }
+      form.setValue("baseFee", "0");
+    } else {
+      form.setValue("baseFee", originalFee);
+    }
+  }, [isFeeWaived]);
+
+  const createBypassApplicationMutation = useMutation({
+    mutationFn: async (sourceApplication: Application) => {
+      const response = await apiRequest('POST', '/api/applications', {
+        animalId: animal.id,
+        applicantName: sourceApplication.applicantName,
+        applicantEmail: sourceApplication.applicantEmail,
+        applicantPhone: sourceApplication.applicantPhone,
+        stage: 'approved',
+        notes: `Fast-tracked from approved application for another animal (source: ${sourceApplication.id})`,
+      });
+      return response.json();
+    },
+    onSuccess: (data) => {
+      const newApp = data.application;
+      queryClient.invalidateQueries({ queryKey: ['/api/animals', animal.id, 'applications'] });
+      form.setValue("applicationId", newApp.id);
+      toast({
+        title: "Adopter linked",
+        description: `${newApp.applicantName} has been linked to ${animal.name}`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to create bypass application",
+        description: error.message || "Please try again",
+        variant: "destructive",
+      });
+    },
+  });
 
   const createSessionMutation = useMutation({
     mutationFn: async (data: FormData) => {
@@ -273,16 +354,26 @@ export function FinalizeAdoptionDialog({ open, onOpenChange, animal }: FinalizeA
     );
   }
 
-  if (approvedApplications.length === 0) {
+  if (approvedApplications.length === 0 && !bypassMode) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent data-testid="dialog-finalize-adoption">
           <DialogHeader>
             <DialogTitle>No Approved Applications</DialogTitle>
             <DialogDescription>
-              There are no approved applications for {animal.name}. Please approve an application first.
+              There are no approved applications for {animal.name}. You can approve an application first, or use the bypass option below to select an existing approved adopter.
             </DialogDescription>
           </DialogHeader>
+          <div className="flex justify-center">
+            <Button
+              variant="outline"
+              onClick={() => setBypassMode(true)}
+              data-testid="button-bypass-application"
+            >
+              <UserPlus className="mr-2 h-4 w-4" />
+              Select Existing Approved Adopter
+            </Button>
+          </div>
           <DialogFooter>
             <Button onClick={() => onOpenChange(false)} data-testid="button-close">Close</Button>
           </DialogFooter>
@@ -304,30 +395,128 @@ export function FinalizeAdoptionDialog({ open, onOpenChange, animal }: FinalizeA
         {!sessionCreated ? (
           <Form {...form}>
             <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
-              <FormField
-                control={form.control}
-                name="applicationId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Select Approved Adopter *</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value || ""}>
-                      <FormControl>
-                        <SelectTrigger data-testid="select-adopter">
-                          <SelectValue placeholder="Choose an adopter" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {approvedApplications.map((app) => (
-                          <SelectItem key={app.id} value={app.id}>
-                            {app.applicantName} ({app.applicantEmail})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
+              {approvedApplications.length > 0 && (
+                <FormField
+                  control={form.control}
+                  name="applicationId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Select Approved Adopter *</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value || ""}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-adopter">
+                            <SelectValue placeholder="Choose an adopter" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {approvedApplications.map((app) => (
+                            <SelectItem key={app.id} value={app.id}>
+                              {app.applicantName} ({app.applicantEmail})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">Bypass Application</span>
+                  <Button
+                    type="button"
+                    variant={bypassMode ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => {
+                      setBypassMode(!bypassMode);
+                      if (bypassMode) {
+                        setBypassSearch("");
+                      }
+                    }}
+                    data-testid="button-toggle-bypass"
+                  >
+                    <UserPlus className="mr-2 h-4 w-4" />
+                    {bypassMode ? "Bypass Active" : "Select Existing Adopter"}
+                  </Button>
+                </div>
+                {bypassMode && (
+                  <div className="space-y-2">
+                    <Popover open={bypassComboOpen} onOpenChange={setBypassComboOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={bypassComboOpen}
+                          className="w-full justify-between font-normal"
+                          data-testid="combobox-bypass-adopter"
+                        >
+                          {form.getValues("applicationId") && bypassMode
+                            ? (() => {
+                                const allApps = [...approvedApplications, ...allApprovedApplications];
+                                const selected = allApps.find(a => a.id === form.getValues("applicationId"));
+                                return selected ? `${selected.applicantName} (${selected.applicantEmail})` : "Search approved adopters...";
+                              })()
+                            : "Search approved adopters..."}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-full p-0" align="start">
+                        <Command shouldFilter={false}>
+                          <CommandInput
+                            placeholder="Search by name or email..."
+                            value={bypassSearch}
+                            onValueChange={setBypassSearch}
+                            data-testid="input-bypass-search"
+                          />
+                          <CommandList>
+                            {loadingAllApproved ? (
+                              <div className="flex items-center justify-center p-4">
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              </div>
+                            ) : (
+                              <>
+                                <CommandEmpty>No approved adopters found.</CommandEmpty>
+                                <CommandGroup>
+                                  {filteredBypassApplicants.map((app) => (
+                                    <CommandItem
+                                      key={app.id}
+                                      value={app.id}
+                                      onSelect={() => {
+                                        createBypassApplicationMutation.mutate(app);
+                                        setBypassComboOpen(false);
+                                      }}
+                                      data-testid={`bypass-adopter-${app.id}`}
+                                    >
+                                      <Check
+                                        className={cn(
+                                          "mr-2 h-4 w-4",
+                                          form.getValues("applicationId") === app.id ? "opacity-100" : "opacity-0"
+                                        )}
+                                      />
+                                      <div className="flex flex-col">
+                                        <span>{app.applicantName}</span>
+                                        <span className="text-xs text-muted-foreground">{app.applicantEmail}</span>
+                                      </div>
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                              </>
+                            )}
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                    {createBypassApplicationMutation.isPending && (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        Linking adopter to {animal.name}...
+                      </div>
+                    )}
+                  </div>
                 )}
-              />
+              </div>
 
               <FormField
                 control={form.control}
@@ -343,20 +532,68 @@ export function FinalizeAdoptionDialog({ open, onOpenChange, animal }: FinalizeA
                           step="0.01"
                           min="0"
                           placeholder="200.00"
+                          disabled={isFeeWaived}
                           {...field}
                           data-testid="input-adoption-fee"
                         />
                       </div>
                     </FormControl>
                     <FormDescription>
-                      {animal.adoptionFee 
-                        ? `Pre-filled from ${animal.name}'s configured adoption fee`
-                        : `Base adoption fee for ${animal.name}`}
+                      {isFeeWaived
+                        ? "Fee has been waived — $0.00"
+                        : animal.adoptionFee 
+                          ? `Pre-filled from ${animal.name}'s configured adoption fee`
+                          : `Base adoption fee for ${animal.name}`}
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+
+              <FormField
+                control={form.control}
+                name="isFeeWaived"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                    <div className="space-y-0.5">
+                      <FormLabel>Waive Adoption Fee ($0.00)</FormLabel>
+                      <FormDescription>
+                        Toggle to waive the entire adoption fee
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        data-testid="switch-waive-fee"
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
+              {isFeeWaived && (
+                <FormField
+                  control={form.control}
+                  name="feeWaiverReason"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Waiver Reason *</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder='e.g., "Compassionate Transfer", "Clear the Shelter Event"'
+                          {...field}
+                          data-testid="input-fee-waiver-reason"
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        Required: explain why this fee is being waived
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
 
               {activeGrants.length > 0 && (
                 <FormField

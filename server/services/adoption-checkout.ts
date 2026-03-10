@@ -220,6 +220,8 @@ export async function createCheckoutSession(
       contractualDueDate: string;
       notes?: string;
     }>;
+    isFeeWaived?: boolean;
+    feeWaiverReason?: string;
   }
 ): Promise<{ session: AdoptionCheckoutSession; token: string }> {
   // Validate application belongs to tenant
@@ -289,11 +291,14 @@ export async function createCheckoutSession(
   const expiresAt = new Date();
   expiresAt.setHours(expiresAt.getHours() + DEFAULT_EXPIRATION_HOURS);
 
+  // If fee is waived, force baseFee to 0
+  const effectiveBaseFee = data.isFeeWaived ? '0' : data.baseFee;
+
   // Calculate totals - include passFeesToAdopter and platform fee if tenant enabled
   const totals = calculateTotals(
-    data.baseFee,
-    data.donationBoost || '0',
-    data.coverFees || false,
+    effectiveBaseFee,
+    data.isFeeWaived ? '0' : (data.donationBoost || '0'),
+    data.isFeeWaived ? false : (data.coverFees || false),
     passFeesToAdopter,
     platformFeePercent
   );
@@ -309,13 +314,15 @@ export async function createCheckoutSession(
       grantId: data.grantId,
       contractTemplateId: data.contractTemplateId,
       staffInitiatedBy: data.staffInitiatedBy,
-      baseFee: data.baseFee,
-      donationBoost: data.donationBoost || '0',
-      coverFees: data.coverFees || false,
+      baseFee: effectiveBaseFee,
+      donationBoost: data.isFeeWaived ? '0' : (data.donationBoost || '0'),
+      coverFees: data.isFeeWaived ? false : (data.coverFees || false),
       processor: data.processor || 'stripe',
       secureTokenHash: tokenHash,
       expiresAt,
       totals,
+      isFeeWaived: data.isFeeWaived || false,
+      feeWaiverReason: data.feeWaiverReason || null,
       vetAppointmentDate: data.vetAppointmentDate,
       spayNeuterDate: data.spayNeuterDate,
       staffConfirmValues: data.staffConfirmValues || null,
@@ -843,7 +850,29 @@ export async function captureSignature(
     })
     .returning();
 
-  // Update session status
+  // If fee is waived, skip payment and auto-complete
+  if (session.isFeeWaived) {
+    await db
+      .update(adoptionCheckoutSessions)
+      .set({
+        status: 'completed',
+        signedAt,
+        paidAt: signedAt,
+        updatedAt: new Date(),
+      })
+      .where(eq(adoptionCheckoutSessions.id, sessionId));
+
+    try {
+      await finalizeAdoption(sessionId);
+      console.log(`[ADOPTION] Fee-waived adoption auto-completed for session ${sessionId}`);
+    } catch (err) {
+      console.error(`[ADOPTION] Fee-waived finalization error for session ${sessionId}:`, err);
+    }
+
+    return contract;
+  }
+
+  // Update session status to awaiting payment
   await db
     .update(adoptionCheckoutSessions)
     .set({

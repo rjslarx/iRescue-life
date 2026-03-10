@@ -3174,6 +3174,8 @@ export const adoptionCheckoutSessions = pgTable("adoption_checkout_sessions", {
       flightRisk?: { checked: boolean; notes: string };
     };
   }>(),
+  isFeeWaived: boolean("is_fee_waived").notNull().default(false),
+  feeWaiverReason: text("fee_waiver_reason"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

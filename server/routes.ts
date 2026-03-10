@@ -10010,9 +10010,11 @@ Crawl-delay: 1
           contractualDueDate: z.string(),
           notes: z.string().optional(),
         })).optional().nullable(),
+        isFeeWaived: z.boolean().optional(),
+        feeWaiverReason: z.string().max(500).optional(),
       });
       
-      const { applicationId, sendContract, baseFee, grantId, contractTemplateId, vetAppointmentDate, spayNeuterDate, staffConfirmValues, medicalDueDates, carePriorities, customComplianceObligations } = approveSchema.parse(req.body);
+      const { applicationId, sendContract, baseFee, grantId, contractTemplateId, vetAppointmentDate, spayNeuterDate, staffConfirmValues, medicalDueDates, carePriorities, customComplianceObligations, isFeeWaived, feeWaiverReason } = approveSchema.parse(req.body);
       
       // Get the application details
       const application = await getApplicationById(req.tenant!.id, applicationId);
@@ -10083,6 +10085,8 @@ Crawl-delay: 1
           medicalDueDates: medicalDueDates || undefined,
           carePriorities: carePriorities || undefined,
           customComplianceObligations: customComplianceObligations || undefined,
+          isFeeWaived: isFeeWaived || false,
+          feeWaiverReason: feeWaiverReason || undefined,
         });
         checkoutSession = sessionResult.session;
         // Use the token returned by createCheckoutSession - it matches the stored hash
@@ -10133,6 +10137,8 @@ Crawl-delay: 1
         donationBoost: z.string().optional(),
         coverFees: z.boolean().optional(),
         processor: z.enum(['stripe']).optional(),
+        isFeeWaived: z.boolean().optional(),
+        feeWaiverReason: z.string().max(500).optional(),
       });
 
       const data = sessionSchema.parse(req.body);
@@ -10603,6 +10609,8 @@ Crawl-delay: 1
           signedAt: session.signedAt,
           paidAt: session.paidAt,
           contractTemplateId: session.contractTemplateId,
+          isFeeWaived: session.isFeeWaived || false,
+          feeWaiverReason: session.feeWaiverReason || null,
         },
         animal: animal ? {
           id: animal.id,

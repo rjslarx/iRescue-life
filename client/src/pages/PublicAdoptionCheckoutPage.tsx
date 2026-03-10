@@ -44,6 +44,8 @@ interface SessionData {
     totals: { subtotal: string; fees: string; total: string };
     expiresAt: string;
     contractTemplateId?: number;
+    isFeeWaived?: boolean;
+    feeWaiverReason?: string | null;
   };
   animal: {
     id: string;
@@ -584,16 +586,20 @@ function PublicAdoptionCheckoutPageContent() {
   useEffect(() => {
     if (sessionData?.session) {
       const status = sessionData.session.status;
-      if (status === 'awaiting_payment' && (currentStep === 'review' || currentStep === 'sign')) {
-        const serverTotal = sessionData.session.totals?.total;
-        if (serverTotal !== undefined && parseFloat(serverTotal) === 0 && !autoFinalizing) {
-          setAutoFinalizing(true);
-          finalizeZeroFeeMutation.mutate();
-        } else if (parseFloat(serverTotal || "0") > 0) {
-          setCurrentStep('payment');
-        }
-      } else if (status === 'completed') {
+      if (status === 'completed') {
         setCurrentStep('success');
+      } else if (status === 'awaiting_payment' && (currentStep === 'review' || currentStep === 'sign')) {
+        if (sessionData.session.isFeeWaived) {
+          setCurrentStep('success');
+        } else {
+          const serverTotal = sessionData.session.totals?.total;
+          if (serverTotal !== undefined && parseFloat(serverTotal) === 0 && !autoFinalizing) {
+            setAutoFinalizing(true);
+            finalizeZeroFeeMutation.mutate();
+          } else if (parseFloat(serverTotal || "0") > 0) {
+            setCurrentStep('payment');
+          }
+        }
       }
     }
   }, [sessionData]);
@@ -608,16 +614,24 @@ function PublicAdoptionCheckoutPageContent() {
       });
       return response.json();
     },
-    onSuccess: () => {
-      const serverTotal = sessionData?.session.totals?.total;
-      if (serverTotal !== undefined && parseFloat(serverTotal) === 0) {
-        finalizeZeroFeeMutation.mutate();
-      } else {
-        setCurrentStep("payment");
+    onSuccess: (data) => {
+      if (sessionData?.session.isFeeWaived || data?.status === 'completed') {
+        setCurrentStep("success");
         toast({
-          title: "Contract signed!",
-          description: "Please proceed to payment",
+          title: "Adoption Complete!",
+          description: "Congratulations on your new family member!",
         });
+      } else {
+        const serverTotal = sessionData?.session.totals?.total;
+        if (serverTotal !== undefined && parseFloat(serverTotal) === 0) {
+          finalizeZeroFeeMutation.mutate();
+        } else {
+          setCurrentStep("payment");
+          toast({
+            title: "Contract signed!",
+            description: "Please proceed to payment",
+          });
+        }
       }
     },
     onError: (error: any) => {
@@ -766,7 +780,7 @@ function PublicAdoptionCheckoutPageContent() {
         {/* Progress */}
         {currentStep !== "success" && (
           <div className="mb-8">
-            <Progress value={stepProgress[currentStep]} className="h-2" />
+            <Progress value={session.isFeeWaived ? (currentStep === "review" ? 50 : 90) : stepProgress[currentStep]} className="h-2" />
             <div className="flex justify-between mt-2 text-xs text-muted-foreground">
               <span className={currentStep === "review" ? "font-medium text-foreground" : ""}>
                 Review
@@ -774,9 +788,11 @@ function PublicAdoptionCheckoutPageContent() {
               <span className={currentStep === "sign" ? "font-medium text-foreground" : ""}>
                 Sign
               </span>
-              <span className={currentStep === "payment" ? "font-medium text-foreground" : ""}>
-                Payment
-              </span>
+              {!session.isFeeWaived && (
+                <span className={currentStep === "payment" ? "font-medium text-foreground" : ""}>
+                  Payment
+                </span>
+              )}
             </div>
           </div>
         )}
@@ -840,10 +856,24 @@ function PublicAdoptionCheckoutPageContent() {
                 {/* Fee Info */}
                 <div>
                   <h3 className="font-semibold mb-3">Adoption Fee</h3>
-                  <div className="flex justify-between text-lg">
-                    <span>Total:</span>
-                    <span className="font-bold">${session.baseFee}</span>
-                  </div>
+                  {session.isFeeWaived ? (
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center text-lg" data-testid="text-fee-waived">
+                        <span>Adoption Fee:</span>
+                        <Badge variant="secondary" className="text-base px-3 py-1" data-testid="badge-fee-waived">WAIVED</Badge>
+                      </div>
+                      {session.feeWaiverReason && (
+                        <p className="text-sm text-muted-foreground" data-testid="text-fee-waiver-reason">
+                          Reason: {session.feeWaiverReason}
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex justify-between text-lg">
+                      <span>Total:</span>
+                      <span className="font-bold">${session.baseFee}</span>
+                    </div>
+                  )}
                 </div>
 
                 <Alert>
