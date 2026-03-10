@@ -235,7 +235,7 @@ export default function FosterKanbanBoard({
 
   return (
     <div className="w-full overflow-x-auto">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {stages.map((stage) => {
           const stageApps = getApplicationsByStage(stage.id);
           const StageIcon = stage.icon;
