@@ -6,7 +6,7 @@ import { MoveAndSendFosterAgreementDialog } from "@/components/MoveAndSendFoster
 import { useAuth } from "@/contexts/AuthContext";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Users, Filter, UserCheck } from "lucide-react";
+import { Loader2, Users, Filter, UserCheck, XCircle, Eye } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -43,7 +43,7 @@ export default function FosterApplicationsPipelinePage() {
   const { toast } = useToast();
   const [sendingAgreementId, setSendingAgreementId] = useState<string | null>(null);
   const [downloadingAgreementId, setDownloadingAgreementId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"pipeline" | "active_pool">("pipeline");
+  const [activeTab, setActiveTab] = useState<"pipeline" | "active_pool" | "rejected">("pipeline");
   const [searchQuery, setSearchQuery] = useState("");
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [applicationToView, setApplicationToView] = useState<ViewApplicationData | null>(null);
@@ -221,6 +221,14 @@ export default function FosterApplicationsPipelinePage() {
       return dateB - dateA;
     });
 
+  const rejectedApplications = applications
+    .filter(app => normalizeStage(app.stage) === 'rejected')
+    .sort((a, b) => {
+      const dateA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+      const dateB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+      return dateB - dateA;
+    });
+
   const filteredActivePool = useMemo(() => {
     let filtered = activePoolApplications;
 
@@ -348,6 +356,10 @@ export default function FosterApplicationsPipelinePage() {
             </TabsTrigger>
             <TabsTrigger value="active_pool" data-testid="tab-active-pool">
               Active Foster Pool ({activePoolApplications.length})
+            </TabsTrigger>
+            <TabsTrigger value="rejected" data-testid="tab-rejected">
+              <XCircle className="h-4 w-4 mr-1" />
+              Rejected ({rejectedApplications.length})
             </TabsTrigger>
           </TabsList>
 
@@ -486,6 +498,68 @@ export default function FosterApplicationsPipelinePage() {
                           </div>
                         </CardContent>
                       </Card>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="rejected" className="mt-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <XCircle className="h-5 w-5 text-destructive" />
+                  Rejected Applications
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {rejectedApplications.length === 0 ? (
+                  <p className="text-muted-foreground text-center py-8" data-testid="text-no-rejected">
+                    No rejected applications
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {rejectedApplications.map((app) => (
+                      <div
+                        key={app.id}
+                        className="flex items-center justify-between flex-wrap gap-2 p-3 rounded-md border"
+                        data-testid={`row-rejected-${app.id}`}
+                      >
+                        <div className="min-w-0">
+                          <p className="font-medium truncate" data-testid={`text-rejected-name-${app.id}`}>
+                            {app.applicantName}
+                          </p>
+                          <p className="text-sm text-muted-foreground truncate">
+                            {app.email}
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            {app.phone}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          {app.updatedAt && (
+                            <span className="text-xs text-muted-foreground">
+                              {new Date(app.updatedAt).toLocaleDateString()}
+                            </span>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            data-testid={`button-view-rejected-${app.id}`}
+                            onClick={() => handleViewApplication({
+                              id: app.id,
+                              applicantName: app.applicantName,
+                              email: app.email,
+                              phone: app.phone,
+                              stage: app.stage,
+                            })}
+                          >
+                            <Eye className="h-4 w-4 mr-1" />
+                            View
+                          </Button>
+                        </div>
+                      </div>
                     ))}
                   </div>
                 )}

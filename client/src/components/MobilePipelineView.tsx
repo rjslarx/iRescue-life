@@ -44,6 +44,7 @@ interface CappedStageConfig {
 
 interface MobilePipelineViewProps {
   stages: PipelineStage[];
+  moveTargetStages?: PipelineStage[];
   cards: PipelineCard[];
   getCardsByStage: (stageId: string) => PipelineCard[];
   onMoveCard?: (cardId: string, newStageId: string) => void;
@@ -56,6 +57,7 @@ interface MobilePipelineViewProps {
 
 export default function MobilePipelineView({
   stages,
+  moveTargetStages: moveTargetStagesProp,
   cards,
   getCardsByStage,
   onMoveCard,
@@ -65,6 +67,7 @@ export default function MobilePipelineView({
   emptyStateText = "No items",
   cappedStages,
 }: MobilePipelineViewProps) {
+  const moveTargetStages = moveTargetStagesProp || stages;
   const [moveSheetOpen, setMoveSheetOpen] = useState(false);
   const [selectedCard, setSelectedCard] = useState<PipelineCard | null>(null);
   const [selectedStage, setSelectedStage] = useState<string>("");
@@ -264,7 +267,7 @@ export default function MobilePipelineView({
             <SheetTitle>Move to...</SheetTitle>
           </SheetHeader>
           <div className="space-y-2 pb-4">
-            {stages.map((stage) => {
+            {moveTargetStages.map((stage) => {
               const isCurrentStage = stage.id === selectedStage;
               const StageIcon = stage.icon;
               

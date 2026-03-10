@@ -67,6 +67,10 @@ const stages: PipelineStage[] = [
   { id: "orientation", label: "Orientation", color: "bg-orange-500", icon: GraduationCap },
   { id: "agreement", label: "Agreement", color: "bg-cyan-500", icon: FileSignature },
   { id: "active_pool", label: "Active Pool", color: "bg-green-500", icon: UserCheck },
+];
+
+const moveTargetStages: PipelineStage[] = [
+  ...stages,
   { id: "rejected", label: "Rejected", color: "bg-red-500", icon: XCircle },
 ];
 
@@ -218,6 +222,7 @@ export default function FosterKanbanBoard({
     return (
       <MobilePipelineView
         stages={stages}
+        moveTargetStages={moveTargetStages}
         cards={applications.map(appToCard)}
         getCardsByStage={getCardsByStage}
         onMoveCard={onMoveApplication ? handleMoveCard : undefined}
@@ -229,8 +234,8 @@ export default function FosterKanbanBoard({
   }
 
   return (
-    <div className="w-full">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+    <div className="w-full overflow-x-auto">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         {stages.map((stage) => {
           const stageApps = getApplicationsByStage(stage.id);
           const StageIcon = stage.icon;
@@ -345,7 +350,7 @@ export default function FosterKanbanBoard({
                                       <SelectValue placeholder="Move to..." />
                                     </SelectTrigger>
                                     <SelectContent>
-                                      {stages.filter(s => s.id !== normalizeStage(app.stage)).map((s) => (
+                                      {moveTargetStages.filter(s => s.id !== normalizeStage(app.stage)).map((s) => (
                                         <SelectItem key={s.id} value={s.id} data-testid={`option-foster-stage-${s.id}-${app.id}`}>
                                           <div className="flex items-center gap-2">
                                             <div className={`h-2 w-2 rounded-full ${s.color}`} />
