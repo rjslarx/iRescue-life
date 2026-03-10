@@ -10714,9 +10714,10 @@ Crawl-delay: 1
       });
 
       // Automatically send payment link email after signature (only for paid adoptions)
-      // For $0 adoptions, skip the payment email — the adopter will finalize directly
+      // For fee-waived adoptions, skip the payment email entirely
+      const isFeeWaived = session.isFeeWaived === true;
       const sessionBaseFee = parseFloat(session.baseFee || '0');
-      if (sessionBaseFee > 0) {
+      if (!isFeeWaived && sessionBaseFee > 0) {
         try {
           await sendPaymentLinkEmail(session.id, req.params.token);
         } catch (emailError) {
@@ -10781,7 +10782,7 @@ Crawl-delay: 1
         console.error('[Adoption] Failed to send contract signed notification:', notifyError);
       }
 
-      res.json({ success: true, contract: { id: contract.id } });
+      res.json({ success: true, contract: { id: contract.id }, status: isFeeWaived ? 'completed' : 'awaiting_payment' });
     } catch (error: any) {
       next(error);
     }

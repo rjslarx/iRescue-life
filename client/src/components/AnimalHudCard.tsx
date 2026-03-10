@@ -10,7 +10,7 @@ import {
   Stethoscope, Users, Pencil, ClipboardList, FileText, Camera,
   MapPin, Home, Building2, Truck, Cat, Dog, Baby, Heart,
   Scissors, AlertTriangle, Shield, ShieldAlert, ShieldX,
-  Send, X, Wand2, Sparkles, FileUp, History, PawPrint, Search, Undo2,
+  Send, X, Wand2, Sparkles, FileUp, History, PawPrint, Search, Undo2, CheckCircle,
   Calendar as CalendarIcon, Check, ExternalLink, ArrowRightLeft, Mail, Phone
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -71,6 +71,7 @@ interface AnimalHudCardProps {
   onChangeLocation?: (animal: Animal) => void;
   onTransferAnimal?: (animal: Animal) => void;
   onReturnToOwner?: (animal: Animal) => void;
+  onFinalizeAdoption?: (animal: Animal) => void;
   calculateDaysInCare: (animal: Animal) => number;
   basePath: string;
   navigate: (path: string) => void;
@@ -95,6 +96,7 @@ export function AnimalHudCard({
   onChangeLocation,
   onTransferAnimal,
   onReturnToOwner,
+  onFinalizeAdoption,
   calculateDaysInCare,
   basePath,
   navigate,
@@ -526,6 +528,15 @@ export function AnimalHudCard({
                           >
                             <Sparkles className="w-4 h-4 mr-2" />
                             Generate Ad Copy
+                          </DropdownMenuItem>
+                        )}
+                        {onFinalizeAdoption && animal.status === 'adoption_pending' && (
+                          <DropdownMenuItem
+                            onClick={() => onFinalizeAdoption(animal)}
+                            data-testid={`menu-finalize-adoption-${animal.id}`}
+                          >
+                            <CheckCircle className="w-4 h-4 mr-2" />
+                            Finalize Adoption
                           </DropdownMenuItem>
                         )}
                         {(onMarkDeceased || (onTransferAnimal && variant === "active") || (onReturnToOwner && variant === "active")) && (

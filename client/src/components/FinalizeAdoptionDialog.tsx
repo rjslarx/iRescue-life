@@ -74,10 +74,23 @@ export function FinalizeAdoptionDialog({ open, onOpenChange, animal }: FinalizeA
   });
 
   const { data: allApprovedData, isLoading: loadingAllApproved } = useQuery<{ applications: Application[] }>({
-    queryKey: ['/api/applications', { stage: 'approved' }],
+    queryKey: ['/api/applications', { stage: 'approved,adopted' }],
     queryFn: async () => {
-      const res = await apiRequest('GET', '/api/applications?stage=approved');
-      return res.json();
+      const [approvedRes, adoptedRes] = await Promise.all([
+        apiRequest('GET', '/api/applications?stage=approved'),
+        apiRequest('GET', '/api/applications?stage=adopted'),
+      ]);
+      const [approvedData, adoptedData] = await Promise.all([approvedRes.json(), adoptedRes.json()]);
+      const seen = new Set<string>();
+      const combined: Application[] = [];
+      for (const app of [...(approvedData.applications || []), ...(adoptedData.applications || [])]) {
+        const key = app.applicantEmail?.toLowerCase();
+        if (key && !seen.has(key)) {
+          seen.add(key);
+          combined.push(app);
+        }
+      }
+      return { applications: combined };
     },
     enabled: open && bypassMode,
   });

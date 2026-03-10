@@ -852,21 +852,30 @@ export async function captureSignature(
 
   // If fee is waived, skip payment and auto-complete
   if (session.isFeeWaived) {
-    await db
-      .update(adoptionCheckoutSessions)
-      .set({
-        status: 'completed',
-        signedAt,
-        paidAt: signedAt,
-        updatedAt: new Date(),
-      })
-      .where(eq(adoptionCheckoutSessions.id, sessionId));
-
     try {
+      await db
+        .update(adoptionCheckoutSessions)
+        .set({
+          status: 'completed',
+          signedAt,
+          paidAt: signedAt,
+          updatedAt: new Date(),
+        })
+        .where(eq(adoptionCheckoutSessions.id, sessionId));
+
       await finalizeAdoption(sessionId);
       console.log(`[ADOPTION] Fee-waived adoption auto-completed for session ${sessionId}`);
     } catch (err) {
-      console.error(`[ADOPTION] Fee-waived finalization error for session ${sessionId}:`, err);
+      // Revert session status so it can be retried
+      await db
+        .update(adoptionCheckoutSessions)
+        .set({
+          status: 'awaiting_signature',
+          updatedAt: new Date(),
+        })
+        .where(eq(adoptionCheckoutSessions.id, sessionId));
+      console.error(`[ADOPTION] Fee-waived finalization failed, reverted session ${sessionId}:`, err);
+      throw new Error('Fee-waived adoption finalization failed. Please try again.');
     }
 
     return contract;

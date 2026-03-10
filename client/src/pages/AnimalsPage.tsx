@@ -2715,6 +2715,11 @@ export default function AnimalsPage() {
     setDetailsDialogOpen(true);
   };
 
+  const handleFinalizeAdoption = (animal: Animal) => {
+    setAnimalToFinalize(animal);
+    setFinalizeDialogOpen(true);
+  };
+
   const handleQuickPhoto = (animal: Animal) => {
     setAnimalForQuickPhoto(animal);
     setQuickPhotoDialogOpen(true);
@@ -2999,6 +3004,7 @@ export default function AnimalsPage() {
                           onChangeLocation={handleChangeLocation}
                           onTransferAnimal={handleTransferAnimal}
                           onReturnToOwner={handleReturnToOwner}
+                          onFinalizeAdoption={handleFinalizeAdoption}
                           calculateDaysInCare={calculateDaysInCare}
                           basePath={basePath}
                           navigate={navigate}
