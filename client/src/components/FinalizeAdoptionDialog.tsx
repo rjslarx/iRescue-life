@@ -360,18 +360,6 @@ export function FinalizeAdoptionDialog({ open, onOpenChange, animal }: FinalizeA
     }
   };
 
-  if (loadingApplications) {
-    return (
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent data-testid="dialog-finalize-adoption">
-          <div className="flex items-center justify-center p-8">
-            <Loader2 className="h-8 w-8 animate-spin" />
-          </div>
-        </DialogContent>
-      </Dialog>
-    );
-  }
-
   const selectedApplicationId = form.watch('applicationId');
   const hasSelectedApplication = !!selectedApplicationId;
 
@@ -381,6 +369,21 @@ export function FinalizeAdoptionDialog({ open, onOpenChange, animal }: FinalizeA
     if (fromApproved) return fromApproved.applicantName;
     return bypassAdopterName;
   }, [selectedApplicationId, approvedApplications, bypassAdopterName]);
+
+  if (loadingApplications) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent data-testid="dialog-finalize-adoption" aria-describedby={undefined}>
+          <DialogHeader>
+            <DialogTitle>Finalize Adoption</DialogTitle>
+          </DialogHeader>
+          <div className="flex items-center justify-center p-8">
+            <Loader2 className="h-8 w-8 animate-spin" />
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   if (approvedApplications.length === 0 && !bypassMode && !hasSelectedApplication) {
     return (
