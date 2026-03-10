@@ -182,6 +182,8 @@ export function FinalizeAdoptionDialog({ open, onOpenChange, animal }: FinalizeA
     }
   }, [isFeeWaived]);
 
+  const [bypassAdopterName, setBypassAdopterName] = useState<string | null>(null);
+
   const createBypassApplicationMutation = useMutation({
     mutationFn: async (sourceApplication: Application) => {
       const response = await apiRequest('POST', '/api/applications', {
@@ -199,6 +201,7 @@ export function FinalizeAdoptionDialog({ open, onOpenChange, animal }: FinalizeA
       const newApp = data.application;
       queryClient.invalidateQueries({ queryKey: ['/api/animals', animal.id, 'applications'] });
       form.setValue("applicationId", newApp.id);
+      setBypassAdopterName(newApp.applicantName || null);
       toast({
         title: "Adopter linked",
         description: `${newApp.applicantName} has been linked to ${animal.name}`,
@@ -266,6 +269,7 @@ export function FinalizeAdoptionDialog({ open, onOpenChange, animal }: FinalizeA
       setSessionId(null);
       setCheckoutToken(null);
       setSessionCreated(false);
+      setBypassAdopterName(null);
       toast({
         title: "Session cancelled",
       });
@@ -368,7 +372,17 @@ export function FinalizeAdoptionDialog({ open, onOpenChange, animal }: FinalizeA
     );
   }
 
-  if (approvedApplications.length === 0 && !bypassMode) {
+  const selectedApplicationId = form.watch('applicationId');
+  const hasSelectedApplication = !!selectedApplicationId;
+
+  const selectedAdopterName = useMemo(() => {
+    if (!selectedApplicationId) return null;
+    const fromApproved = approvedApplications.find(a => a.id === selectedApplicationId);
+    if (fromApproved) return fromApproved.applicantName;
+    return bypassAdopterName;
+  }, [selectedApplicationId, approvedApplications, bypassAdopterName]);
+
+  if (approvedApplications.length === 0 && !bypassMode && !hasSelectedApplication) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent data-testid="dialog-finalize-adoption">
@@ -706,6 +720,22 @@ export function FinalizeAdoptionDialog({ open, onOpenChange, animal }: FinalizeA
                 />
               )}
 
+              {isFeeWaived && hasSelectedApplication && (
+                <Card className="bg-amber-50 dark:bg-amber-950 border-amber-200 dark:border-amber-800">
+                  <CardContent className="pt-4 pb-3">
+                    <div className="flex items-start gap-3">
+                      <CheckCircle2 className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+                      <div className="flex-1 space-y-1">
+                        <h4 className="font-semibold text-amber-900 dark:text-amber-100 text-sm">Fast-Track Summary</h4>
+                        <p className="text-sm text-amber-700 dark:text-amber-300">
+                          {selectedAdopterName || "Selected adopter"} will receive a contract to sign. Since the fee is waived, the adoption will complete automatically after signing — no payment step.
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
               <DialogFooter>
                 <Button
                   type="button"
@@ -724,7 +754,12 @@ export function FinalizeAdoptionDialog({ open, onOpenChange, animal }: FinalizeA
                   {createSessionMutation.isPending ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Creating...
+                      {isFeeWaived ? "Processing..." : "Creating..."}
+                    </>
+                  ) : isFeeWaived ? (
+                    <>
+                      <CheckCircle2 className="mr-2 h-4 w-4" />
+                      Fast-Track Adoption (Fee Waived)
                     </>
                   ) : (
                     <>Create Checkout Session</>
