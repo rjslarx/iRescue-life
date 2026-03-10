@@ -191,6 +191,7 @@ export function FinalizeAdoptionDialog({ open, onOpenChange, animal }: FinalizeA
         applicantPhone: sourceApplication.applicantPhone,
         stage: 'approved',
         notes: `Fast-tracked from approved application for another animal (source: ${sourceApplication.id})`,
+        isBypass: true,
       });
       return response.json();
     },

@@ -9756,7 +9756,7 @@ Crawl-delay: 1
       const { createApplication } = await import('./services/applications');
       const { insertApplicationSchema } = await import('@shared/schema');
       
-      const { gclid, ...applicationData } = req.body;
+      const { gclid, isBypass, ...applicationData } = req.body;
       const data = insertApplicationSchema.omit({ tenantId: true }).parse({
         ...applicationData,
         gclid: gclid || null,
@@ -9799,20 +9799,22 @@ Crawl-delay: 1
         }
       }
 
-      // Send email notification to staff if enabled
-      try {
-        const { sendFormSubmissionNotification } = await import('./services/form-notifications');
-        await sendFormSubmissionNotification({
-          formType: 'adoption',
-          tenantId: req.tenant!.id,
-          applicantName: data.applicantName,
-          applicantEmail: data.applicantEmail,
-          applicantPhone: data.applicantPhone,
-          applicationId: application.id,
-          animalName,
-        });
-      } catch (error) {
-        console.error('Failed to send form notification email:', error);
+      // Send email notification to staff if enabled (skip for internal bypass applications)
+      if (!isBypass) {
+        try {
+          const { sendFormSubmissionNotification } = await import('./services/form-notifications');
+          await sendFormSubmissionNotification({
+            formType: 'adoption',
+            tenantId: req.tenant!.id,
+            applicantName: data.applicantName,
+            applicantEmail: data.applicantEmail,
+            applicantPhone: data.applicantPhone,
+            applicationId: application.id,
+            animalName,
+          });
+        } catch (error) {
+          console.error('Failed to send form notification email:', error);
+        }
       }
       
       res.json({ success: true, application });
