@@ -530,7 +530,7 @@ export function AnimalHudCard({
                             Generate Ad Copy
                           </DropdownMenuItem>
                         )}
-                        {onFinalizeAdoption && animal.status === 'adoption_pending' && (
+                        {onFinalizeAdoption && ['adoption_pending', 'available', 'in_shelter', 'foster'].includes(animal.status || '') && (
                           <DropdownMenuItem
                             onClick={() => onFinalizeAdoption(animal)}
                             data-testid={`menu-finalize-adoption-${animal.id}`}
