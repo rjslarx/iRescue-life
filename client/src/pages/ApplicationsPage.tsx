@@ -60,49 +60,6 @@ export default function ApplicationsPage() {
 
   const [sendingContractId, setSendingContractId] = useState<string | null>(null);
 
-  const startCheckoutMutation = useMutation({
-    mutationFn: async ({ applicationId, animalId, signerEmail, signerName }: {
-      applicationId: string;
-      animalId: string;
-      signerEmail: string;
-      signerName: string;
-    }) => {
-      setSendingContractId(applicationId);
-      const animalData = animalsData?.animals.find(a => a.id === animalId);
-      const baseFee = animalData?.adoptionFee || "0";
-      
-      const createResponse = await apiRequest('POST', '/api/adoptions/checkouts', {
-        applicationId,
-        animalId,
-        baseFee,
-      });
-      const sessionData = await createResponse.json();
-      
-      const sendResponse = await apiRequest('POST', `/api/adoptions/checkouts/${sessionData.session.id}/send-link`, {
-        signerEmail,
-        signerName,
-      });
-      return sendResponse.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/adoptions/checkouts'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/applications'] });
-      toast({
-        title: "Adoption checkout started",
-        description: "The adopter has been sent a link to sign the contract and complete payment.",
-      });
-      setSendingContractId(null);
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Failed to start checkout",
-        description: error.message || "Please try again later.",
-        variant: "destructive",
-      });
-      setSendingContractId(null);
-    },
-  });
-
   const checkoutSessionsByAppId = useMemo(() => {
     const map = new Map<string, { status: string; expiresAt?: string; sessionId?: string; baseFee?: string }>();
     (checkoutSessionsData?.sessions || []).forEach(session => {
@@ -176,7 +133,17 @@ export default function ApplicationsPage() {
   });
 
   const handleStartCheckout = (applicationId: string, animalId: string, signerEmail: string, signerName: string) => {
-    startCheckoutMutation.mutate({ applicationId, animalId, signerEmail, signerName });
+    const animal = animalsData?.animals.find(a => a.id === animalId);
+    if (animal) {
+      setSelectedAnimal(animal);
+      setFinalizeDialogOpen(true);
+    } else {
+      toast({
+        title: "Animal not found",
+        description: "Unable to load animal details for checkout.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleMoveApplication = (applicationId: string, newStage: string) => {

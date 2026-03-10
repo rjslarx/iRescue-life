@@ -69,7 +69,11 @@ export function FinalizeAdoptionDialog({ open, onOpenChange, animal }: FinalizeA
   });
 
   const { data: applicationsData, isLoading: loadingApplications } = useQuery<{ applications: Application[] }>({
-    queryKey: ['/api/animals', animal.id, 'applications'],
+    queryKey: ['/api/applications', { animalId: animal.id }],
+    queryFn: async () => {
+      const res = await apiRequest('GET', `/api/applications?animalId=${animal.id}`);
+      return res.json();
+    },
     enabled: open,
   });
 
@@ -199,7 +203,8 @@ export function FinalizeAdoptionDialog({ open, onOpenChange, animal }: FinalizeA
     },
     onSuccess: (data) => {
       const newApp = data.application;
-      queryClient.invalidateQueries({ queryKey: ['/api/animals', animal.id, 'applications'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/applications', { animalId: animal.id }] });
+      queryClient.invalidateQueries({ queryKey: ['/api/applications'] });
       form.setValue("applicationId", newApp.id);
       setBypassAdopterName(newApp.applicantName || null);
       toast({
