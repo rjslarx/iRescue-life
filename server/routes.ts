@@ -37523,14 +37523,28 @@ Email: ${application.applicantEmail || ''}`
       const { volunteerOpportunities, volunteerSignups } = await import('@shared/schema');
       
       // Validation schema for signup request body
+      // Allow empty body for logged-in users (internal staff signup from VolunteerManagementPage)
       const signupSchema = z.object({
-        applicantName: z.string().min(1),
-        applicantEmail: z.string().email(),
-        applicantPhone: z.string().min(1),
+        applicantName: z.string().min(1).optional(),
+        applicantEmail: z.string().email().optional(),
+        applicantPhone: z.string().min(1).optional(),
         customResponses: z.record(z.any()).optional(),
       });
 
-      const validatedData = signupSchema.parse(req.body);
+      const parsed = signupSchema.parse(req.body);
+
+      // For logged-in users, fall back to session user info
+      const validatedData = {
+        applicantName: parsed.applicantName || req.user?.name || req.user?.email?.split('@')[0] || '',
+        applicantEmail: parsed.applicantEmail || req.user?.email || '',
+        applicantPhone: parsed.applicantPhone || req.user?.phone || '',
+        customResponses: parsed.customResponses,
+      };
+
+      // If still missing required fields (not logged in and no form data), reject
+      if (!validatedData.applicantName || !validatedData.applicantEmail) {
+        return res.status(400).json({ error: 'Name and email are required' });
+      }
       
       // Check if opportunity exists and has available slots
       const [opportunity] = await db
