@@ -19,6 +19,7 @@ import {
   complianceObligations,
   fosterUpdates,
   fosterPhotos,
+  dailyBriefingLogs,
 } from '@shared/schema';
 import { eq, and, or, sql, inArray, lt, isNotNull } from 'drizzle-orm';
 import { EmailService } from '../lib/email-service';
@@ -1394,8 +1395,6 @@ export async function sendDailyBriefingForTenant(tenantId: string): Promise<{ se
   }
 }
 
-const briefingSentDates = new Map<string, string>();
-
 export async function sendDailyBriefingForAllTenants(): Promise<{ sent: number; errors: string[] }> {
   let sent = 0;
   const errors: string[] = [];
@@ -1408,8 +1407,17 @@ export async function sendDailyBriefingForAllTenants(): Promise<{ sent: number; 
       .where(eq(tenants.isActive, true));
 
     for (const tenant of activeTenants) {
-      const lastSentDate = briefingSentDates.get(tenant.id);
-      if (lastSentDate === todayUTC) {
+      const existing = await db
+        .select({ id: dailyBriefingLogs.id })
+        .from(dailyBriefingLogs)
+        .where(and(
+          eq(dailyBriefingLogs.tenantId, tenant.id),
+          eq(dailyBriefingLogs.sentDate, todayUTC)
+        ))
+        .limit(1);
+
+      if (existing.length > 0) {
+        console.log(`[DailyBriefing] Already sent for tenant ${tenant.id} on ${todayUTC}, skipping`);
         continue;
       }
 
@@ -1418,7 +1426,19 @@ export async function sendDailyBriefingForAllTenants(): Promise<{ sent: number; 
       errors.push(...result.errors.map(e => `[${tenant.id}] ${e}`));
 
       if (result.sent > 0) {
-        briefingSentDates.set(tenant.id, todayUTC);
+        try {
+          await db.insert(dailyBriefingLogs).values({
+            tenantId: tenant.id,
+            sentDate: todayUTC,
+            recipientCount: result.sent,
+          });
+        } catch (insertErr: any) {
+          if (insertErr?.code === '23505') {
+            console.log(`[DailyBriefing] Duplicate insert prevented by unique constraint for tenant ${tenant.id}`);
+          } else {
+            throw insertErr;
+          }
+        }
       }
     }
   } catch (error) {
