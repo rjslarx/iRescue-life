@@ -17,7 +17,7 @@ import { z } from "zod";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
-import { Loader2, Send, Link as LinkIcon, X, CheckCircle2, FileText, Star, Download, Mail, ChevronsUpDown, Check, UserPlus } from "lucide-react";
+import { Loader2, Send, Link as LinkIcon, X, CheckCircle2, FileText, Star, Download, Mail, ChevronsUpDown, Check, UserPlus, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Animal, Application, Grant, Tenant } from "@shared/schema";
 
@@ -240,15 +240,19 @@ export function FinalizeAdoptionDialog({ open, onOpenChange, animal }: FinalizeA
     },
   });
 
+  const [sendMethod, setSendMethod] = useState<'sms' | 'email'>('sms');
+
   const sendLinkMutation = useMutation({
     mutationFn: async ({ sessionId, method }: { sessionId: string; method: 'email' | 'sms' }) => {
       const response = await apiRequest('POST', `/api/adoptions/checkouts/${sessionId}/send-link`, { method });
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       toast({
         title: "Checkout link sent!",
-        description: "The adopter will receive an email with the checkout link",
+        description: variables.method === 'sms'
+          ? "The adopter will receive a text message with the checkout link"
+          : "The adopter will receive an email with the checkout link",
       });
     },
     onError: (error: any) => {
@@ -291,9 +295,11 @@ export function FinalizeAdoptionDialog({ open, onOpenChange, animal }: FinalizeA
     } as any);
   };
 
-  const handleSendLink = () => {
+  const handleSendLink = (method?: 'sms' | 'email') => {
     if (sessionId) {
-      sendLinkMutation.mutate({ sessionId, method: 'email' });
+      const m = method || sendMethod;
+      setSendMethod(m);
+      sendLinkMutation.mutate({ sessionId, method: m });
     }
   };
 
@@ -369,6 +375,12 @@ export function FinalizeAdoptionDialog({ open, onOpenChange, animal }: FinalizeA
     if (fromApproved) return fromApproved.applicantName;
     return bypassAdopterName;
   }, [selectedApplicationId, approvedApplications, bypassAdopterName]);
+
+  const adopterPhone = useMemo(() => {
+    if (!selectedApplicationId) return null;
+    const app = approvedApplications.find(a => a.id === selectedApplicationId);
+    return app?.applicantPhone || null;
+  }, [selectedApplicationId, approvedApplications]);
 
   if (loadingApplications) {
     return (
@@ -859,6 +871,60 @@ export function FinalizeAdoptionDialog({ open, onOpenChange, animal }: FinalizeA
               </CardContent>
             </Card>
 
+            <Card>
+              <CardContent className="pt-4 pb-3">
+                <h4 className="text-sm font-medium mb-3">Send Checkout Link</h4>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    onClick={() => handleSendLink('sms')}
+                    disabled={sendLinkMutation.isPending || !adopterPhone}
+                    data-testid="button-send-sms"
+                  >
+                    {sendLinkMutation.isPending && sendMethod === 'sms' ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Sending...
+                      </>
+                    ) : (
+                      <>
+                        <MessageSquare className="mr-2 h-4 w-4" />
+                        Send via SMS
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => handleSendLink('email')}
+                    disabled={sendLinkMutation.isPending}
+                    data-testid="button-send-email"
+                  >
+                    {sendLinkMutation.isPending && sendMethod === 'email' ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Sending...
+                      </>
+                    ) : (
+                      <>
+                        <Mail className="mr-2 h-4 w-4" />
+                        Send via Email
+                      </>
+                    )}
+                  </Button>
+                </div>
+                {adopterPhone ? (
+                  <p className="text-xs text-muted-foreground mt-2" data-testid="text-adopter-phone">
+                    SMS will be sent to {adopterPhone}
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground mt-2">
+                    No phone number on file — use email instead
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+
             <DialogFooter className="flex-col sm:flex-row gap-2">
               <Button
                 type="button"
@@ -870,25 +936,6 @@ export function FinalizeAdoptionDialog({ open, onOpenChange, animal }: FinalizeA
               >
                 <X className="mr-2 h-4 w-4" />
                 Cancel Session
-              </Button>
-              <Button
-                type="button"
-                onClick={handleSendLink}
-                disabled={sendLinkMutation.isPending}
-                className="w-full sm:w-auto"
-                data-testid="button-send-link"
-              >
-                {sendLinkMutation.isPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Sending...
-                  </>
-                ) : (
-                  <>
-                    <Send className="mr-2 h-4 w-4" />
-                    Send Checkout Link
-                  </>
-                )}
               </Button>
             </DialogFooter>
           </div>

@@ -632,8 +632,51 @@ export async function sendCheckoutLink(
       html,
     });
   } else if (method === 'sms') {
-    // SMS sending would be implemented here using Twilio or similar
-    throw new Error('SMS sending not yet implemented');
+    // Get adopter phone number
+    let phone: string | null = null;
+
+    if (session.adopterContactId) {
+      const [contact] = await db
+        .select({ phone: contacts.phone })
+        .from(contacts)
+        .where(eq(contacts.id, session.adopterContactId))
+        .limit(1);
+      phone = contact?.phone || null;
+    }
+
+    if (!phone) {
+      const [application] = await db
+        .select({ phone: applications.applicantPhone })
+        .from(applications)
+        .where(eq(applications.id, session.applicationId))
+        .limit(1);
+      phone = application?.phone || null;
+    }
+
+    if (!phone) {
+      throw new Error('No phone number on file for this adopter. Please use email instead.');
+    }
+
+    const { sendSms } = await import('../lib/twilio-service');
+
+    const baseUrl = tenant.customDomain
+      ? `https://${tenant.customDomain}`
+      : `https://${tenant.subdomain}.irescue.life`;
+    const checkoutUrl = `${baseUrl}/adoption-checkout/${token}`;
+
+    const smsMessage = `Your adoption of ${animal.name} has been approved! Complete your adoption here: ${checkoutUrl}`;
+
+    const result = await sendSms(
+      session.tenantId,
+      phone,
+      smsMessage,
+      'notification',
+      { relatedAnimalId: animal.id }
+    );
+
+    if (result.status === 'failed') {
+      throw new Error(result.error || 'Failed to send SMS');
+    }
   }
 
   // Update send attempts
