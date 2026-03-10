@@ -9763,6 +9763,23 @@ Crawl-delay: 1
         gclidCapturedAt: gclid ? new Date() : null,
       });
       
+      if (isBypass && data.animalId && data.applicantEmail) {
+        const { applications } = await import('@shared/schema');
+        const [existing] = await db
+          .select()
+          .from(applications)
+          .where(and(
+            eq(applications.tenantId, req.tenant!.id),
+            eq(applications.animalId, data.animalId),
+            eq(applications.applicantEmail, data.applicantEmail),
+            eq(applications.stage, 'approved')
+          ))
+          .limit(1);
+        if (existing) {
+          return res.json({ success: true, application: existing });
+        }
+      }
+
       const application = await createApplication(req.tenant!.id, data);
       
       if (gclid && application) {
