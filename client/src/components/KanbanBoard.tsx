@@ -178,7 +178,7 @@ export default function KanbanBoard({ applications, onMoveApplication, onAssignA
       <div
         className="grid gap-3"
         style={{
-          gridTemplateColumns: `repeat(${kanbanStages.length}, minmax(220px, 1fr))`,
+          gridTemplateColumns: `repeat(${kanbanStages.length}, minmax(280px, 1fr))`,
         }}
       >
         {kanbanStages.map((stage) => {
