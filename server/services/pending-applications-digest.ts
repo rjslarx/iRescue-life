@@ -16,8 +16,13 @@ interface PipelineCount {
   eventKey: NotificationEventKey;
   label: string;
   count: number;
+  staleCount: number;
+  recentCount: number;
   stage: string;
 }
+
+const STALE_THRESHOLD_HOURS = 48;
+const STALE_DISPLAY_LABEL = `${STALE_THRESHOLD_HOURS}h+`;
 
 interface RecipientInfo {
   email: string;
@@ -82,50 +87,87 @@ async function getDigestRecipients(
 }
 
 async function gatherPendingApplicationCounts(tenantId: string): Promise<PipelineCount[]> {
+  const staleThreshold = sql`NOW() - interval '${sql.raw(String(STALE_THRESHOLD_HOURS))} hours'`;
+
   const [adoptionResult] = await db
-    .select({ count: sql<number>`count(*)::int` })
+    .select({
+      count: sql<number>`count(*)::int`,
+      staleCount: sql<number>`count(*) filter (where ${applications.createdAt} < ${staleThreshold})::int`,
+    })
     .from(applications)
     .where(and(eq(applications.tenantId, tenantId), eq(applications.stage, 'new')));
 
   const [fosterResult] = await db
-    .select({ count: sql<number>`count(*)::int` })
+    .select({
+      count: sql<number>`count(*)::int`,
+      staleCount: sql<number>`count(*) filter (where ${fosterApplications.createdAt} < ${staleThreshold})::int`,
+    })
     .from(fosterApplications)
     .where(and(eq(fosterApplications.tenantId, tenantId), eq(fosterApplications.pipelineStatus, 'new_app')));
 
   const [volunteerResult] = await db
-    .select({ count: sql<number>`count(*)::int` })
+    .select({
+      count: sql<number>`count(*)::int`,
+      staleCount: sql<number>`count(*) filter (where ${volunteerApplications.createdAt} < ${staleThreshold})::int`,
+    })
     .from(volunteerApplications)
     .where(and(eq(volunteerApplications.tenantId, tenantId), eq(volunteerApplications.pipelineStatus, 'new_applicant')));
 
   const [intakeResult] = await db
-    .select({ count: sql<number>`count(*)::int` })
+    .select({
+      count: sql<number>`count(*)::int`,
+      staleCount: sql<number>`count(*) filter (where ${surrenderRequests.createdAt} < ${staleThreshold})::int`,
+    })
     .from(surrenderRequests)
     .where(and(eq(surrenderRequests.tenantId, tenantId), eq(surrenderRequests.status, 'new')));
 
   return [
-    { eventKey: 'pending_adoption_applications_digest', label: 'Adoption', count: adoptionResult.count, stage: 'New' },
-    { eventKey: 'pending_foster_applications_digest', label: 'Foster', count: fosterResult.count, stage: 'New' },
-    { eventKey: 'pending_volunteer_applications_digest', label: 'Volunteer', count: volunteerResult.count, stage: 'New Applicant' },
-    { eventKey: 'pending_intake_applications_digest', label: 'Intake / Surrender', count: intakeResult.count, stage: 'New' },
+    { eventKey: 'pending_adoption_applications_digest', label: 'Adoption', count: adoptionResult.count, staleCount: adoptionResult.staleCount, recentCount: adoptionResult.count - adoptionResult.staleCount, stage: 'New' },
+    { eventKey: 'pending_foster_applications_digest', label: 'Foster', count: fosterResult.count, staleCount: fosterResult.staleCount, recentCount: fosterResult.count - fosterResult.staleCount, stage: 'New' },
+    { eventKey: 'pending_volunteer_applications_digest', label: 'Volunteer', count: volunteerResult.count, staleCount: volunteerResult.staleCount, recentCount: volunteerResult.count - volunteerResult.staleCount, stage: 'New Applicant' },
+    { eventKey: 'pending_intake_applications_digest', label: 'Intake / Surrender', count: intakeResult.count, staleCount: intakeResult.staleCount, recentCount: intakeResult.count - intakeResult.staleCount, stage: 'New' },
   ];
 }
 
 function composeDigestHtml(pipelines: PipelineCount[], tenantName: string): string {
   const totalPending = pipelines.reduce((sum, p) => sum + p.count, 0);
+  const totalStale = pipelines.reduce((sum, p) => sum + p.staleCount, 0);
 
   const rows = pipelines
     .map(p => {
-      const countColor = p.count > 0 ? '#dc2626' : '#16a34a';
-      const countLabel = p.count > 0 ? `${p.count} pending` : 'None';
+      if (p.count === 0) {
+        return `
+        <tr>
+          <td style="padding: 12px 16px; border-bottom: 1px solid #e5e7eb; font-size: 15px; color: #374151;">${p.label}</td>
+          <td style="padding: 12px 16px; border-bottom: 1px solid #e5e7eb; font-size: 15px; text-align: center;">
+            <span style="display: inline-block; padding: 4px 12px; border-radius: 9999px; font-weight: 600; font-size: 13px; color: white; background-color: #16a34a;">None</span>
+          </td>
+        </tr>`;
+      }
+
+      const badges: string[] = [];
+      if (p.staleCount > 0) {
+        badges.push(`<span style="display: inline-block; padding: 4px 10px; border-radius: 9999px; font-weight: 600; font-size: 13px; color: white; background-color: #dc2626;">${p.staleCount} overdue (${STALE_DISPLAY_LABEL})</span>`);
+      }
+      if (p.recentCount > 0) {
+        badges.push(`<span style="display: inline-block; padding: 4px 10px; border-radius: 9999px; font-weight: 600; font-size: 13px; color: white; background-color: #f59e0b;">${p.recentCount} new</span>`);
+      }
+
       return `
         <tr>
           <td style="padding: 12px 16px; border-bottom: 1px solid #e5e7eb; font-size: 15px; color: #374151;">${p.label}</td>
           <td style="padding: 12px 16px; border-bottom: 1px solid #e5e7eb; font-size: 15px; text-align: center;">
-            <span style="display: inline-block; padding: 4px 12px; border-radius: 9999px; font-weight: 600; font-size: 13px; color: white; background-color: ${countColor};">${countLabel}</span>
+            ${badges.join(' ')}
           </td>
         </tr>`;
     })
     .join('');
+
+  const urgentBanner = totalStale > 0
+    ? `<div style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; padding: 12px 16px; margin-bottom: 16px;">
+        <p style="margin: 0; font-size: 14px; color: #991b1b; font-weight: 600;">${totalStale} application${totalStale !== 1 ? 's have' : ' has'} been waiting ${STALE_DISPLAY_LABEL} without review.</p>
+      </div>`
+    : '';
 
   return `
 <!DOCTYPE html>
@@ -142,6 +184,7 @@ function composeDigestHtml(pipelines: PipelineCount[], tenantName: string): stri
         <p style="margin: 0 0 16px; font-size: 15px; color: #374151;">
           You have <strong style="color: ${totalPending > 0 ? '#dc2626' : '#16a34a'};">${totalPending} application${totalPending !== 1 ? 's' : ''}</strong> across your pipelines that need attention.
         </p>
+        ${urgentBanner}
         <table style="width: 100%; border-collapse: collapse; border: 1px solid #e5e7eb; border-radius: 6px;">
           <thead>
             <tr style="background-color: #f9fafb;">
@@ -165,15 +208,31 @@ function composeDigestHtml(pipelines: PipelineCount[], tenantName: string): stri
 
 function composeDigestPlainText(pipelines: PipelineCount[], tenantName: string): string {
   const totalPending = pipelines.reduce((sum, p) => sum + p.count, 0);
+  const totalStale = pipelines.reduce((sum, p) => sum + p.staleCount, 0);
   const lines = [
     `Pending Applications Summary - ${tenantName}`,
     '',
     `You have ${totalPending} application${totalPending !== 1 ? 's' : ''} across your pipelines that need attention.`,
-    '',
-    ...pipelines.map(p => `  ${p.label}: ${p.count > 0 ? `${p.count} pending` : 'None'}`),
-    '',
-    'Log in to your dashboard to review and process these applications.',
   ];
+
+  if (totalStale > 0) {
+    lines.push(`!! ${totalStale} application${totalStale !== 1 ? 's have' : ' has'} been waiting ${STALE_DISPLAY_LABEL} without review.`);
+  }
+
+  lines.push('');
+
+  for (const p of pipelines) {
+    if (p.count === 0) {
+      lines.push(`  ${p.label}: None`);
+    } else {
+      const parts: string[] = [];
+      if (p.staleCount > 0) parts.push(`${p.staleCount} overdue (${STALE_DISPLAY_LABEL})`);
+      if (p.recentCount > 0) parts.push(`${p.recentCount} new`);
+      lines.push(`  ${p.label}: ${p.count} pending (${parts.join(', ')})`);
+    }
+  }
+
+  lines.push('', 'Log in to your dashboard to review and process these applications.');
   return lines.join('\n');
 }
 
@@ -229,7 +288,9 @@ export async function sendPendingApplicationsDigest(tenantId: string): Promise<{
         const html = composeDigestHtml(subscribedPipelines, tenantName);
         const text = composeDigestPlainText(subscribedPipelines, tenantName);
         const totalPending = subscribedPipelines.reduce((sum, p) => sum + p.count, 0);
-        const subject = `${totalPending} New Application${totalPending !== 1 ? 's' : ''} Pending Review - ${tenantName}`;
+        const totalStale = subscribedPipelines.reduce((sum, p) => sum + p.staleCount, 0);
+        const staleNotice = totalStale > 0 ? ` (${totalStale} overdue)` : '';
+        const subject = `${totalPending} Application${totalPending !== 1 ? 's' : ''} Pending Review${staleNotice} - ${tenantName}`;
         contentCache.set(cacheKey, { html, text, subject });
       }
 
