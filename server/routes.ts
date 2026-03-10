@@ -37581,6 +37581,15 @@ Email: ${application.applicantEmail || ''}`
         .set({ slotsFilled: opportunity.slotsFilled + 1 })
         .where(eq(volunteerOpportunities.id, req.params.id));
 
+
+      // Fire-and-forget: check if calendar is now fully staffed for the month
+      if (opportunity.calendarId && opportunity.date) {
+        const oppMonth = opportunity.date.substring(0, 7); // "2026-03"
+        import("../services/volunteer-fully-staffed-thankyou").then(mod => {
+          mod.checkAndSendFullyStaffedThankYou(req.tenant!.id, opportunity.calendarId!, oppMonth).catch(() => {});
+        }).catch(() => {});
+      }
+
       res.json({ signup, success: true });
     } catch (error) {
       next(error);

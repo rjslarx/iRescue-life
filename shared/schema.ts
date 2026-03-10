@@ -1078,6 +1078,17 @@ export const insertVolunteerSignupSchema = createInsertSchema(volunteerSignups).
 export type InsertVolunteerSignup = z.infer<typeof insertVolunteerSignupSchema>;
 export type VolunteerSignup = typeof volunteerSignups.$inferSelect;
 
+// Volunteer fully-staffed thank-you deduplication
+export const volunteerFullyStaffedNotifications = pgTable("volunteer_fully_staffed_notifications", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  calendarId: uuid("calendar_id").notNull().references(() => calendars.id, { onDelete: 'cascade' }),
+  month: text("month").notNull(),
+  sentAt: timestamp("sent_at").notNull().defaultNow(),
+}, (table) => ({
+  uniqueCalendarMonth: unique().on(table.tenantId, table.calendarId, table.month),
+}));
+
 // Volunteer applications table - public applications to become a volunteer
 export const volunteerApplications = pgTable("volunteer_applications", {
   id: uuid("id").primaryKey().defaultRandom(),
