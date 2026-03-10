@@ -89,7 +89,16 @@ export default function FundraisingHubPage() {
   });
   const tenant = tenantData?.tenant;
 
-  const donationUrl = tenant?.stripeLink || "";
+  const donationUrl = (() => {
+    if (tenant?.stripeLink) return tenant.stripeLink;
+    if (tenant?.stripeEnabled) {
+      const base = window.location.origin;
+      const usePrefix = tenant?.subdomain && !isCustomDomain();
+      const path = usePrefix ? `/${tenant.subdomain}/donate` : "/donate";
+      return `${base}${path}`;
+    }
+    return "";
+  })();
 
   return (
     <DashboardLayout title="Donation & Fundraising Hub" description="Your centralized toolkit for managing donations, running campaigns, and maximizing fundraising impact.">
