@@ -439,10 +439,21 @@ export class StorageBackupService {
       const { bucketName, objectName } = parseObjectPath(path);
       const bucket = objectStorageClient.bucket(bucketName);
 
-      const [files] = await bucket.getFiles({ prefix: objectName });
+      let files: any[] = [];
+      try {
+        const [result] = await bucket.getFiles({ prefix: objectName });
+        files = result || [];
+      } catch (listErr: any) {
+        const msg = listErr.message || '';
+        if (msg.includes('storage.objects.list') || msg.includes('storage.buckets.get') || msg.includes('Permission') || msg.includes('denied')) {
+          console.warn(`[STORAGE BACKUP] Permission denied listing folder ${path} — skipping folder scan (this is expected in deployed environments)`);
+          return;
+        }
+        throw listErr;
+      }
 
-      if (!files || !Array.isArray(files)) {
-        console.log(`[STORAGE BACKUP] No files found or invalid response for path: ${path}`);
+      if (!Array.isArray(files) || files.length === 0) {
+        console.log(`[STORAGE BACKUP] No files found for path: ${path}`);
         return;
       }
 
@@ -457,7 +468,7 @@ export class StorageBackupService {
         }
       }
     } catch (error: any) {
-      console.log(`[STORAGE BACKUP] Could not scan folder: ${error.message}`);
+      console.log(`[STORAGE BACKUP] Could not scan folder ${path}: ${error.message}`);
     }
   }
 
@@ -492,11 +503,21 @@ export class StorageBackupService {
       const { bucketName, objectName } = parseObjectPath(path);
       const bucket = objectStorageClient.bucket(bucketName);
       
-      const [files] = await bucket.getFiles({ prefix: objectName });
+      let files: any[] = [];
+      try {
+        const [result] = await bucket.getFiles({ prefix: objectName });
+        files = result || [];
+      } catch (listErr: any) {
+        const msg = listErr.message || '';
+        if (msg.includes('storage.objects.list') || msg.includes('storage.buckets.get') || msg.includes('Permission') || msg.includes('denied')) {
+          console.warn(`[STORAGE BACKUP] Permission denied listing folder ${path} — skipping folder scan (this is expected in deployed environments)`);
+          return;
+        }
+        throw listErr;
+      }
       
-      // Guard against undefined/null files array
-      if (!files || !Array.isArray(files)) {
-        console.log(`[STORAGE BACKUP] No files found or invalid response for path: ${path}`);
+      if (!Array.isArray(files) || files.length === 0) {
+        console.log(`[STORAGE BACKUP] No files found for path: ${path}`);
         return;
       }
       
@@ -514,8 +535,7 @@ export class StorageBackupService {
         }
       }
     } catch (error: any) {
-      // Folder might not exist
-      console.log(`[STORAGE BACKUP] Could not scan folder: ${error.message}`);
+      console.log(`[STORAGE BACKUP] Could not scan folder ${path}: ${error.message}`);
     }
   }
 
@@ -686,7 +706,9 @@ export class StorageBackupService {
   }
 
   /**
-   * Pre-flight check: verify object storage credentials and connectivity
+   * Pre-flight check: verify object storage credentials and connectivity.
+   * Uses the sidecar signed-URL endpoint instead of bucket.exists() which
+   * requires storage.buckets.get permission that deployed environments lack.
    */
   private async checkObjectStorageConnectivity(): Promise<boolean> {
     try {
@@ -695,13 +717,25 @@ export class StorageBackupService {
         console.error('[STORAGE BACKUP] PRIVATE_OBJECT_DIR not set, object storage unavailable');
         return false;
       }
-      const { bucketName } = parseObjectPath(privateDir);
-      const bucket = objectStorageClient.bucket(bucketName);
-      const [exists] = await bucket.exists();
-      if (!exists) {
-        console.error(`[STORAGE BACKUP] Bucket ${bucketName} does not exist or is not accessible`);
+
+      const { bucketName, objectName } = parseObjectPath(privateDir);
+
+      const probeResponse = await fetch('http://127.0.0.1:1106/object-storage/signed-object-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bucket_name: bucketName,
+          object_name: `${objectName}/.backup-probe`,
+          method: 'GET',
+          expires_at: new Date(Date.now() + 60_000).toISOString(),
+        }),
+      });
+
+      if (!probeResponse.ok) {
+        console.error(`[STORAGE BACKUP] Sidecar signed-URL probe failed with status ${probeResponse.status}`);
         return false;
       }
+
       return true;
     } catch (error: any) {
       console.error(`[STORAGE BACKUP] Object storage connectivity check failed: ${error.message}`);
