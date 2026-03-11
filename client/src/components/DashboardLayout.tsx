@@ -15,10 +15,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Plus, ExternalLink, HelpCircle, MessageSquare } from "lucide-react";
+import { Plus, ExternalLink, HelpCircle, MessageSquare, X } from "lucide-react";
 import { useQuickActions } from "@/hooks/useQuickActions";
 import NotificationBell from "@/components/NotificationBell";
 import { AddMedicalOrderDialog } from "@/components/AddMedicalOrderDialog";
+import { RecordOfflineDonationDialog } from "@/components/RecordOfflineDonationDialog";
 import { useState } from "react";
 
 interface BreadcrumbItem {
@@ -48,8 +49,10 @@ export default function DashboardLayout({ children, title, description, actions,
   const { user } = useAuth();
   const [, navigate] = useLocation();
   const [cpoeOpen, setCpoeOpen] = useState(false);
+  const [donationDialogOpen, setDonationDialogOpen] = useState(false);
   const { actions: quickActions, handleAction } = useQuickActions({
     onAddMedicalOrder: () => setCpoeOpen(true),
+    onRecordDonation: () => setDonationDialogOpen(true),
   });
   const [helpOpen, setHelpOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
@@ -160,7 +163,7 @@ export default function DashboardLayout({ children, title, description, actions,
         <>
           <HelpAssistant externalOpen={helpOpen} onExternalOpenChange={setHelpOpen} />
           <FeedbackDialog externalOpen={feedbackOpen} onExternalOpenChange={setFeedbackOpen} />
-          <div className="fixed bottom-6 left-6 z-50 flex flex-col-reverse items-start gap-3" data-testid="fab-help-container">
+          <div className="fixed bottom-6 right-6 z-50 flex flex-col-reverse items-end gap-3" data-testid="fab-help-container">
             {fabOpen && (
               <div className="flex flex-col-reverse gap-2 mb-2 animate-in fade-in slide-in-from-bottom-2 duration-200">
                 <Button
@@ -186,12 +189,12 @@ export default function DashboardLayout({ children, title, description, actions,
             <Button
               size="icon"
               variant="outline"
-              className={`rounded-full shadow-md transition-transform duration-200 ${fabOpen ? "rotate-45" : ""}`}
+              className="rounded-full shadow-md"
               onClick={() => setFabOpen(!fabOpen)}
               data-testid="fab-help-toggle"
             >
               {fabOpen ? (
-                <Plus className="h-4 w-4" />
+                <X className="h-4 w-4" />
               ) : (
                 <HelpCircle className="h-4 w-4" />
               )}
@@ -203,6 +206,10 @@ export default function DashboardLayout({ children, title, description, actions,
       <AddMedicalOrderDialog
         open={cpoeOpen}
         onOpenChange={setCpoeOpen}
+      />
+      <RecordOfflineDonationDialog
+        open={donationDialogOpen}
+        onOpenChange={setDonationDialogOpen}
       />
     </SidebarProvider>
   );

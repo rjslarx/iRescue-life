@@ -3,8 +3,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useTenant } from "@/contexts/TenantContext";
 import { usePagePermissions } from "@/hooks/usePagePermissions";
 import { OnboardingChecklist } from "@/components/OnboardingChecklist";
-import { FloatingActionButton } from "@/components/FloatingActionButton";
-import { RecordOfflineDonationDialog } from "@/components/RecordOfflineDonationDialog";
 import { Heart, Users, Loader2, Calendar, FileText, AlertCircle, Package, MessageSquare, Pill } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -58,7 +56,6 @@ export default function Dashboard() {
   const [supplyDialogOpen, setSupplyDialogOpen] = useState(false);
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
   const [selectedAnimal, setSelectedAnimal] = useState<{id: string, name: string} | null>(null);
-  const [offlineDonationDialogOpen, setOfflineDonationDialogOpen] = useState(false);
   const [pipelineTab, setPipelineTab] = useState<PipelineTab | undefined>(getInitialPipelineTab);
   
   // Permission checks for dashboard widgets
@@ -484,12 +481,7 @@ export default function Dashboard() {
         </>
       )}
 
-      {/* FloatingActionButton - show if user has finance permission (to record donations) */}
-      {canViewFinance && (
-        <FloatingActionButton onRecordDonation={() => setOfflineDonationDialogOpen(true)} />
-      )}
 
-      <RecordOfflineDonationDialog open={offlineDonationDialogOpen} onOpenChange={setOfflineDonationDialogOpen} />
     </>
   );
 }
