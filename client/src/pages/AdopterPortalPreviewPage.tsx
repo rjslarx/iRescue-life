@@ -47,6 +47,8 @@ interface AdoptedAnimal {
   photoUrls?: string[];
   adoptedAt: string;
   microchipNumber?: string;
+  status?: string;
+  deceasedDate?: string | null;
 }
 
 interface VaccineRecord {
@@ -471,47 +473,119 @@ export default function AdopterPortalPreviewPage() {
             </div>
           </Card>
         ) : (
-          <div className="grid gap-6 md:grid-cols-2">
-            {pets.map((animal) => (
-              <Card 
-                key={animal.id}
-                className="overflow-hidden cursor-pointer hover-elevate transition-all"
-                onClick={() => setSelectedAnimalId(animal.id)}
-                data-testid={`card-pet-${animal.id}`}
-              >
-                {animal.photoUrls && animal.photoUrls.length > 0 ? (
-                  <div className="aspect-video relative overflow-hidden">
-                    <img
-                      src={animal.photoUrls[0]}
-                      alt={animal.name}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                ) : (
-                  <div className="aspect-video bg-muted flex items-center justify-center">
-                    <PawPrint className="h-16 w-16 text-muted-foreground" />
+          <>
+          {(() => {
+            const activePets = pets.filter(p => p.status !== 'deceased');
+            const deceasedPets = pets.filter(p => p.status === 'deceased');
+            return (
+              <>
+                {activePets.length === 0 && deceasedPets.length > 0 && (
+                  <p className="text-muted-foreground text-sm mb-6">
+                    This adopter has no active pets at this time.
+                  </p>
+                )}
+                {activePets.length > 0 && (
+                  <div className="grid gap-6 md:grid-cols-2">
+                    {activePets.map((animal) => (
+                      <Card 
+                        key={animal.id}
+                        className="overflow-hidden cursor-pointer hover-elevate transition-all"
+                        onClick={() => setSelectedAnimalId(animal.id)}
+                        data-testid={`card-pet-${animal.id}`}
+                      >
+                        {animal.photoUrls && animal.photoUrls.length > 0 ? (
+                          <div className="aspect-video relative overflow-hidden">
+                            <img
+                              src={animal.photoUrls[0]}
+                              alt={animal.name}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                        ) : (
+                          <div className="aspect-video bg-muted flex items-center justify-center">
+                            <PawPrint className="h-16 w-16 text-muted-foreground" />
+                          </div>
+                        )}
+                        <CardContent className="p-4">
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <h3 className="text-xl font-semibold">{animal.name}</h3>
+                              <p className="text-muted-foreground text-sm">
+                                {animal.breed} • {animal.species}
+                              </p>
+                            </div>
+                            <ChevronRight className="h-5 w-5 text-muted-foreground mt-1" />
+                          </div>
+                          <div className="flex items-center gap-2 mt-3">
+                            <Badge variant="secondary" className="text-xs">
+                              <Calendar className="h-3 w-3 mr-1" />
+                              Adopted {format(new Date(animal.adoptedAt), "PP")}
+                            </Badge>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
                   </div>
                 )}
-                <CardContent className="p-4">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h3 className="text-xl font-semibold">{animal.name}</h3>
-                      <p className="text-muted-foreground text-sm">
-                        {animal.breed} • {animal.species}
-                      </p>
+                {deceasedPets.length > 0 && (
+                  <div className="mt-12" data-testid="section-in-loving-memory">
+                    <div className="flex items-center gap-2 mb-4">
+                      <Heart className="h-5 w-5 text-muted-foreground" />
+                      <h2 className="text-xl font-semibold text-muted-foreground">In Loving Memory</h2>
                     </div>
-                    <ChevronRight className="h-5 w-5 text-muted-foreground mt-1" />
+                    <div className="grid gap-6 md:grid-cols-2">
+                      {deceasedPets.map((animal) => (
+                        <Card
+                          key={animal.id}
+                          className="overflow-hidden cursor-pointer hover-elevate transition-all opacity-80"
+                          onClick={() => setSelectedAnimalId(animal.id)}
+                          data-testid={`card-pet-deceased-${animal.id}`}
+                        >
+                          {animal.photoUrls && animal.photoUrls.length > 0 ? (
+                            <div className="aspect-video relative overflow-hidden">
+                              <img
+                                src={animal.photoUrls[0]}
+                                alt={animal.name}
+                                className="w-full h-full object-cover grayscale"
+                              />
+                            </div>
+                          ) : (
+                            <div className="aspect-video bg-muted flex items-center justify-center">
+                              <PawPrint className="h-16 w-16 text-muted-foreground" />
+                            </div>
+                          )}
+                          <CardContent className="p-4">
+                            <div className="flex items-start justify-between">
+                              <div>
+                                <h3 className="text-xl font-semibold">{animal.name}</h3>
+                                <p className="text-muted-foreground text-sm">
+                                  {animal.breed} • {animal.species}
+                                </p>
+                              </div>
+                              <ChevronRight className="h-5 w-5 text-muted-foreground mt-1" />
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2 mt-3">
+                              <Badge variant="secondary" className="text-xs">
+                                <Calendar className="h-3 w-3 mr-1" />
+                                Adopted {format(new Date(animal.adoptedAt), "PP")}
+                              </Badge>
+                              {animal.deceasedDate && (
+                                <Badge variant="outline" className="text-xs">
+                                  <Heart className="h-3 w-3 mr-1" />
+                                  {format(new Date(animal.deceasedDate), "PP")}
+                                </Badge>
+                              )}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 mt-3">
-                    <Badge variant="secondary" className="text-xs">
-                      <Calendar className="h-3 w-3 mr-1" />
-                      Adopted {format(new Date(animal.adoptedAt), "PP")}
-                    </Badge>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                )}
+              </>
+            );
+          })()}
+          </>
         )}
         </div>
       </DashboardLayout>

@@ -1528,7 +1528,8 @@ router.get('/admin/adopters', async (req: Request, res: Response) => {
       .innerJoin(animals, eq(animals.id, applications.animalId))
       .where(and(
         eq(applications.tenantId, auth.tenantId),
-        eq(applications.stage, 'adopted')
+        eq(applications.stage, 'adopted'),
+        inArray(animals.status, ['adopted', 'deceased'])
       ))
       .orderBy(desc(animals.adoptionDate));
 
