@@ -7719,6 +7719,11 @@ Crawl-delay: 1
         data.fosterId = null;
       }
 
+      // Safety: auto-set adoptionDate when status changes to 'adopted' if not already provided
+      if (data.status === 'adopted' && !data.adoptionDate) {
+        data.adoptionDate = new Date();
+      }
+
       const animal = await updateAnimal(req.tenant!.id, req.params.id, data);
       
       if (!animal) {

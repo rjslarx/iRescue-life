@@ -425,7 +425,7 @@ export default function AdopterPetDetailPage() {
             <div className="flex flex-wrap gap-2">
               <Badge variant="secondary">
                 <Calendar className="h-3 w-3 mr-1" />
-                Adopted {new Date(pet.adoptedAt).toLocaleDateString()}
+                Adopted {pet.adoptedAt ? new Date(pet.adoptedAt).toLocaleDateString() : 'Date unknown'}
               </Badge>
               {pet.microchipNumber && (
                 <Badge variant="outline">

@@ -174,7 +174,7 @@ export default function AdopterPortalPage() {
                     <div className="flex items-center gap-2 mt-3 flex-wrap">
                       <Badge variant="secondary" className="text-xs">
                         <Calendar className="h-3 w-3 mr-1" />
-                        Adopted {new Date(pet.adoptedAt).toLocaleDateString()}
+                        Adopted {pet.adoptedAt ? new Date(pet.adoptedAt).toLocaleDateString() : 'Date unknown'}
                       </Badge>
                       {pet.microchipNumber && (
                         <Badge variant="outline" className="text-xs font-mono" data-testid={`badge-microchip-${pet.id}`}>
@@ -274,7 +274,7 @@ export default function AdopterPortalPage() {
                   <div className="flex items-center gap-2 mt-3 flex-wrap">
                     <Badge variant="secondary" className="text-xs">
                       <Calendar className="h-3 w-3 mr-1" />
-                      Adopted {new Date(pet.adoptedAt).toLocaleDateString()}
+                      Adopted {pet.adoptedAt ? new Date(pet.adoptedAt).toLocaleDateString() : 'Date unknown'}
                     </Badge>
                     {pet.deceasedDate && (
                       <Badge variant="outline" className="text-xs">
