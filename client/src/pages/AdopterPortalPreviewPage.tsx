@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
+import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -181,7 +182,8 @@ export default function AdopterPortalPreviewPage() {
 
   if (selectedAnimalId && selectedAdopter) {
     return (
-      <div className="container mx-auto p-6 max-w-4xl">
+      <DashboardLayout title="Adopter Portal Preview">
+        <div className="container mx-auto p-6 max-w-4xl">
         <PreviewBanner />
         
         <Button 
@@ -421,12 +423,14 @@ export default function AdopterPortalPreviewPage() {
           </>
         )}
       </div>
+    </DashboardLayout>
     );
   }
 
   if (selectedAdopter) {
     return (
-      <div className="container mx-auto p-6 max-w-4xl">
+      <DashboardLayout title="Adopter Portal Preview">
+        <div className="container mx-auto p-6 max-w-4xl">
         <PreviewBanner />
         
         <Button 
@@ -509,12 +513,14 @@ export default function AdopterPortalPreviewPage() {
             ))}
           </div>
         )}
-      </div>
+        </div>
+      </DashboardLayout>
     );
   }
 
   return (
-    <div className="container mx-auto p-6 max-w-4xl">
+    <DashboardLayout title="Adopter Portal Preview">
+      <div className="container mx-auto p-6 max-w-4xl">
       <PreviewBanner />
 
       <div className="mb-6">
@@ -620,6 +626,7 @@ export default function AdopterPortalPreviewPage() {
           ))}
         </div>
       )}
-    </div>
+      </div>
+    </DashboardLayout>
   );
 }
