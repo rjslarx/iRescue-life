@@ -491,6 +491,19 @@ export function AnimalDataForm({ animalId, initialData, onSuccess, onCancel }: A
       createMutation.mutate(submitData);
     }
   };
+
+  const handleInvalid = (errors: any) => {
+    const errorMessages = Object.entries(errors)
+      .map(([key, val]: [string, any]) => val?.message || key)
+      .filter(Boolean);
+    if (errorMessages.length > 0) {
+      toast({
+        title: "Validation Error",
+        description: errorMessages.join(". "),
+        variant: "destructive",
+      });
+    }
+  };
   
   const isPending = createMutation.isPending || updateMutation.isPending;
   const isFormDisabled = isPending || (mode === 'edit' && isLoadingAnimal);
@@ -506,7 +519,7 @@ export function AnimalDataForm({ animalId, initialData, onSuccess, onCancel }: A
   
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+      <form onSubmit={form.handleSubmit(handleSubmit, handleInvalid)} className="space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <FormField
             control={form.control}
