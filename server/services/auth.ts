@@ -110,13 +110,16 @@ export async function createTenantWithAdmin(data: SignupData) {
       
       // Insert tenant
       console.log(`[SIGNUP] Inserting tenant: ${rescueName}`);
+      const tenantUuid = crypto.randomUUID();
       const [newTenant] = await tx
         .insert(tenants)
         .values({
+          id: tenantUuid,
           subdomain,
           name: rescueName,
           tagline: `Saving lives, one paw at a time.`,
           isActive: true,
+          systemInboundEmail: `import-${tenantUuid}@inbound.irescue.life`,
         })
         .returning();
 

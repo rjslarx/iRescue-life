@@ -32,6 +32,7 @@ import {
   FileSignature,
   Shield,
   DollarSign,
+  FileSearch,
 } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { z } from "zod";
@@ -433,6 +434,69 @@ export default function IntegrationsSettingsPage() {
                 <p className="text-sm text-muted-foreground mt-3">
                   Share this address with veterinarians, volunteers, donors, and partners. Incoming emails will appear in your <span className="font-medium">Email Inbox</span> for staff to review and process.
                 </p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Automated Vet Imports */}
+          {data?.tenant?.systemInboundEmail && (
+            <Card>
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <FileSearch className="h-5 w-5" />
+                  <CardTitle>Automated Vet Imports</CardTitle>
+                </div>
+                <CardDescription>
+                  Automatically import medical records from your veterinarian by forwarding their emails to this system address. PDF attachments are parsed by AI and queued for your review.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium mb-1.5 block">System Import Address</label>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 p-3 bg-muted rounded-md font-mono text-sm select-all" data-testid="text-system-inbound-email">
+                      {data.tenant.systemInboundEmail}
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={() => {
+                        navigator.clipboard.writeText(data.tenant.systemInboundEmail);
+                        toast({ title: "Address copied", description: "The system import address has been copied to your clipboard." });
+                      }}
+                      data-testid="button-copy-system-email"
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+
+                <Separator />
+
+                <div className="space-y-3">
+                  <p className="text-sm font-medium">Setup Instructions</p>
+                  <div className="space-y-2">
+                    <div className="flex gap-3">
+                      <Badge variant="secondary" className="h-6 w-6 shrink-0 flex items-center justify-center rounded-full p-0 text-xs">1</Badge>
+                      <p className="text-sm text-muted-foreground">
+                        Create a dedicated email address for receiving vet records (e.g., <span className="font-mono text-foreground">records@yourrescue.org</span>).
+                      </p>
+                    </div>
+                    <div className="flex gap-3">
+                      <Badge variant="secondary" className="h-6 w-6 shrink-0 flex items-center justify-center rounded-full p-0 text-xs">2</Badge>
+                      <p className="text-sm text-muted-foreground">
+                        Set up a forwarding rule in your email provider to automatically forward all incoming mail from that address to the system import address above.
+                      </p>
+                    </div>
+                    <div className="flex gap-3">
+                      <Badge variant="secondary" className="h-6 w-6 shrink-0 flex items-center justify-center rounded-full p-0 text-xs">3</Badge>
+                      <p className="text-sm text-muted-foreground">
+                        Share <span className="font-mono text-foreground">records@yourrescue.org</span> with your veterinarians. When they email PDF records, the system will automatically parse them using AI and queue the results for your staff to review.
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           )}

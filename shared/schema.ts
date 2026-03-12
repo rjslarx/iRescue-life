@@ -45,6 +45,7 @@ export const tenants = pgTable("tenants", {
   resendFromName: text("resend_from_name"), // From name (e.g., Happy Paws Rescue)
   resendEnabled: boolean("resend_enabled").notNull().default(false), // Whether Resend is configured
   emailCopyRecipients: text("email_copy_recipients").array(), // Email addresses to CC on inbound emails (e.g., ["director@gmail.com"])
+  systemInboundEmail: text("system_inbound_email").unique(), // Auto-generated inbound email for vet doc forwarding (e.g., "import-tenant-[uuid]@inbound.irescue.life")
   constantContactApiKeyEncrypted: text("constant_contact_api_key_encrypted"), // Constant Contact API key
   constantContactEnabled: boolean("constant_contact_enabled").notNull().default(false), // Whether Constant Contact is configured
   // Email usage tracking (for platform-wide API key quota management)

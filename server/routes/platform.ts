@@ -627,9 +627,10 @@ router.post('/tenants', async (req, res, next) => {
       return res.status(400).json({ error: 'Subdomain already exists' });
     }
 
+    const tenantId = crypto.randomUUID();
     const [newTenant] = await db
       .insert(tenants)
-      .values([validatedData as any])
+      .values([{ ...validatedData, id: tenantId, systemInboundEmail: `import-${tenantId}@inbound.irescue.life` } as any])
       .returning();
 
     // Log the action

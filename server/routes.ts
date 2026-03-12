@@ -26184,26 +26184,32 @@ Submitted: ${new Date().toLocaleString()}
 
       const emailData = event.data;
       
-      // Extract tenant subdomain from the "to" address
-      // Expected format: subdomain@mail.irescue.life or similar
+      // Extract the "to" address from the email payload
       const toAddress = Array.isArray(emailData.to) ? emailData.to[0] : emailData.to;
-      const emailMatch = toAddress.match(/^([^@]+)@/);
-      if (!emailMatch) {
-        console.error('Could not extract subdomain from email address:', toAddress);
-        return res.status(400).json({ error: 'Invalid email format' });
-      }
+      const normalizedTo = toAddress.trim().toLowerCase();
 
-      const subdomain = emailMatch[1];
-
-      // Find tenant by subdomain
-      const [tenant] = await db
+      // Route to tenant: first try system_inbound_email match (supports forwarded emails),
+      // then fall back to subdomain extraction for backward compatibility
+      let [tenant] = await db
         .select()
         .from(tenants)
-        .where(eq(tenants.subdomain, subdomain))
+        .where(eq(tenants.systemInboundEmail, normalizedTo))
         .limit(1);
 
       if (!tenant) {
-        console.error('Tenant not found for subdomain:', subdomain);
+        // Fallback: extract subdomain from "to" address (legacy routing)
+        const emailMatch = normalizedTo.match(/^([^@]+)@/);
+        if (emailMatch) {
+          [tenant] = await db
+            .select()
+            .from(tenants)
+            .where(eq(tenants.subdomain, emailMatch[1]))
+            .limit(1);
+        }
+      }
+
+      if (!tenant) {
+        console.error('Tenant not found for inbound email address:', normalizedTo);
         return res.status(404).json({ error: 'Tenant not found' });
       }
 
