@@ -163,7 +163,7 @@ function BatchCard({ batch, animals }: { batch: BatchWithItems; animals: Animal[
   });
 
   const approveAllMutation = useMutation({
-    mutationFn: async (options?: { skipDuplicates?: boolean }) => {
+    mutationFn: async (options?: { skipDuplicates?: boolean }): Promise<{ imported: number; skippedDuplicates?: number }> => {
       if (options?.skipDuplicates) {
         const nonDupItems = pendingItems.filter(i => !duplicates[i.id]?.isDuplicate);
         const results = [];
@@ -177,9 +177,11 @@ function BatchCard({ batch, animals }: { batch: BatchWithItems; animals: Animal[
         }
         return { imported: results.filter(r => r.success).length, skippedDuplicates: pendingItems.length - nonDupItems.length };
       }
-      return apiRequest("POST", `/api/medical-import/batches/${batch.id}/approve-all`);
+      const res = await apiRequest("POST", `/api/medical-import/batches/${batch.id}/approve-all`);
+      const json = await res.json();
+      return { imported: json.imported || 0 };
     },
-    onSuccess: (data: { imported: number; skippedDuplicates?: number }) => {
+    onSuccess: (data) => {
       const parts = [`Successfully imported ${data.imported} medical records`];
       if (data.skippedDuplicates && data.skippedDuplicates > 0) {
         parts.push(`${data.skippedDuplicates} likely duplicate(s) skipped`);
