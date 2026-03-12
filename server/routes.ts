@@ -10646,7 +10646,7 @@ Crawl-delay: 1
       }
 
       // Calculate fee info for display
-      const platformFeePercent = getPlatformFeePercent(tenant?.subscriptionTier || 'free');
+      const platformFeePercent = getPlatformFeePercent(tenant?.subscriptionTier || 'free', tenant?.platformFeePercent);
 
       // Extract address from application's customResponses using form field lookup
       let applicantAddress = '';
@@ -24660,8 +24660,9 @@ Submitted: ${new Date().toLocaleString()}
         .limit(1);
 
       const subscriptionTier = tenant?.subscriptionTier || 'free';
-      const feeCalc = calculateDonorCoversFees(amount, subscriptionTier);
-      const platformFeePercent = getPlatformFeePercent(subscriptionTier);
+      const tenantFeeOverride = tenant?.platformFeePercent;
+      const feeCalc = calculateDonorCoversFees(amount, subscriptionTier, tenantFeeOverride);
+      const platformFeePercent = getPlatformFeePercent(subscriptionTier, tenantFeeOverride);
       
       res.json({
         baseAmount: feeCalc.baseAmount,
@@ -25231,14 +25232,14 @@ Submitted: ${new Date().toLocaleString()}
       let chargeAmount = data.amount;
       let feesCovered = 0;
       if (data.donorCoversFees) {
-        const feeCalc = calculateDonorCoversFees(data.amount, tenant.subscriptionTier || 'free');
+        const feeCalc = calculateDonorCoversFees(data.amount, tenant.subscriptionTier || 'free', tenant.platformFeePercent);
         chargeAmount = feeCalc.totalAmount;
         feesCovered = feeCalc.feesCovered;
       }
 
       // Calculate platform fee on the charge amount
-      const platformFeeAmount = calculatePlatformFee(chargeAmount, tenant.subscriptionTier || 'free');
-      const platformFeePercent = getPlatformFeePercent(tenant.subscriptionTier || 'free');
+      const platformFeeAmount = calculatePlatformFee(chargeAmount, tenant.subscriptionTier || 'free', tenant.platformFeePercent);
+      const platformFeePercent = getPlatformFeePercent(tenant.subscriptionTier || 'free', tenant.platformFeePercent);
 
       const host = req.get('host') || '';
       const baseUrl = `${req.protocol}://${host}`;
@@ -39455,7 +39456,7 @@ The user asking is a tenant administrator or staff member.`;
 
       if (donorCoversFees) {
         const subscriptionTier = tenant.subscriptionTier || 'free';
-        const feeCalc = calculateDonorCoversFees(baseAmount, subscriptionTier);
+        const feeCalc = calculateDonorCoversFees(baseAmount, subscriptionTier, tenant.platformFeePercent);
         finalAmount = feeCalc.totalAmount;
         platformFeeAmount = feeCalc.platformFee;
       }
@@ -42756,12 +42757,12 @@ The user asking is a tenant administrator or staff member.`;
       let chargeAmount = data.amount;
       let feesCovered = 0;
       if (data.donorCoversFees) {
-        const feeCalc = calculateDonorCoversFees(data.amount, tenant.subscriptionTier || 'free');
+        const feeCalc = calculateDonorCoversFees(data.amount, tenant.subscriptionTier || 'free', tenant.platformFeePercent);
         chargeAmount = feeCalc.totalAmount;
         feesCovered = feeCalc.feesCovered;
       }
 
-      const platformFeeAmount = calculatePlatformFee(chargeAmount, tenant.subscriptionTier || 'free');
+      const platformFeeAmount = calculatePlatformFee(chargeAmount, tenant.subscriptionTier || 'free', tenant.platformFeePercent);
 
       const [donation] = await db.insert(peerCampaignDonations).values({
         tenantId: req.tenant!.id,
@@ -43725,7 +43726,7 @@ The user asking is a tenant administrator or staff member.`;
       const [tenant] = await db.select().from(tenants).where(eq(tenants.id, req.tenant!.id)).limit(1);
       if (!tenant || !tenant.stripeEnabled) return res.status(400).json({ error: 'Stripe is not configured' });
 
-      const platformFeeAmount = calculatePlatformFee(amountCents, tenant.subscriptionTier || 'free');
+      const platformFeeAmount = calculatePlatformFee(amountCents, tenant.subscriptionTier || 'free', tenant.platformFeePercent);
 
       const host = req.get('host') || '';
       const baseUrl = `${req.protocol}://${host}`;
