@@ -1077,11 +1077,13 @@ function composeHtmlEmail(data: BriefingData): string {
     ], i % 2 === 1);
   });
 
+  const pendingMedicalImportItemsTotal = data.pendingMedicalImports.reduce((sum, b) => sum + b.itemCount, 0);
+
   let pendingMedicalImportRows = '';
   data.pendingMedicalImports.forEach((imp, i) => {
     pendingMedicalImportRows += renderRow([
-      `<strong>${escapeHtml(imp.fileName.length > 30 ? imp.fileName.substring(0, 27) + '...' : imp.fileName)}</strong>`,
-      imp.animalName ? escapeHtml(imp.animalName) : '<em>Unassigned</em>',
+      imp.animalName ? `<strong>${escapeHtml(imp.animalName)}</strong>` : '<em>Unassigned</em>',
+      escapeHtml(imp.fileName.length > 30 ? imp.fileName.substring(0, 27) + '...' : imp.fileName),
       `${imp.itemCount} record${imp.itemCount !== 1 ? 's' : ''}`,
     ], i % 2 === 1);
   });
@@ -1090,7 +1092,7 @@ function composeHtmlEmail(data: BriefingData): string {
   const shelterCount = data.shelterMissedMeds.length + data.surgeries.length + data.exams.length +
     data.overdueExams.length + data.diagnostics.length +
     data.procedures.length + data.shelterOverdueCare.length + data.calendarItems.length +
-    data.pendingMedicalImports.length;
+    pendingMedicalImportItemsTotal;
   const fosterCount = data.missedFosterMeds.length + data.complianceAlerts.length + data.fosterOverdueCare.length +
     data.recentFosterUpdates.length + data.recentFosterPhotos.length;
   const adoptedCount = data.helpRequests.length + data.overdueObligations.length;
@@ -1112,7 +1114,7 @@ function composeHtmlEmail(data: BriefingData): string {
     renderSection('Procedures Today', '[P]', '#fdf4ff', '#9333ea', data.procedures.length, procRows) +
     renderSection('Overdue Preventative Care', '[OD]', '#fff7ed', '#ea580c', data.shelterOverdueCare.length, shelterOverdueRows) +
     renderSection('Calendar Events Today', '[C]', '#f5f3ff', '#7c3aed', data.calendarItems.length, calendarRowsHtml) +
-    renderSection('Pending Medical Records for Review', '[AI]', '#faf5ff', '#7c3aed', data.pendingMedicalImports.length, pendingMedicalImportRows);
+    renderSection('Pending Medical Records for Review', '[AI]', '#faf5ff', '#7c3aed', pendingMedicalImportItemsTotal, pendingMedicalImportRows);
 
   // --- Foster pillar HTML ---
   const fosterSectionsHtml =
@@ -1199,10 +1201,11 @@ function composePlainTextEmail(data: BriefingData): string {
   lines.push(`${formatDate(data.date)}`);
   lines.push('');
 
+  const ptPendingImportsTotal = data.pendingMedicalImports.reduce((sum, b) => sum + b.itemCount, 0);
   const shelterCount = data.shelterMissedMeds.length + data.surgeries.length + data.exams.length +
     data.overdueExams.length + data.diagnostics.length +
     data.procedures.length + data.shelterOverdueCare.length + data.calendarItems.length +
-    data.pendingMedicalImports.length;
+    ptPendingImportsTotal;
   const fosterCount = data.missedFosterMeds.length + data.complianceAlerts.length + data.fosterOverdueCare.length +
     data.recentFosterUpdates.length + data.recentFosterPhotos.length;
   const adoptedCount = data.helpRequests.length + data.overdueObligations.length;
@@ -1278,10 +1281,10 @@ function composePlainTextEmail(data: BriefingData): string {
     }
 
     if (data.pendingMedicalImports.length > 0) {
-      const totalItems = data.pendingMedicalImports.reduce((sum, b) => sum + b.itemCount, 0);
-      lines.push(`--- PENDING MEDICAL RECORDS FOR REVIEW [${totalItems} records in ${data.pendingMedicalImports.length} batch(es)] ---`);
+      const ptTotal = data.pendingMedicalImports.reduce((sum, b) => sum + b.itemCount, 0);
+      lines.push(`--- PENDING MEDICAL RECORDS FOR REVIEW [${ptTotal} records in ${data.pendingMedicalImports.length} batch(es)] ---`);
       data.pendingMedicalImports.forEach(imp => {
-        lines.push(`  ${imp.fileName} - ${imp.itemCount} record(s)${imp.animalName ? ` (${imp.animalName})` : ' (Unassigned)'}`);
+        lines.push(`  ${imp.animalName || 'Unassigned'} - ${imp.itemCount} record(s) (${imp.fileName})`);
       });
       lines.push('');
     }
@@ -1427,10 +1430,11 @@ export async function sendDailyBriefingForTenant(tenantId: string): Promise<{ se
     const html = composeHtmlEmail(data);
     const text = composePlainTextEmail(data);
 
+    const sendPendingImportsTotal = data.pendingMedicalImports.reduce((sum, b) => sum + b.itemCount, 0);
     const shelterCount = data.shelterMissedMeds.length + data.surgeries.length + data.exams.length +
       data.overdueExams.length + data.diagnostics.length +
       data.procedures.length + data.shelterOverdueCare.length + data.calendarItems.length +
-      data.pendingMedicalImports.length;
+      sendPendingImportsTotal;
     const fosterCount = data.missedFosterMeds.length + data.complianceAlerts.length + data.fosterOverdueCare.length +
       data.recentFosterUpdates.length + data.recentFosterPhotos.length;
     const adoptedCount = data.helpRequests.length + data.overdueObligations.length;
