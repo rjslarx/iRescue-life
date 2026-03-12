@@ -126,6 +126,7 @@
     "react-resizable-panels": "^2.1.7",
     "recharts": "^2.15.2",
     "remark-gfm": "^4.0.1",
+    "resend": "^6.9.3",
     "sharp": "^0.34.5",
     "signature_pad": "^5.1.1",
     "stripe": "^19.1.0",
