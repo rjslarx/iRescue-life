@@ -1,5 +1,5 @@
 import { db } from '../db';
-import { animals, kennelRows, type InsertAnimal, type Animal } from '@shared/schema';
+import { animals, kennelRows, fosterAnimals, users, type InsertAnimal, type Animal } from '@shared/schema';
 import { eq, and, or, desc, sql, ne, inArray, isNull } from 'drizzle-orm';
 
 import { generateLocalShelterId } from '../utils/shelterId';
@@ -81,9 +81,30 @@ export async function getAnimalsByTenant(tenantId: string): Promise<(Animal & { 
     rows.forEach(r => { rowMap[r.id] = r.name; });
   }
   
+  const fosterAnimalIds = animalResults.filter(a => a.locationType === 'foster').map(a => a.id);
+  const fosterNameMap: Record<string, string> = {};
+  if (fosterAnimalIds.length > 0) {
+    const fosterResults = await db
+      .select({
+        animalId: fosterAnimals.animalId,
+        fosterName: users.fullName,
+      })
+      .from(fosterAnimals)
+      .innerJoin(users, eq(fosterAnimals.fosterId, users.id))
+      .where(and(
+        inArray(fosterAnimals.animalId, fosterAnimalIds),
+        eq(fosterAnimals.tenantId, tenantId),
+        eq(fosterAnimals.status, 'active')
+      ));
+    fosterResults.forEach(r => { fosterNameMap[r.animalId] = r.fosterName; });
+  }
+
   return animalResults.map(a => ({
     ...a,
     kennelRowName: a.kennelRowId ? (rowMap[a.kennelRowId] || null) : null,
+    locationName: (a.locationType === 'foster' && !a.locationName && fosterNameMap[a.id])
+      ? fosterNameMap[a.id]
+      : a.locationName,
   })) as any;
 }
 
