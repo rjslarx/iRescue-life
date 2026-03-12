@@ -65,6 +65,7 @@ import { AddMedicalBillDialog } from "@/components/AddMedicalBillDialog";
 import { AddMedicalOrderDialog } from "@/components/AddMedicalOrderDialog";
 import { AddExamDialog } from "@/components/AddExamDialog";
 import { MedicalFileUploadDialog } from "@/components/MedicalFileUploadDialog";
+import { MedicalImportDialog } from "@/components/MedicalImportDialog";
 import { AddMicrochipDialog } from "@/components/AddMicrochipDialog";
 import { AddPreventativeCareDialog } from "@/components/AddPreventativeCareDialog";
 import { AdopterComplianceConfirmationsSection } from "@/components/AdopterComplianceConfirmationsSection";
@@ -176,6 +177,7 @@ export default function AnimalMedicalPage() {
   const [unableReason, setUnableReason] = useState<"animal_sick" | "unable_to_swallow" | "other">("animal_sick");
   const [unableNotes, setUnableNotes] = useState("");
   const [quarantineDialogOpen, setQuarantineDialogOpen] = useState(false);
+  const [medicalImportDialogOpen, setMedicalImportDialogOpen] = useState(false);
   const [quarantineReason, setQuarantineReason] = useState("");
 
   useEffect(() => {
@@ -817,6 +819,15 @@ export default function AnimalMedicalPage() {
                 animalId={animalId} 
                 animalName={animal?.name || 'Animal'}
               />
+              <Button
+                variant="outline"
+                onClick={() => setMedicalImportDialogOpen(true)}
+                data-testid="button-import-vet-records"
+                className="w-full md:w-auto"
+              >
+                <Upload className="w-4 h-4 mr-2" />
+                Import Vet Records
+              </Button>
               <Button
                 onClick={() => window.open(`${basePath}/dashboard/animals/${animalId}/health-record`, '_blank')}
                 data-testid="button-print-records"
@@ -3061,6 +3072,14 @@ export default function AnimalMedicalPage() {
             }}
           />
         </>
+      )}
+
+      {animal && (
+        <MedicalImportDialog
+          open={medicalImportDialogOpen}
+          onOpenChange={setMedicalImportDialogOpen}
+          animal={animal}
+        />
       )}
 
       <Dialog open={doseChartDialogOpen} onOpenChange={(open) => {
