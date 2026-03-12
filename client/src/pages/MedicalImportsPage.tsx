@@ -112,18 +112,14 @@ function BatchCard({ batch, animals }: { batch: BatchWithItems; animals: Animal[
   const hasPendingItems = batch.items.some(i => i.status === 'pending');
   const hasAnimalAssigned = !!batch.animalId;
 
-  const { data: dupData, isLoading: dupLoading, isError: dupError } = useQuery<{ duplicates: DuplicateMap }>({
-    queryKey: ['/api/medical-import/batches', batch.id, 'check-duplicates'],
-    queryFn: async () => {
-      const r = await fetch(`/api/medical-import/batches/${batch.id}/check-duplicates`, { credentials: 'include' });
-      if (!r.ok) throw new Error('Failed to check duplicates');
-      return r.json();
-    },
+  const { data: dupData, isLoading: dupLoading } = useQuery<{ duplicates: DuplicateMap }>({
+    queryKey: [`/api/medical-import/batches/${batch.id}/check-duplicates`],
     enabled: hasAnimalAssigned && hasPendingItems,
     staleTime: 10000,
+    retry: 1,
   });
 
-  const dupCheckReady = hasAnimalAssigned && hasPendingItems ? !dupLoading && !dupError && !!dupData : true;
+  const dupCheckReady = hasAnimalAssigned && hasPendingItems ? !dupLoading : true;
   const duplicates: DuplicateMap = dupData?.duplicates || {};
 
   const assignAnimalMutation = useMutation({
