@@ -90,12 +90,12 @@ export interface MedicalExtractionResult {
 
 export async function extractTextFromPdf(pdfBuffer: Buffer): Promise<{ text: string; pageCount: number }> {
   try {
-    const pdfParseModule = await import("pdf-parse");
-    const pdfParse = pdfParseModule.PDFParse || pdfParseModule.default || pdfParseModule;
-    const data = await pdfParse(pdfBuffer);
+    const { PDFParse } = await import("pdf-parse");
+    const parser = new PDFParse({ data: pdfBuffer });
+    const data = await parser.getText();
     return {
       text: data.text,
-      pageCount: data.numpages
+      pageCount: data.totalPages || 1
     };
   } catch (error) {
     console.error("PDF parsing error:", error);
