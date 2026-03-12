@@ -318,7 +318,7 @@ export function AnimalDataForm({ animalId, initialData, onSuccess, onCancel }: A
         strayHoldUntil: animalData.strayHoldUntil ? new Date(animalData.strayHoldUntil) : null,
         locationType: (animalData as any).locationType || "shelter",
         locationName: (animalData as any).locationName || "",
-        fosterId: (animalData as any).fosterId ?? null,
+        fosterId: (animalData as any).fosterId ?? (animalData as any).activeFosterId ?? null,
       });
       if (animalData.photoUrls) {
         setUploadedPhotos(animalData.photoUrls);

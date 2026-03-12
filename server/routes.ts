@@ -7111,9 +7111,11 @@ Crawl-delay: 1
       
       let activeFosterName: string | null = null;
       let activeFosterStartDate: string | null = null;
+      let activeFosterId: string | null = null;
       const [activeFoster] = await db
         .select({
           fosterName: users.fullName,
+          fosterId: fosterAnimals.fosterId,
           startDate: fosterAnimals.startDate,
         })
         .from(fosterAnimals)
@@ -7129,6 +7131,7 @@ Crawl-delay: 1
       if (activeFoster) {
         activeFosterName = activeFoster.fosterName;
         activeFosterStartDate = activeFoster.startDate?.toISOString() || null;
+        activeFosterId = activeFoster.fosterId;
       }
 
       let kennelBuildingName: string | null = null;
@@ -7148,6 +7151,7 @@ Crawl-delay: 1
           ...animal,
           activeFosterName,
           activeFosterStartDate,
+          activeFosterId,
           kennelBuildingName,
         }
       });

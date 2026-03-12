@@ -376,7 +376,7 @@ function AnimalForm({
       strayHoldUntil: initialData.strayHoldUntil ? new Date(initialData.strayHoldUntil) : null,
       locationType: initialData.locationType || "shelter",
       locationName: initialData.locationName || "",
-      fosterId: (initialData as any).fosterId ?? null,
+      fosterId: (initialData as any).fosterId ?? (initialData as any).activeFosterId ?? null,
     } : {
       name: "",
       // Petfinder-compliant primary fields (user must fill these)
