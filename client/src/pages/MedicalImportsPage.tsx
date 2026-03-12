@@ -102,11 +102,7 @@ function BatchCard({ batch, animals }: { batch: BatchWithItems; animals: Animal[
 
   const assignAnimalMutation = useMutation({
     mutationFn: async (animalId: string) => {
-      return apiRequest(`/api/medical-import/batches/${batch.id}/assign-animal`, {
-        method: 'POST',
-        body: JSON.stringify({ animalId }),
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return apiRequest("POST", `/api/medical-import/batches/${batch.id}/assign-animal`, { animalId });
     },
     onSuccess: () => {
       toast({ title: "Animal Assigned", description: "Animal has been linked to this import batch" });
@@ -119,7 +115,7 @@ function BatchCard({ batch, animals }: { batch: BatchWithItems; animals: Animal[
 
   const approveMutation = useMutation({
     mutationFn: async (itemId: string) => {
-      return apiRequest(`/api/medical-import/items/${itemId}/approve`, { method: 'POST' });
+      return apiRequest("POST", `/api/medical-import/items/${itemId}/approve`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/medical-import/email-batches'] });
@@ -129,7 +125,7 @@ function BatchCard({ batch, animals }: { batch: BatchWithItems; animals: Animal[
 
   const rejectMutation = useMutation({
     mutationFn: async (itemId: string) => {
-      return apiRequest(`/api/medical-import/items/${itemId}/reject`, { method: 'POST' });
+      return apiRequest("POST", `/api/medical-import/items/${itemId}/reject`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/medical-import/email-batches'] });
@@ -139,7 +135,7 @@ function BatchCard({ batch, animals }: { batch: BatchWithItems; animals: Animal[
 
   const approveAllMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest(`/api/medical-import/batches/${batch.id}/approve-all`, { method: 'POST' });
+      return apiRequest("POST", `/api/medical-import/batches/${batch.id}/approve-all`);
     },
     onSuccess: (data: { imported: number }) => {
       toast({ title: "Records Imported", description: `Successfully imported ${data.imported} medical records` });
