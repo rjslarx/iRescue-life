@@ -9,7 +9,9 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Upload, FileText, Loader2, Check, X, AlertTriangle, Syringe, Stethoscope, Pill, TestTube, ClipboardList, CheckCircle2, XCircle, Sparkles } from "lucide-react";
+import { buildTenantUrl, getTenantHeaders } from "@/lib/tenantApi";
+import { Upload, FileText, Loader2, Check, X, AlertTriangle, Syringe, Stethoscope, Pill, TestTube, ClipboardList, CheckCircle2, XCircle, Sparkles, AlertCircle } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import type { Animal, MedicalImportBatch, MedicalImportItem } from "@shared/schema";
 
 interface MedicalImportDialogProps {
@@ -38,6 +40,8 @@ export function MedicalImportDialog({ open, onOpenChange, animal }: MedicalImpor
   const [batchId, setBatchId] = useState<string | null>(null);
   const [items, setItems] = useState<MedicalImportItem[]>([]);
   const [uploadResult, setUploadResult] = useState<UploadResponse | null>(null);
+  const [confirmDupItem, setConfirmDupItem] = useState<string | null>(null);
+  const [confirmApproveAllDups, setConfirmApproveAllDups] = useState(false);
 
   const { data: batchData, refetch: refetchBatch } = useQuery<{ batch: MedicalImportBatch; items: MedicalImportItem[] }>({
     queryKey: ['/api/medical-import/batches', batchId],
@@ -49,8 +53,10 @@ export function MedicalImportDialog({ open, onOpenChange, animal }: MedicalImpor
       const formData = new FormData();
       formData.append('file', file);
       
-      const response = await fetch(`/api/medical-import/${animal.id}/upload`, {
+      const tenantHeaders = getTenantHeaders();
+      const response = await fetch(buildTenantUrl(`/api/medical-import/${animal.id}/upload`), {
         method: 'POST',
+        headers: tenantHeaders,
         body: formData,
         credentials: 'include',
       });
@@ -80,12 +86,20 @@ export function MedicalImportDialog({ open, onOpenChange, animal }: MedicalImpor
     },
   });
 
+  const { data: dupData, isLoading: dupCheckLoading } = useQuery<{ duplicates: Record<string, { isDuplicate: boolean; matchedRecordId?: string; matchedSummary?: string }> }>({
+    queryKey: ['/api/medical-import/batches', batchId, 'check-duplicates'],
+    enabled: !!batchId,
+  });
+  const duplicates = dupData?.duplicates || {};
+  const dupCheckReady = !dupCheckLoading;
+
   const approveMutation = useMutation({
     mutationFn: async (itemId: string) => {
-      return apiRequest(`/api/medical-import/items/${itemId}/approve`, { method: 'POST' });
+      return apiRequest("POST", `/api/medical-import/items/${itemId}/approve`);
     },
     onSuccess: () => {
       refetchBatch();
+      queryClient.invalidateQueries({ queryKey: ['/api/medical-import/batches', batchId, 'check-duplicates'] });
       queryClient.invalidateQueries({ queryKey: ['/api/animals', animal.id, 'vaccines'] });
       queryClient.invalidateQueries({ queryKey: ['/api/animals', animal.id, 'procedures'] });
       queryClient.invalidateQueries({ queryKey: ['/api/animals', animal.id, 'prescriptions'] });
@@ -96,7 +110,7 @@ export function MedicalImportDialog({ open, onOpenChange, animal }: MedicalImpor
 
   const rejectMutation = useMutation({
     mutationFn: async (itemId: string) => {
-      return apiRequest(`/api/medical-import/items/${itemId}/reject`, { method: 'POST' });
+      return apiRequest("POST", `/api/medical-import/items/${itemId}/reject`);
     },
     onSuccess: () => {
       refetchBatch();
@@ -104,15 +118,28 @@ export function MedicalImportDialog({ open, onOpenChange, animal }: MedicalImpor
   });
 
   const approveAllMutation = useMutation({
-    mutationFn: async () => {
-      return apiRequest(`/api/medical-import/batches/${batchId}/approve-all`, { method: 'POST' });
+    mutationFn: async (options?: { skipDuplicates?: boolean }): Promise<{ imported: number; skippedDuplicates?: number }> => {
+      if (options?.skipDuplicates) {
+        const nonDupItems = pendingItems.filter(i => !duplicates[i.id]?.isDuplicate);
+        const results = [];
+        for (const item of nonDupItems) {
+          try {
+            await apiRequest("POST", `/api/medical-import/items/${item.id}/approve`);
+            results.push(item.id);
+          } catch {}
+        }
+        return { imported: results.length, skippedDuplicates: pendingItems.length - nonDupItems.length };
+      }
+      const resp = await apiRequest("POST", `/api/medical-import/batches/${batchId}/approve-all`);
+      return resp.json();
     },
-    onSuccess: (data: { imported: number }) => {
-      toast({
-        title: "Records Imported",
-        description: `Successfully imported ${data.imported} medical records`,
-      });
+    onSuccess: (data) => {
+      const desc = data.skippedDuplicates
+        ? `Imported ${data.imported} records, skipped ${data.skippedDuplicates} duplicates`
+        : `Successfully imported ${data.imported} medical records`;
+      toast({ title: "Records Imported", description: desc });
       refetchBatch();
+      queryClient.invalidateQueries({ queryKey: ['/api/medical-import/batches', batchId, 'check-duplicates'] });
       queryClient.invalidateQueries({ queryKey: ['/api/animals', animal.id] });
     },
   });
@@ -235,6 +262,24 @@ export function MedicalImportDialog({ open, onOpenChange, animal }: MedicalImpor
   const pendingItems = displayItems.filter(i => i.status === 'pending');
   const approvedItems = displayItems.filter(i => i.status === 'approved');
   const rejectedItems = displayItems.filter(i => i.status === 'rejected');
+
+  const handleApproveClick = (itemId: string) => {
+    if (duplicates[itemId]?.isDuplicate) {
+      setConfirmDupItem(itemId);
+    } else {
+      approveMutation.mutate(itemId);
+    }
+  };
+
+  const hasDuplicates = pendingItems.some(i => duplicates[i.id]?.isDuplicate);
+
+  const handleApproveAllClick = () => {
+    if (hasDuplicates) {
+      setConfirmApproveAllDups(true);
+    } else {
+      approveAllMutation.mutate();
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -365,55 +410,69 @@ export function MedicalImportDialog({ open, onOpenChange, animal }: MedicalImpor
                         All records have been reviewed
                       </p>
                     ) : (
-                      pendingItems.map((item) => (
-                        <Card key={item.id} className="relative">
-                          <CardContent className="p-4">
-                            <div className="flex items-start gap-4">
-                              <div className="flex-shrink-0 p-2 bg-muted rounded-md">
-                                {getRecordTypeIcon(item.recordType)}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <Badge variant="secondary" className="capitalize">
-                                    {item.recordType}
-                                  </Badge>
-                                  {getConfidenceBadge(item.confidence)}
+                      pendingItems.map((item) => {
+                        const isDup = duplicates[item.id]?.isDuplicate;
+                        return (
+                          <Card key={item.id} className={`relative ${isDup ? 'border-amber-500/50' : ''}`}>
+                            <CardContent className="p-4">
+                              <div className="flex items-start gap-4">
+                                <div className="flex-shrink-0 p-2 bg-muted rounded-md">
+                                  {getRecordTypeIcon(item.recordType)}
                                 </div>
-                                {formatExtractedData(item)}
-                                {item.sourceText && (
-                                  <details className="mt-2">
-                                    <summary className="text-xs text-muted-foreground cursor-pointer">
-                                      View source text
-                                    </summary>
-                                    <p className="text-xs mt-1 p-2 bg-muted rounded text-muted-foreground">
-                                      {item.sourceText}
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                    <Badge variant="secondary" className="capitalize">
+                                      {item.recordType}
+                                    </Badge>
+                                    {getConfidenceBadge(item.confidence)}
+                                    {isDup && (
+                                      <Badge variant="outline" className="border-amber-500 text-amber-600 gap-1">
+                                        <AlertCircle className="w-3 h-3" />
+                                        Possible Duplicate
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  {formatExtractedData(item)}
+                                  {isDup && duplicates[item.id]?.matchedSummary && (
+                                    <p className="text-xs text-amber-600 mt-1">
+                                      Matches existing record: {duplicates[item.id].matchedSummary}
                                     </p>
-                                  </details>
-                                )}
+                                  )}
+                                  {item.sourceText && (
+                                    <details className="mt-2">
+                                      <summary className="text-xs text-muted-foreground cursor-pointer">
+                                        View source text
+                                      </summary>
+                                      <p className="text-xs mt-1 p-2 bg-muted rounded text-muted-foreground">
+                                        {item.sourceText}
+                                      </p>
+                                    </details>
+                                  )}
+                                </div>
+                                <div className="flex-shrink-0 flex gap-2">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => rejectMutation.mutate(item.id)}
+                                    disabled={rejectMutation.isPending}
+                                    data-testid={`button-reject-${item.id}`}
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    onClick={() => handleApproveClick(item.id)}
+                                    disabled={approveMutation.isPending || !dupCheckReady}
+                                    data-testid={`button-approve-${item.id}`}
+                                  >
+                                    <Check className="w-4 h-4" />
+                                  </Button>
+                                </div>
                               </div>
-                              <div className="flex-shrink-0 flex gap-2">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => rejectMutation.mutate(item.id)}
-                                  disabled={rejectMutation.isPending}
-                                  data-testid={`button-reject-${item.id}`}
-                                >
-                                  <X className="w-4 h-4" />
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  onClick={() => approveMutation.mutate(item.id)}
-                                  disabled={approveMutation.isPending}
-                                  data-testid={`button-approve-${item.id}`}
-                                >
-                                  <Check className="w-4 h-4" />
-                                </Button>
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))
+                            </CardContent>
+                          </Card>
+                        );
+                      })
                     )}
                   </div>
                 </ScrollArea>
@@ -494,8 +553,8 @@ export function MedicalImportDialog({ open, onOpenChange, animal }: MedicalImpor
           {batchId && pendingItems.length > 0 && (
             <Button
               variant="default"
-              onClick={() => approveAllMutation.mutate()}
-              disabled={approveAllMutation.isPending}
+              onClick={handleApproveAllClick}
+              disabled={approveAllMutation.isPending || !dupCheckReady}
               data-testid="button-approve-all"
             >
               {approveAllMutation.isPending ? (
@@ -511,6 +570,43 @@ export function MedicalImportDialog({ open, onOpenChange, animal }: MedicalImpor
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      <AlertDialog open={!!confirmDupItem} onOpenChange={(open) => !open && setConfirmDupItem(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Possible Duplicate Record</AlertDialogTitle>
+            <AlertDialogDescription>
+              This record appears to already exist in this animal's medical history. Are you sure you want to import it?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { if (confirmDupItem) approveMutation.mutate(confirmDupItem); setConfirmDupItem(null); }}>
+              Import Anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={confirmApproveAllDups} onOpenChange={setConfirmApproveAllDups}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Duplicates Detected</AlertDialogTitle>
+            <AlertDialogDescription>
+              Some records appear to already exist. How would you like to proceed?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction className="bg-secondary text-secondary-foreground" onClick={() => { approveAllMutation.mutate({ skipDuplicates: true }); setConfirmApproveAllDups(false); }}>
+              Skip Duplicates
+            </AlertDialogAction>
+            <AlertDialogAction onClick={() => { approveAllMutation.mutate(); setConfirmApproveAllDups(false); }}>
+              Import All Anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }
