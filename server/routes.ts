@@ -26185,6 +26185,7 @@ Submitted: ${new Date().toLocaleString()}
       }
 
       const emailData = event.data;
+      console.log(`[Inbound Email] Received webhook - subject: ${emailData.subject}, from: ${emailData.from}, to: ${JSON.stringify(emailData.to)}, has attachments field: ${!!emailData.attachments}, attachments count: ${emailData.attachments?.length || 0}`);
       
       // Extract the "to" address from the email payload
       const toAddress = Array.isArray(emailData.to) ? emailData.to[0] : emailData.to;
@@ -26252,11 +26253,13 @@ Submitted: ${new Date().toLocaleString()}
         storageUrl: string;
       }> = [];
 
-      if (emailData.attachments && emailData.attachments.length > 0) {
+      {
         try {
+          console.log(`[Inbound Email] Checking for attachments on email ${emailData.email_id}...`);
           const { data: attachments } = await resend.emails.receiving.attachments.list({ 
             emailId: emailData.email_id 
           });
+          console.log(`[Inbound Email] Found ${attachments?.length || 0} attachment(s)`);
 
           if (attachments && attachments.length > 0) {
             const { ObjectStorageService } = await import('./objectStorage');
