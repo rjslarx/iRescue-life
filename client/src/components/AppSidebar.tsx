@@ -32,7 +32,7 @@ import { usePagePermissions } from "@/hooks/usePagePermissions";
 import { useQuickActions } from "@/hooks/useQuickActions";
 import { RecordOfflineDonationDialog } from "@/components/RecordOfflineDonationDialog";
 import { AddMedicalOrderDialog } from "@/components/AddMedicalOrderDialog";
-import { Zap } from "lucide-react";
+import { Zap, FileUp } from "lucide-react";
 import {
   LayoutDashboard,
   Heart,
@@ -272,6 +272,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
         { title: "Network Transfers", url: "/dashboard/transfers", icon: ArrowRightLeft, notificationKey: "pendingTransfers" },
         { title: "Medical Pipeline", url: "/dashboard/medical-pipeline", icon: Stethoscope, notificationKey: "medicalTasks", usesGoogleDrive: true, proOnly: true },
         { title: "Daily Roster", url: "/dashboard/daily-roster", icon: ClipboardList },
+        { title: "Medical Imports", url: "/dashboard/medical-imports", icon: FileUp },
         ...(tnrEnabled ? [{ title: "TNR Log", url: "/dashboard/tnr-log", icon: Cat }] : []),
         { title: "Adoption Applications", url: "/dashboard/applications", icon: FileText, notificationKey: "applications", proOnly: true },
         { title: "Intake Manager", url: "/dashboard/intake", icon: Inbox, proOnly: true },
@@ -382,6 +383,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
         { title: "Network Transfers", url: "/dashboard/transfers", icon: ArrowRightLeft, notificationKey: "pendingTransfers" },
         { title: "Medical Pipeline", url: "/dashboard/medical-pipeline", icon: Stethoscope, notificationKey: "medicalTasks", usesGoogleDrive: true, proOnly: true },
         { title: "Daily Roster", url: "/dashboard/daily-roster", icon: ClipboardList },
+        { title: "Medical Imports", url: "/dashboard/medical-imports", icon: FileUp },
         ...(tnrEnabled ? [{ title: "TNR Log", url: "/dashboard/tnr-log", icon: Cat }] : []),
         { title: "Adoption Applications", url: "/dashboard/applications", icon: FileText, notificationKey: "applications", proOnly: true },
         { title: "Intake Manager", url: "/dashboard/intake", icon: Inbox, proOnly: true },
@@ -472,6 +474,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
         { title: "Network Transfers", url: "/dashboard/transfers", icon: ArrowRightLeft, notificationKey: "pendingTransfers" },
         { title: "Medical Pipeline", url: "/dashboard/medical-pipeline", icon: Stethoscope, notificationKey: "medicalTasks", usesGoogleDrive: true, proOnly: true },
         { title: "Daily Roster", url: "/dashboard/daily-roster", icon: ClipboardList },
+        { title: "Medical Imports", url: "/dashboard/medical-imports", icon: FileUp },
         ...(tnrEnabled ? [{ title: "TNR Log", url: "/dashboard/tnr-log", icon: Cat }] : []),
         { title: "Adoption Applications", url: "/dashboard/applications", icon: FileText, notificationKey: "applications", proOnly: true },
         { title: "Intake Manager", url: "/dashboard/intake", icon: Inbox, proOnly: true },
@@ -531,6 +534,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
     '/dashboard/transfers': 'animals',
     '/dashboard/medical-pipeline': 'medical-tasks',
     '/dashboard/daily-roster': 'daily-roster',
+    '/dashboard/medical-imports': 'medical-imports',
     '/dashboard/applications': 'applications',
     '/dashboard/foster-management': 'foster-management',
     '/dashboard/team': 'team',
@@ -607,6 +611,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
     'animals': { title: "Animals", url: "/dashboard/animals", icon: Heart },
     'medical-tasks': { title: "Medical Pipeline", url: "/dashboard/medical-pipeline", icon: Stethoscope },
     'daily-roster': { title: "Daily Roster", url: "/dashboard/daily-roster", icon: ClipboardList },
+    'medical-imports': { title: "Medical Imports", url: "/dashboard/medical-imports", icon: FileUp },
     'applications': { title: "Adoption Applications", url: "/dashboard/applications", icon: FileText },
     'foster-management': { title: "Foster Management", url: "/dashboard/foster-management", icon: PawPrint },
     'team': { title: "Team", url: "/dashboard/team", icon: Users },

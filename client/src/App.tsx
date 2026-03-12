@@ -282,7 +282,7 @@ function RouterSwitch() {
       <ProtectedRoute path="/dashboard/volunteers" pageId="volunteers" component={VolunteerManagementPage} proOnly proFeatureName="Volunteer Management" />
       <ProtectedRoute path="/dashboard/opportunities" pageId="volunteers" component={VolunteerManagementPage} proOnly proFeatureName="Volunteer Management" />
       <ProtectedRoute path="/dashboard/reports" pageId="analytics" component={Analytics} />
-      <ProtectedRoute path="/dashboard/medical-imports" pageId="dashboard" component={MedicalImportsPage} />
+      <ProtectedRoute path="/dashboard/medical-imports" pageId="medical-imports" component={MedicalImportsPage} />
       <ProtectedRoute path="/dashboard/my-fosters" pageId="my-fosters" component={MyFostersPage} />
       <ProtectedRoute path="/dashboard/my-fosters/:animalId/medical" pageId="my-fosters" component={FosterAnimalMedicalPage} />
       <ProtectedRoute path="/dashboard/my-fosters/:animalId" pageId="my-fosters" component={FosterAnimalProfilePage} />
