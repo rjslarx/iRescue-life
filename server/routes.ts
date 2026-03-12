@@ -26337,7 +26337,7 @@ Submitted: ${new Date().toLocaleString()}
       // Save to inbound_emails table
       const { inboundEmails } = await import('@shared/schema');
       
-      const [savedEmail] = await db.insert(inboundEmails).values({
+      const insertResult = await db.insert(inboundEmails).values({
         tenantId: tenant.id,
         messageId: emailData.email_id,
         from: emailData.from || '',
@@ -26349,7 +26349,14 @@ Submitted: ${new Date().toLocaleString()}
         attachments: attachmentsList.length > 0 ? attachmentsList : null,
         status: 'unprocessed',
         receivedAt: new Date(event.created_at),
-      }).returning();
+      }).onConflictDoNothing({ target: inboundEmails.messageId }).returning();
+
+      if (insertResult.length === 0) {
+        console.log(`[Inbound Email] Duplicate webhook for messageId ${emailData.email_id} — ignoring`);
+        return res.json({ received: true, duplicate: true });
+      }
+
+      const savedEmail = insertResult[0];
 
       console.log(`Saved inbound email ${savedEmail.id} for tenant ${tenant.subdomain}`);
 

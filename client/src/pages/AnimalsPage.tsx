@@ -579,9 +579,22 @@ function AnimalForm({
     onSubmit(animalData as any);
   };
 
+  const handleInvalid = (errors: any) => {
+    const errorMessages = Object.entries(errors)
+      .map(([key, val]: [string, any]) => val?.message || key)
+      .filter(Boolean);
+    if (errorMessages.length > 0) {
+      toast({
+        title: "Validation Error",
+        description: errorMessages.join(". "),
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+      <form onSubmit={form.handleSubmit(handleSubmit, handleInvalid)} className="space-y-4">
         {/* Basic Info Section - Using Petfinder-compliant fields */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <FormField
