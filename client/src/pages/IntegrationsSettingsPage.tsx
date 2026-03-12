@@ -438,64 +438,155 @@ export default function IntegrationsSettingsPage() {
             </Card>
           )}
 
-          {/* Automated Vet Imports */}
+          {/* Automated Veterinary Records Import */}
           {data?.tenant?.systemInboundEmail && (
             <Card>
               <CardHeader>
                 <div className="flex items-center gap-2">
                   <FileSearch className="h-5 w-5" />
-                  <CardTitle>Automated Vet Imports</CardTitle>
+                  <CardTitle>Automated Veterinary Records Import</CardTitle>
                 </div>
                 <CardDescription>
-                  Automatically import medical records from your veterinarian by forwarding their emails to this system address. PDF attachments are parsed by AI and queued for your review.
+                  Automatically import medical PDFs from your vet directly into your animal profiles by creating a dedicated records email address. Attachments are parsed by AI and queued for staff review.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-5">
                 <div>
-                  <label className="text-sm font-medium mb-1.5 block">System Import Address</label>
+                  <label className="text-sm font-medium mb-1.5 block">Your System Routing Address (Keep this secret)</label>
                   <div className="flex items-center gap-2">
-                    <div className="flex-1 p-3 bg-muted rounded-md font-mono text-sm select-all" data-testid="text-system-inbound-email">
-                      {data.tenant.systemInboundEmail}
-                    </div>
+                    <input
+                      type="text"
+                      readOnly
+                      disabled
+                      value={data.tenant.systemInboundEmail}
+                      className="flex-1 h-10 px-3 bg-muted rounded-md font-mono text-sm border border-input"
+                      data-testid="text-system-inbound-email"
+                    />
                     <Button
                       type="button"
-                      variant="outline"
-                      size="icon"
                       onClick={() => {
                         navigator.clipboard.writeText(data.tenant.systemInboundEmail);
-                        toast({ title: "Address copied", description: "The system import address has been copied to your clipboard." });
+                        toast({ title: "Copied!", description: "System routing address copied to clipboard." });
                       }}
                       data-testid="button-copy-system-email"
                     >
-                      <Copy className="h-4 w-4" />
+                      <Copy className="h-4 w-4 mr-2" />
+                      Copy to Clipboard
                     </Button>
                   </div>
                 </div>
 
                 <Separator />
 
-                <div className="space-y-3">
-                  <p className="text-sm font-medium">Setup Instructions</p>
-                  <div className="space-y-2">
-                    <div className="flex gap-3">
-                      <Badge variant="secondary" className="h-6 w-6 shrink-0 flex items-center justify-center rounded-full p-0 text-xs">1</Badge>
-                      <p className="text-sm text-muted-foreground">
-                        Create a dedicated email address for receiving vet records (e.g., <span className="font-mono text-foreground">records@yourrescue.org</span>).
-                      </p>
-                    </div>
-                    <div className="flex gap-3">
-                      <Badge variant="secondary" className="h-6 w-6 shrink-0 flex items-center justify-center rounded-full p-0 text-xs">2</Badge>
-                      <p className="text-sm text-muted-foreground">
-                        Set up a forwarding rule in your email provider to automatically forward all incoming mail from that address to the system import address above.
-                      </p>
-                    </div>
-                    <div className="flex gap-3">
-                      <Badge variant="secondary" className="h-6 w-6 shrink-0 flex items-center justify-center rounded-full p-0 text-xs">3</Badge>
-                      <p className="text-sm text-muted-foreground">
-                        Share <span className="font-mono text-foreground">records@yourrescue.org</span> with your veterinarians. When they email PDF records, the system will automatically parse them using AI and queue the results for your staff to review.
-                      </p>
-                    </div>
-                  </div>
+                <div>
+                  <p className="text-sm font-semibold mb-3">Google Workspace Setup Guide</p>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Follow these steps in your Google Workspace Admin Console to route vet emails into the system automatically.
+                  </p>
+                  <Accordion type="single" collapsible className="w-full">
+                    <AccordionItem value="step-1">
+                      <AccordionTrigger className="text-sm" data-testid="accordion-step-1">
+                        <span className="flex items-center gap-2">
+                          <Badge variant="secondary" className="h-6 w-6 shrink-0 flex items-center justify-center rounded-full p-0 text-xs">1</Badge>
+                          Access Google Admin
+                        </span>
+                      </AccordionTrigger>
+                      <AccordionContent className="text-sm text-muted-foreground pl-8 space-y-2">
+                        <p>
+                          Log into your Google Workspace Admin Console at <span className="font-semibold text-foreground">admin.google.com</span>.
+                        </p>
+                        <p>
+                          In the left menu, navigate to: <span className="font-semibold text-foreground">Apps</span> &rarr; <span className="font-semibold text-foreground">Google Workspace</span> &rarr; <span className="font-semibold text-foreground">Gmail</span>.
+                        </p>
+                        <p>
+                          Scroll down and click on <span className="font-semibold text-foreground">Routing</span>.
+                        </p>
+                      </AccordionContent>
+                    </AccordionItem>
+
+                    <AccordionItem value="step-2">
+                      <AccordionTrigger className="text-sm" data-testid="accordion-step-2">
+                        <span className="flex items-center gap-2">
+                          <Badge variant="secondary" className="h-6 w-6 shrink-0 flex items-center justify-center rounded-full p-0 text-xs">2</Badge>
+                          Create the Routing Rule
+                        </span>
+                      </AccordionTrigger>
+                      <AccordionContent className="text-sm text-muted-foreground pl-8 space-y-2">
+                        <p>
+                          Next to <span className="font-semibold text-foreground">Routing</span> (not Default Routing), click <span className="font-semibold text-foreground">Configure</span> or <span className="font-semibold text-foreground">Add Another Rule</span>.
+                        </p>
+                        <p>
+                          Name the rule: <span className="font-mono text-foreground">Forward Vet Records to Software</span>
+                        </p>
+                      </AccordionContent>
+                    </AccordionItem>
+
+                    <AccordionItem value="step-3">
+                      <AccordionTrigger className="text-sm" data-testid="accordion-step-3">
+                        <span className="flex items-center gap-2">
+                          <Badge variant="secondary" className="h-6 w-6 shrink-0 flex items-center justify-center rounded-full p-0 text-xs">3</Badge>
+                          Set the Trigger
+                        </span>
+                      </AccordionTrigger>
+                      <AccordionContent className="text-sm text-muted-foreground pl-8 space-y-2">
+                        <p>
+                          Under <span className="font-semibold text-foreground">1. Email messages to affect</span>, check the box for <span className="font-semibold text-foreground">Inbound</span>.
+                        </p>
+                        <p>
+                          Scroll down to <span className="font-semibold text-foreground">C. Envelope filter</span>.
+                        </p>
+                        <p>
+                          Check <span className="font-semibold text-foreground">Only affect specific envelope recipients</span>.
+                        </p>
+                        <p>
+                          Select <span className="font-semibold text-foreground">Single email address</span> from the dropdown.
+                        </p>
+                        <p>
+                          Type in the public email address you want your vet to use (e.g., <span className="font-mono text-foreground">records@yourrescue.org</span>).
+                        </p>
+                      </AccordionContent>
+                    </AccordionItem>
+
+                    <AccordionItem value="step-4">
+                      <AccordionTrigger className="text-sm" data-testid="accordion-step-4">
+                        <span className="flex items-center gap-2">
+                          <Badge variant="secondary" className="h-6 w-6 shrink-0 flex items-center justify-center rounded-full p-0 text-xs">4</Badge>
+                          Set the Handoff Action
+                        </span>
+                      </AccordionTrigger>
+                      <AccordionContent className="text-sm text-muted-foreground pl-8 space-y-2">
+                        <p>
+                          Scroll up to <span className="font-semibold text-foreground">2. For the above types of messages, do the following</span>.
+                        </p>
+                        <p>
+                          Under <span className="font-semibold text-foreground">Envelope recipient</span>, check the box for <span className="font-semibold text-foreground">Change envelope recipient</span>.
+                        </p>
+                        <p>
+                          Select <span className="font-semibold text-foreground">Replace recipient</span>.
+                        </p>
+                        <p>
+                          Paste your <span className="font-semibold text-foreground">System Routing Address</span> (copied from above) into the text box.
+                        </p>
+                      </AccordionContent>
+                    </AccordionItem>
+
+                    <AccordionItem value="step-5">
+                      <AccordionTrigger className="text-sm" data-testid="accordion-step-5">
+                        <span className="flex items-center gap-2">
+                          <Badge variant="secondary" className="h-6 w-6 shrink-0 flex items-center justify-center rounded-full p-0 text-xs">5</Badge>
+                          Save and Test
+                        </span>
+                      </AccordionTrigger>
+                      <AccordionContent className="text-sm text-muted-foreground pl-8 space-y-2">
+                        <p>
+                          Scroll to the bottom and click <span className="font-semibold text-foreground">Save</span>.
+                        </p>
+                        <p>
+                          You're all set! Tell your veterinarian to email all PDF records to your public address (e.g., <span className="font-mono text-foreground">records@yourrescue.org</span>). Documents will be automatically parsed by AI and appear in your medical import review queue.
+                        </p>
+                      </AccordionContent>
+                    </AccordionItem>
+                  </Accordion>
                 </div>
               </CardContent>
             </Card>
