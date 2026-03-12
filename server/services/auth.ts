@@ -119,7 +119,7 @@ export async function createTenantWithAdmin(data: SignupData) {
           name: rescueName,
           tagline: `Saving lives, one paw at a time.`,
           isActive: true,
-          systemInboundEmail: `import-${tenantUuid}@inbound.irescue.life`,
+          systemInboundEmail: `import-${tenantUuid}@recv.irescue.life`,
         })
         .returning();
 
