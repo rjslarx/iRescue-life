@@ -91,7 +91,7 @@ export interface MedicalExtractionResult {
 export async function extractTextFromPdf(pdfBuffer: Buffer): Promise<{ text: string; pageCount: number }> {
   try {
     const pdfParseModule = await import("pdf-parse");
-    const pdfParse = pdfParseModule.default || pdfParseModule;
+    const pdfParse = pdfParseModule.PDFParse || pdfParseModule.default || pdfParseModule;
     const data = await pdfParse(pdfBuffer);
     return {
       text: data.text,
