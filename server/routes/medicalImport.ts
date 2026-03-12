@@ -853,6 +853,40 @@ router.get('/email-batches', requireTenant, requireAuth, async (req, res, next) 
   }
 });
 
+router.get('/all-batches', requireTenant, requireAuth, async (req, res, next) => {
+  try {
+    const tenantId = req.tenant!.id;
+
+    const batches = await db.query.medicalImportBatches.findMany({
+      where: eq(medicalImportBatches.tenantId, tenantId),
+      orderBy: [desc(medicalImportBatches.createdAt)],
+    });
+
+    const batchesWithItems = await Promise.all(
+      batches.map(async (batch) => {
+        const items = await db.query.medicalImportItems.findMany({
+          where: eq(medicalImportItems.batchId, batch.id),
+        });
+        const animal = batch.animalId
+          ? await db.query.animals.findFirst({
+              where: and(eq(animals.id, batch.animalId), eq(animals.tenantId, tenantId)),
+            })
+          : null;
+        return {
+          ...batch,
+          items,
+          source: batch.inboundEmailId ? 'email' as const : 'upload' as const,
+          animalName: animal?.name || null,
+        };
+      })
+    );
+
+    res.json(batchesWithItems);
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.post('/batches/:batchId/assign-animal', requireTenant, requireAuth, async (req, res, next) => {
   try {
     const { batchId } = req.params;

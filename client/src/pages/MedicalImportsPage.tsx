@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { buildTenantUrl, getTenantHeaders } from "@/lib/tenantApi";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel,
   AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
@@ -18,13 +19,15 @@ import {
   FileText, Loader2, Check, X, AlertTriangle,
   Syringe, Stethoscope, Pill, TestTube, ClipboardList,
   CheckCircle2, XCircle, Sparkles, Mail, ArrowLeft,
-  PawPrint, Calendar, Copy
+  PawPrint, Calendar, Copy, Upload
 } from "lucide-react";
 import type { Animal, MedicalImportBatch, MedicalImportItem } from "@shared/schema";
 import { Link } from "wouter";
 
 interface BatchWithItems extends MedicalImportBatch {
   items: MedicalImportItem[];
+  source: 'email' | 'upload';
+  animalName: string | null;
 }
 
 function getRecordTypeIcon(type: string) {
@@ -113,7 +116,7 @@ function BatchCard({ batch, animals }: { batch: BatchWithItems; animals: Animal[
   const hasAnimalAssigned = !!batch.animalId;
 
   const { data: dupData, isLoading: dupLoading } = useQuery<{ duplicates: DuplicateMap }>({
-    queryKey: [`/api/medical-import/batches/${batch.id}/check-duplicates`],
+    queryKey: ['/api/medical-import/batches', batch.id, 'check-duplicates'],
     enabled: hasAnimalAssigned && hasPendingItems,
     staleTime: 10000,
     retry: 1,
@@ -128,7 +131,7 @@ function BatchCard({ batch, animals }: { batch: BatchWithItems; animals: Animal[
     },
     onSuccess: () => {
       toast({ title: "Animal Assigned", description: "Animal has been linked to this import batch" });
-      queryClient.invalidateQueries({ queryKey: ['/api/medical-import/email-batches'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/medical-import/all-batches'] });
       queryClient.invalidateQueries({ queryKey: ['/api/medical-import/batches', batch.id, 'check-duplicates'] });
     },
     onError: (error: Error) => {
@@ -141,7 +144,7 @@ function BatchCard({ batch, animals }: { batch: BatchWithItems; animals: Animal[
       return apiRequest("POST", `/api/medical-import/items/${itemId}/approve`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/medical-import/email-batches'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/medical-import/all-batches'] });
       queryClient.invalidateQueries({ queryKey: ['/api/notifications/counts'] });
       queryClient.invalidateQueries({ queryKey: ['/api/medical-import/batches', batch.id, 'check-duplicates'] });
     },
@@ -152,7 +155,7 @@ function BatchCard({ batch, animals }: { batch: BatchWithItems; animals: Animal[
       return apiRequest("POST", `/api/medical-import/items/${itemId}/reject`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/medical-import/email-batches'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/medical-import/all-batches'] });
       queryClient.invalidateQueries({ queryKey: ['/api/notifications/counts'] });
       queryClient.invalidateQueries({ queryKey: ['/api/medical-import/batches', batch.id, 'check-duplicates'] });
     },
@@ -183,7 +186,7 @@ function BatchCard({ batch, animals }: { batch: BatchWithItems; animals: Animal[
         parts.push(`${data.skippedDuplicates} likely duplicate(s) skipped`);
       }
       toast({ title: "Records Imported", description: parts.join('. ') });
-      queryClient.invalidateQueries({ queryKey: ['/api/medical-import/email-batches'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/medical-import/all-batches'] });
       queryClient.invalidateQueries({ queryKey: ['/api/notifications/counts'] });
       queryClient.invalidateQueries({ queryKey: ['/api/medical-import/batches', batch.id, 'check-duplicates'] });
     },
@@ -214,8 +217,15 @@ function BatchCard({ batch, animals }: { batch: BatchWithItems; animals: Animal[
         <div className="flex items-start justify-between gap-2 flex-wrap">
           <div className="space-y-1">
             <CardTitle className="text-base flex items-center gap-2 flex-wrap">
-              <Mail className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-              {batch.fileName || "Email Import"}
+              {batch.source === 'email' ? (
+                <Mail className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+              ) : (
+                <Upload className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+              )}
+              {batch.originalFileName || "Import"}
+              <Badge variant="outline" className={batch.source === 'email' ? "text-purple-600 border-purple-300" : "text-blue-600 border-blue-300"}>
+                {batch.source === 'email' ? 'Email' : 'Upload'}
+              </Badge>
               {batch.status === 'review' && <Badge variant="secondary">Pending Review</Badge>}
               {batch.status === 'approved' && <Badge variant="default" className="bg-green-500">Approved</Badge>}
               {batch.status === 'rejected' && <Badge variant="destructive">Rejected</Badge>}
@@ -237,6 +247,12 @@ function BatchCard({ batch, animals }: { batch: BatchWithItems; animals: Animal[
               {assignedAnimal.name}
             </Badge>
           )}
+          {!assignedAnimal && batch.animalName && (
+            <Badge variant="outline" className="gap-1">
+              <PawPrint className="w-3 h-3" />
+              {batch.animalName}
+            </Badge>
+          )}
         </div>
       </CardHeader>
 
@@ -249,7 +265,9 @@ function BatchCard({ batch, animals }: { batch: BatchWithItems; animals: Animal[
                 <div className="flex-1 space-y-2">
                   <p className="text-sm font-medium">Animal Assignment Required</p>
                   <p className="text-xs text-muted-foreground">
-                    This import came from email. Please assign it to an animal before approving records.
+                    {batch.source === 'email'
+                      ? "This import came from email. Please assign it to an animal before approving records."
+                      : "Please assign this import to an animal before approving records."}
                   </p>
                   <div className="flex items-center gap-2 flex-wrap">
                     <Select value={selectedAnimalId} onValueChange={setSelectedAnimalId}>
@@ -499,9 +517,139 @@ function BatchCard({ batch, animals }: { batch: BatchWithItems; animals: Animal[
   );
 }
 
+function UploadZone({ animals, onUploadComplete }: { animals: Animal[]; onUploadComplete: () => void }) {
+  const { toast } = useToast();
+  const [isDragging, setIsDragging] = useState(false);
+  const [selectedAnimalId, setSelectedAnimalId] = useState<string>("");
+
+  const uploadMutation = useMutation({
+    mutationFn: async (file: File) => {
+      if (!selectedAnimalId) throw new Error("Please select an animal first");
+      const formData = new FormData();
+      formData.append('file', file);
+      const tenantHeaders = getTenantHeaders();
+      const response = await fetch(buildTenantUrl(`/api/medical-import/${selectedAnimalId}/upload`), {
+        method: 'POST',
+        headers: tenantHeaders,
+        body: formData,
+        credentials: 'include',
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Upload failed');
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Document Processed",
+        description: `Found ${data.itemCount} medical records to review`,
+      });
+      onUploadComplete();
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Processing Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files[0];
+    if (file && file.type === 'application/pdf') {
+      uploadMutation.mutate(file);
+    } else {
+      toast({ title: "Invalid File", description: "Please upload a PDF file", variant: "destructive" });
+    }
+  }, [uploadMutation, toast]);
+
+  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) uploadMutation.mutate(file);
+  }, [uploadMutation]);
+
+  return (
+    <Card data-testid="card-upload-zone">
+      <CardContent className="p-4">
+        <div className="flex items-center gap-3 mb-3 flex-wrap">
+          <div className="flex-1 min-w-[200px]">
+            <Select value={selectedAnimalId} onValueChange={setSelectedAnimalId}>
+              <SelectTrigger data-testid="select-upload-animal">
+                <SelectValue placeholder="Select animal for upload..." />
+              </SelectTrigger>
+              <SelectContent>
+                {animals.map(animal => (
+                  <SelectItem key={animal.id} value={animal.id}>
+                    {animal.name} ({animal.species})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <div
+          className={`
+            border-2 border-dashed rounded-md p-6 text-center transition-colors
+            ${!selectedAnimalId ? 'opacity-50 pointer-events-none' : ''}
+            ${isDragging ? 'border-primary bg-primary/5' : 'border-muted-foreground/25'}
+            ${uploadMutation.isPending ? 'opacity-50 pointer-events-none' : 'cursor-pointer hover:border-primary/50'}
+          `}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          onClick={() => selectedAnimalId && document.getElementById('upload-zone-pdf-input')?.click()}
+          data-testid="upload-dropzone"
+        >
+          <input
+            id="upload-zone-pdf-input"
+            type="file"
+            accept="application/pdf"
+            className="hidden"
+            onChange={handleFileSelect}
+            data-testid="input-upload-pdf"
+          />
+          {uploadMutation.isPending ? (
+            <div className="flex flex-col items-center gap-2">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              <p className="text-sm font-medium">Processing document...</p>
+              <p className="text-xs text-muted-foreground">AI is extracting medical records</p>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-2">
+              <Upload className="w-8 h-8 text-muted-foreground" />
+              <p className="text-sm font-medium">
+                {selectedAnimalId ? "Drop a PDF here or click to upload" : "Select an animal above, then upload a PDF"}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Supports veterinary records, shelter intake forms, and medical histories
+              </p>
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function MedicalImportsPage() {
-  const { data: batches, isLoading } = useQuery<BatchWithItems[]>({
-    queryKey: ['/api/medical-import/email-batches'],
+  const [sourceFilter, setSourceFilter] = useState<'all' | 'email' | 'upload'>('all');
+
+  const { data: batches, isLoading, refetch } = useQuery<BatchWithItems[]>({
+    queryKey: ['/api/medical-import/all-batches'],
     refetchInterval: 30000,
   });
 
@@ -510,8 +658,18 @@ export default function MedicalImportsPage() {
   });
 
   const animals = animalsData?.animals || [];
-  const pendingBatches = batches?.filter(b => b.items.some(i => i.status === 'pending')) || [];
-  const completedBatches = batches?.filter(b => !b.items.some(i => i.status === 'pending')) || [];
+
+  const filteredBatches = (batches || []).filter(b => {
+    if (sourceFilter === 'all') return true;
+    return b.source === sourceFilter;
+  });
+
+  const pendingBatches = filteredBatches.filter(b => b.items.some(i => i.status === 'pending'));
+  const completedBatches = filteredBatches.filter(b => !b.items.some(i => i.status === 'pending'));
+
+  const totalPending = (batches || []).filter(b => b.items.some(i => i.status === 'pending')).length;
+  const emailPending = (batches || []).filter(b => b.source === 'email' && b.items.some(i => i.status === 'pending')).length;
+  const uploadPending = (batches || []).filter(b => b.source === 'upload' && b.items.some(i => i.status === 'pending')).length;
 
   return (
     <div className="container mx-auto p-4 md:p-6 max-w-4xl">
@@ -527,22 +685,69 @@ export default function MedicalImportsPage() {
             Medical Record Imports
           </h1>
           <p className="text-sm text-muted-foreground">
-            Review AI-parsed medical records from emailed vet documents
+            Review AI-parsed medical records from uploaded PDFs and emailed vet documents
           </p>
         </div>
+      </div>
+
+      <div className="space-y-4 mb-6">
+        <UploadZone
+          animals={animals}
+          onUploadComplete={() => {
+            queryClient.invalidateQueries({ queryKey: ['/api/medical-import/all-batches'] });
+          }}
+        />
+      </div>
+
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        <Button
+          variant={sourceFilter === 'all' ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setSourceFilter('all')}
+          data-testid="filter-all"
+        >
+          All Imports
+          {totalPending > 0 && <Badge variant="secondary" className="ml-1">{totalPending}</Badge>}
+        </Button>
+        <Button
+          variant={sourceFilter === 'email' ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setSourceFilter('email')}
+          className="gap-1"
+          data-testid="filter-email"
+        >
+          <Mail className="w-3 h-3" />
+          Email
+          {emailPending > 0 && <Badge variant="secondary" className="ml-1">{emailPending}</Badge>}
+        </Button>
+        <Button
+          variant={sourceFilter === 'upload' ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setSourceFilter('upload')}
+          className="gap-1"
+          data-testid="filter-upload"
+        >
+          <Upload className="w-3 h-3" />
+          Manual Upload
+          {uploadPending > 0 && <Badge variant="secondary" className="ml-1">{uploadPending}</Badge>}
+        </Button>
       </div>
 
       {isLoading ? (
         <div className="flex items-center justify-center py-12">
           <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
         </div>
-      ) : !batches || batches.length === 0 ? (
+      ) : filteredBatches.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
-            <Mail className="w-12 h-12 text-muted-foreground mb-4" />
-            <p className="font-medium">No email imports yet</p>
+            <FileText className="w-12 h-12 text-muted-foreground mb-4" />
+            <p className="font-medium">No imports yet</p>
             <p className="text-sm text-muted-foreground mt-1 text-center max-w-md">
-              Forward vet records to your system import email address. AI will automatically parse the PDFs and they'll appear here for review.
+              {sourceFilter === 'email'
+                ? "Forward vet records to your system import email address. AI will automatically parse the PDFs and they'll appear here for review."
+                : sourceFilter === 'upload'
+                ? "Upload a PDF using the upload zone above. AI will extract medical records for review."
+                : "Upload vet record PDFs above, or forward them to your system import email address. AI will extract medical records for review."}
             </p>
           </CardContent>
         </Card>
