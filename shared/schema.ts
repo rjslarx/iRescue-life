@@ -2260,7 +2260,7 @@ export const inboundEmails = pgTable("inbound_emails", {
     size: number;
     url: string; // Object storage URL
   }>>(),
-  status: text("status").notNull().default("unprocessed").$type<"unprocessed" | "processed" | "archived">(),
+  status: text("status").notNull().default("unprocessed").$type<"unprocessed" | "processed" | "failed" | "archived">(),
   // Optional linking to animals or documents
   linkedAnimalId: uuid("linked_animal_id").references(() => animals.id, { onDelete: 'set null' }),
   linkedDocumentId: uuid("linked_document_id").references(() => documents.id, { onDelete: 'set null' }),
@@ -4247,21 +4247,17 @@ export type NewsletterCampaign = typeof newsletterCampaigns.$inferSelect;
 export const medicalImportBatches = pgTable("medical_import_batches", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
-  animalId: uuid("animal_id").notNull().references(() => animals.id, { onDelete: 'cascade' }),
-  // File info
+  animalId: uuid("animal_id").references(() => animals.id, { onDelete: 'cascade' }),
+  inboundEmailId: uuid("inbound_email_id").references(() => inboundEmails.id, { onDelete: 'set null' }),
   originalFileName: text("original_file_name").notNull(),
-  fileUrl: text("file_url"), // Object storage URL
-  fileSize: integer("file_size"), // Bytes
+  fileUrl: text("file_url"),
+  fileSize: integer("file_size"),
   pageCount: integer("page_count"),
-  // Parsing status
   status: text("status").notNull().default("pending").$type<"pending" | "processing" | "review" | "partially_imported" | "completed" | "failed">(),
   errorMessage: text("error_message"),
-  // Raw extracted text (for debugging/verification)
   extractedText: text("extracted_text"),
-  // AI confidence info
-  overallConfidence: numeric("overall_confidence", { precision: 5, scale: 2 }), // 0-100 scale
-  processingNotes: text("processing_notes"), // AI notes about extraction quality
-  // Audit
+  overallConfidence: numeric("overall_confidence", { precision: 5, scale: 2 }),
+  processingNotes: text("processing_notes"),
   createdBy: uuid("created_by").references(() => users.id, { onDelete: 'set null' }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   reviewedBy: uuid("reviewed_by").references(() => users.id, { onDelete: 'set null' }),
@@ -4281,7 +4277,7 @@ export const medicalImportItems = pgTable("medical_import_items", {
   id: uuid("id").primaryKey().defaultRandom(),
   batchId: uuid("batch_id").notNull().references(() => medicalImportBatches.id, { onDelete: 'cascade' }),
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
-  animalId: uuid("animal_id").notNull().references(() => animals.id, { onDelete: 'cascade' }),
+  animalId: uuid("animal_id").references(() => animals.id, { onDelete: 'cascade' }),
   // Record type and status
   recordType: text("record_type").notNull().$type<"vaccine" | "procedure" | "prescription" | "diagnostic" | "exam">(),
   status: text("status").notNull().default("pending").$type<"pending" | "approved" | "rejected" | "modified">(),

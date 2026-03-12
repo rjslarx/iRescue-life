@@ -26185,8 +26185,20 @@ Submitted: ${new Date().toLocaleString()}
         return res.status(500).json({ error: 'Failed to fetch email content' });
       }
 
-      // Process attachments if any
-      let attachmentsList = [];
+      let attachmentsList: Array<{
+        filename: string;
+        contentType: string;
+        size: number;
+        url: string;
+        resendAttachmentId?: string;
+      }> = [];
+      const pdfBuffers: Array<{
+        filename: string;
+        buffer: Buffer;
+        size: number;
+        storageUrl: string;
+      }> = [];
+
       if (emailData.attachments && emailData.attachments.length > 0) {
         try {
           const { data: attachments } = await resend.attachments.receiving.list({ 
@@ -26194,14 +26206,69 @@ Submitted: ${new Date().toLocaleString()}
           });
 
           if (attachments && attachments.length > 0) {
-            // TODO: Upload attachments to object storage
-            // For now, store metadata only
-            attachmentsList = emailData.attachments.map((att: any) => ({
-              filename: att.filename,
-              contentType: att.content_type,
-              size: 0, // Will be updated when we upload to storage
-              url: '', // Will be set after upload
-            }));
+            const { ObjectStorageService } = await import('./objectStorage');
+            const storageService = new ObjectStorageService();
+
+            for (const att of attachments) {
+              try {
+                const { data: attachmentData } = await resend.attachments.receiving.get(att.id);
+                if (!attachmentData || !attachmentData.content) {
+                  attachmentsList.push({
+                    filename: att.filename || 'unknown',
+                    contentType: att.content_type || 'application/octet-stream',
+                    size: 0,
+                    url: '',
+                    resendAttachmentId: att.id,
+                  });
+                  continue;
+                }
+
+                const contentBuffer = Buffer.from(attachmentData.content, 'base64');
+                const safeFilename = `${Date.now()}_${(att.filename || 'attachment').replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+
+                let storageUrl = '';
+                try {
+                  const uploaded = await storageService.uploadTenantFile(
+                    tenant.id,
+                    'inbound-email-attachments',
+                    contentBuffer,
+                    att.content_type || 'application/octet-stream',
+                    safeFilename
+                  );
+                  storageUrl = uploaded.objectPath;
+                } catch (uploadErr) {
+                  console.error('Failed to upload attachment to storage:', uploadErr);
+                }
+
+                attachmentsList.push({
+                  filename: att.filename || 'unknown',
+                  contentType: att.content_type || 'application/octet-stream',
+                  size: contentBuffer.length,
+                  url: storageUrl,
+                  resendAttachmentId: att.id,
+                });
+
+                const isPdf = (att.content_type || '').toLowerCase() === 'application/pdf' ||
+                              (att.filename || '').toLowerCase().endsWith('.pdf');
+                if (isPdf && storageUrl) {
+                  pdfBuffers.push({
+                    filename: att.filename || 'document.pdf',
+                    buffer: contentBuffer,
+                    size: contentBuffer.length,
+                    storageUrl,
+                  });
+                }
+              } catch (singleAttErr) {
+                console.error(`Failed to process attachment ${att.id}:`, singleAttErr);
+                attachmentsList.push({
+                  filename: att.filename || 'unknown',
+                  contentType: att.content_type || 'application/octet-stream',
+                  size: 0,
+                  url: '',
+                  resendAttachmentId: att.id,
+                });
+              }
+            }
           }
         } catch (attachError) {
           console.error('Failed to fetch attachments:', attachError);
@@ -26226,7 +26293,189 @@ Submitted: ${new Date().toLocaleString()}
       }).returning();
 
       console.log(`Saved inbound email ${savedEmail.id} for tenant ${tenant.subdomain}`);
-      
+
+      if (pdfBuffers.length > 0) {
+        const { processMedicalDocument } = await import('./services/aiMedicalParser');
+        const { medicalImportBatches: mibTable, medicalImportItems: miiTable } = await import('@shared/schema');
+        let successCount = 0;
+        let failCount = 0;
+
+        for (const pdf of pdfBuffers) {
+          let batchId: string | null = null;
+          try {
+            console.log(`Auto-processing PDF "${pdf.filename}" from inbound email ${savedEmail.id}`);
+
+            const [batch] = await db.insert(mibTable).values({
+              tenantId: tenant.id,
+              animalId: null,
+              inboundEmailId: savedEmail.id,
+              originalFileName: pdf.filename,
+              fileUrl: pdf.storageUrl,
+              fileSize: pdf.size,
+              status: 'processing' as const,
+            }).returning();
+            batchId = batch.id;
+
+            const result = await processMedicalDocument(pdf.buffer, 'Unknown', 'animal');
+
+            if (!result.success) {
+              await db.update(mibTable)
+                .set({
+                  status: 'failed' as const,
+                  errorMessage: result.error,
+                  extractedText: result.extractedText,
+                  pageCount: result.pageCount,
+                  processingNotes: result.processingNotes,
+                })
+                .where(eq(mibTable.id, batch.id));
+              console.error(`Failed to parse PDF "${pdf.filename}":`, result.error);
+              failCount++;
+              continue;
+            }
+
+            const itemsToInsert: Array<{
+              batchId: string;
+              tenantId: string;
+              animalId: string | null;
+              recordType: 'vaccine' | 'procedure' | 'prescription' | 'diagnostic' | 'exam';
+              extractedData: Record<string, unknown>;
+              confidence: string;
+              sourceText?: string;
+            }> = [];
+
+            for (const vaccine of result.vaccines) {
+              itemsToInsert.push({
+                batchId: batch.id,
+                tenantId: tenant.id,
+                animalId: null,
+                recordType: 'vaccine',
+                extractedData: {
+                  itemName: vaccine.itemName,
+                  dateGiven: vaccine.dateGiven,
+                  dateDue: vaccine.dateDue,
+                  manufacturer: vaccine.manufacturer,
+                  lotNumber: vaccine.lotNumber,
+                  administeredBy: vaccine.administeredBy,
+                },
+                confidence: String(Math.round(vaccine.confidence)),
+                sourceText: vaccine.sourceText,
+              });
+            }
+
+            for (const procedure of result.procedures) {
+              itemsToInsert.push({
+                batchId: batch.id,
+                tenantId: tenant.id,
+                animalId: null,
+                recordType: 'procedure',
+                extractedData: {
+                  procedureName: procedure.procedureName,
+                  procedureDate: procedure.procedureDate,
+                  veterinarian: procedure.veterinarian,
+                  notes: procedure.notes,
+                },
+                confidence: String(Math.round(procedure.confidence)),
+                sourceText: procedure.sourceText,
+              });
+            }
+
+            for (const prescription of result.prescriptions) {
+              itemsToInsert.push({
+                batchId: batch.id,
+                tenantId: tenant.id,
+                animalId: null,
+                recordType: 'prescription',
+                extractedData: {
+                  medicationName: prescription.medicationName,
+                  dosage: prescription.dosage,
+                  route: prescription.route,
+                  frequency: prescription.frequency,
+                  startDate: prescription.startDate,
+                  endDate: prescription.endDate,
+                  notes: prescription.notes,
+                },
+                confidence: String(Math.round(prescription.confidence)),
+                sourceText: prescription.sourceText,
+              });
+            }
+
+            for (const diagnostic of result.diagnostics) {
+              itemsToInsert.push({
+                batchId: batch.id,
+                tenantId: tenant.id,
+                animalId: null,
+                recordType: 'diagnostic',
+                extractedData: {
+                  testName: diagnostic.testName,
+                  testDate: diagnostic.testDate,
+                  result: diagnostic.result,
+                  notes: diagnostic.notes,
+                },
+                confidence: String(Math.round(diagnostic.confidence)),
+                sourceText: diagnostic.sourceText,
+              });
+            }
+
+            for (const exam of result.exams) {
+              itemsToInsert.push({
+                batchId: batch.id,
+                tenantId: tenant.id,
+                animalId: null,
+                recordType: 'exam',
+                extractedData: {
+                  examType: exam.examType,
+                  examDate: exam.examDate,
+                  performedBy: exam.performedBy,
+                  subjective: exam.subjective,
+                  objective: exam.objective,
+                  assessment: exam.assessment,
+                  plan: exam.plan,
+                  weight: exam.weight,
+                  temperature: exam.temperature,
+                },
+                confidence: String(Math.round(exam.confidence)),
+                sourceText: exam.sourceText,
+              });
+            }
+
+            if (itemsToInsert.length > 0) {
+              await db.insert(miiTable).values(itemsToInsert);
+            }
+
+            await db.update(mibTable)
+              .set({
+                status: 'review' as const,
+                extractedText: result.extractedText,
+                pageCount: result.pageCount,
+                overallConfidence: String(Math.round(result.overallConfidence)),
+                processingNotes: result.processingNotes,
+              })
+              .where(eq(mibTable.id, batch.id));
+
+            console.log(`Auto-parsed PDF "${pdf.filename}": ${itemsToInsert.length} items extracted (batch ${batch.id})`);
+            successCount++;
+          } catch (pdfErr) {
+            console.error(`Failed to auto-process PDF "${pdf.filename}":`, pdfErr);
+            failCount++;
+            if (batchId) {
+              try {
+                await db.update(mibTable)
+                  .set({
+                    status: 'failed' as const,
+                    errorMessage: pdfErr instanceof Error ? pdfErr.message : 'Unknown processing error',
+                  })
+                  .where(eq(mibTable.id, batchId));
+              } catch (_) { /* best effort */ }
+            }
+          }
+        }
+
+        const emailStatus = successCount > 0 ? 'processed' : (failCount > 0 ? 'failed' : 'unprocessed');
+        await db.update(inboundEmails)
+          .set({ status: emailStatus })
+          .where(eq(inboundEmails.id, savedEmail.id));
+      }
+
       // Auto-CC: Send copies to configured recipients
       if (tenant.emailCopyRecipients && tenant.emailCopyRecipients.length > 0) {
         try {

@@ -1,12 +1,26 @@
-import OpenAI from "openai";
+import { GoogleGenAI } from "@google/genai";
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 const pdfParse = require("pdf-parse");
 
-const openai = new OpenAI({
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-});
+const geminiApiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY;
+const geminiBaseUrl = process.env.AI_INTEGRATIONS_GEMINI_BASE_URL;
+
+if (!geminiApiKey) {
+  console.warn('[AI Medical Parser] AI_INTEGRATIONS_GEMINI_API_KEY not set — AI parsing will fail at runtime');
+}
+
+const aiConfig: ConstructorParameters<typeof GoogleGenAI>[0] = {
+  apiKey: geminiApiKey || 'not-configured',
+};
+if (geminiBaseUrl) {
+  aiConfig.httpOptions = {
+    apiVersion: "",
+    baseUrl: geminiBaseUrl,
+  };
+}
+
+const ai = new GoogleGenAI(aiConfig);
 
 export interface ExtractedVaccine {
   itemName: string;
@@ -190,17 +204,21 @@ ${extractedText}
 Extract all medical records present and return the structured JSON.`;
 
   try {
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt }
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }],
+        },
       ],
-      temperature: 0.1,
-      response_format: { type: "json_object" }
+      config: {
+        temperature: 0.1,
+        responseMimeType: "application/json",
+      },
     });
 
-    const content = response.choices[0]?.message?.content;
+    const content = response.text;
     if (!content) {
       throw new Error("No response from AI");
     }
@@ -208,7 +226,8 @@ Extract all medical records present and return the structured JSON.`;
     let parsed: Record<string, unknown>;
     try {
       const trimmedContent = content.trim();
-      parsed = JSON.parse(trimmedContent);
+      const cleanedContent = trimmedContent.replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim();
+      parsed = JSON.parse(cleanedContent);
     } catch (parseError) {
       console.error("JSON parse error:", parseError, "Content:", content.substring(0, 200));
       throw new Error("AI response was not valid JSON");

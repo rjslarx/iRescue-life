@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db } from '../db';
 import { medicalImportBatches, medicalImportItems, animals, vaccineRecords, procedureLogs, medicalPrescriptions, diagnosticTests, medicalExams } from '@shared/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, isNotNull, desc } from 'drizzle-orm';
 import multer from 'multer';
 import { processMedicalDocument } from '../services/aiMedicalParser';
 import { requireAuth } from '../middleware/auth';
@@ -328,6 +328,10 @@ router.post('/items/:itemId/approve', requireTenant, requireAuth, async (req, re
       });
     }
 
+    if (!item.animalId) {
+      return res.status(400).json({ error: 'An animal must be assigned to this item before it can be approved. Use the assign-animal endpoint first.' });
+    }
+
     const data = (item.modifiedData as Record<string, unknown>) || (item.extractedData as Record<string, unknown>);
     if (!data) {
       return res.status(400).json({ error: 'No extracted data to import' });
@@ -597,6 +601,11 @@ router.post('/batches/:batchId/approve-all', requireTenant, requireAuth, async (
       return res.status(400).json({ error: 'No pending items to approve' });
     }
 
+    const itemsWithoutAnimal = pendingItems.filter(item => !item.animalId);
+    if (itemsWithoutAnimal.length > 0) {
+      return res.status(400).json({ error: 'All items must have an animal assigned before bulk approval. Use the assign-animal endpoint first.', unassignedCount: itemsWithoutAnimal.length });
+    }
+
     const results: Array<{ itemId: string; success: boolean; createdRecordId?: string; error?: string }> = [];
     
     for (const item of pendingItems) {
@@ -744,6 +753,84 @@ router.post('/batches/:batchId/approve-all', requireTenant, requireAuth, async (
       failed: results.filter(r => !r.success).length,
       results,
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/email-batches', requireTenant, requireAuth, async (req, res, next) => {
+  try {
+    const tenantId = req.tenant!.id;
+
+    const batches = await db.query.medicalImportBatches.findMany({
+      where: and(
+        eq(medicalImportBatches.tenantId, tenantId),
+        isNotNull(medicalImportBatches.inboundEmailId)
+      ),
+      orderBy: [desc(medicalImportBatches.createdAt)],
+    });
+
+    const batchesWithItems = await Promise.all(
+      batches.map(async (batch) => {
+        const items = await db.query.medicalImportItems.findMany({
+          where: eq(medicalImportItems.batchId, batch.id),
+        });
+        return { ...batch, items };
+      })
+    );
+
+    res.json(batchesWithItems);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/batches/:batchId/assign-animal', requireTenant, requireAuth, async (req, res, next) => {
+  try {
+    const { batchId } = req.params;
+    const { animalId } = req.body;
+    const tenantId = req.tenant!.id;
+
+    if (!animalId) {
+      return res.status(400).json({ error: 'animalId is required' });
+    }
+
+    const batch = await db.query.medicalImportBatches.findFirst({
+      where: and(
+        eq(medicalImportBatches.id, batchId),
+        eq(medicalImportBatches.tenantId, tenantId)
+      ),
+    });
+
+    if (!batch) {
+      return res.status(404).json({ error: 'Batch not found' });
+    }
+
+    const animal = await db.query.animals.findFirst({
+      where: and(eq(animals.id, animalId), eq(animals.tenantId, tenantId)),
+    });
+
+    if (!animal) {
+      return res.status(404).json({ error: 'Animal not found' });
+    }
+
+    await db.update(medicalImportBatches)
+      .set({ animalId })
+      .where(eq(medicalImportBatches.id, batchId));
+
+    await db.update(medicalImportItems)
+      .set({ animalId })
+      .where(eq(medicalImportItems.batchId, batchId));
+
+    const updatedBatch = await db.query.medicalImportBatches.findFirst({
+      where: eq(medicalImportBatches.id, batchId),
+    });
+
+    const items = await db.query.medicalImportItems.findMany({
+      where: eq(medicalImportItems.batchId, batchId),
+    });
+
+    res.json({ ...updatedBatch, items, assignedAnimalName: animal.name });
   } catch (error) {
     next(error);
   }
