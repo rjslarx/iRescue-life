@@ -100,7 +100,7 @@ interface ApproveAndSendAgreementDialogProps {
 
 const MEDICAL_DATE_FIELDS: { key: keyof MedicalDueDates; label: string; careNames: string[] }[] = [
   { key: "rabiesDueDate", label: "Rabies Vaccine", careNames: ["rabies"] },
-  { key: "dhppDueDate", label: "DHPP Booster", careNames: ["dhpp", "da2pp", "dapp", "distemper"] },
+  { key: "dhppDueDate", label: "DHPP Booster", careNames: ["dhpp", "da2pp", "dapp", "distemper", "dapp-l4"] },
 ];
 
 const CUSTOM_OBLIGATION_TYPES = [
@@ -176,6 +176,15 @@ export function ApproveAndSendAgreementDialog({
     enabled: open,
   });
 
+  const { data: vaccineRecordsData } = useQuery<{ vaccines: { id: string; itemName: string; dateGiven: string; dateDue: string | null }[] }>({
+    queryKey: ['/api/animals', application?.animalId, 'medical', 'vaccines'],
+    queryFn: async () => {
+      const res = await apiRequest('GET', `/api/animals/${application?.animalId}/medical/vaccines`);
+      return res.json();
+    },
+    enabled: open && !!application?.animalId,
+  });
+
   const contractTemplates = contractTemplatesData?.templates || [];
   const defaultTemplate = contractTemplates.find(t => t.isDefault);
 
@@ -219,14 +228,16 @@ export function ApproveAndSendAgreementDialog({
   }, [open, animal, form]);
 
   useEffect(() => {
-    if (
-      open &&
-      !medicalDatesLoaded &&
-      preventativeCareData?.records &&
-      preventativeCareTypesData?.types
-    ) {
-      const records = preventativeCareData.records;
-      const types = preventativeCareTypesData.types;
+    if (open && !medicalDatesLoaded) {
+      const pcReady = preventativeCareData?.records !== undefined;
+      const typesReady = preventativeCareTypesData?.types !== undefined;
+      const vaccReady = vaccineRecordsData?.vaccines !== undefined;
+
+      if (!pcReady && !vaccReady) return;
+
+      const records = preventativeCareData?.records || [];
+      const types = preventativeCareTypesData?.types || [];
+      const vaccines = vaccineRecordsData?.vaccines || [];
       const newDates: MedicalDueDates = {
         rabiesDueDate: "",
         dhppDueDate: "",
@@ -237,13 +248,22 @@ export function ApproveAndSendAgreementDialog({
         if (matchingRecord?.nextDueDate) {
           const dateStr = new Date(matchingRecord.nextDueDate).toISOString().split('T')[0];
           newDates[field.key] = dateStr;
+        } else {
+          const matchingVaccine = vaccines.find(v => {
+            const name = (v.itemName || '').toLowerCase();
+            return field.careNames.some(cn => name.includes(cn.toLowerCase()));
+          });
+          if (matchingVaccine?.dateDue) {
+            const dateStr = new Date(matchingVaccine.dateDue).toISOString().split('T')[0];
+            newDates[field.key] = dateStr;
+          }
         }
       }
 
       setMedicalDueDates(newDates);
       setMedicalDatesLoaded(true);
     }
-  }, [open, medicalDatesLoaded, preventativeCareData, preventativeCareTypesData]);
+  }, [open, medicalDatesLoaded, preventativeCareData, preventativeCareTypesData, vaccineRecordsData]);
 
   useEffect(() => {
     if (open && defaultTemplate && !form.getValues('contractTemplateId')) {
