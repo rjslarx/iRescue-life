@@ -1201,7 +1201,8 @@ function composePlainTextEmail(data: BriefingData): string {
 
   const shelterCount = data.shelterMissedMeds.length + data.surgeries.length + data.exams.length +
     data.overdueExams.length + data.diagnostics.length +
-    data.procedures.length + data.shelterOverdueCare.length + data.calendarItems.length;
+    data.procedures.length + data.shelterOverdueCare.length + data.calendarItems.length +
+    data.pendingMedicalImports.length;
   const fosterCount = data.missedFosterMeds.length + data.complianceAlerts.length + data.fosterOverdueCare.length +
     data.recentFosterUpdates.length + data.recentFosterPhotos.length;
   const adoptedCount = data.helpRequests.length + data.overdueObligations.length;

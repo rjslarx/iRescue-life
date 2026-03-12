@@ -3496,7 +3496,7 @@ Crawl-delay: 1
    * - Pending vet visits needing medical review
    * - Pending adopter compliance confirmations needing staff approval
    */
-  app.get('/api/notifications/counts', requireTenant, requireAuth, requireRole('admin', 'staff', 'owner', 'manager'), async (req, res, next) => {
+  app.get('/api/notifications/counts', requireTenant, requireAuth, requireRole('admin', 'staff', 'owner', 'manager', 'medical'), async (req, res, next) => {
     try {
       const { vetVisits, adopterComplianceConfirmations, medicalImportItems } = await import('@shared/schema');
 
