@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { db } from '../db';
-import { medicalImportBatches, medicalImportItems, animals, vaccineRecords, procedureLogs, medicalPrescriptions, diagnosticTests, medicalExams } from '@shared/schema';
+import { medicalImportBatches, medicalImportItems, animals, vaccineRecords, procedureLogs, medicalPrescriptions, diagnosticTests, medicalExams, inboundEmails, medicalFiles } from '@shared/schema';
 import { eq, and, isNotNull, desc, sql } from 'drizzle-orm';
 import multer from 'multer';
 import { processMedicalDocument } from '../services/aiMedicalParser';
@@ -8,6 +8,61 @@ import { requireAuth } from '../middleware/auth';
 import { requireTenant } from '../middleware/tenant';
 
 const router = Router();
+
+async function linkSourcePdfToAnimalDocuments(batchId: string, tenantId: string, userId: string) {
+  try {
+    const batch = await db.query.medicalImportBatches.findFirst({
+      where: and(
+        eq(medicalImportBatches.id, batchId),
+        eq(medicalImportBatches.tenantId, tenantId)
+      ),
+    });
+
+    if (!batch || !batch.animalId || !batch.inboundEmailId) return;
+
+    const existing = await db.query.medicalFiles.findFirst({
+      where: and(
+        eq(medicalFiles.animalId, batch.animalId),
+        eq(medicalFiles.tenantId, tenantId),
+        eq(medicalFiles.description, `Imported from email - batch ${batch.id}`)
+      ),
+    });
+    if (existing) return;
+
+    const email = await db.query.inboundEmails.findFirst({
+      where: and(
+        eq(inboundEmails.id, batch.inboundEmailId),
+        eq(inboundEmails.tenantId, tenantId)
+      ),
+    });
+
+    if (!email || !email.attachments || !Array.isArray(email.attachments)) return;
+
+    const pdfAttachment = email.attachments.find(
+      (a: { contentType?: string; filename?: string }) =>
+        a.contentType === 'application/pdf' || a.filename?.toLowerCase().endsWith('.pdf')
+    );
+    if (!pdfAttachment) return;
+
+    const importDate = new Date().toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+    const fileName = pdfAttachment.filename || batch.originalFileName || 'Vet Record.pdf';
+
+    await db.insert(medicalFiles).values({
+      animalId: batch.animalId,
+      tenantId,
+      fileName,
+      fileUrl: pdfAttachment.url,
+      mimeType: 'application/pdf',
+      fileSize: pdfAttachment.size || batch.fileSize || null,
+      description: `Imported from email - batch ${batch.id}`,
+      uploadedBy: userId,
+    });
+
+    console.log(`[Medical Import] Linked PDF "${fileName}" to animal ${batch.animalId} documents (imported ${importDate})`);
+  } catch (error) {
+    console.error('[Medical Import] Failed to link PDF to animal documents:', error);
+  }
+}
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -488,6 +543,10 @@ router.post('/items/:itemId/approve', requireTenant, requireAuth, async (req, re
             completedAt: new Date(),
           })
           .where(eq(medicalImportBatches.id, batch.id));
+
+        if (batch.inboundEmailId) {
+          await linkSourcePdfToAnimalDocuments(batch.id, tenantId, userId);
+        }
       }
     }
 
@@ -564,6 +623,10 @@ router.post('/items/:itemId/reject', requireTenant, requireAuth, async (req, res
             completedAt: new Date(),
           })
           .where(eq(medicalImportBatches.id, batch.id));
+
+        if (batch.inboundEmailId && approvedCount.length > 0) {
+          await linkSourcePdfToAnimalDocuments(batch.id, tenantId, userId);
+        }
       }
     }
 
@@ -746,6 +809,11 @@ router.post('/batches/:batchId/approve-all', requireTenant, requireAuth, async (
         completedAt: new Date(),
       })
       .where(eq(medicalImportBatches.id, batchId));
+
+    const hasImportedRecords = results.some(r => r.success);
+    if (hasImportedRecords && batch.inboundEmailId) {
+      await linkSourcePdfToAnimalDocuments(batchId, tenantId, userId);
+    }
 
     res.json({
       success: true,
