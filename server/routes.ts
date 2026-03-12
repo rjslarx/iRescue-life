@@ -10081,9 +10081,10 @@ Crawl-delay: 1
         })).optional().nullable(),
         isFeeWaived: z.boolean().optional(),
         feeWaiverReason: z.string().max(500).optional(),
+        sendMethod: z.enum(['sms', 'email']).optional(),
       });
       
-      const { applicationId, sendContract, baseFee, grantId, contractTemplateId, vetAppointmentDate, spayNeuterDate, staffConfirmValues, medicalDueDates, carePriorities, customComplianceObligations, isFeeWaived, feeWaiverReason } = approveSchema.parse(req.body);
+      const { applicationId, sendContract, baseFee, grantId, contractTemplateId, vetAppointmentDate, spayNeuterDate, staffConfirmValues, medicalDueDates, carePriorities, customComplianceObligations, isFeeWaived, feeWaiverReason, sendMethod } = approveSchema.parse(req.body);
       
       // Get the application details
       const application = await getApplicationById(req.tenant!.id, applicationId);
@@ -10168,8 +10169,9 @@ Crawl-delay: 1
             updatedAt: new Date(),
           })
           .where(eq(adoptionCheckoutSessions.id, checkoutSession.id));
-        // Send the checkout link email
-        await sendCheckoutLink(checkoutSession.id, token, 'email');
+        // Send the checkout link via preferred method (default to email)
+        const deliveryMethod = sendMethod || 'email';
+        await sendCheckoutLink(checkoutSession.id, token, deliveryMethod);
         contractSent = true;
       }
       

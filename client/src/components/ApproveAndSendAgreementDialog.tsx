@@ -9,6 +9,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -16,7 +17,7 @@ import { z } from "zod";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Check, Send, FileSignature, Star, AlertCircle, ClipboardCheck, Shield, Syringe } from "lucide-react";
+import { Loader2, Check, Send, FileSignature, Star, AlertCircle, ClipboardCheck, Shield, Syringe, MessageSquare, Mail } from "lucide-react";
 import type { Animal, Grant, EditableVariable, CarePriorities } from "@shared/schema";
 import CarePrioritiesInput from "@/components/CarePrioritiesInput";
 
@@ -69,12 +70,21 @@ const formSchema = z.object({
   grantId: z.string().optional(),
   contractTemplateId: z.string().optional(),
   spayNeuterDate: z.string().optional(),
+  isFeeWaived: z.boolean().default(false),
+  feeWaiverReason: z.string().optional(),
 }).superRefine((data, ctx) => {
   if (data.approvalAction === "approve_and_send" && !data.contractTemplateId) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: "Please select a contract template",
       path: ["contractTemplateId"],
+    });
+  }
+  if (data.isFeeWaived && (!data.feeWaiverReason || data.feeWaiverReason.trim().length === 0)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Please provide a reason for waiving the fee",
+      path: ["feeWaiverReason"],
     });
   }
 });
@@ -121,6 +131,7 @@ export function ApproveAndSendAgreementDialog({
 }: ApproveAndSendAgreementDialogProps) {
   const { toast } = useToast();
   const [spayNeuterNotApplicable, setSpayNeuterNotApplicable] = useState(false);
+  const [sendMethod, setSendMethod] = useState<'sms' | 'email'>('sms');
   const [staffConfirmValues, setStaffConfirmValues] = useState<Record<string, string>>({});
   const [medicalDueDates, setMedicalDueDates] = useState<MedicalDueDates>({
     rabiesDueDate: "",
@@ -182,6 +193,8 @@ export function ApproveAndSendAgreementDialog({
       grantId: "",
       contractTemplateId: "",
       spayNeuterDate: "",
+      isFeeWaived: false,
+      feeWaiverReason: "",
     },
   });
 
@@ -191,6 +204,7 @@ export function ApproveAndSendAgreementDialog({
     }
     if (open) {
       setSpayNeuterNotApplicable(false);
+      setSendMethod(application?.applicantPhone ? 'sms' : 'email');
       setStaffConfirmValues({});
       setMedicalDatesLoaded(false);
       setMedicalDueDates({
@@ -249,6 +263,8 @@ export function ApproveAndSendAgreementDialog({
   const baseFee = form.watch("baseFee");
   const approvalAction = form.watch("approvalAction");
   const selectedTemplateId = form.watch("contractTemplateId");
+  const isFeeWaived = form.watch("isFeeWaived");
+  const adopterPhone = application?.applicantPhone;
 
   const selectedTemplate = contractTemplates.find(t => t.id.toString() === selectedTemplateId);
   const editableVars = selectedTemplate?.editableVariables || [];
@@ -268,6 +284,14 @@ export function ApproveAndSendAgreementDialog({
     }
   }, [selectedGrantId]);
 
+  useEffect(() => {
+    if (isFeeWaived) {
+      form.setValue("baseFee", "0");
+    } else if (animal) {
+      form.setValue("baseFee", animal.adoptionFee || "200");
+    }
+  }, [isFeeWaived]);
+
   const allMedicalDatesFilled = approvalAction !== "approve_and_send" ||
     Object.values(medicalDueDates).every(d => d.trim() !== "");
 
@@ -285,6 +309,9 @@ export function ApproveAndSendAgreementDialog({
         medicalDueDates: data.approvalAction === "approve_and_send" ? medicalDueDates : null,
         carePriorities: carePriorities.enabled ? carePriorities : null,
         customComplianceObligations: data.approvalAction === "approve_and_send" && customObligations.length > 0 ? customObligations : null,
+        isFeeWaived: data.isFeeWaived || false,
+        feeWaiverReason: data.feeWaiverReason || null,
+        sendMethod,
       });
       return response.json();
     },
@@ -432,22 +459,70 @@ export function ApproveAndSendAgreementDialog({
                             step="0.01"
                             min="0"
                             placeholder="200.00"
+                            disabled={isFeeWaived}
                             {...field}
                             data-testid="input-adoption-fee"
                           />
                         </div>
                       </FormControl>
                       <FormDescription>
-                        {animal?.adoptionFee 
-                          ? `Pre-filled from ${animal.name}'s configured adoption fee`
-                          : "Enter the adoption fee amount"}
+                        {isFeeWaived
+                          ? "Fee has been waived — $0.00"
+                          : animal?.adoptionFee 
+                            ? `Pre-filled from ${animal.name}'s configured adoption fee`
+                            : "Enter the adoption fee amount"}
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
 
-                {activeGrants.length > 0 && (
+                <FormField
+                  control={form.control}
+                  name="isFeeWaived"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                      <div className="space-y-0.5">
+                        <FormLabel>Waive Adoption Fee</FormLabel>
+                        <FormDescription>
+                          Toggle to waive the entire adoption fee
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                          data-testid="switch-waive-fee"
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+
+                {isFeeWaived && (
+                  <FormField
+                    control={form.control}
+                    name="feeWaiverReason"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Waiver Reason *</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="e.g., Senior animal adoption event, staff adoption"
+                            {...field}
+                            data-testid="input-fee-waiver-reason"
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Required: explain why this fee is being waived
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+
+                {activeGrants.length > 0 && !isFeeWaived && (
                   <FormField
                     control={form.control}
                     name="grantId"
@@ -840,6 +915,45 @@ export function ApproveAndSendAgreementDialog({
                   onChange={setCarePriorities}
                 />
 
+                <Card data-testid="card-delivery-method">
+                  <CardContent className="pt-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <MessageSquare className="h-4 w-4 text-primary" />
+                      <Label className="text-sm font-medium">Contract Delivery Method</Label>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant={sendMethod === 'sms' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setSendMethod('sms')}
+                        disabled={!adopterPhone}
+                        data-testid="button-send-method-sms"
+                      >
+                        <MessageSquare className="h-4 w-4 mr-1" />
+                        SMS
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={sendMethod === 'email' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setSendMethod('email')}
+                        data-testid="button-send-method-email"
+                      >
+                        <Mail className="h-4 w-4 mr-1" />
+                        Email
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      {sendMethod === 'sms' && adopterPhone
+                        ? `Contract link will be sent via SMS to ${adopterPhone}`
+                        : sendMethod === 'sms' && !adopterPhone
+                          ? "No phone number on file — using email instead"
+                          : `Contract link will be sent via email to ${application?.applicantEmail}`}
+                    </p>
+                  </CardContent>
+                </Card>
+
                 <Card className="bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
                   <CardContent className="pt-4">
                     <div className="flex gap-3">
@@ -848,9 +962,15 @@ export function ApproveAndSendAgreementDialog({
                         <p className="font-medium">What happens next:</p>
                         <ol className="list-decimal list-inside mt-1 space-y-1 text-blue-600 dark:text-blue-400">
                           <li>Application is marked as approved</li>
-                          <li>Contract is emailed for e-signature</li>
-                          <li>After signing, payment link is sent automatically</li>
-                          <li>Once paid, adoption is finalized</li>
+                          <li>Contract link sent via {sendMethod === 'sms' && adopterPhone ? 'SMS' : 'email'} for e-signature</li>
+                          {isFeeWaived ? (
+                            <li>After signing, adoption is finalized automatically (fee waived)</li>
+                          ) : (
+                            <>
+                              <li>After signing, payment link is sent automatically</li>
+                              <li>Once paid, adoption is finalized</li>
+                            </>
+                          )}
                         </ol>
                       </div>
                     </div>
