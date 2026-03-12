@@ -657,7 +657,8 @@ export default function MedicalImportsPage() {
     queryKey: ['/api/animals'],
   });
 
-  const animals = animalsData?.animals || [];
+  const terminalStatuses = ['deceased', 'transported', 'returned_to_owner', 'returned_to_field'];
+  const animals = (animalsData?.animals || []).filter(a => !terminalStatuses.includes(a.status));
 
   const filteredBatches = (batches || []).filter(b => {
     if (sourceFilter === 'all') return true;
