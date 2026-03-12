@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db } from '../db';
 import { medicalImportBatches, medicalImportItems, animals, vaccineRecords, procedureLogs, medicalPrescriptions, diagnosticTests, medicalExams } from '@shared/schema';
-import { eq, and, isNotNull, desc } from 'drizzle-orm';
+import { eq, and, isNotNull, desc, sql } from 'drizzle-orm';
 import multer from 'multer';
 import { processMedicalDocument } from '../services/aiMedicalParser';
 import { requireAuth } from '../middleware/auth';
@@ -831,6 +831,146 @@ router.post('/batches/:batchId/assign-animal', requireTenant, requireAuth, async
     });
 
     res.json({ ...updatedBatch, items, assignedAnimalName: animal.name });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/batches/:batchId/check-duplicates', requireTenant, requireAuth, async (req, res, next) => {
+  try {
+    const { batchId } = req.params;
+    const tenantId = req.tenant!.id;
+
+    const batch = await db.query.medicalImportBatches.findFirst({
+      where: and(
+        eq(medicalImportBatches.id, batchId),
+        eq(medicalImportBatches.tenantId, tenantId)
+      ),
+    });
+
+    if (!batch) {
+      return res.status(404).json({ error: 'Import batch not found' });
+    }
+
+    const pendingItems = await db.query.medicalImportItems.findMany({
+      where: and(
+        eq(medicalImportItems.batchId, batchId),
+        eq(medicalImportItems.status, 'pending')
+      ),
+    });
+
+    if (pendingItems.length === 0) {
+      return res.json({ duplicates: {} });
+    }
+
+    const animalIds = [...new Set(pendingItems.map(i => i.animalId).filter(Boolean))] as string[];
+    if (animalIds.length === 0) {
+      return res.json({ duplicates: {} });
+    }
+
+    const [existingVaccines, existingProcedures, existingPrescriptions, existingDiagnostics, existingExams] = await Promise.all([
+      db.select({ id: vaccineRecords.id, animalId: vaccineRecords.animalId, itemName: vaccineRecords.itemName, dateGiven: vaccineRecords.dateGiven })
+        .from(vaccineRecords)
+        .where(and(eq(vaccineRecords.tenantId, tenantId), sql`${vaccineRecords.animalId} = ANY(${animalIds})`)),
+      db.select({ id: procedureLogs.id, animalId: procedureLogs.animalId, procedureName: procedureLogs.procedureName, procedureDate: procedureLogs.procedureDate })
+        .from(procedureLogs)
+        .where(and(eq(procedureLogs.tenantId, tenantId), sql`${procedureLogs.animalId} = ANY(${animalIds})`)),
+      db.select({ id: medicalPrescriptions.id, animalId: medicalPrescriptions.animalId, medicationName: medicalPrescriptions.medicationName, startDate: medicalPrescriptions.startDate })
+        .from(medicalPrescriptions)
+        .where(and(eq(medicalPrescriptions.tenantId, tenantId), sql`${medicalPrescriptions.animalId} = ANY(${animalIds})`)),
+      db.select({ id: diagnosticTests.id, animalId: diagnosticTests.animalId, testName: diagnosticTests.testName, testDate: diagnosticTests.testDate })
+        .from(diagnosticTests)
+        .where(and(eq(diagnosticTests.tenantId, tenantId), sql`${diagnosticTests.animalId} = ANY(${animalIds})`)),
+      db.select({ id: medicalExams.id, animalId: medicalExams.animalId, examType: medicalExams.examType, examDate: medicalExams.examDate })
+        .from(medicalExams)
+        .where(and(eq(medicalExams.tenantId, tenantId), sql`${medicalExams.animalId} = ANY(${animalIds})`)),
+    ]);
+
+    const normalize = (s: string | null | undefined) => (s || '').trim().toLowerCase();
+    const dateStr = (d: Date | string | null | undefined) => {
+      if (!d) return '';
+      if (d instanceof Date) {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+      }
+      const str = String(d).trim();
+      const match = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+      if (match) return `${match[1]}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}`;
+      const parsed = new Date(str);
+      if (isNaN(parsed.getTime())) return '';
+      const y2 = parsed.getFullYear();
+      const m2 = String(parsed.getMonth() + 1).padStart(2, '0');
+      const day2 = String(parsed.getDate()).padStart(2, '0');
+      return `${y2}-${m2}-${day2}`;
+    };
+
+    const duplicates: Record<string, { isDuplicate: boolean; matchedRecordId?: string; matchedSummary?: string }> = {};
+
+    for (const item of pendingItems) {
+      const data = (item.modifiedData as Record<string, unknown>) || (item.extractedData as Record<string, unknown>);
+      if (!data || !item.animalId) {
+        duplicates[item.id] = { isDuplicate: false };
+        continue;
+      }
+
+      let match: { id: string; summary: string } | null = null;
+
+      switch (item.recordType) {
+        case 'vaccine': {
+          const name = normalize(data.itemName as string);
+          const date = dateStr(data.dateGiven as string);
+          const found = existingVaccines.find(v =>
+            v.animalId === item.animalId && normalize(v.itemName) === name && dateStr(v.dateGiven) === date
+          );
+          if (found) match = { id: found.id, summary: `Vaccine "${found.itemName}" on ${dateStr(found.dateGiven)}` };
+          break;
+        }
+        case 'procedure': {
+          const name = normalize(data.procedureName as string);
+          const date = dateStr(data.procedureDate as string);
+          const found = existingProcedures.find(p =>
+            p.animalId === item.animalId && normalize(p.procedureName) === name && dateStr(p.procedureDate) === date
+          );
+          if (found) match = { id: found.id, summary: `Procedure "${found.procedureName}" on ${dateStr(found.procedureDate)}` };
+          break;
+        }
+        case 'prescription': {
+          const name = normalize(data.medicationName as string);
+          const date = dateStr(data.startDate as string);
+          const found = existingPrescriptions.find(p =>
+            p.animalId === item.animalId && normalize(p.medicationName) === name && dateStr(p.startDate) === date
+          );
+          if (found) match = { id: found.id, summary: `Prescription "${found.medicationName}" starting ${dateStr(found.startDate)}` };
+          break;
+        }
+        case 'diagnostic': {
+          const name = normalize(data.testName as string);
+          const date = dateStr(data.testDate as string);
+          const found = existingDiagnostics.find(d =>
+            d.animalId === item.animalId && normalize(d.testName) === name && dateStr(d.testDate) === date
+          );
+          if (found) match = { id: found.id, summary: `Diagnostic "${found.testName}" on ${dateStr(found.testDate)}` };
+          break;
+        }
+        case 'exam': {
+          const type = normalize(data.examType as string);
+          const date = dateStr(data.examDate as string);
+          const found = existingExams.find(e =>
+            e.animalId === item.animalId && normalize(e.examType) === type && dateStr(e.examDate) === date
+          );
+          if (found) match = { id: found.id, summary: `${(found.examType || 'Exam').charAt(0).toUpperCase() + (found.examType || 'exam').slice(1)} exam on ${dateStr(found.examDate)}` };
+          break;
+        }
+      }
+
+      duplicates[item.id] = match
+        ? { isDuplicate: true, matchedRecordId: match.id, matchedSummary: match.summary }
+        : { isDuplicate: false };
+    }
+
+    res.json({ duplicates });
   } catch (error) {
     next(error);
   }

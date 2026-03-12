@@ -9,10 +9,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel,
+  AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
+  AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
   FileText, Loader2, Check, X, AlertTriangle,
   Syringe, Stethoscope, Pill, TestTube, ClipboardList,
   CheckCircle2, XCircle, Sparkles, Mail, ArrowLeft,
-  PawPrint, Calendar
+  PawPrint, Calendar, Copy
 } from "lucide-react";
 import type { Animal, MedicalImportBatch, MedicalImportItem } from "@shared/schema";
 import { Link } from "wouter";
@@ -96,9 +102,29 @@ function formatExtractedData(item: MedicalImportItem) {
   }
 }
 
+type DuplicateMap = Record<string, { isDuplicate: boolean; matchedRecordId?: string; matchedSummary?: string }>;
+
 function BatchCard({ batch, animals }: { batch: BatchWithItems; animals: Animal[] }) {
   const { toast } = useToast();
   const [selectedAnimalId, setSelectedAnimalId] = useState<string>(batch.animalId || "");
+  const [confirmApproveItemId, setConfirmApproveItemId] = useState<string | null>(null);
+
+  const hasPendingItems = batch.items.some(i => i.status === 'pending');
+  const hasAnimalAssigned = !!batch.animalId;
+
+  const { data: dupData, isLoading: dupLoading, isError: dupError } = useQuery<{ duplicates: DuplicateMap }>({
+    queryKey: ['/api/medical-import/batches', batch.id, 'check-duplicates'],
+    queryFn: async () => {
+      const r = await fetch(`/api/medical-import/batches/${batch.id}/check-duplicates`, { credentials: 'include' });
+      if (!r.ok) throw new Error('Failed to check duplicates');
+      return r.json();
+    },
+    enabled: hasAnimalAssigned && hasPendingItems,
+    staleTime: 10000,
+  });
+
+  const dupCheckReady = hasAnimalAssigned && hasPendingItems ? !dupLoading && !dupError && !!dupData : true;
+  const duplicates: DuplicateMap = dupData?.duplicates || {};
 
   const assignAnimalMutation = useMutation({
     mutationFn: async (animalId: string) => {
@@ -107,6 +133,7 @@ function BatchCard({ batch, animals }: { batch: BatchWithItems; animals: Animal[
     onSuccess: () => {
       toast({ title: "Animal Assigned", description: "Animal has been linked to this import batch" });
       queryClient.invalidateQueries({ queryKey: ['/api/medical-import/email-batches'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/medical-import/batches', batch.id, 'check-duplicates'] });
     },
     onError: (error: Error) => {
       toast({ title: "Assignment Failed", description: error.message, variant: "destructive" });
@@ -120,6 +147,7 @@ function BatchCard({ batch, animals }: { batch: BatchWithItems; animals: Animal[
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/medical-import/email-batches'] });
       queryClient.invalidateQueries({ queryKey: ['/api/notifications/counts'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/medical-import/batches', batch.id, 'check-duplicates'] });
     },
   });
 
@@ -130,23 +158,54 @@ function BatchCard({ batch, animals }: { batch: BatchWithItems; animals: Animal[
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/medical-import/email-batches'] });
       queryClient.invalidateQueries({ queryKey: ['/api/notifications/counts'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/medical-import/batches', batch.id, 'check-duplicates'] });
     },
   });
 
   const approveAllMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (options?: { skipDuplicates?: boolean }) => {
+      if (options?.skipDuplicates) {
+        const nonDupItems = pendingItems.filter(i => !duplicates[i.id]?.isDuplicate);
+        const results = [];
+        for (const item of nonDupItems) {
+          try {
+            await apiRequest("POST", `/api/medical-import/items/${item.id}/approve`);
+            results.push({ success: true });
+          } catch {
+            results.push({ success: false });
+          }
+        }
+        return { imported: results.filter(r => r.success).length, skippedDuplicates: pendingItems.length - nonDupItems.length };
+      }
       return apiRequest("POST", `/api/medical-import/batches/${batch.id}/approve-all`);
     },
-    onSuccess: (data: { imported: number }) => {
-      toast({ title: "Records Imported", description: `Successfully imported ${data.imported} medical records` });
+    onSuccess: (data: { imported: number; skippedDuplicates?: number }) => {
+      const parts = [`Successfully imported ${data.imported} medical records`];
+      if (data.skippedDuplicates && data.skippedDuplicates > 0) {
+        parts.push(`${data.skippedDuplicates} likely duplicate(s) skipped`);
+      }
+      toast({ title: "Records Imported", description: parts.join('. ') });
       queryClient.invalidateQueries({ queryKey: ['/api/medical-import/email-batches'] });
       queryClient.invalidateQueries({ queryKey: ['/api/notifications/counts'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/medical-import/batches', batch.id, 'check-duplicates'] });
     },
   });
+
+  const handleApproveClick = (itemId: string) => {
+    if (duplicates[itemId]?.isDuplicate) {
+      setConfirmApproveItemId(itemId);
+    } else {
+      approveMutation.mutate(itemId);
+    }
+  };
 
   const pendingItems = batch.items.filter(i => i.status === 'pending');
   const approvedItems = batch.items.filter(i => i.status === 'approved');
   const rejectedItems = batch.items.filter(i => i.status === 'rejected');
+
+  const duplicateCount = pendingItems.filter(i => duplicates[i.id]?.isDuplicate).length;
+  const nonDuplicateCount = pendingItems.length - duplicateCount;
+  const allPendingAreDuplicates = duplicateCount > 0 && nonDuplicateCount === 0;
 
   const assignedAnimal = animals.find(a => a.id === batch.animalId);
   const needsAnimalAssignment = !batch.animalId;
@@ -225,37 +284,87 @@ function BatchCard({ batch, animals }: { batch: BatchWithItems; animals: Animal[
         {pendingItems.length > 0 && (
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-2">
-              <h4 className="text-sm font-medium flex items-center gap-1">
+              <h4 className="text-sm font-medium flex items-center gap-1 flex-wrap">
                 Pending Review ({pendingItems.length})
+                {hasAnimalAssigned && dupLoading && (
+                  <Badge variant="outline" className="text-muted-foreground ml-1 gap-1">
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    Checking duplicates...
+                  </Badge>
+                )}
+                {duplicateCount > 0 && (
+                  <Badge variant="outline" className="text-amber-600 border-amber-400 ml-1">
+                    <Copy className="w-3 h-3 mr-1" />
+                    {duplicateCount} likely duplicate{duplicateCount !== 1 ? 's' : ''}
+                  </Badge>
+                )}
               </h4>
               {!needsAnimalAssignment && pendingItems.length > 1 && (
-                <Button
-                  size="sm"
-                  onClick={() => approveAllMutation.mutate()}
-                  disabled={approveAllMutation.isPending}
-                  data-testid={`button-approve-all-${batch.id}`}
-                >
-                  {approveAllMutation.isPending ? (
-                    <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                  ) : (
-                    <CheckCircle2 className="w-4 h-4 mr-1" />
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span>
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          if (duplicateCount > 0) {
+                            approveAllMutation.mutate({ skipDuplicates: true });
+                          } else {
+                            approveAllMutation.mutate();
+                          }
+                        }}
+                        disabled={approveAllMutation.isPending || allPendingAreDuplicates || !dupCheckReady}
+                        data-testid={`button-approve-all-${batch.id}`}
+                      >
+                        {approveAllMutation.isPending ? (
+                          <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                        ) : (
+                          <CheckCircle2 className="w-4 h-4 mr-1" />
+                        )}
+                        {duplicateCount > 0 && !allPendingAreDuplicates
+                          ? `Approve ${nonDuplicateCount} Non-Duplicate${nonDuplicateCount !== 1 ? 's' : ''}`
+                          : 'Approve All'}
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  {(allPendingAreDuplicates || !dupCheckReady) && (
+                    <TooltipContent>
+                      <p>{!dupCheckReady
+                        ? "Checking for duplicate records..."
+                        : "All pending items are likely duplicates. Review and approve individually if needed."
+                      }</p>
+                    </TooltipContent>
                   )}
-                  Approve All
-                </Button>
+                </Tooltip>
               )}
             </div>
             <div className="space-y-2">
-              {pendingItems.map((item) => (
-                <Card key={item.id}>
+              {pendingItems.map((item) => {
+                const isDup = duplicates[item.id]?.isDuplicate;
+                const dupSummary = duplicates[item.id]?.matchedSummary;
+                return (
+                <Card key={item.id} className={isDup ? "border-amber-400/50" : ""}>
                   <CardContent className="p-3">
                     <div className="flex items-start gap-3">
-                      <div className="flex-shrink-0 p-2 bg-muted rounded-md">
+                      <div className={`flex-shrink-0 p-2 rounded-md ${isDup ? "bg-amber-500/10" : "bg-muted"}`}>
                         {getRecordTypeIcon(item.recordType)}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1 flex-wrap">
                           <Badge variant="secondary" className="capitalize">{item.recordType}</Badge>
                           {getConfidenceBadge(item.confidence)}
+                          {isDup && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Badge variant="outline" className="text-amber-600 border-amber-400 gap-1" data-testid={`badge-duplicate-${item.id}`}>
+                                  <Copy className="w-3 h-3" />
+                                  Likely Duplicate
+                                </Badge>
+                              </TooltipTrigger>
+                              <TooltipContent side="bottom" className="max-w-xs">
+                                <p className="text-xs">Existing record found: {dupSummary}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          )}
                         </div>
                         {formatExtractedData(item)}
                         {item.sourceText && (
@@ -278,8 +387,8 @@ function BatchCard({ batch, animals }: { batch: BatchWithItems; animals: Animal[
                           </Button>
                           <Button
                             size="icon"
-                            onClick={() => approveMutation.mutate(item.id)}
-                            disabled={approveMutation.isPending}
+                            onClick={() => handleApproveClick(item.id)}
+                            disabled={approveMutation.isPending || (!dupCheckReady && hasAnimalAssigned)}
                             data-testid={`button-approve-${item.id}`}
                           >
                             <Check className="w-4 h-4" />
@@ -289,10 +398,42 @@ function BatchCard({ batch, animals }: { batch: BatchWithItems; animals: Animal[
                     </div>
                   </CardContent>
                 </Card>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
+
+        <AlertDialog open={!!confirmApproveItemId} onOpenChange={(open) => { if (!open) setConfirmApproveItemId(null); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Possible Duplicate Record</AlertDialogTitle>
+              <AlertDialogDescription>
+                A similar medical record already exists for this animal
+                {confirmApproveItemId && duplicates[confirmApproveItemId]?.matchedSummary && (
+                  <span className="block mt-2 text-sm font-medium text-amber-600 dark:text-amber-400">
+                    Match: {duplicates[confirmApproveItemId]?.matchedSummary}
+                  </span>
+                )}
+                <span className="block mt-2">Are you sure you want to import this record? This may create a duplicate entry.</span>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel data-testid="button-cancel-duplicate">Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  if (confirmApproveItemId) {
+                    approveMutation.mutate(confirmApproveItemId);
+                    setConfirmApproveItemId(null);
+                  }
+                }}
+                data-testid="button-confirm-import-anyway"
+              >
+                Import Anyway
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {approvedItems.length > 0 && (
           <div className="space-y-2">
