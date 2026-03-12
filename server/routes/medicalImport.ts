@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db } from '../db';
 import { medicalImportBatches, medicalImportItems, animals, vaccineRecords, procedureLogs, medicalPrescriptions, diagnosticTests, medicalExams, inboundEmails, medicalFiles } from '@shared/schema';
-import { eq, and, isNotNull, desc, sql } from 'drizzle-orm';
+import { eq, and, isNotNull, desc, sql, inArray } from 'drizzle-orm';
 import multer from 'multer';
 import { processMedicalDocument } from '../services/aiMedicalParser';
 import { requireAuth } from '../middleware/auth';
@@ -939,19 +939,19 @@ router.get('/batches/:batchId/check-duplicates', requireTenant, requireAuth, asy
     const [existingVaccines, existingProcedures, existingPrescriptions, existingDiagnostics, existingExams] = await Promise.all([
       db.select({ id: vaccineRecords.id, animalId: vaccineRecords.animalId, itemName: vaccineRecords.itemName, dateGiven: vaccineRecords.dateGiven })
         .from(vaccineRecords)
-        .where(and(eq(vaccineRecords.tenantId, tenantId), sql`${vaccineRecords.animalId} = ANY(${animalIds})`)),
+        .where(and(eq(vaccineRecords.tenantId, tenantId), inArray(vaccineRecords.animalId, animalIds))),
       db.select({ id: procedureLogs.id, animalId: procedureLogs.animalId, procedureName: procedureLogs.procedureName, procedureDate: procedureLogs.procedureDate })
         .from(procedureLogs)
-        .where(and(eq(procedureLogs.tenantId, tenantId), sql`${procedureLogs.animalId} = ANY(${animalIds})`)),
+        .where(and(eq(procedureLogs.tenantId, tenantId), inArray(procedureLogs.animalId, animalIds))),
       db.select({ id: medicalPrescriptions.id, animalId: medicalPrescriptions.animalId, medicationName: medicalPrescriptions.medicationName, startDate: medicalPrescriptions.startDate })
         .from(medicalPrescriptions)
-        .where(and(eq(medicalPrescriptions.tenantId, tenantId), sql`${medicalPrescriptions.animalId} = ANY(${animalIds})`)),
+        .where(and(eq(medicalPrescriptions.tenantId, tenantId), inArray(medicalPrescriptions.animalId, animalIds))),
       db.select({ id: diagnosticTests.id, animalId: diagnosticTests.animalId, testName: diagnosticTests.testName, testDate: diagnosticTests.testDate })
         .from(diagnosticTests)
-        .where(and(eq(diagnosticTests.tenantId, tenantId), sql`${diagnosticTests.animalId} = ANY(${animalIds})`)),
+        .where(and(eq(diagnosticTests.tenantId, tenantId), inArray(diagnosticTests.animalId, animalIds))),
       db.select({ id: medicalExams.id, animalId: medicalExams.animalId, examType: medicalExams.examType, examDate: medicalExams.examDate })
         .from(medicalExams)
-        .where(and(eq(medicalExams.tenantId, tenantId), sql`${medicalExams.animalId} = ANY(${animalIds})`)),
+        .where(and(eq(medicalExams.tenantId, tenantId), inArray(medicalExams.animalId, animalIds))),
     ]);
 
     const normalize = (s: string | null | undefined) => (s || '').trim().toLowerCase();
