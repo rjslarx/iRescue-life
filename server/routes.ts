@@ -26254,8 +26254,8 @@ Submitted: ${new Date().toLocaleString()}
 
       if (emailData.attachments && emailData.attachments.length > 0) {
         try {
-          const { data: attachments } = await resend.attachments.receiving.list({ 
-            inboundId: emailData.email_id 
+          const { data: attachments } = await resend.emails.receiving.attachments.list({ 
+            emailId: emailData.email_id 
           });
 
           if (attachments && attachments.length > 0) {
@@ -26264,7 +26264,7 @@ Submitted: ${new Date().toLocaleString()}
 
             for (const att of attachments) {
               try {
-                const { data: attachmentData } = await resend.attachments.receiving.get(att.id);
+                const { data: attachmentData } = await resend.emails.receiving.attachments.get({ emailId: emailData.email_id, id: att.id });
                 if (!attachmentData || !attachmentData.content) {
                   attachmentsList.push({
                     filename: att.filename || 'unknown',
