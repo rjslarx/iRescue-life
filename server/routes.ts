@@ -26250,7 +26250,7 @@ Submitted: ${new Date().toLocaleString()}
 
                 const isPdf = (att.content_type || '').toLowerCase() === 'application/pdf' ||
                               (att.filename || '').toLowerCase().endsWith('.pdf');
-                if (isPdf && storageUrl) {
+                if (isPdf) {
                   pdfBuffers.push({
                     filename: att.filename || 'document.pdf',
                     buffer: contentBuffer,
@@ -26310,7 +26310,7 @@ Submitted: ${new Date().toLocaleString()}
               animalId: null,
               inboundEmailId: savedEmail.id,
               originalFileName: pdf.filename,
-              fileUrl: pdf.storageUrl,
+              fileUrl: pdf.storageUrl || null,
               fileSize: pdf.size,
               status: 'processing' as const,
             }).returning();
