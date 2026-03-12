@@ -370,11 +370,11 @@ export default function MedicalImportsPage() {
     refetchInterval: 30000,
   });
 
-  const { data: animalsData } = useQuery<Animal[]>({
+  const { data: animalsData } = useQuery<{ animals: Animal[] }>({
     queryKey: ['/api/animals'],
   });
 
-  const animals = animalsData || [];
+  const animals = animalsData?.animals || [];
   const pendingBatches = batches?.filter(b => b.items.some(i => i.status === 'pending')) || [];
   const completedBatches = batches?.filter(b => !b.items.some(i => i.status === 'pending')) || [];
 
