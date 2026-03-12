@@ -19,6 +19,7 @@ import {
   ClipboardCheck,
   CheckCircle,
   Phone,
+  FileSearch,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
@@ -118,6 +119,13 @@ interface SpayNeuterOverdueItem {
   daysOverdue: number;
 }
 
+interface PendingMedicalImport {
+  batchId: string;
+  fileName: string;
+  itemCount: number;
+  animalName: string | null;
+}
+
 interface DailyBriefingData {
   today: {
     surgeries: Surgery[];
@@ -132,6 +140,7 @@ interface DailyBriefingData {
     adopterConfirmationsPendingReview?: AdopterConfirmationPendingReview[];
     adopterObligationsPendingReview?: AdopterObligationPendingReview[];
     spayNeuterOverdue?: SpayNeuterOverdueItem[];
+    pendingMedicalImports?: PendingMedicalImport[];
   };
   tomorrow: {
     surgeries: Surgery[];
@@ -201,6 +210,7 @@ export function DailyBriefing() {
   const hasAdopterObligations = (data?.today.adopterObligationsPendingReview?.length ?? 0) > 0;
   const hasAdopterConfirmations = (data?.today.adopterConfirmationsPendingReview?.length ?? 0) > 0;
   const hasSpayNeuterOverdue = (data?.today.spayNeuterOverdue?.length ?? 0) > 0;
+  const hasPendingMedicalImports = (data?.today.pendingMedicalImports?.length ?? 0) > 0;
 
   const hasUrgent = data && (
     data.today.surgeries.length > 0 || 
@@ -221,7 +231,7 @@ export function DailyBriefing() {
     (data.tomorrow.vetEvents && data.tomorrow.vetEvents.length > 0)
   );
 
-  const isEmpty = !hasUrgent && !hasSpayNeuterOverdue && !hasMedicalToday && !hasVetEventsToday && !hasTomorrowItems && 
+  const isEmpty = !hasUrgent && !hasSpayNeuterOverdue && !hasPendingMedicalImports && !hasMedicalToday && !hasVetEventsToday && !hasTomorrowItems && 
     !hasFosterBioPhoto && !hasAdopterConfirmations &&
     (!data?.today.calendar || data.today.calendar.length === 0);
 
@@ -286,6 +296,47 @@ export function DailyBriefing() {
                       </div>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {hasPendingMedicalImports && (
+                <div
+                  className="rounded-md border border-violet-300 dark:border-violet-700 bg-violet-50 dark:bg-violet-950/30 p-3"
+                  data-testid="section-pending-medical-imports-briefing"
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <FileSearch className="h-4 w-4 text-violet-600 dark:text-violet-400 flex-shrink-0" />
+                    <span className="text-sm font-bold text-violet-700 dark:text-violet-300">AI-Parsed Medical Records Pending Review</span>
+                    <Badge variant="secondary" className="text-xs ml-auto">
+                      {data?.today.pendingMedicalImports?.reduce((sum, b) => sum + b.itemCount, 0)} records
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground mb-2">
+                    Records parsed by AI from imported documents awaiting human review and approval.
+                  </p>
+                  <div className="space-y-1">
+                    {data?.today.pendingMedicalImports?.map((imp) => (
+                      <div
+                        key={imp.batchId}
+                        className="flex items-center gap-2 py-1"
+                        data-testid={`row-pending-import-${imp.batchId}`}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{imp.fileName}</p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {imp.itemCount} record{imp.itemCount !== 1 ? 's' : ''} &middot; {imp.animalName || 'Unassigned'}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <Link
+                    href="/dashboard/medical-imports"
+                    className="text-xs text-violet-600 dark:text-violet-400 hover:underline mt-2 block"
+                    data-testid="link-review-medical-imports"
+                  >
+                    Review all pending records
+                  </Link>
                 </div>
               )}
 

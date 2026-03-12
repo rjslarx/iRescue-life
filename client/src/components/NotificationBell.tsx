@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Bell, Stethoscope, ShieldCheck } from "lucide-react";
+import { Bell, Stethoscope, ShieldCheck, FileSearch } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -12,6 +12,7 @@ import { useState } from "react";
 interface NotificationCounts {
   pendingVetVisits: number;
   pendingComplianceReviews: number;
+  pendingMedicalImports: number;
   total: number;
 }
 
@@ -28,6 +29,7 @@ export default function NotificationBell() {
   const total = data?.total || 0;
   const vetCount = data?.pendingVetVisits || 0;
   const complianceCount = data?.pendingComplianceReviews || 0;
+  const medicalImportCount = data?.pendingMedicalImports || 0;
 
   const handleVetClick = () => {
     setOpen(false);
@@ -37,6 +39,11 @@ export default function NotificationBell() {
   const handleComplianceClick = () => {
     setOpen(false);
     navigate("/dashboard/adopter-compliance");
+  };
+
+  const handleMedicalImportClick = () => {
+    setOpen(false);
+    navigate("/dashboard/medical-imports");
   };
 
   return (
@@ -67,6 +74,26 @@ export default function NotificationBell() {
           )}
         </div>
         <div className="max-h-[300px] overflow-y-auto">
+          {medicalImportCount > 0 && (
+            <Button
+              variant="ghost"
+              onClick={handleMedicalImportClick}
+              className="flex items-start gap-3 w-full h-auto p-3 text-left justify-start rounded-none border-b last:border-b-0"
+              data-testid="notification-medical-imports"
+            >
+              <div className="flex-shrink-0 mt-0.5 w-8 h-8 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
+                <FileSearch className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+              </div>
+              <div className="min-w-0 whitespace-normal">
+                <p className="text-sm font-medium" data-testid="text-medical-import-count">
+                  {medicalImportCount} medical record{medicalImportCount !== 1 ? "s" : ""} awaiting review
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  AI-parsed records need human approval
+                </p>
+              </div>
+            </Button>
+          )}
           {vetCount > 0 && (
             <Button
               variant="ghost"

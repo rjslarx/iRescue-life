@@ -3498,7 +3498,7 @@ Crawl-delay: 1
    */
   app.get('/api/notifications/counts', requireTenant, requireAuth, requireRole('admin', 'staff', 'owner', 'manager'), async (req, res, next) => {
     try {
-      const { vetVisits, adopterComplianceConfirmations } = await import('@shared/schema');
+      const { vetVisits, adopterComplianceConfirmations, medicalImportItems } = await import('@shared/schema');
 
       const [vetResult] = await db
         .select({ count: sql<number>`count(*)::int` })
@@ -3516,10 +3516,23 @@ Crawl-delay: 1
           eq(adopterComplianceConfirmations.status, 'pending_review')
         ));
 
+      const [medicalImportResult] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(medicalImportItems)
+        .where(and(
+          eq(medicalImportItems.tenantId, req.tenant!.id),
+          eq(medicalImportItems.status, 'pending')
+        ));
+
+      const vetCount = vetResult?.count || 0;
+      const complianceCount = complianceResult?.count || 0;
+      const medicalImportCount = medicalImportResult?.count || 0;
+
       res.json({
-        pendingVetVisits: vetResult?.count || 0,
-        pendingComplianceReviews: complianceResult?.count || 0,
-        total: (vetResult?.count || 0) + (complianceResult?.count || 0),
+        pendingVetVisits: vetCount,
+        pendingComplianceReviews: complianceCount,
+        pendingMedicalImports: medicalImportCount,
+        total: vetCount + complianceCount + medicalImportCount,
       });
     } catch (error) {
       next(error);
@@ -4404,6 +4417,37 @@ Crawl-delay: 1
         daysOverdue: Math.floor((Date.now() - new Date(o.contractualDueDate).getTime()) / 86400000),
       }));
 
+      const { medicalImportBatches: mibTable2 } = await import('@shared/schema');
+      const pendingImportBatches = await db
+        .select({
+          batchId: mibTable2.id,
+          fileName: mibTable2.originalFileName,
+          animalId: mibTable2.animalId,
+          itemCount: sql<number>`(SELECT count(*)::int FROM medical_import_items WHERE batch_id = ${mibTable2.id} AND status = 'pending')`,
+        })
+        .from(mibTable2)
+        .where(and(
+          eq(mibTable2.tenantId, req.tenant!.id),
+          sql`EXISTS (SELECT 1 FROM medical_import_items WHERE batch_id = ${mibTable2.id} AND status = 'pending')`
+        ))
+        .limit(10);
+
+      const pendingImportAnimalIds = pendingImportBatches.map(b => b.animalId).filter((id): id is string => !!id);
+      let pendingImportAnimalMap = new Map<string, string>();
+      if (pendingImportAnimalIds.length > 0) {
+        const pAnimals = await db.select({ id: animals.id, name: animals.name }).from(animals).where(inArray(animals.id, pendingImportAnimalIds));
+        pendingImportAnimalMap = new Map(pAnimals.map(a => [a.id, a.name]));
+      }
+
+      const pendingMedicalImports = pendingImportBatches
+        .filter(b => b.itemCount > 0)
+        .map(b => ({
+          batchId: b.batchId,
+          fileName: b.fileName,
+          itemCount: b.itemCount,
+          animalName: b.animalId ? (pendingImportAnimalMap.get(b.animalId) || null) : null,
+        }));
+
       res.json({
         today: {
           surgeries: surgeriesToday,
@@ -4418,6 +4462,7 @@ Crawl-delay: 1
           adopterConfirmationsPendingReview: pendingConfirmationsRaw,
           adopterObligationsPendingReview: pendingObligationsRaw,
           spayNeuterOverdue,
+          pendingMedicalImports,
         },
         tomorrow: {
           surgeries: surgeriesTomorrow,

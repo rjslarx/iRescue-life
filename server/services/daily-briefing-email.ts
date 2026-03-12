@@ -118,6 +118,13 @@ interface FosterPhotoItem {
   caption: string | null;
 }
 
+interface PendingMedicalImportItem {
+  batchId: string;
+  fileName: string;
+  itemCount: number;
+  animalName: string | null;
+}
+
 interface ShelterMissedMed {
   animalName: string;
   animalId: string;
@@ -151,6 +158,7 @@ interface BriefingData {
   overdueObligations: OverdueObligationItem[];
   recentFosterUpdates: FosterUpdateItem[];
   recentFosterPhotos: FosterPhotoItem[];
+  pendingMedicalImports: PendingMedicalImportItem[];
 }
 
 async function gatherBriefingData(tenantId: string): Promise<BriefingData | null> {
@@ -763,6 +771,41 @@ async function gatherBriefingData(tenantId: string): Promise<BriefingData | null
     caption: r.caption,
   }));
 
+  const { medicalImportBatches, medicalImportItems } = await import('@shared/schema');
+
+  const pendingBatches = await db
+    .select({
+      batchId: medicalImportBatches.id,
+      fileName: medicalImportBatches.originalFileName,
+      animalId: medicalImportBatches.animalId,
+      itemCount: sql<number>`(SELECT count(*)::int FROM medical_import_items WHERE batch_id = ${medicalImportBatches.id} AND status = 'pending')`,
+    })
+    .from(medicalImportBatches)
+    .where(and(
+      eq(medicalImportBatches.tenantId, tenantId),
+      sql`EXISTS (SELECT 1 FROM medical_import_items WHERE batch_id = ${medicalImportBatches.id} AND status = 'pending')`
+    ))
+    .limit(20);
+
+  const pendingAnimalIds = pendingBatches.map(b => b.animalId).filter((id): id is string => !!id);
+  let pendingAnimalMap = new Map<string, string>();
+  if (pendingAnimalIds.length > 0) {
+    const pendingAnimalRows = await db
+      .select({ id: animals.id, name: animals.name })
+      .from(animals)
+      .where(inArray(animals.id, pendingAnimalIds));
+    pendingAnimalMap = new Map(pendingAnimalRows.map(a => [a.id, a.name]));
+  }
+
+  const pendingMedicalImports: PendingMedicalImportItem[] = pendingBatches
+    .filter(b => b.itemCount > 0)
+    .map(b => ({
+      batchId: b.batchId,
+      fileName: b.fileName,
+      itemCount: b.itemCount,
+      animalName: b.animalId ? (pendingAnimalMap.get(b.animalId) || null) : null,
+    }));
+
   return {
     tenantName: tenant.name,
     date: todayStr,
@@ -781,6 +824,7 @@ async function gatherBriefingData(tenantId: string): Promise<BriefingData | null
     overdueObligations,
     recentFosterUpdates,
     recentFosterPhotos,
+    pendingMedicalImports,
   };
 }
 
@@ -1033,10 +1077,20 @@ function composeHtmlEmail(data: BriefingData): string {
     ], i % 2 === 1);
   });
 
+  let pendingMedicalImportRows = '';
+  data.pendingMedicalImports.forEach((imp, i) => {
+    pendingMedicalImportRows += renderRow([
+      `<strong>${escapeHtml(imp.fileName.length > 30 ? imp.fileName.substring(0, 27) + '...' : imp.fileName)}</strong>`,
+      imp.animalName ? escapeHtml(imp.animalName) : '<em>Unassigned</em>',
+      `${imp.itemCount} record${imp.itemCount !== 1 ? 's' : ''}`,
+    ], i % 2 === 1);
+  });
+
   // --- Counts ---
   const shelterCount = data.shelterMissedMeds.length + data.surgeries.length + data.exams.length +
     data.overdueExams.length + data.diagnostics.length +
-    data.procedures.length + data.shelterOverdueCare.length + data.calendarItems.length;
+    data.procedures.length + data.shelterOverdueCare.length + data.calendarItems.length +
+    data.pendingMedicalImports.length;
   const fosterCount = data.missedFosterMeds.length + data.complianceAlerts.length + data.fosterOverdueCare.length +
     data.recentFosterUpdates.length + data.recentFosterPhotos.length;
   const adoptedCount = data.helpRequests.length + data.overdueObligations.length;
@@ -1057,7 +1111,8 @@ function composeHtmlEmail(data: BriefingData): string {
     renderSection('Diagnostics & Labs Today', '[D]', '#eff6ff', '#2563eb', data.diagnostics.length, diagRows) +
     renderSection('Procedures Today', '[P]', '#fdf4ff', '#9333ea', data.procedures.length, procRows) +
     renderSection('Overdue Preventative Care', '[OD]', '#fff7ed', '#ea580c', data.shelterOverdueCare.length, shelterOverdueRows) +
-    renderSection('Calendar Events Today', '[C]', '#f5f3ff', '#7c3aed', data.calendarItems.length, calendarRowsHtml);
+    renderSection('Calendar Events Today', '[C]', '#f5f3ff', '#7c3aed', data.calendarItems.length, calendarRowsHtml) +
+    renderSection('Pending Medical Records for Review', '[AI]', '#faf5ff', '#7c3aed', data.pendingMedicalImports.length, pendingMedicalImportRows);
 
   // --- Foster pillar HTML ---
   const fosterSectionsHtml =
@@ -1220,6 +1275,15 @@ function composePlainTextEmail(data: BriefingData): string {
       });
       lines.push('');
     }
+
+    if (data.pendingMedicalImports.length > 0) {
+      const totalItems = data.pendingMedicalImports.reduce((sum, b) => sum + b.itemCount, 0);
+      lines.push(`--- PENDING MEDICAL RECORDS FOR REVIEW [${totalItems} records in ${data.pendingMedicalImports.length} batch(es)] ---`);
+      data.pendingMedicalImports.forEach(imp => {
+        lines.push(`  ${imp.fileName} - ${imp.itemCount} record(s)${imp.animalName ? ` (${imp.animalName})` : ' (Unassigned)'}`);
+      });
+      lines.push('');
+    }
   }
 
   if (fosterCount > 0) {
@@ -1364,7 +1428,8 @@ export async function sendDailyBriefingForTenant(tenantId: string): Promise<{ se
 
     const shelterCount = data.shelterMissedMeds.length + data.surgeries.length + data.exams.length +
       data.overdueExams.length + data.diagnostics.length +
-      data.procedures.length + data.shelterOverdueCare.length + data.calendarItems.length;
+      data.procedures.length + data.shelterOverdueCare.length + data.calendarItems.length +
+      data.pendingMedicalImports.length;
     const fosterCount = data.missedFosterMeds.length + data.complianceAlerts.length + data.fosterOverdueCare.length +
       data.recentFosterUpdates.length + data.recentFosterPhotos.length;
     const adoptedCount = data.helpRequests.length + data.overdueObligations.length;
