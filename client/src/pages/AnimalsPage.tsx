@@ -328,7 +328,7 @@ function AnimalForm({
   const activeFosterName = useMemo(() => {
     return fosterAutoMode ? ((effectiveInitialData as any)?.activeFosterName || 'Foster Parent') : '';
   }, [fosterAutoMode, effectiveInitialData]);
-  
+
   const form = useForm<AnimalFormData>({
     resolver: zodResolver(animalFormSchema),
     defaultValues: initialData ? {
@@ -422,6 +422,16 @@ function AnimalForm({
     },
   });
   
+  useEffect(() => {
+    if (fosterAutoMode && effectiveInitialData) {
+      const fId = (effectiveInitialData as any).activeFosterId || (effectiveInitialData as any).fosterId;
+      if (fId) {
+        form.setValue("fosterId", fId);
+        form.clearErrors("fosterId");
+      }
+    }
+  }, [fosterAutoMode, effectiveInitialData, form]);
+
   const selectedPetfinderType = form.watch("petfinderType");
   const watchedBehaviorColor = form.watch("behaviorColor");
   const [breedPopoverOpen, setBreedPopoverOpen] = useState(false);

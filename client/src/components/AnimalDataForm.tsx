@@ -341,6 +341,16 @@ export function AnimalDataForm({ animalId, initialData, onSuccess, onCancel }: A
     return fosterAutoMode ? ((animalData as any)?.activeFosterName || 'Foster Parent') : '';
   }, [fosterAutoMode, animalData]);
 
+  useEffect(() => {
+    if (fosterAutoMode && animalData) {
+      const fId = (animalData as any).activeFosterId || (animalData as any).fosterId;
+      if (fId) {
+        form.setValue("fosterId", fId);
+        form.clearErrors("fosterId");
+      }
+    }
+  }, [fosterAutoMode, animalData, form]);
+
   const [fosterOpen, setFosterOpen] = useState(false);
   const locationType = form.watch("locationType");
   const { data: eligibleFostersData } = useQuery<{ fosters: { id: string; fullName: string; email: string }[] }>({
