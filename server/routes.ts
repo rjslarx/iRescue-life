@@ -26256,19 +26256,22 @@ Submitted: ${new Date().toLocaleString()}
       {
         try {
           console.log(`[Inbound Email] Checking for attachments on email ${emailData.email_id}...`);
-          const { data: attachments } = await resend.emails.receiving.attachments.list({ 
-            emailId: emailData.email_id 
+          const attListResp = await fetch(`https://api.resend.com/emails/receiving/${emailData.email_id}/attachments`, {
+            headers: { 'Authorization': `Bearer ${resendApiKey}` },
           });
-          console.log(`[Inbound Email] Found ${attachments?.length || 0} attachment(s)`);
+          const attListJson = await attListResp.json() as { data?: Array<{ id: string; filename: string; content_type: string; size: number; download_url: string }> };
+          const attachments = attListJson.data || [];
+          console.log(`[Inbound Email] Found ${attachments.length} attachment(s)`);
 
-          if (attachments && attachments.length > 0) {
+          if (attachments.length > 0) {
             const { ObjectStorageService } = await import('./objectStorage');
             const storageService = new ObjectStorageService();
 
             for (const att of attachments) {
               try {
-                const { data: attachmentData } = await resend.emails.receiving.attachments.get({ emailId: emailData.email_id, id: att.id });
-                if (!attachmentData || !attachmentData.content) {
+                const downloadResp = await fetch(att.download_url);
+                if (!downloadResp.ok) {
+                  console.error(`[Inbound Email] Failed to download attachment ${att.id}: ${downloadResp.status}`);
                   attachmentsList.push({
                     filename: att.filename || 'unknown',
                     contentType: att.content_type || 'application/octet-stream',
@@ -26279,7 +26282,7 @@ Submitted: ${new Date().toLocaleString()}
                   continue;
                 }
 
-                const contentBuffer = Buffer.from(attachmentData.content, 'base64');
+                const contentBuffer = Buffer.from(await downloadResp.arrayBuffer());
                 const safeFilename = `${Date.now()}_${(att.filename || 'attachment').replace(/[^a-zA-Z0-9._-]/g, '_')}`;
 
                 let storageUrl = '';
