@@ -112,6 +112,7 @@ export async function generateFosterAgreementPDF(
     ALLOWED_TAGS: ['html', 'head', 'body', 'title', 'meta', 'style', 'link', 'div', 'span', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'strong', 'em', 'u', 'br', 'hr', 'ul', 'ol', 'li', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'img', 'a'],
     ALLOWED_ATTR: ['class', 'id', 'style', 'href', 'src', 'alt', 'title', 'target', 'colspan', 'rowspan'],
     ALLOW_DATA_ATTR: false,
+    ADD_DATA_URI_TAGS: ['img'],
   });
 
   // Use system Chromium for Replit environment

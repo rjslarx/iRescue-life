@@ -104,6 +104,7 @@ export async function generateSurrenderAgreementPDF(
       'colspan', 'rowspan', 'align', 'valign',
     ],
     ALLOW_DATA_ATTR: false,
+    ADD_DATA_URI_TAGS: ['img'],
   });
 
   const metadataHtml = signatureMetadata ? `
