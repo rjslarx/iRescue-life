@@ -1,11 +1,12 @@
 import { useState, useCallback } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useInfiniteQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { buildTenantUrl, getTenantHeaders } from "@/lib/tenantApi";
@@ -19,7 +20,7 @@ import {
   FileText, Loader2, Check, X, AlertTriangle,
   Syringe, Stethoscope, Pill, TestTube, ClipboardList,
   CheckCircle2, XCircle, Sparkles, Mail, ArrowLeft,
-  PawPrint, Calendar, Copy, Upload
+  PawPrint, Calendar, Copy, Upload, ChevronDown, ChevronRight
 } from "lucide-react";
 import type { Animal, MedicalImportBatch, MedicalImportItem } from "@shared/schema";
 import { Link } from "wouter";
@@ -107,10 +108,11 @@ function formatExtractedData(item: MedicalImportItem) {
 
 type DuplicateMap = Record<string, { isDuplicate: boolean; matchedRecordId?: string; matchedSummary?: string }>;
 
-function BatchCard({ batch, animals }: { batch: BatchWithItems; animals: Animal[] }) {
+function BatchCard({ batch, animals, defaultCollapsed = false }: { batch: BatchWithItems; animals: Animal[]; defaultCollapsed?: boolean }) {
   const { toast } = useToast();
   const [selectedAnimalId, setSelectedAnimalId] = useState<string>(batch.animalId || "");
   const [confirmApproveItemId, setConfirmApproveItemId] = useState<string | null>(null);
+  const [isExpanded, setIsExpanded] = useState(!defaultCollapsed);
 
   const hasPendingItems = batch.items.some(i => i.status === 'pending');
   const hasAnimalAssigned = !!batch.animalId;
@@ -212,11 +214,17 @@ function BatchCard({ batch, animals }: { batch: BatchWithItems; animals: Animal[
   const needsAnimalAssignment = !batch.animalId;
 
   return (
+    <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
     <Card data-testid={`card-import-batch-${batch.id}`}>
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-2 flex-wrap">
-          <div className="space-y-1">
+          <div className="space-y-1 flex-1 min-w-0">
             <CardTitle className="text-base flex items-center gap-2 flex-wrap">
+              <CollapsibleTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-5 w-5 p-0 flex-shrink-0" data-testid={`button-toggle-batch-${batch.id}`}>
+                  {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                </Button>
+              </CollapsibleTrigger>
               {batch.source === 'email' ? (
                 <Mail className="w-4 h-4 text-purple-600 dark:text-purple-400" />
               ) : (
@@ -239,6 +247,13 @@ function BatchCard({ batch, animals }: { batch: BatchWithItems; animals: Animal[
               {batch.overallConfidence && (
                 <span>Confidence: {Math.round(Number(batch.overallConfidence))}%</span>
               )}
+              {!isExpanded && (
+                <>
+                  {approvedItems.length > 0 && <span className="text-green-600">{approvedItems.length} approved</span>}
+                  {rejectedItems.length > 0 && <span className="text-red-600">{rejectedItems.length} rejected</span>}
+                  {pendingItems.length > 0 && <span className="text-amber-600">{pendingItems.length} pending</span>}
+                </>
+              )}
             </div>
           </div>
           {assignedAnimal && (
@@ -256,6 +271,7 @@ function BatchCard({ batch, animals }: { batch: BatchWithItems; animals: Animal[
         </div>
       </CardHeader>
 
+      <CollapsibleContent>
       <CardContent className="space-y-4">
         {needsAnimalAssignment && (
           <Card className="border-dashed border-amber-500/50 bg-amber-500/5">
@@ -513,7 +529,9 @@ function BatchCard({ batch, animals }: { batch: BatchWithItems; animals: Animal[
           <p className="text-sm text-muted-foreground text-center py-4">No records extracted from this document</p>
         )}
       </CardContent>
+      </CollapsibleContent>
     </Card>
+    </Collapsible>
   );
 }
 
@@ -645,11 +663,42 @@ function UploadZone({ animals, onUploadComplete }: { animals: Animal[]; onUpload
   );
 }
 
+interface PaginatedResponse {
+  batches: BatchWithItems[];
+  total: number;
+  hasMore: boolean;
+}
+
+const PAGE_SIZE = 20;
+
 export default function MedicalImportsPage() {
   const [sourceFilter, setSourceFilter] = useState<'all' | 'email' | 'upload'>('all');
 
-  const { data: batches, isLoading, refetch } = useQuery<BatchWithItems[]>({
-    queryKey: ['/api/medical-import/all-batches'],
+  const sourceParam = sourceFilter === 'all' ? '' : sourceFilter;
+
+  const {
+    data,
+    isLoading,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery<PaginatedResponse>({
+    queryKey: ['/api/medical-import/all-batches', { source: sourceParam }],
+    queryFn: async ({ pageParam }) => {
+      const offset = pageParam as number;
+      const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(offset) });
+      if (sourceParam) params.set('source', sourceParam);
+      const url = buildTenantUrl(`/api/medical-import/all-batches?${params.toString()}`);
+      const headers = getTenantHeaders();
+      const res = await fetch(url, { credentials: 'include', headers });
+      if (!res.ok) throw new Error('Failed to fetch');
+      return res.json();
+    },
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, allPages) => {
+      if (!lastPage.hasMore) return undefined;
+      return allPages.length * PAGE_SIZE;
+    },
     refetchInterval: 30000,
   });
 
@@ -660,17 +709,11 @@ export default function MedicalImportsPage() {
   const terminalStatuses = ['deceased', 'transported', 'returned_to_owner', 'returned_to_field'];
   const animals = (animalsData?.animals || []).filter(a => !terminalStatuses.includes(a.status));
 
-  const filteredBatches = (batches || []).filter(b => {
-    if (sourceFilter === 'all') return true;
-    return b.source === sourceFilter;
-  });
+  const allBatches = data?.pages.flatMap(p => p.batches) || [];
+  const total = data?.pages[0]?.total || 0;
 
-  const pendingBatches = filteredBatches.filter(b => b.items.some(i => i.status === 'pending'));
-  const completedBatches = filteredBatches.filter(b => !b.items.some(i => i.status === 'pending'));
-
-  const totalPending = (batches || []).filter(b => b.items.some(i => i.status === 'pending')).length;
-  const emailPending = (batches || []).filter(b => b.source === 'email' && b.items.some(i => i.status === 'pending')).length;
-  const uploadPending = (batches || []).filter(b => b.source === 'upload' && b.items.some(i => i.status === 'pending')).length;
+  const pendingBatches = allBatches.filter(b => b.items.some(i => i.status === 'pending'));
+  const completedBatches = allBatches.filter(b => !b.items.some(i => i.status === 'pending'));
 
   return (
     <div className="container mx-auto p-4 md:p-6 max-w-4xl">
@@ -708,7 +751,7 @@ export default function MedicalImportsPage() {
           data-testid="filter-all"
         >
           All Imports
-          {totalPending > 0 && <Badge variant="secondary" className="ml-1">{totalPending}</Badge>}
+          {total > 0 && <Badge variant="secondary" className="ml-1">{total}</Badge>}
         </Button>
         <Button
           variant={sourceFilter === 'email' ? 'default' : 'outline'}
@@ -719,7 +762,6 @@ export default function MedicalImportsPage() {
         >
           <Mail className="w-3 h-3" />
           Email
-          {emailPending > 0 && <Badge variant="secondary" className="ml-1">{emailPending}</Badge>}
         </Button>
         <Button
           variant={sourceFilter === 'upload' ? 'default' : 'outline'}
@@ -730,7 +772,6 @@ export default function MedicalImportsPage() {
         >
           <Upload className="w-3 h-3" />
           Manual Upload
-          {uploadPending > 0 && <Badge variant="secondary" className="ml-1">{uploadPending}</Badge>}
         </Button>
       </div>
 
@@ -738,7 +779,7 @@ export default function MedicalImportsPage() {
         <div className="flex items-center justify-center py-12">
           <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
         </div>
-      ) : filteredBatches.length === 0 ? (
+      ) : allBatches.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <FileText className="w-12 h-12 text-muted-foreground mb-4" />
@@ -772,8 +813,26 @@ export default function MedicalImportsPage() {
             <div className="space-y-4">
               <h2 className="text-lg font-semibold text-muted-foreground">Previously Reviewed</h2>
               {completedBatches.map(batch => (
-                <BatchCard key={batch.id} batch={batch} animals={animals} />
+                <BatchCard key={batch.id} batch={batch} animals={animals} defaultCollapsed />
               ))}
+            </div>
+          )}
+
+          {hasNextPage && (
+            <div className="flex justify-center pt-2 pb-4">
+              <Button
+                variant="outline"
+                onClick={() => fetchNextPage()}
+                disabled={isFetchingNextPage}
+                className="gap-2"
+                data-testid="button-load-more"
+              >
+                {isFetchingNextPage ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : null}
+                Load More
+                <Badge variant="secondary">{allBatches.length} of {total}</Badge>
+              </Button>
             </div>
           )}
         </div>

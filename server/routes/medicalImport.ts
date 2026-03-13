@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db } from '../db';
 import { medicalImportBatches, medicalImportItems, animals, vaccineRecords, procedureLogs, medicalPrescriptions, diagnosticTests, medicalExams, inboundEmails, medicalFiles } from '@shared/schema';
-import { eq, and, isNotNull, desc, sql, inArray } from 'drizzle-orm';
+import { eq, and, isNotNull, isNull, desc, sql, inArray, count } from 'drizzle-orm';
 import multer from 'multer';
 import { processMedicalDocument } from '../services/aiMedicalParser';
 import { requireAuth } from '../middleware/auth';
@@ -856,10 +856,28 @@ router.get('/email-batches', requireTenant, requireAuth, async (req, res, next) 
 router.get('/all-batches', requireTenant, requireAuth, async (req, res, next) => {
   try {
     const tenantId = req.tenant!.id;
+    const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
+    const offset = parseInt(req.query.offset as string) || 0;
+    const source = req.query.source as string | undefined;
+
+    const conditions: any[] = [eq(medicalImportBatches.tenantId, tenantId)];
+    if (source === 'email') {
+      conditions.push(isNotNull(medicalImportBatches.inboundEmailId));
+    } else if (source === 'upload') {
+      conditions.push(isNull(medicalImportBatches.inboundEmailId));
+    }
+
+    const whereClause = and(...conditions);
+
+    const [{ value: total }] = await db.select({ value: count() })
+      .from(medicalImportBatches)
+      .where(whereClause);
 
     const batches = await db.query.medicalImportBatches.findMany({
-      where: eq(medicalImportBatches.tenantId, tenantId),
+      where: whereClause,
       orderBy: [desc(medicalImportBatches.createdAt)],
+      limit,
+      offset,
     });
 
     const batchesWithItems = await Promise.all(
@@ -881,7 +899,7 @@ router.get('/all-batches', requireTenant, requireAuth, async (req, res, next) =>
       })
     );
 
-    res.json(batchesWithItems);
+    res.json({ batches: batchesWithItems, total, hasMore: offset + limit < total });
   } catch (error) {
     next(error);
   }
