@@ -6517,6 +6517,7 @@ Crawl-delay: 1
       const adoptionContractRecords = await db
         .select({
           sessionId: adoptionCheckoutSessions.id,
+          contractId: adoptionContracts.id,
           applicationId: adoptionCheckoutSessions.applicationId,
           sessionStatus: adoptionCheckoutSessions.status,
           baseFee: adoptionCheckoutSessions.baseFee,

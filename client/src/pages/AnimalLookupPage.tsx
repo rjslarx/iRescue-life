@@ -1,8 +1,10 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { useDebounce } from "@/hooks/use-debounce";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useTenant } from "@/contexts/TenantContext";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -30,6 +32,7 @@ import {
   Loader2,
   ChevronRight,
   ExternalLink,
+  RefreshCw,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -83,6 +86,7 @@ interface AdoptionRecord {
 
 interface AdoptionContractRecord {
   sessionId: string;
+  contractId: number | null;
   applicationId: string | null;
   sessionStatus: string;
   baseFee: string | null;
@@ -403,6 +407,23 @@ function AnimalProfilePanel({ animalId }: { animalId: string }) {
                           </Button>
                         </a>
                       )}
+                      {canRegenerate && matchingContract?.contractId && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="gap-2 mt-1"
+                          onClick={() => regeneratePdfMutation.mutate(matchingContract.contractId!)}
+                          disabled={regeneratePdfMutation.isPending}
+                          data-testid={`button-regenerate-contract-${idx}`}
+                        >
+                          {regeneratePdfMutation.isPending ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <RefreshCw className="h-4 w-4" />
+                          )}
+                          Regenerate PDF
+                        </Button>
+                      )}
                     </CardContent>
                   </Card>
                 );
@@ -453,6 +474,23 @@ function AnimalProfilePanel({ animalId }: { animalId: string }) {
                           <ExternalLink className="h-3 w-3" />
                         </Button>
                       </a>
+                    )}
+                    {canRegenerate && contract.contractId && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="gap-2 mt-1"
+                        onClick={() => regeneratePdfMutation.mutate(contract.contractId!)}
+                        disabled={regeneratePdfMutation.isPending}
+                        data-testid={`button-regenerate-standalone-${idx}`}
+                      >
+                        {regeneratePdfMutation.isPending ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <RefreshCw className="h-4 w-4" />
+                        )}
+                        Regenerate PDF
+                      </Button>
                     )}
                   </CardContent>
                 </Card>
@@ -525,6 +563,30 @@ export default function AnimalLookupPage() {
   const isMobile = useIsMobile();
   const debouncedSearch = useDebounce(searchInput, 300);
   const searchTerm = debouncedSearch.trim();
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const canRegenerate = user && ['admin', 'owner', 'manager'].includes(user.role);
+
+  const regeneratePdfMutation = useMutation({
+    mutationFn: async (contractId: number) => {
+      const response = await apiRequest('POST', `/api/adoption-contracts/${contractId}/regenerate-pdf`);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/animals'] });
+      toast({
+        title: "PDF regenerated",
+        description: "The agreement PDF has been regenerated successfully.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to regenerate PDF",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
 
   const { data: searchData, isLoading: searchLoading } = useQuery<{ animals: LookupAnimal[] }>({
     queryKey: ['/api/animals/lookup', searchTerm],
