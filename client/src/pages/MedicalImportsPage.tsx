@@ -697,7 +697,8 @@ export default function MedicalImportsPage() {
     initialPageParam: 0,
     getNextPageParam: (lastPage, allPages) => {
       if (!lastPage.hasMore) return undefined;
-      return allPages.length * PAGE_SIZE;
+      const totalLoaded = allPages.reduce((sum, page) => sum + page.batches.length, 0);
+      return totalLoaded;
     },
     refetchInterval: 30000,
   });

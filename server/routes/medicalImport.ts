@@ -856,8 +856,8 @@ router.get('/email-batches', requireTenant, requireAuth, async (req, res, next) 
 router.get('/all-batches', requireTenant, requireAuth, async (req, res, next) => {
   try {
     const tenantId = req.tenant!.id;
-    const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
-    const offset = parseInt(req.query.offset as string) || 0;
+    const limit = Math.max(1, Math.min(parseInt(req.query.limit as string) || 20, 100));
+    const offset = Math.max(0, parseInt(req.query.offset as string) || 0);
     const source = req.query.source as string | undefined;
 
     const tenantCondition = eq(medicalImportBatches.tenantId, tenantId);
