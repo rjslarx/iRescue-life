@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { queryClient, apiRequest } from '@/lib/queryClient';
+import { buildTenantUrl, getTenantHeaders } from '@/lib/tenantApi';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -62,6 +63,16 @@ export default function SupplyManagementPage() {
   // Fetch supply items
   const { data: itemsData, isLoading: itemsLoading } = useQuery<{ items: SupplyItemWithRelations[] }>({
     queryKey: ['/api/supply-items', { status: filterStatus !== 'all' ? filterStatus : undefined, categoryId: filterCategory !== 'all' ? filterCategory : undefined }],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (filterStatus !== 'all') params.set('status', filterStatus);
+      if (filterCategory !== 'all') params.set('categoryId', filterCategory);
+      const qs = params.toString();
+      const url = buildTenantUrl(`/api/supply-items${qs ? `?${qs}` : ''}`);
+      const res = await fetch(url, { credentials: 'include', headers: getTenantHeaders() });
+      if (!res.ok) throw new Error('Failed to fetch supply items');
+      return res.json();
+    },
   });
 
   // Fetch categories
