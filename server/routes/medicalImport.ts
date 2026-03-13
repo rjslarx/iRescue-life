@@ -860,14 +860,12 @@ router.get('/all-batches', requireTenant, requireAuth, async (req, res, next) =>
     const offset = parseInt(req.query.offset as string) || 0;
     const source = req.query.source as string | undefined;
 
-    const conditions: any[] = [eq(medicalImportBatches.tenantId, tenantId)];
-    if (source === 'email') {
-      conditions.push(isNotNull(medicalImportBatches.inboundEmailId));
-    } else if (source === 'upload') {
-      conditions.push(isNull(medicalImportBatches.inboundEmailId));
-    }
-
-    const whereClause = and(...conditions);
+    const tenantCondition = eq(medicalImportBatches.tenantId, tenantId);
+    const whereClause = source === 'email'
+      ? and(tenantCondition, isNotNull(medicalImportBatches.inboundEmailId))
+      : source === 'upload'
+      ? and(tenantCondition, isNull(medicalImportBatches.inboundEmailId))
+      : tenantCondition;
 
     const [{ value: total }] = await db.select({ value: count() })
       .from(medicalImportBatches)
