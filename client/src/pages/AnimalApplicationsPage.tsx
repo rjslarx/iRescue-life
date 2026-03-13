@@ -4,11 +4,12 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Loader2, ClipboardList, Mail, Phone, Calendar, Eye, FileText, ExternalLink, PenLine } from "lucide-react";
+import { ArrowLeft, Loader2, ClipboardList, Mail, Phone, Calendar, Eye, FileText, ExternalLink, PenLine, RefreshCw } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { getTenantHeaders, buildTenantUrl } from "@/lib/tenantApi";
 import { useToast } from "@/hooks/use-toast";
 import type { ApplicationWithAnimal } from "@shared/schema";
+import { useAuth } from "@/contexts/AuthContext";
 import { ViewApplicationDialog } from "@/components/ViewApplicationDialog";
 import { ApproveAndSendAgreementDialog } from "@/components/ApproveAndSendAgreementDialog";
 import { format } from "date-fns";
@@ -46,6 +47,8 @@ export default function AnimalApplicationsPage() {
   const { animalId } = useParams<{ animalId: string }>();
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const { user } = useAuth();
+  const canRegenerate = user && ['admin', 'owner', 'manager'].includes(user.role);
   const [selectedApplication, setSelectedApplication] = useState<ApplicationWithAnimal | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [showApprovalDialog, setShowApprovalDialog] = useState(false);
@@ -94,6 +97,27 @@ export default function AnimalApplicationsPage() {
   const adoptionAgreements = agreementsData?.adoptionAgreements || [];
   const placementAgreements = agreementsData?.placementAgreements || [];
   const totalAgreements = adoptionAgreements.length + placementAgreements.length;
+
+  const regeneratePdfMutation = useMutation({
+    mutationFn: async (contractId: number) => {
+      const response = await apiRequest('POST', `/api/adoption-contracts/${contractId}/regenerate-pdf`);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/animals', animalId, 'agreements'] });
+      toast({
+        title: "PDF regenerated",
+        description: "The agreement PDF has been regenerated with the latest template.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to regenerate PDF",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
 
   const updateStageMutation = useMutation({
     mutationFn: async ({ id, stage }: { id: string; stage: string }) => {
@@ -367,19 +391,38 @@ export default function AnimalApplicationsPage() {
                       <span className="text-muted-foreground">Signed: {formatDate(agreement.signedAt)}</span>
                     </div>
                   </div>
-                  {agreement.contractPdfUrl && (
-                    <a
-                      href={agreement.contractPdfUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="w-full"
-                    >
-                      <Button variant="outline" size="sm" className="w-full" data-testid={`button-view-adoption-agreement-${agreement.id}`}>
-                        <ExternalLink className="w-4 h-4 mr-2" />
-                        View Agreement PDF
+                  <div className="flex flex-col gap-2">
+                    {agreement.contractPdfUrl && (
+                      <a
+                        href={agreement.contractPdfUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full"
+                      >
+                        <Button variant="outline" size="sm" className="w-full" data-testid={`button-view-adoption-agreement-${agreement.id}`}>
+                          <ExternalLink className="w-4 h-4 mr-2" />
+                          View Agreement PDF
+                        </Button>
+                      </a>
+                    )}
+                    {canRegenerate && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-full"
+                        onClick={() => regeneratePdfMutation.mutate(agreement.id)}
+                        disabled={regeneratePdfMutation.isPending}
+                        data-testid={`button-regenerate-agreement-${agreement.id}`}
+                      >
+                        {regeneratePdfMutation.isPending ? (
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        ) : (
+                          <RefreshCw className="w-4 h-4 mr-2" />
+                        )}
+                        Regenerate PDF
                       </Button>
-                    </a>
-                  )}
+                    )}
+                  </div>
                 </CardContent>
               </Card>
             ))}

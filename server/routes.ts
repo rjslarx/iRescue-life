@@ -6656,6 +6656,54 @@ Crawl-delay: 1
     }
   });
 
+  app.post('/api/adoption-contracts/:contractId/regenerate-pdf', requireTenant, requireAuth, requireRole('admin', 'owner', 'manager'), async (req, res, next) => {
+    try {
+      const tenantId = req.tenant!.id;
+      const contractId = parseInt(req.params.contractId);
+
+      const [contract] = await db
+        .select()
+        .from(adoptionContracts)
+        .where(eq(adoptionContracts.id, contractId))
+        .limit(1);
+
+      if (!contract) {
+        return res.status(404).json({ error: 'Contract not found' });
+      }
+
+      const [session] = await db
+        .select()
+        .from(adoptionCheckoutSessions)
+        .where(
+          and(
+            eq(adoptionCheckoutSessions.id, contract.sessionId),
+            eq(adoptionCheckoutSessions.tenantId, tenantId)
+          )
+        )
+        .limit(1);
+
+      if (!session) {
+        return res.status(404).json({ error: 'Adoption session not found for this tenant' });
+      }
+
+      const { generateAdoptionContractPDF } = await import('./services/contract-pdf');
+      const newPdfUrl = await generateAdoptionContractPDF(session, contract.signatureImageUrl || undefined, {
+        ipAddress: contract.signedIp || undefined,
+        signedAt: contract.signedAt,
+        driversLicenseNumber: (contract as any).driversLicenseNumber || undefined,
+      });
+
+      await db
+        .update(adoptionContracts)
+        .set({ contractPdfUrl: newPdfUrl })
+        .where(eq(adoptionContracts.id, contractId));
+
+      res.json({ contractPdfUrl: newPdfUrl });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   /**
    * GET /api/animals/search-duplicates
    * Search for potential duplicate animals by microchip number and/or name
