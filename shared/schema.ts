@@ -3315,6 +3315,26 @@ export const insertGrantAllocationSchema = createInsertSchema(grantAllocations).
 export type InsertGrantAllocation = z.infer<typeof insertGrantAllocationSchema>;
 export type GrantAllocation = typeof grantAllocations.$inferSelect;
 
+// Tenant Compliance table - 501(c)(3) grant readiness tracking
+export const tenantCompliance = pgTable("tenant_compliance", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }).unique(),
+  irs990DueDate: timestamp("irs_990_due_date"),
+  stateCharityRenewalDate: timestamp("state_charity_renewal_date"),
+  agLicenseExpiration: timestamp("ag_license_expiration"),
+  hasIrsDeterminationLetter: boolean("has_irs_determination_letter").notNull().default(false),
+  hasW9: boolean("has_w9").notNull().default(false),
+  hasBoardList: boolean("has_board_list").notNull().default(false),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertTenantComplianceSchema = createInsertSchema(tenantCompliance).omit({
+  id: true,
+  updatedAt: true,
+});
+export type InsertTenantCompliance = z.infer<typeof insertTenantComplianceSchema>;
+export type TenantCompliance = typeof tenantCompliance.$inferSelect;
+
 // Medical Reminder Settings table - tenant-level configuration for medical reminders
 export const medicalReminderSettings = pgTable("medical_reminder_settings", {
   id: uuid("id").primaryKey().defaultRandom(),

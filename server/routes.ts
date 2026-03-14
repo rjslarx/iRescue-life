@@ -15277,6 +15277,33 @@ ${renderedHtml}
   });
 
   /**
+   * PATCH /api/grants/compliance
+   * Update tenant compliance deadlines and document flags
+   */
+  app.patch('/api/grants/compliance', requireTenant, requireAuth, requireRole('admin', 'owner', 'manager'), async (req, res, next) => {
+    try {
+      const { tenantCompliance } = await import('@shared/schema');
+      const { irs990DueDate, stateCharityRenewalDate, agLicenseExpiration, hasIrsDeterminationLetter, hasW9, hasBoardList } = req.body;
+      const updateData: any = { updatedAt: new Date() };
+      if (irs990DueDate !== undefined) updateData.irs990DueDate = irs990DueDate ? new Date(irs990DueDate) : null;
+      if (stateCharityRenewalDate !== undefined) updateData.stateCharityRenewalDate = stateCharityRenewalDate ? new Date(stateCharityRenewalDate) : null;
+      if (agLicenseExpiration !== undefined) updateData.agLicenseExpiration = agLicenseExpiration ? new Date(agLicenseExpiration) : null;
+      if (hasIrsDeterminationLetter !== undefined) updateData.hasIrsDeterminationLetter = !!hasIrsDeterminationLetter;
+      if (hasW9 !== undefined) updateData.hasW9 = !!hasW9;
+      if (hasBoardList !== undefined) updateData.hasBoardList = !!hasBoardList;
+
+      const [existing] = await db.select().from(tenantCompliance).where(eq(tenantCompliance.tenantId, req.tenant!.id)).limit(1);
+      let result;
+      if (existing) {
+        [result] = await db.update(tenantCompliance).set(updateData).where(eq(tenantCompliance.tenantId, req.tenant!.id)).returning();
+      } else {
+        [result] = await db.insert(tenantCompliance).values({ tenantId: req.tenant!.id, ...updateData }).returning();
+      }
+      res.json({ compliance: result });
+    } catch (error) { next(error); }
+  });
+
+  /**
    * PATCH /api/grants/:id
    * Update grant (admin only)
    */
@@ -15848,6 +15875,121 @@ ${renderedHtml}
     } catch (error) {
       next(error);
     }
+  });
+
+  /**
+   * GET /api/grants/compliance
+   * Get tenant compliance deadlines and document flags
+   */
+  app.get('/api/grants/compliance', requireTenant, requireAuth, requireRole('admin', 'owner', 'manager', 'board_member'), async (req, res, next) => {
+    try {
+      const { tenantCompliance } = await import('@shared/schema');
+      const [existing] = await db.select().from(tenantCompliance).where(eq(tenantCompliance.tenantId, req.tenant!.id)).limit(1);
+      if (!existing) {
+        const [created] = await db.insert(tenantCompliance).values({ tenantId: req.tenant!.id }).returning();
+        return res.json({ compliance: created });
+      }
+      res.json({ compliance: existing });
+    } catch (error) { next(error); }
+  });
+
+  /**
+   * GET /api/grants/data-matrix
+   * Generate grant data matrix with intake/outcome stats for a date range
+   */
+  app.get('/api/grants/data-matrix', requireTenant, requireAuth, requireRole('admin', 'owner', 'manager', 'board_member', 'staff'), async (req, res, next) => {
+    try {
+      const { startDate, endDate } = req.query;
+      if (!startDate || !endDate) return res.status(400).json({ error: 'startDate and endDate are required' });
+      const start = new Date(startDate as string);
+      const end = new Date(endDate as string);
+      end.setHours(23, 59, 59, 999);
+      const tenantId = req.tenant!.id;
+
+      // Total intakes grouped by intake type
+      const intakeRows = await db.select({
+        intakeSource: animals.intakeSource,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(animals)
+      .where(and(
+        eq(animals.tenantId, tenantId),
+        gte(animals.intakeDate, start),
+        lte(animals.intakeDate, end),
+        or(isNull(animals.recordType), ne(animals.recordType, 'tnr'))
+      ))
+      .groupBy(animals.intakeSource);
+
+      const intakeByType: Record<string, number> = {};
+      let totalIntake = 0;
+      for (const row of intakeRows) {
+        const key = row.intakeSource || 'unknown';
+        intakeByType[key] = row.count;
+        totalIntake += row.count;
+      }
+
+      // Total outcomes grouped by status (adopted, returned_to_owner, transferred_out, euthanized, deceased)
+      const outcomeStatuses = ['adopted', 'returned_to_owner', 'transported', 'deceased', 'returned_to_field'];
+      const outcomeRows = await db.select({
+        status: animals.status,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(animals)
+      .where(and(
+        eq(animals.tenantId, tenantId),
+        inArray(animals.status, outcomeStatuses),
+        or(isNull(animals.recordType), ne(animals.recordType, 'tnr')),
+        // Use updatedAt as proxy for outcome date within range
+        gte(animals.updatedAt, start),
+        lte(animals.updatedAt, end),
+      ))
+      .groupBy(animals.status);
+
+      const outcomeByStatus: Record<string, number> = {};
+      let totalOutcomes = 0;
+      for (const row of outcomeRows) {
+        outcomeByStatus[row.status] = row.count;
+        totalOutcomes += row.count;
+      }
+
+      // Live Release Rate = (total outcomes - deceased) / total outcomes * 100
+      const deceased = outcomeByStatus['deceased'] || 0;
+      const liveReleases = totalOutcomes - deceased;
+      const liveReleaseRate = totalOutcomes > 0 ? ((liveReleases / totalOutcomes) * 100).toFixed(1) : '0.0';
+
+      // Species breakdown for intakes
+      const speciesRows = await db.select({
+        species: animals.species,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(animals)
+      .where(and(
+        eq(animals.tenantId, tenantId),
+        gte(animals.intakeDate, start),
+        lte(animals.intakeDate, end),
+        or(isNull(animals.recordType), ne(animals.recordType, 'tnr'))
+      ))
+      .groupBy(animals.species);
+
+      const intakeBySpecies: Record<string, number> = {};
+      for (const row of speciesRows) {
+        intakeBySpecies[row.species || 'unknown'] = row.count;
+      }
+
+      res.json({
+        dateRange: { startDate: start.toISOString(), endDate: end.toISOString() },
+        intake: {
+          total: totalIntake,
+          byType: intakeByType,
+          bySpecies: intakeBySpecies,
+        },
+        outcomes: {
+          total: totalOutcomes,
+          byStatus: outcomeByStatus,
+        },
+        liveReleaseRate: parseFloat(liveReleaseRate),
+      });
+    } catch (error) { next(error); }
   });
 
   /**

@@ -76,6 +76,12 @@ import {
   Search,
   Filter,
   ExternalLink,
+  Shield,
+  BarChart3,
+  AlertTriangle,
+  CheckCircle2,
+  XCircle,
+  ClipboardCheck,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -231,6 +237,47 @@ export default function GrantsPage() {
   const { data: budgetData, isLoading: budgetLoading } = useQuery<{ grants: BudgetGrant[] }>({
     queryKey: ['/api/grants/budget-report'],
     enabled: activeTab === 'budget',
+  });
+
+  // Fetch compliance data
+  const { data: complianceData, isLoading: complianceLoading } = useQuery<{ compliance: any }>({
+    queryKey: ['/api/grants/compliance'],
+    enabled: activeTab === 'readiness',
+  });
+
+  // Data matrix state
+  const [matrixStartDate, setMatrixStartDate] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-01-01`;
+  });
+  const [matrixEndDate, setMatrixEndDate] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-12-31`;
+  });
+
+  const { data: matrixData, isLoading: matrixLoading, refetch: refetchMatrix } = useQuery<any>({
+    queryKey: ['/api/grants/data-matrix', matrixStartDate, matrixEndDate],
+    queryFn: async () => {
+      const res = await fetch(`/api/grants/data-matrix?startDate=${matrixStartDate}&endDate=${matrixEndDate}`);
+      if (!res.ok) throw new Error('Failed to generate data matrix');
+      return res.json();
+    },
+    enabled: false,
+  });
+
+  // Compliance update mutation
+  const updateComplianceMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const response = await apiRequest('PATCH', '/api/grants/compliance', data);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/grants/compliance'] });
+      toast({ title: "Compliance updated" });
+    },
+    onError: (error: any) => {
+      toast({ title: "Update failed", description: error.message, variant: "destructive" });
+    },
   });
 
   const form = useForm<z.infer<typeof insertGrantSchema>>({
@@ -493,6 +540,14 @@ export default function GrantsPage() {
             <TabsTrigger value="stories" data-testid="tab-stories">
               <Heart className="h-4 w-4 mr-2" />
               Success Stories
+            </TabsTrigger>
+            <TabsTrigger value="readiness" data-testid="tab-readiness">
+              <Shield className="h-4 w-4 mr-2" />
+              Readiness
+            </TabsTrigger>
+            <TabsTrigger value="data-matrix" data-testid="tab-data-matrix">
+              <BarChart3 className="h-4 w-4 mr-2" />
+              Data Matrix
             </TabsTrigger>
           </TabsList>
 
@@ -1112,6 +1167,34 @@ export default function GrantsPage() {
               </div>
             )}
           </TabsContent>
+
+          {/* Readiness Tab - Compliance Tracker */}
+          <TabsContent value="readiness" className="space-y-6">
+            {complianceLoading ? (
+              <div className="flex items-center justify-center h-64">
+                <Loader2 className="h-8 w-8 animate-spin" />
+              </div>
+            ) : (
+              <ReadinessTab
+                compliance={complianceData?.compliance}
+                onUpdate={(data: any) => updateComplianceMutation.mutate(data)}
+                isPending={updateComplianceMutation.isPending}
+              />
+            )}
+          </TabsContent>
+
+          {/* Data Matrix Tab */}
+          <TabsContent value="data-matrix" className="space-y-6">
+            <DataMatrixTab
+              startDate={matrixStartDate}
+              endDate={matrixEndDate}
+              onStartDateChange={setMatrixStartDate}
+              onEndDateChange={setMatrixEndDate}
+              matrixData={matrixData}
+              isLoading={matrixLoading}
+              onGenerate={() => refetchMatrix()}
+            />
+          </TabsContent>
         </Tabs>
 
         {/* Create/Edit Grant Dialog */}
@@ -1508,5 +1591,329 @@ export default function GrantsPage() {
         </AlertDialog>
       </div>
     </DashboardLayout>
+  );
+}
+
+function getDeadlineStatus(date: string | Date | null | undefined): { label: string; variant: "destructive" | "outline" | "default"; icon: any } {
+  if (!date) return { label: "Not Set", variant: "outline" as const, icon: XCircle };
+  const now = new Date();
+  const due = new Date(date);
+  const daysUntil = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  if (daysUntil < 0) return { label: `${Math.abs(daysUntil)} days overdue`, variant: "destructive" as const, icon: XCircle };
+  if (daysUntil <= 30) return { label: `Due in ${daysUntil} days`, variant: "default" as const, icon: AlertTriangle };
+  return { label: `Due ${format(due, "MMM d, yyyy")}`, variant: "outline" as const, icon: CheckCircle2 };
+}
+
+function ReadinessTab({ compliance, onUpdate, isPending }: { compliance: any; onUpdate: (data: any) => void; isPending: boolean }) {
+  const deadlines = [
+    { key: "irs990DueDate", label: "IRS Form 990 Filing", description: "Annual tax-exempt filing deadline" },
+    { key: "stateCharityRenewalDate", label: "State Charity Registration", description: "Annual state charity renewal" },
+    { key: "agLicenseExpiration", label: "Agriculture License", description: "State agriculture department license" },
+  ];
+
+  const documents = [
+    { key: "hasIrsDeterminationLetter", label: "IRS Determination Letter", description: "501(c)(3) tax-exempt status letter" },
+    { key: "hasW9", label: "W-9 Form", description: "Request for Taxpayer Identification Number" },
+    { key: "hasBoardList", label: "Board of Directors List", description: "Current board members with titles" },
+  ];
+
+  const totalItems = deadlines.length + documents.length;
+  let compliantCount = 0;
+  deadlines.forEach(d => {
+    const val = compliance?.[d.key];
+    if (val) {
+      const daysUntil = Math.ceil((new Date(val).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+      if (daysUntil > 0) compliantCount++;
+    }
+  });
+  documents.forEach(d => {
+    if (compliance?.[d.key]) compliantCount++;
+  });
+  const readinessScore = totalItems > 0 ? Math.round((compliantCount / totalItems) * 100) : 0;
+
+  return (
+    <div className="space-y-6">
+      <Card data-testid="card-readiness-score">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Shield className="h-5 w-5" />
+            Grant Readiness Score
+          </CardTitle>
+          <CardDescription>Overall compliance status for national grant eligibility</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center gap-4">
+            <div className="text-4xl font-bold" data-testid="text-readiness-score">{readinessScore}%</div>
+            <Progress value={readinessScore} className="flex-1" />
+          </div>
+          <p className="text-sm text-muted-foreground mt-2">
+            {compliantCount} of {totalItems} items compliant
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card data-testid="card-deadlines">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Calendar className="h-5 w-5" />
+            Compliance Deadlines
+          </CardTitle>
+          <CardDescription>Track critical filing and renewal deadlines</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {deadlines.map((item) => {
+            const currentValue = compliance?.[item.key];
+            const status = getDeadlineStatus(currentValue);
+            const StatusIcon = status.icon;
+            return (
+              <div key={item.key} className="flex items-center justify-between gap-4 p-4 rounded-lg border" data-testid={`deadline-${item.key}`}>
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <StatusIcon className={`h-5 w-5 shrink-0 ${status.variant === 'destructive' ? 'text-destructive' : status.variant === 'default' ? 'text-yellow-500' : 'text-green-500'}`} />
+                  <div className="min-w-0">
+                    <p className="font-medium">{item.label}</p>
+                    <p className="text-sm text-muted-foreground">{item.description}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <Badge variant={status.variant} data-testid={`badge-status-${item.key}`}>{status.label}</Badge>
+                  <Input
+                    type="date"
+                    className="w-40"
+                    value={currentValue ? new Date(currentValue).toISOString().split('T')[0] : ""}
+                    onChange={(e) => onUpdate({ [item.key]: e.target.value || null })}
+                    disabled={isPending}
+                    data-testid={`input-date-${item.key}`}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </CardContent>
+      </Card>
+
+      <Card data-testid="card-document-vault">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <ClipboardCheck className="h-5 w-5" />
+            Document Vault
+          </CardTitle>
+          <CardDescription>Essential documents required for grant applications</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {documents.map((item) => {
+            const hasDoc = !!compliance?.[item.key];
+            return (
+              <div key={item.key} className="flex items-center justify-between gap-4 p-4 rounded-lg border" data-testid={`document-${item.key}`}>
+                <div className="flex items-center gap-3">
+                  {hasDoc ? (
+                    <CheckCircle2 className="h-5 w-5 text-green-500 shrink-0" />
+                  ) : (
+                    <XCircle className="h-5 w-5 text-muted-foreground shrink-0" />
+                  )}
+                  <div>
+                    <p className="font-medium">{item.label}</p>
+                    <p className="text-sm text-muted-foreground">{item.description}</p>
+                  </div>
+                </div>
+                <Button
+                  variant={hasDoc ? "outline" : "default"}
+                  size="sm"
+                  onClick={() => onUpdate({ [item.key]: !hasDoc })}
+                  disabled={isPending}
+                  data-testid={`button-toggle-${item.key}`}
+                >
+                  {hasDoc ? "Mark Missing" : "Mark On File"}
+                </Button>
+              </div>
+            );
+          })}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+const intakeTypeLabels: Record<string, string> = {
+  stray: "Stray / At-Large",
+  owner_surrender: "Owner Surrender",
+  transfer: "Transfer In",
+  born_in_care: "Born in Care",
+  other: "Other",
+  unknown: "Unknown",
+};
+
+const outcomeStatusLabels: Record<string, string> = {
+  adopted: "Adopted",
+  returned_to_owner: "Returned to Owner",
+  transported: "Transferred / Transported",
+  deceased: "Died in Care / Euthanized",
+  returned_to_field: "Returned to Field (TNR)",
+};
+
+function DataMatrixTab({
+  startDate,
+  endDate,
+  onStartDateChange,
+  onEndDateChange,
+  matrixData,
+  isLoading,
+  onGenerate,
+}: {
+  startDate: string;
+  endDate: string;
+  onStartDateChange: (v: string) => void;
+  onEndDateChange: (v: string) => void;
+  matrixData: any;
+  isLoading: boolean;
+  onGenerate: () => void;
+}) {
+  return (
+    <div className="space-y-6">
+      <Card data-testid="card-data-matrix-controls">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <BarChart3 className="h-5 w-5" />
+            Shelter Animals Count - Grant Data Matrix
+          </CardTitle>
+          <CardDescription>Generate aggregated intake/outcome statistics for grant reporting periods</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap items-end gap-4">
+            <div className="space-y-1.5">
+              <Label>Start Date</Label>
+              <Input type="date" value={startDate} onChange={e => onStartDateChange(e.target.value)} className="w-44" data-testid="input-matrix-start" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>End Date</Label>
+              <Input type="date" value={endDate} onChange={e => onEndDateChange(e.target.value)} className="w-44" data-testid="input-matrix-end" />
+            </div>
+            <Button onClick={onGenerate} disabled={isLoading} data-testid="button-generate-matrix">
+              {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <BarChart3 className="h-4 w-4 mr-2" />}
+              Generate Grant Data Matrix
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {matrixData && (
+        <>
+          <div className="grid gap-4 md:grid-cols-3">
+            <Card data-testid="card-total-intakes">
+              <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Intakes</CardTitle>
+                <PawPrint className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold" data-testid="text-total-intakes">{matrixData.intake.total}</div>
+              </CardContent>
+            </Card>
+            <Card data-testid="card-total-outcomes">
+              <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Outcomes</CardTitle>
+                <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold" data-testid="text-total-outcomes">{matrixData.outcomes.total}</div>
+              </CardContent>
+            </Card>
+            <Card data-testid="card-live-release-rate">
+              <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Live Release Rate</CardTitle>
+                <Heart className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold" data-testid="text-live-release-rate">{matrixData.liveReleaseRate}%</div>
+                <Progress value={matrixData.liveReleaseRate} className="mt-2" />
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid gap-6 md:grid-cols-2">
+            <Card data-testid="card-intake-breakdown">
+              <CardHeader>
+                <CardTitle>Intake Breakdown</CardTitle>
+                <CardDescription>Animals received by intake type</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Intake Type</TableHead>
+                      <TableHead className="text-right">Count</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {Object.entries(matrixData.intake.byType).length > 0 ? (
+                      Object.entries(matrixData.intake.byType)
+                        .sort(([, a], [, b]) => (b as number) - (a as number))
+                        .map(([type, count]) => (
+                          <TableRow key={type} data-testid={`row-intake-${type}`}>
+                            <TableCell>{intakeTypeLabels[type] || type}</TableCell>
+                            <TableCell className="text-right font-medium">{count as number}</TableCell>
+                          </TableRow>
+                        ))
+                    ) : (
+                      <TableRow><TableCell colSpan={2} className="text-center text-muted-foreground">No intake data for this period</TableCell></TableRow>
+                    )}
+                    <TableRow className="font-bold border-t-2">
+                      <TableCell>Total</TableCell>
+                      <TableCell className="text-right">{matrixData.intake.total}</TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+
+                {Object.keys(matrixData.intake.bySpecies || {}).length > 0 && (
+                  <div className="mt-4 pt-4 border-t">
+                    <p className="text-sm font-medium text-muted-foreground mb-2">By Species</p>
+                    <div className="flex flex-wrap gap-2">
+                      {Object.entries(matrixData.intake.bySpecies).map(([species, count]) => (
+                        <Badge key={species} variant="outline" data-testid={`badge-species-${species}`}>
+                          {species}: {count as number}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card data-testid="card-outcome-breakdown">
+              <CardHeader>
+                <CardTitle>Outcome Breakdown</CardTitle>
+                <CardDescription>Animals dispositioned by outcome type</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Outcome Type</TableHead>
+                      <TableHead className="text-right">Count</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {Object.entries(matrixData.outcomes.byStatus).length > 0 ? (
+                      Object.entries(matrixData.outcomes.byStatus)
+                        .sort(([, a], [, b]) => (b as number) - (a as number))
+                        .map(([status, count]) => (
+                          <TableRow key={status} data-testid={`row-outcome-${status}`}>
+                            <TableCell>{outcomeStatusLabels[status] || status}</TableCell>
+                            <TableCell className="text-right font-medium">{count as number}</TableCell>
+                          </TableRow>
+                        ))
+                    ) : (
+                      <TableRow><TableCell colSpan={2} className="text-center text-muted-foreground">No outcome data for this period</TableCell></TableRow>
+                    )}
+                    <TableRow className="font-bold border-t-2">
+                      <TableCell>Total</TableCell>
+                      <TableCell className="text-right">{matrixData.outcomes.total}</TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
