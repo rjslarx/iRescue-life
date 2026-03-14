@@ -94,6 +94,8 @@ interface BatchRow {
   trapNumber: string;
   color: string;
   sex: string;
+  breed: string;
+  customBreed: string;
   ageGroup: string;
   snCompleted: boolean;
   earTipped: boolean;
@@ -102,10 +104,19 @@ interface BatchRow {
   tnrNotes: string;
 }
 
+const TNR_BREED_OPTIONS = [
+  { value: "Domestic Short Hair", label: "DSH" },
+  { value: "Domestic Medium Hair", label: "DMH" },
+  { value: "Domestic Long Hair", label: "DLH" },
+  { value: "Other", label: "Other" },
+];
+
 const emptyRow = (): BatchRow => ({
   trapNumber: "",
   color: "",
   sex: "unknown",
+  breed: "Domestic Short Hair",
+  customBreed: "",
   ageGroup: "Adult",
   snCompleted: false,
   earTipped: false,
@@ -631,6 +642,10 @@ function BatchEntryDialog({ open, onClose, onSuccess }: BatchEntryDialogProps) {
     mutationFn: async () => {
       const validRows = rows.filter(r => r.color || r.trapNumber);
       if (validRows.length === 0) throw new Error("At least one row must have a color or trap number.");
+      const mappedRows = validRows.map(r => ({
+        ...r,
+        breed: r.breed === "Other" ? (r.customBreed || "Domestic Short Hair") : r.breed,
+      }));
       const res = await apiRequest("POST", "/api/tnr-records/batch", {
         trappingDate,
         colonyLocation,
@@ -638,7 +653,7 @@ function BatchEntryDialog({ open, onClose, onSuccess }: BatchEntryDialogProps) {
         caretakerPhone,
         surgeryLocation,
         partnership,
-        rows: validRows,
+        rows: mappedRows,
       });
       if (!res.ok) {
         const err = await res.json();
@@ -704,6 +719,7 @@ function BatchEntryDialog({ open, onClose, onSuccess }: BatchEntryDialogProps) {
                   <th className="px-2 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">Trap #</th>
                   <th className="px-2 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">Color / Description</th>
                   <th className="px-2 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">Sex</th>
+                  <th className="px-2 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">Breed</th>
                   <th className="px-2 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">Age</th>
                   <th className="px-2 py-2 text-center font-medium text-muted-foreground whitespace-nowrap">S/N</th>
                   <th className="px-2 py-2 text-center font-medium text-muted-foreground whitespace-nowrap">Ear Tip</th>
@@ -731,6 +747,21 @@ function BatchEntryDialog({ open, onClose, onSuccess }: BatchEntryDialogProps) {
                           <SelectItem value="unknown">?</SelectItem>
                         </SelectContent>
                       </Select>
+                    </td>
+                    <td className="px-2 py-1.5">
+                      <div className="flex items-center gap-1">
+                        <Select value={row.breed === "Other" || !TNR_BREED_OPTIONS.some(o => o.value === row.breed) ? "Other" : row.breed} onValueChange={v => { updateRow(i, "breed", v); if (v !== "Other") updateRow(i, "customBreed", ""); }}>
+                          <SelectTrigger className="h-8 w-24" data-testid={`select-breed-${i}`}><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {TNR_BREED_OPTIONS.map(o => (
+                              <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {(row.breed === "Other" || !TNR_BREED_OPTIONS.some(o => o.value === row.breed)) && (
+                          <Input className="h-8 w-28" value={row.customBreed} onChange={e => updateRow(i, "customBreed", e.target.value)} placeholder="Breed" data-testid={`input-custom-breed-${i}`} />
+                        )}
+                      </div>
                     </td>
                     <td className="px-2 py-1.5">
                       <Select value={row.ageGroup} onValueChange={v => updateRow(i, "ageGroup", v)}>
@@ -1022,12 +1053,18 @@ function EditRecordDialog({ record, onClose, onSuccess }: EditRecordDialogProps)
   const [partnership, setPartnership] = useState(record.partnership || "");
   const [earTipped, setEarTipped] = useState(record.earTipped);
   const [tnrNotes, setTnrNotes] = useState(record.tnrNotes || "");
+  const initialBreed = record.breed || "Domestic Short Hair";
+  const isStandardBreed = TNR_BREED_OPTIONS.some(o => o.value === initialBreed && o.value !== "Other");
+  const [breed, setBreed] = useState(isStandardBreed ? initialBreed : "Other");
+  const [customBreed, setCustomBreed] = useState(isStandardBreed ? "" : initialBreed);
 
   const updateMutation = useMutation({
     mutationFn: async () => {
+      const resolvedBreed = breed === "Other" ? (customBreed || "Domestic Short Hair") : breed;
       const res = await apiRequest("PATCH", `/api/tnr-records/${record.id}`, {
         intakeDate: intakeDate || null,
         colonyLocation, trapNumber, invoiceNumber, surgeryLocation, partnership, earTipped, tnrNotes,
+        breed: resolvedBreed,
       });
       if (!res.ok) throw new Error("Failed to update record");
       return res.json();
@@ -1058,6 +1095,22 @@ function EditRecordDialog({ record, onClose, onSuccess }: EditRecordDialogProps)
             <div className="space-y-1.5">
               <Label>Invoice #</Label>
               <Input value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)} data-testid="input-edit-invoice" />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Breed</Label>
+            <div className="flex items-center gap-2">
+              <Select value={breed} onValueChange={v => { setBreed(v); if (v !== "Other") setCustomBreed(""); }}>
+                <SelectTrigger data-testid="select-edit-breed"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {TNR_BREED_OPTIONS.map(o => (
+                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {breed === "Other" && (
+                <Input value={customBreed} onChange={e => setCustomBreed(e.target.value)} placeholder="Enter breed" data-testid="input-edit-custom-breed" />
+              )}
             </div>
           </div>
           <div className="space-y-1.5">
