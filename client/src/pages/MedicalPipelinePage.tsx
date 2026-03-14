@@ -1741,7 +1741,7 @@ export default function MedicalPipelinePage() {
                             <div 
                               key={item.record.id} 
                               className="flex items-center justify-between p-3 rounded-lg bg-destructive/10 border border-destructive/20 hover-elevate cursor-pointer"
-                              onClick={() => navigate(`/animals/${item.animal.id}`)}
+                              onClick={() => navigate(`/dashboard/animals/${item.animal.id}/medical`)}
                               data-testid={`card-preventative-overdue-${item.record.id}`}
                             >
                               <div className="flex items-center gap-3">
@@ -1786,7 +1786,7 @@ export default function MedicalPipelinePage() {
                           <div 
                             key={item.record.id} 
                             className="flex items-center justify-between p-3 rounded-lg bg-orange-500/10 border border-orange-500/20 hover-elevate cursor-pointer"
-                            onClick={() => navigate(`/animals/${item.animal.id}`)}
+                            onClick={() => navigate(`/dashboard/animals/${item.animal.id}/medical`)}
                             data-testid={`card-preventative-today-${item.record.id}`}
                           >
                             <div className="flex items-center gap-3">
@@ -1832,7 +1832,7 @@ export default function MedicalPipelinePage() {
                             <div 
                               key={item.record.id} 
                               className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border hover-elevate cursor-pointer"
-                              onClick={() => navigate(`/animals/${item.animal.id}`)}
+                              onClick={() => navigate(`/dashboard/animals/${item.animal.id}/medical`)}
                               data-testid={`card-preventative-upcoming-${item.record.id}`}
                             >
                               <div className="flex items-center gap-3">
