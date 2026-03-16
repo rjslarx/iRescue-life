@@ -138,14 +138,14 @@ export const helmetConfig = helmet({
   contentSecurityPolicy: process.env.NODE_ENV === 'production' ? {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "https://js.stripe.com", "https://www.googletagmanager.com", "https://apis.google.com", "https://googleads.g.doubleclick.net", "https://www.google.com", "'unsafe-inline'", "'unsafe-eval'"],
+      scriptSrc: ["'self'", "https://js.stripe.com", "https://connect-js.stripe.com", "https://www.googletagmanager.com", "https://apis.google.com", "https://googleads.g.doubleclick.net", "https://www.google.com", "'unsafe-inline'", "'unsafe-eval'"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       imgSrc: ["'self'", "data:", "https:", "blob:", "https://www.google.com", "https://googleads.g.doubleclick.net"],
       connectSrc: ["'self'", "https://api.resend.com", "https://*.stripe.com", "https://www.google-analytics.com", "https://analytics.google.com", "https://storage.googleapis.com", "https://www.googleapis.com", "https://accounts.google.com", "https://www.google.com", "https://googleads.g.doubleclick.net"],
       fontSrc: ["'self'", "data:", "https://fonts.gstatic.com"],
       objectSrc: ["'none'"],
       mediaSrc: ["'self'"],
-      frameSrc: ["'self'", "https://*.stripe.com", "https://docs.google.com", "https://drive.google.com", "https://www.googletagmanager.com"],
+      frameSrc: ["'self'", "https://*.stripe.com", "https://connect-js.stripe.com", "https://docs.google.com", "https://drive.google.com", "https://www.googletagmanager.com"],
       workerSrc: ["'self'", "blob:"],
       upgradeInsecureRequests: [],
     },

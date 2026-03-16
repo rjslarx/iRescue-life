@@ -532,7 +532,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Update shortcuts to include base path
         manifest.shortcuts = manifest.shortcuts.map(shortcut => ({
           ...shortcut,
-          url: `${basePath}${shortcut.url}`
+          url: basePath === '/' ? shortcut.url : `${basePath}${shortcut.url}`
         }));
       } else {
         console.log(`[MANIFEST] No tenant context - using platform defaults`);
