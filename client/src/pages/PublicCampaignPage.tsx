@@ -46,9 +46,9 @@ function timeAgo(dateStr: string): string {
 }
 
 export default function PublicCampaignPage() {
-  const params = useParams<{ campaignId?: string; animalId?: string }>();
+  const params = useParams<{ campaignId?: string; animalId?: string; slug?: string }>();
   const campaignId = params.campaignId;
-  const animalId = params.animalId;
+  const animalId = params.animalId || params.slug;
   const [selectedAmount, setSelectedAmount] = useState<number | null>(2500);
   const [customAmount, setCustomAmount] = useState("");
   const [showCustom, setShowCustom] = useState(false);
