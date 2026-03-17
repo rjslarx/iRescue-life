@@ -5355,6 +5355,7 @@ export const peerCampaigns = pgTable("peer_campaigns", {
   slug: text("slug").notNull(),
   coverImageUrl: text("cover_image_url"),
   isActive: boolean("is_active").notNull().default(true),
+  startsAt: timestamp("starts_at"),
   endsAt: timestamp("ends_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   animalId: uuid("animal_id").references(() => animals.id, { onDelete: 'set null' }),

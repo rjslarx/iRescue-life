@@ -43865,7 +43865,8 @@ The user asking is a tenant administrator or staff member.`;
         baseUrl = `${protocol}://${req.tenant!.customDomain}`;
       } else if (hostname === 'localhost' || hostname.includes('replit.dev') || hostname.endsWith('.replit.app')) {
         const usePrefix = subdomain ? `/${subdomain}` : '';
-        baseUrl = `${protocol}://${hostname}:${req.socket.localPort || 5000}${usePrefix}`;
+        const portSuffix = hostname === 'localhost' ? `:${req.socket.localPort || 5000}` : '';
+        baseUrl = `${protocol}://${hostname}${portSuffix}${usePrefix}`;
       } else {
         baseUrl = `${protocol}://${subdomain ? subdomain + '.' : ''}${hostname}`;
       }
@@ -43967,7 +43968,7 @@ The user asking is a tenant administrator or staff member.`;
       if (tokenRow.usedAt) return res.status(410).json({ error: 'This invitation has already been used' });
       if (new Date() > tokenRow.expiresAt) return res.status(410).json({ error: 'This invitation has expired' });
 
-      const { campaignTitle, goalType, goalAmount, goalTarget, goalUnitLabel, endDate, description, participants } = req.body;
+      const { campaignTitle, goalType, goalAmount, goalTarget, goalUnitLabel, startDate, endDate, description, participants } = req.body;
 
       if (!campaignTitle || !goalType) {
         return res.status(400).json({ error: 'Campaign title and goal type are required' });
@@ -44005,6 +44006,7 @@ The user asking is a tenant administrator or staff member.`;
         goalAmount: goalType === 'currency' ? goalAmount : 0,
         slug,
         isActive: true,
+        startsAt: startDate ? new Date(startDate) : null,
         endsAt: endDate ? new Date(endDate) : null,
         animalId: tokenRow.animalId || null,
         goalType,
@@ -44039,7 +44041,8 @@ The user asking is a tenant administrator or staff member.`;
         baseUrl = `${protocol}://${req.tenant!.customDomain}`;
       } else if (hostname === 'localhost' || hostname.includes('replit.dev') || hostname.endsWith('.replit.app')) {
         const usePrefix = subdomain ? `/${subdomain}` : '';
-        baseUrl = `${protocol}://${hostname}:${req.socket.localPort || 5000}${usePrefix}`;
+        const portSuffix = hostname === 'localhost' ? `:${req.socket.localPort || 5000}` : '';
+        baseUrl = `${protocol}://${hostname}${portSuffix}${usePrefix}`;
       } else {
         baseUrl = `${protocol}://${subdomain ? subdomain + '.' : ''}${hostname}`;
       }

@@ -1554,8 +1554,14 @@ function CampaignManagerTab({ tenantSubdomain }: { tenantSubdomain?: string }) {
                     return (
                       <TableRow key={campaign.id} data-testid={`row-staff-campaign-${campaign.id}`}>
                         <TableCell>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <div className="font-medium">{campaign.campaignTitle}</div>
+                            {campaign.isPartnerSubmitted && (
+                              <Badge variant="outline" className="text-xs" data-testid={`badge-partner-cm-${campaign.id}`}>
+                                <Users className="h-3 w-3 mr-1" />
+                                Partner-submitted
+                              </Badge>
+                            )}
                             {(campaign.primaryColor || campaign.accentColor) && (
                               <span className="flex gap-0.5 shrink-0" title="Custom campaign colors">
                                 {campaign.primaryColor && <span className="w-2.5 h-2.5 rounded-full border border-border" style={{ backgroundColor: campaign.primaryColor }} data-testid={`swatch-primary-${campaign.id}`} />}
