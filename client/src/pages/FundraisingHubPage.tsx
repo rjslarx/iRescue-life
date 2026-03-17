@@ -42,6 +42,7 @@ import {
 } from "@/components/ui/collapsible";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -398,19 +399,45 @@ function CommunityFundraisersTab({ tenantSubdomain }: { tenantSubdomain?: string
 }
 
 function DonationsDialog({ campaignId, campaignTitle, onClose }: { campaignId: string; campaignTitle: string; onClose: () => void }) {
+  const [statusFilter, setStatusFilter] = useState("all");
   const { data, isLoading } = useQuery<{ donations: any[] }>({
-    queryKey: ["/api/peer-campaigns", campaignId, "donations"],
+    queryKey: ["/api/peer-campaigns", campaignId, "donations", statusFilter],
+    queryFn: async () => {
+      const url = `/api/peer-campaigns/${campaignId}/donations${statusFilter !== "all" ? `?status=${statusFilter}` : ""}`;
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch donations");
+      return res.json();
+    },
     enabled: !!campaignId,
   });
 
   const donations = data?.donations || [];
 
+  const statusBadgeVariant = (status: string) => {
+    if (status === "paid") return "default";
+    if (status === "pending") return "secondary";
+    return "outline";
+  };
+
   return (
     <Dialog open onOpenChange={() => onClose()}>
       <DialogContent className="max-w-lg" data-testid="dialog-campaign-donations">
         <DialogHeader>
-          <DialogTitle data-testid="text-donations-dialog-title">Donations — {campaignTitle}</DialogTitle>
+          <DialogTitle data-testid="text-donations-dialog-title">Donations & Pledges — {campaignTitle}</DialogTitle>
         </DialogHeader>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Label className="text-sm text-muted-foreground">Filter:</Label>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-[140px]" data-testid="select-donation-status-filter">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All</SelectItem>
+              <SelectItem value="paid">Paid</SelectItem>
+              <SelectItem value="pending">Pending</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         {isLoading ? (
           <div className="space-y-2 py-4">
             {[1, 2, 3].map(i => (
@@ -426,11 +453,24 @@ function DonationsDialog({ campaignId, campaignTitle, onClose }: { campaignId: s
             {donations.map((d: any, i: number) => (
               <div key={d.id || i} className="flex items-start justify-between gap-3 py-2 border-b last:border-0" data-testid={`donation-row-${i}`}>
                 <div>
-                  <p className="text-sm font-medium" data-testid={`text-donor-name-${i}`}>
-                    {d.isAnonymous ? "Anonymous" : d.donorName}
-                  </p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-sm font-medium" data-testid={`text-donor-name-${i}`}>
+                      {d.isAnonymous ? "Anonymous" : d.donorName}
+                    </p>
+                    <Badge variant={statusBadgeVariant(d.paymentStatus)} data-testid={`badge-status-${i}`}>
+                      {d.paymentStatus}
+                    </Badge>
+                    {d.pledgeType === "per_unit" && (
+                      <Badge variant="outline" data-testid={`badge-pledge-${i}`}>
+                        Pledge
+                      </Badge>
+                    )}
+                  </div>
                   {!d.isAnonymous && d.donorEmail && (
                     <p className="text-xs text-muted-foreground">{d.donorEmail}</p>
+                  )}
+                  {d.pledgeType === "per_unit" && d.pledgePerUnit && (
+                    <p className="text-xs text-muted-foreground">${(d.pledgePerUnit / 100).toFixed(2)}/unit pledge</p>
                   )}
                   {d.message && (
                     <p className="text-xs text-muted-foreground mt-1 italic">"{d.message}"</p>
@@ -1025,7 +1065,7 @@ function VotingContestsTab({ tenantSubdomain }: { tenantSubdomain?: string }) {
                 <CardFooter className="flex items-center justify-end gap-1 flex-wrap">
                   <Button
                     variant="outline"
-                    size="sm"
+                   
                     onClick={() => handleCopyShareLink(contest.slug)}
                     data-testid={`button-share-contest-${contest.id}`}
                   >
@@ -1034,7 +1074,7 @@ function VotingContestsTab({ tenantSubdomain }: { tenantSubdomain?: string }) {
                   </Button>
                   <Button
                     variant="outline"
-                    size="sm"
+                   
                     onClick={() => setManagingContestId(contest.id)}
                     data-testid={`button-manage-contest-${contest.id}`}
                   >
@@ -1296,7 +1336,7 @@ function CampaignManagerTab({ tenantSubdomain }: { tenantSubdomain?: string }) {
   const handleViewPublicPage = (slug: string) => {
     const base = window.location.origin;
     const usePrefix = tenantSubdomain && !isCustomDomain();
-    const path = usePrefix ? `/${tenantSubdomain}/campaigns/${slug}` : `/campaigns/${slug}`;
+    const path = usePrefix ? `/${tenantSubdomain}/p2p/${slug}` : `/p2p/${slug}`;
     window.open(`${base}${path}`, "_blank");
   };
 
@@ -1495,6 +1535,11 @@ function CreateCampaignDialog({ onClose }: { onClose: () => void }) {
   const [unitLabel, setUnitLabel] = useState("lbs");
   const [coverImageUrl, setCoverImageUrl] = useState("");
   const [endsAt, setEndsAt] = useState("");
+  const [animalId, setAnimalId] = useState("");
+
+  const { data: animalsListData } = useQuery<{ animals: any[] }>({
+    queryKey: ["/api/animals"],
+  });
 
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -1505,6 +1550,7 @@ function CreateCampaignDialog({ onClose }: { onClose: () => void }) {
         goalType,
         endsAt: endsAt || undefined,
         coverImageUrl: coverImageUrl || undefined,
+        animalId: animalId && animalId !== "none" ? animalId : undefined,
       };
       if (goalType === "units") {
         payload.goalTarget = parseInt(goalTarget);
@@ -1581,6 +1627,20 @@ function CreateCampaignDialog({ onClose }: { onClose: () => void }) {
           <div>
             <Label>End Date (optional)</Label>
             <Input type="date" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} data-testid="input-cm-ends-at" />
+          </div>
+          <div>
+            <Label>Link to Animal (optional)</Label>
+            <Select value={animalId} onValueChange={setAnimalId}>
+              <SelectTrigger data-testid="select-cm-animal">
+                <SelectValue placeholder="No animal linked" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">No animal linked</SelectItem>
+                {animalsListData?.animals?.map((a: any) => (
+                  <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
         <DialogFooter>

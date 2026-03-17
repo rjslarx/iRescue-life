@@ -43064,8 +43064,8 @@ The user asking is a tenant administrator or staff member.`;
         currency: 'usd',
         customerEmail: data.donorEmail,
         isRecurring: false,
-        successUrl: `${baseUrl}${tenantPath}/campaigns/${campaign.slug}?donation=success`,
-        cancelUrl: `${baseUrl}${tenantPath}/campaigns/${campaign.slug}`,
+        successUrl: `${baseUrl}${tenantPath}/p2p/${campaign.slug}?donation=success`,
+        cancelUrl: `${baseUrl}${tenantPath}/p2p/${campaign.slug}`,
         platformFeeAmount: platformFeeAmount,
         connectedAccountId: tenant.stripeConnectedAccountId || undefined,
         metadata: {
@@ -43204,13 +43204,16 @@ The user asking is a tenant administrator or staff member.`;
 
       if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
 
+      const statusFilter = req.query.status as string;
+      const conditions = [eq(peerCampaignDonations.peerCampaignId, req.params.id)];
+      if (statusFilter && statusFilter !== 'all') {
+        conditions.push(eq(peerCampaignDonations.paymentStatus, statusFilter));
+      }
+
       const donations = await db
         .select()
         .from(peerCampaignDonations)
-        .where(and(
-          eq(peerCampaignDonations.peerCampaignId, req.params.id),
-          eq(peerCampaignDonations.paymentStatus, 'paid')
-        ))
+        .where(and(...conditions))
         .orderBy(desc(peerCampaignDonations.createdAt));
 
       res.json({ donations });

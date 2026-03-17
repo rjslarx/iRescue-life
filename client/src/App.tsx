@@ -228,7 +228,7 @@ function RouterSwitch() {
       <Route path="/surrender" component={PublicSurrenderPage} />
       <Route path="/form-success/:formType" component={FormSuccessPage} />
       <Route path="/contact" component={PublicContactPage} />
-      <Route path="/campaigns/:slug" component={P2PCampaignLandingPage} />
+      <Route path="/p2p/:slug" component={P2PCampaignLandingPage} />
       <Route path="/fundraise/:slug" component={PeerCampaignPage} />
       <Route path="/fundraisers" component={PublicFundraisersPage} />
       <Route path="/donate/event/:eventId" component={FundraiserEventPage} />
