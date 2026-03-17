@@ -139,6 +139,10 @@ function ShareSection({ campaignUrl, compact }: { campaignUrl: string; compact?:
   if (compact) {
     return (
       <div className="space-y-3" data-testid="section-share-compact">
+        <h3 className="font-semibold text-sm flex items-center gap-2">
+          <Share2 className="h-4 w-4" />
+          Share this Campaign
+        </h3>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={handleCopyLink} data-testid="button-copy-link-social">
             <Copy className="h-4 w-4 mr-2" />
