@@ -1701,13 +1701,15 @@ function ProgressUpdateDialog({ campaignId, initialProgress, onClose }: { campai
 function PostUpdateDialog({ campaignId, onClose }: { campaignId: string; onClose: () => void }) {
   const { toast } = useToast();
   const [updateText, setUpdateText] = useState("");
-  const [imageUrl, setImageUrl] = useState("");
+  const [imageUrls, setImageUrls] = useState<string[]>([]);
+  const [videoUrls, setVideoUrls] = useState<string[]>([]);
 
   const postMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", `/api/peer-campaigns/${campaignId}/updates`, {
         updateText,
-        imageUrl: imageUrl || undefined,
+        imageUrl: imageUrls[0] || undefined,
+        videoUrl: videoUrls[0] || undefined,
       });
       return res.json();
     },
@@ -1733,8 +1735,33 @@ function PostUpdateDialog({ campaignId, onClose }: { campaignId: string; onClose
             <Textarea value={updateText} onChange={(e) => setUpdateText(e.target.value)} placeholder="Weigh-in Wednesday! Luna lost 1 lb!" className="resize-none min-h-[100px]" data-testid="input-update-text" />
           </div>
           <div>
-            <Label>Photo URL (optional)</Label>
-            <Input value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} placeholder="https://..." data-testid="input-update-image" />
+            <Label>Photo (optional)</Label>
+            <ObjectUploader
+              value={imageUrls}
+              onChange={setImageUrls}
+              maxFiles={1}
+              accept="image/*"
+              uploadEndpoint="/api/peer-campaigns/media/upload"
+              data-testid="uploader-update-image"
+              buttonText="Upload Photo"
+            />
+          </div>
+          <div>
+            <Label>Video (optional)</Label>
+            <ObjectUploader
+              value={videoUrls}
+              onChange={setVideoUrls}
+              maxFiles={1}
+              maxFileSize={100 * 1024 * 1024}
+              accept="video/*"
+              uploadEndpoint="/api/peer-campaigns/media/upload"
+              data-testid="uploader-update-video"
+              buttonText="Upload Video"
+              showPreview={false}
+            />
+            {videoUrls.length > 0 && (
+              <p className="text-xs text-muted-foreground mt-1">Video uploaded successfully</p>
+            )}
           </div>
         </div>
         <DialogFooter>

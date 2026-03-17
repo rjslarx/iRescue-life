@@ -23,6 +23,8 @@ import {
   TrendingUp,
   Target,
   Calendar,
+  QrCode,
+  X,
 } from "lucide-react";
 import { SiFacebook } from "react-icons/si";
 import type { Tenant, PeerCampaign, PeerCampaignDonation, PeerCampaignUpdate } from "@shared/schema";
@@ -60,6 +62,10 @@ function formatDonorDisplay(d: { donorName: string; isAnonymous: boolean; pledge
   return `${name} donated $${(d.amount / 100).toLocaleString()}`;
 }
 
+function isVideoUrl(url: string): boolean {
+  return /\.(mp4|mov|webm|ogg|m4v)(\?.*)?$/i.test(url);
+}
+
 function CountdownTimer({ endsAt }: { endsAt: string }) {
   const [now, setNow] = useState(new Date());
 
@@ -91,6 +97,383 @@ function CountdownTimer({ endsAt }: { endsAt: string }) {
   );
 }
 
+function ShareSection({ campaignUrl, compact }: { campaignUrl: string; compact?: boolean }) {
+  const { toast } = useToast();
+  const [showQr, setShowQr] = useState(false);
+  const [qrData, setQrData] = useState<string | null>(null);
+  const [qrLoading, setQrLoading] = useState(false);
+
+  const socialUrl = campaignUrl.includes("?") ? `${campaignUrl}&source=social` : `${campaignUrl}?source=social`;
+
+  const handleCopyLink = () => {
+    navigator.clipboard.writeText(socialUrl).then(() => {
+      toast({ title: "Link copied", description: "Campaign link copied with social tracking." });
+    });
+  };
+
+  const handleShareFacebook = () => {
+    const url = encodeURIComponent(socialUrl);
+    window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}`, "_blank", "width=600,height=400");
+  };
+
+  const handleGenerateQr = async () => {
+    if (qrData) {
+      setShowQr(!showQr);
+      return;
+    }
+    setQrLoading(true);
+    try {
+      const res = await fetch(`/api/qr-code?url=${encodeURIComponent(socialUrl)}`);
+      const data = await res.json();
+      if (data.qrCode) {
+        setQrData(data.qrCode);
+        setShowQr(true);
+      }
+    } catch {
+      toast({ title: "Could not generate QR code", variant: "destructive" });
+    } finally {
+      setQrLoading(false);
+    }
+  };
+
+  if (compact) {
+    return (
+      <div className="space-y-3" data-testid="section-share-compact">
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={handleCopyLink} data-testid="button-copy-link-social">
+            <Copy className="h-4 w-4 mr-2" />
+            Copy Link
+          </Button>
+          <Button variant="outline" onClick={handleShareFacebook} data-testid="button-share-facebook-social">
+            <SiFacebook className="h-4 w-4 mr-2" />
+            Share
+          </Button>
+          <Button variant="outline" onClick={handleGenerateQr} disabled={qrLoading} data-testid="button-generate-qr">
+            {qrLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <QrCode className="h-4 w-4 mr-2" />}
+            QR Code
+          </Button>
+        </div>
+        {showQr && qrData && (
+          <div className="flex justify-center p-4 bg-white rounded-md" data-testid="qr-code-display">
+            <img src={qrData} alt="Campaign QR Code" className="w-48 h-48" />
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <Card data-testid="card-share">
+      <CardContent className="pt-6 space-y-3">
+        <h3 className="font-semibold flex items-center gap-2">
+          <Share2 className="h-4 w-4" />
+          Share this campaign
+        </h3>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={handleShareFacebook} data-testid="button-share-facebook">
+            <SiFacebook className="h-4 w-4 mr-2" />
+            Facebook
+          </Button>
+          <Button variant="outline" onClick={handleCopyLink} data-testid="button-copy-link">
+            <Copy className="h-4 w-4 mr-2" />
+            Copy Link
+          </Button>
+          <Button variant="outline" onClick={handleGenerateQr} disabled={qrLoading} data-testid="button-generate-qr">
+            {qrLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <QrCode className="h-4 w-4 mr-2" />}
+            QR Code
+          </Button>
+        </div>
+        {showQr && qrData && (
+          <div className="flex justify-center p-4 bg-white rounded-md" data-testid="qr-code-display">
+            <img src={qrData} alt="Campaign QR Code" className="w-48 h-48" />
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function VideoPlayer({ src, className }: { src: string; className?: string }) {
+  return (
+    <video
+      src={src}
+      controls
+      playsInline
+      muted
+      className={className || "w-full rounded-md"}
+      data-testid="video-player"
+    >
+      Your browser does not support the video tag.
+    </video>
+  );
+}
+
+function QuickPledgeLayout({
+  campaign,
+  animal,
+  donations,
+  updates,
+  rescueName,
+  tenant,
+}: {
+  campaign: PeerCampaign;
+  animal: CampaignPublicData["animal"];
+  donations: CampaignPublicData["donations"];
+  updates: PeerCampaignUpdate[];
+  rescueName: string;
+  tenant: Tenant | undefined;
+}) {
+  const { toast } = useToast();
+  const [donorName, setDonorName] = useState("");
+  const [donorEmail, setDonorEmail] = useState("");
+  const [isAnonymous, setIsAnonymous] = useState(false);
+  const [coverFees, setCoverFees] = useState(false);
+  const [selectedAmount, setSelectedAmount] = useState<number | null>(2000);
+  const [customAmount, setCustomAmount] = useState("");
+  const [showCustom, setShowCustom] = useState(false);
+  const [pledgePerUnit, setPledgePerUnit] = useState("");
+  const [showCheckout, setShowCheckout] = useState(false);
+
+  const isUnitBased = campaign.goalType === "units";
+  const unitLabel = campaign.goalUnitLabel || "units";
+  const goalTarget = campaign.goalTarget || 0;
+  const currentProgress = campaign.currentProgress || 0;
+  const raisedCents = campaign.amountRaised || 0;
+  const goalCents = campaign.goalAmount || 0;
+  const raisedDollars = raisedCents / 100;
+  const goalDollars = goalCents / 100;
+
+  const progressPercentage = isUnitBased
+    ? (goalTarget > 0 ? Math.min((currentProgress / goalTarget) * 100, 100) : 0)
+    : (goalCents > 0 ? Math.min((raisedCents / goalCents) * 100, 100) : 0);
+
+  const campaignEnded = campaign.endsAt && new Date(campaign.endsAt as unknown as string).getTime() < Date.now();
+  const canDonate = campaign.isActive && !campaignEnded && campaign.status !== "completed";
+
+  const firstVideoUpdate = updates.find((u) => u.videoUrl);
+  const heroMedia = firstVideoUpdate?.videoUrl || campaign.coverImageUrl;
+  const heroIsVideo = firstVideoUpdate?.videoUrl ? true : false;
+
+  const checkoutMutation = useMutation({
+    mutationFn: async (amount: number) => {
+      const slug = campaign.slug || campaign.id;
+      const res = await apiRequest("POST", `/api/peer-campaigns/${slug}/checkout`, {
+        amount,
+        donorName: donorName.trim() || "Anonymous",
+        donorEmail: donorEmail.trim() || undefined,
+        isAnonymous,
+        donorCoversFees: coverFees,
+      });
+      return res.json();
+    },
+    onSuccess: (result) => {
+      if (result.url) window.location.href = result.url;
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Could not create checkout session.", variant: "destructive" });
+    },
+  });
+
+  const pledgeMutation = useMutation({
+    mutationFn: async (pledgeAmountCents: number) => {
+      const slug = campaign.slug || campaign.id;
+      const res = await apiRequest("POST", `/api/peer-campaigns/${slug}/pledge`, {
+        donorName: donorName.trim() || "Anonymous",
+        donorEmail: donorEmail.trim() || undefined,
+        pledgePerUnit: pledgeAmountCents,
+        isAnonymous,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Pledge recorded!", description: "Thank you for your pledge." });
+      setShowCheckout(false);
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Could not submit pledge.", variant: "destructive" });
+    },
+  });
+
+  const handleDonate = () => {
+    const amountCents = showCustom ? Math.round(parseFloat(customAmount) * 100) : selectedAmount;
+    if (!amountCents || amountCents < 100) return;
+    checkoutMutation.mutate(amountCents);
+  };
+
+  const handlePledge = () => {
+    const perUnitCents = Math.round(parseFloat(pledgePerUnit) * 100);
+    if (!perUnitCents || perUnitCents < 100) return;
+    pledgeMutation.mutate(perUnitCents);
+  };
+
+  const campaignUrl = window.location.origin + window.location.pathname;
+
+  return (
+    <div className="min-h-screen bg-background flex flex-col" data-testid="quick-pledge-layout">
+      <div className="flex-1 flex flex-col max-w-lg mx-auto w-full">
+        {heroMedia && (
+          <div className="relative w-full" style={{ aspectRatio: "9/16", maxHeight: "60vh" }}>
+            {heroIsVideo ? (
+              <video
+                src={heroMedia}
+                controls
+                playsInline
+                muted
+                autoPlay
+                className="w-full h-full object-cover rounded-b-xl"
+                data-testid="quick-pledge-hero-video"
+              />
+            ) : (
+              <img
+                src={heroMedia}
+                alt={campaign.campaignTitle}
+                className="w-full h-full object-cover rounded-b-xl"
+                data-testid="quick-pledge-hero-image"
+              />
+            )}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent rounded-b-xl" />
+            <div className="absolute bottom-0 left-0 right-0 p-4">
+              {isUnitBased && (
+                <Badge variant="secondary" className="mb-2" data-testid="badge-quick-unit">
+                  <Target className="h-3 w-3 mr-1" />
+                  {unitLabel} Challenge
+                </Badge>
+              )}
+              <h1 className="text-xl font-bold text-white leading-tight" data-testid="quick-pledge-title">
+                {campaign.campaignTitle}
+              </h1>
+              <p className="text-white/80 text-sm mt-1">
+                by {campaign.creatorName}
+                {animal && <span> for {animal.name}</span>}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {!heroMedia && (
+          <div className="p-4 pt-6">
+            <h1 className="text-xl font-bold" data-testid="quick-pledge-title">{campaign.campaignTitle}</h1>
+            <p className="text-muted-foreground text-sm mt-1">
+              by {campaign.creatorName}
+              {animal && <span> for {animal.name}</span>}
+            </p>
+          </div>
+        )}
+
+        <div className="px-4 py-3 space-y-3">
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-baseline gap-2 justify-between">
+              {isUnitBased ? (
+                <>
+                  <span className="text-lg font-bold" data-testid="quick-progress-current">
+                    {animal?.name || "Progress"}: {currentProgress} of {goalTarget} {unitLabel}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="text-lg font-bold" data-testid="quick-raised">${raisedDollars.toLocaleString()}</span>
+                  <span className="text-sm text-muted-foreground" data-testid="quick-goal">of ${goalDollars.toLocaleString()} goal</span>
+                </>
+              )}
+            </div>
+            <Progress value={progressPercentage} className="h-3" data-testid="quick-progress-bar" />
+            <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1">
+                <TrendingUp className="h-3 w-3" />
+                {progressPercentage.toFixed(0)}% {isUnitBased ? "complete" : "funded"}
+              </span>
+              <span className="flex items-center gap-1">
+                <Users className="h-3 w-3" />
+                {donations.length} {donations.length === 1 ? "backer" : "backers"}
+              </span>
+              {campaign.endsAt && <CountdownTimer endsAt={campaign.endsAt as unknown as string} />}
+            </div>
+          </div>
+
+          <ShareSection campaignUrl={campaignUrl} compact />
+        </div>
+      </div>
+
+      {canDonate && (
+        <>
+          {showCheckout && (
+            <div className="fixed inset-0 z-40 bg-black/50 flex items-end" onClick={(e) => { if (e.target === e.currentTarget) setShowCheckout(false); }}>
+              <div className="w-full max-w-lg mx-auto bg-background rounded-t-2xl p-5 pb-8 space-y-4 animate-in slide-in-from-bottom" data-testid="quick-checkout-sheet">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold text-lg">Back this Campaign</h3>
+                  <Button size="icon" variant="ghost" onClick={() => setShowCheckout(false)} data-testid="button-close-checkout">
+                    <X className="h-5 w-5" />
+                  </Button>
+                </div>
+                <div className="space-y-3">
+                  <Input placeholder="Your name" value={donorName} onChange={(e) => setDonorName(e.target.value)} data-testid="quick-input-name" />
+                  <Input type="email" placeholder="Email (optional)" value={donorEmail} onChange={(e) => setDonorEmail(e.target.value)} data-testid="quick-input-email" />
+                  <div className="flex items-center gap-2">
+                    <Checkbox id="quick-anon" checked={isAnonymous} onCheckedChange={(c) => setIsAnonymous(c === true)} data-testid="quick-checkbox-anon" />
+                    <label htmlFor="quick-anon" className="text-sm text-muted-foreground cursor-pointer">Donate anonymously</label>
+                  </div>
+                </div>
+
+                {isUnitBased ? (
+                  <div className="space-y-3">
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                      <Input type="number" min="1" step="1" placeholder={`Amount per ${unitLabel}`} value={pledgePerUnit} onChange={(e) => setPledgePerUnit(e.target.value)} className="pl-7 text-lg h-12" data-testid="quick-input-pledge" />
+                    </div>
+                    <Button size="lg" className="w-full gap-2 h-14 text-lg" onClick={handlePledge} disabled={pledgeMutation.isPending || !pledgePerUnit || parseFloat(pledgePerUnit) < 1} data-testid="quick-button-pledge">
+                      {pledgeMutation.isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Target className="h-5 w-5" />}
+                      {pledgeMutation.isPending ? "Submitting..." : `Pledge per ${unitLabel}`}
+                    </Button>
+                    <div className="relative flex items-center">
+                      <div className="flex-grow border-t border-muted" />
+                      <span className="px-3 text-xs text-muted-foreground">or one-time donation</span>
+                      <div className="flex-grow border-t border-muted" />
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="space-y-3">
+                  <div className="grid grid-cols-4 gap-2">
+                    {PRESET_AMOUNTS.map((amt) => (
+                      <Button key={amt} variant={!showCustom && selectedAmount === amt ? "default" : "outline"} onClick={() => { setSelectedAmount(amt); setShowCustom(false); }} data-testid={`quick-amount-${amt}`}>
+                        ${amt / 100}
+                      </Button>
+                    ))}
+                  </div>
+                  <Button variant={showCustom ? "default" : "outline"} className="w-full" onClick={() => setShowCustom(true)} data-testid="quick-custom-amount">Custom</Button>
+                  {showCustom && (
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                      <Input type="number" min="1" step="0.01" placeholder="Enter amount" value={customAmount} onChange={(e) => setCustomAmount(e.target.value)} className="pl-7 text-lg h-12" data-testid="quick-input-custom" />
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <Checkbox id="quick-fees" checked={coverFees} onCheckedChange={(c) => setCoverFees(c === true)} data-testid="quick-checkbox-fees" />
+                    <label htmlFor="quick-fees" className="text-sm text-muted-foreground cursor-pointer">Cover processing fees</label>
+                  </div>
+                  <Button size="lg" className="w-full gap-2 h-14 text-lg" onClick={handleDonate} disabled={checkoutMutation.isPending || (!showCustom && !selectedAmount) || (showCustom && (!customAmount || parseFloat(customAmount) < 1))} data-testid="quick-button-donate">
+                    {checkoutMutation.isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Heart className="h-5 w-5" />}
+                    {checkoutMutation.isPending ? "Processing..." : "Donate Now"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="sticky bottom-0 left-0 right-0 bg-background/95 backdrop-blur-sm border-t p-4 z-30" data-testid="quick-sticky-bar">
+            <div className="max-w-lg mx-auto">
+              <Button size="lg" className="w-full gap-2 h-14 text-lg" onClick={() => setShowCheckout(true)} data-testid="quick-button-open-checkout">
+                <Heart className="h-6 w-6" />
+                Back This Campaign
+              </Button>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function P2PCampaignLandingPage() {
   const params = useParams<{ slug: string }>();
   const slug = params.slug;
@@ -106,6 +489,9 @@ export default function P2PCampaignLandingPage() {
   const [donorMessage, setDonorMessage] = useState("");
   const [isAnonymous, setIsAnonymous] = useState(false);
   const [pledgePerUnit, setPledgePerUnit] = useState("");
+
+  const urlParams = new URLSearchParams(window.location.search);
+  const isSocialSource = urlParams.get("source") === "social" || urlParams.get("source") === "reels";
 
   const { data: tenantData } = useQuery<{ tenant: Tenant }>({
     queryKey: ["/api/tenant"],
@@ -171,17 +557,6 @@ export default function P2PCampaignLandingPage() {
     const perUnitCents = Math.round(parseFloat(pledgePerUnit) * 100);
     if (!perUnitCents || perUnitCents < 100) return;
     pledgeMutation.mutate(perUnitCents);
-  };
-
-  const handleCopyLink = () => {
-    navigator.clipboard.writeText(window.location.href).then(() => {
-      toast({ title: "Link copied", description: "Campaign link copied to your clipboard." });
-    });
-  };
-
-  const handleShareFacebook = () => {
-    const url = encodeURIComponent(window.location.href);
-    window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}`, "_blank", "width=600,height=400");
   };
 
   const tenant = tenantData?.tenant;
@@ -266,8 +641,23 @@ export default function P2PCampaignLandingPage() {
     );
   }
 
+  if (isSocialSource) {
+    return (
+      <QuickPledgeLayout
+        campaign={campaign}
+        animal={animal}
+        donations={donations}
+        updates={updates}
+        rescueName={rescueName}
+        tenant={tenant}
+      />
+    );
+  }
+
   const campaignEnded = campaign.endsAt && new Date(campaign.endsAt as unknown as string).getTime() < Date.now();
   const canDonate = campaign.isActive && !campaignEnded && campaign.status !== "completed";
+
+  const campaignUrl = window.location.origin + window.location.pathname;
 
   return (
     <div className="min-h-screen bg-background">
@@ -404,7 +794,12 @@ export default function P2PCampaignLandingPage() {
                         <p className="text-foreground/80 whitespace-pre-wrap" data-testid={`update-text-${update.id}`}>
                           {update.updateText}
                         </p>
-                        {update.imageUrl && (
+                        {update.videoUrl && (
+                          <div className="mt-2" style={{ aspectRatio: "9/16", maxWidth: "320px" }}>
+                            <VideoPlayer src={update.videoUrl} className="w-full h-full object-cover rounded-md" />
+                          </div>
+                        )}
+                        {update.imageUrl && !update.videoUrl && (
                           <img
                             src={update.imageUrl}
                             alt="Campaign update"
@@ -552,24 +947,7 @@ export default function P2PCampaignLandingPage() {
                 </Card>
               )}
 
-              <Card>
-                <CardContent className="pt-6 space-y-3">
-                  <h3 className="font-semibold flex items-center gap-2">
-                    <Share2 className="h-4 w-4" />
-                    Share this campaign
-                  </h3>
-                  <div className="flex flex-wrap gap-2">
-                    <Button variant="outline" onClick={handleShareFacebook} data-testid="button-share-facebook">
-                      <SiFacebook className="h-4 w-4 mr-2" />
-                      Facebook
-                    </Button>
-                    <Button variant="outline" onClick={handleCopyLink} data-testid="button-copy-link">
-                      <Copy className="h-4 w-4 mr-2" />
-                      Copy Link
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
+              <ShareSection campaignUrl={campaignUrl} />
 
               <div className="hidden md:block">
                 {donations.length > 0 && (
@@ -582,14 +960,6 @@ export default function P2PCampaignLandingPage() {
               </div>
             </div>
           </div>
-        </div>
-
-        <div className="mt-12 text-center text-sm text-muted-foreground">
-          <p>
-            This campaign is hosted by <strong>{campaign.creatorName}</strong> in support of{" "}
-            <strong>{rescueName}</strong>
-          </p>
-          <p className="mt-1">Donations are processed securely through Stripe.</p>
         </div>
       </main>
 
@@ -628,6 +998,14 @@ export default function P2PCampaignLandingPage() {
       )}
 
       {canDonate && <div className="md:hidden h-20" />}
+
+      <div className="mt-12 text-center text-sm text-muted-foreground pb-8">
+        <p>
+          This campaign is hosted by <strong>{campaign.creatorName}</strong> in support of{" "}
+          <strong>{rescueName}</strong>
+        </p>
+        <p className="mt-1">Donations are processed securely through Stripe.</p>
+      </div>
     </div>
   );
 }

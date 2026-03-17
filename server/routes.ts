@@ -43250,7 +43250,8 @@ The user asking is a tenant administrator or staff member.`;
 
       const updateSchema = z.object({
         updateText: z.string().min(1).max(2000),
-        imageUrl: z.string().url().optional(),
+        imageUrl: z.string().optional(),
+        videoUrl: z.string().optional(),
       });
 
       const data = updateSchema.parse(req.body);
@@ -43260,6 +43261,7 @@ The user asking is a tenant administrator or staff member.`;
         peerCampaignId: campaign.id,
         updateText: data.updateText,
         imageUrl: data.imageUrl || null,
+        videoUrl: data.videoUrl || null,
       }).returning();
 
       res.json({ update });
@@ -43286,6 +43288,59 @@ The user asking is a tenant administrator or staff member.`;
         .orderBy(desc(peerCampaignUpdates.createdAt));
 
       res.json({ updates });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/peer-campaigns/media/upload
+   * Staff: Upload media (images/videos) for campaign updates
+   */
+  app.post('/api/peer-campaigns/media/upload', requireTenant, requireAuth, requireRole('admin', 'owner', 'board_member', 'staff', 'manager'), async (req, res, next) => {
+    try {
+      const multer = (await import('multer')).default;
+      const { TenantFileStorage } = await import('./lib/tenantFileStorage');
+
+      const allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif', 'mp4', 'mov', 'webm', 'ogg', 'm4v'];
+
+      const upload = multer({
+        storage: multer.memoryStorage(),
+        limits: { fileSize: 100 * 1024 * 1024 },
+        fileFilter: (_req: any, file: any, cb: any) => {
+          const ext = file.originalname.toLowerCase().split('.').pop();
+          if (file.mimetype.startsWith('image/') || file.mimetype.startsWith('video/') || (ext && allowedExtensions.includes(ext))) {
+            cb(null, true);
+          } else {
+            cb(new Error('Only image and video files are allowed'));
+          }
+        },
+      }).array('files', 5);
+
+      upload(req, res, async (err: any) => {
+        if (err) return res.status(400).json({ error: err.message });
+
+        const files = req.files as Express.Multer.File[];
+        if (!files || files.length === 0) return res.status(400).json({ error: 'No files uploaded' });
+
+        try {
+          const tenantId = req.tenant!.id;
+          const storage = await TenantFileStorage.forTenant(tenantId);
+          const uploadedPaths: string[] = [];
+
+          for (const file of files) {
+            const ext = file.originalname.split('.').pop() || 'bin';
+            const fileName = `campaign-media-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+            const filePath = `campaigns/${fileName}`;
+            const objectPath = await storage.uploadFile(filePath, file.buffer, file.mimetype);
+            uploadedPaths.push(objectPath);
+          }
+
+          res.json({ uploadedPaths });
+        } catch (uploadError) {
+          next(uploadError);
+        }
+      });
     } catch (error) {
       next(error);
     }
@@ -43991,6 +44046,7 @@ The user asking is a tenant administrator or staff member.`;
         slug,
         description: data.description || null,
         imageUrl: data.imageUrl || null,
+        videoUrl: data.videoUrl || null,
         startDate: data.startDate ? new Date(data.startDate) : null,
         endDate: data.endDate ? new Date(data.endDate) : null,
       }).returning();

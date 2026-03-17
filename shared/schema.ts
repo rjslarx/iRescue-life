@@ -5381,6 +5381,7 @@ export const peerCampaignUpdates = pgTable("peer_campaign_updates", {
   peerCampaignId: uuid("peer_campaign_id").notNull().references(() => peerCampaigns.id, { onDelete: 'cascade' }),
   updateText: text("update_text").notNull(),
   imageUrl: text("image_url"),
+  videoUrl: text("video_url"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

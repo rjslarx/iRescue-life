@@ -57,6 +57,7 @@ Core functionalities include:
 - **Email PDF Auto-Link to Animal Documents:** Fully reviewed email-imported medical batches automatically save the source PDF to the animal's Documents tab.
 - **Forwarded Email Routing via System Inbound Address:** Each tenant has a unique `system_inbound_email` for forwarded-email routing.
 - **Grant Readiness & Compliance Dashboard:** Tracks regulatory deadlines, document flags, and provides intake/outcome statistics with live release rate calculation.
+- **Social Quick Pledge UI:** Mobile-first campaign landing page layout triggered by `?source=social` URL parameter, with 9:16 vertical media hero, sticky checkout sheet, share tools with QR code generation, and video support in campaign updates.
 
 ## External Dependencies
 - **Stripe:** Payment processing and financial management.
