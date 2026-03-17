@@ -54,6 +54,7 @@ const formSchema = z.object({
   ),
   goalUnitLabel: z.string().max(50).optional(),
   goalTarget: z.string().optional(),
+  animalName: z.string().max(100).optional(),
   coverImageUrl: z.string().optional(),
   endsAt: z.string().optional(),
 }).superRefine((data, ctx) => {
@@ -105,6 +106,7 @@ export default function PeerCampaignCreatePage() {
       goalAmount: "",
       goalUnitLabel: "",
       goalTarget: "",
+      animalName: "",
       coverImageUrl: "",
       endsAt: "",
     },
@@ -129,6 +131,9 @@ export default function PeerCampaignCreatePage() {
       if (values.goalType === "units") {
         payload.goalUnitLabel = values.goalUnitLabel;
         payload.goalTarget = parseInt(values.goalTarget || "0");
+        if (values.animalName?.trim()) {
+          payload.animalName = values.animalName.trim();
+        }
       }
 
       if (coverImages.length > 0) {
@@ -354,6 +359,25 @@ export default function PeerCampaignCreatePage() {
                             />
                           </FormControl>
                           <FormDescription>How many units is the goal? (e.g., 7 lbs to lose)</FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="animalName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Animal Name (Optional)</FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder="Biscuit"
+                              data-testid="input-animal-name"
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormDescription>The name of the animal this challenge is for</FormDescription>
                           <FormMessage />
                         </FormItem>
                       )}

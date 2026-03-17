@@ -42832,11 +42832,19 @@ The user asking is a tenant administrator or staff member.`;
         goalType: z.enum(['currency', 'units']).default('currency'),
         goalUnitLabel: z.string().max(50).optional(),
         goalTarget: z.number().int().min(1).optional(),
+        animalName: z.string().max(100).optional(),
         coverImageUrl: z.string().max(500).optional(),
         endsAt: z.string().optional(),
       });
 
       const data = createSchema.parse(req.body);
+
+      // If an animal name is provided, prepend it to the story for context
+      let finalStory = data.campaignStory || null;
+      if (data.animalName && data.animalName.trim()) {
+        const animalPrefix = `This campaign is for ${data.animalName.trim()}.`;
+        finalStory = finalStory ? `${animalPrefix}\n\n${finalStory}` : animalPrefix;
+      }
 
       let slug = data.campaignTitle
         .toLowerCase()
@@ -42860,7 +42868,7 @@ The user asking is a tenant administrator or staff member.`;
         creatorName: data.creatorName,
         creatorEmail: data.creatorEmail,
         campaignTitle: data.campaignTitle,
-        campaignStory: data.campaignStory || null,
+        campaignStory: finalStory,
         goalAmount: data.goalAmount,
         goalType: data.goalType,
         goalUnitLabel: data.goalUnitLabel || null,
