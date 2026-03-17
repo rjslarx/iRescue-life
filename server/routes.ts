@@ -43064,8 +43064,8 @@ The user asking is a tenant administrator or staff member.`;
         currency: 'usd',
         customerEmail: data.donorEmail,
         isRecurring: false,
-        successUrl: `${baseUrl}${tenantPath}/p2p/${campaign.slug}?donation=success`,
-        cancelUrl: `${baseUrl}${tenantPath}/p2p/${campaign.slug}`,
+        successUrl: `${baseUrl}${tenantPath}/campaign/${campaign.slug}?donation=success`,
+        cancelUrl: `${baseUrl}${tenantPath}/campaign/${campaign.slug}`,
         platformFeeAmount: platformFeeAmount,
         connectedAccountId: tenant.stripeConnectedAccountId || undefined,
         metadata: {

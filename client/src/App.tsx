@@ -228,7 +228,6 @@ function RouterSwitch() {
       <Route path="/surrender" component={PublicSurrenderPage} />
       <Route path="/form-success/:formType" component={FormSuccessPage} />
       <Route path="/contact" component={PublicContactPage} />
-      <Route path="/p2p/:slug" component={P2PCampaignLandingPage} />
       <Route path="/fundraise/:slug" component={PeerCampaignPage} />
       <Route path="/fundraisers" component={PublicFundraisersPage} />
       <Route path="/donate/event/:eventId" component={FundraiserEventPage} />
@@ -239,8 +238,8 @@ function RouterSwitch() {
       <Route path="/give" component={GivePage} />
       <Route path="/transparency" component={PublicTransparencyPage} />
       <Route path="/campaigns/:campaignId" component={PublicCampaignPage} />
-      <Route path="/campaign/:animalId" component={PublicCampaignPage} />
       <Route path="/campaign/:animalId/thank-you" component={DonationThankYouPage} />
+      <Route path="/campaign/:slug" component={P2PCampaignLandingPage} />
       <Route path="/contest/:slug" component={VotingContestPage} />
       <Route path="/fundraise" component={PeerCampaignCreatePage} />
       <Route path="/foster" component={FosterApplicationPage} />

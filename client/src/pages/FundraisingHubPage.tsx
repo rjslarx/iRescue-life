@@ -1336,7 +1336,7 @@ function CampaignManagerTab({ tenantSubdomain }: { tenantSubdomain?: string }) {
   const handleViewPublicPage = (slug: string) => {
     const base = window.location.origin;
     const usePrefix = tenantSubdomain && !isCustomDomain();
-    const path = usePrefix ? `/${tenantSubdomain}/p2p/${slug}` : `/p2p/${slug}`;
+    const path = usePrefix ? `/${tenantSubdomain}/campaign/${slug}` : `/campaign/${slug}`;
     window.open(`${base}${path}`, "_blank");
   };
 
@@ -1543,7 +1543,7 @@ function CreateCampaignDialog({ onClose }: { onClose: () => void }) {
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      const payload: any = {
+      const payload: Record<string, string | number | undefined> = {
         campaignTitle: title,
         campaignStory: story || undefined,
         goalAmount: goalType === "currency" ? Math.round(parseFloat(goalAmount) * 100) : 100,

@@ -49,7 +49,7 @@ Core functionalities include:
 - **Medical Protocol Engine:** Tenant-customizable treatment intervals via Settings > Medical Protocols page.
 - **Medical Record Edit Audit Trail:** All six medical record tables have `lastEditedAt` and `lastEditedBy` columns, with a history timeline and "(Edited)" tooltips.
 - **Transfer Packet Section 5:** "Upcoming Preventative & Medical Care" section added to the official Medical Transfer Packet PDF, listing all future-due items.
-- **P2P Campaigns & Pledges Module:** Extended peer-to-peer fundraising with unit-based pledges (e.g., "$10/lb lost"), progress tracking, and timeline updates. Public campaign landing page at `/p2p/:slug`. Staff Campaign Manager tab in Fundraising Hub with animal linking, progress updates, and donor/pledge list with payment-status filtering.
+- **P2P Campaigns & Pledges Module:** Extended peer-to-peer fundraising with unit-based pledges (e.g., "$10/lb lost"), progress tracking, and timeline updates. Public campaign landing page at `/campaign/:slug` (with UUID fallback to legacy emergency campaigns). Staff Campaign Manager tab in Fundraising Hub with animal linking, progress updates, and donor/pledge list with payment-status filtering.
 - **Voting Contest Engine ("Vote with your Dollar"):** Gamified fundraising where $1 = 1 Vote, with a public leaderboard and Stripe Checkout integration.
 - **Fast-Track / Fee Waived Adoption:** Supports bypassing application steps and waiving adoption fees with a reason.
 - **Adoption Checkout Link SMS Delivery:** Default delivery of checkout links via SMS.

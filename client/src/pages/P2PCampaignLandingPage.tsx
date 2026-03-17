@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams } from "wouter";
 import { useSEO } from "@/hooks/useSEO";
@@ -26,6 +26,8 @@ import {
 } from "lucide-react";
 import { SiFacebook } from "react-icons/si";
 import type { Tenant, PeerCampaign, PeerCampaignDonation, PeerCampaignUpdate } from "@shared/schema";
+
+const PublicCampaignPage = lazy(() => import("@/pages/PublicCampaignPage"));
 
 interface CampaignPublicData {
   campaign: PeerCampaign;
@@ -241,6 +243,14 @@ export default function P2PCampaignLandingPage() {
   }
 
   if (!campaign) {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slug || "");
+    if (isUuid) {
+      return (
+        <Suspense fallback={<div className="min-h-screen bg-background" />}>
+          <PublicCampaignPage />
+        </Suspense>
+      );
+    }
     return (
       <div className="min-h-screen bg-background">
         <PublicHeader rescueName={rescueName} logoUrl={tenant?.logoUrl || undefined} />
