@@ -5357,15 +5357,39 @@ export const peerCampaigns = pgTable("peer_campaigns", {
   isActive: boolean("is_active").notNull().default(true),
   endsAt: timestamp("ends_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  animalId: uuid("animal_id").references(() => animals.id, { onDelete: 'set null' }),
+  goalType: text("goal_type").$type<"currency" | "units">().notNull().default("currency"),
+  goalUnitLabel: text("goal_unit_label"),
+  goalTarget: integer("goal_target"),
+  currentProgress: integer("current_progress").notNull().default(0),
+  status: text("status").$type<"active" | "completed">().notNull().default("active"),
+  createdByUserId: uuid("created_by_user_id").references(() => users.id),
 });
 
 export const insertPeerCampaignSchema = createInsertSchema(peerCampaigns).omit({
   id: true,
   amountRaised: true,
   createdAt: true,
+  currentProgress: true,
 });
 export type InsertPeerCampaign = z.infer<typeof insertPeerCampaignSchema>;
 export type PeerCampaign = typeof peerCampaigns.$inferSelect;
+
+export const peerCampaignUpdates = pgTable("peer_campaign_updates", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  peerCampaignId: uuid("peer_campaign_id").notNull().references(() => peerCampaigns.id, { onDelete: 'cascade' }),
+  updateText: text("update_text").notNull(),
+  imageUrl: text("image_url"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertPeerCampaignUpdateSchema = createInsertSchema(peerCampaignUpdates).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertPeerCampaignUpdate = z.infer<typeof insertPeerCampaignUpdateSchema>;
+export type PeerCampaignUpdate = typeof peerCampaignUpdates.$inferSelect;
 
 export const peerCampaignDonations = pgTable("peer_campaign_donations", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -5377,7 +5401,9 @@ export const peerCampaignDonations = pgTable("peer_campaign_donations", {
   message: text("message"),
   isAnonymous: boolean("is_anonymous").notNull().default(false),
   stripeSessionId: text("stripe_session_id"),
-  paymentStatus: text("payment_status").$type<"pending" | "paid">().notNull().default("pending"),
+  paymentStatus: text("payment_status").$type<"pending" | "paid" | "cancelled">().notNull().default("pending"),
+  pledgeType: text("pledge_type").$type<"per_unit" | "flat">().notNull().default("flat"),
+  pledgePerUnit: integer("pledge_per_unit"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

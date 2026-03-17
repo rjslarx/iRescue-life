@@ -107,8 +107,9 @@ export default function FundraisingHubPage() {
       <Tabs defaultValue="toolkit" className="space-y-4">
         <TabsList data-testid="tabs-fundraising">
           <TabsTrigger value="toolkit" data-testid="tab-toolkit">Toolkit</TabsTrigger>
-          <TabsTrigger value="community" data-testid="tab-community-fundraisers">Community Fundraisers</TabsTrigger>
-          <TabsTrigger value="voting-contests" data-testid="tab-voting-contests">Voting Contests</TabsTrigger>
+          <TabsTrigger value="campaigns" data-testid="tab-campaign-manager">Campaigns</TabsTrigger>
+          <TabsTrigger value="community" data-testid="tab-community-fundraisers">Community</TabsTrigger>
+          <TabsTrigger value="voting-contests" data-testid="tab-voting-contests">Voting</TabsTrigger>
         </TabsList>
 
         <TabsContent value="toolkit">
@@ -117,6 +118,10 @@ export default function FundraisingHubPage() {
             <AnimalCampaignsCard onNavigate={setLocation} />
             <SocialMediaPlaybookCard />
           </div>
+        </TabsContent>
+
+        <TabsContent value="campaigns">
+          <CampaignManagerTab tenantSubdomain={tenant?.subdomain} />
         </TabsContent>
 
         <TabsContent value="community">
@@ -1267,5 +1272,419 @@ function SocialMediaPlaybookCard() {
         </Collapsible>
       </CardContent>
     </Card>
+  );
+}
+
+function CampaignManagerTab({ tenantSubdomain }: { tenantSubdomain?: string }) {
+  const { toast } = useToast();
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
+  const [showUpdateForm, setShowUpdateForm] = useState(false);
+  const [showDonors, setShowDonors] = useState(false);
+  const [progressValue, setProgressValue] = useState("");
+
+  const { data, isLoading } = useQuery<{ campaigns: any[] }>({
+    queryKey: ["/api/peer-campaigns"],
+  });
+
+  const campaigns = data?.campaigns || [];
+  const staffCampaigns = campaigns.filter((c: any) => c.createdByUserId || c.goalType === "units");
+
+  const totalRaised = staffCampaigns.reduce((sum: number, c: any) => sum + (c.donationTotal || c.amountRaised || 0), 0);
+  const activeCampaigns = staffCampaigns.filter((c: any) => c.isActive && c.status === "active").length;
+
+  const handleViewPublicPage = (slug: string) => {
+    const base = window.location.origin;
+    const usePrefix = tenantSubdomain && !isCustomDomain();
+    const path = usePrefix ? `/${tenantSubdomain}/campaigns/${slug}` : `/campaigns/${slug}`;
+    window.open(`${base}${path}`, "_blank");
+  };
+
+  return (
+    <div className="space-y-4" data-testid="section-campaign-manager">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3">
+              <div className="rounded-md bg-purple-500/10 p-2">
+                <Target className="h-5 w-5 text-purple-500" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Staff Campaigns</p>
+                <p className="text-2xl font-bold" data-testid="text-staff-campaigns-count">{staffCampaigns.length}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3">
+              <div className="rounded-md bg-green-500/10 p-2">
+                <DollarSign className="h-5 w-5 text-green-500" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Total Raised</p>
+                <p className="text-2xl font-bold" data-testid="text-cm-total-raised">${(totalRaised / 100).toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3">
+              <div className="rounded-md bg-amber-500/10 p-2">
+                <TrendingUp className="h-5 w-5 text-amber-500" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Active</p>
+                <p className="text-2xl font-bold" data-testid="text-cm-active">{activeCampaigns}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-2">
+              <Target className="h-5 w-5 text-purple-500" />
+              <CardTitle className="text-lg">Campaign Manager</CardTitle>
+            </div>
+            <Button onClick={() => setShowCreateForm(true)} data-testid="button-create-campaign">
+              <Plus className="mr-2 h-4 w-4" />
+              New Campaign
+            </Button>
+          </div>
+          <p className="text-sm text-muted-foreground">Create and manage staff-run campaigns with pledge-per-unit goals, progress tracking, and timeline updates.</p>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map(i => (<div key={i} className="h-12 rounded-md bg-muted animate-pulse" />))}
+            </div>
+          ) : staffCampaigns.length === 0 && !showCreateForm ? (
+            <div className="flex flex-col items-center gap-3 py-8 text-center">
+              <div className="rounded-full bg-muted p-3">
+                <Target className="h-6 w-6 text-muted-foreground" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm font-medium" data-testid="text-no-staff-campaigns">No campaigns yet</p>
+                <p className="text-xs text-muted-foreground">Create a campaign to start fundraising with pledges, progress tracking, and timeline updates.</p>
+              </div>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table data-testid="table-staff-campaigns">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Campaign</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead className="text-right">Progress</TableHead>
+                    <TableHead className="text-right">Raised</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {staffCampaigns.map((campaign: any) => {
+                    const raised = campaign.donationTotal || campaign.amountRaised || 0;
+                    const isUnits = campaign.goalType === "units";
+                    const progress = isUnits
+                      ? (campaign.goalTarget > 0 ? Math.min(100, Math.round((campaign.currentProgress / campaign.goalTarget) * 100)) : 0)
+                      : (campaign.goalAmount > 0 ? Math.min(100, Math.round((raised / campaign.goalAmount) * 100)) : 0);
+
+                    return (
+                      <TableRow key={campaign.id} data-testid={`row-staff-campaign-${campaign.id}`}>
+                        <TableCell>
+                          <div className="font-medium">{campaign.campaignTitle}</div>
+                          <div className="text-xs text-muted-foreground">{new Date(campaign.createdAt).toLocaleDateString()}</div>
+                        </TableCell>
+                        <TableCell>
+                          {isUnits ? (
+                            <Badge variant="secondary"><Target className="h-3 w-3 mr-1" />{campaign.goalUnitLabel || "units"}</Badge>
+                          ) : (
+                            <Badge variant="secondary"><DollarSign className="h-3 w-3 mr-1" />Dollar</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <div className="w-16 h-2 rounded-full bg-muted overflow-hidden">
+                              <div className="h-full rounded-full bg-purple-500 transition-all" style={{ width: `${progress}%` }} />
+                            </div>
+                            <span className="text-xs text-muted-foreground w-12 text-right">
+                              {isUnits ? `${campaign.currentProgress || 0}/${campaign.goalTarget || 0}` : `${progress}%`}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right font-medium">${(raised / 100).toLocaleString()}</TableCell>
+                        <TableCell>
+                          {campaign.status === "completed" ? (
+                            <Badge variant="secondary">Completed</Badge>
+                          ) : campaign.isActive ? (
+                            <Badge variant="default" className="bg-green-600">Active</Badge>
+                          ) : (
+                            <Badge variant="secondary">Inactive</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center justify-end gap-1">
+                            <Button size="icon" variant="ghost" onClick={() => handleViewPublicPage(campaign.slug)} title="View public page" data-testid={`button-view-staff-campaign-${campaign.id}`}>
+                              <Eye />
+                            </Button>
+                            {campaign.goalType === "units" && (
+                              <Button size="icon" variant="ghost" onClick={() => { setSelectedCampaignId(campaign.id); setProgressValue(String(campaign.currentProgress || 0)); setShowUpdateForm(false); setShowDonors(false); }} title="Update progress" data-testid={`button-progress-${campaign.id}`}>
+                                <TrendingUp />
+                              </Button>
+                            )}
+                            <Button size="icon" variant="ghost" onClick={() => { setSelectedCampaignId(campaign.id); setShowUpdateForm(true); setShowDonors(false); }} title="Post update" data-testid={`button-post-update-${campaign.id}`}>
+                              <Megaphone />
+                            </Button>
+                            <Button size="icon" variant="ghost" onClick={() => { setSelectedCampaignId(campaign.id); setShowDonors(true); setShowUpdateForm(false); }} title="View donors" data-testid={`button-view-donors-${campaign.id}`}>
+                              <DollarSign />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {showCreateForm && (
+        <CreateCampaignDialog onClose={() => setShowCreateForm(false)} />
+      )}
+
+      {selectedCampaignId && !showUpdateForm && !showDonors && (
+        <ProgressUpdateDialog
+          campaignId={selectedCampaignId}
+          initialProgress={progressValue}
+          onClose={() => setSelectedCampaignId(null)}
+        />
+      )}
+
+      {selectedCampaignId && showUpdateForm && (
+        <PostUpdateDialog
+          campaignId={selectedCampaignId}
+          onClose={() => { setSelectedCampaignId(null); setShowUpdateForm(false); }}
+        />
+      )}
+
+      {selectedCampaignId && showDonors && (
+        <DonationsDialog
+          campaignId={selectedCampaignId}
+          campaignTitle={campaigns.find((c: any) => c.id === selectedCampaignId)?.campaignTitle || "Campaign"}
+          onClose={() => { setSelectedCampaignId(null); setShowDonors(false); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function CreateCampaignDialog({ onClose }: { onClose: () => void }) {
+  const { toast } = useToast();
+  const [title, setTitle] = useState("");
+  const [story, setStory] = useState("");
+  const [goalType, setGoalType] = useState<"currency" | "units">("currency");
+  const [goalAmount, setGoalAmount] = useState("");
+  const [goalTarget, setGoalTarget] = useState("");
+  const [unitLabel, setUnitLabel] = useState("lbs");
+  const [coverImageUrl, setCoverImageUrl] = useState("");
+  const [endsAt, setEndsAt] = useState("");
+
+  const createMutation = useMutation({
+    mutationFn: async () => {
+      const payload: any = {
+        campaignTitle: title,
+        campaignStory: story || undefined,
+        goalAmount: goalType === "currency" ? Math.round(parseFloat(goalAmount) * 100) : 100,
+        goalType,
+        endsAt: endsAt || undefined,
+        coverImageUrl: coverImageUrl || undefined,
+      };
+      if (goalType === "units") {
+        payload.goalTarget = parseInt(goalTarget);
+        payload.goalUnitLabel = unitLabel;
+      }
+      const res = await apiRequest("POST", "/api/peer-campaigns/staff", payload);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/peer-campaigns"] });
+      toast({ title: "Campaign created!" });
+      onClose();
+    },
+    onError: () => {
+      toast({ title: "Failed to create campaign", variant: "destructive" });
+    },
+  });
+
+  const canSubmit = title.trim().length > 0 && (
+    (goalType === "currency" && parseFloat(goalAmount) >= 1) ||
+    (goalType === "units" && parseInt(goalTarget) >= 1 && unitLabel.trim().length > 0)
+  );
+
+  return (
+    <Dialog open onOpenChange={() => onClose()}>
+      <DialogContent className="max-w-lg" data-testid="dialog-create-campaign">
+        <DialogHeader>
+          <DialogTitle>Create Campaign</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div>
+            <Label>Campaign Title</Label>
+            <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Luna's 7-Pound Shed-A-Thon" data-testid="input-cm-title" />
+          </div>
+          <div>
+            <Label>Story / Description</Label>
+            <Textarea value={story} onChange={(e) => setStory(e.target.value)} placeholder="Tell supporters about this campaign..." className="resize-none min-h-[100px]" data-testid="input-cm-story" />
+          </div>
+          <div>
+            <Label>Goal Type</Label>
+            <div className="flex gap-2 mt-1">
+              <Button variant={goalType === "currency" ? "default" : "outline"} onClick={() => setGoalType("currency")} data-testid="button-goal-currency">
+                <DollarSign className="h-4 w-4 mr-1" />Dollar Goal
+              </Button>
+              <Button variant={goalType === "units" ? "default" : "outline"} onClick={() => setGoalType("units")} data-testid="button-goal-units">
+                <Target className="h-4 w-4 mr-1" />Unit Goal
+              </Button>
+            </div>
+          </div>
+          {goalType === "currency" ? (
+            <div>
+              <Label>Goal Amount ($)</Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                <Input type="number" min="1" step="1" value={goalAmount} onChange={(e) => setGoalAmount(e.target.value)} className="pl-7" placeholder="500" data-testid="input-cm-goal-amount" />
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Target ({unitLabel})</Label>
+                <Input type="number" min="1" value={goalTarget} onChange={(e) => setGoalTarget(e.target.value)} placeholder="7" data-testid="input-cm-goal-target" />
+              </div>
+              <div>
+                <Label>Unit Label</Label>
+                <Input value={unitLabel} onChange={(e) => setUnitLabel(e.target.value)} placeholder="lbs" data-testid="input-cm-unit-label" />
+              </div>
+            </div>
+          )}
+          <div>
+            <Label>Cover Image URL (optional)</Label>
+            <Input value={coverImageUrl} onChange={(e) => setCoverImageUrl(e.target.value)} placeholder="https://..." data-testid="input-cm-cover-image" />
+          </div>
+          <div>
+            <Label>End Date (optional)</Label>
+            <Input type="date" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} data-testid="input-cm-ends-at" />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={() => createMutation.mutate()} disabled={!canSubmit || createMutation.isPending} data-testid="button-cm-submit">
+            {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
+            Create Campaign
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ProgressUpdateDialog({ campaignId, initialProgress, onClose }: { campaignId: string; initialProgress: string; onClose: () => void }) {
+  const { toast } = useToast();
+  const [value, setValue] = useState(initialProgress);
+
+  const updateMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("PATCH", `/api/peer-campaigns/${campaignId}/progress`, {
+        currentProgress: parseInt(value),
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/peer-campaigns"] });
+      toast({ title: "Progress updated!" });
+      onClose();
+    },
+    onError: () => {
+      toast({ title: "Failed to update progress", variant: "destructive" });
+    },
+  });
+
+  return (
+    <Dialog open onOpenChange={() => onClose()}>
+      <DialogContent className="max-w-sm" data-testid="dialog-progress-update">
+        <DialogHeader>
+          <DialogTitle>Update Progress</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <Label>Current Progress</Label>
+          <Input type="number" min="0" value={value} onChange={(e) => setValue(e.target.value)} data-testid="input-progress-value" />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={() => updateMutation.mutate()} disabled={updateMutation.isPending} data-testid="button-save-progress">
+            {updateMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+            Save
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function PostUpdateDialog({ campaignId, onClose }: { campaignId: string; onClose: () => void }) {
+  const { toast } = useToast();
+  const [updateText, setUpdateText] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
+
+  const postMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/peer-campaigns/${campaignId}/updates`, {
+        updateText,
+        imageUrl: imageUrl || undefined,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/peer-campaigns"] });
+      toast({ title: "Update posted!" });
+      onClose();
+    },
+    onError: () => {
+      toast({ title: "Failed to post update", variant: "destructive" });
+    },
+  });
+
+  return (
+    <Dialog open onOpenChange={() => onClose()}>
+      <DialogContent className="max-w-lg" data-testid="dialog-post-update">
+        <DialogHeader>
+          <DialogTitle>Post Campaign Update</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <div>
+            <Label>Update Text</Label>
+            <Textarea value={updateText} onChange={(e) => setUpdateText(e.target.value)} placeholder="Weigh-in Wednesday! Luna lost 1 lb!" className="resize-none min-h-[100px]" data-testid="input-update-text" />
+          </div>
+          <div>
+            <Label>Photo URL (optional)</Label>
+            <Input value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} placeholder="https://..." data-testid="input-update-image" />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={() => postMutation.mutate()} disabled={!updateText.trim() || postMutation.isPending} data-testid="button-submit-update">
+            {postMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+            Post Update
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

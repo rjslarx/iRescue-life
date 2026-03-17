@@ -42861,6 +42861,70 @@ The user asking is a tenant administrator or staff member.`;
   });
 
   /**
+   * POST /api/peer-campaigns/staff
+   * Staff: Create a campaign from the dashboard (with animal linking, goal type)
+   */
+  app.post('/api/peer-campaigns/staff', requireTenant, requireAuth, requireRole('admin', 'owner', 'board_member', 'staff', 'manager'), async (req, res, next) => {
+    try {
+      const { peerCampaigns } = await import('@shared/schema');
+
+      const createSchema = z.object({
+        campaignTitle: z.string().min(1).max(200),
+        campaignStory: z.string().max(5000).optional(),
+        goalAmount: z.number().int().min(100),
+        goalType: z.enum(['currency', 'units']).default('currency'),
+        goalUnitLabel: z.string().max(50).optional(),
+        goalTarget: z.number().int().min(1).optional(),
+        coverImageUrl: z.string().url().optional(),
+        animalId: z.string().uuid().nullable().optional(),
+        endsAt: z.string().optional(),
+      });
+
+      const data = createSchema.parse(req.body);
+
+      let slug = data.campaignTitle
+        .toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, '')
+        .replace(/\s+/g, '-')
+        .replace(/-+/g, '-')
+        .substring(0, 60);
+
+      const [existing] = await db
+        .select({ id: peerCampaigns.id })
+        .from(peerCampaigns)
+        .where(and(eq(peerCampaigns.tenantId, req.tenant!.id), eq(peerCampaigns.slug, slug)))
+        .limit(1);
+
+      if (existing) {
+        slug = slug + '-' + Date.now().toString(36);
+      }
+
+      const user = req.user as any;
+
+      const [campaign] = await db.insert(peerCampaigns).values({
+        tenantId: req.tenant!.id,
+        creatorName: user?.fullName || user?.email || 'Staff',
+        creatorEmail: user?.email || '',
+        campaignTitle: data.campaignTitle,
+        campaignStory: data.campaignStory || null,
+        goalAmount: data.goalAmount,
+        goalType: data.goalType,
+        goalUnitLabel: data.goalUnitLabel || null,
+        goalTarget: data.goalTarget || null,
+        slug,
+        coverImageUrl: data.coverImageUrl || null,
+        animalId: data.animalId || null,
+        endsAt: data.endsAt ? new Date(data.endsAt) : null,
+        createdByUserId: user?.id || null,
+      }).returning();
+
+      res.json({ campaign });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * GET /api/peer-campaigns/:slug
    * Public: Get a campaign by slug for the landing page
    */
@@ -42886,17 +42950,34 @@ The user asking is a tenant administrator or staff member.`;
           amount: peerCampaignDonations.amount,
           message: peerCampaignDonations.message,
           isAnonymous: peerCampaignDonations.isAnonymous,
+          pledgeType: peerCampaignDonations.pledgeType,
+          pledgePerUnit: peerCampaignDonations.pledgePerUnit,
           createdAt: peerCampaignDonations.createdAt,
         })
         .from(peerCampaignDonations)
         .where(and(
           eq(peerCampaignDonations.peerCampaignId, campaign.id),
-          eq(peerCampaignDonations.paymentStatus, 'paid')
+          sql`(${peerCampaignDonations.paymentStatus} = 'paid' OR ${peerCampaignDonations.pledgeType} = 'per_unit')`
         ))
         .orderBy(desc(peerCampaignDonations.createdAt))
         .limit(50);
 
-      res.json({ campaign, donations });
+      const { peerCampaignUpdates } = await import('@shared/schema');
+      const updates = await db
+        .select()
+        .from(peerCampaignUpdates)
+        .where(eq(peerCampaignUpdates.peerCampaignId, campaign.id))
+        .orderBy(desc(peerCampaignUpdates.createdAt))
+        .limit(50);
+
+      let animal = null;
+      if (campaign.animalId) {
+        const { animals } = await import('@shared/schema');
+        const [a] = await db.select({ id: animals.id, name: animals.name, species: animals.species, breed: animals.breed, photoUrls: animals.photoUrls }).from(animals).where(eq(animals.id, campaign.animalId)).limit(1);
+        animal = a || null;
+      }
+
+      res.json({ campaign, donations, updates, animal });
     } catch (error) {
       next(error);
     }
@@ -42934,6 +43015,13 @@ The user asking is a tenant administrator or staff member.`;
         .limit(1);
 
       if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+
+      if (campaign.status === 'completed' || campaign.status === 'cancelled') {
+        return res.status(400).json({ error: 'This campaign is no longer accepting donations' });
+      }
+      if (campaign.endsAt && new Date(campaign.endsAt) < new Date()) {
+        return res.status(400).json({ error: 'This campaign has ended' });
+      }
 
       const [tenant] = await db
         .select()
@@ -42976,8 +43064,8 @@ The user asking is a tenant administrator or staff member.`;
         currency: 'usd',
         customerEmail: data.donorEmail,
         isRecurring: false,
-        successUrl: `${baseUrl}${tenantPath}/fundraise/${campaign.slug}?donation=success`,
-        cancelUrl: `${baseUrl}${tenantPath}/fundraise/${campaign.slug}`,
+        successUrl: `${baseUrl}${tenantPath}/campaigns/${campaign.slug}?donation=success`,
+        cancelUrl: `${baseUrl}${tenantPath}/campaigns/${campaign.slug}`,
         platformFeeAmount: platformFeeAmount,
         connectedAccountId: tenant.stripeConnectedAccountId || undefined,
         metadata: {
@@ -43012,7 +43100,7 @@ The user asking is a tenant administrator or staff member.`;
    * GET /api/peer-campaigns
    * Admin: List all P2P campaigns for the tenant
    */
-  app.get('/api/peer-campaigns', requireTenant, requireAuth, requireRole('admin', 'owner', 'board_member', 'staff'), async (req, res, next) => {
+  app.get('/api/peer-campaigns', requireTenant, requireAuth, requireRole('admin', 'owner', 'board_member', 'staff', 'manager'), async (req, res, next) => {
     try {
       const { peerCampaigns, peerCampaignDonations } = await import('@shared/schema');
 
@@ -43069,6 +43157,13 @@ The user asking is a tenant administrator or staff member.`;
         campaignTitle: z.string().min(1).max(200).optional(),
         campaignStory: z.string().max(5000).optional(),
         goalAmount: z.number().int().min(100).optional(),
+        goalType: z.enum(['currency', 'units']).optional(),
+        goalUnitLabel: z.string().max(50).optional(),
+        goalTarget: z.number().int().min(1).optional(),
+        currentProgress: z.number().int().min(0).optional(),
+        status: z.enum(['active', 'completed']).optional(),
+        coverImageUrl: z.string().optional(),
+        animalId: z.string().uuid().nullable().optional(),
       });
 
       const data = updateSchema.parse(req.body);
@@ -43094,7 +43189,7 @@ The user asking is a tenant administrator or staff member.`;
    * GET /api/peer-campaigns/:id/donations
    * Admin: List donations for a specific P2P campaign
    */
-  app.get('/api/peer-campaigns/:id/donations', requireTenant, requireAuth, requireRole('admin', 'owner', 'board_member', 'staff'), async (req, res, next) => {
+  app.get('/api/peer-campaigns/:id/donations', requireTenant, requireAuth, requireRole('admin', 'owner', 'board_member', 'staff', 'manager'), async (req, res, next) => {
     try {
       const { peerCampaignDonations, peerCampaigns } = await import('@shared/schema');
 
@@ -43119,6 +43214,154 @@ The user asking is a tenant administrator or staff member.`;
         .orderBy(desc(peerCampaignDonations.createdAt));
 
       res.json({ donations });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/peer-campaigns/:id/updates
+   * Staff: Post a timeline update to a campaign
+   */
+  app.post('/api/peer-campaigns/:id/updates', requireTenant, requireAuth, requireRole('admin', 'owner', 'board_member', 'staff', 'manager'), async (req, res, next) => {
+    try {
+      const { peerCampaigns, peerCampaignUpdates } = await import('@shared/schema');
+
+      const [campaign] = await db
+        .select({ id: peerCampaigns.id })
+        .from(peerCampaigns)
+        .where(and(eq(peerCampaigns.id, req.params.id), eq(peerCampaigns.tenantId, req.tenant!.id)))
+        .limit(1);
+
+      if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+
+      const updateSchema = z.object({
+        updateText: z.string().min(1).max(2000),
+        imageUrl: z.string().url().optional(),
+      });
+
+      const data = updateSchema.parse(req.body);
+
+      const [update] = await db.insert(peerCampaignUpdates).values({
+        tenantId: req.tenant!.id,
+        peerCampaignId: campaign.id,
+        updateText: data.updateText,
+        imageUrl: data.imageUrl || null,
+      }).returning();
+
+      res.json({ update });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/peer-campaigns/:id/updates
+   * Staff/Public: Get timeline updates for a campaign
+   */
+  app.get('/api/peer-campaigns/:id/updates', requireTenant, async (req, res, next) => {
+    try {
+      const { peerCampaignUpdates } = await import('@shared/schema');
+
+      const updates = await db
+        .select()
+        .from(peerCampaignUpdates)
+        .where(and(
+          eq(peerCampaignUpdates.peerCampaignId, req.params.id),
+          eq(peerCampaignUpdates.tenantId, req.tenant!.id)
+        ))
+        .orderBy(desc(peerCampaignUpdates.createdAt));
+
+      res.json({ updates });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * PATCH /api/peer-campaigns/:id/progress
+   * Staff: Update campaign progress (for unit-based campaigns)
+   */
+  app.patch('/api/peer-campaigns/:id/progress', requireTenant, requireAuth, requireRole('admin', 'owner', 'board_member', 'staff', 'manager'), async (req, res, next) => {
+    try {
+      const { peerCampaigns } = await import('@shared/schema');
+
+      const progressSchema = z.object({
+        currentProgress: z.number().int().min(0),
+      });
+
+      const data = progressSchema.parse(req.body);
+
+      const [campaign] = await db
+        .update(peerCampaigns)
+        .set({ currentProgress: data.currentProgress })
+        .where(and(
+          eq(peerCampaigns.id, req.params.id),
+          eq(peerCampaigns.tenantId, req.tenant!.id)
+        ))
+        .returning();
+
+      if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+
+      res.json({ campaign });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/peer-campaigns/:slug/pledge
+   * Public: Create a pledge-per-unit donation (saved as pending)
+   */
+  app.post('/api/peer-campaigns/:slug/pledge', requireTenant, async (req, res, next) => {
+    try {
+      const { peerCampaigns, peerCampaignDonations } = await import('@shared/schema');
+
+      const pledgeSchema = z.object({
+        donorName: z.string().min(1).max(200),
+        donorEmail: z.string().email().optional(),
+        pledgePerUnit: z.number().int().min(1),
+        message: z.string().max(500).optional(),
+        isAnonymous: z.boolean().default(false),
+      });
+
+      const data = pledgeSchema.parse(req.body);
+
+      const [campaign] = await db
+        .select()
+        .from(peerCampaigns)
+        .where(and(
+          eq(peerCampaigns.tenantId, req.tenant!.id),
+          eq(peerCampaigns.slug, req.params.slug),
+          eq(peerCampaigns.isActive, true)
+        ))
+        .limit(1);
+
+      if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+
+      if (campaign.status === 'completed' || campaign.status === 'cancelled') {
+        return res.status(400).json({ error: 'This campaign is no longer accepting pledges' });
+      }
+      if (campaign.endsAt && new Date(campaign.endsAt) < new Date()) {
+        return res.status(400).json({ error: 'This campaign has ended' });
+      }
+
+      const maxAmount = data.pledgePerUnit * (campaign.goalTarget || 0);
+
+      const [donation] = await db.insert(peerCampaignDonations).values({
+        tenantId: req.tenant!.id,
+        peerCampaignId: campaign.id,
+        donorName: data.donorName,
+        donorEmail: data.donorEmail || null,
+        amount: maxAmount,
+        message: data.message || null,
+        isAnonymous: data.isAnonymous,
+        paymentStatus: 'pending',
+        pledgeType: 'per_unit',
+        pledgePerUnit: data.pledgePerUnit,
+      }).returning();
+
+      res.json({ pledge: donation });
     } catch (error) {
       next(error);
     }

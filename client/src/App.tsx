@@ -80,6 +80,7 @@ import TutorialsPage from "@/pages/TutorialsPage";
 import PlatformIntegrationsPage from "@/pages/PlatformIntegrationsPage";
 import ComplianceSettingsPage from "@/pages/ComplianceSettingsPage";
 import PeerCampaignPage from "@/pages/PeerCampaignPage";
+import P2PCampaignLandingPage from "@/pages/P2PCampaignLandingPage";
 import VotingContestPage from "@/pages/VotingContestPage";
 import PlatformLandingPage from "@/pages/PlatformLandingPage";
 import PlatformPrivacyPage from "@/pages/PlatformPrivacyPage";
@@ -227,6 +228,7 @@ function RouterSwitch() {
       <Route path="/surrender" component={PublicSurrenderPage} />
       <Route path="/form-success/:formType" component={FormSuccessPage} />
       <Route path="/contact" component={PublicContactPage} />
+      <Route path="/campaigns/:slug" component={P2PCampaignLandingPage} />
       <Route path="/fundraise/:slug" component={PeerCampaignPage} />
       <Route path="/fundraisers" component={PublicFundraisersPage} />
       <Route path="/donate/event/:eventId" component={FundraiserEventPage} />
