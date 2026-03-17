@@ -119,7 +119,7 @@ export default function PeerCampaignCreatePage() {
   const createMutation = useMutation({
     mutationFn: async (values: FormValues) => {
       const goalCents = Math.round(parseFloat(values.goalAmount) * 100);
-      const payload: Record<string, any> = {
+      const payload: Record<string, string | number | boolean | null> = {
         creatorName: values.creatorName,
         creatorEmail: values.creatorEmail,
         campaignTitle: values.campaignTitle,
@@ -465,8 +465,9 @@ export default function PeerCampaignCreatePage() {
                     className="text-sm text-destructive text-center"
                     data-testid="text-create-error"
                   >
-                    {(createMutation.error as any)?.message ||
-                      "Something went wrong. Please try again."}
+                    {createMutation.error instanceof Error
+                      ? createMutation.error.message
+                      : "Something went wrong. Please try again."}
                   </p>
                 )}
 
