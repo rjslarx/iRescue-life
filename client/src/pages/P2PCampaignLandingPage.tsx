@@ -193,21 +193,6 @@ function ShareSection({ campaignUrl, compact }: { campaignUrl: string; compact?:
   );
 }
 
-function VideoPlayer({ src, className }: { src: string; className?: string }) {
-  return (
-    <video
-      src={src}
-      controls
-      playsInline
-      muted
-      className={className || "w-full rounded-md"}
-      data-testid="video-player"
-    >
-      Your browser does not support the video tag.
-    </video>
-  );
-}
-
 function QuickPledgeLayout({
   campaign,
   animal,
@@ -794,12 +779,22 @@ export default function P2PCampaignLandingPage() {
                         <p className="text-foreground/80 whitespace-pre-wrap" data-testid={`update-text-${update.id}`}>
                           {update.updateText}
                         </p>
-                        {update.videoUrl && (
+                        {(update.videoUrl || (update.imageUrl && isVideoUrl(update.imageUrl))) && (
                           <div className="mt-2" style={{ aspectRatio: "9/16", maxWidth: "320px" }}>
-                            <VideoPlayer src={update.videoUrl} className="w-full h-full object-cover rounded-md" />
+                            <video
+                              src={update.videoUrl || update.imageUrl!}
+                              controls
+                              playsInline
+                              muted
+                              autoPlay
+                              className="w-full h-full object-cover rounded-md"
+                              data-testid={`update-video-${update.id}`}
+                            >
+                              Your browser does not support the video tag.
+                            </video>
                           </div>
                         )}
-                        {update.imageUrl && !update.videoUrl && (
+                        {update.imageUrl && !update.videoUrl && !isVideoUrl(update.imageUrl) && (
                           <img
                             src={update.imageUrl}
                             alt="Campaign update"
