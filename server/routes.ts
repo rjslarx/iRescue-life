@@ -43904,7 +43904,7 @@ The user asking is a tenant administrator or staff member.`;
         console.error('[INTAKE] Failed to send invitation email:', emailErr);
       }
 
-      res.json({ success: true, token, intakeUrl, expiresAt });
+      res.json({ success: true, intakeUrl, expiresAt });
     } catch (error) {
       next(error);
     }
@@ -43968,6 +43968,15 @@ The user asking is a tenant administrator or staff member.`;
       if (tokenRow.usedAt) return res.status(410).json({ error: 'This invitation has already been used' });
       if (new Date() > tokenRow.expiresAt) return res.status(410).json({ error: 'This invitation has expired' });
 
+      const [claimed] = await db.update(campaignIntakeTokens)
+        .set({ usedAt: new Date() })
+        .where(and(
+          eq(campaignIntakeTokens.id, tokenRow.id),
+          isNull(campaignIntakeTokens.usedAt)
+        ))
+        .returning();
+      if (!claimed) return res.status(410).json({ error: 'This invitation has already been used' });
+
       const { campaignTitle, goalType, goalAmount, goalTarget, goalUnitLabel, startDate, endDate, description, participants } = req.body;
 
       if (!campaignTitle || !goalType) {
@@ -44029,7 +44038,7 @@ The user asking is a tenant administrator or staff member.`;
       }
 
       await db.update(campaignIntakeTokens)
-        .set({ usedAt: new Date(), createdCampaignId: campaign.id })
+        .set({ createdCampaignId: campaign.id })
         .where(eq(campaignIntakeTokens.id, tokenRow.id));
 
       const hostname = req.hostname;
