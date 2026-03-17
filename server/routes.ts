@@ -43997,45 +43997,56 @@ The user asking is a tenant administrator or staff member.`;
 
       const avatarTypes = ['dog1', 'cat1', 'bone', 'paw', 'bird1', 'fish1', 'rabbit1', 'turtle1', 'star', 'heart'];
 
-      const [campaign] = await db.insert(peerCampaigns).values({
-        tenantId: req.tenant!.id,
-        creatorName: tokenRow.partnerName,
-        creatorEmail: tokenRow.partnerEmail,
-        campaignTitle,
-        campaignStory: description || null,
-        goalAmount: goalType === 'currency' ? goalAmount : 0,
-        slug,
-        isActive: true,
-        startsAt: startDate ? new Date(startDate) : null,
-        endsAt: endDate ? new Date(endDate) : null,
-        animalId: tokenRow.animalId || null,
-        goalType,
-        goalUnitLabel: goalType === 'units' ? (goalUnitLabel || 'units') : null,
-        goalTarget: goalType === 'units' ? goalTarget : null,
-        status: 'active',
-      }).returning();
+      const txResult = await db.transaction(async (tx) => {
+        const [claimed] = await tx.update(campaignIntakeTokens)
+          .set({ usedAt: new Date() })
+          .where(and(
+            eq(campaignIntakeTokens.id, tokenRow.id),
+            isNull(campaignIntakeTokens.usedAt)
+          ))
+          .returning();
+        if (!claimed) return null;
 
-      const createdParticipants: Array<{ id: string; displayName: string }> = [];
-      if (participantNames.length > 0) {
-        const participantValues = participantNames.map((name, idx) => ({
+        const [campaign] = await tx.insert(peerCampaigns).values({
           tenantId: req.tenant!.id,
-          peerCampaignId: campaign.id,
-          displayName: name,
-          avatarType: avatarTypes[Math.floor(Math.random() * avatarTypes.length)] as "dog1" | "cat1" | "bone" | "paw" | "bird1" | "fish1" | "rabbit1" | "turtle1" | "star" | "heart",
+          creatorName: tokenRow.partnerName,
+          creatorEmail: tokenRow.partnerEmail,
+          campaignTitle,
+          campaignStory: description || null,
+          goalAmount: goalType === 'currency' ? goalAmount : 0,
+          slug,
           isActive: true,
-        }));
-        const inserted = await db.insert(campaignParticipants).values(participantValues).returning();
-        createdParticipants.push(...inserted);
-      }
+          startsAt: startDate ? new Date(startDate) : null,
+          endsAt: endDate ? new Date(endDate) : null,
+          animalId: tokenRow.animalId || null,
+          goalType,
+          goalUnitLabel: goalType === 'units' ? (goalUnitLabel || 'units') : null,
+          goalTarget: goalType === 'units' ? goalTarget : null,
+          status: 'active',
+        }).returning();
 
-      const [claimed] = await db.update(campaignIntakeTokens)
-        .set({ usedAt: new Date(), createdCampaignId: campaign.id })
-        .where(and(
-          eq(campaignIntakeTokens.id, tokenRow.id),
-          isNull(campaignIntakeTokens.usedAt)
-        ))
-        .returning();
-      if (!claimed) return res.status(410).json({ error: 'This invitation has already been used' });
+        const createdParticipants: Array<{ id: string; displayName: string }> = [];
+        if (participantNames.length > 0) {
+          const participantValues = participantNames.map((name: string) => ({
+            tenantId: req.tenant!.id,
+            peerCampaignId: campaign.id,
+            displayName: name,
+            avatarType: avatarTypes[Math.floor(Math.random() * avatarTypes.length)] as "dog1" | "cat1" | "bone" | "paw" | "bird1" | "fish1" | "rabbit1" | "turtle1" | "star" | "heart",
+            isActive: true,
+          }));
+          const inserted = await tx.insert(campaignParticipants).values(participantValues).returning();
+          createdParticipants.push(...inserted);
+        }
+
+        await tx.update(campaignIntakeTokens)
+          .set({ createdCampaignId: campaign.id })
+          .where(eq(campaignIntakeTokens.id, tokenRow.id));
+
+        return { campaign, createdParticipants };
+      });
+
+      if (!txResult) return res.status(410).json({ error: 'This invitation has already been used' });
+      const { campaign, createdParticipants } = txResult;
 
       const hostname = req.hostname;
       const protocol = req.protocol;
