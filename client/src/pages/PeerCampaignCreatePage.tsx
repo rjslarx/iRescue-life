@@ -22,7 +22,9 @@ import {
   FormMessage,
   FormDescription,
 } from "@/components/ui/form";
-import { Heart, Link as LinkIcon, Loader2, Target, DollarSign, Calendar } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Heart, Link as LinkIcon, Loader2, Target, DollarSign, Calendar, ChevronRight, ChevronDown, X } from "lucide-react";
+import { Label } from "@/components/ui/label";
 import type { Tenant } from "@shared/schema";
 
 interface TenantResponse {
@@ -81,6 +83,9 @@ type FormValues = z.infer<typeof formSchema>;
 export default function PeerCampaignCreatePage() {
   const [, navigate] = useLocation();
   const [coverImages, setCoverImages] = useState<string[]>([]);
+  const [primaryColor, setPrimaryColor] = useState("");
+  const [accentColor, setAccentColor] = useState("");
+  const [showColors, setShowColors] = useState(false);
 
   const { data, isLoading } = useQuery<TenantResponse>({
     queryKey: ["/api/tenant"],
@@ -142,6 +147,13 @@ export default function PeerCampaignCreatePage() {
 
       if (values.endsAt) {
         payload.endsAt = values.endsAt;
+      }
+
+      if (primaryColor) {
+        payload.primaryColor = primaryColor;
+      }
+      if (accentColor) {
+        payload.accentColor = accentColor;
       }
 
       const res = await apiRequest("POST", "/api/peer-campaigns", payload);
@@ -459,6 +471,51 @@ export default function PeerCampaignCreatePage() {
                     </FormItem>
                   )}
                 />
+
+                <Collapsible open={showColors} onOpenChange={setShowColors}>
+                  <CollapsibleTrigger asChild>
+                    <Button variant="ghost" type="button" className="w-full justify-between gap-2 text-sm text-muted-foreground" data-testid="button-toggle-colors">
+                      <span className="flex items-center gap-2">
+                        {(primaryColor || accentColor) && (
+                          <span className="flex gap-1">
+                            {primaryColor && <span className="w-3 h-3 rounded-full border" style={{ backgroundColor: primaryColor }} />}
+                            {accentColor && <span className="w-3 h-3 rounded-full border" style={{ backgroundColor: accentColor }} />}
+                          </span>
+                        )}
+                        Campaign Colors (optional)
+                      </span>
+                      {showColors ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                    </Button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="space-y-3 pt-2">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label className="text-xs">Primary Color</Label>
+                        <div className="flex items-center gap-2 mt-1">
+                          <input type="color" value={primaryColor || "#6366f1"} onChange={(e) => setPrimaryColor(e.target.value)} className="w-8 h-8 rounded-md border cursor-pointer" data-testid="input-primary-color" />
+                          <Input value={primaryColor} onChange={(e) => setPrimaryColor(e.target.value)} placeholder="#6366f1" className="font-mono text-xs" data-testid="input-primary-color-hex" />
+                        </div>
+                      </div>
+                      <div>
+                        <Label className="text-xs">Accent Color</Label>
+                        <div className="flex items-center gap-2 mt-1">
+                          <input type="color" value={accentColor || "#f59e0b"} onChange={(e) => setAccentColor(e.target.value)} className="w-8 h-8 rounded-md border cursor-pointer" data-testid="input-accent-color" />
+                          <Input value={accentColor} onChange={(e) => setAccentColor(e.target.value)} placeholder="#f59e0b" className="font-mono text-xs" data-testid="input-accent-color-hex" />
+                        </div>
+                      </div>
+                    </div>
+                    {(primaryColor || accentColor) && (
+                      <div className="flex items-center gap-3 p-3 rounded-md border" data-testid="color-preview">
+                        <span className="text-xs text-muted-foreground">Preview:</span>
+                        <div className="flex-1 h-2 rounded-full" style={{ backgroundColor: primaryColor || "#6366f1" }} />
+                        {accentColor && <div className="w-8 h-8 rounded-md flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: accentColor }}>CTA</div>}
+                        <Button variant="ghost" size="sm" type="button" onClick={() => { setPrimaryColor(""); setAccentColor(""); }} data-testid="button-clear-colors">
+                          <X className="h-3 w-3 mr-1" />Clear
+                        </Button>
+                      </div>
+                    )}
+                  </CollapsibleContent>
+                </Collapsible>
 
                 {createMutation.isError && (
                   <p

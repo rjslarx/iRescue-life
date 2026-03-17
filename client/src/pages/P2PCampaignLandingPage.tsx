@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from "react";
+import { useState, useEffect, lazy, Suspense, type CSSProperties } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams } from "wouter";
 import { useSEO } from "@/hooks/useSEO";
@@ -77,9 +77,9 @@ function useCampaignTheme(campaign: PeerCampaign | null | undefined) {
   const pc = campaign?.primaryColor;
   const ac = campaign?.accentColor;
   const hasTheme = !!(pc || ac);
-  const themeStyle: Record<string, string> = {};
-  if (pc) themeStyle["--campaign-primary"] = pc;
-  if (ac) themeStyle["--campaign-accent"] = ac;
+  const themeStyle: CSSProperties = {};
+  if (pc) (themeStyle as Record<string, string>)["--campaign-primary"] = pc;
+  if (ac) (themeStyle as Record<string, string>)["--campaign-accent"] = ac;
   return { hasTheme, themeStyle, primaryColor: pc, accentColor: ac };
 }
 
@@ -459,7 +459,7 @@ function QuickPledgeLayout({
   const campaignUrl = window.location.origin + window.location.pathname;
 
   return (
-    <div className="min-h-screen bg-background flex flex-col" style={hasTheme ? themeStyle as any : undefined} data-testid="quick-pledge-layout">
+    <div className="min-h-screen bg-background flex flex-col" style={hasTheme ? themeStyle : undefined} data-testid="quick-pledge-layout">
       <div className="flex-1 flex flex-col max-w-lg mx-auto w-full">
         {heroMedia && (
           <div className="relative w-full" style={{ aspectRatio: "9/16", maxHeight: "60vh" }}>
@@ -820,7 +820,7 @@ export default function P2PCampaignLandingPage() {
   const { hasTheme, themeStyle, primaryColor: themePrimary, accentColor: themeAccent } = useCampaignTheme(campaign);
 
   return (
-    <div className="min-h-screen bg-background" style={hasTheme ? themeStyle as any : undefined}>
+    <div className="min-h-screen bg-background" style={hasTheme ? themeStyle : undefined}>
       <PublicHeader rescueName={rescueName} logoUrl={tenant?.logoUrl || undefined} />
 
       {campaign.coverImageUrl && (

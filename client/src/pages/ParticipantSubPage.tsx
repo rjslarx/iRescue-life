@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, type CSSProperties } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams } from "wouter";
 import { useSEO } from "@/hooks/useSEO";
@@ -31,9 +31,9 @@ function useCampaignTheme(campaign: PeerCampaign | null | undefined) {
   const pc = campaign?.primaryColor;
   const ac = campaign?.accentColor;
   const hasTheme = !!(pc || ac);
-  const themeStyle: Record<string, string> = {};
-  if (pc) themeStyle["--campaign-primary"] = pc;
-  if (ac) themeStyle["--campaign-accent"] = ac;
+  const themeStyle: CSSProperties = {};
+  if (pc) (themeStyle as Record<string, string>)["--campaign-primary"] = pc;
+  if (ac) (themeStyle as Record<string, string>)["--campaign-accent"] = ac;
   return { hasTheme, themeStyle, primaryColor: pc, accentColor: ac };
 }
 
@@ -265,7 +265,7 @@ export default function ParticipantSubPage() {
 
   if (isSocialSource) {
     return (
-      <div className="min-h-screen bg-background flex flex-col" style={hasTheme ? themeStyle as any : undefined} data-testid="participant-sub-page-social">
+      <div className="min-h-screen bg-background flex flex-col" style={hasTheme ? themeStyle : undefined} data-testid="participant-sub-page-social">
         <div className="relative aspect-[9/16] max-h-[45vh] w-full flex flex-col items-center justify-center overflow-hidden" style={themePrimary ? { backgroundColor: `${themePrimary}1a` } : { backgroundColor: "hsl(var(--primary) / 0.1)" }}>
           <div className="absolute inset-0" style={themePrimary ? { background: `linear-gradient(to bottom, transparent, ${themePrimary}33)` } : { background: "linear-gradient(to bottom, transparent, hsl(var(--background) / 0.8))" }} />
           <div className="relative z-10 text-center space-y-3 px-4">
@@ -309,7 +309,7 @@ export default function ParticipantSubPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col" style={hasTheme ? themeStyle as any : undefined} data-testid="participant-sub-page">
+    <div className="min-h-screen bg-background flex flex-col" style={hasTheme ? themeStyle : undefined} data-testid="participant-sub-page">
       <PublicHeader tenant={tenantData?.tenant} />
 
       <div className="flex-1 max-w-lg mx-auto w-full p-4 space-y-6">
