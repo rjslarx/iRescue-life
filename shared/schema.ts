@@ -5392,6 +5392,24 @@ export const insertPeerCampaignUpdateSchema = createInsertSchema(peerCampaignUpd
 export type InsertPeerCampaignUpdate = z.infer<typeof insertPeerCampaignUpdateSchema>;
 export type PeerCampaignUpdate = typeof peerCampaignUpdates.$inferSelect;
 
+export const campaignParticipants = pgTable("campaign_participants", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  peerCampaignId: uuid("peer_campaign_id").notNull().references(() => peerCampaigns.id, { onDelete: 'cascade' }),
+  displayName: text("display_name").notNull(),
+  avatarType: text("avatar_type").$type<"dog1" | "cat1" | "bone" | "paw" | "bird1" | "fish1" | "rabbit1" | "turtle1" | "star" | "heart">().notNull().default("paw"),
+  currentUnits: integer("current_units").notNull().default(0),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertCampaignParticipantSchema = createInsertSchema(campaignParticipants).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertCampaignParticipant = z.infer<typeof insertCampaignParticipantSchema>;
+export type CampaignParticipant = typeof campaignParticipants.$inferSelect;
+
 export const peerCampaignDonations = pgTable("peer_campaign_donations", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
@@ -5405,6 +5423,7 @@ export const peerCampaignDonations = pgTable("peer_campaign_donations", {
   paymentStatus: text("payment_status").$type<"pending" | "paid" | "cancelled">().notNull().default("pending"),
   pledgeType: text("pledge_type").$type<"per_unit" | "flat">().notNull().default("flat"),
   pledgePerUnit: integer("pledge_per_unit"),
+  participantId: uuid("participant_id").references(() => campaignParticipants.id, { onDelete: 'set null' }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

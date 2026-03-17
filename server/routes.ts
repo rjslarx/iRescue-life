@@ -43054,7 +43054,41 @@ The user asking is a tenant administrator or staff member.`;
         animal = a || null;
       }
 
-      res.json({ campaign, donations, updates, animal });
+      const { campaignParticipants } = await import('@shared/schema');
+      const participantsRaw = await db
+        .select()
+        .from(campaignParticipants)
+        .where(and(
+          eq(campaignParticipants.peerCampaignId, campaign.id),
+          eq(campaignParticipants.isActive, true)
+        ))
+        .orderBy(desc(campaignParticipants.currentUnits));
+
+      let participants: any[] = [];
+      if (participantsRaw.length > 0) {
+        const pledgeTotals = await db
+          .select({
+            participantId: peerCampaignDonations.participantId,
+            totalAmount: sql<number>`COALESCE(SUM(${peerCampaignDonations.amount}), 0)`,
+            donationCount: sql<number>`COUNT(*)`,
+          })
+          .from(peerCampaignDonations)
+          .where(and(
+            eq(peerCampaignDonations.peerCampaignId, campaign.id),
+            isNotNull(peerCampaignDonations.participantId),
+            sql`(${peerCampaignDonations.paymentStatus} = 'paid' OR ${peerCampaignDonations.pledgeType} = 'per_unit')`
+          ))
+          .groupBy(peerCampaignDonations.participantId);
+
+        const totalsMap = new Map(pledgeTotals.map(t => [t.participantId, { totalAmount: Number(t.totalAmount), donationCount: Number(t.donationCount) }]));
+        participants = participantsRaw.map(p => ({
+          ...p,
+          totalRaised: totalsMap.get(p.id)?.totalAmount || 0,
+          donationCount: totalsMap.get(p.id)?.donationCount || 0,
+        }));
+      }
+
+      res.json({ campaign, donations, updates, animal, participants });
     } catch (error) {
       next(error);
     }
@@ -43077,6 +43111,7 @@ The user asking is a tenant administrator or staff member.`;
         message: z.string().max(500).optional(),
         isAnonymous: z.boolean().default(false),
         donorCoversFees: z.boolean().default(false),
+        participantId: z.string().uuid().optional(),
       });
 
       const data = checkoutSchema.parse(req.body);
@@ -43129,6 +43164,7 @@ The user asking is a tenant administrator or staff member.`;
         message: data.message || null,
         isAnonymous: data.isAnonymous,
         paymentStatus: 'pending',
+        participantId: data.participantId || null,
       }).returning();
 
       const host = req.get('host') || '';
@@ -43458,6 +43494,7 @@ The user asking is a tenant administrator or staff member.`;
         pledgePerUnit: z.number().int().min(1),
         message: z.string().max(500).optional(),
         isAnonymous: z.boolean().default(false),
+        participantId: z.string().uuid().optional(),
       });
 
       const data = pledgeSchema.parse(req.body);
@@ -43497,6 +43534,7 @@ The user asking is a tenant administrator or staff member.`;
         paymentStatus: 'pending',
         pledgeType: 'per_unit',
         pledgePerUnit: data.pledgePerUnit,
+        participantId: data.participantId || null,
       }).returning();
 
       res.json({ pledge: donation });
@@ -43505,7 +43543,223 @@ The user asking is a tenant administrator or staff member.`;
     }
   });
 
-    // ============================================================================
+  // ============================================================================
+  // Campaign Participants Routes (Team-Based Fundraising)
+  // ============================================================================
+
+  /**
+   * GET /api/peer-campaigns/:id/participants
+   * Public: Get all participants for a campaign with aggregated pledge totals
+   */
+  app.get('/api/peer-campaigns/:id/participants', requireTenant, async (req, res, next) => {
+    try {
+      const { campaignParticipants, peerCampaignDonations } = await import('@shared/schema');
+
+      const participants = await db
+        .select()
+        .from(campaignParticipants)
+        .where(and(
+          eq(campaignParticipants.tenantId, req.tenant!.id),
+          eq(campaignParticipants.peerCampaignId, req.params.id),
+          eq(campaignParticipants.isActive, true)
+        ))
+        .orderBy(desc(campaignParticipants.currentUnits));
+
+      const pledgeTotals = await db
+        .select({
+          participantId: peerCampaignDonations.participantId,
+          totalAmount: sql<number>`COALESCE(SUM(${peerCampaignDonations.amount}), 0)`,
+          donationCount: sql<number>`COUNT(*)`,
+        })
+        .from(peerCampaignDonations)
+        .where(and(
+          eq(peerCampaignDonations.peerCampaignId, req.params.id),
+          isNotNull(peerCampaignDonations.participantId),
+          sql`(${peerCampaignDonations.paymentStatus} = 'paid' OR ${peerCampaignDonations.pledgeType} = 'per_unit')`
+        ))
+        .groupBy(peerCampaignDonations.participantId);
+
+      const totalsMap = new Map(pledgeTotals.map(t => [t.participantId, { totalAmount: Number(t.totalAmount), donationCount: Number(t.donationCount) }]));
+
+      const enriched = participants.map(p => ({
+        ...p,
+        totalRaised: totalsMap.get(p.id)?.totalAmount || 0,
+        donationCount: totalsMap.get(p.id)?.donationCount || 0,
+      }));
+
+      res.json({ participants: enriched });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/peer-campaigns/:id/participants
+   * Staff/Admin: Create participant(s) — supports single or bulk array
+   */
+  app.post('/api/peer-campaigns/:id/participants', requireTenant, requireAuth, requireRole('admin', 'owner', 'board_member', 'staff', 'manager'), async (req, res, next) => {
+    try {
+      const { campaignParticipants, peerCampaigns } = await import('@shared/schema');
+
+      const [campaign] = await db
+        .select()
+        .from(peerCampaigns)
+        .where(and(
+          eq(peerCampaigns.id, req.params.id),
+          eq(peerCampaigns.tenantId, req.tenant!.id)
+        ))
+        .limit(1);
+
+      if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+
+      const avatarTypes = ['dog1', 'cat1', 'bone', 'paw', 'bird1', 'fish1', 'rabbit1', 'turtle1', 'star', 'heart'];
+
+      const participantSchema = z.object({
+        displayName: z.string().min(1).max(100),
+        avatarType: z.enum(avatarTypes as [string, ...string[]]).optional(),
+      });
+
+      const body = req.body;
+      const items = Array.isArray(body) ? body : [body];
+
+      const validated = items.map(item => participantSchema.parse(item));
+
+      const created = await db.insert(campaignParticipants).values(
+        validated.map(v => ({
+          tenantId: req.tenant!.id,
+          peerCampaignId: campaign.id,
+          displayName: v.displayName,
+          avatarType: (v.avatarType || avatarTypes[Math.floor(Math.random() * avatarTypes.length)]) as any,
+        }))
+      ).returning();
+
+      res.json({ participants: created });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * PATCH /api/peer-campaigns/:id/participants/:pid
+   * Staff/Admin: Update a participant
+   */
+  app.patch('/api/peer-campaigns/:id/participants/:pid', requireTenant, requireAuth, requireRole('admin', 'owner', 'board_member', 'staff', 'manager'), async (req, res, next) => {
+    try {
+      const { campaignParticipants } = await import('@shared/schema');
+
+      const avatarTypes = ['dog1', 'cat1', 'bone', 'paw', 'bird1', 'fish1', 'rabbit1', 'turtle1', 'star', 'heart'];
+
+      const updateSchema = z.object({
+        displayName: z.string().min(1).max(100).optional(),
+        avatarType: z.enum(avatarTypes as [string, ...string[]]).optional(),
+        currentUnits: z.number().int().min(0).optional(),
+        isActive: z.boolean().optional(),
+      });
+
+      const data = updateSchema.parse(req.body);
+
+      const [updated] = await db
+        .update(campaignParticipants)
+        .set(data as any)
+        .where(and(
+          eq(campaignParticipants.id, req.params.pid),
+          eq(campaignParticipants.peerCampaignId, req.params.id),
+          eq(campaignParticipants.tenantId, req.tenant!.id)
+        ))
+        .returning();
+
+      if (!updated) return res.status(404).json({ error: 'Participant not found' });
+
+      res.json({ participant: updated });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * DELETE /api/peer-campaigns/:id/participants/:pid
+   * Staff/Admin: Remove a participant
+   */
+  app.delete('/api/peer-campaigns/:id/participants/:pid', requireTenant, requireAuth, requireRole('admin', 'owner', 'board_member', 'staff', 'manager'), async (req, res, next) => {
+    try {
+      const { campaignParticipants } = await import('@shared/schema');
+
+      const [deleted] = await db
+        .delete(campaignParticipants)
+        .where(and(
+          eq(campaignParticipants.id, req.params.pid),
+          eq(campaignParticipants.peerCampaignId, req.params.id),
+          eq(campaignParticipants.tenantId, req.tenant!.id)
+        ))
+        .returning();
+
+      if (!deleted) return res.status(404).json({ error: 'Participant not found' });
+
+      res.json({ success: true });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/peer-campaigns/:slug/participant/:pid
+   * Public: Get a single participant with their donations for the sub-page
+   */
+  app.get('/api/peer-campaigns/:slug/participant/:pid', requireTenant, async (req, res, next) => {
+    try {
+      const { peerCampaigns, campaignParticipants, peerCampaignDonations } = await import('@shared/schema');
+
+      const [campaign] = await db
+        .select()
+        .from(peerCampaigns)
+        .where(and(
+          eq(peerCampaigns.tenantId, req.tenant!.id),
+          eq(peerCampaigns.slug, req.params.slug),
+          eq(peerCampaigns.isActive, true)
+        ))
+        .limit(1);
+
+      if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+
+      const [participant] = await db
+        .select()
+        .from(campaignParticipants)
+        .where(and(
+          eq(campaignParticipants.id, req.params.pid),
+          eq(campaignParticipants.peerCampaignId, campaign.id),
+          eq(campaignParticipants.isActive, true)
+        ))
+        .limit(1);
+
+      if (!participant) return res.status(404).json({ error: 'Participant not found' });
+
+      const donations = await db
+        .select({
+          donorName: peerCampaignDonations.donorName,
+          amount: peerCampaignDonations.amount,
+          message: peerCampaignDonations.message,
+          isAnonymous: peerCampaignDonations.isAnonymous,
+          pledgeType: peerCampaignDonations.pledgeType,
+          pledgePerUnit: peerCampaignDonations.pledgePerUnit,
+          createdAt: peerCampaignDonations.createdAt,
+        })
+        .from(peerCampaignDonations)
+        .where(and(
+          eq(peerCampaignDonations.participantId, participant.id),
+          sql`(${peerCampaignDonations.paymentStatus} = 'paid' OR ${peerCampaignDonations.pledgeType} = 'per_unit')`
+        ))
+        .orderBy(desc(peerCampaignDonations.createdAt))
+        .limit(50);
+
+      const totalRaised = donations.reduce((sum, d) => sum + d.amount, 0);
+
+      res.json({ participant: { ...participant, totalRaised, donationCount: donations.length }, campaign, donations });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+      // ============================================================================
   // TNR (Trap-Neuter-Return) Log Routes
   // ============================================================================
 

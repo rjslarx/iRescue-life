@@ -150,6 +150,7 @@ import TransfersPage from "@/pages/TransfersPage";
 import EventTicketSalesPage from "@/pages/EventTicketSalesPage";
 import FundraisingHubPage from "@/pages/FundraisingHubPage";
 import PeerCampaignCreatePage from "@/pages/PeerCampaignCreatePage";
+import ParticipantSubPage from "@/pages/ParticipantSubPage";
 import TenantAuditLogsPage from "@/pages/TenantAuditLogsPage";
 import MedicalImportsPage from "@/pages/MedicalImportsPage";
 import TenantSignupPage from "@/pages/TenantSignupPage";
@@ -239,6 +240,7 @@ function RouterSwitch() {
       <Route path="/transparency" component={PublicTransparencyPage} />
       <Route path="/campaigns/:campaignId" component={PublicCampaignPage} />
       <Route path="/campaign/:animalId/thank-you" component={DonationThankYouPage} />
+      <Route path="/campaign/:slug/p/:participantId" component={ParticipantSubPage} />
       <Route path="/campaign/:slug" component={P2PCampaignLandingPage} />
       <Route path="/contest/:slug" component={VotingContestPage} />
       <Route path="/fundraise" component={PeerCampaignCreatePage} />

@@ -27,15 +27,23 @@ import {
   X,
 } from "lucide-react";
 import { SiFacebook } from "react-icons/si";
-import type { Tenant, PeerCampaign, PeerCampaignDonation, PeerCampaignUpdate } from "@shared/schema";
+import type { Tenant, PeerCampaign, PeerCampaignDonation, PeerCampaignUpdate, CampaignParticipant } from "@shared/schema";
+import { getAvatarIcon, getAvatarColor } from "@/lib/participant-avatars";
+import { Trophy } from "lucide-react";
 
 const PublicCampaignPage = lazy(() => import("@/pages/PublicCampaignPage"));
+
+interface EnrichedParticipant extends CampaignParticipant {
+  totalRaised: number;
+  donationCount: number;
+}
 
 interface CampaignPublicData {
   campaign: PeerCampaign;
   donations: (Pick<PeerCampaignDonation, "donorName" | "amount" | "message" | "isAnonymous" | "pledgeType" | "pledgePerUnit" | "createdAt">)[];
   updates: PeerCampaignUpdate[];
   animal: { id: string; name: string; species: string; breed: string | null; photoUrls: string[] | null } | null;
+  participants?: EnrichedParticipant[];
 }
 
 const PRESET_AMOUNTS = [2000, 5000, 10000, 25000];
@@ -197,6 +205,147 @@ function ShareSection({ campaignUrl, compact }: { campaignUrl: string; compact?:
   );
 }
 
+function CampaignLeaderboard({
+  participants,
+  campaign,
+  slug,
+}: {
+  participants: EnrichedParticipant[];
+  campaign: PeerCampaign;
+  slug: string;
+}) {
+  const [rankBy, setRankBy] = useState<"funds" | "activity">("funds");
+  const [showAll, setShowAll] = useState(false);
+
+  if (participants.length === 0) return null;
+
+  const isUnitBased = campaign.goalType === "units";
+  const unitLabel = campaign.goalUnitLabel || "units";
+
+  const sorted = [...participants].sort((a, b) => {
+    if (rankBy === "activity" && isUnitBased) {
+      return b.currentUnits - a.currentUnits;
+    }
+    return b.totalRaised - a.totalRaised;
+  });
+
+  const podium = sorted.slice(0, 3);
+  const contenders = sorted.slice(3);
+  const displayContenders = showAll ? contenders : contenders.slice(0, 10);
+  const leaderMax = sorted[0]
+    ? (rankBy === "activity" && isUnitBased ? sorted[0].currentUnits : sorted[0].totalRaised)
+    : 1;
+
+  const basePath = window.location.pathname;
+  const getParticipantUrl = (pid: string) => `${basePath}/p/${pid}`;
+
+  const podiumOrder = podium.length === 3 ? [podium[1], podium[0], podium[2]] : podium;
+  const podiumHeights = podium.length === 3 ? ["h-20", "h-28", "h-16"] : podium.length === 2 ? ["h-28", "h-20"] : ["h-28"];
+  const podiumAccents = ["bg-slate-400/20", "bg-yellow-400/20", "bg-amber-700/20"];
+  const podiumRanks = podium.length === 3 ? [2, 1, 3] : podium.length === 2 ? [1, 2] : [1];
+
+  return (
+    <section className="space-y-4" data-testid="section-leaderboard">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h2 className="text-xl font-semibold flex items-center gap-2" data-testid="text-leaderboard-heading">
+          <Trophy className="h-5 w-5 text-yellow-500" />
+          Leaderboard
+        </h2>
+        {isUnitBased && (
+          <div className="flex rounded-md border overflow-hidden">
+            <button
+              className={`px-3 py-1.5 text-xs font-medium transition-colors ${rankBy === "funds" ? "bg-primary text-primary-foreground" : "hover-elevate"}`}
+              onClick={() => setRankBy("funds")}
+              data-testid="button-rank-funds"
+            >
+              By Funds
+            </button>
+            <button
+              className={`px-3 py-1.5 text-xs font-medium transition-colors ${rankBy === "activity" ? "bg-primary text-primary-foreground" : "hover-elevate"}`}
+              onClick={() => setRankBy("activity")}
+              data-testid="button-rank-activity"
+            >
+              By {unitLabel}
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className={`grid gap-3 items-end ${podium.length >= 3 ? "grid-cols-3" : podium.length === 2 ? "grid-cols-2" : "grid-cols-1 max-w-xs mx-auto"}`} data-testid="podium-view">
+        {podiumOrder.map((p, idx) => {
+          const AIcon = getAvatarIcon(p.avatarType);
+          const aColor = getAvatarColor(p.avatarType);
+          const rank = podiumRanks[idx];
+          const metric = rankBy === "activity" && isUnitBased
+            ? `${p.currentUnits} ${unitLabel}`
+            : `$${(p.totalRaised / 100).toLocaleString()}`;
+
+          return (
+            <div key={p.id} className="flex flex-col items-center" data-testid={`podium-participant-${p.id}`}>
+              <Card className={`w-full text-center p-3 space-y-2 ${podiumAccents[idx] || ""}`}>
+                <div className="flex justify-center">
+                  {rank === 1 && <Trophy className="h-5 w-5 text-yellow-500 mb-1" />}
+                </div>
+                <div className={`w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mx-auto ${rank === 1 ? "w-16 h-16 ring-2 ring-yellow-400" : ""}`}>
+                  <AIcon className={`${rank === 1 ? "h-8 w-8" : "h-6 w-6"} ${aColor}`} />
+                </div>
+                <p className="text-sm font-semibold truncate" data-testid={`text-podium-name-${p.id}`}>{p.displayName}</p>
+                <p className="text-xs text-muted-foreground font-medium" data-testid={`text-podium-metric-${p.id}`}>{metric}</p>
+                <Button size="sm" variant="outline" className="w-full" asChild data-testid={`button-sponsor-${p.id}`}>
+                  <a href={getParticipantUrl(p.id)}>Sponsor</a>
+                </Button>
+              </Card>
+              <div className={`w-full rounded-b-md ${rank === 1 ? "bg-yellow-400/30" : rank === 2 ? "bg-slate-300/30" : "bg-amber-600/20"} ${podiumHeights[idx]}`} />
+            </div>
+          );
+        })}
+      </div>
+
+      {contenders.length > 0 && (
+        <Card data-testid="contenders-list">
+          <CardContent className="pt-4 space-y-1">
+            {displayContenders.map((p, idx) => {
+              const AIcon = getAvatarIcon(p.avatarType);
+              const aColor = getAvatarColor(p.avatarType);
+              const rank = idx + 4;
+              const metric = rankBy === "activity" && isUnitBased ? p.currentUnits : p.totalRaised;
+              const progressPct = leaderMax > 0 ? Math.min((metric / leaderMax) * 100, 100) : 0;
+
+              return (
+                <div key={p.id} className="flex items-center gap-3 py-2" data-testid={`contender-${p.id}`}>
+                  <span className="text-xs text-muted-foreground w-6 text-right font-mono">{rank}</span>
+                  <div className={`w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0`}>
+                    <AIcon className={`h-4 w-4 ${aColor}`} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{p.displayName}</p>
+                    <div className="w-full h-1.5 rounded-full bg-muted mt-1">
+                      <div className="h-full rounded-full bg-primary/60 transition-all" style={{ width: `${progressPct}%` }} />
+                    </div>
+                  </div>
+                  <span className="text-xs text-muted-foreground shrink-0">
+                    {rankBy === "activity" && isUnitBased
+                      ? `${p.currentUnits} ${unitLabel}`
+                      : `$${(p.totalRaised / 100).toLocaleString()}`}
+                  </span>
+                  <a href={getParticipantUrl(p.id)} className="text-xs text-primary hover:underline shrink-0" data-testid={`link-sponsor-${p.id}`}>
+                    Sponsor
+                  </a>
+                </div>
+              );
+            })}
+            {contenders.length > 10 && !showAll && (
+              <Button variant="ghost" className="w-full mt-2" onClick={() => setShowAll(true)} data-testid="button-view-all-contenders">
+                View All ({contenders.length} more)
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      )}
+    </section>
+  );
+}
+
 function QuickPledgeLayout({
   campaign,
   animal,
@@ -204,6 +353,7 @@ function QuickPledgeLayout({
   updates,
   rescueName,
   tenant,
+  participants,
 }: {
   campaign: PeerCampaign;
   animal: CampaignPublicData["animal"];
@@ -211,6 +361,7 @@ function QuickPledgeLayout({
   updates: PeerCampaignUpdate[];
   rescueName: string;
   tenant: Tenant | undefined;
+  participants?: EnrichedParticipant[];
 }) {
   const { toast } = useToast();
   const [donorName, setDonorName] = useState("");
@@ -380,6 +531,10 @@ function QuickPledgeLayout({
           </div>
 
           <ShareSection campaignUrl={campaignUrl} compact />
+
+          {participants && participants.length > 0 && (
+            <CampaignLeaderboard participants={participants} campaign={campaign} slug={campaign.slug || ""} />
+          )}
         </div>
       </div>
 
@@ -554,6 +709,7 @@ export default function P2PCampaignLandingPage() {
   const donations = data?.donations || [];
   const updates = data?.updates || [];
   const animal = data?.animal;
+  const participants = data?.participants || [];
 
   const isUnitBased = campaign?.goalType === "units";
   const unitLabel = campaign?.goalUnitLabel || "units";
@@ -639,6 +795,7 @@ export default function P2PCampaignLandingPage() {
         updates={updates}
         rescueName={rescueName}
         tenant={tenant}
+        participants={participants}
       />
     );
   }
@@ -746,6 +903,10 @@ export default function P2PCampaignLandingPage() {
             </div>
           </CardContent>
         </Card>
+
+        {participants.length > 0 && (
+          <CampaignLeaderboard participants={participants} campaign={campaign} slug={slug || ""} />
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           <div className="md:col-span-2 space-y-8">

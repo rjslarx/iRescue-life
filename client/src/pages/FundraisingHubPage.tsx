@@ -76,9 +76,11 @@ import {
   Trash2,
   Vote,
   Loader2,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import DashboardLayout from "@/components/DashboardLayout";
+import { getAvatarIcon, getAvatarColor, AVATAR_TYPES } from "@/lib/participant-avatars";
 import type { VotingContest, VotingContestEntrant } from "@shared/schema";
 
 export default function FundraisingHubPage() {
@@ -1321,6 +1323,7 @@ function CampaignManagerTab({ tenantSubdomain }: { tenantSubdomain?: string }) {
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
   const [showUpdateForm, setShowUpdateForm] = useState(false);
   const [showDonors, setShowDonors] = useState(false);
+  const [showParticipants, setShowParticipants] = useState(false);
   const [progressValue, setProgressValue] = useState("");
 
   const { data, isLoading } = useQuery<{ campaigns: any[] }>({
@@ -1477,10 +1480,13 @@ function CampaignManagerTab({ tenantSubdomain }: { tenantSubdomain?: string }) {
                                 <TrendingUp />
                               </Button>
                             )}
-                            <Button size="icon" variant="ghost" onClick={() => { setSelectedCampaignId(campaign.id); setShowUpdateForm(true); setShowDonors(false); }} title="Post update" data-testid={`button-post-update-${campaign.id}`}>
+                            <Button size="icon" variant="ghost" onClick={() => { setSelectedCampaignId(campaign.id); setShowParticipants(true); setShowUpdateForm(false); setShowDonors(false); }} title="Manage participants" data-testid={`button-participants-${campaign.id}`}>
+                              <Users />
+                            </Button>
+                            <Button size="icon" variant="ghost" onClick={() => { setSelectedCampaignId(campaign.id); setShowUpdateForm(true); setShowDonors(false); setShowParticipants(false); }} title="Post update" data-testid={`button-post-update-${campaign.id}`}>
                               <Megaphone />
                             </Button>
-                            <Button size="icon" variant="ghost" onClick={() => { setSelectedCampaignId(campaign.id); setShowDonors(true); setShowUpdateForm(false); }} title="View donors" data-testid={`button-view-donors-${campaign.id}`}>
+                            <Button size="icon" variant="ghost" onClick={() => { setSelectedCampaignId(campaign.id); setShowDonors(true); setShowUpdateForm(false); setShowParticipants(false); }} title="View donors" data-testid={`button-view-donors-${campaign.id}`}>
                               <DollarSign />
                             </Button>
                           </div>
@@ -1499,7 +1505,7 @@ function CampaignManagerTab({ tenantSubdomain }: { tenantSubdomain?: string }) {
         <CreateCampaignDialog onClose={() => setShowCreateForm(false)} />
       )}
 
-      {selectedCampaignId && !showUpdateForm && !showDonors && (
+      {selectedCampaignId && !showUpdateForm && !showDonors && !showParticipants && (
         <ProgressUpdateDialog
           campaignId={selectedCampaignId}
           initialProgress={progressValue}
@@ -1519,6 +1525,16 @@ function CampaignManagerTab({ tenantSubdomain }: { tenantSubdomain?: string }) {
           campaignId={selectedCampaignId}
           campaignTitle={campaigns.find((c: any) => c.id === selectedCampaignId)?.campaignTitle || "Campaign"}
           onClose={() => { setSelectedCampaignId(null); setShowDonors(false); }}
+        />
+      )}
+
+      {selectedCampaignId && showParticipants && (
+        <ManageParticipantsDialog
+          campaignId={selectedCampaignId}
+          campaignSlug={campaigns.find((c: any) => c.id === selectedCampaignId)?.slug || ""}
+          campaignTitle={campaigns.find((c: any) => c.id === selectedCampaignId)?.campaignTitle || "Campaign"}
+          tenantSubdomain={tenantSubdomain}
+          onClose={() => { setSelectedCampaignId(null); setShowParticipants(false); }}
         />
       )}
     </div>
@@ -1771,6 +1787,257 @@ function PostUpdateDialog({ campaignId, onClose }: { campaignId: string; onClose
             Post Update
           </Button>
         </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ManageParticipantsDialog({
+  campaignId,
+  campaignSlug,
+  campaignTitle,
+  tenantSubdomain,
+  onClose,
+}: {
+  campaignId: string;
+  campaignSlug: string;
+  campaignTitle: string;
+  tenantSubdomain?: string;
+  onClose: () => void;
+}) {
+  const { toast } = useToast();
+  const [showAdd, setShowAdd] = useState(false);
+  const [showBulk, setShowBulk] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newAvatar, setNewAvatar] = useState("paw");
+  const [bulkNames, setBulkNames] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editUnits, setEditUnits] = useState("");
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+
+  const { data, isLoading, refetch } = useQuery<{ participants: any[] }>({
+    queryKey: ["/api/peer-campaigns", campaignId, "participants"],
+    queryFn: async () => {
+      const res = await fetch(`/api/peer-campaigns/${campaignId}/participants`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch");
+      return res.json();
+    },
+    enabled: !!campaignId,
+  });
+
+  const participants = data?.participants || [];
+
+  const addMutation = useMutation({
+    mutationFn: async (body: any) => {
+      const res = await apiRequest("POST", `/api/peer-campaigns/${campaignId}/participants`, body);
+      return res.json();
+    },
+    onSuccess: () => {
+      refetch();
+      setNewName("");
+      setNewAvatar("paw");
+      setShowAdd(false);
+      toast({ title: "Participant added" });
+    },
+    onError: () => toast({ title: "Failed to add participant", variant: "destructive" }),
+  });
+
+  const bulkMutation = useMutation({
+    mutationFn: async (names: string[]) => {
+      const body = names.map(n => ({ displayName: n.trim() }));
+      const res = await apiRequest("POST", `/api/peer-campaigns/${campaignId}/participants`, body);
+      return res.json();
+    },
+    onSuccess: (result) => {
+      refetch();
+      setBulkNames("");
+      setShowBulk(false);
+      toast({ title: `${result.participants?.length || 0} participants imported` });
+    },
+    onError: () => toast({ title: "Import failed", variant: "destructive" }),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ pid, body }: { pid: string; body: any }) => {
+      const res = await apiRequest("PATCH", `/api/peer-campaigns/${campaignId}/participants/${pid}`, body);
+      return res.json();
+    },
+    onSuccess: () => {
+      refetch();
+      setEditingId(null);
+      toast({ title: "Participant updated" });
+    },
+    onError: () => toast({ title: "Update failed", variant: "destructive" }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (pid: string) => {
+      const res = await apiRequest("DELETE", `/api/peer-campaigns/${campaignId}/participants/${pid}`);
+      return res.json();
+    },
+    onSuccess: () => {
+      refetch();
+      setDeleteId(null);
+      toast({ title: "Participant removed" });
+    },
+    onError: () => toast({ title: "Delete failed", variant: "destructive" }),
+  });
+
+  const handleCopySubLink = (pid: string) => {
+    const base = window.location.origin;
+    const usePrefix = tenantSubdomain && !isCustomDomain();
+    const path = usePrefix ? `/${tenantSubdomain}/campaign/${campaignSlug}/p/${pid}` : `/campaign/${campaignSlug}/p/${pid}`;
+    navigator.clipboard.writeText(`${base}${path}`).then(() => {
+      toast({ title: "Link copied", description: "Participant sub-page link copied." });
+    });
+  };
+
+  const handleBulkImport = () => {
+    const names = bulkNames.split("\n").map(n => n.trim()).filter(n => n.length > 0);
+    if (names.length === 0) return;
+    bulkMutation.mutate(names);
+  };
+
+  return (
+    <Dialog open onOpenChange={() => onClose()}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto" data-testid="dialog-manage-participants">
+        <DialogHeader>
+          <DialogTitle data-testid="text-participants-dialog-title">Participants — {campaignTitle}</DialogTitle>
+        </DialogHeader>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button onClick={() => { setShowAdd(true); setShowBulk(false); }} data-testid="button-add-participant">
+            <Plus className="h-4 w-4 mr-2" />
+            Add Participant
+          </Button>
+          <Button variant="outline" onClick={() => { setShowBulk(true); setShowAdd(false); }} data-testid="button-bulk-import">
+            <Users className="h-4 w-4 mr-2" />
+            Bulk Import
+          </Button>
+        </div>
+
+        {showAdd && (
+          <Card data-testid="card-add-participant">
+            <CardContent className="pt-4 space-y-3">
+              <div className="space-y-2">
+                <Label>Display Name</Label>
+                <Input placeholder="e.g. Mrs. Smith's Class" value={newName} onChange={(e) => setNewName(e.target.value)} data-testid="input-new-participant-name" />
+              </div>
+              <div className="space-y-2">
+                <Label>Avatar</Label>
+                <div className="flex flex-wrap gap-2">
+                  {AVATAR_TYPES.map(type => {
+                    const Icon = getAvatarIcon(type);
+                    const color = getAvatarColor(type);
+                    return (
+                      <button
+                        key={type}
+                        className={`w-10 h-10 rounded-md border flex items-center justify-center transition-colors ${newAvatar === type ? "ring-2 ring-primary bg-primary/10" : "hover-elevate"}`}
+                        onClick={() => setNewAvatar(type)}
+                        data-testid={`avatar-option-${type}`}
+                      >
+                        <Icon className={`h-5 w-5 ${color}`} />
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button onClick={() => addMutation.mutate({ displayName: newName.trim(), avatarType: newAvatar })} disabled={!newName.trim() || addMutation.isPending} data-testid="button-confirm-add-participant">
+                  {addMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                  Add
+                </Button>
+                <Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {showBulk && (
+          <Card data-testid="card-bulk-import">
+            <CardContent className="pt-4 space-y-3">
+              <div className="space-y-2">
+                <Label>Paste Names (one per line)</Label>
+                <Textarea placeholder={"Mrs. Smith's Class\nMr. Jones' Class\nRoom 204"} value={bulkNames} onChange={(e) => setBulkNames(e.target.value)} rows={6} data-testid="textarea-bulk-names" />
+              </div>
+              <div className="flex gap-2">
+                <Button onClick={handleBulkImport} disabled={!bulkNames.trim() || bulkMutation.isPending} data-testid="button-confirm-bulk">
+                  {bulkMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                  Import {bulkNames.split("\n").filter(n => n.trim()).length} Participants
+                </Button>
+                <Button variant="outline" onClick={() => setShowBulk(false)}>Cancel</Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {isLoading ? (
+          <div className="space-y-2 py-4">
+            {[1, 2, 3].map(i => <div key={i} className="h-10 rounded-md bg-muted animate-pulse" />)}
+          </div>
+        ) : participants.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-4 text-center" data-testid="text-no-participants">
+            No participants yet. Add participants to enable the leaderboard on the campaign page.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {participants.map((p: any) => {
+              const AIcon = getAvatarIcon(p.avatarType);
+              const aColor = getAvatarColor(p.avatarType);
+              const isEditing = editingId === p.id;
+
+              return (
+                <div key={p.id} className="flex items-center gap-3 py-2 border-b last:border-0" data-testid={`participant-row-${p.id}`}>
+                  <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                    <AIcon className={`h-4 w-4 ${aColor}`} />
+                  </div>
+                  {isEditing ? (
+                    <div className="flex-1 flex items-center gap-2 flex-wrap">
+                      <Input className="w-40" value={editName} onChange={(e) => setEditName(e.target.value)} data-testid={`input-edit-name-${p.id}`} />
+                      <Input className="w-20" type="number" min="0" value={editUnits} onChange={(e) => setEditUnits(e.target.value)} placeholder="Units" data-testid={`input-edit-units-${p.id}`} />
+                      <Button size="sm" onClick={() => updateMutation.mutate({ pid: p.id, body: { displayName: editName, currentUnits: parseInt(editUnits) || 0 } })} disabled={updateMutation.isPending} data-testid={`button-save-edit-${p.id}`}>
+                        {updateMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => setEditingId(null)}>
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate" data-testid={`text-participant-name-${p.id}`}>{p.displayName}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {p.currentUnits} units | ${(p.totalRaised / 100).toLocaleString()} raised | {p.donationCount} sponsors
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button size="icon" variant="ghost" onClick={() => handleCopySubLink(p.id)} title="Copy sub-link" data-testid={`button-copy-sublink-${p.id}`}>
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                        <Button size="icon" variant="ghost" onClick={() => { setEditingId(p.id); setEditName(p.displayName); setEditUnits(String(p.currentUnits || 0)); }} title="Edit" data-testid={`button-edit-participant-${p.id}`}>
+                          <TrendingUp className="h-4 w-4" />
+                        </Button>
+                        {deleteId === p.id ? (
+                          <div className="flex items-center gap-1">
+                            <Button size="sm" variant="destructive" onClick={() => deleteMutation.mutate(p.id)} disabled={deleteMutation.isPending} data-testid={`button-confirm-delete-${p.id}`}>
+                              {deleteMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Yes"}
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => setDeleteId(null)}>No</Button>
+                          </div>
+                        ) : (
+                          <Button size="icon" variant="ghost" onClick={() => setDeleteId(p.id)} title="Remove" data-testid={`button-delete-participant-${p.id}`}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
