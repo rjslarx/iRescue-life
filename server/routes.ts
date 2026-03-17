@@ -6,7 +6,7 @@ import { requireAuth, requireRole, requireRoleOrPageAccess, requireProTier } fro
 import { loginUser, createTenantWithAdmin, createUser } from "./services/auth";
 import { PushNotificationService } from "./services/push-notifications";
 import { db } from "./db";
-import { tenants, users, demoRequests, insertDemoRequestSchema, smsMessageLogs, emailEvents, animals, platformIntegrations, newsletterCampaigns, newsletterSubscribers, happyTails, animalMergeHistory, activityLogs, medicalExams, medicalPrescriptions, medicalBills, medicalFiles, animalNotes, applications, adoptionCheckoutSessions, adoptions, partnerOrganizations, microchipRecords, surrenderRequests, surrenderFormFields, insertSurrenderRequestSchema, insertSurrenderFormFieldSchema, inboundEmails, calendars, careInstructionSnippets, fosterApplications, volunteerApplications, adoptionContracts, fosterAgreementSessions, volunteerAgreementSessions, surrenderAgreementSessions, customFormSubmissions, customForms, placementAgreementSessions, medicationTasks, medicationPlans, fosterAnimals, messageQueue, contacts } from "@shared/schema";
+import { tenants, users, demoRequests, insertDemoRequestSchema, smsMessageLogs, emailEvents, animals, platformIntegrations, newsletterCampaigns, newsletterSubscribers, happyTails, animalMergeHistory, activityLogs, medicalExams, medicalPrescriptions, medicalBills, medicalFiles, animalNotes, applications, adoptionCheckoutSessions, adoptions, partnerOrganizations, microchipRecords, surrenderRequests, surrenderFormFields, insertSurrenderRequestSchema, insertSurrenderFormFieldSchema, inboundEmails, calendars, careInstructionSnippets, fosterApplications, volunteerApplications, adoptionContracts, fosterAgreementSessions, volunteerAgreementSessions, surrenderAgreementSessions, customFormSubmissions, customForms, placementAgreementSessions, medicationTasks, medicationPlans, fosterAnimals, messageQueue, contacts, campaignIntakeTokens } from "@shared/schema";
 import { eq, and, desc, asc, sql, inArray, lt, lte, gte, not, notInArray, or, ne, isNull, isNotNull } from "drizzle-orm";
 import { z } from "zod";
 import { authLimiter, signupLimiter, passwordResetLimiter, emailLimiter } from "./config/security";
@@ -43270,10 +43270,23 @@ The user asking is a tenant administrator or staff member.`;
         });
       }
 
+      let intakeSubmittedIds = new Set<string>();
+      if (campaignIds.length > 0) {
+        const intakeRows = await db
+          .select({ campaignId: campaignIntakeTokens.createdCampaignId })
+          .from(campaignIntakeTokens)
+          .where(and(
+            eq(campaignIntakeTokens.tenantId, req.tenant!.id),
+            isNotNull(campaignIntakeTokens.createdCampaignId)
+          ));
+        intakeRows.forEach(r => { if (r.campaignId) intakeSubmittedIds.add(r.campaignId); });
+      }
+
       const enriched = campaigns.map(c => ({
         ...c,
         donationCount: donationCounts[c.id]?.count || 0,
         donationTotal: donationCounts[c.id]?.total || 0,
+        isPartnerSubmitted: intakeSubmittedIds.has(c.id),
       }));
 
       res.json({ campaigns: enriched });
@@ -43804,6 +43817,322 @@ The user asking is a tenant administrator or staff member.`;
       const totalRaised = donations.reduce((sum, d) => sum + d.amount, 0);
 
       res.json({ participant: { ...participant, totalRaised, donationCount: donations.length }, campaign, donations });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+
+  // ============================================================================
+  // Campaign Intake (Partner Invitation) Routes
+  // ============================================================================
+
+  /**
+   * POST /api/peer-campaigns/invite
+   * Staff: Send a branded invitation email to an external partner with a tokenized intake form link
+   */
+  app.post('/api/peer-campaigns/invite', requireTenant, requireAuth, requireRole('admin', 'owner', 'board_member', 'staff', 'manager'), async (req, res, next) => {
+    try {
+      const { partnerName, partnerEmail, animalId } = req.body;
+      if (!partnerName || !partnerEmail) {
+        return res.status(400).json({ error: 'Partner name and email are required' });
+      }
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(partnerEmail)) {
+        return res.status(400).json({ error: 'Invalid email address' });
+      }
+
+      const crypto = await import('crypto');
+      const token = crypto.randomBytes(32).toString('hex');
+      const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+      await db.insert(campaignIntakeTokens).values({
+        tenantId: req.tenant!.id,
+        token,
+        partnerName,
+        partnerEmail,
+        animalId: animalId || null,
+        invitedByUserId: (req as any).user?.id || null,
+        expiresAt,
+      });
+
+      const hostname = req.hostname;
+      const protocol = req.protocol;
+      const isCustomDomain = req.tenant!.customDomain && (req.tenant! as any).customDomainVerified;
+      const subdomain = (req.tenant! as any).subdomain;
+      let baseUrl: string;
+      if (isCustomDomain) {
+        baseUrl = `${protocol}://${req.tenant!.customDomain}`;
+      } else if (hostname === 'localhost' || hostname.includes('replit.dev') || hostname.endsWith('.replit.app')) {
+        const usePrefix = subdomain ? `/${subdomain}` : '';
+        baseUrl = `${protocol}://${hostname}:${req.socket.localPort || 5000}${usePrefix}`;
+      } else {
+        baseUrl = `${protocol}://${subdomain ? subdomain + '.' : ''}${hostname}`;
+      }
+      const intakeUrl = `${baseUrl}/intake/${token}`;
+      const rescueName = escapeHtml(req.tenant!.name);
+      const partnerNameEsc = escapeHtml(partnerName);
+
+      try {
+        const { EmailService } = await import('./lib/email-service');
+        const emailService = await EmailService.forTenant(req.tenant!.id);
+        if (emailService) {
+          await emailService.send({
+            to: partnerEmail,
+            subject: `${req.tenant!.name} invites you to create a fundraising campaign!`,
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <div style="background: linear-gradient(135deg, #5B7B6B, #7fa391); padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
+                  <h1 style="color: white; margin: 0; font-size: 24px;">Campaign Invitation</h1>
+                  <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0 0;">from ${rescueName}</p>
+                </div>
+                <div style="background: #f9fafb; padding: 30px; border-radius: 0 0 12px 12px;">
+                  <p>Hi ${partnerNameEsc},</p>
+                  <p>${rescueName} would love for you to create a fundraising campaign to support their mission! Fill out the form below to get your campaign set up in minutes.</p>
+                  <p style="text-align: center; margin: 30px 0;">
+                    <a href="${intakeUrl}" style="display: inline-block; background-color: #5B7B6B; color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">Create Your Campaign</a>
+                  </p>
+                  <p style="color: #6b7280; font-size: 13px;">This link expires in 30 days.</p>
+                  <p style="color: #6b7280; font-size: 13px;">If you didn't expect this invitation, you can safely ignore this email.</p>
+                </div>
+              </div>
+            `,
+          });
+        }
+      } catch (emailErr) {
+        console.error('[INTAKE] Failed to send invitation email:', emailErr);
+      }
+
+      res.json({ success: true, token, intakeUrl, expiresAt });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/peer-campaigns/intake/:token
+   * Public: Validate an intake token and return tenant info for the form
+   */
+  app.get('/api/peer-campaigns/intake/:token', requireTenant, async (req, res, next) => {
+    try {
+      const [tokenRow] = await db
+        .select()
+        .from(campaignIntakeTokens)
+        .where(and(
+          eq(campaignIntakeTokens.token, req.params.token),
+          eq(campaignIntakeTokens.tenantId, req.tenant!.id)
+        ))
+        .limit(1);
+
+      if (!tokenRow) return res.status(404).json({ error: 'Invalid or expired invitation link' });
+      if (tokenRow.usedAt) return res.status(410).json({ error: 'This invitation has already been used' });
+      if (new Date() > tokenRow.expiresAt) return res.status(410).json({ error: 'This invitation has expired' });
+
+      let animalName = null;
+      if (tokenRow.animalId) {
+        const [animal] = await db.select({ name: animals.name }).from(animals).where(eq(animals.id, tokenRow.animalId)).limit(1);
+        animalName = animal?.name || null;
+      }
+
+      res.json({
+        valid: true,
+        partnerName: tokenRow.partnerName,
+        partnerEmail: tokenRow.partnerEmail,
+        animalId: tokenRow.animalId,
+        animalName,
+        tenantName: req.tenant!.name,
+        tenantLogo: (req.tenant! as any).logoUrl || null,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/peer-campaigns/intake/:token
+   * Public: Submit the intake form — creates campaign + participants + sends confirmation emails
+   */
+  app.post('/api/peer-campaigns/intake/:token', requireTenant, async (req, res, next) => {
+    try {
+      const [tokenRow] = await db
+        .select()
+        .from(campaignIntakeTokens)
+        .where(and(
+          eq(campaignIntakeTokens.token, req.params.token),
+          eq(campaignIntakeTokens.tenantId, req.tenant!.id)
+        ))
+        .limit(1);
+
+      if (!tokenRow) return res.status(404).json({ error: 'Invalid or expired invitation link' });
+      if (tokenRow.usedAt) return res.status(410).json({ error: 'This invitation has already been used' });
+      if (new Date() > tokenRow.expiresAt) return res.status(410).json({ error: 'This invitation has expired' });
+
+      const { campaignTitle, goalType, goalAmount, goalTarget, goalUnitLabel, startDate, endDate, description, participants } = req.body;
+
+      if (!campaignTitle || !goalType) {
+        return res.status(400).json({ error: 'Campaign title and goal type are required' });
+      }
+      if (goalType === 'currency' && (!goalAmount || goalAmount < 100)) {
+        return res.status(400).json({ error: 'Goal amount must be at least $1.00' });
+      }
+      if (goalType === 'units' && (!goalTarget || goalTarget < 1)) {
+        return res.status(400).json({ error: 'Goal target must be at least 1' });
+      }
+
+      const participantNames: string[] = (participants || [])
+        .map((p: string) => p.trim())
+        .filter((p: string) => p.length > 0);
+
+      const { peerCampaigns, campaignParticipants } = await import('@shared/schema');
+
+      const slugBase = campaignTitle
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .substring(0, 40);
+      const crypto = await import('crypto');
+      const slugSuffix = crypto.randomBytes(3).toString('hex');
+      const slug = `${slugBase}-${slugSuffix}`;
+
+      const avatarTypes = ['dog1', 'cat1', 'bone', 'paw', 'bird1', 'fish1', 'rabbit1', 'turtle1', 'star', 'heart'];
+
+      const [campaign] = await db.insert(peerCampaigns).values({
+        tenantId: req.tenant!.id,
+        creatorName: tokenRow.partnerName,
+        creatorEmail: tokenRow.partnerEmail,
+        campaignTitle,
+        campaignStory: description || null,
+        goalAmount: goalType === 'currency' ? goalAmount : 0,
+        slug,
+        isActive: true,
+        endsAt: endDate ? new Date(endDate) : null,
+        animalId: tokenRow.animalId || null,
+        goalType,
+        goalUnitLabel: goalType === 'units' ? (goalUnitLabel || 'units') : null,
+        goalTarget: goalType === 'units' ? goalTarget : null,
+        status: 'active',
+      }).returning();
+
+      const createdParticipants: any[] = [];
+      if (participantNames.length > 0) {
+        const participantValues = participantNames.map((name, idx) => ({
+          tenantId: req.tenant!.id,
+          peerCampaignId: campaign.id,
+          displayName: name,
+          avatarType: avatarTypes[idx % avatarTypes.length] as any,
+          isActive: true,
+        }));
+        const inserted = await db.insert(campaignParticipants).values(participantValues).returning();
+        createdParticipants.push(...inserted);
+      }
+
+      await db.update(campaignIntakeTokens)
+        .set({ usedAt: new Date(), createdCampaignId: campaign.id })
+        .where(eq(campaignIntakeTokens.id, tokenRow.id));
+
+      const hostname = req.hostname;
+      const protocol = req.protocol;
+      const isCustomDomain = req.tenant!.customDomain && (req.tenant! as any).customDomainVerified;
+      const subdomain = (req.tenant! as any).subdomain;
+      let baseUrl: string;
+      if (isCustomDomain) {
+        baseUrl = `${protocol}://${req.tenant!.customDomain}`;
+      } else if (hostname === 'localhost' || hostname.includes('replit.dev') || hostname.endsWith('.replit.app')) {
+        const usePrefix = subdomain ? `/${subdomain}` : '';
+        baseUrl = `${protocol}://${hostname}:${req.socket.localPort || 5000}${usePrefix}`;
+      } else {
+        baseUrl = `${protocol}://${subdomain ? subdomain + '.' : ''}${hostname}`;
+      }
+      const campaignUrl = `${baseUrl}/campaign/${slug}`;
+      const rescueName = escapeHtml(req.tenant!.name);
+      const partnerNameEsc = escapeHtml(tokenRow.partnerName);
+      const titleEsc = escapeHtml(campaignTitle);
+
+      const participantLinksHtml = createdParticipants.map(p =>
+        `<li style="margin: 4px 0;"><strong>${escapeHtml(p.displayName)}</strong>: <a href="${campaignUrl}/p/${p.id}" style="color: #2563eb;">${campaignUrl}/p/${p.id}</a></li>`
+      ).join('\n');
+
+      try {
+        const { EmailService } = await import('./lib/email-service');
+        const emailService = await EmailService.forTenant(req.tenant!.id);
+        if (emailService) {
+          await emailService.send({
+            to: tokenRow.partnerEmail,
+            subject: `Your campaign "${campaignTitle}" is live!`,
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <div style="background: linear-gradient(135deg, #5B7B6B, #7fa391); padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
+                  <h1 style="color: white; margin: 0; font-size: 22px;">Your Campaign is Live!</h1>
+                </div>
+                <div style="background: #f9fafb; padding: 30px; border-radius: 0 0 12px 12px;">
+                  <p>Hi ${partnerNameEsc},</p>
+                  <p>Your campaign <strong>${titleEsc}</strong> has been created and is now live! Share the link below with your community to start fundraising.</p>
+                  <p style="text-align: center; margin: 24px 0;">
+                    <a href="${campaignUrl}" style="display: inline-block; background-color: #5B7B6B; color: white; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: bold;">View Your Campaign</a>
+                  </p>
+                  ${createdParticipants.length > 0 ? `
+                    <h3 style="margin-top: 24px;">Participant Links</h3>
+                    <p style="color: #6b7280; font-size: 13px;">Share each participant's personal fundraising link:</p>
+                    <ul style="font-size: 13px;">${participantLinksHtml}</ul>
+                  ` : ''}
+                  <p style="color: #6b7280; font-size: 13px; margin-top: 20px;">Thank you for supporting ${rescueName}!</p>
+                </div>
+              </div>
+            `,
+          });
+
+          const adminUsers = await db
+            .select({ email: users.email, fullName: users.fullName })
+            .from(users)
+            .where(and(
+              eq(users.tenantId, req.tenant!.id),
+              sql`${users.roles}::text[] && ARRAY['admin', 'owner']::text[]`
+            ))
+            .limit(5);
+
+          for (const admin of adminUsers) {
+            try {
+              await emailService.send({
+                to: admin.email,
+                subject: `New partner campaign submitted: ${campaignTitle}`,
+                html: `
+                  <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                    <div style="background: linear-gradient(135deg, #5B7B6B, #7fa391); padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
+                      <h1 style="color: white; margin: 0; font-size: 20px;">New Partner Campaign</h1>
+                    </div>
+                    <div style="background: #f9fafb; padding: 30px; border-radius: 0 0 12px 12px;">
+                      <p>Hi ${escapeHtml(admin.fullName)},</p>
+                      <p><strong>${partnerNameEsc}</strong> (${escapeHtml(tokenRow.partnerEmail)}) submitted a campaign via the partner intake form.</p>
+                      <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
+                        <tr><td style="padding: 6px 0; color: #6b7280;">Campaign:</td><td style="padding: 6px 0; font-weight: bold;">${titleEsc}</td></tr>
+                        <tr><td style="padding: 6px 0; color: #6b7280;">Participants:</td><td style="padding: 6px 0;">${createdParticipants.length}</td></tr>
+                      </table>
+                      <p style="text-align: center; margin: 24px 0;">
+                        <a href="${campaignUrl}" style="display: inline-block; background-color: #5B7B6B; color: white; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: bold;">View Campaign</a>
+                      </p>
+                      ${createdParticipants.length > 0 ? `
+                        <h3>Participant Sub-Links</h3>
+                        <ul style="font-size: 13px;">${participantLinksHtml}</ul>
+                      ` : ''}
+                    </div>
+                  </div>
+                `,
+              });
+            } catch (adminEmailErr) {
+              console.error('[INTAKE] Failed to send admin notification:', adminEmailErr);
+            }
+          }
+        }
+      } catch (emailErr) {
+        console.error('[INTAKE] Failed to send confirmation emails:', emailErr);
+      }
+
+      res.json({
+        success: true,
+        campaign: { id: campaign.id, slug, campaignTitle },
+        participants: createdParticipants.map(p => ({ id: p.id, displayName: p.displayName })),
+        campaignUrl,
+      });
     } catch (error) {
       next(error);
     }

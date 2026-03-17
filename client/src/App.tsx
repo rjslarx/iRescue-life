@@ -153,6 +153,7 @@ import PeerCampaignCreatePage from "@/pages/PeerCampaignCreatePage";
 import ParticipantSubPage from "@/pages/ParticipantSubPage";
 import TenantAuditLogsPage from "@/pages/TenantAuditLogsPage";
 import MedicalImportsPage from "@/pages/MedicalImportsPage";
+import CampaignIntakePage from "@/pages/CampaignIntakePage";
 import TenantSignupPage from "@/pages/TenantSignupPage";
 import SignupSuccessPage from "@/pages/platform/SignupSuccessPage";
 import Login from "@/pages/Login";
@@ -243,6 +244,7 @@ function RouterSwitch() {
       <Route path="/campaign/:slug/p/:participantId" component={ParticipantSubPage} />
       <Route path="/campaign/:slug" component={P2PCampaignLandingPage} />
       <Route path="/contest/:slug" component={VotingContestPage} />
+      <Route path="/intake/:token" component={CampaignIntakePage} />
       <Route path="/fundraise" component={PeerCampaignCreatePage} />
       <Route path="/foster" component={FosterApplicationPage} />
       <Route path="/login" component={Login} />

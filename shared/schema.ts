@@ -6215,3 +6215,26 @@ export const insertVotingContestEntrantSchema = createInsertSchema(votingContest
 });
 export type InsertVotingContestEntrant = z.infer<typeof insertVotingContestEntrantSchema>;
 export type VotingContestEntrant = typeof votingContestEntrants.$inferSelect;
+
+export const campaignIntakeTokens = pgTable("campaign_intake_tokens", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  token: text("token").notNull().unique(),
+  partnerName: text("partner_name").notNull(),
+  partnerEmail: text("partner_email").notNull(),
+  animalId: uuid("animal_id").references(() => animals.id, { onDelete: 'set null' }),
+  invitedByUserId: uuid("invited_by_user_id").references(() => users.id),
+  expiresAt: timestamp("expires_at").notNull(),
+  usedAt: timestamp("used_at"),
+  createdCampaignId: uuid("created_campaign_id").references(() => peerCampaigns.id, { onDelete: 'set null' }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertCampaignIntakeTokenSchema = createInsertSchema(campaignIntakeTokens).omit({
+  id: true,
+  createdAt: true,
+  usedAt: true,
+  createdCampaignId: true,
+});
+export type InsertCampaignIntakeToken = z.infer<typeof insertCampaignIntakeTokenSchema>;
+export type CampaignIntakeToken = typeof campaignIntakeTokens.$inferSelect;

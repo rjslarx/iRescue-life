@@ -159,6 +159,9 @@ function CommunityFundraisersTab({ tenantSubdomain }: { tenantSubdomain?: string
   const [editColorsCampaign, setEditColorsCampaign] = useState<{ id: string; title: string; primaryColor?: string | null; accentColor?: string | null } | null>(null);
   const [editPrimary, setEditPrimary] = useState("");
   const [editAccent, setEditAccent] = useState("");
+  const [showInviteDialog, setShowInviteDialog] = useState(false);
+  const [invitePartnerName, setInvitePartnerName] = useState("");
+  const [invitePartnerEmail, setInvitePartnerEmail] = useState("");
 
   const { data, isLoading } = useQuery<{ campaigns: any[] }>({
     queryKey: ["/api/peer-campaigns"],
@@ -192,6 +195,22 @@ function CommunityFundraisersTab({ tenantSubdomain }: { tenantSubdomain?: string
     },
     onError: () => {
       toast({ title: "Failed to update colors", variant: "destructive" });
+    },
+  });
+
+  const invitePartnerMutation = useMutation({
+    mutationFn: async ({ partnerName, partnerEmail }: { partnerName: string; partnerEmail: string }) => {
+      const res = await apiRequest("POST", "/api/peer-campaigns/invite", { partnerName, partnerEmail });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      toast({ title: "Invitation sent!", description: `An email has been sent to ${invitePartnerEmail}` });
+      setShowInviteDialog(false);
+      setInvitePartnerName("");
+      setInvitePartnerEmail("");
+    },
+    onError: (err: Error) => {
+      toast({ title: "Failed to send invitation", description: err.message, variant: "destructive" });
     },
   });
 
@@ -271,10 +290,16 @@ function CommunityFundraisersTab({ tenantSubdomain }: { tenantSubdomain?: string
               <Heart className="h-5 w-5 text-rose-500" />
               <CardTitle className="text-lg">Community Fundraisers</CardTitle>
             </div>
-            <Button variant="outline" onClick={handleCopyCreationLink} data-testid="button-copy-creation-link">
-              <Share2 className="mr-2 h-4 w-4" />
-              Copy Creation Link
-            </Button>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button variant="outline" onClick={() => setShowInviteDialog(true)} data-testid="button-invite-partner">
+                <Users className="mr-2 h-4 w-4" />
+                Invite Partner
+              </Button>
+              <Button variant="outline" onClick={handleCopyCreationLink} data-testid="button-copy-creation-link">
+                <Share2 className="mr-2 h-4 w-4" />
+                Copy Creation Link
+              </Button>
+            </div>
           </div>
           <p className="text-sm text-muted-foreground">
             Peer-to-peer campaigns created by supporters. Share the creation link so anyone can start a fundraiser for your rescue.
@@ -323,8 +348,15 @@ function CommunityFundraisersTab({ tenantSubdomain }: { tenantSubdomain?: string
                     return (
                       <TableRow key={campaign.id} data-testid={`row-campaign-${campaign.id}`}>
                         <TableCell>
-                          <div className="font-medium" data-testid={`text-campaign-title-${campaign.id}`}>
-                            {campaign.campaignTitle}
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-medium" data-testid={`text-campaign-title-${campaign.id}`}>
+                              {campaign.campaignTitle}
+                            </span>
+                            {campaign.isPartnerSubmitted && (
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0" data-testid={`badge-partner-${campaign.id}`}>
+                                Partner-submitted
+                              </Badge>
+                            )}
                           </div>
                           <div className="text-xs text-muted-foreground">
                             {new Date(campaign.createdAt).toLocaleDateString()}
@@ -420,6 +452,37 @@ function CommunityFundraisersTab({ tenantSubdomain }: { tenantSubdomain?: string
           )}
         </CardContent>
       </Card>
+
+      {showInviteDialog && (
+        <Dialog open onOpenChange={() => setShowInviteDialog(false)}>
+          <DialogContent className="max-w-sm" data-testid="dialog-invite-partner">
+            <DialogHeader>
+              <DialogTitle>Invite a Partner</DialogTitle>
+              <p className="text-sm text-muted-foreground">Send a branded intake form to an external partner (school, PTA, organization) so they can set up their campaign directly.</p>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="invite-name">Partner Name *</Label>
+                <Input id="invite-name" value={invitePartnerName} onChange={(e) => setInvitePartnerName(e.target.value)} placeholder="e.g. Mrs. Johnson" data-testid="input-invite-partner-name" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="invite-email">Partner Email *</Label>
+                <Input id="invite-email" type="email" value={invitePartnerEmail} onChange={(e) => setInvitePartnerEmail(e.target.value)} placeholder="principal@school.edu" data-testid="input-invite-partner-email" />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowInviteDialog(false)} data-testid="button-cancel-invite">Cancel</Button>
+              <Button
+                onClick={() => invitePartnerMutation.mutate({ partnerName: invitePartnerName, partnerEmail: invitePartnerEmail })}
+                disabled={invitePartnerMutation.isPending || !invitePartnerName.trim() || !invitePartnerEmail.trim()}
+                data-testid="button-send-invite"
+              >
+                {invitePartnerMutation.isPending ? "Sending..." : "Send Invitation"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {editColorsCampaign && (
         <Dialog open onOpenChange={() => setEditColorsCampaign(null)}>

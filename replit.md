@@ -59,6 +59,7 @@ Core functionalities include:
 - **Grant Readiness & Compliance Dashboard:** Tracks regulatory deadlines, document flags, and provides intake/outcome statistics with live release rate calculation.
 - **Social Quick Pledge UI:** Mobile-first campaign landing page layout triggered by `?source=social` URL parameter, with 9:16 vertical media hero, sticky checkout sheet, share tools with QR code generation, and video support in campaign updates.
 - **Per-Campaign Theme Customizer:** Each P2P campaign can have optional `primaryColor` and `accentColor` hex values set during creation or editing. These colors are applied to the public campaign landing page (hero gradient overlay, progress bars, CTA buttons, sticky donate bar) and participant sub-pages. Staff see color swatch indicators next to themed campaigns in the Campaign Manager table.
+- **Campaign Intake Form for External Partners:** Self-service partner invitation system. Admins click "Invite Partner" to send a branded email with a tokenized link to an external partner (school, PTA, organization). The partner fills out a public intake form at `/intake/:token` with campaign details and participant roster. On submission, the system auto-creates the campaign and all participants with random avatars, sends confirmation emails with all sub-links to both partner and admin. Tokens expire after 30 days or upon use. Partner-submitted campaigns show a "Partner-submitted" badge in Campaign Manager.
 
 ## External Dependencies
 - **Stripe:** Payment processing and financial management.
