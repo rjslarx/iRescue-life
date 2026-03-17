@@ -5362,7 +5362,7 @@ export const peerCampaigns = pgTable("peer_campaigns", {
   goalUnitLabel: text("goal_unit_label"),
   goalTarget: integer("goal_target"),
   currentProgress: integer("current_progress").notNull().default(0),
-  status: text("status").$type<"active" | "completed">().notNull().default("active"),
+  status: text("status").$type<"active" | "completed" | "cancelled">().notNull().default("active"),
   createdByUserId: uuid("created_by_user_id").references(() => users.id),
 });
 
