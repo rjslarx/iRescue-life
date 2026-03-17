@@ -43060,6 +43060,7 @@ The user asking is a tenant administrator or staff member.`;
         .from(campaignParticipants)
         .where(and(
           eq(campaignParticipants.peerCampaignId, campaign.id),
+          eq(campaignParticipants.tenantId, req.tenant!.id),
           eq(campaignParticipants.isActive, true)
         ))
         .orderBy(desc(campaignParticipants.currentUnits));
@@ -43765,6 +43766,7 @@ The user asking is a tenant administrator or staff member.`;
         .where(and(
           eq(campaignParticipants.id, req.params.pid),
           eq(campaignParticipants.peerCampaignId, campaign.id),
+          eq(campaignParticipants.tenantId, req.tenant!.id),
           eq(campaignParticipants.isActive, true)
         ))
         .limit(1);
