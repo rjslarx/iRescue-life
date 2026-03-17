@@ -173,6 +173,11 @@ export default function ParticipantSubPage() {
   const AvatarIcon = getAvatarIcon(participant.avatarType);
   const masterUrl = window.location.pathname.replace(`/p/${participantId}`, "");
 
+  const goalTarget = campaign.goalTarget || 0;
+  const progressPercent = isUnitBased
+    ? (goalTarget > 0 ? Math.min(100, (participant.currentUnits / goalTarget) * 100) : 0)
+    : (goalTarget > 0 ? Math.min(100, (participant.totalRaised / goalTarget) * 100) : 0);
+
   const handleShare = () => {
     const shareUrl = window.location.href.replace(/[?&]source=social/, "");
     if (navigator.share) {
@@ -263,6 +268,12 @@ export default function ParticipantSubPage() {
               <span className="font-bold">${(participant.totalRaised / 100).toLocaleString()} raised</span>
               <span className="text-muted-foreground">{participant.donationCount} sponsors</span>
             </div>
+            {goalTarget > 0 && (
+              <div className="w-48 mx-auto space-y-1" data-testid="social-participant-progress-bar">
+                <Progress value={progressPercent} className="h-2" />
+                <p className="text-xs text-muted-foreground text-center">{Math.round(progressPercent)}% of goal</p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -323,6 +334,12 @@ export default function ParticipantSubPage() {
                 </>
               )}
             </div>
+            {goalTarget > 0 && (
+              <div className="space-y-1" data-testid="participant-progress-bar">
+                <Progress value={progressPercent} className="h-2" />
+                <p className="text-xs text-muted-foreground text-right">{Math.round(progressPercent)}% of goal</p>
+              </div>
+            )}
             <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
               <span className="flex items-center gap-1">
                 <Users className="h-3 w-3" />

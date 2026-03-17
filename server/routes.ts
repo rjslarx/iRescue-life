@@ -43690,9 +43690,15 @@ The user asking is a tenant administrator or staff member.`;
 
       const data = updateSchema.parse(req.body);
 
+      const updateFields: Record<string, unknown> = {};
+      if (data.displayName !== undefined) updateFields.displayName = data.displayName;
+      if (data.avatarType !== undefined) updateFields.avatarType = data.avatarType as "dog1" | "cat1" | "bone" | "paw" | "bird1" | "fish1" | "rabbit1" | "turtle1" | "star" | "heart";
+      if (data.currentUnits !== undefined) updateFields.currentUnits = data.currentUnits;
+      if (data.isActive !== undefined) updateFields.isActive = data.isActive;
+
       const [updated] = await db
         .update(campaignParticipants)
-        .set(data as any)
+        .set(updateFields)
         .where(and(
           eq(campaignParticipants.id, req.params.pid),
           eq(campaignParticipants.peerCampaignId, req.params.id),
