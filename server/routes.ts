@@ -43842,6 +43842,13 @@ The user asking is a tenant administrator or staff member.`;
         return res.status(400).json({ error: 'Invalid email address' });
       }
 
+      if (animalId) {
+        const [animal] = await db.select({ id: animals.id }).from(animals)
+          .where(and(eq(animals.id, animalId), eq(animals.tenantId, req.tenant!.id)))
+          .limit(1);
+        if (!animal) return res.status(400).json({ error: 'Animal not found for this organization' });
+      }
+
       const crypto = await import('crypto');
       const token = crypto.randomBytes(32).toString('hex');
       const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
