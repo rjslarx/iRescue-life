@@ -43100,7 +43100,7 @@ The user asking is a tenant administrator or staff member.`;
    */
   app.post('/api/peer-campaigns/:slug/checkout', requireTenant, async (req, res, next) => {
     try {
-      const { peerCampaigns, peerCampaignDonations } = await import('@shared/schema');
+      const { peerCampaigns, peerCampaignDonations, campaignParticipants } = await import('@shared/schema');
       const { stripeService } = await import('./lib/stripe-service');
       const { calculatePlatformFee, calculateDonorCoversFees } = await import('./config/platform');
 
@@ -43133,6 +43133,22 @@ The user asking is a tenant administrator or staff member.`;
       }
       if (campaign.endsAt && new Date(campaign.endsAt) < new Date()) {
         return res.status(400).json({ error: 'This campaign has ended' });
+      }
+
+      if (data.participantId) {
+        const [validParticipant] = await db
+          .select({ id: campaignParticipants.id })
+          .from(campaignParticipants)
+          .where(and(
+            eq(campaignParticipants.id, data.participantId),
+            eq(campaignParticipants.peerCampaignId, campaign.id),
+            eq(campaignParticipants.tenantId, req.tenant!.id),
+            eq(campaignParticipants.isActive, true)
+          ))
+          .limit(1);
+        if (!validParticipant) {
+          return res.status(400).json({ error: 'Invalid participant' });
+        }
       }
 
       const [tenant] = await db
@@ -43486,7 +43502,7 @@ The user asking is a tenant administrator or staff member.`;
    */
   app.post('/api/peer-campaigns/:slug/pledge', requireTenant, async (req, res, next) => {
     try {
-      const { peerCampaigns, peerCampaignDonations } = await import('@shared/schema');
+      const { peerCampaigns, peerCampaignDonations, campaignParticipants } = await import('@shared/schema');
 
       const pledgeSchema = z.object({
         donorName: z.string().min(1).max(200),
@@ -43519,6 +43535,22 @@ The user asking is a tenant administrator or staff member.`;
       }
       if (campaign.endsAt && new Date(campaign.endsAt) < new Date()) {
         return res.status(400).json({ error: 'This campaign has ended' });
+      }
+
+      if (data.participantId) {
+        const [validParticipant] = await db
+          .select({ id: campaignParticipants.id })
+          .from(campaignParticipants)
+          .where(and(
+            eq(campaignParticipants.id, data.participantId),
+            eq(campaignParticipants.peerCampaignId, campaign.id),
+            eq(campaignParticipants.tenantId, req.tenant!.id),
+            eq(campaignParticipants.isActive, true)
+          ))
+          .limit(1);
+        if (!validParticipant) {
+          return res.status(400).json({ error: 'Invalid participant' });
+        }
       }
 
       const maxAmount = data.pledgePerUnit * (campaign.goalTarget || 0);
@@ -43629,7 +43661,7 @@ The user asking is a tenant administrator or staff member.`;
           tenantId: req.tenant!.id,
           peerCampaignId: campaign.id,
           displayName: v.displayName,
-          avatarType: (v.avatarType || avatarTypes[Math.floor(Math.random() * avatarTypes.length)]) as any,
+          avatarType: (v.avatarType || avatarTypes[Math.floor(Math.random() * avatarTypes.length)]) as "dog1" | "cat1" | "bone" | "paw" | "bird1" | "fish1" | "rabbit1" | "turtle1" | "star" | "heart",
         }))
       ).returning();
 

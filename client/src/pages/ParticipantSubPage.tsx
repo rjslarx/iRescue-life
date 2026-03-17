@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams } from "wouter";
 import { useSEO } from "@/hooks/useSEO";
@@ -20,6 +20,7 @@ import {
   TrendingUp,
   Target,
   ArrowLeft,
+  Share2,
   X,
 } from "lucide-react";
 import type { Tenant, PeerCampaign, CampaignParticipant } from "@shared/schema";
@@ -60,10 +61,9 @@ export default function ParticipantSubPage() {
   const [customAmount, setCustomAmount] = useState("");
   const [showCustom, setShowCustom] = useState(false);
   const [pledgePerUnit, setPledgePerUnit] = useState("");
-  const [showCheckout, setShowCheckout] = useState(false);
-
   const urlParams = new URLSearchParams(window.location.search);
   const isSocialSource = urlParams.get("source") === "social";
+  const [showCheckout, setShowCheckout] = useState(isSocialSource);
 
   const { data: tenantData } = useQuery<{ tenant: Tenant }>({
     queryKey: ["/api/tenant"],
@@ -173,9 +173,121 @@ export default function ParticipantSubPage() {
   const AvatarIcon = getAvatarIcon(participant.avatarType);
   const masterUrl = window.location.pathname.replace(`/p/${participantId}`, "");
 
+  const handleShare = () => {
+    const shareUrl = window.location.href.replace(/[?&]source=social/, "");
+    if (navigator.share) {
+      navigator.share({ title: `Sponsor ${participant.displayName}`, url: shareUrl }).catch(() => {});
+    } else {
+      navigator.clipboard.writeText(shareUrl).then(() => {
+        toast({ title: "Link copied!" });
+      });
+    }
+  };
+
+  const CheckoutForm = ({ inline }: { inline?: boolean }) => (
+    <div className={`space-y-4 ${inline ? "" : "animate-in slide-in-from-bottom"}`} data-testid="participant-checkout-form">
+      {!inline && (
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold text-lg">Sponsor {participant.displayName}</h3>
+          <Button size="icon" variant="ghost" onClick={() => setShowCheckout(false)} data-testid="button-close-checkout">
+            <X className="h-5 w-5" />
+          </Button>
+        </div>
+      )}
+      <div className="space-y-3">
+        <Input placeholder="Your name" value={donorName} onChange={(e) => setDonorName(e.target.value)} data-testid="participant-input-name" />
+        <Input type="email" placeholder="Email (optional)" value={donorEmail} onChange={(e) => setDonorEmail(e.target.value)} data-testid="participant-input-email" />
+        <div className="flex items-center gap-2">
+          <Checkbox id="p-anon" checked={isAnonymous} onCheckedChange={(c) => setIsAnonymous(c === true)} data-testid="participant-checkbox-anon" />
+          <label htmlFor="p-anon" className="text-sm text-muted-foreground cursor-pointer">Donate anonymously</label>
+        </div>
+      </div>
+
+      {isUnitBased && (
+        <div className="space-y-3">
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+            <Input type="number" min="1" step="1" placeholder={`Amount per ${unitLabel}`} value={pledgePerUnit} onChange={(e) => setPledgePerUnit(e.target.value)} className="pl-7 text-lg" data-testid="participant-input-pledge" />
+          </div>
+          <Button size="lg" className="w-full gap-2" onClick={handlePledge} disabled={pledgeMutation.isPending || !pledgePerUnit || parseFloat(pledgePerUnit) < 1} data-testid="participant-button-pledge">
+            {pledgeMutation.isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Target className="h-5 w-5" />}
+            {pledgeMutation.isPending ? "Submitting..." : `Pledge per ${unitLabel}`}
+          </Button>
+          <div className="relative flex items-center">
+            <div className="flex-grow border-t border-muted" />
+            <span className="px-3 text-xs text-muted-foreground">or one-time donation</span>
+            <div className="flex-grow border-t border-muted" />
+          </div>
+        </div>
+      )}
+
+      <div className="space-y-3">
+        <div className="grid grid-cols-4 gap-2">
+          {PRESET_AMOUNTS.map((amt) => (
+            <Button key={amt} variant={!showCustom && selectedAmount === amt ? "default" : "outline"} onClick={() => { setSelectedAmount(amt); setShowCustom(false); }} data-testid={`participant-amount-${amt}`}>
+              ${amt / 100}
+            </Button>
+          ))}
+        </div>
+        <Button variant={showCustom ? "default" : "outline"} className="w-full" onClick={() => setShowCustom(true)} data-testid="participant-custom-amount">Custom</Button>
+        {showCustom && (
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+            <Input type="number" min="1" step="0.01" placeholder="Enter amount" value={customAmount} onChange={(e) => setCustomAmount(e.target.value)} className="pl-7 text-lg" data-testid="participant-input-custom" />
+          </div>
+        )}
+        <div className="flex items-center gap-2">
+          <Checkbox id="p-fees" checked={coverFees} onCheckedChange={(c) => setCoverFees(c === true)} data-testid="participant-checkbox-fees" />
+          <label htmlFor="p-fees" className="text-sm text-muted-foreground cursor-pointer">Cover processing fees</label>
+        </div>
+        <Button size="lg" className="w-full gap-2" onClick={handleDonate} disabled={checkoutMutation.isPending || (!showCustom && !selectedAmount) || (showCustom && (!customAmount || parseFloat(customAmount) < 1))} data-testid="participant-button-donate">
+          {checkoutMutation.isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Heart className="h-5 w-5" />}
+          {checkoutMutation.isPending ? "Processing..." : "Donate Now"}
+        </Button>
+      </div>
+    </div>
+  );
+
+  if (isSocialSource) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col" data-testid="participant-sub-page-social">
+        <div className="relative bg-primary/10 aspect-[9/16] max-h-[45vh] w-full flex flex-col items-center justify-center overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent to-background/80" />
+          <div className="relative z-10 text-center space-y-3 px-4">
+            <div className="w-20 h-20 rounded-full bg-background/80 backdrop-blur-sm flex items-center justify-center mx-auto">
+              <AvatarIcon className="h-10 w-10 text-primary" />
+            </div>
+            <h1 className="text-2xl font-bold" data-testid="text-participant-name">{participant.displayName}</h1>
+            <p className="text-sm text-muted-foreground">{campaign.campaignTitle}</p>
+            <div className="flex items-center justify-center gap-3 text-sm">
+              <span className="font-bold">${(participant.totalRaised / 100).toLocaleString()} raised</span>
+              <span className="text-muted-foreground">{participant.donationCount} sponsors</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex-1 max-w-lg mx-auto w-full p-4 space-y-4">
+          {canDonate && <CheckoutForm inline />}
+          <div className="flex items-center gap-2">
+            <Button variant="outline" className="flex-1 gap-2" onClick={handleShare} data-testid="button-share-participant">
+              <Share2 className="h-4 w-4" />
+              Share
+            </Button>
+            <Button variant="outline" asChild>
+              <a href={masterUrl} data-testid="link-back-campaign">
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Full Campaign
+              </a>
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background flex flex-col" data-testid="participant-sub-page">
-      {!isSocialSource && <PublicHeader tenant={tenantData?.tenant} />}
+      <PublicHeader tenant={tenantData?.tenant} />
 
       <div className="flex-1 max-w-lg mx-auto w-full p-4 space-y-6">
         <div className="text-center space-y-4">
@@ -254,64 +366,8 @@ export default function ParticipantSubPage() {
         <>
           {showCheckout && (
             <div className="fixed inset-0 z-40 bg-black/50 flex items-end" onClick={(e) => { if (e.target === e.currentTarget) setShowCheckout(false); }}>
-              <div className="w-full max-w-lg mx-auto bg-background rounded-t-2xl p-5 pb-8 space-y-4 animate-in slide-in-from-bottom" data-testid="participant-checkout-sheet">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-semibold text-lg">Sponsor {participant.displayName}</h3>
-                  <Button size="icon" variant="ghost" onClick={() => setShowCheckout(false)} data-testid="button-close-checkout">
-                    <X className="h-5 w-5" />
-                  </Button>
-                </div>
-                <div className="space-y-3">
-                  <Input placeholder="Your name" value={donorName} onChange={(e) => setDonorName(e.target.value)} data-testid="participant-input-name" />
-                  <Input type="email" placeholder="Email (optional)" value={donorEmail} onChange={(e) => setDonorEmail(e.target.value)} data-testid="participant-input-email" />
-                  <div className="flex items-center gap-2">
-                    <Checkbox id="p-anon" checked={isAnonymous} onCheckedChange={(c) => setIsAnonymous(c === true)} data-testid="participant-checkbox-anon" />
-                    <label htmlFor="p-anon" className="text-sm text-muted-foreground cursor-pointer">Donate anonymously</label>
-                  </div>
-                </div>
-
-                {isUnitBased && (
-                  <div className="space-y-3">
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
-                      <Input type="number" min="1" step="1" placeholder={`Amount per ${unitLabel}`} value={pledgePerUnit} onChange={(e) => setPledgePerUnit(e.target.value)} className="pl-7 text-lg" data-testid="participant-input-pledge" />
-                    </div>
-                    <Button size="lg" className="w-full gap-2" onClick={handlePledge} disabled={pledgeMutation.isPending || !pledgePerUnit || parseFloat(pledgePerUnit) < 1} data-testid="participant-button-pledge">
-                      {pledgeMutation.isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Target className="h-5 w-5" />}
-                      {pledgeMutation.isPending ? "Submitting..." : `Pledge per ${unitLabel}`}
-                    </Button>
-                    <div className="relative flex items-center">
-                      <div className="flex-grow border-t border-muted" />
-                      <span className="px-3 text-xs text-muted-foreground">or one-time donation</span>
-                      <div className="flex-grow border-t border-muted" />
-                    </div>
-                  </div>
-                )}
-
-                <div className="space-y-3">
-                  <div className="grid grid-cols-4 gap-2">
-                    {PRESET_AMOUNTS.map((amt) => (
-                      <Button key={amt} variant={!showCustom && selectedAmount === amt ? "default" : "outline"} onClick={() => { setSelectedAmount(amt); setShowCustom(false); }} data-testid={`participant-amount-${amt}`}>
-                        ${amt / 100}
-                      </Button>
-                    ))}
-                  </div>
-                  <Button variant={showCustom ? "default" : "outline"} className="w-full" onClick={() => setShowCustom(true)} data-testid="participant-custom-amount">Custom</Button>
-                  {showCustom && (
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
-                      <Input type="number" min="1" step="0.01" placeholder="Enter amount" value={customAmount} onChange={(e) => setCustomAmount(e.target.value)} className="pl-7 text-lg" data-testid="participant-input-custom" />
-                    </div>
-                  )}
-                  <div className="flex items-center gap-2">
-                    <Checkbox id="p-fees" checked={coverFees} onCheckedChange={(c) => setCoverFees(c === true)} data-testid="participant-checkbox-fees" />
-                    <label htmlFor="p-fees" className="text-sm text-muted-foreground cursor-pointer">Cover processing fees</label>
-                  </div>
-                  <Button size="lg" className="w-full gap-2" onClick={handleDonate} disabled={checkoutMutation.isPending || (!showCustom && !selectedAmount) || (showCustom && (!customAmount || parseFloat(customAmount) < 1))} data-testid="participant-button-donate">
-                    {checkoutMutation.isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Heart className="h-5 w-5" />}
-                    {checkoutMutation.isPending ? "Processing..." : "Donate Now"}
-                  </Button>
-                </div>
+              <div className="w-full max-w-lg mx-auto bg-background rounded-t-2xl p-5 pb-8" data-testid="participant-checkout-sheet">
+                <CheckoutForm />
               </div>
             </div>
           )}
