@@ -15377,7 +15377,7 @@ ${renderedHtml}
       
       // Animal Statistics
       const allAnimals = await db
-        .select({ id: animals.id, intakeDate: animals.intakeDate, status: animals.status, adoptionDate: animals.adoptionDate, locationType: animals.locationType })
+        .select({ id: animals.id, intakeDate: animals.intakeDate, status: animals.status, adoptionDate: animals.adoptionDate, locationType: animals.locationType, species: animals.species })
         .from(animals)
         .where(eq(animals.tenantId, req.tenant!.id));
       
@@ -15465,9 +15465,9 @@ ${renderedHtml}
           currentInShelter: inShelter,
           spayNeuterCount,
           bySpecies: {
-            dogs: allAnimals.filter(a => a.species.toLowerCase() === 'dog').length,
-            cats: allAnimals.filter(a => a.species.toLowerCase() === 'cat').length,
-            other: allAnimals.filter(a => !['dog', 'cat'].includes(a.species.toLowerCase())).length,
+            dogs: allAnimals.filter(a => (a.species || '').toLowerCase() === 'dog').length,
+            cats: allAnimals.filter(a => (a.species || '').toLowerCase() === 'cat').length,
+            other: allAnimals.filter(a => !['dog', 'cat'].includes((a.species || '').toLowerCase())).length,
           },
         },
         financial: {
