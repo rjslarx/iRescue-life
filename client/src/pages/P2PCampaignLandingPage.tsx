@@ -6,7 +6,6 @@ import { apiRequest } from "@/lib/queryClient";
 import PublicHeader from "@/components/PublicHeader";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -72,6 +71,16 @@ function formatDonorDisplay(d: { donorName: string; isAnonymous: boolean; pledge
 
 function isVideoUrl(url: string): boolean {
   return /\.(mp4|mov|webm|ogg|m4v)(\?.*)?$/i.test(url);
+}
+
+function useCampaignTheme(campaign: PeerCampaign | null | undefined) {
+  const pc = campaign?.primaryColor;
+  const ac = campaign?.accentColor;
+  const hasTheme = !!(pc || ac);
+  const themeStyle: Record<string, string> = {};
+  if (pc) themeStyle["--campaign-primary"] = pc;
+  if (ac) themeStyle["--campaign-accent"] = ac;
+  return { hasTheme, themeStyle, primaryColor: pc, accentColor: ac };
 }
 
 function CountdownTimer({ endsAt }: { endsAt: string }) {
@@ -393,6 +402,7 @@ function QuickPledgeLayout({
   const firstVideoUpdate = updates.find((u) => u.videoUrl);
   const heroMedia = firstVideoUpdate?.videoUrl || campaign.coverImageUrl;
   const heroIsVideo = firstVideoUpdate?.videoUrl ? true : false;
+  const { hasTheme, themeStyle, primaryColor: themePrimary, accentColor: themeAccent } = useCampaignTheme(campaign);
 
   const checkoutMutation = useMutation({
     mutationFn: async (amount: number) => {
@@ -449,7 +459,7 @@ function QuickPledgeLayout({
   const campaignUrl = window.location.origin + window.location.pathname;
 
   return (
-    <div className="min-h-screen bg-background flex flex-col" data-testid="quick-pledge-layout">
+    <div className="min-h-screen bg-background flex flex-col" style={hasTheme ? themeStyle as any : undefined} data-testid="quick-pledge-layout">
       <div className="flex-1 flex flex-col max-w-lg mx-auto w-full">
         {heroMedia && (
           <div className="relative w-full" style={{ aspectRatio: "9/16", maxHeight: "60vh" }}>
@@ -471,7 +481,7 @@ function QuickPledgeLayout({
                 data-testid="quick-pledge-hero-image"
               />
             )}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent rounded-b-xl" />
+            <div className="absolute inset-0 rounded-b-xl" style={themePrimary ? { background: `linear-gradient(to top, ${themePrimary}cc, transparent, transparent)` } : { background: "linear-gradient(to top, rgba(0,0,0,0.7), transparent, transparent)" }} />
             <div className="absolute bottom-0 left-0 right-0 p-4">
               {isUnitBased && (
                 <Badge variant="secondary" className="mb-2" data-testid="badge-quick-unit">
@@ -516,7 +526,9 @@ function QuickPledgeLayout({
                 </>
               )}
             </div>
-            <Progress value={progressPercentage} className="h-3" data-testid="quick-progress-bar" />
+            <div className="relative h-3 w-full overflow-hidden rounded-full bg-primary/20" data-testid="quick-progress-bar">
+              <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, progressPercentage)}%`, backgroundColor: themePrimary || "hsl(var(--primary))" }} />
+            </div>
             <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
               <span className="flex items-center gap-1">
                 <TrendingUp className="h-3 w-3" />
@@ -564,7 +576,7 @@ function QuickPledgeLayout({
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
                       <Input type="number" min="1" step="1" placeholder={`Amount per ${unitLabel}`} value={pledgePerUnit} onChange={(e) => setPledgePerUnit(e.target.value)} className="pl-7 text-lg h-12" data-testid="quick-input-pledge" />
                     </div>
-                    <Button size="lg" className="w-full gap-2 h-14 text-lg" onClick={handlePledge} disabled={pledgeMutation.isPending || !pledgePerUnit || parseFloat(pledgePerUnit) < 1} data-testid="quick-button-pledge">
+                    <Button size="lg" className="w-full gap-2 h-14 text-lg" style={themeAccent ? { backgroundColor: themeAccent, borderColor: themeAccent, color: "#fff" } : undefined} onClick={handlePledge} disabled={pledgeMutation.isPending || !pledgePerUnit || parseFloat(pledgePerUnit) < 1} data-testid="quick-button-pledge">
                       {pledgeMutation.isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Target className="h-5 w-5" />}
                       {pledgeMutation.isPending ? "Submitting..." : `Pledge per ${unitLabel}`}
                     </Button>
@@ -595,7 +607,7 @@ function QuickPledgeLayout({
                     <Checkbox id="quick-fees" checked={coverFees} onCheckedChange={(c) => setCoverFees(c === true)} data-testid="quick-checkbox-fees" />
                     <label htmlFor="quick-fees" className="text-sm text-muted-foreground cursor-pointer">Cover processing fees</label>
                   </div>
-                  <Button size="lg" className="w-full gap-2 h-14 text-lg" onClick={handleDonate} disabled={checkoutMutation.isPending || (!showCustom && !selectedAmount) || (showCustom && (!customAmount || parseFloat(customAmount) < 1))} data-testid="quick-button-donate">
+                  <Button size="lg" className="w-full gap-2 h-14 text-lg" style={themeAccent ? { backgroundColor: themeAccent, borderColor: themeAccent, color: "#fff" } : undefined} onClick={handleDonate} disabled={checkoutMutation.isPending || (!showCustom && !selectedAmount) || (showCustom && (!customAmount || parseFloat(customAmount) < 1))} data-testid="quick-button-donate">
                     {checkoutMutation.isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Heart className="h-5 w-5" />}
                     {checkoutMutation.isPending ? "Processing..." : "Donate Now"}
                   </Button>
@@ -606,7 +618,7 @@ function QuickPledgeLayout({
 
           <div className="sticky bottom-0 left-0 right-0 bg-background/95 backdrop-blur-sm border-t p-4 z-30" data-testid="quick-sticky-bar">
             <div className="max-w-lg mx-auto">
-              <Button size="lg" className="w-full gap-2 h-14 text-lg" onClick={() => setShowCheckout(true)} data-testid="quick-button-open-checkout">
+              <Button size="lg" className="w-full gap-2 h-14 text-lg" style={themeAccent ? { backgroundColor: themeAccent, borderColor: themeAccent, color: "#fff" } : undefined} onClick={() => setShowCheckout(true)} data-testid="quick-button-open-checkout">
                 <Heart className="h-6 w-6" />
                 Back This Campaign
               </Button>
@@ -805,8 +817,10 @@ export default function P2PCampaignLandingPage() {
 
   const campaignUrl = window.location.origin + window.location.pathname;
 
+  const { hasTheme, themeStyle, primaryColor: themePrimary, accentColor: themeAccent } = useCampaignTheme(campaign);
+
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background" style={hasTheme ? themeStyle as any : undefined}>
       <PublicHeader rescueName={rescueName} logoUrl={tenant?.logoUrl || undefined} />
 
       {campaign.coverImageUrl && (
@@ -817,7 +831,9 @@ export default function P2PCampaignLandingPage() {
             className="w-full h-full object-cover"
             data-testid="img-campaign-cover"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent" />
+          <div className="absolute inset-0" style={themePrimary ? { background: `linear-gradient(to top, ${themePrimary}cc, ${themePrimary}4d, transparent)` } : undefined}>
+            {!themePrimary && <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent" />}
+          </div>
           <div className="absolute bottom-0 left-0 right-0 p-6 md:p-10">
             <div className="max-w-4xl mx-auto">
               {isUnitBased && (
@@ -883,7 +899,15 @@ export default function P2PCampaignLandingPage() {
                 </>
               )}
             </div>
-            <Progress value={progressPercentage} className="h-4" data-testid="progress-bar" />
+            <div className="relative h-4 w-full overflow-hidden rounded-full bg-primary/20" data-testid="progress-bar">
+              <div
+                className="h-full rounded-full transition-all"
+                style={{
+                  width: `${Math.min(100, progressPercentage)}%`,
+                  backgroundColor: themePrimary || "hsl(var(--primary))",
+                }}
+              />
+            </div>
             <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
               <span className="flex items-center gap-1" data-testid="text-progress-pct">
                 <TrendingUp className="h-3.5 w-3.5" />
@@ -1053,6 +1077,7 @@ export default function P2PCampaignLandingPage() {
                           <Button
                             size="lg"
                             className="w-full gap-2"
+                            style={themeAccent ? { backgroundColor: themeAccent, borderColor: themeAccent, color: "#fff" } : undefined}
                             onClick={handlePledge}
                             disabled={pledgeMutation.isPending || !pledgePerUnit || parseFloat(pledgePerUnit) < 1}
                             data-testid="button-pledge"
@@ -1078,6 +1103,7 @@ export default function P2PCampaignLandingPage() {
                             setCoverFees={setCoverFees}
                             onDonate={handleDonate}
                             isPending={checkoutMutation.isPending}
+                            themeAccent={themeAccent}
                           />
                         </TabsContent>
                       </Tabs>
@@ -1093,6 +1119,7 @@ export default function P2PCampaignLandingPage() {
                         setCoverFees={setCoverFees}
                         onDonate={handleDonate}
                         isPending={checkoutMutation.isPending}
+                        themeAccent={themeAccent}
                       />
                     )}
                   </CardContent>
@@ -1139,11 +1166,14 @@ export default function P2PCampaignLandingPage() {
                   ${raisedDollars.toLocaleString()} raised
                 </p>
               )}
-              <Progress value={progressPercentage} className="h-2 mt-1" />
+              <div className="relative h-2 w-full overflow-hidden rounded-full bg-primary/20 mt-1">
+                <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, progressPercentage)}%`, backgroundColor: themePrimary || "hsl(var(--primary))" }} />
+              </div>
             </div>
             <Button
               size="lg"
               className="gap-2 shrink-0"
+              style={themeAccent ? { backgroundColor: themeAccent, borderColor: themeAccent, color: "#fff" } : undefined}
               onClick={() => {
                 const el = document.querySelector('[data-testid="card-checkout"]');
                 el?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -1181,6 +1211,7 @@ function OneTimeDonationForm({
   setCoverFees,
   onDonate,
   isPending,
+  themeAccent,
 }: {
   selectedAmount: number | null;
   setSelectedAmount: (a: number | null) => void;
@@ -1192,6 +1223,7 @@ function OneTimeDonationForm({
   setCoverFees: (b: boolean) => void;
   onDonate: () => void;
   isPending: boolean;
+  themeAccent?: string | null;
 }) {
   return (
     <>
@@ -1244,6 +1276,7 @@ function OneTimeDonationForm({
       <Button
         size="lg"
         className="w-full gap-2"
+        style={themeAccent ? { backgroundColor: themeAccent, borderColor: themeAccent, color: "#fff" } : undefined}
         onClick={onDonate}
         disabled={isPending || (!showCustom && !selectedAmount) || (showCustom && (!customAmount || parseFloat(customAmount) < 1))}
         data-testid="button-donate-now"

@@ -5364,6 +5364,8 @@ export const peerCampaigns = pgTable("peer_campaigns", {
   currentProgress: integer("current_progress").notNull().default(0),
   status: text("status").$type<"active" | "completed" | "cancelled">().notNull().default("active"),
   createdByUserId: uuid("created_by_user_id").references(() => users.id),
+  primaryColor: text("primary_color"),
+  accentColor: text("accent_color"),
 });
 
 export const insertPeerCampaignSchema = createInsertSchema(peerCampaigns).omit({

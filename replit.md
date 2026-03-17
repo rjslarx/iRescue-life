@@ -58,6 +58,7 @@ Core functionalities include:
 - **Forwarded Email Routing via System Inbound Address:** Each tenant has a unique `system_inbound_email` for forwarded-email routing.
 - **Grant Readiness & Compliance Dashboard:** Tracks regulatory deadlines, document flags, and provides intake/outcome statistics with live release rate calculation.
 - **Social Quick Pledge UI:** Mobile-first campaign landing page layout triggered by `?source=social` URL parameter, with 9:16 vertical media hero, sticky checkout sheet, share tools with QR code generation, and video support in campaign updates.
+- **Per-Campaign Theme Customizer:** Each P2P campaign can have optional `primaryColor` and `accentColor` hex values set during creation or editing. These colors are applied to the public campaign landing page (hero gradient overlay, progress bars, CTA buttons, sticky donate bar) and participant sub-pages. Staff see color swatch indicators next to themed campaigns in the Campaign Manager table.
 
 ## External Dependencies
 - **Stripe:** Payment processing and financial management.

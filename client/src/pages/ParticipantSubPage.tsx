@@ -6,7 +6,6 @@ import { apiRequest } from "@/lib/queryClient";
 import PublicHeader from "@/components/PublicHeader";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -27,6 +26,16 @@ import type { Tenant, PeerCampaign, CampaignParticipant } from "@shared/schema";
 import { getAvatarIcon } from "@/lib/participant-avatars";
 
 const PRESET_AMOUNTS = [1000, 2500, 5000, 10000];
+
+function useCampaignTheme(campaign: PeerCampaign | null | undefined) {
+  const pc = campaign?.primaryColor;
+  const ac = campaign?.accentColor;
+  const hasTheme = !!(pc || ac);
+  const themeStyle: Record<string, string> = {};
+  if (pc) themeStyle["--campaign-primary"] = pc;
+  if (ac) themeStyle["--campaign-accent"] = ac;
+  return { hasTheme, themeStyle, primaryColor: pc, accentColor: ac };
+}
 
 function timeAgo(dateStr: string): string {
   const date = new Date(dateStr);
@@ -172,6 +181,7 @@ export default function ParticipantSubPage() {
   const canDonate = campaign.isActive && !campaignEnded && campaign.status !== "completed";
   const AvatarIcon = getAvatarIcon(participant.avatarType);
   const masterUrl = window.location.pathname.replace(`/p/${participantId}`, "");
+  const { hasTheme, themeStyle, primaryColor: themePrimary, accentColor: themeAccent } = useCampaignTheme(campaign);
 
   const goalTarget = campaign.goalTarget || 0;
   const progressPercent = isUnitBased
@@ -214,7 +224,7 @@ export default function ParticipantSubPage() {
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
             <Input type="number" min="1" step="1" placeholder={`Amount per ${unitLabel}`} value={pledgePerUnit} onChange={(e) => setPledgePerUnit(e.target.value)} className="pl-7 text-lg" data-testid="participant-input-pledge" />
           </div>
-          <Button size="lg" className="w-full gap-2" onClick={handlePledge} disabled={pledgeMutation.isPending || !pledgePerUnit || parseFloat(pledgePerUnit) < 1} data-testid="participant-button-pledge">
+          <Button size="lg" className="w-full gap-2" style={themeAccent ? { backgroundColor: themeAccent, borderColor: themeAccent, color: "#fff" } : undefined} onClick={handlePledge} disabled={pledgeMutation.isPending || !pledgePerUnit || parseFloat(pledgePerUnit) < 1} data-testid="participant-button-pledge">
             {pledgeMutation.isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Target className="h-5 w-5" />}
             {pledgeMutation.isPending ? "Submitting..." : `Pledge per ${unitLabel}`}
           </Button>
@@ -245,7 +255,7 @@ export default function ParticipantSubPage() {
           <Checkbox id="p-fees" checked={coverFees} onCheckedChange={(c) => setCoverFees(c === true)} data-testid="participant-checkbox-fees" />
           <label htmlFor="p-fees" className="text-sm text-muted-foreground cursor-pointer">Cover processing fees</label>
         </div>
-        <Button size="lg" className="w-full gap-2" onClick={handleDonate} disabled={checkoutMutation.isPending || (!showCustom && !selectedAmount) || (showCustom && (!customAmount || parseFloat(customAmount) < 1))} data-testid="participant-button-donate">
+        <Button size="lg" className="w-full gap-2" style={themeAccent ? { backgroundColor: themeAccent, borderColor: themeAccent, color: "#fff" } : undefined} onClick={handleDonate} disabled={checkoutMutation.isPending || (!showCustom && !selectedAmount) || (showCustom && (!customAmount || parseFloat(customAmount) < 1))} data-testid="participant-button-donate">
           {checkoutMutation.isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Heart className="h-5 w-5" />}
           {checkoutMutation.isPending ? "Processing..." : "Donate Now"}
         </Button>
@@ -255,9 +265,9 @@ export default function ParticipantSubPage() {
 
   if (isSocialSource) {
     return (
-      <div className="min-h-screen bg-background flex flex-col" data-testid="participant-sub-page-social">
-        <div className="relative bg-primary/10 aspect-[9/16] max-h-[45vh] w-full flex flex-col items-center justify-center overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-b from-transparent to-background/80" />
+      <div className="min-h-screen bg-background flex flex-col" style={hasTheme ? themeStyle as any : undefined} data-testid="participant-sub-page-social">
+        <div className="relative aspect-[9/16] max-h-[45vh] w-full flex flex-col items-center justify-center overflow-hidden" style={themePrimary ? { backgroundColor: `${themePrimary}1a` } : { backgroundColor: "hsl(var(--primary) / 0.1)" }}>
+          <div className="absolute inset-0" style={themePrimary ? { background: `linear-gradient(to bottom, transparent, ${themePrimary}33)` } : { background: "linear-gradient(to bottom, transparent, hsl(var(--background) / 0.8))" }} />
           <div className="relative z-10 text-center space-y-3 px-4">
             <div className="w-20 h-20 rounded-full bg-background/80 backdrop-blur-sm flex items-center justify-center mx-auto">
               <AvatarIcon className="h-10 w-10 text-primary" />
@@ -270,7 +280,9 @@ export default function ParticipantSubPage() {
             </div>
             {goalTarget > 0 && (
               <div className="w-48 mx-auto space-y-1" data-testid="social-participant-progress-bar">
-                <Progress value={progressPercent} className="h-2" />
+                <div className="relative h-2 w-full overflow-hidden rounded-full bg-primary/20">
+                  <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, progressPercent)}%`, backgroundColor: themePrimary || "hsl(var(--primary))" }} />
+                </div>
                 <p className="text-xs text-muted-foreground text-center">{Math.round(progressPercent)}% of goal</p>
               </div>
             )}
@@ -297,13 +309,13 @@ export default function ParticipantSubPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col" data-testid="participant-sub-page">
+    <div className="min-h-screen bg-background flex flex-col" style={hasTheme ? themeStyle as any : undefined} data-testid="participant-sub-page">
       <PublicHeader tenant={tenantData?.tenant} />
 
       <div className="flex-1 max-w-lg mx-auto w-full p-4 space-y-6">
         <div className="text-center space-y-4">
-          <div className="w-24 h-24 rounded-full bg-primary/10 flex items-center justify-center mx-auto" data-testid="participant-avatar">
-            <AvatarIcon className="h-12 w-12 text-primary" />
+          <div className="w-24 h-24 rounded-full flex items-center justify-center mx-auto" style={themePrimary ? { backgroundColor: `${themePrimary}1a` } : { backgroundColor: "hsl(var(--primary) / 0.1)" }} data-testid="participant-avatar">
+            <AvatarIcon className="h-12 w-12" style={themePrimary ? { color: themePrimary } : { color: "hsl(var(--primary))" }} />
           </div>
           <div>
             <h1 className="text-2xl font-bold" data-testid="text-participant-name">{participant.displayName}</h1>
@@ -336,7 +348,9 @@ export default function ParticipantSubPage() {
             </div>
             {goalTarget > 0 && (
               <div className="space-y-1" data-testid="participant-progress-bar">
-                <Progress value={progressPercent} className="h-2" />
+                <div className="relative h-2 w-full overflow-hidden rounded-full bg-primary/20">
+                  <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, progressPercent)}%`, backgroundColor: themePrimary || "hsl(var(--primary))" }} />
+                </div>
                 <p className="text-xs text-muted-foreground text-right">{Math.round(progressPercent)}% of goal</p>
               </div>
             )}
@@ -391,7 +405,7 @@ export default function ParticipantSubPage() {
 
           <div className="sticky bottom-0 left-0 right-0 bg-background/95 backdrop-blur-sm border-t p-4 z-30" data-testid="participant-sticky-bar">
             <div className="max-w-lg mx-auto">
-              <Button size="lg" className="w-full gap-2 h-14 text-lg" onClick={() => setShowCheckout(true)} data-testid="participant-button-sponsor">
+              <Button size="lg" className="w-full gap-2 h-14 text-lg" style={themeAccent ? { backgroundColor: themeAccent, borderColor: themeAccent, color: "#fff" } : undefined} onClick={() => setShowCheckout(true)} data-testid="participant-button-sponsor">
                 <Heart className="h-6 w-6" />
                 Sponsor {participant.displayName}
               </Button>

@@ -42835,6 +42835,8 @@ The user asking is a tenant administrator or staff member.`;
         animalName: z.string().max(100).optional(),
         coverImageUrl: z.string().max(500).optional(),
         endsAt: z.string().optional(),
+        primaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+        accentColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
       });
 
       const data = createSchema.parse(req.body);
@@ -42876,6 +42878,8 @@ The user asking is a tenant administrator or staff member.`;
         slug,
         coverImageUrl: data.coverImageUrl || null,
         endsAt: data.endsAt ? new Date(data.endsAt) : null,
+        primaryColor: data.primaryColor || null,
+        accentColor: data.accentColor || null,
       }).returning();
 
       res.json({ campaign });
@@ -42955,6 +42959,8 @@ The user asking is a tenant administrator or staff member.`;
         coverImageUrl: z.string().url().optional(),
         animalId: z.string().uuid().nullable().optional(),
         endsAt: z.string().optional(),
+        primaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+        accentColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
       });
 
       const data = createSchema.parse(req.body);
@@ -42993,6 +42999,8 @@ The user asking is a tenant administrator or staff member.`;
         animalId: data.animalId || null,
         endsAt: data.endsAt ? new Date(data.endsAt) : null,
         createdByUserId: user?.id || null,
+        primaryColor: data.primaryColor || null,
+        accentColor: data.accentColor || null,
       }).returning();
 
       res.json({ campaign });
@@ -43294,6 +43302,8 @@ The user asking is a tenant administrator or staff member.`;
         status: z.enum(['active', 'completed']).optional(),
         coverImageUrl: z.string().optional(),
         animalId: z.string().uuid().nullable().optional(),
+        primaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(),
+        accentColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(),
       });
 
       const data = updateSchema.parse(req.body);

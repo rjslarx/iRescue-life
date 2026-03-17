@@ -1440,7 +1440,15 @@ function CampaignManagerTab({ tenantSubdomain }: { tenantSubdomain?: string }) {
                     return (
                       <TableRow key={campaign.id} data-testid={`row-staff-campaign-${campaign.id}`}>
                         <TableCell>
-                          <div className="font-medium">{campaign.campaignTitle}</div>
+                          <div className="flex items-center gap-2">
+                            <div className="font-medium">{campaign.campaignTitle}</div>
+                            {(campaign.primaryColor || campaign.accentColor) && (
+                              <span className="flex gap-0.5 shrink-0" title="Custom campaign colors">
+                                {campaign.primaryColor && <span className="w-2.5 h-2.5 rounded-full border border-border" style={{ backgroundColor: campaign.primaryColor }} data-testid={`swatch-primary-${campaign.id}`} />}
+                                {campaign.accentColor && <span className="w-2.5 h-2.5 rounded-full border border-border" style={{ backgroundColor: campaign.accentColor }} data-testid={`swatch-accent-${campaign.id}`} />}
+                              </span>
+                            )}
+                          </div>
                           <div className="text-xs text-muted-foreground">{new Date(campaign.createdAt).toLocaleDateString()}</div>
                         </TableCell>
                         <TableCell>
@@ -1552,6 +1560,9 @@ function CreateCampaignDialog({ onClose }: { onClose: () => void }) {
   const [coverImageUrl, setCoverImageUrl] = useState("");
   const [endsAt, setEndsAt] = useState("");
   const [animalId, setAnimalId] = useState("");
+  const [primaryColor, setPrimaryColor] = useState("");
+  const [accentColor, setAccentColor] = useState("");
+  const [showColors, setShowColors] = useState(false);
 
   const { data: animalsListData } = useQuery<{ animals: any[] }>({
     queryKey: ["/api/animals"],
@@ -1567,6 +1578,8 @@ function CreateCampaignDialog({ onClose }: { onClose: () => void }) {
         endsAt: endsAt || undefined,
         coverImageUrl: coverImageUrl || undefined,
         animalId: animalId && animalId !== "none" ? animalId : undefined,
+        primaryColor: primaryColor || undefined,
+        accentColor: accentColor || undefined,
       };
       if (goalType === "units") {
         payload.goalTarget = parseInt(goalTarget);
@@ -1658,6 +1671,50 @@ function CreateCampaignDialog({ onClose }: { onClose: () => void }) {
               </SelectContent>
             </Select>
           </div>
+          <Collapsible open={showColors} onOpenChange={setShowColors}>
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" type="button" className="w-full justify-between gap-2 text-sm text-muted-foreground" data-testid="button-toggle-colors">
+                <span className="flex items-center gap-2">
+                  {(primaryColor || accentColor) && (
+                    <span className="flex gap-1">
+                      {primaryColor && <span className="w-3 h-3 rounded-full border" style={{ backgroundColor: primaryColor }} />}
+                      {accentColor && <span className="w-3 h-3 rounded-full border" style={{ backgroundColor: accentColor }} />}
+                    </span>
+                  )}
+                  Campaign Colors (optional)
+                </span>
+                {showColors ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="space-y-3 pt-2">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">Primary Color</Label>
+                  <div className="flex items-center gap-2 mt-1">
+                    <input type="color" value={primaryColor || "#6366f1"} onChange={(e) => setPrimaryColor(e.target.value)} className="w-8 h-8 rounded-md border cursor-pointer" data-testid="input-primary-color" />
+                    <Input value={primaryColor} onChange={(e) => setPrimaryColor(e.target.value)} placeholder="#6366f1" className="font-mono text-xs" data-testid="input-primary-color-hex" />
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-xs">Accent Color</Label>
+                  <div className="flex items-center gap-2 mt-1">
+                    <input type="color" value={accentColor || "#f59e0b"} onChange={(e) => setAccentColor(e.target.value)} className="w-8 h-8 rounded-md border cursor-pointer" data-testid="input-accent-color" />
+                    <Input value={accentColor} onChange={(e) => setAccentColor(e.target.value)} placeholder="#f59e0b" className="font-mono text-xs" data-testid="input-accent-color-hex" />
+                  </div>
+                </div>
+              </div>
+              {(primaryColor || accentColor) && (
+                <div className="flex items-center gap-3 p-3 rounded-md border" data-testid="color-preview">
+                  <span className="text-xs text-muted-foreground">Preview:</span>
+                  <div className="flex-1 h-2 rounded-full" style={{ backgroundColor: primaryColor || "#6366f1" }} />
+                  {accentColor && <div className="w-8 h-8 rounded-md flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: accentColor }}>CTA</div>}
+                  <Button variant="ghost" size="sm" onClick={() => { setPrimaryColor(""); setAccentColor(""); }} data-testid="button-clear-colors">
+                    <X className="h-3 w-3 mr-1" />Clear
+                  </Button>
+                </div>
+              )}
+            </CollapsibleContent>
+          </Collapsible>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
