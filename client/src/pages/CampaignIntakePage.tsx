@@ -62,7 +62,7 @@ export default function CampaignIntakePage() {
   });
 
   const submitMutation = useMutation({
-    mutationFn: async (payload: any) => {
+    mutationFn: async (payload: Record<string, unknown>) => {
       const res = await apiRequest("POST", `/api/peer-campaigns/intake/${token}`, payload);
       return res.json();
     },

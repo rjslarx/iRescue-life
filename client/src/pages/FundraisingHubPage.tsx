@@ -1439,7 +1439,7 @@ function CampaignManagerTab({ tenantSubdomain }: { tenantSubdomain?: string }) {
   });
 
   const campaigns = data?.campaigns || [];
-  const staffCampaigns = campaigns.filter((c: any) => c.createdByUserId || c.goalType === "units");
+  const staffCampaigns = campaigns.filter((c: any) => c.createdByUserId || c.goalType === "units" || c.isPartnerSubmitted);
 
   const totalRaised = staffCampaigns.reduce((sum: number, c: any) => sum + (c.donationTotal || c.amountRaised || 0), 0);
   const activeCampaigns = staffCampaigns.filter((c: any) => c.isActive && c.status === "active").length;

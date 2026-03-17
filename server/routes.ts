@@ -44015,7 +44015,7 @@ The user asking is a tenant administrator or staff member.`;
         status: 'active',
       }).returning();
 
-      const createdParticipants: any[] = [];
+      const createdParticipants: Array<{ id: string; displayName: string }> = [];
       if (participantNames.length > 0) {
         const participantValues = participantNames.map((name, idx) => ({
           tenantId: req.tenant!.id,
