@@ -43967,7 +43967,7 @@ The user asking is a tenant administrator or staff member.`;
       if (tokenRow.usedAt) return res.status(410).json({ error: 'This invitation has already been used' });
       if (new Date() > tokenRow.expiresAt) return res.status(410).json({ error: 'This invitation has expired' });
 
-      const { campaignTitle, goalType, goalAmount, goalTarget, goalUnitLabel, startDate, endDate, description, participants } = req.body;
+      const { campaignTitle, goalType, goalAmount, goalTarget, goalUnitLabel, endDate, description, participants } = req.body;
 
       if (!campaignTitle || !goalType) {
         return res.status(400).json({ error: 'Campaign title and goal type are required' });
@@ -44019,7 +44019,7 @@ The user asking is a tenant administrator or staff member.`;
           tenantId: req.tenant!.id,
           peerCampaignId: campaign.id,
           displayName: name,
-          avatarType: avatarTypes[idx % avatarTypes.length] as any,
+          avatarType: avatarTypes[Math.floor(Math.random() * avatarTypes.length)] as "dog1" | "cat1" | "bone" | "paw" | "bird1" | "fish1" | "rabbit1" | "turtle1" | "star" | "heart",
           isActive: true,
         }));
         const inserted = await db.insert(campaignParticipants).values(participantValues).returning();

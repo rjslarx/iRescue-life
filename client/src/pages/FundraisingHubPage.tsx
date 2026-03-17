@@ -159,9 +159,6 @@ function CommunityFundraisersTab({ tenantSubdomain }: { tenantSubdomain?: string
   const [editColorsCampaign, setEditColorsCampaign] = useState<{ id: string; title: string; primaryColor?: string | null; accentColor?: string | null } | null>(null);
   const [editPrimary, setEditPrimary] = useState("");
   const [editAccent, setEditAccent] = useState("");
-  const [showInviteDialog, setShowInviteDialog] = useState(false);
-  const [invitePartnerName, setInvitePartnerName] = useState("");
-  const [invitePartnerEmail, setInvitePartnerEmail] = useState("");
 
   const { data, isLoading } = useQuery<{ campaigns: any[] }>({
     queryKey: ["/api/peer-campaigns"],
@@ -195,22 +192,6 @@ function CommunityFundraisersTab({ tenantSubdomain }: { tenantSubdomain?: string
     },
     onError: () => {
       toast({ title: "Failed to update colors", variant: "destructive" });
-    },
-  });
-
-  const invitePartnerMutation = useMutation({
-    mutationFn: async ({ partnerName, partnerEmail }: { partnerName: string; partnerEmail: string }) => {
-      const res = await apiRequest("POST", "/api/peer-campaigns/invite", { partnerName, partnerEmail });
-      return res.json();
-    },
-    onSuccess: (data) => {
-      toast({ title: "Invitation sent!", description: `An email has been sent to ${invitePartnerEmail}` });
-      setShowInviteDialog(false);
-      setInvitePartnerName("");
-      setInvitePartnerEmail("");
-    },
-    onError: (err: Error) => {
-      toast({ title: "Failed to send invitation", description: err.message, variant: "destructive" });
     },
   });
 
@@ -291,10 +272,6 @@ function CommunityFundraisersTab({ tenantSubdomain }: { tenantSubdomain?: string
               <CardTitle className="text-lg">Community Fundraisers</CardTitle>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
-              <Button variant="outline" onClick={() => setShowInviteDialog(true)} data-testid="button-invite-partner">
-                <Users className="mr-2 h-4 w-4" />
-                Invite Partner
-              </Button>
               <Button variant="outline" onClick={handleCopyCreationLink} data-testid="button-copy-creation-link">
                 <Share2 className="mr-2 h-4 w-4" />
                 Copy Creation Link
@@ -452,37 +429,6 @@ function CommunityFundraisersTab({ tenantSubdomain }: { tenantSubdomain?: string
           )}
         </CardContent>
       </Card>
-
-      {showInviteDialog && (
-        <Dialog open onOpenChange={() => setShowInviteDialog(false)}>
-          <DialogContent className="max-w-sm" data-testid="dialog-invite-partner">
-            <DialogHeader>
-              <DialogTitle>Invite a Partner</DialogTitle>
-              <p className="text-sm text-muted-foreground">Send a branded intake form to an external partner (school, PTA, organization) so they can set up their campaign directly.</p>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="invite-name">Partner Name *</Label>
-                <Input id="invite-name" value={invitePartnerName} onChange={(e) => setInvitePartnerName(e.target.value)} placeholder="e.g. Mrs. Johnson" data-testid="input-invite-partner-name" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="invite-email">Partner Email *</Label>
-                <Input id="invite-email" type="email" value={invitePartnerEmail} onChange={(e) => setInvitePartnerEmail(e.target.value)} placeholder="principal@school.edu" data-testid="input-invite-partner-email" />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setShowInviteDialog(false)} data-testid="button-cancel-invite">Cancel</Button>
-              <Button
-                onClick={() => invitePartnerMutation.mutate({ partnerName: invitePartnerName, partnerEmail: invitePartnerEmail })}
-                disabled={invitePartnerMutation.isPending || !invitePartnerName.trim() || !invitePartnerEmail.trim()}
-                data-testid="button-send-invite"
-              >
-                {invitePartnerMutation.isPending ? "Sending..." : "Send Invitation"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      )}
 
       {editColorsCampaign && (
         <Dialog open onOpenChange={() => setEditColorsCampaign(null)}>
@@ -1462,6 +1408,31 @@ function CampaignManagerTab({ tenantSubdomain }: { tenantSubdomain?: string }) {
   const [showDonors, setShowDonors] = useState(false);
   const [showParticipants, setShowParticipants] = useState(false);
   const [progressValue, setProgressValue] = useState("");
+  const [showInvitePartnerDialog, setShowInvitePartnerDialog] = useState(false);
+  const [invPartnerName, setInvPartnerName] = useState("");
+  const [invPartnerEmail, setInvPartnerEmail] = useState("");
+  const [invAnimalId, setInvAnimalId] = useState<string>("");
+
+  const { data: animalsData } = useQuery<{ animals: any[] }>({
+    queryKey: ["/api/animals"],
+  });
+
+  const invitePartnerMut = useMutation({
+    mutationFn: async ({ partnerName, partnerEmail, animalId }: { partnerName: string; partnerEmail: string; animalId?: string }) => {
+      const res = await apiRequest("POST", "/api/peer-campaigns/invite", { partnerName, partnerEmail, animalId: animalId || undefined });
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Invitation sent!", description: `Email sent to ${invPartnerEmail}` });
+      setShowInvitePartnerDialog(false);
+      setInvPartnerName("");
+      setInvPartnerEmail("");
+      setInvAnimalId("");
+    },
+    onError: (err: Error) => {
+      toast({ title: "Failed to send invitation", description: err.message, variant: "destructive" });
+    },
+  });
 
   const { data, isLoading } = useQuery<{ campaigns: any[] }>({
     queryKey: ["/api/peer-campaigns"],
@@ -1531,10 +1502,16 @@ function CampaignManagerTab({ tenantSubdomain }: { tenantSubdomain?: string }) {
               <Target className="h-5 w-5 text-purple-500" />
               <CardTitle className="text-lg">Campaign Manager</CardTitle>
             </div>
-            <Button onClick={() => setShowCreateForm(true)} data-testid="button-create-campaign">
-              <Plus className="mr-2 h-4 w-4" />
-              New Campaign
-            </Button>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button variant="outline" onClick={() => setShowInvitePartnerDialog(true)} data-testid="button-invite-partner-cm">
+                <Users className="mr-2 h-4 w-4" />
+                Invite Partner
+              </Button>
+              <Button onClick={() => setShowCreateForm(true)} data-testid="button-create-campaign">
+                <Plus className="mr-2 h-4 w-4" />
+                New Campaign
+              </Button>
+            </div>
           </div>
           <p className="text-sm text-muted-foreground">Create and manage staff-run campaigns with pledge-per-unit goals, progress tracking, and timeline updates.</p>
         </CardHeader>
@@ -1681,6 +1658,51 @@ function CampaignManagerTab({ tenantSubdomain }: { tenantSubdomain?: string }) {
           tenantSubdomain={tenantSubdomain}
           onClose={() => { setSelectedCampaignId(null); setShowParticipants(false); }}
         />
+      )}
+
+      {showInvitePartnerDialog && (
+        <Dialog open onOpenChange={() => setShowInvitePartnerDialog(false)}>
+          <DialogContent className="max-w-sm" data-testid="dialog-invite-partner-cm">
+            <DialogHeader>
+              <DialogTitle>Invite a Partner</DialogTitle>
+              <p className="text-sm text-muted-foreground">Send a branded intake form so an external partner (school, PTA, organization) can set up their campaign directly.</p>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="inv-name">Partner Name *</Label>
+                <Input id="inv-name" value={invPartnerName} onChange={(e) => setInvPartnerName(e.target.value)} placeholder="e.g. Mrs. Johnson" data-testid="input-inv-partner-name" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="inv-email">Partner Email *</Label>
+                <Input id="inv-email" type="email" value={invPartnerEmail} onChange={(e) => setInvPartnerEmail(e.target.value)} placeholder="principal@school.edu" data-testid="input-inv-partner-email" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="inv-animal">Link to Animal (optional)</Label>
+                <Select value={invAnimalId} onValueChange={setInvAnimalId}>
+                  <SelectTrigger data-testid="select-inv-animal">
+                    <SelectValue placeholder="None" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {(animalsData?.animals || []).map((a: any) => (
+                      <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowInvitePartnerDialog(false)} data-testid="button-cancel-inv">Cancel</Button>
+              <Button
+                onClick={() => invitePartnerMut.mutate({ partnerName: invPartnerName, partnerEmail: invPartnerEmail, animalId: invAnimalId && invAnimalId !== "none" ? invAnimalId : undefined })}
+                disabled={invitePartnerMut.isPending || !invPartnerName.trim() || !invPartnerEmail.trim()}
+                data-testid="button-send-inv"
+              >
+                {invitePartnerMut.isPending ? "Sending..." : "Send Invitation"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );

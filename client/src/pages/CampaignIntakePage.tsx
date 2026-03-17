@@ -44,7 +44,6 @@ export default function CampaignIntakePage() {
   const [goalAmount, setGoalAmount] = useState("");
   const [goalTarget, setGoalTarget] = useState("");
   const [goalUnitLabel, setGoalUnitLabel] = useState("");
-  const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [description, setDescription] = useState("");
   const [participantText, setParticipantText] = useState("");
@@ -93,7 +92,6 @@ export default function CampaignIntakePage() {
       goalAmount: goalType === "currency" ? Math.round(parseFloat(goalAmount || "0") * 100) : 0,
       goalTarget: goalType === "units" ? parseInt(goalTarget || "0", 10) : null,
       goalUnitLabel: goalType === "units" ? goalUnitLabel || "units" : null,
-      startDate: startDate || null,
       endDate: endDate || null,
       description: description.trim() || null,
       participants,
@@ -307,24 +305,11 @@ export default function CampaignIntakePage() {
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2">
-                  <Label htmlFor="startDate">
-                    <Calendar className="h-3.5 w-3.5 inline mr-1" />
-                    Start Date
-                  </Label>
-                  <Input
-                    id="startDate"
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    data-testid="input-intake-start-date"
-                  />
-                </div>
+              <div className="space-y-2">
                 <div className="space-y-2">
                   <Label htmlFor="endDate">
                     <Calendar className="h-3.5 w-3.5 inline mr-1" />
-                    End Date
+                    End Date (optional)
                   </Label>
                   <Input
                     id="endDate"
