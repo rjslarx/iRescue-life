@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ObjectUploader } from "@/components/ObjectUploader";
 import {
   Form,
   FormControl,
@@ -21,7 +22,7 @@ import {
   FormMessage,
   FormDescription,
 } from "@/components/ui/form";
-import { Heart, Link as LinkIcon, Loader2 } from "lucide-react";
+import { Heart, Link as LinkIcon, Loader2, Target, DollarSign, Calendar } from "lucide-react";
 import type { Tenant } from "@shared/schema";
 
 interface TenantResponse {
@@ -43,6 +44,7 @@ const formSchema = z.object({
   creatorEmail: z.string().email("Please enter a valid email"),
   campaignTitle: z.string().min(1, "Campaign title is required").max(100, "Title must be 100 characters or less"),
   campaignStory: z.string().optional(),
+  goalType: z.enum(["currency", "units"]),
   goalAmount: z.string().min(1, "Goal amount is required").refine(
     (val) => {
       const num = parseFloat(val);
@@ -50,12 +52,34 @@ const formSchema = z.object({
     },
     "Goal must be at least $1"
   ),
+  goalUnitLabel: z.string().max(50).optional(),
+  goalTarget: z.string().optional(),
+  coverImageUrl: z.string().optional(),
+  endsAt: z.string().optional(),
+}).superRefine((data, ctx) => {
+  if (data.goalType === "units") {
+    if (!data.goalUnitLabel || data.goalUnitLabel.trim().length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Unit label is required for pledge campaigns",
+        path: ["goalUnitLabel"],
+      });
+    }
+    if (!data.goalTarget || parseInt(data.goalTarget) < 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Target must be at least 1",
+        path: ["goalTarget"],
+      });
+    }
+  }
 });
 
 type FormValues = z.infer<typeof formSchema>;
 
 export default function PeerCampaignCreatePage() {
   const [, navigate] = useLocation();
+  const [coverImages, setCoverImages] = useState<string[]>([]);
 
   const { data, isLoading } = useQuery<TenantResponse>({
     queryKey: ["/api/tenant"],
@@ -66,7 +90,7 @@ export default function PeerCampaignCreatePage() {
 
   useSEO({
     title: `Start a Fundraiser | ${rescueName}`,
-    description: `Create a personal fundraising campaign to support ${rescueName}. Birthday fundraisers, memorial campaigns, and more.`,
+    description: `Create a personal fundraising campaign to support ${rescueName}. Birthday fundraisers, pledge challenges, and more.`,
     siteName: rescueName,
   });
 
@@ -77,29 +101,51 @@ export default function PeerCampaignCreatePage() {
       creatorEmail: "",
       campaignTitle: "",
       campaignStory: "",
+      goalType: "currency",
       goalAmount: "",
+      goalUnitLabel: "",
+      goalTarget: "",
+      coverImageUrl: "",
+      endsAt: "",
     },
   });
 
+  const goalType = form.watch("goalType");
   const titleValue = form.watch("campaignTitle");
   const slugPreview = generateSlug(titleValue || "");
 
   const createMutation = useMutation({
     mutationFn: async (values: FormValues) => {
       const goalCents = Math.round(parseFloat(values.goalAmount) * 100);
-      const res = await apiRequest("POST", "/api/peer-campaigns", {
+      const payload: Record<string, any> = {
         creatorName: values.creatorName,
         creatorEmail: values.creatorEmail,
         campaignTitle: values.campaignTitle,
         campaignStory: values.campaignStory || null,
         goalAmount: goalCents,
-      });
+        goalType: values.goalType,
+      };
+
+      if (values.goalType === "units") {
+        payload.goalUnitLabel = values.goalUnitLabel;
+        payload.goalTarget = parseInt(values.goalTarget || "0");
+      }
+
+      if (coverImages.length > 0) {
+        payload.coverImageUrl = coverImages[0];
+      }
+
+      if (values.endsAt) {
+        payload.endsAt = values.endsAt;
+      }
+
+      const res = await apiRequest("POST", "/api/peer-campaigns", payload);
       return res.json();
     },
     onSuccess: (result) => {
       const slug = result?.campaign?.slug || result?.slug;
       if (slug) {
-        navigate(`/fundraise/${slug}`);
+        navigate(`/campaign/${slug}`);
       }
     },
   });
@@ -193,7 +239,7 @@ export default function PeerCampaignCreatePage() {
                       <FormLabel>Campaign Title</FormLabel>
                       <FormControl>
                         <Input
-                          placeholder="Sarah's 30th Birthday Fundraiser"
+                          placeholder={goalType === "units" ? "Help Biscuit Lose 7 lbs!" : "Sarah's 30th Birthday Fundraiser"}
                           data-testid="input-campaign-title"
                           {...field}
                         />
@@ -202,7 +248,7 @@ export default function PeerCampaignCreatePage() {
                         <FormDescription className="flex items-center gap-1.5 text-xs">
                           <LinkIcon className="h-3 w-3" />
                           <span data-testid="text-slug-preview">
-                            {typeof window !== "undefined" ? window.location.origin : ""}/fundraise/{slugPreview}
+                            {typeof window !== "undefined" ? window.location.origin : ""}/campaign/{slugPreview}
                           </span>
                         </FormDescription>
                       )}
@@ -219,7 +265,10 @@ export default function PeerCampaignCreatePage() {
                       <FormLabel>Campaign Story (Optional)</FormLabel>
                       <FormControl>
                         <Textarea
-                          placeholder="Tell people why you're fundraising. Share your connection to the rescue and what inspired you to start this campaign..."
+                          placeholder={goalType === "units"
+                            ? "Tell people about your pledge challenge. What's the goal, and why does it matter?"
+                            : "Tell people why you're fundraising. Share your connection to the rescue and what inspired you to start this campaign..."
+                          }
                           className="resize-none min-h-[120px]"
                           data-testid="input-campaign-story"
                           {...field}
@@ -232,10 +281,94 @@ export default function PeerCampaignCreatePage() {
 
                 <FormField
                   control={form.control}
+                  name="goalType"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Campaign Type</FormLabel>
+                      <FormControl>
+                        <div className="grid grid-cols-2 gap-3">
+                          <Button
+                            type="button"
+                            variant={field.value === "currency" ? "default" : "outline"}
+                            className="flex flex-col items-center gap-1 h-auto py-3"
+                            onClick={() => field.onChange("currency")}
+                            data-testid="button-goal-type-currency"
+                          >
+                            <DollarSign className="h-5 w-5" />
+                            <span className="text-sm font-medium">Dollar Goal</span>
+                            <span className="text-xs opacity-70">Raise a set amount</span>
+                          </Button>
+                          <Button
+                            type="button"
+                            variant={field.value === "units" ? "default" : "outline"}
+                            className="flex flex-col items-center gap-1 h-auto py-3"
+                            onClick={() => field.onChange("units")}
+                            data-testid="button-goal-type-units"
+                          >
+                            <Target className="h-5 w-5" />
+                            <span className="text-sm font-medium">Pledge Challenge</span>
+                            <span className="text-xs opacity-70">$/unit pledges</span>
+                          </Button>
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {goalType === "units" && (
+                  <div className="space-y-4 p-4 rounded-md bg-muted/50 border border-muted">
+                    <FormField
+                      control={form.control}
+                      name="goalUnitLabel"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Unit Label</FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder="lbs, miles, laps, etc."
+                              data-testid="input-goal-unit-label"
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormDescription>What are people pledging per? (e.g., "lbs" for weight loss)</FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="goalTarget"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Target</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              min="1"
+                              step="1"
+                              placeholder="7"
+                              data-testid="input-goal-target"
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormDescription>How many units is the goal? (e.g., 7 lbs to lose)</FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                )}
+
+                <FormField
+                  control={form.control}
                   name="goalAmount"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Fundraising Goal ($)</FormLabel>
+                      <FormLabel>
+                        {goalType === "units" ? "Minimum Donation Goal ($)" : "Fundraising Goal ($)"}
+                      </FormLabel>
                       <FormControl>
                         <div className="relative">
                           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
@@ -252,6 +385,52 @@ export default function PeerCampaignCreatePage() {
                           />
                         </div>
                       </FormControl>
+                      {goalType === "units" && (
+                        <FormDescription>Overall fundraising goal in dollars</FormDescription>
+                      )}
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="space-y-2">
+                  <FormLabel>Cover Image (Optional)</FormLabel>
+                  <ObjectUploader
+                    value={coverImages}
+                    onChange={(urls) => setCoverImages(urls)}
+                    maxFiles={1}
+                    maxFileSize={10 * 1024 * 1024}
+                    uploadEndpoint="/api/peer-campaigns/public-media/upload"
+                    accept="image/*"
+                    data-testid="uploader-cover-image"
+                    buttonText={coverImages.length > 0 ? "Change Image" : "Upload Cover Image"}
+                    buttonVariant="outline"
+                    showPreview={true}
+                    previewSize="lg"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    This image will appear at the top of your campaign page
+                  </p>
+                </div>
+
+                <FormField
+                  control={form.control}
+                  name="endsAt"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center gap-1.5">
+                        <Calendar className="h-4 w-4" />
+                        End Date (Optional)
+                      </FormLabel>
+                      <FormControl>
+                        <Input
+                          type="date"
+                          min={new Date().toISOString().split("T")[0]}
+                          data-testid="input-ends-at"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormDescription>Leave blank for an open-ended campaign</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -276,12 +455,16 @@ export default function PeerCampaignCreatePage() {
                 >
                   {createMutation.isPending ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : goalType === "units" ? (
+                    <Target className="h-4 w-4" />
                   ) : (
                     <Heart className="h-4 w-4" />
                   )}
                   {createMutation.isPending
                     ? "Creating..."
-                    : "Launch My Fundraiser"}
+                    : goalType === "units"
+                      ? "Launch Pledge Challenge"
+                      : "Launch My Fundraiser"}
                 </Button>
               </form>
             </Form>

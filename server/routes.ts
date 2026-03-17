@@ -42829,7 +42829,10 @@ The user asking is a tenant administrator or staff member.`;
         campaignTitle: z.string().min(1).max(200),
         campaignStory: z.string().max(5000).optional(),
         goalAmount: z.number().int().min(100),
-        coverImageUrl: z.string().url().optional(),
+        goalType: z.enum(['currency', 'units']).default('currency'),
+        goalUnitLabel: z.string().max(50).optional(),
+        goalTarget: z.number().int().min(1).optional(),
+        coverImageUrl: z.string().max(500).optional(),
         endsAt: z.string().optional(),
       });
 
@@ -42859,12 +42862,68 @@ The user asking is a tenant administrator or staff member.`;
         campaignTitle: data.campaignTitle,
         campaignStory: data.campaignStory || null,
         goalAmount: data.goalAmount,
+        goalType: data.goalType,
+        goalUnitLabel: data.goalUnitLabel || null,
+        goalTarget: data.goalTarget || null,
         slug,
         coverImageUrl: data.coverImageUrl || null,
         endsAt: data.endsAt ? new Date(data.endsAt) : null,
       }).returning();
 
       res.json({ campaign });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/peer-campaigns/public-media/upload
+   * Public: Upload a cover image for a campaign (no auth required)
+   */
+  app.post('/api/peer-campaigns/public-media/upload', requireTenant, async (req, res, next) => {
+    try {
+      const multer = (await import('multer')).default;
+      const { TenantFileStorage } = await import('./lib/tenantFileStorage');
+
+      const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif'];
+
+      const upload = multer({
+        storage: multer.memoryStorage(),
+        limits: { fileSize: 10 * 1024 * 1024 },
+        fileFilter: (_req: any, file: any, cb: any) => {
+          const ext = file.originalname.toLowerCase().split('.').pop();
+          if (file.mimetype.startsWith('image/') || (ext && imageExtensions.includes(ext))) {
+            cb(null, true);
+          } else {
+            cb(new Error('Only image files are allowed'));
+          }
+        },
+      }).array('files', 1);
+
+      upload(req, res, async (err: any) => {
+        if (err) return res.status(400).json({ error: err.message });
+
+        const files = req.files as Express.Multer.File[];
+        if (!files || files.length === 0) return res.status(400).json({ error: 'No files uploaded' });
+
+        try {
+          const tenantId = req.tenant!.id;
+          const storage = await TenantFileStorage.forTenant(tenantId);
+          const uploadedPaths: string[] = [];
+
+          for (const file of files) {
+            const ext = file.originalname.split('.').pop() || 'jpg';
+            const fileName = `campaign-cover-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+            const filePath = `campaigns/${fileName}`;
+            const objectPath = await storage.uploadFile(filePath, file.buffer, file.mimetype);
+            uploadedPaths.push(objectPath);
+          }
+
+          res.json({ uploadedPaths });
+        } catch (uploadError) {
+          next(uploadError);
+        }
+      });
     } catch (error) {
       next(error);
     }
