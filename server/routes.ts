@@ -25615,10 +25615,20 @@ Submitted: ${new Date().toLocaleString()}
             console.log('[STRIPE-WEBHOOK] P2P campaign donation received:', session.metadata.peerDonationId);
             try {
               const { peerCampaignDonations, peerCampaigns } = await import('@shared/schema');
-              await db
+
+              const [updated] = await db
                 .update(peerCampaignDonations)
                 .set({ paymentStatus: 'paid' })
-                .where(eq(peerCampaignDonations.stripeSessionId, session.id));
+                .where(and(
+                  eq(peerCampaignDonations.stripeSessionId, session.id),
+                  eq(peerCampaignDonations.paymentStatus, 'pending')
+                ))
+                .returning({ id: peerCampaignDonations.id });
+
+              if (!updated) {
+                console.log('[STRIPE-WEBHOOK] P2P donation already processed (idempotency), skipping');
+                break;
+              }
 
               const amountPaid = session.metadata.baseAmount ? parseInt(session.metadata.baseAmount) : (session.amount_total || 0);
               await db
@@ -43342,6 +43352,9 @@ The user asking is a tenant administrator or staff member.`;
 
       if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
 
+      if (campaign.goalType !== 'units') {
+        return res.status(400).json({ error: 'Pledges are only available for unit-based campaigns' });
+      }
       if (campaign.status === 'completed' || campaign.status === 'cancelled') {
         return res.status(400).json({ error: 'This campaign is no longer accepting pledges' });
       }
