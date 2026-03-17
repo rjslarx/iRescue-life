@@ -77,6 +77,7 @@ import {
   Vote,
   Loader2,
   X,
+  Palette,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -155,6 +156,9 @@ function CommunityFundraisersTab({ tenantSubdomain }: { tenantSubdomain?: string
   const { toast } = useToast();
   const [donationsDialogCampaignId, setDonationsDialogCampaignId] = useState<string | null>(null);
   const [donationsDialogTitle, setDonationsDialogTitle] = useState("");
+  const [editColorsCampaign, setEditColorsCampaign] = useState<{ id: string; title: string; primaryColor?: string | null; accentColor?: string | null } | null>(null);
+  const [editPrimary, setEditPrimary] = useState("");
+  const [editAccent, setEditAccent] = useState("");
 
   const { data, isLoading } = useQuery<{ campaigns: any[] }>({
     queryKey: ["/api/peer-campaigns"],
@@ -173,6 +177,21 @@ function CommunityFundraisersTab({ tenantSubdomain }: { tenantSubdomain?: string
     },
     onError: () => {
       toast({ title: "Failed to update campaign", variant: "destructive" });
+    },
+  });
+
+  const updateColorsMutation = useMutation({
+    mutationFn: async ({ id, primaryColor, accentColor }: { id: string; primaryColor: string | null; accentColor: string | null }) => {
+      const res = await apiRequest("PATCH", `/api/peer-campaigns/${id}`, { primaryColor, accentColor });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/peer-campaigns"] });
+      toast({ title: "Campaign colors updated" });
+      setEditColorsCampaign(null);
+    },
+    onError: () => {
+      toast({ title: "Failed to update colors", variant: "destructive" });
     },
   });
 
@@ -371,6 +390,19 @@ function CommunityFundraisersTab({ tenantSubdomain }: { tenantSubdomain?: string
                             <Button
                               size="icon"
                               variant="ghost"
+                              onClick={() => {
+                                setEditColorsCampaign({ id: campaign.id, title: campaign.campaignTitle, primaryColor: campaign.primaryColor, accentColor: campaign.accentColor });
+                                setEditPrimary(campaign.primaryColor || "");
+                                setEditAccent(campaign.accentColor || "");
+                              }}
+                              title="Edit theme colors"
+                              data-testid={`button-edit-colors-${campaign.id}`}
+                            >
+                              <Palette />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
                               onClick={() => toggleMutation.mutate({ id: campaign.id, isActive: !campaign.isActive })}
                               title={campaign.isActive ? "Deactivate" : "Activate"}
                               data-testid={`button-toggle-${campaign.id}`}
@@ -388,6 +420,48 @@ function CommunityFundraisersTab({ tenantSubdomain }: { tenantSubdomain?: string
           )}
         </CardContent>
       </Card>
+
+      {editColorsCampaign && (
+        <Dialog open onOpenChange={() => setEditColorsCampaign(null)}>
+          <DialogContent className="max-w-sm" data-testid="dialog-edit-campaign-colors">
+            <DialogHeader>
+              <DialogTitle>Edit Theme Colors</DialogTitle>
+              <p className="text-sm text-muted-foreground">{editColorsCampaign.title}</p>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Primary Color</Label>
+                <div className="flex items-center gap-2">
+                  <input type="color" value={editPrimary || "#6366f1"} onChange={(e) => setEditPrimary(e.target.value)} className="w-9 h-9 rounded-md border cursor-pointer" data-testid="input-edit-primary-color" />
+                  <Input value={editPrimary} onChange={(e) => setEditPrimary(e.target.value)} placeholder="#6366f1" className="flex-1 font-mono text-sm" data-testid="input-edit-primary-hex" />
+                  {editPrimary && <Button size="icon" variant="ghost" onClick={() => setEditPrimary("")} data-testid="button-clear-edit-primary"><X className="h-4 w-4" /></Button>}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Accent Color</Label>
+                <div className="flex items-center gap-2">
+                  <input type="color" value={editAccent || "#f59e0b"} onChange={(e) => setEditAccent(e.target.value)} className="w-9 h-9 rounded-md border cursor-pointer" data-testid="input-edit-accent-color" />
+                  <Input value={editAccent} onChange={(e) => setEditAccent(e.target.value)} placeholder="#f59e0b" className="flex-1 font-mono text-sm" data-testid="input-edit-accent-hex" />
+                  {editAccent && <Button size="icon" variant="ghost" onClick={() => setEditAccent("")} data-testid="button-clear-edit-accent"><X className="h-4 w-4" /></Button>}
+                </div>
+              </div>
+              {(editPrimary || editAccent) && (
+                <div className="flex items-center gap-2 p-3 rounded-md bg-muted">
+                  <span className="text-xs text-muted-foreground">Preview:</span>
+                  {editPrimary && <div className="w-6 h-6 rounded-full border" style={{ backgroundColor: editPrimary }} />}
+                  {editAccent && <div className="w-6 h-6 rounded-full border" style={{ backgroundColor: editAccent }} />}
+                </div>
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setEditColorsCampaign(null)} data-testid="button-cancel-edit-colors">Cancel</Button>
+              <Button onClick={() => updateColorsMutation.mutate({ id: editColorsCampaign.id, primaryColor: editPrimary || null, accentColor: editAccent || null })} disabled={updateColorsMutation.isPending} data-testid="button-save-edit-colors">
+                {updateColorsMutation.isPending ? "Saving..." : "Save Colors"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {donationsDialogCampaignId && (
         <DonationsDialog
