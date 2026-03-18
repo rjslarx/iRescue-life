@@ -15371,9 +15371,23 @@ ${renderedHtml}
       } = await import('@shared/schema');
       
       const now = new Date();
-      const quarterStart = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
-      const lastQuarterStart = new Date(quarterStart);
-      lastQuarterStart.setMonth(lastQuarterStart.getMonth() - 3);
+      let rangeStart: Date | null = null;
+      let rangeEnd: Date | null = null;
+      
+      if (req.query.startDate && req.query.endDate) {
+        rangeStart = new Date(req.query.startDate as string + 'T00:00:00');
+        rangeEnd = new Date(req.query.endDate as string + 'T23:59:59.999');
+        if (isNaN(rangeStart.getTime()) || isNaN(rangeEnd.getTime()) || rangeStart > rangeEnd) {
+          return res.status(400).json({ error: 'Invalid date range' });
+        }
+      }
+      
+      const inRange = (d: Date | string | null | undefined) => {
+        if (!rangeStart || !rangeEnd) return true;
+        if (!d) return false;
+        const date = new Date(d);
+        return date >= rangeStart && date <= rangeEnd;
+      };
       
       // Animal Statistics
       const allAnimals = await db
@@ -15381,22 +15395,16 @@ ${renderedHtml}
         .from(animals)
         .where(eq(animals.tenantId, req.tenant!.id));
       
-      const totalIntake = allAnimals.length;
-      const intakeThisQuarter = allAnimals.filter(a => 
-        a.intakeDate && new Date(a.intakeDate) >= quarterStart
-      ).length;
+      const intakeInRange = allAnimals.filter(a => inRange(a.intakeDate));
+      const totalIntake = intakeInRange.length;
       
-      const adopted = allAnimals.filter(a => a.status === 'adopted');
-      const adoptedThisQuarter = adopted.filter(a => 
-        a.adoptionDate && new Date(a.adoptionDate) >= quarterStart
-      ).length;
+      const adopted = allAnimals.filter(a => a.status === 'adopted' && inRange(a.adoptionDate));
       
       const inFoster = allAnimals.filter(a => a.locationType === 'foster').length;
       const inShelter = allAnimals.filter(a => 
         a.status !== 'adopted' && a.status !== 'deceased' && a.locationType !== 'foster'
       ).length;
       
-      // Calculate average length of stay
       const adoptedWithDates = adopted.filter(a => a.intakeDate && a.adoptionDate);
       const avgLengthOfStay = adoptedWithDates.length > 0 
         ? Math.round(
@@ -15407,36 +15415,39 @@ ${renderedHtml}
           )
         : 0;
       
-      // Spay/neuter count from procedures
-      const spayNeuterProcedures = await db
+      // Spay/neuter count from procedures (filtered by date range)
+      const allProcedures = await db
         .select()
         .from(procedureLogs)
         .where(eq(procedureLogs.tenantId, req.tenant!.id));
       
-      const spayNeuterCount = spayNeuterProcedures.filter(p => 
+      const spayNeuterCount = allProcedures.filter(p => 
+        inRange(p.procedureDate) &&
         p.procedureName && (
           p.procedureName.toLowerCase().includes('spay') || 
           p.procedureName.toLowerCase().includes('neuter')
         )
       ).length;
       
-      // Financial data
+      // Financial data (filtered by date range)
       const allDonations = await db
         .select()
         .from(donations)
         .where(eq(donations.tenantId, req.tenant!.id));
       
-      const totalDonations = allDonations.reduce((sum, d) => sum + parseFloat(d.amount), 0);
+      const donationsInRange = allDonations.filter(d => inRange(d.createdAt));
+      const totalDonations = donationsInRange.reduce((sum, d) => sum + parseFloat(d.amount), 0);
       
       const allExpenditures = await db
         .select()
         .from(expenditures)
         .where(eq(expenditures.tenantId, req.tenant!.id));
       
-      const totalExpenses = allExpenditures.reduce((sum, e) => sum + parseFloat(e.amount), 0);
+      const expendituresInRange = allExpenditures.filter(e => inRange(e.date));
+      const totalExpenses = expendituresInRange.reduce((sum, e) => sum + parseFloat(e.amount), 0);
       const costPerAnimal = totalIntake > 0 ? totalExpenses / totalIntake : 0;
       
-      // Volunteer statistics — count filled shifts from volunteer-type calendars
+      // Volunteer statistics — count filled shifts from volunteer-type calendars (filtered by date range)
       const volunteerCalendarIds = await db
         .select({ id: calendars.id })
         .from(calendars)
@@ -15459,13 +15470,15 @@ ${renderedHtml}
             isNotNull(calendarEvents.volunteerContactId)
           ));
         
-        totalVolunteerHoursCalc = filledShifts.reduce((sum, s) => {
-          const hours = (new Date(s.endTime).getTime() - new Date(s.startTime).getTime()) / (1000 * 60 * 60);
-          return sum + (hours > 0 ? hours : 0);
-        }, 0);
+        totalVolunteerHoursCalc = filledShifts
+          .filter(s => inRange(s.startTime))
+          .reduce((sum, s) => {
+            const hours = (new Date(s.endTime).getTime() - new Date(s.startTime).getTime()) / (1000 * 60 * 60);
+            return sum + (hours > 0 ? hours : 0);
+          }, 0);
       }
       
-      // Foster statistics
+      // Foster statistics (snapshot — not date-filtered)
       const fosterList = await db
         .select()
         .from(fosterAnimals)
@@ -15476,26 +15489,28 @@ ${renderedHtml}
       ).size;
       
       res.json({
+        dateRange: {
+          startDate: rangeStart ? rangeStart.toISOString() : null,
+          endDate: rangeEnd ? rangeEnd.toISOString() : null,
+        },
         animalStatistics: {
           totalIntake,
-          intakeThisQuarter,
           adoptions: adopted.length,
-          adoptionsThisQuarter: adoptedThisQuarter,
           avgLengthOfStay,
           currentInFoster: inFoster,
           currentInShelter: inShelter,
           spayNeuterCount,
           bySpecies: {
-            dogs: allAnimals.filter(a => (a.species || '').toLowerCase() === 'dog').length,
-            cats: allAnimals.filter(a => (a.species || '').toLowerCase() === 'cat').length,
-            other: allAnimals.filter(a => !['dog', 'cat'].includes((a.species || '').toLowerCase())).length,
+            dogs: intakeInRange.filter(a => (a.species || '').toLowerCase() === 'dog').length,
+            cats: intakeInRange.filter(a => (a.species || '').toLowerCase() === 'cat').length,
+            other: intakeInRange.filter(a => !['dog', 'cat'].includes((a.species || '').toLowerCase())).length,
           },
         },
         financial: {
           totalDonations: totalDonations.toFixed(2),
           totalExpenses: totalExpenses.toFixed(2),
           costPerAnimal: costPerAnimal.toFixed(2),
-          adoptionFeesCollected: allDonations
+          adoptionFeesCollected: donationsInRange
             .filter(d => d.source === 'online_form')
             .reduce((sum, d) => sum + parseFloat(d.amount), 0)
             .toFixed(2),

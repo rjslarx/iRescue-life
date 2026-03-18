@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -8,6 +8,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar as CalendarWidget } from "@/components/ui/calendar";
 import { Label } from "@/components/ui/label";
 import {
   Table,
@@ -97,11 +99,13 @@ const documentTypeLabels: Record<string, string> = {
 };
 
 type GrantMetrics = {
+  dateRange: {
+    startDate: string;
+    endDate: string;
+  };
   animalStatistics: {
     totalIntake: number;
-    intakeThisQuarter: number;
     adoptions: number;
-    adoptionsThisQuarter: number;
     avgLengthOfStay: number;
     currentInFoster: number;
     currentInShelter: number;
@@ -199,15 +203,82 @@ export default function GrantsPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploadingDocument, setIsUploadingDocument] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [datePreset, setDatePreset] = useState<string>("this_quarter");
+  const [customDateRange, setCustomDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({ from: undefined, to: undefined });
+  const [customPickerOpen, setCustomPickerOpen] = useState(false);
+
+  const dateRange = useMemo(() => {
+    const now = new Date();
+    switch (datePreset) {
+      case "this_quarter": {
+        const qStart = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
+        const qEnd = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3 + 3, 0);
+        return { startDate: qStart, endDate: qEnd };
+      }
+      case "last_quarter": {
+        const q = Math.floor(now.getMonth() / 3);
+        const year = q === 0 ? now.getFullYear() - 1 : now.getFullYear();
+        const prevQ = q === 0 ? 3 : q - 1;
+        const qStart = new Date(year, prevQ * 3, 1);
+        const qEnd = new Date(year, prevQ * 3 + 3, 0);
+        return { startDate: qStart, endDate: qEnd };
+      }
+      case "ytd": {
+        return { startDate: new Date(now.getFullYear(), 0, 1), endDate: now };
+      }
+      case "last_12": {
+        const start = new Date(now);
+        start.setFullYear(start.getFullYear() - 1);
+        return { startDate: start, endDate: now };
+      }
+      case "all_time":
+        return { startDate: null, endDate: null };
+      case "custom":
+        if (customDateRange.from && customDateRange.to) {
+          return { startDate: customDateRange.from, endDate: customDateRange.to };
+        }
+        return { startDate: null, endDate: null };
+      default: {
+        const qStart = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
+        const qEnd = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3 + 3, 0);
+        return { startDate: qStart, endDate: qEnd };
+      }
+    }
+  }, [datePreset, customDateRange]);
+
+  const dateRangeLabel = useMemo(() => {
+    if (!dateRange.startDate || !dateRange.endDate) return "All Time";
+    return `${format(dateRange.startDate, "MMM d, yyyy")} – ${format(dateRange.endDate, "MMM d, yyyy")}`;
+  }, [dateRange]);
+
+  const presetLabels: Record<string, string> = {
+    this_quarter: "This Quarter",
+    last_quarter: "Last Quarter",
+    ytd: "Year to Date",
+    last_12: "Last 12 Months",
+    all_time: "All Time",
+    custom: "Custom",
+  };
 
   // Fetch grants
   const { data: grantsData, isLoading: grantsLoading } = useQuery<{ grants: Grant[] }>({
     queryKey: ['/api/grants'],
   });
 
-  // Fetch metrics
+  const metricsQueryParams = useMemo(() => {
+    if (dateRange.startDate && dateRange.endDate) {
+      return `?startDate=${format(dateRange.startDate, 'yyyy-MM-dd')}&endDate=${format(dateRange.endDate, 'yyyy-MM-dd')}`;
+    }
+    return '';
+  }, [dateRange]);
+
   const { data: metricsData, isLoading: metricsLoading } = useQuery<GrantMetrics>({
-    queryKey: ['/api/grants/metrics'],
+    queryKey: ['/api/grants/metrics', metricsQueryParams],
+    queryFn: async () => {
+      const res = await fetch(`/api/grants/metrics${metricsQueryParams}`, { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to fetch metrics');
+      return res.json();
+    },
     enabled: activeTab === 'overview',
   });
 
@@ -553,6 +624,54 @@ export default function GrantsPage() {
 
           {/* Overview Tab - Reporting Metrics */}
           <TabsContent value="overview" className="space-y-6">
+            <div className="flex flex-wrap items-center gap-2" data-testid="date-range-selector">
+              {Object.entries(presetLabels).map(([key, label]) => (
+                key !== "custom" ? (
+                  <Button
+                    key={key}
+                    variant={datePreset === key ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setDatePreset(key)}
+                    data-testid={`btn-preset-${key}`}
+                  >
+                    {label}
+                  </Button>
+                ) : (
+                  <Popover key={key} open={customPickerOpen} onOpenChange={setCustomPickerOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant={datePreset === "custom" ? "default" : "outline"}
+                        size="sm"
+                        data-testid="btn-preset-custom"
+                      >
+                        <Calendar className="h-4 w-4 mr-1" />
+                        Custom
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <CalendarWidget
+                        mode="range"
+                        selected={customDateRange.from && customDateRange.to ? { from: customDateRange.from, to: customDateRange.to } : undefined}
+                        onSelect={(range: any) => {
+                          if (range?.from && range?.to) {
+                            setCustomDateRange({ from: range.from, to: range.to });
+                            setDatePreset("custom");
+                            setCustomPickerOpen(false);
+                          } else if (range?.from) {
+                            setCustomDateRange({ from: range.from, to: undefined });
+                          }
+                        }}
+                        numberOfMonths={2}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                )
+              ))}
+              <span className="text-sm text-muted-foreground ml-2" data-testid="text-date-range-label">
+                {dateRangeLabel}
+              </span>
+            </div>
+
             {metricsLoading ? (
               <div className="flex items-center justify-center h-64">
                 <Loader2 className="h-8 w-8 animate-spin" />
@@ -562,7 +681,7 @@ export default function GrantsPage() {
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                   <Card data-testid="card-total-intake">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-sm font-medium">Total Intake</CardTitle>
+                      <CardTitle className="text-sm font-medium">Intake</CardTitle>
                       <PawPrint className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
@@ -570,7 +689,7 @@ export default function GrantsPage() {
                         {metrics.animalStatistics.totalIntake}
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        +{metrics.animalStatistics.intakeThisQuarter} this quarter
+                        animals received
                       </p>
                     </CardContent>
                   </Card>
@@ -585,14 +704,14 @@ export default function GrantsPage() {
                         {metrics.animalStatistics.adoptions}
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        +{metrics.animalStatistics.adoptionsThisQuarter} this quarter
+                        animals adopted
                       </p>
                     </CardContent>
                   </Card>
 
                   <Card data-testid="card-donations">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-sm font-medium">Total Donations</CardTitle>
+                      <CardTitle className="text-sm font-medium">Donations</CardTitle>
                       <DollarSign className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
