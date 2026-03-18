@@ -398,6 +398,26 @@ export default function AnimalMedicalPage() {
     },
   });
 
+  const deleteProcedureMutation = useMutation({
+    mutationFn: async (procedureId: number) => {
+      await apiRequest('DELETE', `/api/medical/procedures/${procedureId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/animals/${animalId}/medical/procedures`] });
+      toast({
+        title: "Procedure deleted",
+        description: "The procedure entry has been removed successfully.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to delete the procedure. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const quarantineMutation = useMutation({
     mutationFn: async (data: { isQuarantined: boolean; quarantineReason?: string | null }) => {
       await apiRequest('PATCH', `/api/animals/${animalId}/quarantine`, data);
@@ -1789,7 +1809,17 @@ export default function AnimalMedicalPage() {
                         >
                           Edit
                         </Button>
-                        <Button variant="ghost" size="sm" data-testid={`button-delete-procedure-${proc.id}`}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            if (window.confirm(`Are you sure you want to delete this procedure? This cannot be undone.`)) {
+                              deleteProcedureMutation.mutate(proc.id);
+                            }
+                          }}
+                          disabled={deleteProcedureMutation.isPending}
+                          data-testid={`button-delete-procedure-${proc.id}`}
+                        >
                           Delete
                         </Button>
                       </div>
