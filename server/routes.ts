@@ -15364,7 +15364,7 @@ ${renderedHtml}
         animals, 
         applications, 
         fosterAnimals, 
-        volunteerOpportunities,
+        calendarEvents,
         donations,
         expenditures,
         procedureLogs
@@ -15436,13 +15436,34 @@ ${renderedHtml}
       const totalExpenses = allExpenditures.reduce((sum, e) => sum + parseFloat(e.amount), 0);
       const costPerAnimal = totalIntake > 0 ? totalExpenses / totalIntake : 0;
       
-      // Volunteer statistics
-      const volunteerShifts = await db
-        .select()
-        .from(volunteerOpportunities)
-        .where(eq(volunteerOpportunities.tenantId, req.tenant!.id));
+      // Volunteer statistics — count filled shifts from volunteer-type calendars
+      const volunteerCalendarIds = await db
+        .select({ id: calendars.id })
+        .from(calendars)
+        .where(and(
+          eq(calendars.tenantId, req.tenant!.id),
+          eq(calendars.type, 'volunteer')
+        ));
       
-      const totalVolunteerSlots = volunteerShifts.reduce((sum, s) => sum + s.slotsFilled, 0);
+      let totalVolunteerHoursCalc = 0;
+      if (volunteerCalendarIds.length > 0) {
+        const filledShifts = await db
+          .select({
+            startTime: calendarEvents.startTime,
+            endTime: calendarEvents.endTime,
+          })
+          .from(calendarEvents)
+          .where(and(
+            eq(calendarEvents.tenantId, req.tenant!.id),
+            inArray(calendarEvents.calendarId, volunteerCalendarIds.map(c => c.id)),
+            isNotNull(calendarEvents.volunteerContactId)
+          ));
+        
+        totalVolunteerHoursCalc = filledShifts.reduce((sum, s) => {
+          const hours = (new Date(s.endTime).getTime() - new Date(s.startTime).getTime()) / (1000 * 60 * 60);
+          return sum + (hours > 0 ? hours : 0);
+        }, 0);
+      }
       
       // Foster statistics
       const fosterList = await db
@@ -15480,7 +15501,7 @@ ${renderedHtml}
             .toFixed(2),
         },
         operational: {
-          totalVolunteerHours: totalVolunteerSlots * 4, // Estimate 4 hours per shift
+          totalVolunteerHours: parseFloat(totalVolunteerHoursCalc.toFixed(1)),
           activeFosterHomes,
           pendingApplications: await db
             .select({ count: sql<number>`count(*)` })
