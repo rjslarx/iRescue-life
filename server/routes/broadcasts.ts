@@ -37,6 +37,7 @@ router.post('/send', requireTenant, requireAuth, requireAdmin, async (req, res, 
       channels: z.array(z.enum(['push', 'sms', 'email'])).min(1),
       targetRoles: z.array(z.enum(['admin', 'board_member', 'staff', 'foster', 'volunteer'])).optional(),
       targetUserIds: z.array(z.string().uuid()).optional(),
+      targetTags: z.array(z.string().min(1).max(50)).optional(),
       templateId: z.string().uuid().optional(),
       replyToNumber: z.string().regex(/^\d{10}$/, 'Must be a 10-digit phone number').optional(),
     });
@@ -54,6 +55,7 @@ router.post('/send', requireTenant, requireAuth, requireAdmin, async (req, res, 
       channels: data.channels,
       targetRoles: data.targetRoles,
       targetUserIds: data.targetUserIds,
+      targetTags: data.targetTags,
       templateId: data.templateId,
       replyToNumber: data.replyToNumber,
       sentBy: { id: req.user!.id, name: req.user!.fullName },
@@ -99,8 +101,10 @@ router.get('/recipients', requireTenant, requireAuth, requireAdmin, async (req, 
   try {
     const rolesParam = req.query.roles as string | undefined;
     const roles = rolesParam ? rolesParam.split(',') as any[] : undefined;
+    const tagsParam = req.query.tags as string | undefined;
+    const tags = tagsParam ? tagsParam.split(',').map(t => t.trim()).filter(Boolean) : undefined;
     
-    const users = await BroadcastService.getTargetableUsers(req.tenant!.id, roles);
+    const users = await BroadcastService.getTargetableUsers(req.tenant!.id, roles, tags);
     res.json(users);
   } catch (error) {
     next(error);

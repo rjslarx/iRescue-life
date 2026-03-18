@@ -25,6 +25,7 @@ interface BroadcastRequest {
   channels: Channel[];
   targetRoles?: TargetRole[];
   targetUserIds?: string[];
+  targetTags?: string[];
   templateId?: string;
   replyToNumber?: string;
   sentBy: { id: string; name: string };
@@ -42,7 +43,7 @@ interface BroadcastResult {
 
 export class BroadcastService {
   static async sendBroadcast(request: BroadcastRequest): Promise<BroadcastResult> {
-    const { tenantId, title, message, channels, targetRoles, targetUserIds, templateId, replyToNumber, sentBy } = request;
+    const { tenantId, title, message, channels, targetRoles, targetUserIds, targetTags, templateId, replyToNumber, sentBy } = request;
 
     if (templateId) {
       const [template] = await db.select()
@@ -66,6 +67,7 @@ export class BroadcastService {
         email: users.email,
         phone: users.phone,
         roles: users.roles,
+        tags: users.tags,
       })
       .from(users)
       .where(and(
@@ -80,6 +82,7 @@ export class BroadcastService {
         email: users.email,
         phone: users.phone,
         roles: users.roles,
+        tags: users.tags,
       })
       .from(users)
       .where(and(
@@ -87,9 +90,17 @@ export class BroadcastService {
         eq(users.isActive, true)
       ));
 
-      targetUsers = allUsers.filter(user => 
+      let filtered = allUsers.filter(user => 
         user.roles.some(role => targetRoles.includes(role as TargetRole))
       );
+
+      if (targetTags && targetTags.length > 0) {
+        filtered = filtered.filter(user =>
+          user.tags && user.tags.some(tag => targetTags.includes(tag))
+        );
+      }
+
+      targetUsers = filtered;
     }
 
     if (targetUsers.length === 0) {
@@ -104,6 +115,7 @@ export class BroadcastService {
       channels,
       targetRoles,
       targetUserIds,
+      targetTags: targetTags && targetTags.length > 0 ? targetTags : null,
       replyToNumber: replyToNumber || null,
       status: 'sending',
       sentBy: sentBy.id,
@@ -443,12 +455,13 @@ export class BroadcastService {
     return created;
   }
 
-  static async getTargetableUsers(tenantId: string, roles?: TargetRole[]): Promise<{
+  static async getTargetableUsers(tenantId: string, roles?: TargetRole[], tags?: string[]): Promise<{
     id: string;
     fullName: string;
     email: string;
     phone?: string | null;
     roles: string[];
+    tags?: string[] | null;
     hasPushSubscription: boolean;
   }[]> {
     const allUsers = await db.select({
@@ -457,6 +470,7 @@ export class BroadcastService {
       email: users.email,
       phone: users.phone,
       roles: users.roles,
+      tags: users.tags,
     })
     .from(users)
     .where(and(
@@ -464,9 +478,15 @@ export class BroadcastService {
       eq(users.isActive, true)
     ));
 
-    const filteredUsers = roles && roles.length > 0
+    let filteredUsers = roles && roles.length > 0
       ? allUsers.filter(user => user.roles.some(role => roles.includes(role as TargetRole)))
       : allUsers;
+
+    if (tags && tags.length > 0) {
+      filteredUsers = filteredUsers.filter(user =>
+        user.tags && user.tags.some(tag => tags.includes(tag))
+      );
+    }
 
     const subscriptions = await db.select({ userId: pushSubscriptions.userId })
       .from(pushSubscriptions)

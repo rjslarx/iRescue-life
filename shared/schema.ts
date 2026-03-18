@@ -4731,6 +4731,7 @@ export const broadcasts = pgTable("broadcasts", {
   channels: text("channels").array().notNull().$type<("push" | "sms" | "email")[]>(),
   targetRoles: text("target_roles").array().$type<("admin" | "board_member" | "staff" | "foster" | "volunteer")[]>(),
   targetUserIds: text("target_user_ids").array(), // Specific users (if not role-based)
+  targetTags: text("target_tags").array(), // Optional tag filter (e.g. "transport", "medical")
   // Delivery stats
   totalRecipients: integer("total_recipients").notNull().default(0),
   pushSent: integer("push_sent").notNull().default(0),

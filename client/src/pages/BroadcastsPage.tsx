@@ -31,6 +31,8 @@ import {
   Smartphone,
   Zap,
   Radio,
+  Tag,
+  X,
 } from "lucide-react";
 import type { Broadcast, BroadcastTemplate } from "@shared/schema";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -79,6 +81,7 @@ export default function BroadcastsPage() {
   const [message, setMessage] = useState("");
   const [selectedChannels, setSelectedChannels] = useState<Channel[]>(["push"]);
   const [selectedRoles, setSelectedRoles] = useState<TargetRole[]>([]);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
   const [replyToNumber, setReplyToNumber] = useState("");
 
@@ -90,11 +93,23 @@ export default function BroadcastsPage() {
     queryKey: ['/api/broadcasts/templates/list'],
   });
 
-  const { data: targetUsers, isLoading: usersLoading } = useQuery<TargetUser[]>({
-    queryKey: ['/api/broadcasts/recipients', selectedRoles.join(',')],
+  const { data: availableTags } = useQuery<string[]>({
+    queryKey: ['/api/users/tags'],
     queryFn: async () => {
-      const params = selectedRoles.length > 0 ? `?roles=${selectedRoles.join(',')}` : '';
-      const res = await fetch(`/api/broadcasts/recipients${params}`, { credentials: 'include' });
+      const res = await fetch('/api/users/tags', { credentials: 'include' });
+      const data = await res.json();
+      return data.tags || [];
+    },
+  });
+
+  const { data: targetUsers, isLoading: usersLoading } = useQuery<TargetUser[]>({
+    queryKey: ['/api/broadcasts/recipients', selectedRoles.join(','), selectedTags.join(',')],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (selectedRoles.length > 0) params.set('roles', selectedRoles.join(','));
+      if (selectedTags.length > 0) params.set('tags', selectedTags.join(','));
+      const qs = params.toString();
+      const res = await fetch(`/api/broadcasts/recipients${qs ? `?${qs}` : ''}`, { credentials: 'include' });
       return res.json();
     },
     enabled: selectedRoles.length > 0,
@@ -127,6 +142,7 @@ export default function BroadcastsPage() {
         message,
         channels: selectedChannels,
         targetRoles: selectedRoles,
+        targetTags: selectedTags.length > 0 ? selectedTags : undefined,
         templateId: selectedTemplateId || undefined,
         replyToNumber: cleanedReplyTo.length === 10 ? cleanedReplyTo : undefined,
       });
@@ -140,6 +156,7 @@ export default function BroadcastsPage() {
       setTitle("");
       setMessage("");
       setSelectedRoles([]);
+      setSelectedTags([]);
       setSelectedTemplateId("");
       queryClient.invalidateQueries({ queryKey: ['/api/broadcasts'] });
     },
@@ -450,6 +467,46 @@ export default function BroadcastsPage() {
                         <span className="font-medium">{ROLE_LABELS[role]}</span>
                       </label>
                     ))}
+
+                    {availableTags && availableTags.length > 0 && selectedRoles.length > 0 && (
+                      <div className="space-y-2 pt-3 border-t">
+                        <Label className="flex items-center gap-2 text-sm">
+                          <Tag className="h-3.5 w-3.5" />
+                          Filter by Tags (optional)
+                        </Label>
+                        <p className="text-xs text-muted-foreground">
+                          Only send to team members with these tags
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {availableTags.map(tag => (
+                            <Badge
+                              key={tag}
+                              variant={selectedTags.includes(tag) ? "default" : "outline"}
+                              className="cursor-pointer"
+                              onClick={() => {
+                                setSelectedTags(prev =>
+                                  prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
+                                );
+                              }}
+                              data-testid={`tag-filter-${tag}`}
+                            >
+                              {tag}
+                              {selectedTags.includes(tag) && <X className="h-3 w-3 ml-1" />}
+                            </Badge>
+                          ))}
+                        </div>
+                        {selectedTags.length > 0 && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setSelectedTags([])}
+                            data-testid="button-clear-tags"
+                          >
+                            Clear tags
+                          </Button>
+                        )}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
 
@@ -624,10 +681,20 @@ export default function BroadcastsPage() {
                           </div>
 
                           <div className="flex items-center justify-between text-xs text-muted-foreground">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               {broadcast.targetRoles && (broadcast.targetRoles as string[]).length > 0 && (
                                 <span className="flex items-center gap-1">
                                   Target: {(broadcast.targetRoles as string[]).map(r => ROLE_LABELS[r as TargetRole] || r).join(', ')}
+                                </span>
+                              )}
+                              {broadcast.targetTags && (broadcast.targetTags as string[]).length > 0 && (
+                                <span className="flex items-center gap-1">
+                                  <Tag className="h-3 w-3" />
+                                  {(broadcast.targetTags as string[]).map(t => (
+                                    <Badge key={t} variant="outline" className="text-xs py-0 px-1">
+                                      {t}
+                                    </Badge>
+                                  ))}
                                 </span>
                               )}
                             </div>
