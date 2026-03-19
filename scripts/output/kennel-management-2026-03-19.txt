@@ -1,0 +1,115 @@
+# iRescue.life Video Script: Kennel Management
+
+---
+
+**1. TITLE**
+Managing Your Shelter's Layout: Kennel Management with iRescue.life
+
+**2. DURATION**
+Approximately 3-4 minutes
+
+**3. TARGET AUDIENCE**
+Shelter staff, administrators, and anyone responsible for animal placement and facility management.
+
+---
+
+**4. INTRO**
+
+[00:00]
+NARRATOR: Welcome to iRescue.life! We're thrilled to help you streamline your animal rescue operations. In this video, we'll walk you through the Kennel Management feature, a powerful tool designed to help you visually organize your shelter's layout, assign animals to specific kennels, and generate printable kennel cards for easy identification. Let's dive in!
+
+**5. MAIN CONTENT**
+
+[00:15]
+NARRATOR: To access Kennel Management, you'll start from your iRescue.life dashboard.
+SHOW: Mouse cursor navigates to the left-hand sidebar.
+NARRATOR: Look for the **'Operations'** section in your sidebar.
+SHOW: Highlight 'Operations' in the sidebar.
+NARRATOR: Click on **'Operations'** to expand it, and then select **'Kennels'**.
+SHOW: Click 'Operations', then click 'Kennels'.
+NARRATOR: This takes you to the Kennel Management dashboard. You'll see two main tabs here: **'Facility Manager'** and **'Kennel Cards'**.
+
+[00:35]
+NARRATOR: First, let's set up your facility's layout using the **'Facility Manager'** tab. This is where you'll define your buildings and the rows of kennels within them, reflecting your actual shelter structure.
+SHOW: Ensure 'Facility Manager' tab is active.
+NARRATOR: To add a new building, click the **'Add Building'** button.
+SHOW: Click the 'Add Building' button. A dialog box appears.
+NARRATOR: Give your building a descriptive name, like "Main Shelter" or "Quarantine Wing". I'll call this one "Main Adoption Center".
+SHOW: Type "Main Adoption Center" into the 'Building Name' field.
+NARRATOR: Then, click **'Save'**.
+SHOW: Click 'Save'. The new building appears in the left panel.
+
+[01:00]
+NARRATOR: Now that we have a building, let's add some rows of kennels within it. Make sure your new building is selected on the left.
+SHOW: Ensure "Main Adoption Center" is highlighted in the left panel.
+NARRATOR: Click the **'Add Row'** button.
+SHOW: Click the 'Add Row' button. A dialog box appears.
+NARRATOR: Here, you can name your row, specify its capacity, and choose the kennel type. For example, let's create "Row A".
+SHOW: Type "Row A" into 'Row Name'.
+NARRATOR: Let's give it a capacity of 5 kennels.
+SHOW: Enter '5' in the 'Capacity' field.
+NARRATOR: And select 'Standard' as the type.
+SHOW: Select 'Standard' from the 'Type' dropdown.
+NARRATOR: Click **'Save'**.
+SHOW: Click 'Save'. Row A appears in the main grid area.
+NARRATOR: We can quickly add another one, let's say "Puppy Bay" with a capacity of 3, and set its type to 'Puppy'.
+SHOW: Repeat 'Add Row', type "Puppy Bay", Capacity 3, Type 'Puppy', then 'Save'.
+NARRATOR: You can continue adding all the rows for your buildings, matching your physical setup.
+
+[01:35]
+NARRATOR: If you need to reorder your rows, click the **'Edit Layout'** button.
+SHOW: Click 'Edit Layout' button. Rows become draggable.
+NARRATOR: You can simply drag and drop rows to arrange them in the order that makes the most sense for your facility.
+SHOW: Drag "Puppy Bay" above "Row A".
+NARRATOR: Once you're done, click **'Save Layout'**.
+SHOW: Click 'Save Layout'.
+
+[01:45]
+NARRATOR: With your layout defined, it's time to assign animals! The main view here is the **'Grid View'**, which gives you a visual representation of your kennels.
+SHOW: Ensure 'Grid View' tab is active.
+NARRATOR: On the right, you'll see a list of **'Unassigned Animals'**. To assign an animal, you can simply drag them from this list into an empty kennel slot.
+SHOW: Drag an animal (e.g., "Buddy") from 'Unassigned Animals' list to an empty slot in "Row A".
+NARRATOR: The kennel will update to show the animal's photo and name.
+SHOW: Kennel slot updates with animal info.
+NARRATOR: Another way to assign an animal is to click directly on an empty kennel.
+SHOW: Click an empty kennel slot. A dialog box appears.
+NARRATOR: A pop-up will appear allowing you to search for an animal by name or ID. Let's find "Mittens".
+SHOW: Type "Mittens" in the search bar, select "Mittens" from results.
+NARRATOR: Click **'Assign'**.
+SHOW: Click 'Assign'. Kennel slot updates.
+
+[02:20]
+NARRATOR: If an animal needs to move, simply drag them from their current kennel to a new empty one.
+SHOW: Drag "Buddy" from his current kennel to another empty one.
+NARRATOR: To unassign an animal, click on their occupied kennel.
+SHOW: Click on "Mittens'" occupied kennel. A dialog box appears.
+NARRATOR: Then, click the **'Unassign'** button. The animal will return to the 'Unassigned Animals' list.
+SHOW: Click 'Unassign'. Kennel becomes empty, "Mittens" appears in 'Unassigned Animals'.
+
+[02:35]
+NARRATOR: For those who prefer a more traditional view, switch to the **'List View'** tab.
+SHOW: Click the 'List View' tab.
+NARRATOR: This shows your kennels and their occupants in a clear, organized list format. You can also assign or unassign animals directly from this view by clicking on a kennel row.
+SHOW: Click on an empty kennel row in 'List View', demonstrate assigning an animal quickly.
+
+[02:45]
+NARRATOR: Finally, let's look at generating **'Kennel Cards'**. These are fantastic for printing and attaching to the physical kennels in your facility.
+SHOW: Click the 'Kennel Cards' tab.
+NARRATOR: Here, you can select which buildings or specific rows you want to generate cards for.
+SHOW: Select "Main Adoption Center" from the 'Select Building' dropdown.
+NARRATOR: Once selected, you'll see a preview of the cards. To print them, click the **'Generate/Print Cards'** button.
+SHOW: Click 'Generate/Print Cards'. A print-ready PDF preview appears.
+NARRATOR: This will generate a printable PDF that you can send to your printer. It's that easy!
+SHOW: Close the print preview.
+
+**6. RECAP**
+
+[03:10]
+NARRATOR: And there you have it! We've covered how to set up your shelter's layout using the Facility Manager, assign and manage animals in both Grid and List views, and generate printable kennel cards. This feature empowers you to keep track of your animals and facility with ease.
+
+**7. OUTRO**
+
+[03:25]
+NARRATOR: We hope this tutorial helps you make the most of iRescue.life's Kennel Management. If you have any questions or need further assistance, please don't hesitate to reach out to our support team. We're here to help you continue your amazing work for animals in need. Thanks for watching!
+
+---
