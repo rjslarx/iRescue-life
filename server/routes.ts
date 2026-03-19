@@ -15436,7 +15436,7 @@ ${renderedHtml}
         .where(eq(donations.tenantId, req.tenant!.id));
       
       const donationsInRange = allDonations.filter(d => inRange(d.createdAt));
-      const totalDonations = donationsInRange.reduce((sum, d) => sum + parseFloat(d.amount), 0);
+      const totalDonations = donationsInRange.reduce((sum, d) => sum + (Number(d.amount) / 100), 0);
       
       const allExpenditures = await db
         .select()
@@ -15512,7 +15512,7 @@ ${renderedHtml}
           costPerAnimal: costPerAnimal.toFixed(2),
           adoptionFeesCollected: donationsInRange
             .filter(d => d.source === 'online_form')
-            .reduce((sum, d) => sum + parseFloat(d.amount), 0)
+            .reduce((sum, d) => sum + (Number(d.amount) / 100), 0)
             .toFixed(2),
         },
         operational: {
