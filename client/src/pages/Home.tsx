@@ -627,7 +627,7 @@ export default function Home() {
 
       {(isLoadingHappyTails || happyTails.length > 0) && (
         <section className="py-12 sm:py-20 bg-muted/30">
-          <div className="container px-6 sm:px-8 space-y-8 sm:space-y-12">
+          <div className="w-full max-w-7xl mx-auto px-6 sm:px-8 space-y-8 sm:space-y-12">
             <div className="max-w-3xl">
               <h2 className="font-display text-2xl sm:text-3xl md:text-4xl font-bold mb-3 sm:mb-4">Happy Tails</h2>
               <p className="text-base sm:text-lg text-muted-foreground">
