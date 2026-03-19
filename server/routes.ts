@@ -43351,7 +43351,154 @@ Use timestamps like [00:00] to help with pacing.`;
     }
   });
 
+  
+  // ============================================================================
+  // Animal Medical Fund (Quick Campaign from Animal Profile HUD)
+  // ============================================================================
+
   /**
+   * GET /api/animals/:id/medical-fund
+   * Get the medical fund campaign status for an animal
+   */
+  app.get('/api/animals/:id/medical-fund', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { peerCampaigns, peerCampaignDonations, tenants } = await import('@shared/schema');
+      const animalId = req.params.id;
+      const tenantId = req.tenant!.id;
+
+      const [campaign] = await db
+        .select()
+        .from(peerCampaigns)
+        .where(and(
+          eq(peerCampaigns.tenantId, tenantId),
+          eq(peerCampaigns.animalId, animalId),
+          eq(peerCampaigns.isActive, true)
+        ))
+        .orderBy(desc(peerCampaigns.createdAt))
+        .limit(1);
+
+      if (!campaign) {
+        return res.json({
+          hasCampaign: false,
+          goal: null,
+          raised: 0,
+          url: null,
+          qrCodeUrl: null,
+          campaignId: null,
+        });
+      }
+
+      const [tenant] = await db.select({ subdomain: tenants.subdomain, customDomain: tenants.customDomain })
+        .from(tenants).where(eq(tenants.id, tenantId)).limit(1);
+
+      const protocol = req.protocol || 'https';
+      const host = req.get('host') || '';
+      const baseUrl = tenant?.customDomain
+        ? `https://${tenant.customDomain}`
+        : `${protocol}://${host}`;
+      const campaignUrl = `${baseUrl}/campaign/${campaign.slug}`;
+
+      let qrCodeUrl: string | null = null;
+      try {
+        const QRCode = (await import('qrcode')).default;
+        qrCodeUrl = await QRCode.toDataURL(campaignUrl, { width: 256, margin: 1 });
+      } catch {}
+
+      const raisedCents = campaign.amountRaised || 0;
+
+      res.json({
+        hasCampaign: true,
+        goal: campaign.goalAmount ? campaign.goalAmount / 100 : null,
+        raised: raisedCents / 100,
+        url: campaignUrl,
+        qrCodeUrl,
+        campaignId: campaign.id,
+      });
+    } catch (error) { next(error); }
+  });
+
+  /**
+   * POST /api/animals/:id/medical-fund
+   * Create a medical fund campaign for an animal
+   */
+  app.post('/api/animals/:id/medical-fund', requireTenant, requireAuth, requireRole('admin', 'owner', 'board_member', 'staff', 'manager'), async (req, res, next) => {
+    try {
+      const { peerCampaigns, animals } = await import('@shared/schema');
+      const animalId = req.params.id;
+      const tenantId = req.tenant!.id;
+
+      const [animal] = await db
+        .select({ id: animals.id, name: animals.name })
+        .from(animals)
+        .where(and(eq(animals.id, animalId), eq(animals.tenantId, tenantId)))
+        .limit(1);
+
+      if (!animal) {
+        return res.status(404).json({ error: 'Animal not found' });
+      }
+
+      const [existingCampaign] = await db
+        .select({ id: peerCampaigns.id })
+        .from(peerCampaigns)
+        .where(and(
+          eq(peerCampaigns.tenantId, tenantId),
+          eq(peerCampaigns.animalId, animalId),
+          eq(peerCampaigns.isActive, true)
+        ))
+        .limit(1);
+
+      if (existingCampaign) {
+        return res.status(409).json({ error: 'An active medical fund campaign already exists for this animal' });
+      }
+
+      const createSchema = z.object({
+        title: z.string().min(1).max(200),
+        description: z.string().max(5000).optional(),
+        goal: z.number().positive().optional().nullable(),
+      });
+
+      const data = createSchema.parse(req.body);
+      const goalCents = data.goal ? Math.round(data.goal * 100) : 50000;
+
+      let slug = data.title
+        .toLowerCase()
+        .replace(/[^a-z0-9s-]/g, '')
+        .replace(/s+/g, '-')
+        .replace(/-+/g, '-')
+        .substring(0, 60);
+
+      const [existingSlug] = await db
+        .select({ id: peerCampaigns.id })
+        .from(peerCampaigns)
+        .where(and(eq(peerCampaigns.tenantId, tenantId), eq(peerCampaigns.slug, slug)))
+        .limit(1);
+
+      if (existingSlug) {
+        slug = slug + '-' + Date.now().toString(36);
+      }
+
+      const user = req.user as any;
+
+      const [campaign] = await db.insert(peerCampaigns).values({
+        tenantId,
+        creatorName: user?.fullName || user?.name || user?.email || 'Staff',
+        creatorEmail: user?.email || '',
+        campaignTitle: data.title,
+        campaignStory: data.description || null,
+        goalAmount: goalCents,
+        goalType: 'currency',
+        slug,
+        animalId,
+        createdByUserId: user?.id || null,
+        isActive: true,
+        status: 'active',
+      }).returning();
+
+      res.json({ campaign });
+    } catch (error) { next(error); }
+  });
+
+/**
    * POST /api/peer-campaigns/staff
    * Staff: Create a campaign from the dashboard (with animal linking, goal type)
    */
