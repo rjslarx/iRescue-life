@@ -1,6 +1,7 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect, useCallback } from "react";
 import { Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import QRCode from "qrcode";
 import { useTenant } from "@/contexts/TenantContext";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -14,13 +15,19 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Plus, Pencil, Trash2, Copy, TicketPercent, Users, ImagePlus, X } from "lucide-react";
+import { Plus, Pencil, Trash2, Copy, TicketPercent, Users, ImagePlus, X, QrCode, Download, Printer } from "lucide-react";
 import type { FundraiserEvent } from "@shared/schema";
 
 type EventWithSold = FundraiserEvent & { soldCount: number };
 
 function formatCents(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
+}
+
+function escapeHtml(str: string): string {
+  const div = document.createElement("div");
+  div.appendChild(document.createTextNode(str));
+  return div.innerHTML;
 }
 
 interface EventFormState {
@@ -57,6 +64,8 @@ export default function FundraisersPage() {
   const [deleteTarget, setDeleteTarget] = useState<EventWithSold | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [qrEvent, setQrEvent] = useState<EventWithSold | null>(null);
+  const [showPrintAll, setShowPrintAll] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data, isLoading } = useQuery<{ events: EventWithSold[] }>({
@@ -191,10 +200,18 @@ export default function FundraisersPage() {
             <h1 className="text-2xl font-bold">Fundraiser Events</h1>
             <p className="text-sm text-muted-foreground mt-1">Create and manage public sales events with Stripe checkout</p>
           </div>
-          <Button data-testid="button-new-event" onClick={openCreate}>
-            <Plus className="h-4 w-4 mr-2" />
-            New Event
-          </Button>
+          <div className="flex items-center gap-2 flex-wrap">
+            {data?.events && data.events.filter(e => e.isActive).length > 0 && (
+              <Button variant="outline" onClick={() => setShowPrintAll(true)} data-testid="button-print-all-qr">
+                <Printer className="h-4 w-4 mr-2" />
+                Print All QR Codes
+              </Button>
+            )}
+            <Button data-testid="button-new-event" onClick={openCreate}>
+              <Plus className="h-4 w-4 mr-2" />
+              New Event
+            </Button>
+          </div>
         </div>
 
         {isLoading ? (
@@ -277,6 +294,10 @@ export default function FundraisersPage() {
                       <Button size="sm" variant="outline" onClick={() => copyPublicLink(evt)} data-testid={`button-copy-link-${evt.id}`}>
                         <Copy className="h-3.5 w-3.5 mr-1.5" />
                         Copy Link
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => setQrEvent(evt)} data-testid={`button-qr-code-${evt.id}`}>
+                        <QrCode className="h-3.5 w-3.5 mr-1.5" />
+                        QR Code
                       </Button>
                       <Button size="icon" variant="ghost" onClick={() => openEdit(evt)} data-testid={`button-edit-${evt.id}`}>
                         <Pencil className="h-4 w-4" />
@@ -482,6 +503,240 @@ export default function FundraisersPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {qrEvent && (
+        <QrCodeDialog
+          event={qrEvent}
+          checkoutUrl={`${window.location.origin}${basePath}/donate/event/${qrEvent.id}`}
+          onClose={() => setQrEvent(null)}
+        />
+      )}
+
+      {showPrintAll && data?.events && (
+        <PrintAllQrDialog
+          events={data.events.filter(e => e.isActive)}
+          basePath={basePath}
+          onClose={() => setShowPrintAll(false)}
+        />
+      )}
     </DashboardLayout>
+  );
+}
+
+function QrCodeDialog({
+  event,
+  checkoutUrl,
+  onClose,
+}: {
+  event: EventWithSold;
+  checkoutUrl: string;
+  onClose: () => void;
+}) {
+  const { toast } = useToast();
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    if (canvasRef.current) {
+      QRCode.toCanvas(canvasRef.current, checkoutUrl, {
+        width: 240,
+        margin: 2,
+        color: { dark: "#000000", light: "#ffffff" },
+      })
+        .then(() => setReady(true))
+        .catch(() => setReady(false));
+    }
+  }, [checkoutUrl]);
+
+  const handleDownload = () => {
+    if (!canvasRef.current) return;
+    const link = document.createElement("a");
+    const safeName = event.title.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase();
+    link.download = `${safeName}-qr-code.png`;
+    link.href = canvasRef.current.toDataURL("image/png");
+    link.click();
+  };
+
+  const handlePrint = useCallback(() => {
+    if (!canvasRef.current) return;
+    const dataUrl = canvasRef.current.toDataURL("image/png");
+    const w = window.open("", "_blank");
+    if (!w) {
+      toast({ title: "Pop-up blocked", description: "Please allow pop-ups to print.", variant: "destructive" });
+      return;
+    }
+    const safeTitle = escapeHtml(event.title);
+    const safePrice = escapeHtml(formatCents(event.priceCents));
+    w.document.write(`
+      <html><head><title>QR Code - ${safeTitle}</title>
+      <style>
+        @page { size: auto; margin: 0.5in; }
+        body { font-family: system-ui, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; text-align: center; }
+        .card { border: 2px solid #e5e7eb; border-radius: 12px; padding: 32px; max-width: 320px; }
+        .title { font-size: 20px; font-weight: 700; margin: 0 0 4px; }
+        .price { font-size: 16px; color: #6b7280; margin: 0 0 16px; }
+        img { width: 240px; height: 240px; }
+        .hint { font-size: 12px; color: #9ca3af; margin-top: 16px; }
+      </style></head><body>
+      <div class="card">
+        <p class="title">${safeTitle}</p>
+        <p class="price">${safePrice}</p>
+        <img src="${dataUrl}" alt="QR Code" />
+        <p class="hint">Scan to pay with your phone</p>
+      </div>
+      </body></html>
+    `);
+    w.document.close();
+    w.onload = () => { w.print(); };
+  }, [event, toast]);
+
+  const handleCopyUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(checkoutUrl);
+      toast({ title: "Link copied" });
+    } catch {
+      toast({ title: "Copy failed", variant: "destructive" });
+    }
+  };
+
+  return (
+    <Dialog open onOpenChange={() => onClose()}>
+      <DialogContent className="max-w-sm" data-testid="dialog-qr-code">
+        <DialogHeader>
+          <DialogTitle data-testid="text-qr-dialog-title">QR Code — {event.title}</DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col items-center gap-4">
+          <div className="bg-white rounded-lg p-4">
+            <canvas ref={canvasRef} data-testid="canvas-qr-code" />
+          </div>
+          <p className="text-sm text-muted-foreground text-center" data-testid="text-qr-price">
+            {formatCents(event.priceCents)} per item
+          </p>
+          <div className="flex items-center gap-2 flex-wrap justify-center">
+            <Button variant="outline" onClick={handleCopyUrl} data-testid="button-qr-copy-url">
+              <Copy className="h-4 w-4 mr-2" />
+              Copy URL
+            </Button>
+            <Button variant="outline" onClick={handleDownload} disabled={!ready} data-testid="button-qr-download">
+              <Download className="h-4 w-4 mr-2" />
+              Download
+            </Button>
+            <Button onClick={handlePrint} disabled={!ready} data-testid="button-qr-print">
+              <Printer className="h-4 w-4 mr-2" />
+              Print
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function PrintAllQrDialog({
+  events,
+  basePath,
+  onClose,
+}: {
+  events: EventWithSold[];
+  basePath: string;
+  onClose: () => void;
+}) {
+  const { toast } = useToast();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [generated, setGenerated] = useState(false);
+  const canvasRefs = useRef<Map<string, HTMLCanvasElement>>(new Map());
+
+  useEffect(() => {
+    let cancelled = false;
+    const generate = async () => {
+      for (const evt of events) {
+        const canvas = canvasRefs.current.get(evt.id);
+        if (!canvas) continue;
+        const url = `${window.location.origin}${basePath}/donate/event/${evt.id}`;
+        await QRCode.toCanvas(canvas, url, {
+          width: 180,
+          margin: 2,
+          color: { dark: "#000000", light: "#ffffff" },
+        });
+      }
+      if (!cancelled) setGenerated(true);
+    };
+    const timer = setTimeout(generate, 100);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [events, basePath]);
+
+  const handlePrint = useCallback(() => {
+    const cards: string[] = [];
+    for (const evt of events) {
+      const canvas = canvasRefs.current.get(evt.id);
+      if (!canvas) continue;
+      const dataUrl = canvas.toDataURL("image/png");
+      const safeTitle = escapeHtml(evt.title);
+      const safePrice = escapeHtml(formatCents(evt.priceCents));
+      cards.push(`
+        <div class="card">
+          <p class="title">${safeTitle}</p>
+          <p class="price">${safePrice}</p>
+          <img src="${dataUrl}" alt="QR Code" />
+          <p class="hint">Scan to pay with your phone</p>
+        </div>
+      `);
+    }
+    const w = window.open("", "_blank");
+    if (!w) {
+      toast({ title: "Pop-up blocked", description: "Please allow pop-ups to print.", variant: "destructive" });
+      return;
+    }
+    w.document.write(`
+      <html><head><title>All QR Codes - Fundraiser Events</title>
+      <style>
+        @page { size: auto; margin: 0.4in; }
+        body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 24px; }
+        .card { border: 2px solid #e5e7eb; border-radius: 12px; padding: 20px; text-align: center; page-break-inside: avoid; }
+        .title { font-size: 16px; font-weight: 700; margin: 0 0 2px; }
+        .price { font-size: 14px; color: #6b7280; margin: 0 0 12px; }
+        img { width: 180px; height: 180px; }
+        .hint { font-size: 11px; color: #9ca3af; margin-top: 12px; }
+      </style></head><body>
+      <div class="grid">${cards.join("")}</div>
+      </body></html>
+    `);
+    w.document.close();
+    w.onload = () => { w.print(); };
+  }, [events, toast]);
+
+  return (
+    <Dialog open onOpenChange={() => onClose()}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto" data-testid="dialog-print-all-qr">
+        <DialogHeader>
+          <DialogTitle data-testid="text-print-all-title">QR Codes — All Active Events ({events.length})</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">
+          Preview all QR codes below, then print them as tent cards for your table.
+        </p>
+        <div ref={containerRef} className="grid grid-cols-2 gap-4">
+          {events.map((evt) => (
+            <div key={evt.id} className="flex flex-col items-center gap-2 p-3 border rounded-lg" data-testid={`print-qr-card-${evt.id}`}>
+              <p className="text-sm font-medium text-center truncate w-full" data-testid={`text-print-qr-title-${evt.id}`}>{evt.title}</p>
+              <p className="text-xs text-muted-foreground">{formatCents(evt.priceCents)}</p>
+              <div className="bg-white rounded-md p-2">
+                <canvas
+                  ref={(el) => { if (el) canvasRefs.current.set(evt.id, el); }}
+                  data-testid={`canvas-print-qr-${evt.id}`}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Close</Button>
+          <Button onClick={handlePrint} disabled={!generated} data-testid="button-print-all-confirm">
+            <Printer className="h-4 w-4 mr-2" />
+            Print All
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
