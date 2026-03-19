@@ -15311,10 +15311,15 @@ ${renderedHtml}
     try {
       const { grants } = await import('@shared/schema');
       
+      // Sanitize numeric fields - convert empty strings to null
+      const updateData = { ...req.body };
+      if ('amountRequested' in updateData) updateData.amountRequested = updateData.amountRequested && String(updateData.amountRequested).trim() ? updateData.amountRequested : null;
+      if ('amountAwarded' in updateData) updateData.amountAwarded = updateData.amountAwarded && String(updateData.amountAwarded).trim() ? updateData.amountAwarded : null;
+
       const [grant] = await db
         .update(grants)
         .set({
-          ...req.body,
+          ...updateData,
           updatedAt: new Date(),
         })
         .where(and(
@@ -30137,6 +30142,10 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
       // Exclude immutable fields (tenant, animal, audit fields)
       const { tenantId, animalId, createdBy, createdAt, ...data } = parsed;
 
+      // Sanitize numeric fields - convert empty strings to null
+      if ('billAmount' in data) data.billAmount = data.billAmount && String(data.billAmount).trim() ? data.billAmount : null;
+      if ('billPaidAmount' in data) data.billPaidAmount = data.billPaidAmount && String(data.billPaidAmount).trim() ? data.billPaidAmount : null;
+
       const [exam] = await db
         .update(medicalExams)
         .set({ ...data, lastEditedAt: new Date(), lastEditedBy: req.user!.id })
@@ -30398,6 +30407,10 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
       
       // Exclude immutable fields
       const { tenantId, animalId, createdBy, createdAt, ...data } = parsed;
+
+      // Sanitize numeric fields - convert empty strings to null
+      if ('billAmount' in data) data.billAmount = data.billAmount && String(data.billAmount).trim() ? data.billAmount : null;
+      if ('billPaidAmount' in data) data.billPaidAmount = data.billPaidAmount && String(data.billPaidAmount).trim() ? data.billPaidAmount : null;
 
       const [vaccine] = await db
         .update(vaccineRecords)
@@ -31106,6 +31119,10 @@ Email: ${application.applicantEmail || ''}`
       // Exclude immutable fields
       const { tenantId, animalId, createdBy, createdAt, ...data } = parsed;
 
+      // Sanitize numeric fields - convert empty strings to null
+      if ('billAmount' in data) data.billAmount = data.billAmount && String(data.billAmount).trim() ? data.billAmount : null;
+      if ('billPaidAmount' in data) data.billPaidAmount = data.billPaidAmount && String(data.billPaidAmount).trim() ? data.billPaidAmount : null;
+
       const [diagnostic] = await db
         .update(diagnosticTests)
         .set({ ...data, lastEditedAt: new Date(), lastEditedBy: req.user!.id })
@@ -31344,6 +31361,10 @@ Email: ${application.applicantEmail || ''}`
       
       // Exclude immutable fields
       const { tenantId, animalId, createdBy, createdAt, ...data } = parsed;
+
+      // Sanitize numeric fields - convert empty strings to null
+      if ('billAmount' in data) data.billAmount = data.billAmount && String(data.billAmount).trim() ? data.billAmount : null;
+      if ('billPaidAmount' in data) data.billPaidAmount = data.billPaidAmount && String(data.billPaidAmount).trim() ? data.billPaidAmount : null;
 
       const [procedure] = await db
         .update(procedureLogs)
