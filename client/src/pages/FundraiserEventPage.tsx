@@ -117,7 +117,7 @@ export default function FundraiserEventPage() {
         <div className="text-center space-y-3">
           <AlertCircle className="h-10 w-10 text-muted-foreground mx-auto" />
           <p className="text-lg font-medium">Event not found</p>
-          <p className="text-sm text-muted-foreground">This fundraiser event may no longer be active.</p>
+          <p className="text-sm text-muted-foreground">This event or product may no longer be active.</p>
           <Button variant="outline" asChild>
             <Link href="/fundraisers">Browse all fundraisers</Link>
           </Button>

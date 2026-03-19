@@ -197,8 +197,8 @@ export default function FundraisersPage() {
       <div className="space-y-6">
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div>
-            <h1 className="text-2xl font-bold">Fundraiser Events</h1>
-            <p className="text-sm text-muted-foreground mt-1">Create and manage public sales events with Stripe checkout</p>
+            <h1 className="text-2xl font-bold">Fundraiser Events & Products</h1>
+            <p className="text-sm text-muted-foreground mt-1">Create and manage events, products, and items for sale with Stripe checkout</p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             {data?.events && data.events.filter(e => e.isActive).length > 0 && (
@@ -228,8 +228,8 @@ export default function FundraisersPage() {
             <CardContent className="flex flex-col items-center justify-center py-16 text-center space-y-3">
               <TicketPercent className="h-12 w-12 text-muted-foreground" />
               <div>
-                <p className="font-medium">No fundraiser events yet</p>
-                <p className="text-sm text-muted-foreground">Create your first event to start selling tickets or items online</p>
+                <p className="font-medium">No events or products yet</p>
+                <p className="text-sm text-muted-foreground">Create your first event or product to start selling online</p>
               </div>
               <Button onClick={openCreate} data-testid="button-new-event-empty">
                 <Plus className="h-4 w-4 mr-2" />
@@ -318,7 +318,7 @@ export default function FundraisersPage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto" data-testid="dialog-event-form">
           <DialogHeader>
-            <DialogTitle>{editingEvent ? "Edit Event" : "Create Fundraiser Event"}</DialogTitle>
+            <DialogTitle>{editingEvent ? "Edit Event / Product" : "Create Event / Product"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
 
@@ -688,7 +688,7 @@ function PrintAllQrDialog({
       return;
     }
     w.document.write(`
-      <html><head><title>All QR Codes - Fundraiser Events</title>
+      <html><head><title>All QR Codes - Fundraiser Events &amp; Products</title>
       <style>
         @page { size: auto; margin: 0.4in; }
         body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; }

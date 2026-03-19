@@ -59,10 +59,10 @@ export default function PublicFundraisersPage() {
         <div className="max-w-5xl mx-auto px-4 py-10">
           <div className="flex items-center gap-3 mb-2">
             <TicketPercent className="h-7 w-7 text-primary" />
-            <h1 className="text-3xl font-bold">Fundraisers</h1>
+            <h1 className="text-3xl font-bold">Fundraisers & Products</h1>
           </div>
           <p className="text-muted-foreground text-lg">
-            Support {tenant?.name || "our rescue"} by purchasing items from our fundraiser events.
+            Support {tenant?.name || "our rescue"} by purchasing items from our fundraiser events and products.
           </p>
         </div>
       </div>
@@ -84,13 +84,13 @@ export default function PublicFundraisersPage() {
         ) : error ? (
           <div className="flex flex-col items-center justify-center py-20 text-center space-y-3">
             <AlertCircle className="h-10 w-10 text-muted-foreground" />
-            <p className="text-lg font-medium">Unable to load fundraisers</p>
+            <p className="text-lg font-medium">Unable to load fundraisers and products</p>
             <p className="text-sm text-muted-foreground">Please try again shortly.</p>
           </div>
         ) : events.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center space-y-3">
             <TicketPercent className="h-12 w-12 text-muted-foreground" />
-            <p className="text-lg font-medium">No active fundraisers right now</p>
+            <p className="text-lg font-medium">No active fundraisers or products right now</p>
             <p className="text-sm text-muted-foreground">Check back soon for upcoming events.</p>
           </div>
         ) : (
