@@ -486,9 +486,9 @@ export default function FundraisersPage() {
       <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Deactivate Event?</AlertDialogTitle>
+            <AlertDialogTitle>Deactivate?</AlertDialogTitle>
             <AlertDialogDescription>
-              "{deleteTarget?.title}" will be hidden from the public checkout page. Existing orders are not affected.
+              "{deleteTarget?.title}" will be hidden from the public page. Existing orders are not affected.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

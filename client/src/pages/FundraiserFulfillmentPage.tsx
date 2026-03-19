@@ -91,7 +91,7 @@ export default function FundraiserFulfillmentPage() {
           <Button variant="ghost" size="sm" asChild>
             <Link href="/dashboard/fundraisers">
               <ChevronLeft className="h-4 w-4 mr-1" />
-              Fundraisers
+              Events & Products
             </Link>
           </Button>
         </div>

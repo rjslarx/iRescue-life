@@ -317,7 +317,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
       items: [
         { title: "Fundraising Hub", url: "/dashboard/fundraising", icon: Megaphone },
         { title: "Donation Links", url: "/dashboard/donation-links", icon: DollarSign },
-        { title: "Fundraisers", url: "/dashboard/fundraisers", icon: TicketPercent },
+        { title: "Events & Products", url: "/dashboard/fundraisers", icon: TicketPercent },
         { title: "Event Ticket Sales", url: "/dashboard/event-ticket-sales", icon: Ticket },
       ],
       defaultOpen: false,
@@ -409,7 +409,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
       items: [
         { title: "Fundraising Hub", url: "/dashboard/fundraising", icon: Megaphone },
         { title: "Donation Links", url: "/dashboard/donation-links", icon: DollarSign },
-        { title: "Fundraisers", url: "/dashboard/fundraisers", icon: TicketPercent },
+        { title: "Events & Products", url: "/dashboard/fundraisers", icon: TicketPercent },
         { title: "Event Ticket Sales", url: "/dashboard/event-ticket-sales", icon: Ticket },
       ],
       defaultOpen: false,
