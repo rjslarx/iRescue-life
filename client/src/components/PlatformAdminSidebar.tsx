@@ -11,7 +11,7 @@ import {
   SidebarFooter,
 } from "@/components/ui/sidebar";
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, Building2, Users, Settings, LogOut, Flag, FileText, Megaphone, Activity } from "lucide-react";
+import { LayoutDashboard, Building2, Users, Settings, LogOut, Flag, FileText, Megaphone, Activity, BookOpen, Video, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -57,6 +57,19 @@ const navigationItems = [
     title: "Settings",
     url: "/platform/settings",
     icon: Settings,
+  },
+];
+
+const helpTrainingItems = [
+  {
+    title: "Global Content",
+    url: "/platform/global-content",
+    icon: Globe,
+  },
+  {
+    title: "Video Script Generator",
+    url: "/platform/video-scripts",
+    icon: Video,
   },
 ];
 
@@ -108,6 +121,24 @@ export function PlatformAdminSidebar({ userName }: PlatformAdminSidebarProps) {
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild isActive={location === item.url}>
                     <Link href={item.url} data-testid={`nav-${item.title.toLowerCase()}`}>
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.title}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel>Help & Training</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {helpTrainingItems.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton asChild isActive={location === item.url}>
+                    <Link href={item.url} data-testid={`nav-${item.title.toLowerCase().replace(/\s+/g, '-')}`}>
                       <item.icon className="h-4 w-4" />
                       <span>{item.title}</span>
                     </Link>

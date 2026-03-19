@@ -39366,6 +39366,240 @@ Use timestamps like [00:00] to help with pacing.`;
     }
   });
 
+
+  // ============================================================================
+  // Platform Admin - Global Help & Training Content Management
+  // ============================================================================
+
+  app.get('/api/platform/global-tutorials', requireAuth, async (req, res, next) => {
+    try {
+      if (!req.user?.roles.includes('platform_admin')) {
+        return res.status(403).json({ error: 'Platform admin access required' });
+      }
+      const { tutorials } = await import('@shared/schema');
+      const results = await db
+        .select()
+        .from(tutorials)
+        .where(eq(tutorials.isGlobal, true))
+        .orderBy(tutorials.sortOrder, tutorials.createdAt);
+      res.json({ tutorials: results });
+    } catch (error) { next(error); }
+  });
+
+  app.post('/api/platform/global-tutorials', requireAuth, async (req, res, next) => {
+    try {
+      if (!req.user?.roles.includes('platform_admin')) {
+        return res.status(403).json({ error: 'Platform admin access required' });
+      }
+      const { tutorials, insertTutorialSchema } = await import('@shared/schema');
+      const data = insertTutorialSchema.parse({
+        ...req.body,
+        tenantId: null,
+        isGlobal: true,
+      });
+      const [tutorial] = await db.insert(tutorials).values(data).returning();
+      res.json({ tutorial });
+    } catch (error) { next(error); }
+  });
+
+  app.patch('/api/platform/global-tutorials/:id', requireAuth, async (req, res, next) => {
+    try {
+      if (!req.user?.roles.includes('platform_admin')) {
+        return res.status(403).json({ error: 'Platform admin access required' });
+      }
+      const { tutorials } = await import('@shared/schema');
+      const updateSchema = z.object({
+        title: z.string().min(1).max(200).optional(),
+        description: z.string().max(1000).optional(),
+        youtubeUrl: z.string().url().optional(),
+        category: z.enum(['getting-started', 'animals', 'medical', 'fosters', 'volunteers', 'communications', 'finance', 'website', 'settings', 'other']).optional(),
+        sortOrder: z.coerce.number().int().min(0).max(9999).optional(),
+        visibleToRoles: z.array(z.enum(['admin', 'board_member', 'staff', 'foster', 'volunteer'])).nullable().optional(),
+      }).strict();
+      const validatedData = updateSchema.parse(req.body);
+      const updateFields: Record<string, any> = { updatedAt: new Date() };
+      Object.entries(validatedData).forEach(([key, val]) => {
+        if (val !== undefined) updateFields[key] = key === 'visibleToRoles' && Array.isArray(val) && val.length === 0 ? null : val;
+      });
+      const [updated] = await db
+        .update(tutorials)
+        .set(updateFields)
+        .where(and(eq(tutorials.id, req.params.id), eq(tutorials.isGlobal, true)))
+        .returning();
+      if (!updated) return res.status(404).json({ error: 'Global tutorial not found' });
+      res.json({ tutorial: updated });
+    } catch (error) { next(error); }
+  });
+
+  app.delete('/api/platform/global-tutorials/:id', requireAuth, async (req, res, next) => {
+    try {
+      if (!req.user?.roles.includes('platform_admin')) {
+        return res.status(403).json({ error: 'Platform admin access required' });
+      }
+      const { tutorials } = await import('@shared/schema');
+      const [deleted] = await db
+        .delete(tutorials)
+        .where(and(eq(tutorials.id, req.params.id), eq(tutorials.isGlobal, true)))
+        .returning();
+      if (!deleted) return res.status(404).json({ error: 'Global tutorial not found' });
+      res.json({ success: true });
+    } catch (error) { next(error); }
+  });
+
+  app.get('/api/platform/global-help-documents', requireAuth, async (req, res, next) => {
+    try {
+      if (!req.user?.roles.includes('platform_admin')) {
+        return res.status(403).json({ error: 'Platform admin access required' });
+      }
+      const { helpDocuments } = await import('@shared/schema');
+      const results = await db
+        .select()
+        .from(helpDocuments)
+        .where(eq(helpDocuments.isGlobal, true))
+        .orderBy(helpDocuments.sortOrder, helpDocuments.createdAt);
+      res.json({ documents: results });
+    } catch (error) { next(error); }
+  });
+
+  
+  app.post('/api/platform/global-help-documents/upload', requireAuth, async (req, res, next) => {
+    try {
+      if (!req.user?.roles.includes('platform_admin')) {
+        return res.status(403).json({ error: 'Platform admin access required' });
+      }
+      const multer = (await import('multer')).default;
+      const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+      upload.single('file')(req, res, async (err: any) => {
+        if (err) return res.status(400).json({ error: err.message || 'Upload failed' });
+        if (!req.file) return res.status(400).json({ error: 'No file provided' });
+        try {
+          const { ObjectStorageService } = await import('./objectStorage');
+          const storage = new ObjectStorageService();
+          const ext = req.file.originalname.split('.').pop() || 'bin';
+          const customFilename = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+          const { objectPath } = await storage.uploadTenantFile('platform', 'help-docs', req.file.buffer, req.file.mimetype, customFilename);
+          res.json({ uploadedPath: objectPath });
+        } catch (uploadErr: any) {
+          console.error('[Platform Upload] Error:', uploadErr.message);
+          res.status(500).json({ error: 'Failed to upload file' });
+        }
+      });
+    } catch (error) { next(error); }
+  });
+
+  app.post('/api/platform/global-help-documents', requireAuth, async (req, res, next) => {
+    try {
+      if (!req.user?.roles.includes('platform_admin')) {
+        return res.status(403).json({ error: 'Platform admin access required' });
+      }
+      const { helpDocuments, insertHelpDocumentSchema } = await import('@shared/schema');
+      const data = insertHelpDocumentSchema.parse({
+        ...req.body,
+        tenantId: null,
+        isGlobal: true,
+      });
+      const [doc] = await db.insert(helpDocuments).values(data).returning();
+      res.json({ document: doc });
+    } catch (error) { next(error); }
+  });
+
+  app.patch('/api/platform/global-help-documents/:id', requireAuth, async (req, res, next) => {
+    try {
+      if (!req.user?.roles.includes('platform_admin')) {
+        return res.status(403).json({ error: 'Platform admin access required' });
+      }
+      const { helpDocuments } = await import('@shared/schema');
+      const updateSchema = z.object({
+        title: z.string().min(1).max(200).optional(),
+        description: z.string().max(1000).optional(),
+        category: z.string().max(100).optional(),
+        sortOrder: z.coerce.number().int().min(0).max(9999).optional(),
+        visibleToRoles: z.array(z.enum(['admin', 'board_member', 'staff', 'foster', 'volunteer'])).nullable().optional(),
+      }).strict();
+      const validatedData = updateSchema.parse(req.body);
+      const updateFields: Record<string, any> = { updatedAt: new Date() };
+      Object.entries(validatedData).forEach(([key, val]) => {
+        if (val !== undefined) updateFields[key] = key === 'visibleToRoles' && Array.isArray(val) && val.length === 0 ? null : val;
+      });
+      const [updated] = await db
+        .update(helpDocuments)
+        .set(updateFields)
+        .where(and(eq(helpDocuments.id, req.params.id), eq(helpDocuments.isGlobal, true)))
+        .returning();
+      if (!updated) return res.status(404).json({ error: 'Global document not found' });
+      res.json({ document: updated });
+    } catch (error) { next(error); }
+  });
+
+  app.delete('/api/platform/global-help-documents/:id', requireAuth, async (req, res, next) => {
+    try {
+      if (!req.user?.roles.includes('platform_admin')) {
+        return res.status(403).json({ error: 'Platform admin access required' });
+      }
+      const { helpDocuments } = await import('@shared/schema');
+      const [deleted] = await db
+        .delete(helpDocuments)
+        .where(and(eq(helpDocuments.id, req.params.id), eq(helpDocuments.isGlobal, true)))
+        .returning();
+      if (!deleted) return res.status(404).json({ error: 'Global document not found' });
+      res.json({ success: true });
+    } catch (error) { next(error); }
+  });
+
+  app.post('/api/platform/generate-video-script', requireAuth, async (req, res, next) => {
+    try {
+      if (!req.user?.roles.includes('platform_admin')) {
+        return res.status(403).json({ error: 'Platform admin access required' });
+      }
+      const { feature, notes } = req.body;
+      if (!feature || typeof feature !== 'string') {
+        return res.status(400).json({ error: 'Feature name is required' });
+      }
+      const featureContext = VIDEO_SCRIPT_FEATURES[feature] || feature;
+      const prompt = `${VIDEO_SCRIPT_PLATFORM_CONTEXT}
+
+FEATURE TO COVER: ${feature}
+FEATURE DETAILS: ${featureContext}
+${notes ? `
+ADDITIONAL NOTES FROM THE CREATOR: ${notes}` : ''}
+
+Please write a complete how-to video script for this feature. Structure it as follows:
+
+1. TITLE - A clear, searchable title for the video
+2. DURATION - Estimated video length
+3. TARGET AUDIENCE - Who this video is for
+4. INTRO (15-20 seconds) - Welcome, briefly state what they will learn
+5. MAIN CONTENT - Step-by-step walkthrough with:
+   - NARRATOR lines (what to say)
+   - SCREEN CUE lines (what to show on screen, formatted as SHOW: ...)
+   - Tips or callouts where helpful (formatted as TIP: ...)
+6. RECAP - Quick summary of what was covered
+7. OUTRO (10-15 seconds) - Encourage next steps, mention related features
+
+Format the script so it is easy to read and follow during recording.
+Use timestamps like [00:00] to help with pacing.`;
+
+      const { GoogleGenAI } = require('@google/genai');
+      const geminiApiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY;
+      const geminiBaseUrl = process.env.AI_INTEGRATIONS_GEMINI_BASE_URL;
+      const aiConfig: any = {
+        apiKey: geminiApiKey || 'not-configured',
+        ...(geminiBaseUrl && { httpOptions: { apiVersion: '', baseUrl: geminiBaseUrl } }),
+      };
+      const ai = new GoogleGenAI(aiConfig);
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        config: { temperature: 0.7 },
+      });
+      const script = response.text || 'No content generated.';
+      res.json({ script, feature });
+    } catch (error: any) {
+      console.error('[VIDEO SCRIPT] Platform generation error:', error.message);
+      next(error);
+    }
+  });
+
   // GET /api/tutorials - Get all tutorials for the tenant
   app.get('/api/tutorials', requireTenant, requireAuth, async (req, res, next) => {
     try {
@@ -39505,7 +39739,10 @@ Use timestamps like [00:00] to help with pacing.`;
         const userRoles = req.user!.roles;
         const isAdmin = userRoles.includes('admin') || userRoles.includes('owner');
 
-        const tenantCondition = eq(helpDocuments.tenantId, req.tenant!.id);
+        const tenantCondition = or(
+          eq(helpDocuments.tenantId, req.tenant!.id),
+          eq(helpDocuments.isGlobal, true)
+        );
 
         // Non-admins only see items where visibleToRoles is null/empty OR overlaps their roles
         const visibilityCondition = isAdmin
@@ -39586,7 +39823,7 @@ Use timestamps like [00:00] to help with pacing.`;
         const [doc] = await db
           .select({ fileUrl: helpDocuments.fileUrl, tenantId: helpDocuments.tenantId })
           .from(helpDocuments)
-          .where(and(eq(helpDocuments.id, req.params.id), eq(helpDocuments.tenantId, req.tenant!.id)))
+          .where(and(eq(helpDocuments.id, req.params.id), or(eq(helpDocuments.tenantId, req.tenant!.id), eq(helpDocuments.isGlobal, true))))
           .limit(1);
         if (!doc) return res.status(404).json({ error: 'Document not found' });
 

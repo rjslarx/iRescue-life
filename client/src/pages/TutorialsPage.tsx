@@ -40,7 +40,7 @@ import { z } from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import {
   Loader2, Plus, Edit, Trash2, Play, Video, BookOpen,
-  ExternalLink, FileText, Upload, Download, File, Lock, Eye, X,
+  ExternalLink, FileText, Upload, Download, File, Lock, Eye, X, Globe,
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -898,7 +898,7 @@ function TutorialCard({
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between gap-2">
           <CardTitle className="text-base line-clamp-2">{tutorial.title}</CardTitle>
-          {isAdmin && (
+          {isAdmin && !tutorial.isGlobal && (
             <div className="flex gap-1 shrink-0">
               <Button size="icon" variant="ghost" onClick={onEdit} data-testid={`button-edit-${tutorial.id}`}>
                 <Edit className="h-4 w-4" />
@@ -913,7 +913,12 @@ function TutorialCard({
           <Badge variant="secondary" className="w-fit">
             {CATEGORIES.find(c => c.value === tutorial.category)?.label || tutorial.category}
           </Badge>
-          {isAdmin && <VisibilityBadge roles={tutorial.visibleToRoles as RoleValue[] | null} />}
+          {tutorial.isGlobal && (
+            <Badge variant="outline" className="w-fit gap-1 text-xs" data-testid={`badge-platform-${tutorial.id}`}>
+              <Globe className="h-3 w-3" /> Platform
+            </Badge>
+          )}
+          {isAdmin && !tutorial.isGlobal && <VisibilityBadge roles={tutorial.visibleToRoles as RoleValue[] | null} />}
         </div>
       </CardHeader>
 
@@ -1009,7 +1014,7 @@ function DocumentCard({
               <div className="shrink-0 mt-0.5">{getFileIcon(doc.mimeType)}</div>
               <CardTitle className="text-base line-clamp-2">{doc.title}</CardTitle>
             </div>
-            {isAdmin && (
+            {isAdmin && !doc.isGlobal && (
               <div className="flex gap-1 shrink-0">
                 <Button size="icon" variant="ghost" onClick={onEdit} data-testid={`button-edit-doc-${doc.id}`}>
                   <Edit className="h-4 w-4" />
@@ -1022,7 +1027,12 @@ function DocumentCard({
           </div>
           <div className="flex flex-wrap gap-1.5">
             <Badge variant="secondary" className="w-fit">{getCategoryLabel(doc.category)}</Badge>
-            {isAdmin && <VisibilityBadge roles={doc.visibleToRoles as RoleValue[] | null} />}
+            {doc.isGlobal && (
+              <Badge variant="outline" className="w-fit gap-1 text-xs" data-testid={`badge-platform-doc-${doc.id}`}>
+                <Globe className="h-3 w-3" /> Platform
+              </Badge>
+            )}
+            {isAdmin && !doc.isGlobal && <VisibilityBadge roles={doc.visibleToRoles as RoleValue[] | null} />}
           </div>
         </CardHeader>
 

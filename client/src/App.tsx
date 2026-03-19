@@ -144,6 +144,8 @@ import AuditLogsPage from "@/pages/platform/AuditLogsPage";
 import AnnouncementsPage from "@/pages/platform/AnnouncementsPage";
 import SystemHealthPage from "@/pages/platform/SystemHealthPage";
 import PlatformSettingsPage from "@/pages/platform/PlatformSettingsPage";
+import PlatformGlobalContentPage from "@/pages/platform/PlatformGlobalContentPage";
+import PlatformVideoScriptPage from "@/pages/platform/PlatformVideoScriptPage";
 import PlatformLoginPage from "@/pages/platform/PlatformLoginPage";
 import PlatformForgotPasswordPage from "@/pages/platform/PlatformForgotPasswordPage";
 import PlatformResetPasswordPage from "@/pages/platform/PlatformResetPasswordPage";
@@ -216,6 +218,8 @@ function RouterSwitch() {
       <Route path="/platform/announcements" component={AnnouncementsPage} />
       <Route path="/platform/health" component={SystemHealthPage} />
       <Route path="/platform/settings" component={PlatformSettingsPage} />
+      <Route path="/platform/global-content" component={PlatformGlobalContentPage} />
+      <Route path="/platform/video-scripts" component={PlatformVideoScriptPage} />
       <Route path="/platform/mfa-setup" component={MfaSetup} />
       <Route path="/platform/login" component={PlatformLoginPage} />
       <Route path="/platform/forgot-password" component={PlatformForgotPasswordPage} />
