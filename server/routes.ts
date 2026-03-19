@@ -10191,6 +10191,7 @@ Crawl-delay: 1
       
       let contractSent = false;
       let checkoutSession = null;
+      let smsQuietHoursWarning: string | null = null;
       
       // If sendContract is true, create checkout session and send contract email
       if (sendContract && parsedTemplateId) {
@@ -10224,8 +10225,17 @@ Crawl-delay: 1
           .where(eq(adoptionCheckoutSessions.id, checkoutSession.id));
         // Send the checkout link via preferred method (default to email)
         const deliveryMethod = sendMethod || 'email';
-        await sendCheckoutLink(checkoutSession.id, token, deliveryMethod);
-        contractSent = true;
+        try {
+          await sendCheckoutLink(checkoutSession.id, token, deliveryMethod);
+          contractSent = true;
+        } catch (sendErr: any) {
+          if (sendErr.isQuietHours || sendErr.statusCode === 422) {
+            contractSent = false;
+            smsQuietHoursWarning = sendErr.message || 'SMS cannot be sent during quiet hours (8 PM – 6 AM CST). The adoption was approved — please resend the link during business hours or switch to email.';
+          } else {
+            throw sendErr;
+          }
+        }
       }
       
       res.json({ 
@@ -10233,6 +10243,7 @@ Crawl-delay: 1
         application: updatedApplication,
         contractSent,
         checkoutSession: checkoutSession ? { id: checkoutSession.id } : null,
+        ...(smsQuietHoursWarning ? { warning: smsQuietHoursWarning } : {}),
       });
     } catch (error) {
       next(error);
@@ -10397,7 +10408,16 @@ Crawl-delay: 1
         })
         .where(eq(adoptionCheckoutSessions.id, req.params.id));
 
-      await sendCheckoutLink(req.params.id, token, method);
+      try {
+        await sendCheckoutLink(req.params.id, token, method);
+      } catch (sendErr: any) {
+        if (sendErr.isQuietHours || sendErr.statusCode === 422) {
+          return res.status(422).json({ 
+            error: sendErr.message || 'SMS cannot be sent during quiet hours (8 PM – 6 AM CST). Please try again during business hours or switch to email.',
+          });
+        }
+        throw sendErr;
+      }
 
       res.json({ success: true, message: 'Checkout link sent successfully' });
     } catch (error: any) {

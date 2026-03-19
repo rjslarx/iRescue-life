@@ -675,6 +675,14 @@ export async function sendCheckoutLink(
     );
 
     if (result.status === 'failed') {
+      const isQuietHours = result.error?.includes('quiet hours');
+      const isPaused = result.error?.includes('paused');
+      if (isQuietHours || isPaused) {
+        const err = new Error(result.error || 'SMS delivery blocked');
+        (err as any).statusCode = 422;
+        (err as any).isQuietHours = isQuietHours;
+        throw err;
+      }
       throw new Error(result.error || 'Failed to send SMS');
     }
   }

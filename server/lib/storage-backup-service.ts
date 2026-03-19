@@ -751,11 +751,16 @@ export class StorageBackupService {
     folderName: string,
     parentId?: string
   ): Promise<{ success: boolean; folderId?: string; error?: string }> {
-    const existing = await driveService.findFolder(folderName, parentId);
-    if (existing.success && existing.folderId) {
-      return existing;
+    try {
+      const existing = await driveService.findFolder(folderName, parentId);
+      if (existing && existing.success && existing.folderId) {
+        return existing;
+      }
+      const created = await driveService.createFolder({ name: folderName, parentId });
+      return created || { success: false, error: 'createFolder returned null' };
+    } catch (err: any) {
+      return { success: false, error: err?.message || 'Failed to get or create folder' };
     }
-    return driveService.createFolder({ name: folderName, parentId });
   }
 
   /**
@@ -795,8 +800,8 @@ export class StorageBackupService {
   ): Promise<boolean> {
     try {
       const result = await driveService.listFiles({ folderId, pageSize: 100 });
-      if (result.success && result.files) {
-        return result.files.some(f => f.name === fileName);
+      if (result && result.success && result.files && Array.isArray(result.files)) {
+        return result.files.some(f => f?.name === fileName);
       }
     } catch (error) {
       console.log(`[STORAGE BACKUP] Could not check for existing file: ${fileName}`);
