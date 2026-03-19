@@ -39769,7 +39769,7 @@ Use timestamps like [00:00] to help with pacing.`;
     app.post('/api/help-documents', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
       try {
         const { helpDocuments, insertHelpDocumentSchema } = await import('@shared/schema');
-        const data = insertHelpDocumentSchema.parse({ ...req.body, tenantId: req.tenant!.id });
+        const data = insertHelpDocumentSchema.parse({ ...req.body, tenantId: req.tenant!.id, isGlobal: false });
         const [doc] = await db.insert(helpDocuments).values(data).returning();
         res.json({ document: doc });
       } catch (error) { next(error); }
