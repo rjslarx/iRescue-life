@@ -16,11 +16,11 @@ interface HappyTailsCardProps {
 export default function HappyTailsCard({ tail }: HappyTailsCardProps) {
   return (
     <Card className="overflow-hidden" data-testid={`card-happy-tail-${tail.id}`}>
-      <div className="overflow-hidden bg-muted">
+      <div className="overflow-hidden bg-muted aspect-[2/3]">
         <img 
           src={tail.photo} 
           alt={tail.animalName}
-          className="w-full h-auto"
+          className="w-full h-full object-cover object-center"
         />
       </div>
       <CardContent className="p-6 space-y-3">
