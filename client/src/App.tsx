@@ -77,6 +77,7 @@ import PublicWishlist from "@/pages/PublicWishlist";
 import EmailInboxPage from "@/pages/EmailInboxPage";
 import HappyTailsPage from "@/pages/HappyTailsPage";
 import TutorialsPage from "@/pages/TutorialsPage";
+import VideoScriptGeneratorPage from "@/pages/VideoScriptGeneratorPage";
 import PlatformIntegrationsPage from "@/pages/PlatformIntegrationsPage";
 import ComplianceSettingsPage from "@/pages/ComplianceSettingsPage";
 import PeerCampaignPage from "@/pages/PeerCampaignPage";
@@ -358,6 +359,7 @@ function RouterSwitch() {
       <ProtectedRoute path="/dashboard/supplies" pageId="supply-registry" component={SupplyManagementPage} />
       <ProtectedRoute path="/dashboard/happy-tails" pageId="happy-tails" component={HappyTailsPage} />
       <ProtectedRoute path="/dashboard/tutorials" pageId="tutorials" component={TutorialsPage} />
+      <ProtectedRoute path="/dashboard/video-scripts" pageId="tutorials" component={VideoScriptGeneratorPage} />
       <ProtectedRoute path="/dashboard/event-ticket-sales" pageId="event-ticket-sales" component={EventTicketSalesPage} />
       <ProtectedRoute path="/dashboard/transfers" pageId="animals" component={TransfersPage} />
       <ProtectedRoute path="/dashboard/kennels" pageId="animals" component={KennelManagementPage} />

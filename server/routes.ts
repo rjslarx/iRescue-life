@@ -39270,6 +39270,102 @@ The user asking is a tenant administrator or staff member.`;
    * CRUD operations for help/tutorial videos
    */
 
+
+  // ============================================================================
+  // Video Script Generator - AI-powered how-to video script creation
+  // ============================================================================
+  
+  const VIDEO_SCRIPT_FEATURES: Record<string, string> = {
+    'Animal Management': 'Managing animals in the shelter. Adding new animals, editing profiles, uploading photos, setting status (Available, Adopted, Foster, Hold, Medical Hold), assigning kennel locations, and using search/filter. Animals have a 3-pillar architecture: Status, Location, and Badges. Each animal gets a local shelter ID and a global UUID. Sidebar: Animals section.',
+    'Kennel Management': 'The Facility Manager for kennel layout and occupancy. Create buildings (Main Shelter, Quarantine), add rows with capacity and type (standard, isolation, puppy, cat), assign animals to positions. Visual grid view, list view, edit layout mode, drag-and-drop assignment, printable kennel cards. Sidebar: Operations > Kennels.',
+    'Adoption Pipeline': 'Full adoption workflow from application to completion. Kanban-style pipeline: New Application, Under Review, Home Check, Approved, Contract Sent, Adopted. Review applications, approve with contract templates, send checkout links via email or SMS, collect fees through Stripe, generate adoption packets. Supports fast-track adoptions and fee waivers. Sidebar: Adoptions.',
+    'Medical Records': 'Comprehensive medical record management. Add vaccines, diagnostics, procedures, prescriptions, medical exams. Animal Medical Profile page with tabs. Smart Add Medical Order Modal (CPOE). Preventative care tracking, puppy protocol automation, medical protocol engine. Edit audit trails. Unified Daily Medical Roster. Sidebar: Medical section.',
+    'Foster Care': 'Foster parent management and My Fosters portal. Assign animals to foster homes, create medication plans with scheduled tasks, track compliance. Mobile-first foster portal with medication task confirmation. SMS escalation for unconfirmed tasks (hourly digests, evening nudges, dashboard alerts). Sidebar: Foster section.',
+    'Fundraising': 'Donation & Fundraising Hub: general donations, animal-targeted fundraising, P2P campaigns with participant sub-pages and unit-based pledges, Voting Contests (dollar equals one vote), fundraiser events and products with QR codes. Custom campaign theme colors. Public campaign pages. Campaign Intake Form for external partners. Sidebar: Fundraising.',
+    'Volunteer Management': 'Volunteer coordination. Manage profiles, track hours, assign to events and shifts. SMS signup for open shifts. Document management for agreements and background checks. Sidebar: Volunteers section.',
+    'Happy Tails': 'Success stories showcasing adopted animals. Create entries with photos and stories. Displayed on public website as a gallery. Portrait-style photo layout. Helps community engagement. Sidebar: Happy Tails section.',
+    'Communications': 'Omnichannel Communications Switchboard. Email notifications, SMS messaging, SMS logs, Pause Outbound Comms kill switch, channel conversion modal. Quiet hours enforcement (8 PM to 6 AM CST). Automated Daily Staff Briefing and Pending Applications Digest. Sidebar: Communications.',
+    'Contacts': 'Contact management for adopters, fosters, volunteers, donors, vets, and general contacts. Contact profiles with interaction history, applications, donations, volunteer hours. Search and filter. Sidebar: Contacts.',
+    'E-Signatures': 'Native e-signature system for adoption contracts. Create customizable contract templates, send for signature via checkout links, digital signing. Generates legally verifiable PDFs with timestamps and IP addresses. Sidebar: Settings > Contract Templates.',
+    'Supplies & Expenditures': 'Supply registry and expenditure tracking. Manage shelter supply inventory, track spending by category, monitor budgets. Link expenditures to specific animals or general operations. Sidebar: Finances.',
+    'Events': 'Event management for adoption events, fundraisers, volunteer activities, community outreach. Create events with dates, locations, descriptions, volunteer needs. Track RSVPs, sell tickets via fundraiser module. Sidebar: Events.',
+    'Documents & AI Import': 'Document management with AI-powered PDF auto-import. Upload documents to animal profiles. Email PDF Auto-Import with system inbound email, automatic PDF upload to storage, Gemini AI parsing into structured medical data for approval. Reviewed batches auto-save to animal Documents tab. Sidebar: Documents, Medical Import.',
+    'TNR Log': 'Trap-Neuter-Return record management within animal data. Track trap date, location, procedure details, ear tip status, release information. For grant reporting and compliance. Sidebar: TNR section.',
+    'Grants Dashboard': 'Grant Readiness & Compliance Dashboard. Track regulatory deadlines, document flags, intake/outcome statistics with live release rate. Monitor grant applications, awards, reporting requirements. Sidebar: Grants.',
+    'Help & Training': 'Two-tab page for training videos and documents with role-based visibility. Upload how-to videos and documents shown to staff by role. Onboarding and reference materials. Sidebar: Help & Training.',
+    'Adopter Compliance': 'Post-adoption compliance tracking. Microchip registration reminders, spay/neuter deadlines, breach escalation with automated notifications and dashboard alerts. Staff can view compliance status per adopter. Sidebar: Compliance within Adoptions.',
+    'Network Transfers': 'Tenant-to-tenant animal transfer engine with Clone-and-Link. Transfer between organizations preserving medical history. Medical Transfer Packets (PDF) with vaccination, preventative care, and upcoming items. Sidebar: Transfers.',
+    'Settings & Configuration': 'Platform settings: organization profile and branding, user management and RBAC, medical protocols customization, contract templates, notification preferences, subscription feature flags, Google Drive backup, system inbound email. Sidebar: Settings.',
+    'Public Website': 'Tenant public-facing website showcasing available animals, donations, Happy Tails, organization info. Customizable layouts with branding. Campaign landing pages, event listings, adoption application forms. Accessed via tenant subdomain.',
+  };
+
+  const VIDEO_SCRIPT_PLATFORM_CONTEXT = `You are a script writer for iRescue.life, a multi-tenant SaaS platform for animal rescue organizations. The platform helps shelters manage animals, adoptions, medical records, fundraising, volunteers, foster care, and more. Each rescue organization (tenant) gets their own subdomain and a full suite of tools.
+
+When writing scripts:
+- Use a warm, professional, and encouraging tone
+- Assume the viewer is a shelter staff member or admin who may not be tech-savvy
+- Reference specific UI elements by name (sidebar items, buttons, tabs, dialogs)
+- Include what you will see on screen cues for the video editor
+- Keep each step clear and concise
+- Suggest screen recording moments (e.g., SHOW: Click the Add Animal button)
+- Include an intro and outro for each video
+- Target video length: 2-4 minutes per script`;
+
+  app.post('/api/tools/generate-video-script', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+    try {
+      const { feature, notes } = req.body;
+      if (!feature || typeof feature !== 'string') {
+        return res.status(400).json({ error: 'Feature name is required' });
+      }
+
+      const featureContext = VIDEO_SCRIPT_FEATURES[feature] || feature;
+
+      const prompt = `${VIDEO_SCRIPT_PLATFORM_CONTEXT}
+
+FEATURE TO COVER: ${feature}
+FEATURE DETAILS: ${featureContext}
+${notes ? `
+ADDITIONAL NOTES FROM THE CREATOR: ${notes}` : ''}
+
+Please write a complete how-to video script for this feature. Structure it as follows:
+
+1. TITLE - A clear, searchable title for the video
+2. DURATION - Estimated video length
+3. TARGET AUDIENCE - Who this video is for
+4. INTRO (15-20 seconds) - Welcome, briefly state what they will learn
+5. MAIN CONTENT - Step-by-step walkthrough with:
+   - NARRATOR lines (what to say)
+   - SCREEN CUE lines (what to show on screen, formatted as SHOW: ...)
+   - Tips or callouts where helpful (formatted as TIP: ...)
+6. RECAP - Quick summary of what was covered
+7. OUTRO (10-15 seconds) - Encourage next steps, mention related features
+
+Format the script so it is easy to read and follow during recording.
+Use timestamps like [00:00] to help with pacing.`;
+
+      const { GoogleGenAI } = require('@google/genai');
+      const geminiApiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY;
+      const geminiBaseUrl = process.env.AI_INTEGRATIONS_GEMINI_BASE_URL;
+      const aiConfig: any = {
+        apiKey: geminiApiKey || 'not-configured',
+        ...(geminiBaseUrl && { httpOptions: { apiVersion: '', baseUrl: geminiBaseUrl } }),
+      };
+      const ai = new GoogleGenAI(aiConfig);
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        config: { temperature: 0.7 },
+      });
+
+      const script = response.text || 'No content generated.';
+      res.json({ script, feature });
+    } catch (error: any) {
+      console.error('[VIDEO SCRIPT] Generation error:', error.message);
+      next(error);
+    }
+  });
+
   // GET /api/tutorials - Get all tutorials for the tenant
   app.get('/api/tutorials', requireTenant, requireAuth, async (req, res, next) => {
     try {

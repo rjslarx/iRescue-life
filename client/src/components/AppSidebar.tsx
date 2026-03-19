@@ -359,6 +359,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
       title: "Help & Training",
       items: [
         { title: "Help & Training", url: "/dashboard/tutorials", icon: BookOpen },
+        { title: "Video Script Generator", url: "/dashboard/video-scripts", icon: Video },
       ],
       defaultOpen: false,
     },
@@ -580,6 +581,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
     '/dashboard/website-builder': 'custom-pages',
     '/dashboard/collaboration': 'collaboration',
     '/dashboard/tutorials': 'tutorials',
+    '/dashboard/video-scripts': 'tutorials',
     '/dashboard/event-ticket-sales': 'event-ticket-sales',
     '/dashboard/volunteer-pipeline': 'volunteer-pipeline',
     '/dashboard/foster-pipeline': 'foster-pipeline',
