@@ -117,10 +117,10 @@ type GrantMetrics = {
     };
   };
   financial: {
-    totalDonations: string;
+    totalAwarded: string;
+    totalRequested: string;
     totalExpenses: string;
     costPerAnimal: string;
-    adoptionFeesCollected: string;
   };
   operational: {
     totalVolunteerHours: number;
@@ -709,17 +709,17 @@ export default function GrantsPage() {
                     </CardContent>
                   </Card>
 
-                  <Card data-testid="card-donations">
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-sm font-medium">Donations</CardTitle>
+                  <Card data-testid="card-grants-awarded">
+                    <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Grants Awarded</CardTitle>
                       <DollarSign className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                      <div className="text-2xl font-bold" data-testid="text-donations">
-                        ${metrics.financial.totalDonations}
+                      <div className="text-2xl font-bold" data-testid="text-grants-awarded">
+                        ${metrics.financial.totalAwarded}
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        ${metrics.financial.adoptionFeesCollected} from adoption fees
+                        ${metrics.financial.totalRequested} requested
                       </p>
                     </CardContent>
                   </Card>
@@ -784,14 +784,18 @@ export default function GrantsPage() {
 
                   <Card data-testid="card-financial-summary">
                     <CardHeader>
-                      <CardTitle>Financial Summary</CardTitle>
-                      <CardDescription>Revenue and expenses overview</CardDescription>
+                      <CardTitle>Grant Financial Summary</CardTitle>
+                      <CardDescription>Grant funding and expenses overview</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
-                          <span className="text-sm">Total Donations</span>
-                          <span className="font-medium">${metrics.financial.totalDonations}</span>
+                          <span className="text-sm">Total Awarded</span>
+                          <span className="font-medium">${metrics.financial.totalAwarded}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm">Total Requested</span>
+                          <span className="font-medium">${metrics.financial.totalRequested}</span>
                         </div>
                         <div className="flex items-center justify-between">
                           <span className="text-sm">Total Expenses</span>
@@ -804,9 +808,9 @@ export default function GrantsPage() {
                       </div>
                       <div className="pt-4 border-t">
                         <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium">Net Income</span>
+                          <span className="text-sm font-medium">Net Balance</span>
                           <span className="text-lg font-bold">
-                            ${(parseFloat(metrics.financial.totalDonations) - parseFloat(metrics.financial.totalExpenses)).toFixed(2)}
+                            ${(parseFloat(metrics.financial.totalAwarded) - parseFloat(metrics.financial.totalExpenses)).toFixed(2)}
                           </span>
                         </div>
                       </div>

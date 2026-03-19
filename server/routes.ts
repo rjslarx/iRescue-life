@@ -15365,7 +15365,7 @@ ${renderedHtml}
         applications, 
         fosterAnimals, 
         calendarEvents,
-        donations,
+        grants,
         expenditures,
         procedureLogs
       } = await import('@shared/schema');
@@ -15429,14 +15429,17 @@ ${renderedHtml}
         )
       ).length;
       
-      // Financial data (filtered by date range)
-      const allDonations = await db
+      // Financial data — grant awards (filtered by award_date in date range)
+      const allGrants = await db
         .select()
-        .from(donations)
-        .where(eq(donations.tenantId, req.tenant!.id));
+        .from(grants)
+        .where(eq(grants.tenantId, req.tenant!.id));
       
-      const donationsInRange = allDonations.filter(d => inRange(d.createdAt));
-      const totalDonations = donationsInRange.reduce((sum, d) => sum + (Number(d.amount) / 100), 0);
+      const awardedStatuses = ['awarded', 'active', 'completed'];
+      const grantsAwarded = allGrants.filter(g => awardedStatuses.includes(g.status || '') && inRange(g.awardDate));
+      const totalAwarded = grantsAwarded.reduce((sum, g) => sum + parseFloat(g.amountAwarded || '0'), 0);
+      const grantsRequested = allGrants.filter(g => inRange(g.applicationDeadline));
+      const totalRequested = grantsRequested.reduce((sum, g) => sum + parseFloat(g.amountRequested || '0'), 0);
       
       const allExpenditures = await db
         .select()
@@ -15507,13 +15510,10 @@ ${renderedHtml}
           },
         },
         financial: {
-          totalDonations: totalDonations.toFixed(2),
+          totalAwarded: totalAwarded.toFixed(2),
+          totalRequested: totalRequested.toFixed(2),
           totalExpenses: totalExpenses.toFixed(2),
           costPerAnimal: costPerAnimal.toFixed(2),
-          adoptionFeesCollected: donationsInRange
-            .filter(d => d.source === 'online_form')
-            .reduce((sum, d) => sum + (Number(d.amount) / 100), 0)
-            .toFixed(2),
         },
         operational: {
           totalVolunteerHours: parseFloat(totalVolunteerHoursCalc.toFixed(1)),
