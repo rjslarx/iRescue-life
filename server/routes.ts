@@ -16487,7 +16487,11 @@ ${renderedHtml}
         ['admin', 'board_member', 'staff'].includes(role)
       );
 
-      let query = db
+      const whereCondition = isStaff
+        ? eq(happyTails.tenantId, req.tenant!.id)
+        : and(eq(happyTails.tenantId, req.tenant!.id), eq(happyTails.isPublished, true));
+
+      const tails = await db
         .select({
           id: happyTails.id,
           tenantId: happyTails.tenantId,
@@ -16501,14 +16505,8 @@ ${renderedHtml}
           createdAt: happyTails.createdAt,
         })
         .from(happyTails)
-        .where(eq(happyTails.tenantId, req.tenant!.id));
-
-      // If not staff, only show published happy tails
-      if (!isStaff) {
-        query = query.where(eq(happyTails.isPublished, true)) as any;
-      }
-
-      const tails = await query.orderBy(desc(happyTails.createdAt));
+        .where(whereCondition)
+        .orderBy(desc(happyTails.createdAt));
 
       res.json({ happyTails: tails });
     } catch (error) {
