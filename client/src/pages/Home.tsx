@@ -258,6 +258,7 @@ export default function Home() {
 
   const { data: happyTailsData, isLoading: isLoadingHappyTails } = useQuery<{ happyTails: HappyTail[] }>({
     queryKey: ['/api/happy-tails', tenantId],
+    staleTime: 1000 * 60 * 5,
   });
 
   const { data: contentModulesData } = useQuery<{ modules: ContentModule[] }>({
