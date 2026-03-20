@@ -25887,14 +25887,8 @@ Submitted: ${new Date().toLocaleString()}
 
             const donorCoveredFees = sessionMetadata.donorCoveredFees === 'true' || sessionMetadata.donorCoversFees === 'true';
             const baseAmountCents = sessionMetadata.baseAmount ? parseInt(sessionMetadata.baseAmount, 10) : (session.amount_total || 0);
-            const grossAmountCents = session.amount_total || 0;
-            const platformFeeCollected = sessionMetadata.platformFeeCollected === 'true';
-            const platformFeeCents = platformFeeCollected && sessionMetadata.platformFeeAmount
-              ? parseInt(sessionMetadata.platformFeeAmount, 10)
-              : 0;
-            const { STRIPE_PROCESSING_FEE_PERCENT: stripePct, STRIPE_PROCESSING_FEE_FIXED_CENTS: stripeFixed } = await import('./config/platform');
-            const estimatedStripeFeeCents = Math.round(grossAmountCents * (stripePct / 100)) + stripeFixed;
-            const netAmountCents = grossAmountCents - platformFeeCents - estimatedStripeFeeCents;
+            const grossAmountCents = donorCoveredFees ? (session.amount_total || 0) : baseAmountCents;
+            const netAmountCents = baseAmountCents;
 
             const [donationRecord] = await db.insert(donations).values({
               tenantId: tenant.id,
