@@ -1,6 +1,5 @@
 import { Route, RouteProps } from 'wouter';
 import { RequirePageAccess } from './RequirePageAccess';
-import { ProFeatureGate } from './ProFeatureGate';
 
 interface ProtectedRouteProps extends RouteProps {
   pageId: string;
@@ -15,13 +14,7 @@ export function ProtectedRoute({ pageId, component: Component, proOnly, proFeatu
       {...routeProps}
       component={(props: any) => (
         <RequirePageAccess pageId={pageId}>
-          {proOnly ? (
-            <ProFeatureGate featureName={proFeatureName}>
-              <Component {...props} />
-            </ProFeatureGate>
-          ) : (
-            <Component {...props} />
-          )}
+          <Component {...props} />
         </RequirePageAccess>
       )}
     />

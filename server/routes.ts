@@ -2,7 +2,7 @@ import type { Express } from "express";
 import express from "express";
 import { createServer, type Server } from "http";
 import { requireTenant } from "./middleware/tenant";
-import { requireAuth, requireRole, requireRoleOrPageAccess, requireProTier } from "./middleware/auth";
+import { requireAuth, requireRole, requireRoleOrPageAccess } from "./middleware/auth";
 import { loginUser, createTenantWithAdmin, createUser } from "./services/auth";
 import { PushNotificationService } from "./services/push-notifications";
 import { db } from "./db";
