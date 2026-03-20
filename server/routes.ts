@@ -39312,7 +39312,7 @@ Please write a complete how-to video script for this feature. Structure it as fo
 Format the script so it is easy to read and follow during recording.
 Use timestamps like [00:00] to help with pacing.`;
 
-      const { GoogleGenAI } = require('@google/genai');
+      const { GoogleGenAI } = await import('@google/genai');
       const geminiApiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY;
       const geminiBaseUrl = process.env.AI_INTEGRATIONS_GEMINI_BASE_URL;
       const aiConfig: any = {
@@ -39548,7 +39548,7 @@ Please write a complete how-to video script for this feature. Structure it as fo
 Format the script so it is easy to read and follow during recording.
 Use timestamps like [00:00] to help with pacing.`;
 
-      const { GoogleGenAI } = require('@google/genai');
+      const { GoogleGenAI } = await import('@google/genai');
       const geminiApiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY;
       const geminiBaseUrl = process.env.AI_INTEGRATIONS_GEMINI_BASE_URL;
       const aiConfig: any = {
