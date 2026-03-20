@@ -31,6 +31,7 @@ const FEATURES = [
   "Network Transfers",
   "Settings & Configuration",
   "Public Website",
+  "Emergency Medical Fund",
 ];
 
 export default function VideoScriptGeneratorPage() {
