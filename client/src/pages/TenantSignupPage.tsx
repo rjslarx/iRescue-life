@@ -63,7 +63,7 @@ type OrganizationFormData = z.infer<typeof organizationSchema>;
 export default function TenantSignupPage() {
   const urlParams = new URLSearchParams(window.location.search);
   const tierParam = urlParams.get("tier");
-  const initialTier: "lite" | "professional" = tierParam === "professional" ? "professional" : "lite";
+  const initialTier: "lite" | "professional" = (tierParam === "professional" || tierParam === "pro") ? "professional" : "lite";
 
   const [selectedTier, setSelectedTier] = useState<"lite" | "professional">(initialTier);
   const [formData, setFormData] = useState<OrganizationFormData>({

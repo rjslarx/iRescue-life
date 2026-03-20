@@ -271,7 +271,7 @@ export default function PlatformPricingPage() {
                     </li>
                   ))}
                 </ul>
-                <Link href="/platform/signup?tier=professional" className="mt-6">
+                <Link href="/platform/signup?tier=pro" className="mt-6">
                   <Button
                     className="w-full text-white"
                     style={{ backgroundColor: TEAL }}
@@ -335,7 +335,7 @@ export default function PlatformPricingPage() {
                 Start for Free
               </Button>
             </Link>
-            <Link href="/platform/signup?tier=professional">
+            <Link href="/platform/signup?tier=pro">
               <Button
                 size="lg"
                 variant="outline"
