@@ -100,7 +100,6 @@ interface NavItem {
   icon: any;
   notificationKey?: string;
   usesGoogleDrive?: boolean;
-  proOnly?: boolean;
 }
 
 interface NavGroup {
@@ -166,7 +165,6 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
   const { data: tenantData } = useQuery<{ tenant: { subscriptionTier: string; tnrEnabled?: boolean } }>({
     queryKey: ['/api/tenant'],
   });
-  const isLiteTier = tenantData?.tenant?.subscriptionTier === 'lite';
   const tnrEnabled = tenantData?.tenant?.tnrEnabled === true;
   const { actions: allFavoriteActions, handleAction: handleFavoriteAction } = useQuickActions({
     onRecordDonation: () => setShowDonationDialog(true),
@@ -643,7 +641,6 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
     .map(group => ({
       ...group,
       items: group.items.filter(item => {
-        if (isLiteTier && item.proOnly) return false;
         return shouldShowMenuItem(item.url);
       })
     }))
