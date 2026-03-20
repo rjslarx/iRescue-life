@@ -307,45 +307,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Pro-tier API Route Protection
   // Blocks Lite tier tenants from accessing Pro-only API endpoints
   // ============================================================================
-  const PRO_ONLY_API_PREFIXES = [
-    '/api/applications',
-    '/api/intake',
-    '/api/foster-applications',
-    '/api/foster-pipeline',
-    '/api/volunteer-applications',
-    '/api/volunteer-pipeline',
-    '/api/medical-pipeline',
-    '/api/medical-tasks',
-    '/api/custom-forms',
-    '/api/contract-templates',
-    '/api/grants',
-    '/api/newsletter/campaigns',
-    '/api/newsletter/subscribers',
-    '/api/compliance',
-    '/api/site-permissions',
-  ];
-
-  const PRO_ONLY_PUBLIC_EXCEPTIONS = [
-    '/api/compliance/public/',
-  ];
-
-  app.use((req, res, next) => {
-    if (!req.tenant || (req.tenant as any).subscriptionTier !== 'lite') {
-      return next();
-    }
-    const isPublicException = PRO_ONLY_PUBLIC_EXCEPTIONS.some(prefix => req.path.startsWith(prefix));
-    if (isPublicException) {
-      return next();
-    }
-    const isProOnlyPath = PRO_ONLY_API_PREFIXES.some(prefix => req.path.startsWith(prefix));
-    if (isProOnlyPath) {
-      return res.status(403).json({
-        error: 'Pro Feature',
-        message: 'This feature requires the Professional plan.',
-      });
-    }
-    next();
-  });
+  // Lite tier now has all the same features as Pro tier.
+  // No API prefix restrictions are applied to lite tenants.
 
   // ============================================================================
   // Public Routes (no authentication required)
@@ -25922,6 +25885,17 @@ Submitted: ${new Date().toLocaleString()}
               ? `Sponsored: ${sessionMetadata.sponsoredAnimalName}${feeNote}`
               : feeNote || null;
 
+            const donorCoveredFees = sessionMetadata.donorCoveredFees === 'true' || sessionMetadata.donorCoversFees === 'true';
+            const baseAmountCents = sessionMetadata.baseAmount ? parseInt(sessionMetadata.baseAmount, 10) : (session.amount_total || 0);
+            const grossAmountCents = session.amount_total || 0;
+            const platformFeeCollected = sessionMetadata.platformFeeCollected === 'true';
+            const platformFeeCents = platformFeeCollected && sessionMetadata.platformFeeAmount
+              ? parseInt(sessionMetadata.platformFeeAmount, 10)
+              : 0;
+            const { STRIPE_PROCESSING_FEE_PERCENT: stripePct, STRIPE_PROCESSING_FEE_FIXED_CENTS: stripeFixed } = await import('./config/platform');
+            const estimatedStripeFeeCents = Math.round(grossAmountCents * (stripePct / 100)) + stripeFixed;
+            const netAmountCents = grossAmountCents - platformFeeCents - estimatedStripeFeeCents;
+
             const [donationRecord] = await db.insert(donations).values({
               tenantId: tenant.id,
               donorId: donor.id,
@@ -25932,7 +25906,7 @@ Submitted: ${new Date().toLocaleString()}
               donorState: billingAddr?.state || null,
               donorZip: billingAddr?.postal_code || null,
               donorCountry: billingAddr?.country || null,
-              amount: session.amount_total || 0,
+              amount: baseAmountCents,
               source: 'stripe' as any,
               date: new Date(),
               message: session.metadata?.message || null,
@@ -25943,6 +25917,9 @@ Submitted: ${new Date().toLocaleString()}
               paymentMethod: 'stripe',
               isPublic: true,
               description: donationDescription,
+              feesCovered: donorCoveredFees,
+              grossAmount: grossAmountCents,
+              netAmount: netAmountCents,
             }).returning();
             
             console.log(`[STRIPE-WEBHOOK] Created donation record ${donationRecord.id} for Finance page, donor: ${customerName} (${donor.id}), amount: $${session.amount_total / 100}${feeNote}`);

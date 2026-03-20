@@ -928,6 +928,9 @@ export const donations = pgTable("donations", {
   isPublic: boolean("is_public").notNull().default(true), // Whether this donation is visible on public donor wall
   contactId: uuid("contact_id").references(() => contacts.id, { onDelete: 'set null' }), // Linked contact record
   paymentMethod: text("payment_method"), // e.g. 'stripe', 'check', 'cash'
+  feesCovered: boolean("fees_covered").notNull().default(false),
+  grossAmount: integer("gross_amount"),
+  netAmount: integer("net_amount"),
   date: timestamp("date").notNull().defaultNow(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });

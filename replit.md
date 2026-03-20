@@ -28,7 +28,7 @@ Core functionalities include:
 - Automated email and optional SMS notifications for adopters.
 - A mobile-first Foster Portal (My Fosters) for foster parents, including medication task logging.
 - A Medication Plan & Task System for staff to create and track foster completion of medication plans.
-- Subscription Feature Flags to enable differentiated features based on subscription tiers.
+- Subscription Feature Flags to enable differentiated features based on subscription tiers (Note: Lite tier now has all Pro features unlocked).
 - A centralized Notification Preferences system allowing admins to configure event-based notifications.
 - **3-Pillar Animal Architecture:** Structuring animal data by `Status`, `Location`, and `Badges`.
 - Preventative Care Coverage Tracking and a "Smart Add Medical Order Modal" (CPOE) on the Animal Medical Profile page for efficient order entry.
@@ -37,7 +37,7 @@ Core functionalities include:
 - **Network Transfer Engine (Clone-and-Link):** Facilitates tenant-to-tenant animal transfers, preserving medical history.
 - **Two-Layer Animal Identity:** Each animal has a global UUID and a tenant-specific human-readable `local_shelter_id`.
 - **Unified Daily Medical Roster:** Provides an aggregated daily view of all pending medical tasks with a 30-second undo window for marked doses and admin override for foster medical tasks with audit trails.
-- **Donation & Fundraising Hub:** A centralized dashboard for general donations, targeted animal fundraising, and a fundraiser/event sales module with full campaign pages.
+- **Donation & Fundraising Hub:** A centralized dashboard for general donations, targeted animal fundraising, and a fundraiser/event sales module with full campaign pages. Includes "Donor Covers Fees" feature with `fees_covered`, `gross_amount`, and `net_amount` tracking in the donations table.
 - **Help & Training Module:** Offers a two-tab page for videos and documents with role-based visibility.
 - **TNR (Trap-Neuter-Return) Log Module:** Integrates TNR record management within existing animal data.
 - **Omnichannel Communications Switchboard:** A unified admin control panel for SMS logs and queued messages, including a "Pause Outbound Comms" kill switch and a "Convert Channel" modal.
