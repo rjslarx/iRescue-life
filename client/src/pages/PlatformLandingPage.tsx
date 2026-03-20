@@ -40,7 +40,7 @@ export default function PlatformLandingPage() {
 
   useSEO({
     title: "iRescue.life - Complete Animal Rescue Management Platform",
-    description: "All-in-one platform for animal rescues. Manage adoptions, volunteers, finances, medical records, and more. Choose Lite (free) or Pro ($39/mo) to fit your rescue's needs.",
+    description: "All-in-one platform for animal rescues. Manage adoptions, volunteers, finances, medical records, and more. Start free or upgrade to Scale ($39/mo) for zero platform fees.",
     siteName: "iRescue.life",
   });
 
