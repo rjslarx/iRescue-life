@@ -1,0 +1,28 @@
+I need to build a high-converting React Pricing Page component (`/pricing`) for our SaaS platform. The strategy is "Usage-Based Crossover," meaning both tiers get the exact same features, but the billing trigger changes.
+
+1. The Layout & Header:
+   - Create a clean, modern, two-column grid (side-by-side on desktop, stacked on mobile).
+   - Add a header above the cards: "Simple, transparent pricing built for rescues of all sizes."
+   - Add a subtle subheader: "Get full access to all features on both plans. Just pick the billing model that fits your cash flow."
+
+2. The "Starter" Tier Card (Left Column):
+   - Title: "Starter"
+   - Price: "$0 / month"
+   - Subtitle: "+ 5% platform fee on donations"
+   - Highlight Badge: "Best for rescues raising less than $800/mo"
+   - CTA Button: "Start for Free" (Secondary button styling).
+   - Features List: Map an array of features (e.g., "Unlimited Adoption Applications," "Peer-to-Peer Campaigns," "Grant Compliance Tracker," "Donor Covers the Fee Option"). Every feature must have a green checkmark icon.
+
+3. The "Scale" Tier Card (Right Column - Highlighted):
+   - Title: "Scale"
+   - Price: "$39 / month"
+   - Subtitle: "0% platform fee on donations"
+   - Highlight Badge: "Best for rescues raising over $800/mo"
+   - CTA Button: "Upgrade to Scale" (Primary button styling, highly visible).
+   - Features List: Render the exact same feature array as the Starter tier with the exact same green checkmarks. 
+   - Visual Difference: Give this card a subtle border, a slight drop shadow, or a "Most Popular" banner to draw the eye.
+
+4. The FAQ Section (Below the cards):
+   - Add a simple accordion FAQ.
+   - Question 1: "Do I have to pay credit card fees?" -> Answer: "Yes, standard Stripe processing fees (~2.9% + 30¢) apply to all transactions on both plans. However, our 'Cover the Fees' feature allows donors to pay this for you!"
+   - Question 2: "When should I upgrade to Scale?" -> Answer: "Once you are raising more than $800 a month through our platform, the $39 flat rate becomes cheaper than paying the 5% platform fee."
