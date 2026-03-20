@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { DemoRequestModal } from "@/components/DemoRequestModal";
 import { DemoAccessDialog } from "@/components/DemoAccessDialog";
@@ -14,12 +14,9 @@ import { CookiePolicyModal } from "@/components/CookiePolicyModal";
 import { useSEO } from "@/hooks/useSEO";
 import { 
   PawPrint, 
-  CheckCircle,
   ArrowRight,
   Heart,
   Play,
-  Zap,
-  Crown,
   Sparkles,
 } from "lucide-react";
 
@@ -47,40 +44,6 @@ export default function PlatformLandingPage() {
     siteName: "iRescue.life",
   });
 
-  const sharedFeatures = [
-    "Unlimited animals & team members",
-    "Public website & adoptable profiles",
-    "Stripe donation & adoption payments",
-    "Kennel management & layout editor",
-    "Contact & communications hub",
-    "Event calendar & volunteer signups",
-    "Supply wishlist (Amazon, Chewy)",
-    "Happy Tails success stories",
-    "Partner organizations & transports",
-    "Analytics & reporting",
-    "PWA mobile app",
-    "AI help assistant",
-  ];
-
-  const liteOnlyFeatures = [
-    "Use your own JotForm / Google Forms",
-    "5% platform fee on transactions",
-  ];
-
-  const proOnlyFeatures = [
-    "Built-in adoption pipeline (Kanban)",
-    "Foster & volunteer pipelines",
-    "Intake manager (surrender requests)",
-    "Medical pipeline dashboard",
-    "E-signature contracts & PDFs",
-    "Custom forms builder",
-    "Grant tracking & compliance",
-    "Newsletter designer & campaigns",
-    "Site permissions & access control",
-    "Adopter portal",
-    "0% platform fees — keep every dollar",
-  ];
-
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -93,9 +56,9 @@ export default function PlatformLandingPage() {
             <span className="font-display font-bold text-lg">iRescue.life</span>
           </div>
           <nav className="hidden md:flex items-center gap-4">
-            <a href="#pricing" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-pricing">
+            <Link href="/platform/pricing" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-pricing">
               Pricing
-            </a>
+            </Link>
             <a href="#features" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-features">
               Features
             </a>
@@ -114,7 +77,7 @@ export default function PlatformLandingPage() {
               Live Demo
             </Button>
             <Link href="/platform/signup?tier=lite">
-              <Button size="sm" style={{ backgroundColor: TEAL }} className="hover:opacity-90" data-testid="button-start-free">
+              <Button size="sm" style={{ backgroundColor: TEAL }} className="text-white" data-testid="button-start-free">
                 Start Free
               </Button>
             </Link>
@@ -124,7 +87,7 @@ export default function PlatformLandingPage() {
               <Button variant="ghost" size="sm" data-testid="button-mobile-login">Login</Button>
             </Link>
             <Link href="/platform/signup?tier=lite">
-              <Button size="sm" style={{ backgroundColor: TEAL }} className="hover:opacity-90" data-testid="button-mobile-start">
+              <Button size="sm" style={{ backgroundColor: TEAL }} className="text-white" data-testid="button-mobile-start">
                 Start Free
               </Button>
             </Link>
@@ -196,127 +159,37 @@ export default function PlatformLandingPage() {
         </div>
       </section>
 
-      {/* ======== FOLD 2: Pricing / Tier Comparison ======== */}
+      {/* ======== FOLD 2: Pricing CTA ======== */}
       <section id="pricing" className="py-12 sm:py-16 lg:py-20">
-        <div className="container max-w-6xl mx-auto px-4 sm:px-6">
-          <div className="text-center space-y-3 mb-10">
+        <div className="container max-w-4xl mx-auto px-4 sm:px-6">
+          <div className="text-center space-y-4">
             <p className="text-sm font-semibold uppercase tracking-wider" style={{ color: TEAL }}>Simple Pricing</p>
             <h2 className="font-display text-2xl sm:text-3xl lg:text-4xl font-bold" data-testid="heading-pricing">
-              Choose the Plan That Fits Your Rescue
+              Same Features. Two Billing Models.
             </h2>
             <p className="text-muted-foreground max-w-xl mx-auto">
-              No hidden fees. Cancel anytime.
+              Every rescue gets full access to every feature. Just pick the billing model that fits your cash flow.
             </p>
-          </div>
-
-          <div id="features" className="grid gap-6 md:grid-cols-2 max-w-4xl mx-auto">
-            {/* Lite Tier */}
-            <Card className="border-2 flex flex-col" data-testid="card-lite-tier">
-              <CardHeader className="pb-3">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="h-10 w-10 rounded-lg flex items-center justify-center" style={{ backgroundColor: TEAL_LIGHT }}>
-                    <Heart className="h-5 w-5" style={{ color: TEAL }} />
-                  </div>
-                  <div>
-                    <CardTitle className="text-xl">Lite</CardTitle>
-                    <p className="text-xs text-muted-foreground mt-0.5">For rescues using external forms</p>
-                  </div>
-                </div>
-                <div className="flex items-baseline gap-1">
-                  <span className="text-4xl font-bold">$0</span>
-                  <span className="text-muted-foreground">/month</span>
-                </div>
-                <p className="text-sm mt-1" style={{ color: TEAL }}>5% platform fee on Stripe transactions</p>
-              </CardHeader>
-              <CardContent className="flex-1 flex flex-col">
-                <div className="space-y-4 flex-1">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Lite highlights</p>
-                    <ul className="space-y-1.5">
-                      {liteOnlyFeatures.map((feature, i) => (
-                        <li key={i} className="flex items-start gap-2 text-sm">
-                          <CheckCircle className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: TEAL }} />
-                          <span className="font-medium">{feature}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                  <div className="border-t pt-3">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2" data-testid="heading-features">Included in both tiers</p>
-                    <ul className="space-y-1.5">
-                      {sharedFeatures.map((feature, i) => (
-                        <li key={i} className="flex items-start gap-2 text-sm" data-testid={`feature-shared-${i}`}>
-                          <CheckCircle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0 text-muted-foreground/60" />
-                          <span className="text-muted-foreground">{feature}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-                <Link href="/platform/signup?tier=lite" className="mt-6">
-                  <Button className="w-full" variant="outline" data-testid="button-get-lite">
-                    Get Started Free
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
-
-            {/* Pro Tier */}
-            <Card className="border-2 flex flex-col relative" style={{ borderColor: TEAL }} data-testid="card-pro-tier">
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                <Badge className="text-white" style={{ backgroundColor: TEAL }}>
-                  <Crown className="h-3 w-3 mr-1" />
-                  BEST VALUE
-                </Badge>
-              </div>
-              <CardHeader className="pb-3 pt-6">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="h-10 w-10 rounded-lg flex items-center justify-center" style={{ backgroundColor: TEAL }}>
-                    <Zap className="h-5 w-5 text-white" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-xl">Professional</CardTitle>
-                    <p className="text-xs text-muted-foreground mt-0.5">Full-featured with built-in pipelines</p>
-                  </div>
-                </div>
-                <div className="flex items-baseline gap-1">
-                  <span className="text-4xl font-bold">$39</span>
-                  <span className="text-muted-foreground">/month</span>
-                </div>
-                <p className="text-sm font-semibold mt-1" style={{ color: TEAL }}>0% platform fees</p>
-              </CardHeader>
-              <CardContent className="flex-1 flex flex-col">
-                <div className="space-y-4 flex-1">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Everything in Lite, plus</p>
-                    <ul className="space-y-1.5">
-                      {proOnlyFeatures.map((feature, i) => (
-                        <li key={i} className="flex items-start gap-2 text-sm">
-                          <CheckCircle className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: TEAL }} />
-                          <span>{feature}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                  <div className="border-t pt-3">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Plus all Lite features</p>
-                    <ul className="space-y-1.5">
-                      {sharedFeatures.map((feature, i) => (
-                        <li key={i} className="flex items-start gap-2 text-sm">
-                          <CheckCircle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0 text-muted-foreground/60" />
-                          <span className="text-muted-foreground">{feature}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-                <Link href="/platform/signup?tier=professional" className="mt-6">
-                  <Button className="w-full text-white" style={{ backgroundColor: TEAL }} data-testid="button-get-pro">
-                    Start Free Trial
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
+            <div id="features" className="grid gap-4 sm:grid-cols-2 max-w-2xl mx-auto pt-6">
+              <Card className="text-center p-6" data-testid="card-starter-summary">
+                <p className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-1">Starter</p>
+                <p className="text-3xl font-bold">$0<span className="text-base font-normal text-muted-foreground">/mo</span></p>
+                <p className="text-sm mt-1" style={{ color: TEAL }}>+ 5% platform fee</p>
+              </Card>
+              <Card className="text-center p-6 border-2" style={{ borderColor: TEAL }} data-testid="card-scale-summary">
+                <p className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-1">Scale</p>
+                <p className="text-3xl font-bold">$39<span className="text-base font-normal text-muted-foreground">/mo</span></p>
+                <p className="text-sm font-semibold mt-1" style={{ color: TEAL }}>0% platform fee</p>
+              </Card>
+            </div>
+            <div className="pt-4">
+              <Link href="/platform/pricing">
+                <Button size="lg" style={{ backgroundColor: TEAL }} className="text-white" data-testid="button-view-pricing">
+                  Compare Plans
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </Link>
+            </div>
           </div>
         </div>
       </section>
@@ -332,19 +205,19 @@ export default function PlatformLandingPage() {
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Link href="/platform/signup?tier=lite">
-              <Button size="lg" className="text-lg px-8" style={{ backgroundColor: "white", color: TEAL }} data-testid="button-cta-lite">
-                Start Free (Lite)
+              <Button size="lg" className="text-lg px-8" style={{ backgroundColor: "white", color: TEAL }} data-testid="button-cta-starter">
+                Start for Free
               </Button>
             </Link>
-            <Link href="/platform/signup?tier=professional">
-              <Button size="lg" variant="outline" className="text-lg px-8 border-white/50 text-white backdrop-blur-sm bg-white/10" data-testid="button-cta-pro">
-                Start Pro Trial
+            <Link href="/platform/pricing">
+              <Button size="lg" variant="outline" className="text-lg px-8 border-white/50 text-white backdrop-blur-sm bg-white/10" data-testid="button-cta-pricing">
+                Compare Plans
                 <ArrowRight className="ml-2 h-5 w-5" />
               </Button>
             </Link>
           </div>
           <p className="text-sm text-white/60">
-            No credit card required for either tier.
+            No credit card required for either plan.
           </p>
         </div>
       </section>
@@ -368,7 +241,7 @@ export default function PlatformLandingPage() {
             <div>
               <h4 className="font-semibold mb-3 text-sm" style={{ color: TEAL }}>Product</h4>
               <ul className="space-y-1.5 text-sm text-muted-foreground">
-                <li><a href="#pricing" className="hover:text-foreground transition-colors" data-testid="link-pricing">Pricing</a></li>
+                <li><Link href="/platform/pricing" className="hover:text-foreground transition-colors" data-testid="link-pricing">Pricing</Link></li>
                 <li><a href="#features" className="hover:text-foreground transition-colors" data-testid="link-features">Features</a></li>
                 <li><button onClick={() => setDemoAccessDialogOpen(true)} className="hover:text-foreground transition-colors" data-testid="link-demo">Live Demo</button></li>
               </ul>

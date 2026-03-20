@@ -146,6 +146,7 @@ import SystemHealthPage from "@/pages/platform/SystemHealthPage";
 import PlatformSettingsPage from "@/pages/platform/PlatformSettingsPage";
 import PlatformGlobalContentPage from "@/pages/platform/PlatformGlobalContentPage";
 import PlatformVideoScriptPage from "@/pages/platform/PlatformVideoScriptPage";
+import PlatformPricingPage from "@/pages/PlatformPricingPage";
 import PlatformLoginPage from "@/pages/platform/PlatformLoginPage";
 import PlatformForgotPasswordPage from "@/pages/platform/PlatformForgotPasswordPage";
 import PlatformResetPasswordPage from "@/pages/platform/PlatformResetPasswordPage";
@@ -202,6 +203,7 @@ function RouterSwitch() {
     <Switch>
       {/* Platform routes must come before / to avoid prefix matching */}
       <Route path="/platform" component={PlatformLandingPage} />
+      <Route path="/platform/pricing" component={PlatformPricingPage} />
       <Route path="/platform/privacy" component={PlatformPrivacyPage} />
       <Route path="/platform/terms" component={PlatformTermsPage} />
       <Route path="/platform/integrations" component={PlatformIntegrationsInfoPage} />
