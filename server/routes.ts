@@ -25568,10 +25568,8 @@ Submitted: ${new Date().toLocaleString()}
       }
 
       if (!tenantId) {
-        console.error('[STRIPE-WEBHOOK] ERROR: Missing tenantId - could not resolve from metadata, subscription, or Connect account');
-        console.error('[STRIPE-WEBHOOK] Full payload metadata:', JSON.stringify(metadata));
-        console.error('[STRIPE-WEBHOOK] Connect account:', payload.account || 'none');
-        return res.status(400).send('Missing tenant information');
+        console.warn(`[STRIPE-WEBHOOK] Ignoring event ${payload.type} (${payload.id}) - no tenantId resolved from metadata, subscription, or Connect account`);
+        return res.status(200).json({ received: true, skipped: true, reason: 'no_tenant' });
       }
       
       console.log(`[STRIPE-WEBHOOK] Resolved tenantId: ${tenantId}`);
