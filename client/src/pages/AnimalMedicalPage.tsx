@@ -1578,7 +1578,7 @@ export default function AnimalMedicalPage() {
             </div>
             <div className="grid gap-4">
               {diagnostics.map((test: any) => {
-                const isPendingResult = !test.result || test.result === 'Pending' || !test.results || test.results === 'Pending';
+                const isPendingResult = !test.result || test.result === 'Pending';
                 const isEnteringResults = enterResultsId === test.id;
                 return (
                 <Card key={test.id} className={isPendingResult ? "border-dashed" : ""}>
@@ -1702,10 +1702,10 @@ export default function AnimalMedicalPage() {
                       </div>
                     ) : (
                       <>
-                        {(test.results || test.result) && !isPendingResult && (
+                        {test.result && !isPendingResult && (
                           <div>
                             <p className="font-medium text-sm mb-1">Results:</p>
-                            <p className="text-sm text-muted-foreground">{test.results || test.result}</p>
+                            <p className="text-sm text-muted-foreground">{test.result}</p>
                           </div>
                         )}
                       </>
