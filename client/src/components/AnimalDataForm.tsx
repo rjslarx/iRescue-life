@@ -77,6 +77,7 @@ const animalFormSchema = insertAnimalSchema.omit({ tenantId: true }).extend({
   locationType: z.enum(["shelter", "foster", "clinic", "transport", "offsite"]).optional().default("shelter"),
   locationName: z.string().optional().default(""),
   fosterId: z.string().uuid().optional().nullable(),
+  motherId: z.string().uuid().optional().nullable(),
 }).refine((data) => {
   if ((data.behaviorColor === "yellow" || data.behaviorColor === "red") && !data.behaviorRestrictionReason?.trim()) {
     return false;
@@ -268,6 +269,7 @@ export function AnimalDataForm({ animalId, initialData, onSuccess, onCancel }: A
       locationType: "shelter",
       locationName: "",
       fosterId: null,
+      motherId: null,
     },
   });
   
@@ -319,6 +321,7 @@ export function AnimalDataForm({ animalId, initialData, onSuccess, onCancel }: A
         locationType: (animalData as any).locationType || "shelter",
         locationName: (animalData as any).locationName || "",
         fosterId: (animalData as any).fosterId ?? (animalData as any).activeFosterId ?? null,
+        motherId: (animalData as any).motherId ?? null,
       });
       if (animalData.photoUrls) {
         setUploadedPhotos(animalData.photoUrls);
@@ -352,7 +355,16 @@ export function AnimalDataForm({ animalId, initialData, onSuccess, onCancel }: A
   }, [fosterAutoMode, animalData, form]);
 
   const [fosterOpen, setFosterOpen] = useState(false);
+  const [motherOpen, setMotherOpen] = useState(false);
   const locationType = form.watch("locationType");
+
+  const { data: allAnimalsData } = useQuery<{ animals: any[] }>({
+    queryKey: ['/api/animals'],
+    staleTime: 60_000,
+  });
+  const allAnimals = Array.isArray(allAnimalsData) ? allAnimalsData : (allAnimalsData?.animals || []);
+  const motherCandidates = allAnimals.filter((a: any) => a.id !== animalId);
+
   const { data: eligibleFostersData } = useQuery<{ fosters: { id: string; fullName: string; email: string }[] }>({
     queryKey: ["/api/fosters/eligible"],
     queryFn: async () => {
@@ -493,6 +505,7 @@ export function AnimalDataForm({ animalId, initialData, onSuccess, onCancel }: A
             })()
           : '')
         : (data.locationName || ''),
+      motherId: data.motherId || null,
     };
     
     if (mode === 'edit') {
@@ -1427,6 +1440,76 @@ export function AnimalDataForm({ animalId, initialData, onSuccess, onCancel }: A
               )}
             />
             
+            <FormField
+              control={form.control}
+              name="motherId"
+              render={({ field }) => (
+                <FormItem className="flex flex-col">
+                  <FormLabel>Mother (Dam)</FormLabel>
+                  <Popover open={motherOpen} onOpenChange={setMotherOpen}>
+                    <PopoverTrigger asChild>
+                      <FormControl>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          className={cn(
+                            "w-full justify-between font-normal",
+                            !field.value && "text-muted-foreground"
+                          )}
+                          data-testid="select-mother"
+                        >
+                          {field.value
+                            ? motherCandidates.find((a: any) => a.id === field.value)?.name || "Selected animal"
+                            : "Link to mother..."}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </FormControl>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[300px] p-0" align="start">
+                      <Command>
+                        <CommandInput placeholder="Search animals..." />
+                        <CommandList>
+                          <CommandEmpty>No animals found.</CommandEmpty>
+                          <CommandGroup>
+                            <CommandItem
+                              value="__none__"
+                              onSelect={() => {
+                                field.onChange(null);
+                                setMotherOpen(false);
+                              }}
+                              data-testid="option-mother-none"
+                            >
+                              <Check className={cn("mr-2 h-4 w-4", !field.value ? "opacity-100" : "opacity-0")} />
+                              No mother link
+                            </CommandItem>
+                            {motherCandidates.map((animal: any) => (
+                              <CommandItem
+                                key={animal.id}
+                                value={`${animal.name} ${animal.species || ''} ${animal.breed || ''}`}
+                                onSelect={() => {
+                                  field.onChange(animal.id);
+                                  setMotherOpen(false);
+                                }}
+                                data-testid={`option-mother-${animal.id}`}
+                              >
+                                <Check className={cn("mr-2 h-4 w-4", field.value === animal.id ? "opacity-100" : "opacity-0")} />
+                                <span>{animal.name}</span>
+                                {animal.species && (
+                                  <span className="ml-1 text-muted-foreground text-xs">({animal.species})</span>
+                                )}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                  <FormDescription>Link this animal to its mother for litter/medical history tracking.</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             <FormField
               control={form.control}
               name="activityLevel"
