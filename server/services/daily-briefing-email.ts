@@ -1412,6 +1412,8 @@ export async function sendDailyBriefingForTenant(tenantId: string): Promise<{ se
       .where(and(
         eq(users.tenantId, tenantId),
         eq(users.isActive, true),
+        eq(users.emailBounced, false),
+        eq(users.emailComplaint, false),
         sql`(${users.roles} && ${sql.raw(`ARRAY[${recipientRoles.map(r => `'${r}'`).join(',')}]::text[]`)})`
       ));
 

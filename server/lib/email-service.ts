@@ -1,4 +1,4 @@
-import { eq, sql, and, gte } from 'drizzle-orm';
+import { eq, sql, and, gte, or, inArray } from 'drizzle-orm';
 import { db } from '../db';
 import { tenants, platformIntegrations, users, gmailSendLogs } from '@shared/schema';
 import { decrypt } from './encryption';
@@ -616,9 +616,53 @@ export class EmailService {
   }
 
   /**
+   * Filter out bounced/complained email addresses before sending
+   */
+  private async filterSuppressedEmails(to: string | string[]): Promise<{ filtered: string[]; suppressed: string[] }> {
+    const emails = Array.isArray(to) ? to : [to];
+    if (emails.length === 0) return { filtered: [], suppressed: [] };
+
+    try {
+      const suppressedUsers = await db
+        .select({ email: users.email })
+        .from(users)
+        .where(and(
+          inArray(users.email, emails),
+          or(
+            eq(users.emailBounced, true),
+            eq(users.emailComplaint, true)
+          )
+        ));
+
+      const suppressedSet = new Set(suppressedUsers.map(u => u.email));
+      const filtered = emails.filter(e => !suppressedSet.has(e));
+      const suppressed = emails.filter(e => suppressedSet.has(e));
+
+      if (suppressed.length > 0) {
+        console.log(`[EmailService] Suppressed ${suppressed.length} bounced/complained address(es): ${suppressed.join(', ')}`);
+      }
+
+      return { filtered, suppressed };
+    } catch (error) {
+      console.warn('[EmailService] Failed to check bounce suppression, proceeding with all addresses:', error);
+      return { filtered: emails, suppressed: [] };
+    }
+  }
+
+  /**
    * Send a single email
    */
   async send(options: EmailOptions): Promise<{ success: boolean; messageId?: string; error?: string }> {
+    const { filtered, suppressed } = await this.filterSuppressedEmails(options.to);
+    if (filtered.length === 0) {
+      const msg = suppressed.length > 0
+        ? `All recipients suppressed (bounced/complained): ${suppressed.join(', ')}`
+        : 'No recipients specified';
+      console.log(`[EmailService] Skipping send: ${msg}`);
+      return { success: true, messageId: undefined, error: undefined };
+    }
+    options = { ...options, to: filtered.length === 1 ? filtered[0] : filtered };
+
     // If Gmail is configured, try it first
     if (this.gmailService) {
       try {
