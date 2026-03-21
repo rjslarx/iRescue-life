@@ -1,0 +1,116 @@
+2026-03-21 00:00:25.43
+e812f1de
+User
+⚠️ Daily briefing errors: [8e34d17d-d8d1-4616-8f63-f3edc01f5139] Email send failed: Email API error: Forbidden; [7e3c7b23-41c9-4570-b09f-28b0142495a0] Email send failed: Email API error: Forbidden; [87f318e1-ffe9-4cc1-9911-633336446f1f] Email send failed: Email API error: Forbidden; [de18a899-d553-45f1-9c2a-0c58cf340e21] Email send failed: Email API error: Forbidden
+2026-03-21 02:29:21.62
+e812f1de
+User
+[STRIPE-WEBHOOK] ERROR: Missing tenantId - could not resolve from metadata, subscription, or Connect account
+2026-03-21 02:29:21.62
+e812f1de
+User
+[STRIPE-WEBHOOK] Connect account: none
+2026-03-21 02:29:21.62
+e812f1de
+User
+[STRIPE-WEBHOOK] Full payload metadata: {}
+2026-03-21 03:00:18.63
+e812f1de
+User
+⚠️ Medical reminder errors: Tenant Southern Pets Animal Rescue Inc: Failed to send to southernpetsanimalrescue@gmail.com: Email API error: Forbidden, Failed to send to rstelly3@gmail.com: Email API error: Forbidden
+2026-03-21 10:33:12.53
+03e70105
+User
+[Foster Directory Sync] Failed to send foster welcome invitation to nancy.trahan@outlook.com: Error: Email API error: Forbidden
+2026-03-21 10:33:12.53
+03e70105
+User
+at sendFosterWelcomeEmail (file:///home/runner/workspace/dist/index.js:12180:11)
+2026-03-21 10:33:12.53
+03e70105
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-03-21 10:33:12.53
+03e70105
+User
+at async file:///home/runner/workspace/dist/index.js:57242:11
+2026-03-21 10:33:12.53
+03e70105
+User
+at async activateFosterInDirectory (file:///home/runner/workspace/dist/index.js:12653:11)
+2026-03-21 10:34:58.26
+03e70105
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:708:19
+2026-03-21 10:34:58.26
+03e70105
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:684:26
+2026-03-21 10:34:58.26
+03e70105
+User
+at PgSelectBase._prepare (file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:683:19)
+2026-03-21 10:34:58.26
+03e70105
+User
+at Object.startActiveSpan (file:///home/runner/workspace/node_modules/drizzle-orm/tracing.js:8:14)
+2026-03-21 10:34:58.26
+03e70105
+User
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:33)
+2026-03-21 10:34:58.26
+03e70105
+User
+at Object.startActiveSpan (file:///home/runner/workspace/node_modules/drizzle-orm/tracing.js:8:14)
+2026-03-21 10:34:58.26
+03e70105
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:63:22
+2026-03-21 10:35:18.50
+d23cde83
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:684:26
+2026-03-21 10:35:18.50
+d23cde83
+User
+at Function.entries ()
+2026-03-21 10:35:18.50
+d23cde83
+User
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:33)
+2026-03-21 10:35:18.50
+d23cde83
+User
+at Object.startActiveSpan (file:///home/runner/workspace/node_modules/drizzle-orm/tracing.js:8:14)
+2026-03-21 10:35:18.50
+d23cde83
+User
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:17)
+2026-03-21 10:35:18.50
+d23cde83
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:63:22
+2026-03-21 10:35:18.50
+d23cde83
+User
+at PgSelectBase._prepare (file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:683:19)
+2026-03-21 10:35:18.50
+d23cde83
+User
+at Object.startActiveSpan (file:///home/runner/workspace/node_modules/drizzle-orm/tracing.js:8:14)
+2026-03-21 10:35:18.50
+d23cde83
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:708:19
+2026-03-21 10:35:18.50
+d23cde83
+User
+at Array.reduce ()
+2026-03-21 10:35:18.50
+d23cde83
+User
+[Error] 500 — Cannot convert undefined or null to object TypeError: Cannot convert undefined or null to object
+2026-03-21 16:16:30.16
+d23cde83
+User
+[STRIPE-WEBHOOK] Ignoring event invoice.payment_succeeded (evt_1TDFKKLzdp6pTJ6i8C4vqtYA) - no tenantId resolved from metadata, subscription, or Connect account
