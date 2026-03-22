@@ -15,7 +15,9 @@ import {
   Mail,
   Inbox,
   Users,
+  Receipt,
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import DashboardLayout from "@/components/DashboardLayout";
 import NotificationSettings from "@/components/NotificationSettings";
 import NotificationPreferencesSettings from "@/components/NotificationPreferencesSettings";
@@ -169,6 +171,65 @@ function EmailCopyRecipientsManager({ tenant }: { tenant?: Tenant }) {
   );
 }
 
+function AutoSendTaxReceiptsToggle({ tenant }: { tenant?: Tenant }) {
+  const { toast } = useToast();
+
+  const toggleMutation = useMutation({
+    mutationFn: async (enabled: boolean) => {
+      const response = await apiRequest('PATCH', '/api/tenant/settings', {
+        autoSendTaxReceipts: enabled,
+      });
+      return response.json();
+    },
+    onSuccess: (_, enabled) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/tenant/settings'] });
+      toast({
+        title: enabled ? "Auto-send enabled" : "Auto-send disabled",
+        description: enabled
+          ? "Tax receipts will be automatically emailed to donors when donations are received."
+          : "Tax receipts will only be sent when manually triggered from the Finance page.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to update setting",
+        description: error.message || "Please try again later.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const isEnabled = tenant?.autoSendTaxReceipts ?? true;
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <Receipt className="h-5 w-5" />
+          <CardTitle>Auto-Send Tax Receipts</CardTitle>
+        </div>
+        <CardDescription>
+          Automatically generate and email IRS-compliant tax receipts to donors when donations are received through Stripe. Receipts include your organization name, EIN, donation amount, and date. If disabled, receipts can still be sent manually from the Finance page.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="flex items-center justify-between gap-4">
+          <Label htmlFor="auto-send-receipts" className="flex-1">
+            Send tax receipts automatically
+          </Label>
+          <Switch
+            id="auto-send-receipts"
+            data-testid="switch-auto-send-receipts"
+            checked={isEnabled}
+            disabled={toggleMutation.isPending}
+            onCheckedChange={(checked) => toggleMutation.mutate(checked)}
+          />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function NotificationsSettingsPage() {
   const { user } = useAuth();
 
@@ -235,6 +296,8 @@ export default function NotificationsSettingsPage() {
         </div>
       ) : (
         <div className="max-w-2xl space-y-6">
+          <AutoSendTaxReceiptsToggle tenant={data?.tenant} />
+
           <Card>
             <CardHeader>
               <div className="flex items-center gap-2">

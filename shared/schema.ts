@@ -36,6 +36,7 @@ export const tenants = pgTable("tenants", {
   stripeConnectedAccountId: text("stripe_connected_account_id"), // Stripe Connect account ID (Standard Connect - tenant owns account)
   stripeConnectedAt: timestamp("stripe_connected_at"), // When Stripe was connected via OAuth
   // Adoption fee settings
+  autoSendTaxReceipts: boolean("auto_send_tax_receipts").notNull().default(true), // Whether to automatically email tax receipts when donations are received via Stripe
   passFeesToAdopter: boolean("pass_fees_to_adopter").notNull().default(false), // Whether to add processing + platform fees to adoption fee (paid by adopter)
   requireSpayNeuterContract: boolean("require_spay_neuter_contract").notNull().default(false), // Whether adopters of unaltered animals must sign a spay/neuter agreement
   defaultSurrenderFee: decimal("default_surrender_fee", { precision: 10, scale: 2 }), // Default owner surrender fee amount (null = no fee)

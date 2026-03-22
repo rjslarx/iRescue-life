@@ -381,7 +381,7 @@ export default function FinanceTable({ donations, expenditures, grants, onAddDon
                       <TableHead>Amount/Items</TableHead>
                       <TableHead>Date</TableHead>
                       <TableHead>Source</TableHead>
-                      <TableHead>Receipt</TableHead>
+                      <TableHead>Tax Receipt</TableHead>
                       <TableHead className="w-[50px]"></TableHead>
                     </TableRow>
                   </TableHeader>

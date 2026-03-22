@@ -22042,6 +22042,7 @@ Submitted: ${new Date().toLocaleString()}
         passFeesToAdopter: z.boolean().optional(),
         requireSpayNeuterContract: z.boolean().optional(),
         defaultSurrenderFee: z.string().optional().nullable(),
+        autoSendTaxReceipts: z.boolean().optional(),
       });
 
       const parsedSettings = settingsSchema.parse(req.body);
@@ -22051,6 +22052,7 @@ Submitted: ${new Date().toLocaleString()}
       if (parsedSettings.passFeesToAdopter !== undefined) settingsToUpdate.passFeesToAdopter = parsedSettings.passFeesToAdopter;
       if (parsedSettings.requireSpayNeuterContract !== undefined) settingsToUpdate.requireSpayNeuterContract = parsedSettings.requireSpayNeuterContract;
       if (parsedSettings.defaultSurrenderFee !== undefined) settingsToUpdate.defaultSurrenderFee = parsedSettings.defaultSurrenderFee;
+      if (parsedSettings.autoSendTaxReceipts !== undefined) settingsToUpdate.autoSendTaxReceipts = parsedSettings.autoSendTaxReceipts;
 
       const [updatedTenant] = await db
         .update(tenants)
@@ -25915,6 +25917,23 @@ Submitted: ${new Date().toLocaleString()}
             }).returning();
             
             console.log(`[STRIPE-WEBHOOK] Created donation record ${donationRecord.id} for Finance page, donor: ${customerName} (${donor.id}), amount: $${session.amount_total / 100}${feeNote}`);
+
+            if (tenant.autoSendTaxReceipts && donationRecord.donorEmail) {
+              try {
+                const { generateAndEmailReceipt } = await import('./services/donation-receipt-service');
+                const receiptResult = await generateAndEmailReceipt({
+                  donationId: donationRecord.id,
+                  tenantId: tenant.id,
+                });
+                if (receiptResult.success) {
+                  console.log(`[STRIPE-WEBHOOK] Auto-sent tax receipt #${receiptResult.receiptNumber} to ${donationRecord.donorEmail}`);
+                } else {
+                  console.warn(`[STRIPE-WEBHOOK] Auto-send tax receipt failed for donation ${donationRecord.id}: ${receiptResult.message}`);
+                }
+              } catch (receiptErr) {
+                console.error(`[STRIPE-WEBHOOK] Error auto-sending tax receipt for donation ${donationRecord.id}:`, receiptErr);
+              }
+            }
           } else if (isPaymentComplete && !isDonation) {
             console.log(`[STRIPE-WEBHOOK] Skipping donation record for non-donation payment: ${paymentTypeLabel}`);
           }
