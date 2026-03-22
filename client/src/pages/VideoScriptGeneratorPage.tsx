@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Video, Copy, Download, Sparkles } from "lucide-react";
+import DashboardLayout from "@/components/DashboardLayout";
 
 const FEATURES = [
   "Animal Management",
@@ -87,13 +88,19 @@ export default function VideoScriptGeneratorPage() {
   };
 
   return (
-    <div className="flex-1 overflow-auto p-4 md:p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight" data-testid="text-page-title">Video Script Generator</h1>
-        <p className="text-muted-foreground mt-1">
-          Generate professional how-to video scripts for any platform feature using AI.
-        </p>
-      </div>
+    <DashboardLayout
+      breadcrumbs={[
+        { label: "Help & Training", href: "/dashboard/tutorials" },
+        { label: "Video Script Generator" },
+      ]}
+    >
+      <div className="flex-1 overflow-auto p-4 md:p-6 space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight" data-testid="text-page-title">Video Script Generator</h1>
+          <p className="text-muted-foreground mt-1">
+            Generate professional how-to video scripts for any platform feature using AI.
+          </p>
+        </div>
 
       <Card>
         <CardHeader>
@@ -193,6 +200,7 @@ export default function VideoScriptGeneratorPage() {
           </CardContent>
         </Card>
       )}
-    </div>
+      </div>
+    </DashboardLayout>
   );
 }
