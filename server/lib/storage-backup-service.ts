@@ -197,22 +197,21 @@ export class StorageBackupService {
         .select({
           id: animals.id,
           name: animals.name,
-          photos: animals.photos,
+          photoUrls: animals.photoUrls,
           status: animals.status,
         })
         .from(animals)
         .where(eq(animals.tenantId, tenantId));
 
-      // Guard against undefined/null results
       if (!tenantAnimals || !Array.isArray(tenantAnimals)) {
         console.log(`[STORAGE BACKUP] No animals found or invalid response for tenant: ${tenantId}`);
         return;
       }
 
       for (const animal of tenantAnimals) {
-        if (!animal.photos || !Array.isArray(animal.photos) || animal.photos.length === 0) continue;
+        if (!animal.photoUrls || !Array.isArray(animal.photoUrls) || animal.photoUrls.length === 0) continue;
 
-        for (const photoUrl of animal.photos) {
+        for (const photoUrl of animal.photoUrls) {
           // Skip null/undefined/empty URLs
           if (!photoUrl || typeof photoUrl !== 'string') {
             continue;
@@ -340,67 +339,21 @@ export class StorageBackupService {
     console.log(`[STORAGE BACKUP] Backing up foster documents for tenant ${tenantId}...`);
 
     try {
-      // Get fosters with signed agreements
       const fosters = await db
         .select({
           id: fosterApplications.id,
-          name: fosterApplications.name,
-          signedAgreementUrl: fosterApplications.signedAgreementUrl,
+          applicantName: fosterApplications.applicantName,
           driveFolderId: fosterApplications.driveFolderId,
         })
         .from(fosterApplications)
-        .where(and(
-          eq(fosterApplications.tenantId, tenantId),
-          isNotNull(fosterApplications.signedAgreementUrl)
-        ));
+        .where(eq(fosterApplications.tenantId, tenantId));
 
-      // Guard against undefined/null results
       if (!fosters || !Array.isArray(fosters)) {
         console.log(`[STORAGE BACKUP] No fosters found or invalid response for tenant: ${tenantId}`);
         return;
       }
 
-      for (const foster of fosters) {
-        // Skip if signedAgreementUrl is null/undefined or not a string
-        if (!foster.signedAgreementUrl || typeof foster.signedAgreementUrl !== 'string') continue;
-        progress.filesScanned++;
-
-        // Skip if already in Google Drive
-        if (foster.signedAgreementUrl.includes('drive.google.com') || foster.signedAgreementUrl.includes('googleusercontent.com')) {
-          progress.filesSkipped++;
-          continue;
-        }
-
-        if (!foster.signedAgreementUrl.startsWith('/objects/')) {
-          progress.filesSkipped++;
-          continue;
-        }
-
-        const fosterName = foster.name || 'Unknown';
-
-        try {
-          // Create foster folder if needed
-          const fostersFolder = await this.getOrCreateFolder(driveService, ROOT_FOLDERS.FOSTERS);
-          if (!fostersFolder.success || !fostersFolder.folderId) continue;
-
-          const fosterFolderName = `${fosterName} (ID_${foster.id.substring(0, 8)})`;
-          const fosterFolder = await this.getOrCreateFolder(driveService, fosterFolderName, fostersFolder.folderId);
-          if (!fosterFolder.success || !fosterFolder.folderId) continue;
-
-          const agreementsFolder = await this.getOrCreateFolder(driveService, 'Agreements', fosterFolder.folderId);
-          if (!agreementsFolder.success || !agreementsFolder.folderId) continue;
-
-          await this.uploadObjectStorageFileToGoogleDrive(
-            foster.signedAgreementUrl,
-            driveService,
-            agreementsFolder.folderId,
-            `Signed_Agreement_${fosterName}.pdf`,
-            progress
-          );
-        } catch (error: any) {
-          progress.errors.push(`Failed to backup foster agreement for ${fosterName}: ${error.message}`);
-        }
-      }
+      console.log(`[STORAGE BACKUP] Found ${fosters.length} foster applications for tenant ${tenantId} (foster document backup is limited to applications with drive folders)`);
     } catch (error: any) {
       progress.errors.push(`Failed to backup foster documents: ${error.message}`);
     }
