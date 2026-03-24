@@ -246,7 +246,7 @@ function AnimalProfilePanel({ animalId }: { animalId: string }) {
             setDetailsAnimal(a);
             setDetailsDialogOpen(true);
           }}
-          onEditAnimal={(a) => navigate(`${basePath}/animals?edit=${a.id}`)}
+          onEditAnimal={(a) => navigate(`/dashboard/animals?edit=${a.id}`)}
           calculateDaysInCare={calculateDaysInCare}
           basePath={basePath}
           navigate={navigate}
