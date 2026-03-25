@@ -65,23 +65,47 @@ function loadGoogleMapsScript(apiKey: string): Promise<void> {
   return mapsScriptPromise;
 }
 
-function buildInfoWindowContent(record: MapRecord, viewRecordBtnId: string): string {
+function isValidImageUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url, window.location.origin);
+    return parsed.protocol === "https:" || parsed.protocol === "http:" || parsed.pathname.startsWith("/");
+  } catch {
+    return false;
+  }
+}
+
+function buildInfoWindowElement(record: MapRecord, onViewClick: () => void): HTMLElement {
   const fmtSex = (s: string | null) => s === "male" ? "M" : s === "female" ? "F" : s || "";
-  const outcomeLabel = record.tnrOutcomeType ? (OUTCOME_LABELS[record.tnrOutcomeType] || record.tnrOutcomeType) : "";
-  const outcomeColor = record.tnrOutcomeType ? (OUTCOME_COLORS[record.tnrOutcomeType] || "#6b7280") : "";
-  const dateStr = record.intakeDate ? new Date(record.intakeDate).toLocaleDateString() : "";
+
+  const container = document.createElement("div");
+  container.style.cssText = "font-family:system-ui,sans-serif;min-width:200px;max-width:280px;font-size:13px;";
+  container.setAttribute("data-testid", "map-info-window");
+
   const photoUrl = record.photoUrls && record.photoUrls.length > 0 ? record.photoUrls[0] : null;
-
-  let html = `<div style="font-family:system-ui,sans-serif;min-width:200px;max-width:280px;font-size:13px;" data-testid="map-info-window">`;
-
-  if (photoUrl) {
-    html += `<div style="margin-bottom:8px;border-radius:6px;overflow:hidden;"><img src="${photoUrl}" alt="${record.name}" style="width:100%;height:100px;object-fit:cover;" data-testid="img-tnr-photo" /></div>`;
+  if (photoUrl && isValidImageUrl(photoUrl)) {
+    const imgWrap = document.createElement("div");
+    imgWrap.style.cssText = "margin-bottom:8px;border-radius:6px;overflow:hidden;";
+    const img = document.createElement("img");
+    img.src = photoUrl;
+    img.alt = record.name;
+    img.style.cssText = "width:100%;height:100px;object-fit:cover;";
+    img.setAttribute("data-testid", "img-tnr-photo");
+    imgWrap.appendChild(img);
+    container.appendChild(imgWrap);
   }
 
-  html += `<div style="font-weight:600;font-size:14px;margin-bottom:2px;" data-testid="text-info-name">${record.name}</div>`;
+  const nameDiv = document.createElement("div");
+  nameDiv.style.cssText = "font-weight:600;font-size:14px;margin-bottom:2px;";
+  nameDiv.setAttribute("data-testid", "text-info-name");
+  nameDiv.textContent = record.name;
+  container.appendChild(nameDiv);
 
   if (record.localShelterId) {
-    html += `<div style="color:#6b7280;font-size:11px;margin-bottom:4px;" data-testid="text-info-id">ID: ${record.localShelterId}</div>`;
+    const idDiv = document.createElement("div");
+    idDiv.style.cssText = "color:#6b7280;font-size:11px;margin-bottom:4px;";
+    idDiv.setAttribute("data-testid", "text-info-id");
+    idDiv.textContent = `ID: ${record.localShelterId}`;
+    container.appendChild(idDiv);
   }
 
   const fields: [string, string][] = [];
@@ -89,23 +113,40 @@ function buildInfoWindowContent(record: MapRecord, viewRecordBtnId: string): str
   if (record.colonyLocation) fields.push(["Location", record.colonyLocation]);
   if (record.trapNumber) fields.push(["Trap #", record.trapNumber]);
   if (record.sex) fields.push(["Sex", fmtSex(record.sex)]);
-  if (dateStr) fields.push(["Date", dateStr]);
+  if (record.intakeDate) fields.push(["Date", new Date(record.intakeDate).toLocaleDateString()]);
 
   for (const [label, value] of fields) {
-    html += `<div style="font-size:12px;margin-bottom:2px;"><strong>${label}:</strong> ${value}</div>`;
+    const fieldDiv = document.createElement("div");
+    fieldDiv.style.cssText = "font-size:12px;margin-bottom:2px;";
+    const strong = document.createElement("strong");
+    strong.textContent = `${label}: `;
+    fieldDiv.appendChild(strong);
+    fieldDiv.appendChild(document.createTextNode(value));
+    container.appendChild(fieldDiv);
   }
+
+  const outcomeLabel = record.tnrOutcomeType ? (OUTCOME_LABELS[record.tnrOutcomeType] || record.tnrOutcomeType) : "";
+  const outcomeColor = record.tnrOutcomeType ? (OUTCOME_COLORS[record.tnrOutcomeType] || "#6b7280") : "";
 
   if (outcomeLabel) {
-    html += `<div style="display:inline-block;margin-top:4px;padding:2px 8px;border-radius:9999px;font-size:11px;background:${outcomeColor}20;color:${outcomeColor};font-weight:500;">${outcomeLabel}</div>`;
+    const badge = document.createElement("div");
+    badge.style.cssText = `display:inline-block;margin-top:4px;padding:2px 8px;border-radius:9999px;font-size:11px;background:${outcomeColor}20;color:${outcomeColor};font-weight:500;`;
+    badge.textContent = outcomeLabel;
+    container.appendChild(badge);
   }
 
-  html += `<div style="margin-top:8px;padding-top:6px;border-top:1px solid #e5e7eb;">`;
-  html += `<button id="${viewRecordBtnId}" data-testid="button-view-full-record" style="width:100%;padding:6px 12px;border:1px solid #d1d5db;border-radius:6px;background:white;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;gap:4px;">`;
-  html += `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>`;
-  html += `View Full Record</button></div>`;
-  html += `</div>`;
+  const footer = document.createElement("div");
+  footer.style.cssText = "margin-top:8px;padding-top:6px;border-top:1px solid #e5e7eb;";
+  const btn = document.createElement("button");
+  btn.setAttribute("data-testid", "button-view-full-record");
+  btn.style.cssText = "width:100%;padding:6px 12px;border:1px solid #d1d5db;border-radius:6px;background:white;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;gap:4px;";
+  btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>`;
+  btn.appendChild(document.createTextNode("View Full Record"));
+  btn.addEventListener("click", onViewClick);
+  footer.appendChild(btn);
+  container.appendChild(footer);
 
-  return html;
+  return container;
 }
 
 interface TnrColonyMapProps {
@@ -210,18 +251,11 @@ export default function TnrColonyMap({ onViewRecord }: TnrColonyMapProps) {
 
       marker.addListener("click", () => {
         if (!infoWindowRef.current || !mapRef.current) return;
-        const btnId = `view-record-${record.id}`;
-        infoWindowRef.current.setContent(buildInfoWindowContent(record, btnId));
-        infoWindowRef.current.open(mapRef.current, marker);
-
-        google.maps.event.addListenerOnce(infoWindowRef.current, "domready", () => {
-          const btn = document.getElementById(btnId);
-          if (btn) {
-            btn.addEventListener("click", () => {
-              if (onViewRecord) onViewRecord(record);
-            });
-          }
+        const element = buildInfoWindowElement(record, () => {
+          if (onViewRecord) onViewRecord(record);
         });
+        infoWindowRef.current.setContent(element);
+        infoWindowRef.current.open(mapRef.current, marker);
       });
 
       markersRef.current.push(marker);
