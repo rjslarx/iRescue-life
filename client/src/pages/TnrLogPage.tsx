@@ -153,6 +153,65 @@ const emptyRow = (): BatchRow => ({
   tnrNotes: "",
 });
 
+interface GrantOption {
+  id: string;
+  funderName: string;
+  programName: string;
+  status: string;
+}
+
+function GrantPicker({ value, onChange, testIdPrefix }: { value: string; onChange: (v: string) => void; testIdPrefix: string }) {
+  const { data: grants } = useQuery<GrantOption[]>({
+    queryKey: ['/api/grants'],
+  });
+
+  const activeGrants = (grants || []).filter(g => g.status === 'awarded' || g.status === 'in_progress' || g.status === 'completed');
+  const grantLabels = activeGrants.map(g => `${g.funderName} — ${g.programName}`);
+  const isCustom = value !== "" && !grantLabels.includes(value);
+  const [showCustom, setShowCustom] = useState(isCustom);
+
+  const selectValue = showCustom ? "__custom__" : (value || "__none__");
+
+  return (
+    <div className="flex items-center gap-2">
+      <Select
+        value={selectValue}
+        onValueChange={v => {
+          if (v === "__custom__") {
+            setShowCustom(true);
+            onChange("");
+          } else if (v === "__none__") {
+            setShowCustom(false);
+            onChange("");
+          } else {
+            setShowCustom(false);
+            onChange(v);
+          }
+        }}
+      >
+        <SelectTrigger data-testid={`${testIdPrefix}-select`}><SelectValue placeholder="Select grant..." /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="__none__">None</SelectItem>
+          {activeGrants.map(g => (
+            <SelectItem key={g.id} value={`${g.funderName} — ${g.programName}`}>
+              {g.funderName} — {g.programName}
+            </SelectItem>
+          ))}
+          <SelectItem value="__custom__">Custom...</SelectItem>
+        </SelectContent>
+      </Select>
+      {showCustom && (
+        <Input
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          placeholder="Enter grant/partnership"
+          data-testid={`${testIdPrefix}-custom`}
+        />
+      )}
+    </div>
+  );
+}
+
 function getMonthString(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
@@ -766,9 +825,9 @@ function BatchEntryDialog({ open, onClose, onSuccess }: BatchEntryDialogProps) {
               <Label htmlFor="batch-phone">Caretaker Phone</Label>
               <Input id="batch-phone" placeholder="Phone number" value={caretakerPhone} onChange={e => setCaretakerPhone(e.target.value)} data-testid="input-caretaker-phone" />
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="batch-partner">Partnership / Grant</Label>
-              <Input id="batch-partner" placeholder="Org or grant name" value={partnership} onChange={e => setPartnership(e.target.value)} data-testid="input-partnership" />
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label>Partnership / Grant</Label>
+              <GrantPicker value={partnership} onChange={setPartnership} testIdPrefix="batch-partnership" />
             </div>
           </div>
 
@@ -1231,7 +1290,7 @@ function EditRecordDialog({ record, onClose, onSuccess }: EditRecordDialogProps)
           </div>
           <div className="space-y-1.5">
             <Label>Partnership / Grant</Label>
-            <Input value={partnership} onChange={e => setPartnership(e.target.value)} data-testid="input-edit-partnership" />
+            <GrantPicker value={partnership} onChange={setPartnership} testIdPrefix="edit-partnership" />
           </div>
           <div className="flex items-center gap-4 flex-wrap">
             <div className="flex items-center gap-2">
