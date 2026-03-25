@@ -31,6 +31,9 @@ import {
   Pause,
   Gift,
   Loader2,
+  ImagePlus,
+  X,
+  Upload,
 } from "lucide-react";
 import type { ShopProduct, ShopProductVariant, ShopOrder, ShopOrderItem, Tenant } from "@shared/schema";
 
@@ -65,7 +68,9 @@ export default function ShopManagementPage() {
     featured: false,
     rafflePrizeDescription: '',
     raffleDrawDate: '',
+    imageUrls: [] as string[],
   });
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   const [variantForm, setVariantForm] = useState({
     name: '',
@@ -123,6 +128,7 @@ export default function ShopManagementPage() {
         totalInventory: data.trackInventory ? parseInt(data.totalInventory) || 0 : null,
         maxPerOrder: data.maxPerOrder ? parseInt(data.maxPerOrder) : null,
         raffleDrawDate: data.raffleDrawDate ? new Date(data.raffleDrawDate) : null,
+        imageUrls: data.imageUrls,
       });
       if (!response.ok) {
         const error = await response.json();
@@ -150,6 +156,7 @@ export default function ShopManagementPage() {
         totalInventory: data.trackInventory ? parseInt(data.totalInventory) || 0 : null,
         maxPerOrder: data.maxPerOrder ? parseInt(data.maxPerOrder) : null,
         raffleDrawDate: data.raffleDrawDate ? new Date(data.raffleDrawDate) : null,
+        imageUrls: data.imageUrls,
       });
       if (!response.ok) {
         const error = await response.json();
@@ -246,7 +253,42 @@ export default function ShopManagementPage() {
       featured: false,
       rafflePrizeDescription: '',
       raffleDrawDate: '',
+      imageUrls: [],
     });
+  };
+
+  const handleProductImageUpload = async (file: File) => {
+    setUploadingImage(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/shop/admin/products/images/upload", {
+        method: "POST",
+        body: fd,
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Upload failed");
+      }
+      const data = await res.json();
+      setProductForm(prev => ({
+        ...prev,
+        imageUrls: [...prev.imageUrls, data.imageUrl],
+      }));
+      toast({ title: "Image uploaded" });
+    } catch (err: any) {
+      toast({ title: "Upload failed", description: err.message, variant: "destructive" });
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const removeProductImage = (index: number) => {
+    setProductForm(prev => ({
+      ...prev,
+      imageUrls: prev.imageUrls.filter((_, i) => i !== index),
+    }));
   };
 
   const resetVariantForm = () => {
@@ -276,6 +318,7 @@ export default function ShopManagementPage() {
       featured: product.featured,
       rafflePrizeDescription: product.rafflePrizeDescription || '',
       raffleDrawDate: product.raffleDrawDate ? new Date(product.raffleDrawDate).toISOString().split('T')[0] : '',
+      imageUrls: product.imageUrls || [],
     });
     setProductDialogOpen(true);
   };
@@ -671,6 +714,50 @@ export default function ShopManagementPage() {
                   rows={3}
                   data-testid="input-product-description"
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Product Images</Label>
+                <div className="flex flex-wrap gap-3">
+                  {productForm.imageUrls.map((url, index) => (
+                    <div key={index} className="relative group w-20 h-20 rounded-md overflow-visible border bg-muted">
+                      <img src={url} alt="" className="w-full h-full object-cover rounded-md" />
+                      <button
+                        type="button"
+                        onClick={() => removeProductImage(index)}
+                        className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground rounded-full p-0.5"
+                        data-testid={`button-remove-image-${index}`}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                  <label
+                    className="w-20 h-20 rounded-md border-2 border-dashed flex flex-col items-center justify-center gap-1 cursor-pointer hover-elevate text-muted-foreground"
+                    data-testid="button-upload-product-image"
+                  >
+                    {uploadingImage ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <>
+                        <ImagePlus className="h-5 w-5" />
+                        <span className="text-xs">Add</span>
+                      </>
+                    )}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      disabled={uploadingImage}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleProductImageUpload(file);
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
+                </div>
+                <p className="text-xs text-muted-foreground">Upload up to 5 images. First image is used as the main product photo.</p>
               </div>
 
               <div className="grid grid-cols-2 gap-4">

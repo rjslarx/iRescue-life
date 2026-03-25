@@ -1116,4 +1116,62 @@ router.get('/admin/stats', requireTenant, requireAuth, async (req, res, next) =>
   }
 });
 
+/**
+ * POST /api/shop/admin/products/images/upload
+ * Upload a product image
+ */
+router.post('/admin/products/images/upload', requireTenant, requireAuth, async (req, res, next) => {
+  try {
+    if (!['admin', 'staff'].includes(req.user!.activeRole)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const multer = (await import('multer')).default;
+    const { TenantFileStorage } = await import('../lib/tenantFileStorage');
+
+    const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif', 'avif'];
+
+    const upload = multer({
+      storage: multer.memoryStorage(),
+      limits: { fileSize: 10 * 1024 * 1024 },
+      fileFilter: (_req, file, cb) => {
+        const ext = file.originalname.split('.').pop()?.toLowerCase() || '';
+        if (file.mimetype.startsWith('image/') || imageExtensions.includes(ext)) {
+          cb(null, true);
+        } else {
+          cb(new Error('Only image files are allowed'));
+        }
+      },
+    });
+
+    upload.single('file')(req, res, async (err: any) => {
+      if (err) {
+        return res.status(400).json({ error: err.message });
+      }
+      if (!req.file) {
+        return res.status(400).json({ error: 'No file uploaded' });
+      }
+
+      try {
+        const storage = new TenantFileStorage(req.tenant!.id);
+        const result = await storage.uploadFile({
+          tenantId: req.tenant!.id,
+          userId: req.user!.id,
+          category: 'animal-photos',
+          visibility: 'public',
+          fileName: `shop-${Date.now()}-${req.file.originalname}`,
+          mimeType: req.file.mimetype,
+          content: req.file.buffer,
+        });
+        res.json({ imageUrl: result.fileUrl });
+      } catch (uploadError: any) {
+        console.error('Error uploading shop product image:', uploadError);
+        res.status(500).json({ error: 'Failed to upload image' });
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 export default router;
