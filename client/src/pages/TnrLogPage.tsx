@@ -836,7 +836,7 @@ function BatchEntryDialog({ open, onClose, onSuccess }: BatchEntryDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-[95vw] xl:max-w-7xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>New TNR Batch Entry</DialogTitle>
           <DialogDescription>Enter trapping session details and individual cat information below.</DialogDescription>
@@ -905,11 +905,11 @@ function BatchEntryDialog({ open, onClose, onSuccess }: BatchEntryDialogProps) {
                       <Input className="h-8 w-20" value={row.trapNumber} onChange={e => updateRow(i, "trapNumber", e.target.value)} placeholder={`#${i+1}`} data-testid={`input-trap-${i}`} />
                     </td>
                     <td className="px-2 py-1.5">
-                      <Input className="h-8 w-32" value={row.color} onChange={e => updateRow(i, "color", e.target.value)} placeholder="e.g. gray tabby" data-testid={`input-color-${i}`} />
+                      <Input className="h-8 w-28" value={row.color} onChange={e => updateRow(i, "color", e.target.value)} placeholder="e.g. gray tabby" data-testid={`input-color-${i}`} />
                     </td>
                     <td className="px-2 py-1.5">
                       <Select value={row.sex} onValueChange={v => updateRow(i, "sex", v)}>
-                        <SelectTrigger className="h-8 w-24" data-testid={`select-sex-${i}`}><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="h-8 w-16" data-testid={`select-sex-${i}`}><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="male">M</SelectItem>
                           <SelectItem value="female">F</SelectItem>
@@ -934,7 +934,7 @@ function BatchEntryDialog({ open, onClose, onSuccess }: BatchEntryDialogProps) {
                     </td>
                     <td className="px-2 py-1.5">
                       <Select value={row.ageGroup} onValueChange={v => updateRow(i, "ageGroup", v)}>
-                        <SelectTrigger className="h-8 w-24" data-testid={`select-age-${i}`}><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="h-8 w-20" data-testid={`select-age-${i}`}><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="Adult">Adult</SelectItem>
                           <SelectItem value="Kitten">Kitten</SelectItem>
@@ -970,7 +970,7 @@ function BatchEntryDialog({ open, onClose, onSuccess }: BatchEntryDialogProps) {
                       <Input className="h-8 w-24" value={row.invoiceNumber} onChange={e => updateRow(i, "invoiceNumber", e.target.value)} placeholder="Inv #" data-testid={`input-invoice-${i}`} />
                     </td>
                     <td className="px-2 py-1.5">
-                      <Input className="h-8 w-36" value={row.tnrNotes} onChange={e => updateRow(i, "tnrNotes", e.target.value)} placeholder="Notes" data-testid={`input-notes-${i}`} />
+                      <Input className="h-8 w-28" value={row.tnrNotes} onChange={e => updateRow(i, "tnrNotes", e.target.value)} placeholder="Notes" data-testid={`input-notes-${i}`} />
                     </td>
                     <td className="px-2 py-1.5">
                       {rows.length > 1 && (
