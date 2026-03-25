@@ -50,7 +50,11 @@ import {
   Download,
   FileText,
   Image as ImageIcon,
+  List,
+  Map,
 } from "lucide-react";
+import { lazy, Suspense } from "react";
+const TnrColonyMap = lazy(() => import("@/components/TnrColonyMap"));
 import {
   Sheet,
   SheetContent,
@@ -266,6 +270,7 @@ export default function TnrLogPage() {
   const [attachmentAnimalId, setAttachmentAnimalId] = useState<string | null>(null);
   const [attachmentAnimalName, setAttachmentAnimalName] = useState<string>("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [viewMode, setViewMode] = useState<"list" | "map">("list");
   const fmtSex = (s: string | null) => s === 'male' ? 'M' : s === 'female' ? 'F' : s || '—';
 
   const monthStr = getMonthString(currentDate);
@@ -476,24 +481,55 @@ export default function TnrLogPage() {
             <Cat className="h-6 w-6 text-muted-foreground" />
             <h1 className="text-2xl font-bold">TNR Log</h1>
           </div>
-          <div className="flex items-center gap-2">
-            <Button size="icon" variant="ghost" onClick={prevMonth} data-testid="button-prev-month"><ChevronLeft className="h-4 w-4" /></Button>
-            <span className="text-base font-medium min-w-36 text-center">{monthLabel}</span>
-            <Button size="icon" variant="ghost" onClick={nextMonth} data-testid="button-next-month"><ChevronRight className="h-4 w-4" /></Button>
-            {selectedIds.size > 0 && (
-              <Button variant="outline" onClick={doPrintSelected} data-testid="button-print-selected">
-                <Printer className="h-4 w-4 mr-2" /> Print Selected ({selectedIds.size})
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center rounded-md border">
+              <Button
+                size="sm"
+                variant={viewMode === "list" ? "default" : "ghost"}
+                className="rounded-r-none"
+                onClick={() => setViewMode("list")}
+                data-testid="button-view-list"
+              >
+                <List className="h-4 w-4 mr-1" /> List
               </Button>
+              <Button
+                size="sm"
+                variant={viewMode === "map" ? "default" : "ghost"}
+                className="rounded-l-none"
+                onClick={() => setViewMode("map")}
+                data-testid="button-view-map"
+              >
+                <Map className="h-4 w-4 mr-1" /> Map
+              </Button>
+            </div>
+            {viewMode === "list" && (
+              <>
+                <Button size="icon" variant="ghost" onClick={prevMonth} data-testid="button-prev-month"><ChevronLeft className="h-4 w-4" /></Button>
+                <span className="text-base font-medium min-w-36 text-center">{monthLabel}</span>
+                <Button size="icon" variant="ghost" onClick={nextMonth} data-testid="button-next-month"><ChevronRight className="h-4 w-4" /></Button>
+                {selectedIds.size > 0 && (
+                  <Button variant="outline" onClick={doPrintSelected} data-testid="button-print-selected">
+                    <Printer className="h-4 w-4 mr-2" /> Print Selected ({selectedIds.size})
+                  </Button>
+                )}
+                <Button variant="outline" onClick={doPrintMonth} data-testid="button-print-month">
+                  <Printer className="h-4 w-4 mr-2" /> Print Month
+                </Button>
+              </>
             )}
-            <Button variant="outline" onClick={doPrintMonth} data-testid="button-print-month">
-              <Printer className="h-4 w-4 mr-2" /> Print Month
-            </Button>
             <Button onClick={() => setShowBatchDialog(true)} data-testid="button-new-batch">
               <Plus className="h-4 w-4 mr-2" /> New Batch
             </Button>
           </div>
         </div>
 
+        {viewMode === "map" ? (
+          <div className="flex-1 min-h-[500px] rounded-md border overflow-hidden">
+            <Suspense fallback={<Skeleton className="h-[500px] w-full" />}>
+              <TnrColonyMap />
+            </Suspense>
+          </div>
+        ) : (
         <div className="tnr-main-content">
           {isLoading ? (
             <div className="space-y-2">
@@ -651,6 +687,7 @@ export default function TnrLogPage() {
             </div>
           )}
         </div>
+        )}
       </div>
 
       <BatchEntryDialog

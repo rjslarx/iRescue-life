@@ -39,7 +39,7 @@ Core functionalities include:
 - **Unified Daily Medical Roster:** Provides an aggregated daily view of all pending medical tasks with a 30-second undo window for marked doses and admin override for foster medical tasks with audit trails.
 - **Donation & Fundraising Hub:** A centralized dashboard for general donations, targeted animal fundraising, and a fundraiser/event sales module with full campaign pages. Includes "Donor Covers Fees" feature with `fees_covered`, `gross_amount`, and `net_amount` tracking in the donations table.
 - **Help & Training Module:** Offers a two-tab page for videos and documents with role-based visibility.
-- **TNR (Trap-Neuter-Return) Log Module:** Integrates TNR record management within existing animal data.
+- **TNR (Trap-Neuter-Return) Log Module:** Integrates TNR record management within existing animal data. Includes a Colony Map View with Google Maps integration showing color-coded markers by outcome type, geocoding of colony locations on batch create and edit, and an interactive info panel for each mapped record.
 - **Omnichannel Communications Switchboard:** A unified admin control panel for SMS logs and queued messages, including a "Pause Outbound Comms" kill switch and a "Convert Channel" modal.
 - **Daily Staff Briefing Email:** An automated HTML email providing a daily summary of shelter, foster, and adopted animal-related tasks and alerts.
 - **Pending Applications Digest:** A daily scheduled email alerting configured recipients to new/unreviewed applications across various pipelines.

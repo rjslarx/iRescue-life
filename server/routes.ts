@@ -44798,6 +44798,15 @@ Use timestamps like [00:00] to help with pacing.`;
   });
 
   /**
+   * GET /api/config/google-maps-key
+   * Return Google Maps API key for frontend use
+   */
+  app.get('/api/config/google-maps-key', requireTenant, requireAuth, async (req, res) => {
+    const key = process.env.GOOGLE_MAPS_API_KEY || '';
+    res.json({ apiKey: key });
+  });
+
+  /**
    * GET /api/tnr-records/map
    * Return all TNR records with valid lat/lng for map rendering
    */
@@ -44961,12 +44970,20 @@ Use timestamps like [00:00] to help with pacing.`;
         updateData.tnrOutcomeDate = new Date(updateData.tnrOutcomeDate);
       }
       // Re-geocode if colonyLocation changed
-      if (updateData.colonyLocation && typeof updateData.colonyLocation === 'string') {
-        const { geocodeAddress } = await import('./lib/geocoding');
-        const coords = await geocodeAddress(updateData.colonyLocation);
-        if (coords) {
-          updateData.latitude = coords.latitude;
-          updateData.longitude = coords.longitude;
+      if ('colonyLocation' in updateData) {
+        if (updateData.colonyLocation && typeof updateData.colonyLocation === 'string' && updateData.colonyLocation.trim().length > 0) {
+          const { geocodeAddress } = await import('./lib/geocoding');
+          const coords = await geocodeAddress(updateData.colonyLocation);
+          if (coords) {
+            updateData.latitude = coords.latitude;
+            updateData.longitude = coords.longitude;
+          } else {
+            updateData.latitude = null;
+            updateData.longitude = null;
+          }
+        } else {
+          updateData.latitude = null;
+          updateData.longitude = null;
         }
       }
       const [updated] = await db.update(animals)
