@@ -44811,7 +44811,7 @@ Use timestamps like [00:00] to help with pacing.`;
           eq(animals.tenantId, req.tenant!.id),
           eq(animals.recordType, 'tnr'),
           isNotNull(animals.colonyLocation),
-          isNull(animals.latitude),
+          or(isNull(animals.latitude), isNull(animals.longitude)),
         ));
 
       const geocodeCache: Record<string, { latitude: number; longitude: number } | null> = {};
@@ -45007,21 +45007,28 @@ Use timestamps like [00:00] to help with pacing.`;
       if (updateData.tnrOutcomeDate && typeof updateData.tnrOutcomeDate === 'string') {
         updateData.tnrOutcomeDate = new Date(updateData.tnrOutcomeDate);
       }
-      // Re-geocode if colonyLocation changed
+      // Re-geocode only if colonyLocation actually changed
       if ('colonyLocation' in updateData) {
-        if (updateData.colonyLocation && typeof updateData.colonyLocation === 'string' && updateData.colonyLocation.trim().length > 0) {
-          const { geocodeAddress } = await import('./lib/geocoding');
-          const coords = await geocodeAddress(updateData.colonyLocation);
-          if (coords) {
-            updateData.latitude = coords.latitude;
-            updateData.longitude = coords.longitude;
-          } else {
-            updateData.latitude = null;
-            updateData.longitude = null;
-          }
-        } else {
+        if (!updateData.colonyLocation || (typeof updateData.colonyLocation === 'string' && updateData.colonyLocation.trim().length === 0)) {
+          // Location was explicitly cleared — remove coordinates
           updateData.latitude = null;
           updateData.longitude = null;
+        } else {
+          // Location was set — check if it differs from current before geocoding
+          const [existing] = await db.select({ colonyLocation: animals.colonyLocation })
+            .from(animals)
+            .where(and(eq(animals.id, id), eq(animals.tenantId, req.tenant!.id)))
+            .limit(1);
+          const oldLocation = existing?.colonyLocation || '';
+          if (updateData.colonyLocation.trim().toLowerCase() !== oldLocation.trim().toLowerCase()) {
+            const { geocodeAddress } = await import('./lib/geocoding');
+            const coords = await geocodeAddress(updateData.colonyLocation);
+            if (coords) {
+              updateData.latitude = coords.latitude;
+              updateData.longitude = coords.longitude;
+            }
+            // If geocoding fails, preserve existing coordinates (don't null them)
+          }
         }
       }
       const [updated] = await db.update(animals)
