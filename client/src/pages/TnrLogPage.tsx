@@ -165,10 +165,11 @@ interface GrantOption {
 }
 
 function GrantPicker({ value, onChange, testIdPrefix }: { value: string; onChange: (v: string) => void; testIdPrefix: string }) {
-  const { data: grants } = useQuery<GrantOption[]>({
+  const { data: grantsResponse } = useQuery<{ grants: GrantOption[] }>({
     queryKey: ['/api/grants'],
   });
 
+  const grants = grantsResponse?.grants;
   const activeGrants = (grants || []).filter(g => g.status === 'awarded' || g.status === 'in_progress' || g.status === 'completed');
   const grantLabels = activeGrants.map(g => `${g.funderName} — ${g.programName}`);
   const isCustom = value !== "" && !grantLabels.includes(value);
