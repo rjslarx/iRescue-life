@@ -50,6 +50,11 @@ export async function injectOGTags(req: Request, res: Response, next: NextFuncti
     return next();
   }
 
+  const assetPaths = ['/objects/', '/api/', '/assets/', '/icon-', '/manifest', '/favicon'];
+  if (assetPaths.some(p => req.url.includes(p) || req.originalUrl.includes(p))) {
+    return next();
+  }
+
   const tenant = req.tenant;
   if (!tenant) {
     console.log(`[OG-TAGS] No tenant available for: ${req.url}`);
