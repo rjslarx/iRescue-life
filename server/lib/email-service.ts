@@ -864,12 +864,40 @@ export class EmailService {
         body: JSON.stringify(emailPayload),
       });
 
-      const data: ResendResponse = await response.json();
-
-      if (!response.ok || data.error) {
+      let data: ResendResponse;
+      try {
+        data = await response.json();
+      } catch {
+        const rawBody = await response.text().catch(() => '(unreadable)');
+        console.error(`[EmailService] Resend API returned non-JSON response ${response.status}: ${rawBody}`, {
+          status: response.status,
+          from,
+          to: Array.isArray(options.to) ? options.to : [options.to],
+          usePlatformKey: this.usePlatformKey,
+          tenantId: this.tenantId,
+        });
         return {
           success: false,
-          error: data.error?.message || `Email API error: ${response.statusText}`,
+          error: `Email API error: ${response.status} ${response.statusText} (non-JSON response)`,
+        };
+      }
+
+      if (!response.ok || data.error) {
+        const errorDetail = data.error?.message || response.statusText;
+        const errorName = data.error?.name || 'unknown';
+        console.error(`[EmailService] Resend API error ${response.status} (${errorName}): ${errorDetail}`, {
+          status: response.status,
+          errorName,
+          errorDetail,
+          from,
+          to: Array.isArray(options.to) ? options.to : [options.to],
+          subject: cleanedSubject,
+          usePlatformKey: this.usePlatformKey,
+          tenantId: this.tenantId,
+        });
+        return {
+          success: false,
+          error: `Email API error: ${response.status} ${errorName} - ${errorDetail}`,
         };
       }
 
