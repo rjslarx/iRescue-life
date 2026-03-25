@@ -9,7 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Menu, ChevronDown, Package, Heart, TicketPercent, HeartHandshake } from "lucide-react";
+import { Menu, ChevronDown, Package, Heart, TicketPercent, HeartHandshake, ShoppingBag } from "lucide-react";
 import type { CustomPage, SupplyItem, Tenant } from "@shared/schema";
 
 interface ActiveCampaign {
@@ -75,8 +75,9 @@ export default function PublicHeader({ rescueName, logoUrl }: PublicHeaderProps)
   const activeCampaigns = campaignsData?.campaigns || [];
   const hasActiveFundraisers = (fundraiserData?.events?.length || 0) > 0;
   
+  const shopEnabled = (tenant as any)?.shopEnabled ?? false;
   const hasStartFundraiser = true;
-  const showMoreDropdown = hasStartFundraiser || navigationPages.length > 0 || hasWishlistItems || activeCampaigns.length > 0;
+  const showMoreDropdown = hasStartFundraiser || navigationPages.length > 0 || hasWishlistItems || activeCampaigns.length > 0 || shopEnabled;
   
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -161,6 +162,18 @@ export default function PublicHeader({ rescueName, logoUrl }: PublicHeaderProps)
                     >
                       <TicketPercent className="h-4 w-4" />
                       Fundraisers
+                    </Link>
+                  </DropdownMenuItem>
+                )}
+                {shopEnabled && (
+                  <DropdownMenuItem asChild>
+                    <Link
+                      href="/shop"
+                      className="cursor-pointer w-full flex items-center gap-2"
+                      data-testid="link-nav-shop"
+                    >
+                      <ShoppingBag className="h-4 w-4" />
+                      Shop
                     </Link>
                   </DropdownMenuItem>
                 )}
@@ -325,6 +338,19 @@ export default function PublicHeader({ rescueName, logoUrl }: PublicHeaderProps)
                       >
                         <TicketPercent className="h-4 w-4 mr-2" />
                         Fundraisers
+                      </Button>
+                    </Link>
+                  )}
+                  {shopEnabled && (
+                    <Link href="/shop">
+                      <Button
+                        variant="ghost"
+                        className="w-full justify-start"
+                        data-testid="button-shop-mobile"
+                        onClick={() => setMobileMenuOpen(false)}
+                      >
+                        <ShoppingBag className="h-4 w-4 mr-2" />
+                        Shop
                       </Button>
                     </Link>
                   )}

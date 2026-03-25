@@ -32,7 +32,7 @@ import {
   Gift,
   Loader2,
 } from "lucide-react";
-import type { ShopProduct, ShopProductVariant, ShopOrder, ShopOrderItem } from "@shared/schema";
+import type { ShopProduct, ShopProductVariant, ShopOrder, ShopOrderItem, Tenant } from "@shared/schema";
 
 type ProductWithVariants = ShopProduct & {
   variants: ShopProductVariant[];
@@ -89,6 +89,27 @@ export default function ShopManagementPage() {
     products: { total: number; active: number } 
   }>({
     queryKey: ['/api/shop/admin/stats'],
+  });
+
+  const { data: tenantData } = useQuery<{ tenant: Tenant }>({
+    queryKey: ['/api/tenant'],
+  });
+  const shopEnabled = (tenantData?.tenant as any)?.shopEnabled ?? false;
+
+  const toggleShopMutation = useMutation({
+    mutationFn: async (enabled: boolean) => {
+      const response = await apiRequest('PATCH', '/api/tenant/settings', { shopEnabled: enabled });
+      if (!response.ok) throw new Error('Failed to update shop visibility');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/tenant'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/shop'] });
+      toast({ title: shopEnabled ? "Shop page hidden from public site" : "Shop page is now live on your public site" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
   });
 
   const products = productsData?.products || [];
@@ -302,10 +323,24 @@ export default function ShopManagementPage() {
             <ShoppingBag className="h-6 w-6" />
             <h1 className="text-2xl font-bold">Shop Management</h1>
           </div>
-          <Button onClick={() => { resetProductForm(); setEditingProduct(null); setProductDialogOpen(true); }} data-testid="button-add-product">
-            <Plus className="h-4 w-4 mr-2" />
-            Add Product
-          </Button>
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="flex items-center gap-2">
+              <Switch
+                id="shop-enabled"
+                checked={shopEnabled}
+                onCheckedChange={(checked) => toggleShopMutation.mutate(checked)}
+                disabled={toggleShopMutation.isPending}
+                data-testid="switch-shop-enabled"
+              />
+              <Label htmlFor="shop-enabled" className="text-sm whitespace-nowrap">
+                {shopEnabled ? "Shop is live" : "Shop is hidden"}
+              </Label>
+            </div>
+            <Button onClick={() => { resetProductForm(); setEditingProduct(null); setProductDialogOpen(true); }} data-testid="button-add-product">
+              <Plus className="h-4 w-4 mr-2" />
+              Add Product
+            </Button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

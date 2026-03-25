@@ -33,6 +33,7 @@ export const tenants = pgTable("tenants", {
   stripeWebhookSecretEncrypted: text("stripe_webhook_secret_encrypted"), // Encrypted webhook secret
   stripeEnabled: boolean("stripe_enabled").notNull().default(false), // Whether Stripe is configured
   tnrEnabled: boolean("tnr_enabled").notNull().default(false), // Whether the TNR Log module is enabled for this tenant
+  shopEnabled: boolean("shop_enabled").notNull().default(false), // Whether the public shop page is enabled for this tenant
   stripeConnectedAccountId: text("stripe_connected_account_id"), // Stripe Connect account ID (Standard Connect - tenant owns account)
   stripeConnectedAt: timestamp("stripe_connected_at"), // When Stripe was connected via OAuth
   // Adoption fee settings

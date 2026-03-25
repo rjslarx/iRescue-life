@@ -86,6 +86,7 @@ import {
   Video,
   Activity,
   Megaphone,
+  ShoppingBag,
 } from "lucide-react";
 
 interface AppSidebarProps {
@@ -317,6 +318,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
         { title: "Donation Links", url: "/dashboard/donation-links", icon: DollarSign },
         { title: "Events & Products", url: "/dashboard/fundraisers", icon: TicketPercent },
         { title: "Event Ticket Sales", url: "/dashboard/event-ticket-sales", icon: Ticket },
+        { title: "Shop", url: "/dashboard/shop", icon: ShoppingBag },
       ],
       defaultOpen: false,
     },
@@ -409,6 +411,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
         { title: "Donation Links", url: "/dashboard/donation-links", icon: DollarSign },
         { title: "Events & Products", url: "/dashboard/fundraisers", icon: TicketPercent },
         { title: "Event Ticket Sales", url: "/dashboard/event-ticket-sales", icon: Ticket },
+        { title: "Shop", url: "/dashboard/shop", icon: ShoppingBag },
       ],
       defaultOpen: false,
     },
@@ -582,6 +585,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
     '/dashboard/volunteer-pipeline': 'volunteer-pipeline',
     '/dashboard/foster-pipeline': 'foster-pipeline',
     '/dashboard/tnr-log': 'tnr-log',
+    '/dashboard/shop': 'shop',
   };
 
   // Helper function to check if menu item should be shown

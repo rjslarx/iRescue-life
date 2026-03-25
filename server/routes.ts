@@ -22043,6 +22043,7 @@ Submitted: ${new Date().toLocaleString()}
         requireSpayNeuterContract: z.boolean().optional(),
         defaultSurrenderFee: z.string().optional().nullable(),
         autoSendTaxReceipts: z.boolean().optional(),
+        shopEnabled: z.boolean().optional(),
       });
 
       const parsedSettings = settingsSchema.parse(req.body);
@@ -22053,6 +22054,7 @@ Submitted: ${new Date().toLocaleString()}
       if (parsedSettings.requireSpayNeuterContract !== undefined) settingsToUpdate.requireSpayNeuterContract = parsedSettings.requireSpayNeuterContract;
       if (parsedSettings.defaultSurrenderFee !== undefined) settingsToUpdate.defaultSurrenderFee = parsedSettings.defaultSurrenderFee;
       if (parsedSettings.autoSendTaxReceipts !== undefined) settingsToUpdate.autoSendTaxReceipts = parsedSettings.autoSendTaxReceipts;
+      if (parsedSettings.shopEnabled !== undefined) settingsToUpdate.shopEnabled = parsedSettings.shopEnabled;
 
       const [updatedTenant] = await db
         .update(tenants)
