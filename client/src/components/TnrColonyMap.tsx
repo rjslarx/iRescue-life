@@ -3,9 +3,8 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Cat, MapPin, ExternalLink, X, RefreshCw, Loader2 } from "lucide-react";
+import { MapPin, RefreshCw, Loader2 } from "lucide-react";
 
 interface MapRecord {
   id: string;
@@ -21,6 +20,11 @@ interface MapRecord {
   colors: string[] | null;
   intakeDate: string | null;
   trapNumber: string | null;
+}
+
+interface BackfillResponse {
+  total: number;
+  updated: number;
 }
 
 const OUTCOME_COLORS: Record<string, string> = {
@@ -46,7 +50,7 @@ const MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
 let mapsScriptPromise: Promise<void> | null = null;
 
 function loadGoogleMapsScript(apiKey: string): Promise<void> {
-  if ((window as any).google?.maps) return Promise.resolve();
+  if ((window as unknown as { google?: { maps?: unknown } }).google?.maps) return Promise.resolve();
   if (mapsScriptPromise) return mapsScriptPromise;
 
   mapsScriptPromise = new Promise((resolve, reject) => {
@@ -61,75 +65,47 @@ function loadGoogleMapsScript(apiKey: string): Promise<void> {
   return mapsScriptPromise;
 }
 
-interface InfoPanelProps {
-  record: MapRecord;
-  onClose: () => void;
-  onViewRecord: (record: MapRecord) => void;
-}
-
-function InfoPanel({ record, onClose, onViewRecord }: InfoPanelProps) {
+function buildInfoWindowContent(record: MapRecord, viewRecordBtnId: string): string {
   const fmtSex = (s: string | null) => s === "male" ? "M" : s === "female" ? "F" : s || "";
+  const outcomeLabel = record.tnrOutcomeType ? (OUTCOME_LABELS[record.tnrOutcomeType] || record.tnrOutcomeType) : "";
+  const outcomeColor = record.tnrOutcomeType ? (OUTCOME_COLORS[record.tnrOutcomeType] || "#6b7280") : "";
+  const dateStr = record.intakeDate ? new Date(record.intakeDate).toLocaleDateString() : "";
   const photoUrl = record.photoUrls && record.photoUrls.length > 0 ? record.photoUrls[0] : null;
 
-  return (
-    <div className="absolute top-4 right-4 z-10 bg-background border rounded-md shadow-lg p-4 min-w-[260px] max-w-[320px]" data-testid="map-info-panel">
-      <button onClick={onClose} className="absolute top-2 right-2 text-muted-foreground hover:text-foreground" data-testid="button-close-info-panel">
-        <X className="h-4 w-4" />
-      </button>
+  let html = `<div style="font-family:system-ui,sans-serif;min-width:200px;max-width:280px;font-size:13px;" data-testid="map-info-window">`;
 
-      {photoUrl && (
-        <div className="mb-2 rounded-md overflow-hidden">
-          <img
-            src={photoUrl.startsWith("http") ? photoUrl : photoUrl}
-            alt={record.name}
-            className="w-full h-32 object-cover"
-            data-testid="img-tnr-photo"
-          />
-        </div>
-      )}
+  if (photoUrl) {
+    html += `<div style="margin-bottom:8px;border-radius:6px;overflow:hidden;"><img src="${photoUrl}" alt="${record.name}" style="width:100%;height:100px;object-fit:cover;" data-testid="img-tnr-photo" /></div>`;
+  }
 
-      <div className="flex items-center gap-2 mb-1">
-        <Cat className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-        <span className="font-semibold text-sm" data-testid="text-info-name">{record.name}</span>
-      </div>
-      {record.localShelterId && (
-        <p className="text-xs text-muted-foreground mb-1" data-testid="text-info-id">ID: {record.localShelterId}</p>
-      )}
-      {record.colonyName && (
-        <p className="text-xs mb-0.5"><span className="font-medium">Colony:</span> {record.colonyName}</p>
-      )}
-      {record.colonyLocation && (
-        <p className="text-xs mb-0.5"><span className="font-medium">Location:</span> {record.colonyLocation}</p>
-      )}
-      {record.trapNumber && (
-        <p className="text-xs mb-0.5"><span className="font-medium">Trap #:</span> {record.trapNumber}</p>
-      )}
-      {record.sex && (
-        <p className="text-xs mb-0.5"><span className="font-medium">Sex:</span> {fmtSex(record.sex)}</p>
-      )}
-      {record.intakeDate && (
-        <p className="text-xs mb-0.5"><span className="font-medium">Date:</span> {new Date(record.intakeDate).toLocaleDateString()}</p>
-      )}
-      {record.tnrOutcomeType && (
-        <Badge variant="secondary" className="mt-1 text-xs">
-          {OUTCOME_LABELS[record.tnrOutcomeType] || record.tnrOutcomeType}
-        </Badge>
-      )}
+  html += `<div style="font-weight:600;font-size:14px;margin-bottom:2px;" data-testid="text-info-name">${record.name}</div>`;
 
-      <div className="mt-3 pt-2 border-t">
-        <Button
-          size="sm"
-          variant="outline"
-          className="w-full"
-          onClick={() => onViewRecord(record)}
-          data-testid="button-view-full-record"
-        >
-          <ExternalLink className="h-3 w-3 mr-1.5" />
-          View Full Record
-        </Button>
-      </div>
-    </div>
-  );
+  if (record.localShelterId) {
+    html += `<div style="color:#6b7280;font-size:11px;margin-bottom:4px;" data-testid="text-info-id">ID: ${record.localShelterId}</div>`;
+  }
+
+  const fields: [string, string][] = [];
+  if (record.colonyName) fields.push(["Colony", record.colonyName]);
+  if (record.colonyLocation) fields.push(["Location", record.colonyLocation]);
+  if (record.trapNumber) fields.push(["Trap #", record.trapNumber]);
+  if (record.sex) fields.push(["Sex", fmtSex(record.sex)]);
+  if (dateStr) fields.push(["Date", dateStr]);
+
+  for (const [label, value] of fields) {
+    html += `<div style="font-size:12px;margin-bottom:2px;"><strong>${label}:</strong> ${value}</div>`;
+  }
+
+  if (outcomeLabel) {
+    html += `<div style="display:inline-block;margin-top:4px;padding:2px 8px;border-radius:9999px;font-size:11px;background:${outcomeColor}20;color:${outcomeColor};font-weight:500;">${outcomeLabel}</div>`;
+  }
+
+  html += `<div style="margin-top:8px;padding-top:6px;border-top:1px solid #e5e7eb;">`;
+  html += `<button id="${viewRecordBtnId}" data-testid="button-view-full-record" style="width:100%;padding:6px 12px;border:1px solid #d1d5db;border-radius:6px;background:white;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;gap:4px;">`;
+  html += `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>`;
+  html += `View Full Record</button></div>`;
+  html += `</div>`;
+
+  return html;
 }
 
 interface TnrColonyMapProps {
@@ -141,18 +117,20 @@ export default function TnrColonyMap({ onViewRecord }: TnrColonyMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
   const markersRef = useRef<google.maps.Marker[]>([]);
-  const [selectedRecord, setSelectedRecord] = useState<MapRecord | null>(null);
+  const infoWindowRef = useRef<google.maps.InfoWindow | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const backfillMutation = useMutation({
-    mutationFn: () => apiRequest("POST", "/api/tnr-records/geocode-backfill"),
-    onSuccess: async (res: any) => {
-      const data = typeof res.json === "function" ? await res.json() : res;
+    mutationFn: async (): Promise<BackfillResponse> => {
+      const res = await apiRequest("POST", "/api/tnr-records/geocode-backfill");
+      return res.json() as Promise<BackfillResponse>;
+    },
+    onSuccess: (data: BackfillResponse) => {
       queryClient.invalidateQueries({ queryKey: ["/api/tnr-records/map"] });
       toast({
         title: "Geocoding complete",
-        description: `Updated ${data.updated || 0} of ${data.total || 0} records.`,
+        description: `Updated ${data.updated} of ${data.total} records.`,
       });
     },
     onError: () => {
@@ -199,10 +177,12 @@ export default function TnrColonyMap({ onViewRecord }: TnrColonyMapProps) {
       streetViewControl: false,
       fullscreenControl: true,
     });
+
+    infoWindowRef.current = new google.maps.InfoWindow();
   }, [mapLoaded]);
 
   useEffect(() => {
-    if (!mapRef.current || !mapLoaded) return;
+    if (!mapRef.current || !mapLoaded || !infoWindowRef.current) return;
 
     for (const m of markersRef.current) {
       m.setMap(null);
@@ -229,7 +209,19 @@ export default function TnrColonyMap({ onViewRecord }: TnrColonyMapProps) {
       });
 
       marker.addListener("click", () => {
-        setSelectedRecord(record);
+        if (!infoWindowRef.current || !mapRef.current) return;
+        const btnId = `view-record-${record.id}`;
+        infoWindowRef.current.setContent(buildInfoWindowContent(record, btnId));
+        infoWindowRef.current.open(mapRef.current, marker);
+
+        google.maps.event.addListenerOnce(infoWindowRef.current, "domready", () => {
+          const btn = document.getElementById(btnId);
+          if (btn) {
+            btn.addEventListener("click", () => {
+              if (onViewRecord) onViewRecord(record);
+            });
+          }
+        });
       });
 
       markersRef.current.push(marker);
@@ -246,13 +238,7 @@ export default function TnrColonyMap({ onViewRecord }: TnrColonyMapProps) {
       mapRef.current.setCenter(center);
       mapRef.current.setZoom(10);
     }
-  }, [records, mapLoaded]);
-
-  const handleViewRecord = (record: MapRecord) => {
-    if (onViewRecord) {
-      onViewRecord(record);
-    }
-  };
+  }, [records, mapLoaded, onViewRecord]);
 
   if (!MAPS_API_KEY) {
     return (
@@ -307,15 +293,8 @@ export default function TnrColonyMap({ onViewRecord }: TnrColonyMapProps) {
         </div>
       </div>
 
-      <div className="flex-1 min-h-[500px] relative">
+      <div className="flex-1 min-h-[500px]">
         <div ref={mapContainerRef} className="w-full h-full" />
-        {selectedRecord && (
-          <InfoPanel
-            record={selectedRecord}
-            onClose={() => setSelectedRecord(null)}
-            onViewRecord={handleViewRecord}
-          />
-        )}
       </div>
     </div>
   );
