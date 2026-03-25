@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction, Router } from 'express';
 import { db } from '../db';
-import { animals, calendars, tenants, donationLinks } from '@shared/schema';
+import { animals, calendars, tenants, donationLinks, shopProducts } from '@shared/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import fs from 'fs';
 import path from 'path';
@@ -329,6 +329,53 @@ export async function injectOGTags(req: Request, res: Response, next: NextFuncti
             };
           }
         }
+      }
+    }
+
+    if (!ogData) {
+      const shopMatch = url.match(/^\/shop\/([a-z0-9-]+)$/i);
+      if (shopMatch) {
+        const slug = shopMatch[1];
+        if (slug !== 'checkout') {
+          const [product] = await db.select({
+            name: shopProducts.name,
+            description: shopProducts.description,
+            imageUrls: shopProducts.imageUrls,
+            basePrice: shopProducts.basePrice,
+          })
+          .from(shopProducts)
+          .where(and(
+            eq(shopProducts.tenantId, tenant.id),
+            eq(shopProducts.slug, slug),
+            eq(shopProducts.status, 'active')
+          ))
+          .limit(1);
+
+          if (product) {
+            const productImage = product.imageUrls?.[0]
+              ? (resolveImageUrl(product.imageUrls[0]) || defaultImage)
+              : defaultImage;
+            const priceStr = product.basePrice ? `$${parseFloat(product.basePrice).toFixed(2)}` : '';
+            ogData = {
+              title: `${product.name}${priceStr ? ` - ${priceStr}` : ''} | ${tenant.name}`,
+              description: product.description
+                ? product.description.slice(0, 200) + (product.description.length > 200 ? '...' : '')
+                : `Shop ${product.name} at ${tenant.name}. Support animal rescue with every purchase!`,
+              image: productImage,
+            };
+          }
+        }
+      }
+    }
+
+    if (!ogData) {
+      const shopListMatch = url.match(/^\/shop\/?$/i);
+      if (shopListMatch) {
+        ogData = {
+          title: `Shop | ${tenant.name}`,
+          description: `Browse products from ${tenant.name}. Every purchase supports animal rescue!`,
+          image: defaultImage,
+        };
       }
     }
 
