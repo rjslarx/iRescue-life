@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from 'express';
+import { Request, Response, NextFunction, Router } from 'express';
 import { db } from '../db';
 import { animals, calendars, tenants, donationLinks } from '@shared/schema';
 import { eq, and, desc } from 'drizzle-orm';
@@ -345,18 +345,30 @@ export async function injectOGTags(req: Request, res: Response, next: NextFuncti
       ? `${req.protocol}://${tenant.customDomain}${url}`
       : `${req.protocol}://${req.get('host')}/${tenant.subdomain}${url}`;
 
+    let ogImage = ogData.image;
+    const ogImageOriginal = ogData.image;
+    if (ogImage.includes('/objects/')) {
+      const objectsPath = ogImage.includes('/objects/') ? ogImage.substring(ogImage.indexOf('/objects/')) : '';
+      if (objectsPath) {
+        ogImage = `${baseUrl}/api/og-image?url=${encodeURIComponent(objectsPath)}`;
+      }
+    }
+
     const ogTags = `
     <!-- Dynamic Open Graph Tags for Social Sharing -->
     <meta property="og:type" content="website" />
     <meta property="og:url" content="${escapeHtml(canonicalUrl)}" />
     <meta property="og:title" content="${escapeHtml(ogData.title)}" />
     <meta property="og:description" content="${escapeHtml(ogData.description)}" />
-    <meta property="og:image" content="${escapeHtml(ogData.image)}" />
+    <meta property="og:image" content="${escapeHtml(ogImage)}" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:type" content="image/jpeg" />
     <meta property="og:site_name" content="${escapeHtml(tenant.name)}" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="${escapeHtml(ogData.title)}" />
     <meta name="twitter:description" content="${escapeHtml(ogData.description)}" />
-    <meta name="twitter:image" content="${escapeHtml(ogData.image)}" />
+    <meta name="twitter:image" content="${escapeHtml(ogImage)}" />
     <meta name="description" content="${escapeHtml(ogData.description)}" />
     <title>${escapeHtml(ogData.title)}</title>
     <!-- End Dynamic Open Graph Tags -->
@@ -409,3 +421,36 @@ export async function injectOGTags(req: Request, res: Response, next: NextFuncti
     next();
   }
 }
+
+export const ogImageRouter = Router();
+
+ogImageRouter.get('/api/og-image', async (req, res) => {
+  try {
+    const imageUrl = req.query.url as string;
+    if (!imageUrl || !imageUrl.startsWith('/objects/')) {
+      return res.status(400).json({ error: 'Invalid image URL' });
+    }
+
+    const { ObjectStorageService } = await import('../objectStorage');
+    const objectStorage = new ObjectStorageService();
+    const objectFile = await objectStorage.getObjectEntityFile(imageUrl);
+
+    const [contents] = await objectFile.download();
+
+    const sharp = (await import('sharp')).default;
+    const optimized = await sharp(contents)
+      .resize(1200, 630, { fit: 'cover', position: 'center' })
+      .jpeg({ quality: 80 })
+      .toBuffer();
+
+    res.set({
+      'Content-Type': 'image/jpeg',
+      'Content-Length': String(optimized.length),
+      'Cache-Control': 'public, max-age=86400',
+    });
+    res.end(optimized);
+  } catch (error) {
+    console.error('[OG-IMAGE] Error generating OG image:', error);
+    res.status(500).json({ error: 'Failed to generate image' });
+  }
+});

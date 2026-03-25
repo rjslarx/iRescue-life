@@ -6,7 +6,7 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { sessionMiddleware, authenticateUser } from "./middleware/auth";
 import { resolveTenant } from "./middleware/tenant";
-import { injectOGTags } from "./middleware/og-tags";
+import { injectOGTags, ogImageRouter } from "./middleware/og-tags";
 import { validateEnvironment } from "./config/env-validation";
 import { helmetConfig, getCorsConfig, configureTrustProxy, apiLimiter } from "./config/security";
 import { initializeScheduler } from "./lib/scheduler";
@@ -125,6 +125,9 @@ app.use(resolveTenant);
 
 // User authentication middleware
 app.use(authenticateUser);
+
+// OG image optimization endpoint (must be before OG tags middleware)
+app.use(ogImageRouter);
 
 // Open Graph tags injection for social media crawlers
 app.use(injectOGTags);
