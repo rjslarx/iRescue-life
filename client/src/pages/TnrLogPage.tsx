@@ -526,7 +526,16 @@ export default function TnrLogPage() {
         {viewMode === "map" ? (
           <div className="flex-1 min-h-[500px] rounded-md border overflow-hidden">
             <Suspense fallback={<Skeleton className="h-[500px] w-full" />}>
-              <TnrColonyMap />
+              <TnrColonyMap onViewRecord={async (rec) => {
+                try {
+                  const res = await fetch(`/api/tnr-records?month=${new Date(rec.intakeDate || Date.now()).toISOString().slice(0, 7)}`);
+                  const data = await res.json();
+                  const full = (data.records || []).find((r: TnrRecord) => r.id === rec.id);
+                  if (full) {
+                    setEditRecord(full);
+                  }
+                } catch {}
+              }} />
             </Suspense>
           </div>
         ) : (

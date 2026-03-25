@@ -44798,12 +44798,43 @@ Use timestamps like [00:00] to help with pacing.`;
   });
 
   /**
-   * GET /api/config/google-maps-key
-   * Return Google Maps API key for frontend use
+   * POST /api/tnr-records/geocode-backfill
+   * Geocode all TNR records with colonyLocation but missing lat/lng
    */
-  app.get('/api/config/google-maps-key', requireTenant, requireAuth, async (req, res) => {
-    const key = process.env.GOOGLE_MAPS_API_KEY || '';
-    res.json({ apiKey: key });
+  app.post('/api/tnr-records/geocode-backfill', requireTenant, requireAuth, requireRole('admin', 'owner'), async (req, res, next) => {
+    try {
+      const { geocodeAddress } = await import('./lib/geocoding');
+      const ungeocodedRecords = await db
+        .select({ id: animals.id, colonyLocation: animals.colonyLocation })
+        .from(animals)
+        .where(and(
+          eq(animals.tenantId, req.tenant!.id),
+          eq(animals.recordType, 'tnr'),
+          isNotNull(animals.colonyLocation),
+          isNull(animals.latitude),
+        ));
+
+      const geocodeCache: Record<string, { latitude: number; longitude: number } | null> = {};
+      let updated = 0;
+
+      for (const record of ungeocodedRecords) {
+        if (!record.colonyLocation) continue;
+        const key = record.colonyLocation.trim().toLowerCase();
+        let coords = geocodeCache[key];
+        if (coords === undefined) {
+          coords = await geocodeAddress(record.colonyLocation);
+          geocodeCache[key] = coords;
+        }
+        if (coords) {
+          await db.update(animals)
+            .set({ latitude: coords.latitude, longitude: coords.longitude })
+            .where(eq(animals.id, record.id));
+          updated++;
+        }
+      }
+
+      res.json({ total: ungeocodedRecords.length, updated });
+    } catch (error) { next(error); }
   });
 
   /**
@@ -44855,12 +44886,16 @@ Use timestamps like [00:00] to help with pacing.`;
       const trapDate = trappingDate ? new Date(trappingDate) : new Date();
       const createdRecords: any[] = [];
 
-      // Geocode the colony location once for the whole batch
+      // Geocode colony locations (cache results for repeated locations)
       const { geocodeAddress } = await import('./lib/geocoding');
-      const effectiveLocation = colonyLocation || (rows[0] && rows[0].colonyLocation);
-      let batchCoords: { latitude: number; longitude: number } | null = null;
-      if (effectiveLocation) {
-        batchCoords = await geocodeAddress(effectiveLocation);
+      const geocodeCache: Record<string, { latitude: number; longitude: number } | null> = {};
+      async function getCoords(location: string | null): Promise<{ latitude: number; longitude: number } | null> {
+        if (!location || location.trim().length < 3) return null;
+        const key = location.trim().toLowerCase();
+        if (key in geocodeCache) return geocodeCache[key];
+        const coords = await geocodeAddress(location);
+        geocodeCache[key] = coords;
+        return coords;
       }
 
       for (let i = 0; i < rows.length; i++) {
@@ -44880,6 +44915,9 @@ Use timestamps like [00:00] to help with pacing.`;
           const dateStr = trapDate.toISOString().split('T')[0].replace(/-/g, '');
           catName = `${catName}-${dateStr}-${i + 1}`;
         }
+
+        const rowLocation = row.colonyLocation || colonyLocation || null;
+        const rowCoords = await getCoords(rowLocation);
 
         const [newAnimal] = await db.insert(animals).values({
           tenantId: req.tenant!.id,
@@ -44911,8 +44949,8 @@ Use timestamps like [00:00] to help with pacing.`;
           fivFelvResult: row.fivFelvResult || null,
           tnrOutcomeType: row.tnrOutcomeType || 'returned_to_colony',
           tnrOutcomeDate: row.tnrOutcomeDate ? new Date(row.tnrOutcomeDate) : null,
-          latitude: batchCoords?.latitude ?? null,
-          longitude: batchCoords?.longitude ?? null,
+          latitude: rowCoords?.latitude ?? null,
+          longitude: rowCoords?.longitude ?? null,
           colors: row.color ? [row.color] : [],
           neuterStatus: row.snCompleted ? (row.sex === 'female' ? 'spayed' : 'neutered') : 'unknown',
           locationType: 'offsite',
