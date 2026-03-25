@@ -844,7 +844,7 @@ function BatchEntryDialog({ open, onClose, onSuccess }: BatchEntryDialogProps) {
 
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 max-w-[10rem]">
               <Label htmlFor="batch-date">Trapping Date</Label>
               <Input id="batch-date" type="date" value={trappingDate} onChange={e => setTrappingDate(e.target.value)} data-testid="input-batch-date" />
             </div>
