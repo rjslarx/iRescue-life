@@ -88,6 +88,14 @@ interface TnrRecord {
   neuterStatus: string | null;
   localShelterId: string | null;
   createdAt: string | null;
+  colonyName: string | null;
+  trapperName: string | null;
+  dateAltered: string | null;
+  rabiesTagNumber: string | null;
+  fvrcpVaxGiven: boolean;
+  fivFelvResult: string | null;
+  tnrOutcomeType: string | null;
+  tnrOutcomeDate: string | null;
 }
 
 interface BatchRow {
@@ -100,6 +108,9 @@ interface BatchRow {
   snCompleted: boolean;
   earTipped: boolean;
   rabiesVaxGiven: boolean;
+  fvrcpVaxGiven: boolean;
+  rabiesTagNumber: string;
+  fivFelvResult: string;
   invoiceNumber: string;
   tnrNotes: string;
 }
@@ -109,6 +120,20 @@ const TNR_BREED_OPTIONS = [
   { value: "Domestic Medium Hair", label: "DMH" },
   { value: "Domestic Long Hair", label: "DLH" },
   { value: "Other", label: "Other" },
+];
+
+const TNR_OUTCOME_OPTIONS = [
+  { value: "returned_to_colony", label: "Returned to Colony" },
+  { value: "relocated", label: "Relocated" },
+  { value: "transferred_to_rescue", label: "Transferred to Rescue" },
+  { value: "euthanized", label: "Euthanized in Clinic" },
+  { value: "died_in_care", label: "Died in Care" },
+];
+
+const FIV_FELV_OPTIONS = [
+  { value: "negative", label: "Neg" },
+  { value: "positive", label: "Pos" },
+  { value: "not_tested", label: "N/T" },
 ];
 
 const emptyRow = (): BatchRow => ({
@@ -121,6 +146,9 @@ const emptyRow = (): BatchRow => ({
   snCompleted: false,
   earTipped: false,
   rabiesVaxGiven: false,
+  fvrcpVaxGiven: false,
+  rabiesTagNumber: "",
+  fivFelvResult: "not_tested",
   invoiceNumber: "",
   tnrNotes: "",
 });
@@ -331,17 +359,25 @@ export default function TnrLogPage() {
           </div>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
             <tbody>
-              <tr><td style={{ fontWeight: "bold", padding: "4px 8px", width: 140 }}>Date</td><td style={{ padding: "4px 8px" }}>{formatDate(printRow.intakeDate)}</td></tr>
+              <tr><td style={{ fontWeight: "bold", padding: "4px 8px", width: 160 }}>Date</td><td style={{ padding: "4px 8px" }}>{formatDate(printRow.intakeDate)}</td></tr>
               <tr><td style={{ fontWeight: "bold", padding: "4px 8px" }}>Trap #</td><td style={{ padding: "4px 8px" }}>{printRow.trapNumber || "—"}</td></tr>
               <tr><td style={{ fontWeight: "bold", padding: "4px 8px" }}>Color</td><td style={{ padding: "4px 8px" }}>{printRow.colors?.join(", ") || "—"}</td></tr>
               <tr><td style={{ fontWeight: "bold", padding: "4px 8px" }}>Sex</td><td style={{ padding: "4px 8px" }}>{fmtSex(printRow.sex)}</td></tr>
               <tr><td style={{ fontWeight: "bold", padding: "4px 8px" }}>Breed</td><td style={{ padding: "4px 8px" }}>{printRow.breed || "—"}</td></tr>
+              <tr><td style={{ fontWeight: "bold", padding: "4px 8px" }}>Colony Name</td><td style={{ padding: "4px 8px" }}>{printRow.colonyName || "—"}</td></tr>
               <tr><td style={{ fontWeight: "bold", padding: "4px 8px" }}>Colony Location</td><td style={{ padding: "4px 8px" }}>{printRow.colonyLocation || "—"}</td></tr>
+              <tr><td style={{ fontWeight: "bold", padding: "4px 8px" }}>Trapper Name</td><td style={{ padding: "4px 8px" }}>{printRow.trapperName || "—"}</td></tr>
               <tr><td style={{ fontWeight: "bold", padding: "4px 8px" }}>Surgery Location</td><td style={{ padding: "4px 8px" }}>{printRow.surgeryLocation || "—"}</td></tr>
+              <tr><td style={{ fontWeight: "bold", padding: "4px 8px" }}>Surgery Date</td><td style={{ padding: "4px 8px" }}>{printRow.dateAltered ? formatDate(printRow.dateAltered) : "—"}</td></tr>
               <tr><td style={{ fontWeight: "bold", padding: "4px 8px" }}>Invoice #</td><td style={{ padding: "4px 8px" }}>{printRow.invoiceNumber || "—"}</td></tr>
               <tr><td style={{ fontWeight: "bold", padding: "4px 8px" }}>Partnership</td><td style={{ padding: "4px 8px" }}>{printRow.partnership || "—"}</td></tr>
               <tr><td style={{ fontWeight: "bold", padding: "4px 8px" }}>S/N</td><td style={{ padding: "4px 8px" }}>{printRow.neuterStatus && printRow.neuterStatus !== "unknown" ? "Yes" : "No"}</td></tr>
               <tr><td style={{ fontWeight: "bold", padding: "4px 8px" }}>Ear Tipped</td><td style={{ padding: "4px 8px" }}>{printRow.earTipped ? "Yes" : "No"}</td></tr>
+              <tr><td style={{ fontWeight: "bold", padding: "4px 8px" }}>Rabies Tag #</td><td style={{ padding: "4px 8px" }}>{printRow.rabiesTagNumber || "—"}</td></tr>
+              <tr><td style={{ fontWeight: "bold", padding: "4px 8px" }}>FVRCP Given</td><td style={{ padding: "4px 8px" }}>{printRow.fvrcpVaxGiven ? "Yes" : "No"}</td></tr>
+              <tr><td style={{ fontWeight: "bold", padding: "4px 8px" }}>FIV/FeLV</td><td style={{ padding: "4px 8px" }}>{printRow.fivFelvResult === "positive" ? "Positive" : printRow.fivFelvResult === "negative" ? "Negative" : "Not Tested"}</td></tr>
+              <tr><td style={{ fontWeight: "bold", padding: "4px 8px" }}>Outcome</td><td style={{ padding: "4px 8px" }}>{printRow.tnrOutcomeType ? (TNR_OUTCOME_OPTIONS.find(o => o.value === printRow.tnrOutcomeType)?.label || printRow.tnrOutcomeType) : "—"}</td></tr>
+              <tr><td style={{ fontWeight: "bold", padding: "4px 8px" }}>Outcome Date</td><td style={{ padding: "4px 8px" }}>{printRow.tnrOutcomeDate ? formatDate(printRow.tnrOutcomeDate) : "—"}</td></tr>
               <tr><td style={{ fontWeight: "bold", padding: "4px 8px" }}>Notes</td><td style={{ padding: "4px 8px" }}>{printRow.tnrNotes || "—"}</td></tr>
             </tbody>
           </table>
@@ -428,8 +464,8 @@ export default function TnrLogPage() {
                         aria-label="Select all"
                       />
                     </th>
-                    {["Date","Trap #","Color","Sex","Breed","Age","Colony","Surgery Location","Invoice #","Partnership","S/N","Ear Tip","Notes"].map(h => (
-                      <th key={h} className="px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">{h}</th>
+                    {["Date","Trap #","Color","Sex","Breed","Age","Colony","Location","Trapper","Clinic","S/N","Surgery Date","Ear Tip","Rabies Tag","FVRCP","FIV/FeLV","Invoice #","Outcome","Notes"].map(h => (
+                      <th key={h} className="px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap text-xs">{h}</th>
                     ))}
                     <th className="px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap print-hidden">Files</th>
                     <th className="px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap print-hidden">Actions</th>
@@ -451,23 +487,35 @@ export default function TnrLogPage() {
                           aria-label={`Select ${r.name}`}
                         />
                       </td>
-                      <td className="px-3 py-2 whitespace-nowrap">{formatDate(r.intakeDate)}</td>
-                      <td className="px-3 py-2 whitespace-nowrap">{r.trapNumber || "—"}</td>
-                      <td className="px-3 py-2 whitespace-nowrap">{r.colors?.join(", ") || "—"}</td>
-                      <td className="px-3 py-2 whitespace-nowrap">{fmtSex(r.sex)}</td>
-                      <td className="px-3 py-2 whitespace-nowrap">{r.breed || "—"}</td>
-                      <td className="px-3 py-2 whitespace-nowrap">{r.name?.includes("Kitten") ? "Kitten" : "Adult"}</td>
-                      <td className="px-3 py-2 max-w-32 truncate">{r.colonyLocation || "—"}</td>
-                      <td className="px-3 py-2 max-w-32 truncate">{r.surgeryLocation || "—"}</td>
-                      <td className="px-3 py-2 whitespace-nowrap">{r.invoiceNumber || "—"}</td>
-                      <td className="px-3 py-2 whitespace-nowrap">{r.partnership || "—"}</td>
-                      <td className="px-3 py-2 text-center">
-                        {r.neuterStatus && r.neuterStatus !== "unknown" ? <Check className="h-4 w-4 text-green-600 mx-auto" /> : <span className="text-muted-foreground">—</span>}
+                      <td className="px-2 py-2 whitespace-nowrap text-xs">{formatDate(r.intakeDate)}</td>
+                      <td className="px-2 py-2 whitespace-nowrap text-xs">{r.trapNumber || "—"}</td>
+                      <td className="px-2 py-2 whitespace-nowrap text-xs">{r.colors?.join(", ") || "—"}</td>
+                      <td className="px-2 py-2 whitespace-nowrap text-xs">{fmtSex(r.sex)}</td>
+                      <td className="px-2 py-2 whitespace-nowrap text-xs">{r.breed || "—"}</td>
+                      <td className="px-2 py-2 whitespace-nowrap text-xs">{r.name?.includes("Kitten") ? "Kitten" : "Adult"}</td>
+                      <td className="px-2 py-2 max-w-28 truncate text-xs">{r.colonyName || "—"}</td>
+                      <td className="px-2 py-2 max-w-28 truncate text-xs">{r.colonyLocation || "—"}</td>
+                      <td className="px-2 py-2 whitespace-nowrap text-xs">{r.trapperName || "—"}</td>
+                      <td className="px-2 py-2 max-w-28 truncate text-xs">{r.surgeryLocation || "—"}</td>
+                      <td className="px-2 py-2 text-center text-xs">
+                        {r.neuterStatus && r.neuterStatus !== "unknown" ? <Check className="h-3.5 w-3.5 text-green-600 mx-auto" /> : <span className="text-muted-foreground">—</span>}
                       </td>
-                      <td className="px-3 py-2 text-center">
-                        {r.earTipped ? <Check className="h-4 w-4 text-green-600 mx-auto" /> : <span className="text-muted-foreground">—</span>}
+                      <td className="px-2 py-2 whitespace-nowrap text-xs">{r.dateAltered ? formatDate(r.dateAltered) : "—"}</td>
+                      <td className="px-2 py-2 text-center text-xs">
+                        {r.earTipped ? <Check className="h-3.5 w-3.5 text-green-600 mx-auto" /> : <span className="text-muted-foreground">—</span>}
                       </td>
-                      <td className="px-3 py-2 max-w-40 truncate text-muted-foreground">{r.tnrNotes || "—"}</td>
+                      <td className="px-2 py-2 whitespace-nowrap text-xs">{r.rabiesTagNumber || "—"}</td>
+                      <td className="px-2 py-2 text-center text-xs">
+                        {r.fvrcpVaxGiven ? <Check className="h-3.5 w-3.5 text-green-600 mx-auto" /> : <span className="text-muted-foreground">—</span>}
+                      </td>
+                      <td className="px-2 py-2 whitespace-nowrap text-xs">
+                        {r.fivFelvResult === "positive" ? <span className="text-red-600 font-medium">Pos</span> : r.fivFelvResult === "negative" ? <span className="text-green-600">Neg</span> : "—"}
+                      </td>
+                      <td className="px-2 py-2 whitespace-nowrap text-xs">{r.invoiceNumber || "—"}</td>
+                      <td className="px-2 py-2 whitespace-nowrap text-xs">
+                        {r.tnrOutcomeType ? TNR_OUTCOME_OPTIONS.find(o => o.value === r.tnrOutcomeType)?.label || r.tnrOutcomeType : "—"}
+                      </td>
+                      <td className="px-2 py-2 max-w-32 truncate text-xs text-muted-foreground">{r.tnrNotes || "—"}</td>
                       <td className="px-3 py-2 whitespace-nowrap print-hidden">
                         <Button
                           size="icon"
@@ -632,6 +680,8 @@ function BatchEntryDialog({ open, onClose, onSuccess }: BatchEntryDialogProps) {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
   });
   const [colonyLocation, setColonyLocation] = useState("");
+  const [colonyName, setColonyName] = useState("");
+  const [trapperName, setTrapperName] = useState("");
   const [caretakerName, setCaretakerName] = useState("");
   const [caretakerPhone, setCaretakerPhone] = useState("");
   const [surgeryLocation, setSurgeryLocation] = useState("");
@@ -649,6 +699,8 @@ function BatchEntryDialog({ open, onClose, onSuccess }: BatchEntryDialogProps) {
       const res = await apiRequest("POST", "/api/tnr-records/batch", {
         trappingDate,
         colonyLocation,
+        colonyName,
+        trapperName,
         caretakerName,
         caretakerPhone,
         surgeryLocation,
@@ -664,7 +716,7 @@ function BatchEntryDialog({ open, onClose, onSuccess }: BatchEntryDialogProps) {
     onSuccess: (data) => {
       toast({ title: `${data.created} ${data.created === 1 ? "cat" : "cats"} logged successfully.` });
       setRows([emptyRow(), emptyRow(), emptyRow()]);
-      setColonyLocation(""); setCaretakerName(""); setCaretakerPhone(""); setSurgeryLocation(""); setPartnership("");
+      setColonyLocation(""); setColonyName(""); setTrapperName(""); setCaretakerName(""); setCaretakerPhone(""); setSurgeryLocation(""); setPartnership("");
       onSuccess();
     },
     onError: (e: any) => toast({ title: "Failed to save batch", description: e.message, variant: "destructive" }),
@@ -685,14 +737,22 @@ function BatchEntryDialog({ open, onClose, onSuccess }: BatchEntryDialogProps) {
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             <div className="space-y-1.5">
               <Label htmlFor="batch-date">Trapping Date</Label>
               <Input id="batch-date" type="date" value={trappingDate} onChange={e => setTrappingDate(e.target.value)} data-testid="input-batch-date" />
             </div>
             <div className="space-y-1.5">
+              <Label htmlFor="batch-colony-name">Colony Name</Label>
+              <Input id="batch-colony-name" placeholder="e.g. Elm Street Colony" value={colonyName} onChange={e => setColonyName(e.target.value)} data-testid="input-colony-name" />
+            </div>
+            <div className="space-y-1.5">
               <Label htmlFor="batch-colony">Colony Location</Label>
               <Input id="batch-colony" placeholder="Address or description" value={colonyLocation} onChange={e => setColonyLocation(e.target.value)} data-testid="input-colony-location" />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="batch-trapper">Trapper Name</Label>
+              <Input id="batch-trapper" placeholder="Person who trapped" value={trapperName} onChange={e => setTrapperName(e.target.value)} data-testid="input-trapper-name" />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="batch-surgery">Surgery Location</Label>
@@ -716,16 +776,19 @@ function BatchEntryDialog({ open, onClose, onSuccess }: BatchEntryDialogProps) {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-muted/40">
-                  <th className="px-2 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">Trap #</th>
-                  <th className="px-2 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">Color / Description</th>
-                  <th className="px-2 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">Sex</th>
-                  <th className="px-2 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">Breed</th>
-                  <th className="px-2 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">Age</th>
-                  <th className="px-2 py-2 text-center font-medium text-muted-foreground whitespace-nowrap">S/N</th>
-                  <th className="px-2 py-2 text-center font-medium text-muted-foreground whitespace-nowrap">Ear Tip</th>
-                  <th className="px-2 py-2 text-center font-medium text-muted-foreground whitespace-nowrap">Rabies</th>
-                  <th className="px-2 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">Invoice #</th>
-                  <th className="px-2 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">Notes</th>
+                  <th className="px-2 py-2 text-left font-medium text-muted-foreground whitespace-nowrap text-xs">Trap #</th>
+                  <th className="px-2 py-2 text-left font-medium text-muted-foreground whitespace-nowrap text-xs">Color</th>
+                  <th className="px-2 py-2 text-left font-medium text-muted-foreground whitespace-nowrap text-xs">Sex</th>
+                  <th className="px-2 py-2 text-left font-medium text-muted-foreground whitespace-nowrap text-xs">Breed</th>
+                  <th className="px-2 py-2 text-left font-medium text-muted-foreground whitespace-nowrap text-xs">Age</th>
+                  <th className="px-2 py-2 text-center font-medium text-muted-foreground whitespace-nowrap text-xs">S/N</th>
+                  <th className="px-2 py-2 text-center font-medium text-muted-foreground whitespace-nowrap text-xs">Ear Tip</th>
+                  <th className="px-2 py-2 text-center font-medium text-muted-foreground whitespace-nowrap text-xs">Rabies</th>
+                  <th className="px-2 py-2 text-left font-medium text-muted-foreground whitespace-nowrap text-xs">Rabies Tag</th>
+                  <th className="px-2 py-2 text-center font-medium text-muted-foreground whitespace-nowrap text-xs">FVRCP</th>
+                  <th className="px-2 py-2 text-left font-medium text-muted-foreground whitespace-nowrap text-xs">FIV/FeLV</th>
+                  <th className="px-2 py-2 text-left font-medium text-muted-foreground whitespace-nowrap text-xs">Invoice #</th>
+                  <th className="px-2 py-2 text-left font-medium text-muted-foreground whitespace-nowrap text-xs">Notes</th>
                   <th className="px-2 py-2"></th>
                 </tr>
               </thead>
@@ -780,6 +843,22 @@ function BatchEntryDialog({ open, onClose, onSuccess }: BatchEntryDialogProps) {
                     </td>
                     <td className="px-2 py-1.5 text-center">
                       <Checkbox checked={row.rabiesVaxGiven} onCheckedChange={v => updateRow(i, "rabiesVaxGiven", !!v)} data-testid={`checkbox-rabies-${i}`} />
+                    </td>
+                    <td className="px-2 py-1.5">
+                      <Input className="h-8 w-24" value={row.rabiesTagNumber} onChange={e => updateRow(i, "rabiesTagNumber", e.target.value)} placeholder="Tag #" data-testid={`input-rabies-tag-${i}`} />
+                    </td>
+                    <td className="px-2 py-1.5 text-center">
+                      <Checkbox checked={row.fvrcpVaxGiven} onCheckedChange={v => updateRow(i, "fvrcpVaxGiven", !!v)} data-testid={`checkbox-fvrcp-${i}`} />
+                    </td>
+                    <td className="px-2 py-1.5">
+                      <Select value={row.fivFelvResult} onValueChange={v => updateRow(i, "fivFelvResult", v)}>
+                        <SelectTrigger className="h-8 w-20" data-testid={`select-fiv-felv-${i}`}><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {FIV_FELV_OPTIONS.map(o => (
+                            <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </td>
                     <td className="px-2 py-1.5">
                       <Input className="h-8 w-24" value={row.invoiceNumber} onChange={e => updateRow(i, "invoiceNumber", e.target.value)} placeholder="Inv #" data-testid={`input-invoice-${i}`} />
@@ -1047,11 +1126,19 @@ function EditRecordDialog({ record, onClose, onSuccess }: EditRecordDialogProps)
   const { toast } = useToast();
   const [intakeDate, setIntakeDate] = useState(toDateInputValue(record.intakeDate));
   const [colonyLocation, setColonyLocation] = useState(record.colonyLocation || "");
+  const [colonyName, setColonyName] = useState(record.colonyName || "");
+  const [trapperName, setTrapperName] = useState(record.trapperName || "");
   const [trapNumber, setTrapNumber] = useState(record.trapNumber || "");
   const [invoiceNumber, setInvoiceNumber] = useState(record.invoiceNumber || "");
   const [surgeryLocation, setSurgeryLocation] = useState(record.surgeryLocation || "");
   const [partnership, setPartnership] = useState(record.partnership || "");
   const [earTipped, setEarTipped] = useState(record.earTipped);
+  const [dateAltered, setDateAltered] = useState(toDateInputValue(record.dateAltered));
+  const [rabiesTagNumber, setRabiesTagNumber] = useState(record.rabiesTagNumber || "");
+  const [fvrcpVaxGiven, setFvrcpVaxGiven] = useState(record.fvrcpVaxGiven || false);
+  const [fivFelvResult, setFivFelvResult] = useState(record.fivFelvResult || "not_tested");
+  const [tnrOutcomeType, setTnrOutcomeType] = useState(record.tnrOutcomeType || "returned_to_colony");
+  const [tnrOutcomeDate, setTnrOutcomeDate] = useState(toDateInputValue(record.tnrOutcomeDate));
   const [tnrNotes, setTnrNotes] = useState(record.tnrNotes || "");
   const initialBreed = record.breed || "Domestic Short Hair";
   const isStandardBreed = TNR_BREED_OPTIONS.some(o => o.value === initialBreed && o.value !== "Other");
@@ -1063,7 +1150,10 @@ function EditRecordDialog({ record, onClose, onSuccess }: EditRecordDialogProps)
       const resolvedBreed = breed === "Other" ? (customBreed || "Domestic Short Hair") : breed;
       const res = await apiRequest("PATCH", `/api/tnr-records/${record.id}`, {
         intakeDate: intakeDate || null,
-        colonyLocation, trapNumber, invoiceNumber, surgeryLocation, partnership, earTipped, tnrNotes,
+        colonyLocation, colonyName, trapperName, trapNumber, invoiceNumber, surgeryLocation, partnership, earTipped, tnrNotes,
+        dateAltered: dateAltered || null,
+        rabiesTagNumber, fvrcpVaxGiven, fivFelvResult,
+        tnrOutcomeType, tnrOutcomeDate: tnrOutcomeDate || null,
         breed: resolvedBreed,
       });
       if (!res.ok) throw new Error("Failed to update record");
@@ -1078,19 +1168,35 @@ function EditRecordDialog({ record, onClose, onSuccess }: EditRecordDialogProps)
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit TNR Record</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
-          <div className="space-y-1.5">
-            <Label htmlFor="edit-date">Trapping Date</Label>
-            <Input id="edit-date" type="date" value={intakeDate} onChange={e => setIntakeDate(e.target.value)} data-testid="input-edit-date" />
-          </div>
           <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-date">Trapping Date</Label>
+              <Input id="edit-date" type="date" value={intakeDate} onChange={e => setIntakeDate(e.target.value)} data-testid="input-edit-date" />
+            </div>
             <div className="space-y-1.5">
               <Label>Trap #</Label>
               <Input value={trapNumber} onChange={e => setTrapNumber(e.target.value)} data-testid="input-edit-trap" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Colony Name</Label>
+              <Input value={colonyName} onChange={e => setColonyName(e.target.value)} placeholder="e.g. Elm Street Colony" data-testid="input-edit-colony-name" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Colony Location</Label>
+              <Input value={colonyLocation} onChange={e => setColonyLocation(e.target.value)} data-testid="input-edit-colony" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Trapper Name</Label>
+              <Input value={trapperName} onChange={e => setTrapperName(e.target.value)} data-testid="input-edit-trapper" />
             </div>
             <div className="space-y-1.5">
               <Label>Invoice #</Label>
@@ -1113,21 +1219,63 @@ function EditRecordDialog({ record, onClose, onSuccess }: EditRecordDialogProps)
               )}
             </div>
           </div>
-          <div className="space-y-1.5">
-            <Label>Colony Location</Label>
-            <Input value={colonyLocation} onChange={e => setColonyLocation(e.target.value)} data-testid="input-edit-colony" />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Surgery Location</Label>
-            <Input value={surgeryLocation} onChange={e => setSurgeryLocation(e.target.value)} data-testid="input-edit-surgery" />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Surgery Location</Label>
+              <Input value={surgeryLocation} onChange={e => setSurgeryLocation(e.target.value)} data-testid="input-edit-surgery" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Surgery Date</Label>
+              <Input type="date" value={dateAltered} onChange={e => setDateAltered(e.target.value)} data-testid="input-edit-date-altered" />
+            </div>
           </div>
           <div className="space-y-1.5">
             <Label>Partnership / Grant</Label>
             <Input value={partnership} onChange={e => setPartnership(e.target.value)} data-testid="input-edit-partnership" />
           </div>
-          <div className="flex items-center gap-2">
-            <Checkbox id="edit-ear-tipped" checked={earTipped} onCheckedChange={v => setEarTipped(!!v)} data-testid="checkbox-edit-eartip" />
-            <Label htmlFor="edit-ear-tipped">Ear Tipped</Label>
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="flex items-center gap-2">
+              <Checkbox id="edit-ear-tipped" checked={earTipped} onCheckedChange={v => setEarTipped(!!v)} data-testid="checkbox-edit-eartip" />
+              <Label htmlFor="edit-ear-tipped">Ear Tipped</Label>
+            </div>
+            <div className="flex items-center gap-2">
+              <Checkbox id="edit-fvrcp" checked={fvrcpVaxGiven} onCheckedChange={v => setFvrcpVaxGiven(!!v)} data-testid="checkbox-edit-fvrcp" />
+              <Label htmlFor="edit-fvrcp">FVRCP Given</Label>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Rabies Tag #</Label>
+              <Input value={rabiesTagNumber} onChange={e => setRabiesTagNumber(e.target.value)} data-testid="input-edit-rabies-tag" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>FIV/FeLV Result</Label>
+              <Select value={fivFelvResult} onValueChange={setFivFelvResult}>
+                <SelectTrigger data-testid="select-edit-fiv-felv"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {FIV_FELV_OPTIONS.map(o => (
+                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Outcome</Label>
+              <Select value={tnrOutcomeType} onValueChange={setTnrOutcomeType}>
+                <SelectTrigger data-testid="select-edit-outcome"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {TNR_OUTCOME_OPTIONS.map(o => (
+                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Outcome Date</Label>
+              <Input type="date" value={tnrOutcomeDate} onChange={e => setTnrOutcomeDate(e.target.value)} data-testid="input-edit-outcome-date" />
+            </div>
           </div>
           <div className="space-y-1.5">
             <Label>Notes</Label>

@@ -556,6 +556,14 @@ export const animals = pgTable("animals", {
   releaseLocation: text("release_location"), // Address where the cat was returned to field
   trapNumber: text("trap_number"), // Temporary trap ID during batch TNR event
   tnrNotes: text("tnr_notes"), // TNR-specific notes (separate from general bio)
+  colonyName: text("colony_name"), // Colony name or ID (e.g., "Oak Street Colony")
+  trapperName: text("trapper_name"), // Name of person who set/pulled the trap
+  dateAltered: timestamp("date_altered"), // Date spay/neuter surgery was performed
+  rabiesTagNumber: text("rabies_tag_number"), // Rabies tag # or certificate serial #
+  fvrcpVaxGiven: boolean("fvrcp_vax_given").notNull().default(false), // FVRCP vaccine administered
+  fivFelvResult: text("fiv_felv_result").$type<"positive" | "negative" | "not_tested">(), // FIV/FeLV combo test result
+  tnrOutcomeType: text("tnr_outcome_type").$type<"returned_to_colony" | "relocated" | "transferred_to_rescue" | "euthanized" | "died_in_care">(), // TNR disposition
+  tnrOutcomeDate: timestamp("tnr_outcome_date"), // Date of TNR outcome/release
   intakeDate: timestamp("intake_date").notNull().defaultNow(),
   intakeSource: text("intake_source").$type<"stray" | "owner_surrender" | "transfer" | "born_in_care" | "other">(), // How the animal came to the rescue
   locationFound: text("location_found"), // Where the stray animal was found (address or intersection)

@@ -44776,6 +44776,14 @@ Use timestamps like [00:00] to help with pacing.`;
           releaseLocation: animals.releaseLocation,
           trapNumber: animals.trapNumber,
           tnrNotes: animals.tnrNotes,
+          colonyName: animals.colonyName,
+          trapperName: animals.trapperName,
+          dateAltered: animals.dateAltered,
+          rabiesTagNumber: animals.rabiesTagNumber,
+          fvrcpVaxGiven: animals.fvrcpVaxGiven,
+          fivFelvResult: animals.fivFelvResult,
+          tnrOutcomeType: animals.tnrOutcomeType,
+          tnrOutcomeDate: animals.tnrOutcomeDate,
           neuterStatus: animals.neuterStatus,
           localShelterId: animals.localShelterId,
           createdAt: animals.createdAt,
@@ -44842,6 +44850,14 @@ Use timestamps like [00:00] to help with pacing.`;
           releaseLocation: row.releaseLocation || colonyLocation || null,
           trapNumber: row.trapNumber || null,
           tnrNotes: row.tnrNotes || row.notes || null,
+          colonyName: row.colonyName || req.body.colonyName || null,
+          trapperName: row.trapperName || req.body.trapperName || null,
+          dateAltered: row.dateAltered ? new Date(row.dateAltered) : null,
+          rabiesTagNumber: row.rabiesTagNumber || null,
+          fvrcpVaxGiven: row.fvrcpVaxGiven || false,
+          fivFelvResult: row.fivFelvResult || null,
+          tnrOutcomeType: row.tnrOutcomeType || 'returned_to_colony',
+          tnrOutcomeDate: row.tnrOutcomeDate ? new Date(row.tnrOutcomeDate) : null,
           colors: row.color ? [row.color] : [],
           neuterStatus: row.snCompleted ? (row.sex === 'female' ? 'spayed' : 'neutered') : 'unknown',
           locationType: 'offsite',
@@ -44853,6 +44869,19 @@ Use timestamps like [00:00] to help with pacing.`;
             tenantId: req.tenant!.id,
             animalId: newAnimal.id,
             itemName: 'Rabies',
+            dateGiven: trapDate,
+            dateDue: null,
+            status: 'given',
+            administeredBy: caretakerName || null,
+          });
+        }
+
+        // Auto-create FVRCP vaccine record if checked
+        if (row.fvrcpVaxGiven && newAnimal) {
+          await db.insert(vaccineRecords).values({
+            tenantId: req.tenant!.id,
+            animalId: newAnimal.id,
+            itemName: 'FVRCP',
             dateGiven: trapDate,
             dateDue: null,
             status: 'given',
@@ -44878,6 +44907,12 @@ Use timestamps like [00:00] to help with pacing.`;
       delete updateData.id; delete updateData.tenantId; delete updateData.recordType;
       if (updateData.intakeDate && typeof updateData.intakeDate === 'string') {
         updateData.intakeDate = new Date(updateData.intakeDate);
+      }
+      if (updateData.dateAltered && typeof updateData.dateAltered === 'string') {
+        updateData.dateAltered = new Date(updateData.dateAltered);
+      }
+      if (updateData.tnrOutcomeDate && typeof updateData.tnrOutcomeDate === 'string') {
+        updateData.tnrOutcomeDate = new Date(updateData.tnrOutcomeDate);
       }
       const [updated] = await db.update(animals)
         .set({ ...updateData, updatedAt: new Date() })
