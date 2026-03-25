@@ -44784,12 +44784,48 @@ Use timestamps like [00:00] to help with pacing.`;
           fivFelvResult: animals.fivFelvResult,
           tnrOutcomeType: animals.tnrOutcomeType,
           tnrOutcomeDate: animals.tnrOutcomeDate,
+          latitude: animals.latitude,
+          longitude: animals.longitude,
           neuterStatus: animals.neuterStatus,
           localShelterId: animals.localShelterId,
           createdAt: animals.createdAt,
         })
         .from(animals)
         .where(and(...conditions))
+        .orderBy(animals.intakeDate);
+      res.json({ records });
+    } catch (error) { next(error); }
+  });
+
+  /**
+   * GET /api/tnr-records/map
+   * Return all TNR records with valid lat/lng for map rendering
+   */
+  app.get('/api/tnr-records/map', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const records = await db
+        .select({
+          id: animals.id,
+          name: animals.name,
+          localShelterId: animals.localShelterId,
+          colonyName: animals.colonyName,
+          colonyLocation: animals.colonyLocation,
+          latitude: animals.latitude,
+          longitude: animals.longitude,
+          tnrOutcomeType: animals.tnrOutcomeType,
+          photoUrls: animals.photoUrls,
+          sex: animals.sex,
+          colors: animals.colors,
+          intakeDate: animals.intakeDate,
+          trapNumber: animals.trapNumber,
+        })
+        .from(animals)
+        .where(and(
+          eq(animals.tenantId, req.tenant!.id),
+          eq(animals.recordType, 'tnr'),
+          isNotNull(animals.latitude),
+          isNotNull(animals.longitude),
+        ))
         .orderBy(animals.intakeDate);
       res.json({ records });
     } catch (error) { next(error); }
@@ -44809,6 +44845,14 @@ Use timestamps like [00:00] to help with pacing.`;
 
       const trapDate = trappingDate ? new Date(trappingDate) : new Date();
       const createdRecords: any[] = [];
+
+      // Geocode the colony location once for the whole batch
+      const { geocodeAddress } = await import('./lib/geocoding');
+      const effectiveLocation = colonyLocation || (rows[0] && rows[0].colonyLocation);
+      let batchCoords: { latitude: number; longitude: number } | null = null;
+      if (effectiveLocation) {
+        batchCoords = await geocodeAddress(effectiveLocation);
+      }
 
       for (let i = 0; i < rows.length; i++) {
         const row = rows[i];
@@ -44858,6 +44902,8 @@ Use timestamps like [00:00] to help with pacing.`;
           fivFelvResult: row.fivFelvResult || null,
           tnrOutcomeType: row.tnrOutcomeType || 'returned_to_colony',
           tnrOutcomeDate: row.tnrOutcomeDate ? new Date(row.tnrOutcomeDate) : null,
+          latitude: batchCoords?.latitude ?? null,
+          longitude: batchCoords?.longitude ?? null,
           colors: row.color ? [row.color] : [],
           neuterStatus: row.snCompleted ? (row.sex === 'female' ? 'spayed' : 'neutered') : 'unknown',
           locationType: 'offsite',
@@ -44913,6 +44959,15 @@ Use timestamps like [00:00] to help with pacing.`;
       }
       if (updateData.tnrOutcomeDate && typeof updateData.tnrOutcomeDate === 'string') {
         updateData.tnrOutcomeDate = new Date(updateData.tnrOutcomeDate);
+      }
+      // Re-geocode if colonyLocation changed
+      if (updateData.colonyLocation && typeof updateData.colonyLocation === 'string') {
+        const { geocodeAddress } = await import('./lib/geocoding');
+        const coords = await geocodeAddress(updateData.colonyLocation);
+        if (coords) {
+          updateData.latitude = coords.latitude;
+          updateData.longitude = coords.longitude;
+        }
       }
       const [updated] = await db.update(animals)
         .set({ ...updateData, updatedAt: new Date() })

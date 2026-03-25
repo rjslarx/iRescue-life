@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, integer, boolean, jsonb, unique, uniqueIndex, numeric, serial, decimal, date, varchar, real } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, integer, boolean, jsonb, unique, uniqueIndex, numeric, serial, decimal, date, varchar, real, doublePrecision } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -564,6 +564,8 @@ export const animals = pgTable("animals", {
   fivFelvResult: text("fiv_felv_result").$type<"positive" | "negative" | "not_tested">(), // FIV/FeLV combo test result
   tnrOutcomeType: text("tnr_outcome_type").$type<"returned_to_colony" | "relocated" | "transferred_to_rescue" | "euthanized" | "died_in_care">(), // TNR disposition
   tnrOutcomeDate: timestamp("tnr_outcome_date"), // Date of TNR outcome/release
+  latitude: doublePrecision("latitude"), // Geocoded latitude for map display
+  longitude: doublePrecision("longitude"), // Geocoded longitude for map display
   intakeDate: timestamp("intake_date").notNull().defaultNow(),
   intakeSource: text("intake_source").$type<"stray" | "owner_surrender" | "transfer" | "born_in_care" | "other">(), // How the animal came to the rescue
   locationFound: text("location_found"), // Where the stray animal was found (address or intersection)
