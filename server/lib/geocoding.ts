@@ -33,7 +33,7 @@ export async function geocodeAddress(address: string): Promise<GeocodingResult |
     }
 
     if (data.status !== 'ZERO_RESULTS') {
-      console.warn(`[Geocoding] API status: ${data.status} for address: "${address}"`);
+      console.error(`[Geocoding] API status: ${data.status} for address: "${address}"${data.error_message ? ` - ${data.error_message}` : ''}`);
     }
     return null;
   } catch (error) {
