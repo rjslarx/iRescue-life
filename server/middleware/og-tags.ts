@@ -380,7 +380,7 @@ export async function injectOGTags(req: Request, res: Response, next: NextFuncti
     }
 
     if (!ogData) {
-      const customPageMatch = url.match(/^\/([a-z0-9]+(?:-[a-z0-9]+)*)$/i);
+      const customPageMatch = url.match(/^\/([a-z0-9]+(?:-[a-z0-9]+)*)\/?(?:\?.*)?$/i);
       if (customPageMatch) {
         const slug = customPageMatch[1].toLowerCase();
         const knownPrefixes = ['login', 'register', 'dashboard', 'admin', 'api', 'apply', 'foster-portal', 'intake'];
