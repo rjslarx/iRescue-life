@@ -52,7 +52,16 @@ import {
   Image as ImageIcon,
   List,
   Map,
+  Scissors,
+  Syringe,
+  Stethoscope,
+  ShieldCheck,
 } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { lazy, Suspense } from "react";
 const TnrColonyMap = lazy(() => import("@/components/TnrColonyMap"));
 import {
@@ -569,9 +578,24 @@ export default function TnrLogPage() {
                         aria-label="Select all"
                       />
                     </th>
-                    {["Date","Trap #","Color","Sex","Breed","Age","Colony","Location","Trapper","Clinic","S/N","Surgery Date","Ear Tip","Rabies Tag","FVRCP","FIV/FeLV","Invoice #","Outcome","Notes"].map(h => (
-                      <th key={h} className="px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap text-xs">{h}</th>
+                    {["Date","Trap #","Color","Sex","Breed","Age","Colony","Trap Loc","Trapper","Clinic"].map(h => (
+                      <th key={h} className="px-2 py-2 text-left font-medium text-muted-foreground whitespace-nowrap text-xs">{h}</th>
                     ))}
+                    <th className="px-2 py-2 text-center font-medium text-muted-foreground text-xs">
+                      <Tooltip delayDuration={0}><TooltipTrigger asChild><span className="inline-flex cursor-help" aria-label="Spay/Neuter"><Stethoscope className="h-3.5 w-3.5" /></span></TooltipTrigger><TooltipContent side="top">Spay/Neuter</TooltipContent></Tooltip>
+                    </th>
+                    <th className="px-2 py-2 text-left font-medium text-muted-foreground whitespace-nowrap text-xs">Sx Date</th>
+                    <th className="px-2 py-2 text-center font-medium text-muted-foreground text-xs">
+                      <Tooltip delayDuration={0}><TooltipTrigger asChild><span className="inline-flex cursor-help" aria-label="Ear Tipped"><Scissors className="h-3.5 w-3.5" /></span></TooltipTrigger><TooltipContent side="top">Ear Tipped</TooltipContent></Tooltip>
+                    </th>
+                    <th className="px-2 py-2 text-left font-medium text-muted-foreground whitespace-nowrap text-xs">RV Tag</th>
+                    <th className="px-2 py-2 text-center font-medium text-muted-foreground text-xs">
+                      <Tooltip delayDuration={0}><TooltipTrigger asChild><span className="inline-flex cursor-help" aria-label="FVRCP Vaccine"><Syringe className="h-3.5 w-3.5" /></span></TooltipTrigger><TooltipContent side="top">FVRCP Vaccine</TooltipContent></Tooltip>
+                    </th>
+                    <th className="px-2 py-2 text-left font-medium text-muted-foreground whitespace-nowrap text-xs">Combo</th>
+                    <th className="px-2 py-2 text-left font-medium text-muted-foreground whitespace-nowrap text-xs">Inv #</th>
+                    <th className="px-2 py-2 text-left font-medium text-muted-foreground whitespace-nowrap text-xs">Disp</th>
+                    <th className="px-2 py-2 text-left font-medium text-muted-foreground whitespace-nowrap text-xs">Notes</th>
                     <th className="px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap print-hidden">Files</th>
                     <th className="px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap print-hidden">Actions</th>
                   </tr>
@@ -882,34 +906,42 @@ function BatchEntryDialog({ open, onClose, onSuccess }: BatchEntryDialogProps) {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-muted/40">
-                  <th className="px-2 py-2 text-left font-medium text-muted-foreground whitespace-nowrap text-xs">Trap #</th>
-                  <th className="px-2 py-2 text-left font-medium text-muted-foreground whitespace-nowrap text-xs">Color</th>
-                  <th className="px-2 py-2 text-left font-medium text-muted-foreground whitespace-nowrap text-xs">Sex</th>
-                  <th className="px-2 py-2 text-left font-medium text-muted-foreground whitespace-nowrap text-xs">Breed</th>
-                  <th className="px-2 py-2 text-left font-medium text-muted-foreground whitespace-nowrap text-xs">Age</th>
-                  <th className="px-2 py-2 text-center font-medium text-muted-foreground whitespace-nowrap text-xs">S/N</th>
-                  <th className="px-2 py-2 text-center font-medium text-muted-foreground whitespace-nowrap text-xs">Ear Tip</th>
-                  <th className="px-2 py-2 text-center font-medium text-muted-foreground whitespace-nowrap text-xs">Rabies</th>
-                  <th className="px-2 py-2 text-left font-medium text-muted-foreground whitespace-nowrap text-xs">Rabies Tag</th>
-                  <th className="px-2 py-2 text-center font-medium text-muted-foreground whitespace-nowrap text-xs">FVRCP</th>
-                  <th className="px-2 py-2 text-left font-medium text-muted-foreground whitespace-nowrap text-xs">FIV/FeLV</th>
-                  <th className="px-2 py-2 text-left font-medium text-muted-foreground whitespace-nowrap text-xs">Invoice #</th>
-                  <th className="px-2 py-2 text-left font-medium text-muted-foreground whitespace-nowrap text-xs">Notes</th>
-                  <th className="px-2 py-2"></th>
+                  <th className="px-1.5 py-2 text-left font-medium text-muted-foreground whitespace-nowrap text-xs">Trap #</th>
+                  <th className="px-1.5 py-2 text-left font-medium text-muted-foreground whitespace-nowrap text-xs">Color</th>
+                  <th className="px-1.5 py-2 text-left font-medium text-muted-foreground whitespace-nowrap text-xs">Sex</th>
+                  <th className="px-1.5 py-2 text-left font-medium text-muted-foreground whitespace-nowrap text-xs">Breed</th>
+                  <th className="px-1.5 py-2 text-left font-medium text-muted-foreground whitespace-nowrap text-xs">Age</th>
+                  <th className="px-1.5 py-2 text-center font-medium text-muted-foreground text-xs">
+                    <Tooltip delayDuration={0}><TooltipTrigger asChild><span className="inline-flex cursor-help" aria-label="Spay/Neuter"><Stethoscope className="h-3.5 w-3.5" /></span></TooltipTrigger><TooltipContent side="top">Spay/Neuter</TooltipContent></Tooltip>
+                  </th>
+                  <th className="px-1.5 py-2 text-center font-medium text-muted-foreground text-xs">
+                    <Tooltip delayDuration={0}><TooltipTrigger asChild><span className="inline-flex cursor-help" aria-label="Ear Tipped"><Scissors className="h-3.5 w-3.5" /></span></TooltipTrigger><TooltipContent side="top">Ear Tipped</TooltipContent></Tooltip>
+                  </th>
+                  <th className="px-1.5 py-2 text-center font-medium text-muted-foreground text-xs">
+                    <Tooltip delayDuration={0}><TooltipTrigger asChild><span className="inline-flex cursor-help" aria-label="Rabies Vaccine"><ShieldCheck className="h-3.5 w-3.5" /></span></TooltipTrigger><TooltipContent side="top">Rabies Vaccine</TooltipContent></Tooltip>
+                  </th>
+                  <th className="px-1.5 py-2 text-left font-medium text-muted-foreground whitespace-nowrap text-xs">RV Tag</th>
+                  <th className="px-1.5 py-2 text-center font-medium text-muted-foreground text-xs">
+                    <Tooltip delayDuration={0}><TooltipTrigger asChild><span className="inline-flex cursor-help" aria-label="FVRCP Vaccine"><Syringe className="h-3.5 w-3.5" /></span></TooltipTrigger><TooltipContent side="top">FVRCP Vaccine</TooltipContent></Tooltip>
+                  </th>
+                  <th className="px-1.5 py-2 text-left font-medium text-muted-foreground whitespace-nowrap text-xs">Combo</th>
+                  <th className="px-1.5 py-2 text-left font-medium text-muted-foreground whitespace-nowrap text-xs">Inv #</th>
+                  <th className="px-1.5 py-2 text-left font-medium text-muted-foreground whitespace-nowrap text-xs">Notes</th>
+                  <th className="px-1.5 py-2"></th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((row, i) => (
                   <tr key={i} className="border-b last:border-0" data-testid={`batch-row-${i}`}>
-                    <td className="px-2 py-1.5">
-                      <Input className="h-8 w-20" value={row.trapNumber} onChange={e => updateRow(i, "trapNumber", e.target.value)} placeholder={`#${i+1}`} data-testid={`input-trap-${i}`} />
+                    <td className="px-1.5 py-1.5">
+                      <Input className="h-8 w-16" value={row.trapNumber} onChange={e => updateRow(i, "trapNumber", e.target.value)} placeholder={`#${i+1}`} data-testid={`input-trap-${i}`} />
                     </td>
-                    <td className="px-2 py-1.5">
-                      <Input className="h-8 w-28" value={row.color} onChange={e => updateRow(i, "color", e.target.value)} placeholder="e.g. gray tabby" data-testid={`input-color-${i}`} />
+                    <td className="px-1.5 py-1.5">
+                      <Input className="h-8 w-24" value={row.color} onChange={e => updateRow(i, "color", e.target.value)} placeholder="e.g. gray tabby" data-testid={`input-color-${i}`} />
                     </td>
-                    <td className="px-2 py-1.5">
+                    <td className="px-1.5 py-1.5">
                       <Select value={row.sex} onValueChange={v => updateRow(i, "sex", v)}>
-                        <SelectTrigger className="h-8 w-16" data-testid={`select-sex-${i}`}><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="h-8 w-14" data-testid={`select-sex-${i}`}><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="male">M</SelectItem>
                           <SelectItem value="female">F</SelectItem>
@@ -917,10 +949,10 @@ function BatchEntryDialog({ open, onClose, onSuccess }: BatchEntryDialogProps) {
                         </SelectContent>
                       </Select>
                     </td>
-                    <td className="px-2 py-1.5">
+                    <td className="px-1.5 py-1.5">
                       <div className="flex items-center gap-1">
                         <Select value={row.breed === "Other" || !TNR_BREED_OPTIONS.some(o => o.value === row.breed) ? "Other" : row.breed} onValueChange={v => { updateRow(i, "breed", v); if (v !== "Other") updateRow(i, "customBreed", ""); }}>
-                          <SelectTrigger className="h-8 w-24" data-testid={`select-breed-${i}`}><SelectValue /></SelectTrigger>
+                          <SelectTrigger className="h-8 w-20" data-testid={`select-breed-${i}`}><SelectValue /></SelectTrigger>
                           <SelectContent>
                             {TNR_BREED_OPTIONS.map(o => (
                               <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
@@ -928,37 +960,37 @@ function BatchEntryDialog({ open, onClose, onSuccess }: BatchEntryDialogProps) {
                           </SelectContent>
                         </Select>
                         {(row.breed === "Other" || !TNR_BREED_OPTIONS.some(o => o.value === row.breed)) && (
-                          <Input className="h-8 w-28" value={row.customBreed} onChange={e => updateRow(i, "customBreed", e.target.value)} placeholder="Breed" data-testid={`input-custom-breed-${i}`} />
+                          <Input className="h-8 w-24" value={row.customBreed} onChange={e => updateRow(i, "customBreed", e.target.value)} placeholder="Breed" data-testid={`input-custom-breed-${i}`} />
                         )}
                       </div>
                     </td>
-                    <td className="px-2 py-1.5">
+                    <td className="px-1.5 py-1.5">
                       <Select value={row.ageGroup} onValueChange={v => updateRow(i, "ageGroup", v)}>
-                        <SelectTrigger className="h-8 w-20" data-testid={`select-age-${i}`}><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="h-8 w-16" data-testid={`select-age-${i}`}><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Adult">Adult</SelectItem>
-                          <SelectItem value="Kitten">Kitten</SelectItem>
+                          <SelectItem value="Adult">A</SelectItem>
+                          <SelectItem value="Kitten">K</SelectItem>
                         </SelectContent>
                       </Select>
                     </td>
-                    <td className="px-2 py-1.5 text-center">
+                    <td className="px-1.5 py-1.5 text-center">
                       <Checkbox checked={row.snCompleted} onCheckedChange={v => updateRow(i, "snCompleted", !!v)} data-testid={`checkbox-sn-${i}`} />
                     </td>
-                    <td className="px-2 py-1.5 text-center">
+                    <td className="px-1.5 py-1.5 text-center">
                       <Checkbox checked={row.earTipped} onCheckedChange={v => updateRow(i, "earTipped", !!v)} data-testid={`checkbox-eartip-${i}`} />
                     </td>
-                    <td className="px-2 py-1.5 text-center">
+                    <td className="px-1.5 py-1.5 text-center">
                       <Checkbox checked={row.rabiesVaxGiven} onCheckedChange={v => updateRow(i, "rabiesVaxGiven", !!v)} data-testid={`checkbox-rabies-${i}`} />
                     </td>
-                    <td className="px-2 py-1.5">
-                      <Input className="h-8 w-24" value={row.rabiesTagNumber} onChange={e => updateRow(i, "rabiesTagNumber", e.target.value)} placeholder="Tag #" data-testid={`input-rabies-tag-${i}`} />
+                    <td className="px-1.5 py-1.5">
+                      <Input className="h-8 w-20" value={row.rabiesTagNumber} onChange={e => updateRow(i, "rabiesTagNumber", e.target.value)} placeholder="Tag #" data-testid={`input-rabies-tag-${i}`} />
                     </td>
-                    <td className="px-2 py-1.5 text-center">
+                    <td className="px-1.5 py-1.5 text-center">
                       <Checkbox checked={row.fvrcpVaxGiven} onCheckedChange={v => updateRow(i, "fvrcpVaxGiven", !!v)} data-testid={`checkbox-fvrcp-${i}`} />
                     </td>
-                    <td className="px-2 py-1.5">
+                    <td className="px-1.5 py-1.5">
                       <Select value={row.fivFelvResult} onValueChange={v => updateRow(i, "fivFelvResult", v)}>
-                        <SelectTrigger className="h-8 w-20" data-testid={`select-fiv-felv-${i}`}><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="h-8 w-[4.5rem]" data-testid={`select-fiv-felv-${i}`}><SelectValue /></SelectTrigger>
                         <SelectContent>
                           {FIV_FELV_OPTIONS.map(o => (
                             <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
@@ -966,13 +998,13 @@ function BatchEntryDialog({ open, onClose, onSuccess }: BatchEntryDialogProps) {
                         </SelectContent>
                       </Select>
                     </td>
-                    <td className="px-2 py-1.5">
-                      <Input className="h-8 w-24" value={row.invoiceNumber} onChange={e => updateRow(i, "invoiceNumber", e.target.value)} placeholder="Inv #" data-testid={`input-invoice-${i}`} />
+                    <td className="px-1.5 py-1.5">
+                      <Input className="h-8 w-20" value={row.invoiceNumber} onChange={e => updateRow(i, "invoiceNumber", e.target.value)} placeholder="Inv #" data-testid={`input-invoice-${i}`} />
                     </td>
-                    <td className="px-2 py-1.5">
-                      <Input className="h-8 w-28" value={row.tnrNotes} onChange={e => updateRow(i, "tnrNotes", e.target.value)} placeholder="Notes" data-testid={`input-notes-${i}`} />
+                    <td className="px-1.5 py-1.5">
+                      <Input className="h-8 w-24" value={row.tnrNotes} onChange={e => updateRow(i, "tnrNotes", e.target.value)} placeholder="Notes" data-testid={`input-notes-${i}`} />
                     </td>
-                    <td className="px-2 py-1.5">
+                    <td className="px-1.5 py-1.5">
                       {rows.length > 1 && (
                         <Button size="icon" variant="ghost" onClick={() => removeRow(i)} data-testid={`button-remove-row-${i}`}>
                           <X className="h-3.5 w-3.5 text-muted-foreground" />
