@@ -70,7 +70,7 @@ function loadGoogleMapsScript(apiKey: string): Promise<void> {
 
     const script = document.createElement("script");
     script.setAttribute("data-gmaps", "true");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&loading=async&callback=${callbackName}`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&v=weekly&loading=async&callback=${callbackName}`;
     script.async = true;
     script.onerror = () => {
       delete (window as any)[callbackName];
@@ -374,8 +374,8 @@ export default function TnrColonyMap({ onViewRecord }: TnrColonyMapProps) {
         </div>
       </div>
 
-      <div className="flex-1 min-h-[500px]">
-        <div ref={mapContainerRef} className="w-full h-full" />
+      <div className="flex-1">
+        <div ref={mapContainerRef} style={{ width: "100%", minHeight: "500px", height: "100%" }} />
       </div>
     </div>
   );
