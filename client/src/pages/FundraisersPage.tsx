@@ -37,6 +37,7 @@ interface EventFormState {
   imageUrl: string | null;
   imageDisplayMode: "hero" | "poster";
   priceStr: string;
+  passFeesToBuyer: boolean;
   inventoryCapStr: string;
   pickupTimes: string[];
   isActive: boolean;
@@ -49,6 +50,7 @@ const defaultForm = (): EventFormState => ({
   imageUrl: null,
   imageDisplayMode: "hero",
   priceStr: "",
+  passFeesToBuyer: false,
   inventoryCapStr: "",
   pickupTimes: [],
   isActive: true,
@@ -121,6 +123,7 @@ export default function FundraisersPage() {
       imageUrl: (evt as any).imageUrl ?? null,
       imageDisplayMode: ((evt as any).imageDisplayMode === "poster" ? "poster" : "hero") as "hero" | "poster",
       priceStr: (evt.priceCents / 100).toFixed(2),
+      passFeesToBuyer: (evt as any).passFeesToBuyer ?? false,
       inventoryCapStr: evt.inventoryCap != null ? String(evt.inventoryCap) : "",
       pickupTimes: [...evt.pickupTimes],
       isActive: evt.isActive,
@@ -177,6 +180,7 @@ export default function FundraisersPage() {
       imageUrl: form.imageUrl || null,
       imageDisplayMode: form.imageDisplayMode,
       priceCents,
+      passFeesToBuyer: form.passFeesToBuyer,
       inventoryCap,
       pickupTimes: form.pickupTimes,
       isActive: form.isActive,
@@ -466,6 +470,19 @@ export default function FundraisersPage() {
                   onChange={(e) => setForm((f) => ({ ...f, inventoryCapStr: e.target.value }))}
                 />
               </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-2 rounded-md border p-3">
+              <div className="space-y-0.5">
+                <Label htmlFor="pass-fees" className="text-sm font-medium">Pass processing fees to buyer</Label>
+                <p className="text-xs text-muted-foreground">Stripe fees will be added to the buyer's total so the rescue receives the full listed price</p>
+              </div>
+              <Switch
+                id="pass-fees"
+                checked={form.passFeesToBuyer}
+                onCheckedChange={(checked) => setForm((f) => ({ ...f, passFeesToBuyer: checked }))}
+                data-testid="switch-pass-fees"
+              />
             </div>
 
             <div className="space-y-2">

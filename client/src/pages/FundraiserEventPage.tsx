@@ -22,6 +22,7 @@ interface FundraiserEventPublic {
   imageUrl: string | null;
   imageDisplayMode: "hero" | "poster";
   priceCents: number;
+  passFeesToBuyer: boolean;
   inventoryCap: number | null;
   pickupTimes: string[];
   isActive: boolean;
@@ -375,9 +376,14 @@ export default function FundraiserEventPage() {
               </div>
             )}
 
-            <div className="flex items-center justify-between pt-2 border-t">
-              <span className="font-medium">Total</span>
-              <span className="text-xl font-bold">{formatCents(total)}</span>
+            <div className="pt-2 border-t space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="font-medium">Total</span>
+                <span className="text-xl font-bold" data-testid="text-order-total">{formatCents(total)}</span>
+              </div>
+              {event.passFeesToBuyer && (
+                <p className="text-xs text-muted-foreground" data-testid="text-fees-notice">Processing fees will be added at checkout so the full amount goes to the rescue.</p>
+              )}
             </div>
 
             <Button

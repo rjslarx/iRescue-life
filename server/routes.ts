@@ -42962,6 +42962,7 @@ Use timestamps like [00:00] to help with pacing.`;
           imageUrl: fundraiserEvents.imageUrl,
           imageDisplayMode: fundraiserEvents.imageDisplayMode,
           priceCents: fundraiserEvents.priceCents,
+          passFeesToBuyer: fundraiserEvents.passFeesToBuyer,
           inventoryCap: fundraiserEvents.inventoryCap,
           pickupTimes: fundraiserEvents.pickupTimes,
           isActive: fundraiserEvents.isActive,
@@ -43009,7 +43010,7 @@ Use timestamps like [00:00] to help with pacing.`;
     try {
       const { fundraiserEvents } = await import('@shared/schema');
       const { id } = req.params;
-      const allowed = ['title', 'description', 'bodyContent', 'imageUrl', 'imageDisplayMode', 'priceCents', 'inventoryCap', 'pickupTimes', 'isActive'] as const;
+      const allowed = ['title', 'description', 'bodyContent', 'imageUrl', 'imageDisplayMode', 'priceCents', 'passFeesToBuyer', 'inventoryCap', 'pickupTimes', 'isActive'] as const;
       const updates: Record<string, unknown> = {};
       for (const key of allowed) {
         if (key in req.body) updates[key] = req.body[key];
@@ -43136,12 +43137,28 @@ Use timestamps like [00:00] to help with pacing.`;
       const successUrl = `${tenantBase}/donate/event/${id}?status=success`;
       const cancelUrl = `${tenantBase}/donate/event/${id}?status=cancelled`;
 
-      const totalCents = event.priceCents * body.quantity;
+      // Calculate unit amount: if passFeesToBuyer, gross up per-item price to cover Stripe + platform fees
+      let unitAmountCents = event.priceCents;
+      if (event.passFeesToBuyer) {
+        const { calculateDonorCoversFees } = await import('./config/platform');
+        const feeCalc = calculateDonorCoversFees(
+          event.priceCents * body.quantity,
+          req.tenant!.subscriptionTier || 'free',
+          req.tenant!.platformFeePercent
+        );
+        unitAmountCents = Math.ceil(feeCalc.totalAmount / body.quantity);
+      }
+
+      const totalCents = unitAmountCents * body.quantity;
       const applicationFeeAmount = calculatePlatformFee(totalCents, req.tenant!.subscriptionTier || 'free', req.tenant!.platformFeePercent);
 
       // Create Stripe checkout session directly using platform key (Connect destination charges)
       const Stripe = (await import('stripe')).default;
       const stripeClient = new Stripe(platformKey, { apiVersion: '2025-09-30.clover' as any, typescript: true });
+
+      const lineItemName = event.passFeesToBuyer
+        ? `${event.title} (incl. processing fees)`
+        : event.title;
 
       const session = await stripeClient.checkout.sessions.create({
         mode: 'payment',
@@ -43151,8 +43168,8 @@ Use timestamps like [00:00] to help with pacing.`;
         line_items: [{
           price_data: {
             currency: 'usd',
-            product_data: { name: event.title },
-            unit_amount: event.priceCents,
+            product_data: { name: lineItemName },
+            unit_amount: unitAmountCents,
           },
           quantity: body.quantity,
         }],
