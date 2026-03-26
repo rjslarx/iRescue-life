@@ -55,11 +55,14 @@ function loadGoogleMapsScript(apiKey: string): Promise<void> {
 
   mapsScriptPromise = new Promise((resolve, reject) => {
     const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&loading=async`;
     script.async = true;
     script.defer = true;
     script.onload = () => resolve();
-    script.onerror = () => reject(new Error("Failed to load Google Maps"));
+    script.onerror = () => {
+      mapsScriptPromise = null;
+      reject(new Error("Failed to load Google Maps script. The API key may be invalid or the Maps JavaScript API may not be enabled in Google Cloud Console."));
+    };
     document.head.appendChild(script);
   });
   return mapsScriptPromise;
