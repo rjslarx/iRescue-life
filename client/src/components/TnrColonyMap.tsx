@@ -229,8 +229,8 @@ export default function TnrColonyMap({ onViewRecord }: TnrColonyMapProps) {
         }
         return loadGoogleMapsScript(key);
       })
-      .then((result) => {
-        if (result !== undefined) setMapLoaded(true);
+      .then(() => {
+        setMapLoaded(true);
       })
       .catch((err) => {
         setLoadError(err.message);
@@ -326,8 +326,8 @@ export default function TnrColonyMap({ onViewRecord }: TnrColonyMapProps) {
                 }
                 return loadGoogleMapsScript(key);
               })
-              .then((result) => {
-                if (result !== undefined) setMapLoaded(true);
+              .then(() => {
+                setMapLoaded(true);
               })
               .catch((err) => setLoadError(err.message));
           }}
