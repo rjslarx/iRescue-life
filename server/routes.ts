@@ -314,6 +314,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Public Routes (no authentication required)
   // ============================================================================
 
+  app.get("/api/config/maps-key", (_req, res) => {
+    res.json({ key: process.env.GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY || "" });
+  });
+
   /**
    * GET /api/qr-code
    * Generate a QR code for any URL

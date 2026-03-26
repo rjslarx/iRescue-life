@@ -45,23 +45,37 @@ const OUTCOME_LABELS: Record<string, string> = {
 
 const DEFAULT_CENTER = { lat: 39.8283, lng: -98.5795 };
 
-const MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
-
 let mapsScriptPromise: Promise<void> | null = null;
 
 function loadGoogleMapsScript(apiKey: string): Promise<void> {
-  if ((window as unknown as { google?: { maps?: unknown } }).google?.maps) return Promise.resolve();
+  const win = window as unknown as { google?: { maps?: { Map?: unknown } } };
+  if (win.google?.maps?.Map) return Promise.resolve();
   if (mapsScriptPromise) return mapsScriptPromise;
 
   mapsScriptPromise = new Promise((resolve, reject) => {
+    const existing = document.querySelector('script[src*="maps.googleapis.com"]');
+    if (existing) existing.remove();
+
+    const callbackName = `__googleMapsCallback_${Date.now()}`;
+    (window as Record<string, unknown>)[callbackName] = () => {
+      delete (window as Record<string, unknown>)[callbackName];
+      const w = window as unknown as { google?: { maps?: { Map?: unknown } } };
+      if (w.google?.maps?.Map) {
+        resolve();
+      } else {
+        mapsScriptPromise = null;
+        reject(new Error("Google Maps loaded but Maps API not available. Ensure the Maps JavaScript API is enabled in your Google Cloud Console."));
+      }
+    };
+
     const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&loading=async`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=${callbackName}`;
     script.async = true;
     script.defer = true;
-    script.onload = () => resolve();
     script.onerror = () => {
+      delete (window as Record<string, unknown>)[callbackName];
       mapsScriptPromise = null;
-      reject(new Error("Failed to load Google Maps script. The API key may be invalid or the Maps JavaScript API may not be enabled in Google Cloud Console."));
+      reject(new Error("Failed to load Google Maps script."));
     };
     document.head.appendChild(script);
   });
@@ -204,10 +218,22 @@ export default function TnrColonyMap({ onViewRecord }: TnrColonyMapProps) {
   }, [records]);
 
   useEffect(() => {
-    if (!MAPS_API_KEY) return;
-    loadGoogleMapsScript(MAPS_API_KEY)
-      .then(() => setMapLoaded(true))
-      .catch((err) => setLoadError(err.message));
+    fetch("/api/config/maps-key")
+      .then((r) => r.json())
+      .then((data: { key: string }) => {
+        const key = data.key || import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
+        if (!key) {
+          setLoadError("Google Maps API key not configured. Set GOOGLE_MAPS_API_KEY in your environment.");
+          return;
+        }
+        return loadGoogleMapsScript(key);
+      })
+      .then((result) => {
+        if (result !== undefined) setMapLoaded(true);
+      })
+      .catch((err) => {
+        setLoadError(err.message);
+      });
   }, []);
 
   useEffect(() => {
@@ -277,20 +303,37 @@ export default function TnrColonyMap({ onViewRecord }: TnrColonyMapProps) {
     }
   }, [records, mapLoaded, onViewRecord]);
 
-  if (!MAPS_API_KEY) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground" data-testid="tnr-colony-map">
-        <MapPin className="h-12 w-12 opacity-40" />
-        <p className="text-sm">Google Maps API key not configured.</p>
-      </div>
-    );
-  }
-
   if (loadError) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground" data-testid="tnr-colony-map">
         <MapPin className="h-12 w-12 opacity-40" />
-        <p className="text-sm">Failed to load Google Maps. Please check your API key.</p>
+        <p className="text-sm font-medium">Failed to load Google Maps</p>
+        <p className="text-xs max-w-md text-center">{loadError}</p>
+        <Button
+          size="sm"
+          variant="outline"
+          data-testid="button-retry-maps"
+          onClick={() => {
+            setLoadError(null);
+            fetch("/api/config/maps-key")
+              .then((r) => r.json())
+              .then((data: { key: string }) => {
+                const key = data.key || import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
+                if (!key) {
+                  setLoadError("Google Maps API key not configured.");
+                  return;
+                }
+                return loadGoogleMapsScript(key);
+              })
+              .then((result) => {
+                if (result !== undefined) setMapLoaded(true);
+              })
+              .catch((err) => setLoadError(err.message));
+          }}
+        >
+          <RefreshCw className="h-3 w-3 mr-1" />
+          Retry
+        </Button>
       </div>
     );
   }
