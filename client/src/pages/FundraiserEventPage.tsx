@@ -64,13 +64,14 @@ export default function FundraiserEventPage() {
 
   const checkoutMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest("POST", `/api/fundraiser-events/${eventId}/checkout`, {
+      const res = await apiRequest("POST", `/api/fundraiser-events/${eventId}/checkout`, {
         customerName,
         customerEmail,
         customerPhone: customerPhone || undefined,
         quantity,
         pickupTime: pickupTime || undefined,
       });
+      return await res.json();
     },
     onSuccess: (data: any) => {
       if (data.url) window.location.href = data.url;
