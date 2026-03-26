@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction, Router } from 'express';
 import { db } from '../db';
-import { animals, calendars, tenants, donationLinks, shopProducts } from '@shared/schema';
+import { animals, calendars, tenants, donationLinks, shopProducts, customPages } from '@shared/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import fs from 'fs';
 import path from 'path';
@@ -376,6 +376,59 @@ export async function injectOGTags(req: Request, res: Response, next: NextFuncti
           description: `Browse products from ${tenant.name}. Every purchase supports animal rescue!`,
           image: defaultImage,
         };
+      }
+    }
+
+    if (!ogData) {
+      const customPageMatch = url.match(/^\/([a-z0-9]+(?:-[a-z0-9]+)*)$/i);
+      if (customPageMatch) {
+        const slug = customPageMatch[1].toLowerCase();
+        const knownPrefixes = ['login', 'register', 'dashboard', 'admin', 'api', 'apply', 'foster-portal', 'intake'];
+        if (!knownPrefixes.includes(slug)) {
+          const [page] = await db.select({
+            title: customPages.title,
+            excerpt: customPages.excerpt,
+            contentBlocks: customPages.contentBlocks,
+          })
+          .from(customPages)
+          .where(and(
+            eq(customPages.tenantId, tenant.id),
+            eq(customPages.slug, slug),
+            eq(customPages.isPublished, true)
+          ))
+          .limit(1);
+
+          if (page) {
+            let image = defaultImage;
+            let description = page.excerpt || '';
+
+            if (!description && page.contentBlocks && Array.isArray(page.contentBlocks)) {
+              const paragraphBlock = page.contentBlocks.find((b: any) => b.type === 'paragraph' && b.content);
+              if (paragraphBlock) {
+                const text = (paragraphBlock as any).content as string;
+                description = text.slice(0, 200) + (text.length > 200 ? '...' : '');
+              }
+            }
+
+            if (!description) {
+              description = `${page.title} - ${tenant.name}`;
+            }
+
+            if (page.contentBlocks && Array.isArray(page.contentBlocks)) {
+              const imageBlock = page.contentBlocks.find((b: any) => b.type === 'image' && b.src);
+              if (imageBlock) {
+                image = resolveImageUrl((imageBlock as any).src) || defaultImage;
+              }
+            }
+
+            ogData = {
+              title: `${page.title} | ${tenant.name}`,
+              description,
+              image,
+            };
+            console.log(`[OG-TAGS] Custom page match: slug=${slug}, tenant=${tenant.subdomain}`);
+          }
+        }
       }
     }
 
