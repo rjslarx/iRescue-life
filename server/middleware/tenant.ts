@@ -104,6 +104,7 @@ export interface TenantContext {
   };
   quickActions?: string[] | null;
   subscriptionTier?: string | null;
+  subscriptionStatus?: string | null;
   jotformAdoptionUrl?: string | null;
   jotformFosterUrl?: string | null;
   jotformVolunteerUrl?: string | null;
@@ -409,6 +410,10 @@ export async function resolveTenant(req: Request, res: Response, next: NextFunct
           supervisingVetLicense: tenants.supervisingVetLicense,
           orgTaxEin: tenants.orgTaxEin,
           subscriptionTier: tenants.subscriptionTier,
+          subscriptionStatus: tenants.subscriptionStatus,
+          stripeConnectedAccountId: tenants.stripeConnectedAccountId,
+          stripeSecretKeyEncrypted: tenants.stripeSecretKeyEncrypted,
+          platformFeePercent: tenants.platformFeePercent,
           jotformAdoptionUrl: tenants.jotformAdoptionUrl,
           jotformFosterUrl: tenants.jotformFosterUrl,
           jotformVolunteerUrl: tenants.jotformVolunteerUrl,
@@ -500,6 +505,7 @@ export async function resolveTenant(req: Request, res: Response, next: NextFunct
         supervisingVetLicense: tenant.supervisingVetLicense,
         orgTaxEin: tenant.orgTaxEin,
         subscriptionTier: tenant.subscriptionTier,
+        subscriptionStatus: tenant.subscriptionStatus,
         jotformAdoptionUrl: tenant.jotformAdoptionUrl,
         jotformFosterUrl: tenant.jotformFosterUrl,
         jotformVolunteerUrl: tenant.jotformVolunteerUrl,
