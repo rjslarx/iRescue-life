@@ -579,15 +579,19 @@ function QrCodeDialog({
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    if (canvasRef.current) {
-      QRCode.toCanvas(canvasRef.current, checkoutUrl, {
-        width: 240,
-        margin: 2,
-        color: { dark: "#000000", light: "#ffffff" },
-      })
-        .then(() => setReady(true))
-        .catch(() => setReady(false));
-    }
+    const generate = () => {
+      if (canvasRef.current) {
+        QRCode.toCanvas(canvasRef.current, checkoutUrl, {
+          width: 240,
+          margin: 2,
+          color: { dark: "#000000", light: "#ffffff" },
+        })
+          .then(() => setReady(true))
+          .catch(() => setReady(false));
+      }
+    };
+    const timer = setTimeout(generate, 150);
+    return () => clearTimeout(timer);
   }, [checkoutUrl]);
 
   const handleDownload = () => {
