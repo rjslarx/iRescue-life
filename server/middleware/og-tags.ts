@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction, Router } from 'express';
 import { db } from '../db';
-import { animals, calendars, tenants, donationLinks, shopProducts, customPages } from '@shared/schema';
+import { animals, calendars, tenants, donationLinks, shopProducts, customPages, type PageBlock } from '@shared/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import fs from 'fs';
 import path from 'path';
@@ -401,12 +401,12 @@ export async function injectOGTags(req: Request, res: Response, next: NextFuncti
           if (page) {
             let image = defaultImage;
             let description = page.excerpt || '';
+            const blocks: PageBlock[] = Array.isArray(page.contentBlocks) ? page.contentBlocks : [];
 
-            if (!description && page.contentBlocks && Array.isArray(page.contentBlocks)) {
-              const paragraphBlock = page.contentBlocks.find((b: any) => b.type === 'paragraph' && b.content);
+            if (!description) {
+              const paragraphBlock = blocks.find((b): b is PageBlock & { type: 'paragraph'; content: string } => b.type === 'paragraph' && 'content' in b && typeof b.content === 'string');
               if (paragraphBlock) {
-                const text = (paragraphBlock as any).content as string;
-                description = text.slice(0, 200) + (text.length > 200 ? '...' : '');
+                description = paragraphBlock.content.slice(0, 200) + (paragraphBlock.content.length > 200 ? '...' : '');
               }
             }
 
@@ -414,11 +414,9 @@ export async function injectOGTags(req: Request, res: Response, next: NextFuncti
               description = `${page.title} - ${tenant.name}`;
             }
 
-            if (page.contentBlocks && Array.isArray(page.contentBlocks)) {
-              const imageBlock = page.contentBlocks.find((b: any) => b.type === 'image' && b.src);
-              if (imageBlock) {
-                image = resolveImageUrl((imageBlock as any).src) || defaultImage;
-              }
+            const imageBlock = blocks.find((b): b is PageBlock & { type: 'image'; src: string } => b.type === 'image' && 'src' in b && typeof b.src === 'string');
+            if (imageBlock) {
+              image = resolveImageUrl(imageBlock.src) || defaultImage;
             }
 
             ogData = {
