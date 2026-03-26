@@ -13,6 +13,7 @@ interface FundraiserEventPublic {
   title: string;
   description: string | null;
   imageUrl: string | null;
+  imageDisplayMode?: "hero" | "poster";
   priceCents: number;
   inventoryCap: number | null;
   pickupTimes: string[];
@@ -102,26 +103,48 @@ export default function PublicFundraisersPage() {
               return (
                 <Card key={evt.id} className="overflow-hidden flex flex-col" data-testid={`card-fundraiser-${evt.id}`}>
                   {evt.imageUrl ? (
-                    <div className="relative h-48 w-full overflow-hidden">
-                      <img
-                        src={evt.imageUrl}
-                        alt={evt.title}
-                        className="w-full h-full object-cover"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                      {isSoldOut && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/50">
-                          <Badge variant="destructive" className="text-base px-4 py-1">Sold Out</Badge>
-                        </div>
-                      )}
-                      {!isSoldOut && remaining !== null && remaining <= 10 && (
-                        <div className="absolute bottom-3 left-3">
-                          <Badge variant="secondary" className="bg-white/90 text-foreground">
-                            Only {remaining} left!
-                          </Badge>
-                        </div>
-                      )}
-                    </div>
+                    evt.imageDisplayMode === "poster" ? (
+                      <div className="relative w-full bg-muted flex justify-center overflow-hidden">
+                        <img
+                          src={evt.imageUrl}
+                          alt={evt.title}
+                          className="w-full max-h-80 object-contain"
+                        />
+                        {isSoldOut && (
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                            <Badge variant="destructive" className="text-base px-4 py-1">Sold Out</Badge>
+                          </div>
+                        )}
+                        {!isSoldOut && remaining !== null && remaining <= 10 && (
+                          <div className="absolute bottom-3 left-3">
+                            <Badge variant="secondary" className="bg-white/90 text-foreground">
+                              Only {remaining} left!
+                            </Badge>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="relative h-48 w-full overflow-hidden">
+                        <img
+                          src={evt.imageUrl}
+                          alt={evt.title}
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                        {isSoldOut && (
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                            <Badge variant="destructive" className="text-base px-4 py-1">Sold Out</Badge>
+                          </div>
+                        )}
+                        {!isSoldOut && remaining !== null && remaining <= 10 && (
+                          <div className="absolute bottom-3 left-3">
+                            <Badge variant="secondary" className="bg-white/90 text-foreground">
+                              Only {remaining} left!
+                            </Badge>
+                          </div>
+                        )}
+                      </div>
+                    )
                   ) : (
                     <div className="h-32 w-full bg-muted flex items-center justify-center">
                       <TicketPercent className="h-10 w-10 text-muted-foreground/50" />

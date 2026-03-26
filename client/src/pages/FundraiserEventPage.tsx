@@ -20,6 +20,7 @@ interface FundraiserEventPublic {
   description: string | null;
   bodyContent: string | null;
   imageUrl: string | null;
+  imageDisplayMode: "hero" | "poster";
   priceCents: number;
   inventoryCap: number | null;
   pickupTimes: string[];
@@ -130,13 +131,19 @@ export default function FundraiserEventPage() {
     return (
       <div className="min-h-screen bg-background">
         {event.imageUrl && (
-          <div className="relative w-full h-56 overflow-hidden">
-            <img src={event.imageUrl} alt={event.title} className="w-full h-full object-cover" />
-            <div className="absolute inset-0 bg-black/50" />
-            <div className="absolute inset-0 flex flex-col items-center justify-center px-4 text-center">
-              <h1 className="text-3xl font-bold text-white">{event.title}</h1>
+          event.imageDisplayMode === "poster" ? (
+            <div className="w-full bg-muted flex justify-center py-6">
+              <img src={event.imageUrl} alt={event.title} className="max-h-[28rem] w-auto object-contain rounded-md" />
             </div>
-          </div>
+          ) : (
+            <div className="relative w-full h-56 overflow-hidden">
+              <img src={event.imageUrl} alt={event.title} className="w-full h-full object-cover" />
+              <div className="absolute inset-0 bg-black/50" />
+              <div className="absolute inset-0 flex flex-col items-center justify-center px-4 text-center">
+                <h1 className="text-3xl font-bold text-white">{event.title}</h1>
+              </div>
+            </div>
+          )
         )}
         <div className="flex items-center justify-center px-4 py-16 min-h-[50vh]">
           <Card className="max-w-md w-full">
@@ -166,8 +173,27 @@ export default function FundraiserEventPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Hero image or plain header */}
-      {event.imageUrl ? (
+      {/* Hero/poster image or plain header */}
+      {event.imageUrl && event.imageDisplayMode === "poster" ? (
+        <div className="w-full bg-muted">
+          <div className="max-w-3xl mx-auto flex flex-col items-center px-4 py-8 gap-6">
+            <img src={event.imageUrl} alt={event.title} className="max-h-[32rem] w-auto max-w-full object-contain rounded-lg shadow-sm" data-testid="img-event-poster" />
+            <div className="text-center space-y-2 w-full">
+              {isSoldOut && <Badge variant="destructive" className="w-fit mx-auto">Sold Out</Badge>}
+              <h1 className="text-3xl md:text-4xl font-bold leading-tight">{event.title}</h1>
+              {event.description && (
+                <p className="text-muted-foreground text-base md:text-lg">{event.description}</p>
+              )}
+              <div className="flex items-center justify-center gap-3 pt-1">
+                <span className="text-xl font-semibold">{formatCents(event.priceCents)} per item</span>
+                {event.inventoryCap != null && !isSoldOut && (
+                  <Badge variant="secondary">{remaining} remaining</Badge>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : event.imageUrl ? (
         <div className="relative w-full h-72 md:h-96 overflow-hidden">
           <img src={event.imageUrl} alt={event.title} className="w-full h-full object-cover" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />

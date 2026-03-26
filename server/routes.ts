@@ -42960,6 +42960,7 @@ Use timestamps like [00:00] to help with pacing.`;
           description: fundraiserEvents.description,
           bodyContent: fundraiserEvents.bodyContent,
           imageUrl: fundraiserEvents.imageUrl,
+          imageDisplayMode: fundraiserEvents.imageDisplayMode,
           priceCents: fundraiserEvents.priceCents,
           inventoryCap: fundraiserEvents.inventoryCap,
           pickupTimes: fundraiserEvents.pickupTimes,
@@ -43008,10 +43009,13 @@ Use timestamps like [00:00] to help with pacing.`;
     try {
       const { fundraiserEvents } = await import('@shared/schema');
       const { id } = req.params;
-      const allowed = ['title', 'description', 'bodyContent', 'imageUrl', 'priceCents', 'inventoryCap', 'pickupTimes', 'isActive'] as const;
+      const allowed = ['title', 'description', 'bodyContent', 'imageUrl', 'imageDisplayMode', 'priceCents', 'inventoryCap', 'pickupTimes', 'isActive'] as const;
       const updates: Record<string, unknown> = {};
       for (const key of allowed) {
         if (key in req.body) updates[key] = req.body[key];
+      }
+      if (updates.imageDisplayMode && !['hero', 'poster'].includes(updates.imageDisplayMode as string)) {
+        return res.status(400).json({ error: 'imageDisplayMode must be "hero" or "poster"' });
       }
       const [event] = await db
         .update(fundraiserEvents)

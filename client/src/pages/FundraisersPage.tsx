@@ -15,7 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Plus, Pencil, Trash2, Copy, TicketPercent, Users, ImagePlus, X, QrCode, Download, Printer } from "lucide-react";
+import { Plus, Pencil, Trash2, Copy, TicketPercent, Users, ImagePlus, X, QrCode, Download, Printer, RectangleHorizontal, RectangleVertical } from "lucide-react";
 import type { FundraiserEvent } from "@shared/schema";
 
 type EventWithSold = FundraiserEvent & { soldCount: number };
@@ -35,6 +35,7 @@ interface EventFormState {
   description: string;
   bodyContent: string;
   imageUrl: string | null;
+  imageDisplayMode: "hero" | "poster";
   priceStr: string;
   inventoryCapStr: string;
   pickupTimes: string[];
@@ -46,6 +47,7 @@ const defaultForm = (): EventFormState => ({
   description: "",
   bodyContent: "",
   imageUrl: null,
+  imageDisplayMode: "hero",
   priceStr: "",
   inventoryCapStr: "",
   pickupTimes: [],
@@ -117,6 +119,7 @@ export default function FundraisersPage() {
       description: evt.description ?? "",
       bodyContent: (evt as any).bodyContent ?? "",
       imageUrl: (evt as any).imageUrl ?? null,
+      imageDisplayMode: ((evt as any).imageDisplayMode === "poster" ? "poster" : "hero") as "hero" | "poster",
       priceStr: (evt.priceCents / 100).toFixed(2),
       inventoryCapStr: evt.inventoryCap != null ? String(evt.inventoryCap) : "",
       pickupTimes: [...evt.pickupTimes],
@@ -172,6 +175,7 @@ export default function FundraisersPage() {
       description: form.description.trim() || null,
       bodyContent: form.bodyContent.trim() || null,
       imageUrl: form.imageUrl || null,
+      imageDisplayMode: form.imageDisplayMode,
       priceCents,
       inventoryCap,
       pickupTimes: form.pickupTimes,
@@ -245,15 +249,26 @@ export default function FundraisersPage() {
               return (
                 <Card key={evt.id} data-testid={`card-event-${evt.id}`}>
                   {evtAny.imageUrl && (
-                    <div className="relative h-40 w-full overflow-hidden rounded-t-md">
-                      <img src={evtAny.imageUrl} alt={evt.title} className="w-full h-full object-cover" />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                      <div className="absolute bottom-3 left-3">
-                        <Badge variant={evt.isActive ? (isSoldOut ? "destructive" : "default") : "secondary"}>
-                          {!evt.isActive ? "Inactive" : isSoldOut ? "Sold Out" : "Active"}
-                        </Badge>
+                    evtAny.imageDisplayMode === "poster" ? (
+                      <div className="relative w-full overflow-hidden rounded-t-md bg-muted flex justify-center">
+                        <img src={evtAny.imageUrl} alt={evt.title} className="w-full max-h-96 object-contain" />
+                        <div className="absolute bottom-3 left-3">
+                          <Badge variant={evt.isActive ? (isSoldOut ? "destructive" : "default") : "secondary"}>
+                            {!evt.isActive ? "Inactive" : isSoldOut ? "Sold Out" : "Active"}
+                          </Badge>
+                        </div>
                       </div>
-                    </div>
+                    ) : (
+                      <div className="relative h-40 w-full overflow-hidden rounded-t-md">
+                        <img src={evtAny.imageUrl} alt={evt.title} className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                        <div className="absolute bottom-3 left-3">
+                          <Badge variant={evt.isActive ? (isSoldOut ? "destructive" : "default") : "secondary"}>
+                            {!evt.isActive ? "Inactive" : isSoldOut ? "Sold Out" : "Active"}
+                          </Badge>
+                        </div>
+                      </div>
+                    )
                   )}
                   <CardHeader className="flex flex-row items-start justify-between gap-2 flex-wrap">
                     <div className="space-y-1 flex-1 min-w-0">
@@ -338,8 +353,8 @@ export default function FundraisersPage() {
                 }}
               />
               {imagePreview ? (
-                <div className="relative rounded-md overflow-hidden h-40 w-full bg-muted">
-                  <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+                <div className={`relative rounded-md overflow-hidden w-full bg-muted ${form.imageDisplayMode === "poster" ? "max-h-80" : "h-40"}`}>
+                  <img src={imagePreview} alt="Preview" className={`w-full ${form.imageDisplayMode === "poster" ? "h-auto max-h-80 object-contain" : "h-full object-cover"}`} />
                   <Button
                     size="icon"
                     variant="destructive"
@@ -359,8 +374,35 @@ export default function FundraisersPage() {
                   className="w-full h-32 rounded-md border-2 border-dashed border-muted-foreground/30 flex flex-col items-center justify-center gap-2 text-muted-foreground hover-elevate transition-colors"
                 >
                   <ImagePlus className="h-8 w-8" />
-                  <span className="text-sm">{uploading ? "Uploading…" : "Click to upload a hero image"}</span>
+                  <span className="text-sm">{uploading ? "Uploading…" : "Click to upload an image"}</span>
                 </button>
+              )}
+              {form.imageUrl && (
+                <div className="flex items-center gap-2 pt-1">
+                  <Label className="text-xs text-muted-foreground shrink-0">Display as:</Label>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={form.imageDisplayMode === "hero" ? "default" : "outline"}
+                      onClick={() => setForm((f) => ({ ...f, imageDisplayMode: "hero" }))}
+                      data-testid="button-mode-hero"
+                    >
+                      <RectangleHorizontal className="h-3.5 w-3.5 mr-1.5" />
+                      Hero
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={form.imageDisplayMode === "poster" ? "default" : "outline"}
+                      onClick={() => setForm((f) => ({ ...f, imageDisplayMode: "poster" }))}
+                      data-testid="button-mode-poster"
+                    >
+                      <RectangleVertical className="h-3.5 w-3.5 mr-1.5" />
+                      Poster
+                    </Button>
+                  </div>
+                </div>
               )}
             </div>
 

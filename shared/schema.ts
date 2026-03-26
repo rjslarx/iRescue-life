@@ -5255,6 +5255,7 @@ export const fundraiserEvents = pgTable("fundraiser_events", {
   description: text("description"),
   bodyContent: text("body_content"),
   imageUrl: text("image_url"),
+  imageDisplayMode: text("image_display_mode").notNull().default("hero"),
   priceCents: integer("price_cents").notNull(),
   inventoryCap: integer("inventory_cap"), // null = unlimited
   pickupTimes: text("pickup_times").array().notNull().default([]),
