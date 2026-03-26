@@ -241,16 +241,29 @@ export default function TnrColonyMap({ onViewRecord }: TnrColonyMapProps) {
     if (!mapLoaded || !mapContainerRef.current) return;
     if (mapRef.current) return;
 
-    mapRef.current = new google.maps.Map(mapContainerRef.current, {
-      center,
-      zoom: records.length <= 1 ? 12 : 10,
-      mapTypeControl: true,
-      streetViewControl: false,
-      fullscreenControl: true,
-    });
+    try {
+      const mapCenter = records.length > 0
+        ? { lat: records.reduce((s, r) => s + r.latitude, 0) / records.length, lng: records.reduce((s, r) => s + r.longitude, 0) / records.length }
+        : center;
 
-    infoWindowRef.current = new google.maps.InfoWindow();
-  }, [mapLoaded]);
+      mapRef.current = new google.maps.Map(mapContainerRef.current, {
+        center: mapCenter,
+        zoom: records.length <= 1 ? 12 : 10,
+        mapTypeControl: true,
+        streetViewControl: false,
+        fullscreenControl: true,
+      });
+
+      infoWindowRef.current = new google.maps.InfoWindow();
+
+      google.maps.event.addListenerOnce(mapRef.current, 'tilesloaded', () => {
+        console.log('[TNR Map] Tiles loaded successfully');
+      });
+    } catch (err) {
+      console.error('[TNR Map] Failed to create map:', err);
+      setLoadError(`Map initialization failed: ${(err as Error).message}`);
+    }
+  }, [mapLoaded, records.length > 0]);
 
   useEffect(() => {
     if (!mapRef.current || !mapLoaded || !infoWindowRef.current) return;
