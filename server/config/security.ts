@@ -138,10 +138,10 @@ export const helmetConfig = helmet({
   contentSecurityPolicy: process.env.NODE_ENV === 'production' ? {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "https://js.stripe.com", "https://connect-js.stripe.com", "https://www.googletagmanager.com", "https://apis.google.com", "https://googleads.g.doubleclick.net", "https://www.google.com", "'unsafe-inline'", "'unsafe-eval'"],
+      scriptSrc: ["'self'", "https://js.stripe.com", "https://connect-js.stripe.com", "https://www.googletagmanager.com", "https://apis.google.com", "https://maps.googleapis.com", "https://googleads.g.doubleclick.net", "https://www.google.com", "'unsafe-inline'", "'unsafe-eval'"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-      imgSrc: ["'self'", "data:", "https:", "blob:", "https://www.google.com", "https://googleads.g.doubleclick.net"],
-      connectSrc: ["'self'", "https://api.resend.com", "https://*.stripe.com", "https://connect-js.stripe.com", "https://www.google-analytics.com", "https://analytics.google.com", "https://storage.googleapis.com", "https://www.googleapis.com", "https://accounts.google.com", "https://www.google.com", "https://googleads.g.doubleclick.net"],
+      imgSrc: ["'self'", "data:", "https:", "blob:", "https://www.google.com", "https://googleads.g.doubleclick.net", "https://maps.googleapis.com", "https://maps.gstatic.com"],
+      connectSrc: ["'self'", "https://api.resend.com", "https://*.stripe.com", "https://connect-js.stripe.com", "https://www.google-analytics.com", "https://analytics.google.com", "https://storage.googleapis.com", "https://www.googleapis.com", "https://maps.googleapis.com", "https://accounts.google.com", "https://www.google.com", "https://googleads.g.doubleclick.net"],
       fontSrc: ["'self'", "data:", "https://fonts.gstatic.com"],
       objectSrc: ["'none'"],
       mediaSrc: ["'self'"],
