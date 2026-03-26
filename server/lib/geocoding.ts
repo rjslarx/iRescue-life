@@ -1,4 +1,4 @@
-const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
+const GOOGLE_GEOCODING_KEY = process.env.GOOGLE_GEOCODING_API_KEY || process.env.GOOGLE_MAPS_API_KEY;
 
 interface GeocodingResult {
   latitude: number;
@@ -6,8 +6,8 @@ interface GeocodingResult {
 }
 
 export async function geocodeAddress(address: string): Promise<GeocodingResult | null> {
-  if (!GOOGLE_MAPS_API_KEY) {
-    console.warn('[Geocoding] GOOGLE_MAPS_API_KEY not set, skipping geocode');
+  if (!GOOGLE_GEOCODING_KEY) {
+    console.warn('[Geocoding] No geocoding API key set (GOOGLE_GEOCODING_API_KEY or GOOGLE_MAPS_API_KEY), skipping geocode');
     return null;
   }
 
@@ -16,7 +16,7 @@ export async function geocodeAddress(address: string): Promise<GeocodingResult |
   }
 
   try {
-    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address.trim())}&key=${GOOGLE_MAPS_API_KEY}`;
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address.trim())}&key=${GOOGLE_GEOCODING_KEY}`;
     const response = await fetch(url);
     if (!response.ok) {
       console.error(`[Geocoding] HTTP error: ${response.status}`);
