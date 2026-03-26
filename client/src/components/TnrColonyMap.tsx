@@ -53,31 +53,40 @@ function loadGoogleMapsScript(apiKey: string): Promise<void> {
   if (mapsScriptPromise) return mapsScriptPromise;
 
   mapsScriptPromise = new Promise((resolve, reject) => {
-    const existing = document.querySelector('script[src*="maps.googleapis.com"]');
-    if (existing) existing.remove();
+    const existing = document.querySelectorAll('script[src*="maps.googleapis.com"], script[data-gmaps]');
+    existing.forEach((el) => el.remove());
 
-    const callbackName = `__googleMapsCallback_${Date.now()}`;
-    (window as Record<string, unknown>)[callbackName] = () => {
-      delete (window as Record<string, unknown>)[callbackName];
-      const w = window as unknown as { google?: { maps?: { Map?: unknown } } };
-      if (w.google?.maps?.Map) {
-        resolve();
-      } else {
-        mapsScriptPromise = null;
-        reject(new Error("Google Maps loaded but Maps API not available. Ensure the Maps JavaScript API is enabled in your Google Cloud Console."));
-      }
-    };
+    const directUrl = `https://maps.googleapis.com/maps/api/js?key=${apiKey}`;
+    const proxyUrl = `/api/config/maps-script?key=${apiKey}`;
 
-    const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=${callbackName}`;
-    script.async = true;
-    script.defer = true;
-    script.onerror = () => {
-      delete (window as Record<string, unknown>)[callbackName];
-      mapsScriptPromise = null;
-      reject(new Error("Failed to load Google Maps script."));
-    };
-    document.head.appendChild(script);
+    function tryLoad(url: string, isProxy: boolean) {
+      const script = document.createElement("script");
+      script.setAttribute("data-gmaps", "true");
+      script.src = url;
+      script.async = true;
+      script.defer = true;
+      script.onload = () => {
+        const w = window as unknown as { google?: { maps?: { Map?: unknown } } };
+        if (w.google?.maps?.Map) {
+          resolve();
+        } else {
+          mapsScriptPromise = null;
+          reject(new Error("Google Maps script loaded but the Maps JavaScript API is not available. Please verify the Maps JavaScript API is enabled in Google Cloud Console."));
+        }
+      };
+      script.onerror = () => {
+        script.remove();
+        if (!isProxy) {
+          tryLoad(proxyUrl, true);
+        } else {
+          mapsScriptPromise = null;
+          reject(new Error("Could not load Google Maps. This may be caused by a browser extension, firewall, or network restriction blocking googleapis.com."));
+        }
+      };
+      document.head.appendChild(script);
+    }
+
+    tryLoad(directUrl, false);
   });
   return mapsScriptPromise;
 }

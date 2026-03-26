@@ -318,6 +318,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ key: process.env.GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY || "" });
   });
 
+  app.get("/api/config/maps-script", async (req, res) => {
+    try {
+      const key = (req.query.key as string) || process.env.GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY || "";
+      if (!key) {
+        res.status(400).send("// Google Maps API key not configured");
+        return;
+      }
+      const response = await fetch(`https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}`);
+      const body = await response.text();
+      res.set("Content-Type", "application/javascript");
+      res.set("Cache-Control", "public, max-age=3600");
+      res.send(body);
+    } catch (err) {
+      res.status(502).send(`// Failed to proxy Google Maps: ${(err as Error).message}`);
+    }
+  });
+
   /**
    * GET /api/qr-code
    * Generate a QR code for any URL
