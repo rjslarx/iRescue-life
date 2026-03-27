@@ -179,10 +179,6 @@ export class StripeService {
           } : {}),
         } : {}),
       };
-      sessionParams.subscription_data.payment_settings = {
-        ...(sessionParams.subscription_data.payment_settings || {}),
-        statement_descriptor_suffix_default: toStripeStatementDescriptor(tenant.name),
-      };
     } else {
       sessionParams.line_items = [
         {
