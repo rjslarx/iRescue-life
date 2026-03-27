@@ -299,6 +299,10 @@ export default function CalendarViewPage() {
 
   const duplicateVolunteerShift = (() => {
     if (!newEvent.calendarId || !newEvent.startTime) return false;
+    if (newEvent.manualVolunteerName) return false;
+    const cal = calendarsData?.calendars.find(c => c.id === newEvent.calendarId);
+    const isVolunteerContext = cal?.type === 'volunteer' || !!newEvent.volunteerContactId;
+    if (!isVolunteerContext) return false;
     const volunteerId = newEvent.volunteerContactId || currentUser?.id;
     if (!volunteerId) return false;
     const eventDate = new Date(newEvent.startTime);

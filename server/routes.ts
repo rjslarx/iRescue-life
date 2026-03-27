@@ -29380,7 +29380,8 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
         }
       }
 
-      if (req.user!.activeRole !== 'admin') {
+      const isVolunteerContext = (calendar.type === 'volunteer' || !!validatedData.volunteerContactId) && !validatedData.manualVolunteerName;
+      if (isVolunteerContext && req.user!.activeRole !== 'admin') {
         const effectiveVolunteerId = validatedData.volunteerContactId || req.user!.id;
         const eventDate = new Date(validatedData.startTime);
         const startOfDay = new Date(Date.UTC(eventDate.getUTCFullYear(), eventDate.getUTCMonth(), eventDate.getUTCDate()));
