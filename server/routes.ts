@@ -29380,6 +29380,36 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
         }
       }
 
+      if (req.user!.activeRole !== 'admin') {
+        const effectiveVolunteerId = validatedData.volunteerContactId || req.user!.id;
+        const eventDate = new Date(validatedData.startTime);
+        const startOfDay = new Date(Date.UTC(eventDate.getUTCFullYear(), eventDate.getUTCMonth(), eventDate.getUTCDate()));
+        const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
+
+        const volunteerMatch = validatedData.volunteerContactId
+          ? eq(calendarEvents.volunteerContactId, effectiveVolunteerId)
+          : sql`(${calendarEvents.volunteerContactId} = ${effectiveVolunteerId} OR (${calendarEvents.volunteerContactId} IS NULL AND ${calendarEvents.createdBy} = ${effectiveVolunteerId}))`;
+
+        const [existingShift] = await db
+          .select({ id: calendarEvents.id })
+          .from(calendarEvents)
+          .where(and(
+            eq(calendarEvents.calendarId, validatedData.calendarId),
+            eq(calendarEvents.tenantId, req.tenant!.id),
+            volunteerMatch,
+            sql`${calendarEvents.startTime} >= ${startOfDay}`,
+            sql`${calendarEvents.startTime} < ${endOfDay}`
+          ))
+          .limit(1);
+
+        if (existingShift) {
+          return res.status(409).json({
+            error: 'Duplicate signup',
+            message: 'This volunteer already has a shift on this calendar for this day.'
+          });
+        }
+      }
+
       // Create the event in database
       let newEvent;
       try {

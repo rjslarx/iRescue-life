@@ -81,6 +81,7 @@ interface CalendarEvent {
   syncError?: string | null;
   volunteerContactId?: string | null;
   manualVolunteerName?: string | null;
+  createdBy?: string | null;
 }
 
 interface VolunteerTeamMember {
@@ -295,6 +296,23 @@ export default function CalendarViewPage() {
       });
     },
   });
+
+  const duplicateVolunteerShift = (() => {
+    if (!newEvent.calendarId || !newEvent.startTime) return false;
+    const volunteerId = newEvent.volunteerContactId || currentUser?.id;
+    if (!volunteerId) return false;
+    const eventDate = new Date(newEvent.startTime);
+    const allEvents = eventsData?.events || [];
+    return allEvents.some(ev => {
+      if (ev.calendarId !== newEvent.calendarId) return false;
+      const evVolunteer = ev.volunteerContactId || ev.createdBy;
+      if (evVolunteer !== volunteerId) return false;
+      const existingDate = new Date(ev.startTime);
+      return existingDate.getFullYear() === eventDate.getFullYear() &&
+        existingDate.getMonth() === eventDate.getMonth() &&
+        existingDate.getDate() === eventDate.getDate();
+    });
+  })();
 
   // Filter events by selected calendars
   const filteredEvents = eventsData?.events.filter(event => {
@@ -1534,7 +1552,7 @@ export default function CalendarViewPage() {
               </Button>
               <Button
                 type="submit"
-                disabled={createEventMutation.isPending || !newEvent.calendarId}
+                disabled={createEventMutation.isPending || !newEvent.calendarId || (duplicateVolunteerShift && currentUser?.activeRole !== 'admin')}
                 className="flex-1"
                 data-testid="button-submit-create-event"
               >
@@ -1543,6 +1561,11 @@ export default function CalendarViewPage() {
                   : (selectedCalendarFormSettings?.simplifiedVolunteerMode ? "Sign Up" : "Create Event")}
               </Button>
             </div>
+            {duplicateVolunteerShift && currentUser?.activeRole !== 'admin' && (
+              <p className="text-sm text-destructive mt-2" data-testid="text-duplicate-shift-warning">
+                This volunteer already has a shift on this calendar for this day.
+              </p>
+            )}
           </form>
         </DialogContent>
       </Dialog>
