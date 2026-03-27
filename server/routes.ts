@@ -10117,7 +10117,7 @@ Crawl-delay: 1
           notes: z.string().optional(),
         })).optional().nullable(),
         isFeeWaived: z.boolean().optional(),
-        feeWaiverReason: z.string().max(500).optional(),
+        feeWaiverReason: z.string().max(500).optional().nullable(),
         sendMethod: z.enum(['sms', 'email']).optional(),
       });
       
@@ -10257,7 +10257,7 @@ Crawl-delay: 1
         coverFees: z.boolean().optional(),
         processor: z.enum(['stripe']).optional(),
         isFeeWaived: z.boolean().optional(),
-        feeWaiverReason: z.string().max(500).optional(),
+        feeWaiverReason: z.string().max(500).optional().nullable(),
       });
 
       const data = sessionSchema.parse(req.body);
