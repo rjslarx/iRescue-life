@@ -6,6 +6,16 @@ import { getPlatformStripeSecretKey } from '../config/platform';
 // Re-export for convenience
 export { isStripeTestMode } from '../config/platform';
 
+export function toStripeStatementDescriptor(name: string): string {
+  const cleaned = name
+    .replace(/[^a-zA-Z0-9 ]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toUpperCase();
+  if (!cleaned || !/[A-Z]/.test(cleaned)) return 'RESCUE';
+  return cleaned.slice(0, 22);
+}
+
 // Get the appropriate platform Stripe key based on test mode
 export function getPlatformStripeKey(): string | undefined {
   return getPlatformStripeSecretKey();
@@ -169,6 +179,10 @@ export class StripeService {
           } : {}),
         } : {}),
       };
+      sessionParams.subscription_data.payment_settings = {
+        ...(sessionParams.subscription_data.payment_settings || {}),
+        statement_descriptor_suffix_default: toStripeStatementDescriptor(tenant.name),
+      };
     } else {
       sessionParams.line_items = [
         {
@@ -192,10 +206,16 @@ export class StripeService {
           transfer_data: {
             destination: params.connectedAccountId,
           },
+          statement_descriptor_suffix: toStripeStatementDescriptor(tenant.name),
           // Only add application fee if there is one (free tier has fee, pro tier has 0)
           ...(collectPlatformFee && params.platformFeeAmount ? {
             application_fee_amount: params.platformFeeAmount,
           } : {}),
+        };
+      } else {
+        sessionParams.payment_intent_data = {
+          ...(sessionParams.payment_intent_data || {}),
+          statement_descriptor_suffix: toStripeStatementDescriptor(tenant.name),
         };
       }
     }
@@ -264,6 +284,7 @@ export class StripeService {
       currency: params.currency || 'usd',
       description: params.description,
       receipt_email: params.receiptEmail,
+      statement_descriptor_suffix: toStripeStatementDescriptor(tenant.name),
       automatic_payment_methods: {
         enabled: true,
       },

@@ -1,4 +1,5 @@
 import type { Express } from "express";
+import { toStripeStatementDescriptor } from "./lib/stripe-service";
 import express from "express";
 import { createServer, type Server } from "http";
 import { requireTenant } from "./middleware/tenant";
@@ -40898,7 +40899,7 @@ Use timestamps like [00:00] to help with pacing.`;
           tenantId: req.tenant!.id,
           type: 'emergency_fund',
         },
-        payment_intent_data: {},
+        payment_intent_data: { statement_descriptor_suffix: toStripeStatementDescriptor(tenant.name) },
       };
 
       if (platformFeeAmount > 0) {
@@ -43229,6 +43230,7 @@ Use timestamps like [00:00] to help with pacing.`;
           on_behalf_of: connectedAccountId,
           transfer_data: { destination: connectedAccountId },
           ...(applicationFeeAmount > 0 ? { application_fee_amount: applicationFeeAmount } : {}),
+          statement_descriptor_suffix: toStripeStatementDescriptor(req.tenant!.name),
         },
         metadata: {
           fundraiser_event_id: id,

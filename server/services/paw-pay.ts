@@ -53,6 +53,7 @@ import {
   STRIPE_PROCESSING_FEE_PERCENT,
   STRIPE_PROCESSING_FEE_FIXED_CENTS,
 } from '../config/platform';
+import { toStripeStatementDescriptor } from '../lib/stripe-service';
 
 export interface PaymentProcessingResult {
   success: boolean;
@@ -255,6 +256,7 @@ export async function processDonationPayment(
       currency: params.currency || 'usd',
       description: `Donation to ${tenant.name}`,
       receipt_email: params.donorEmail,
+      statement_descriptor_suffix: toStripeStatementDescriptor(tenant.name),
       automatic_payment_methods: {
         enabled: true,
       },
@@ -419,6 +421,7 @@ export async function processAdoptionFeePayment(
       currency: params.currency || 'usd',
       description,
       receipt_email: params.adopterEmail,
+      statement_descriptor_suffix: toStripeStatementDescriptor(tenant.name),
       automatic_payment_methods: {
         enabled: true,
       },
@@ -568,6 +571,7 @@ export async function processShopPayment(
       currency: options.currency || 'usd',
       description: `Shop order - ${tenant.name}`,
       receipt_email: options.customerEmail,
+      statement_descriptor_suffix: toStripeStatementDescriptor(tenant.name),
       automatic_payment_methods: {
         enabled: true,
       },

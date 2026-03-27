@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { db } from '../db';
 import { requireTenant } from '../middleware/tenant';
 import { requireAuth, requireRole } from '../middleware/auth';
+import { toStripeStatementDescriptor } from '../lib/stripe-service';
 import { 
   shopProducts, 
   shopProductVariants, 
@@ -336,6 +337,7 @@ router.post('/checkout', requireTenant, async (req, res, next) => {
         },
         receipt_email: data.customerEmail,
         description: `Order ${orderNumber} from ${tenant.name}`,
+        statement_descriptor_suffix: toStripeStatementDescriptor(tenant.name),
       });
 
       // Update order with payment intent ID
