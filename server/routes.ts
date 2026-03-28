@@ -28682,6 +28682,11 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
         }).nullish(),
         eventFormSettings: z.object({
           simplifiedVolunteerMode: z.boolean().optional(),
+          fixedDayTimes: z.record(z.string(), z.object({
+            enabled: z.boolean(),
+            startTime: z.string().optional(),
+            endTime: z.string().optional(),
+          })).optional(),
           title: fieldSettingSchema,
           description: fieldSettingSchema,
           location: fieldSettingSchema,
