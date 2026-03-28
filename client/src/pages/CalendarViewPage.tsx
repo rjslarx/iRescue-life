@@ -440,6 +440,23 @@ export default function CalendarViewPage() {
     }
   };
 
+  const getFixedTimesForDate = (baseDate: Date, formSettings: EventFormSettings | null | undefined): { startTime: string; endTime: string } | null => {
+    if (!formSettings?.simplifiedVolunteerMode || !formSettings.fixedDayTimes) return null;
+    const dayOfWeek = baseDate.getDay() as 0 | 1 | 2 | 3 | 4 | 5 | 6;
+    const dayConfig = formSettings.fixedDayTimes[dayOfWeek];
+    if (!dayConfig?.enabled || !dayConfig.startTime || !dayConfig.endTime) return null;
+    const [startHour, startMin] = dayConfig.startTime.split(':').map(Number);
+    const [endHour, endMin] = dayConfig.endTime.split(':').map(Number);
+    const start = new Date(baseDate);
+    start.setHours(startHour, startMin, 0, 0);
+    const end = new Date(baseDate);
+    end.setHours(endHour, endMin, 0, 0);
+    return {
+      startTime: format(start, "yyyy-MM-dd'T'HH:mm"),
+      endTime: format(end, "yyyy-MM-dd'T'HH:mm"),
+    };
+  };
+
   const openCreateDialog = (date?: Date) => {
     const baseDate = date || new Date();
     const startTime = new Date(baseDate);
@@ -447,14 +464,34 @@ export default function CalendarViewPage() {
     const endTime = new Date(baseDate);
     endTime.setHours(10, 0, 0, 0);
     
+    let defaultStart = format(startTime, "yyyy-MM-dd'T'HH:mm");
+    let defaultEnd = format(endTime, "yyyy-MM-dd'T'HH:mm");
+    let preSelectedCalendarId = "";
+    let preSelectedTitle = "";
+
+    const calsWithAdd = calendarsData?.calendars.filter(cal => cal.canAdd) || [];
+    if (calsWithAdd.length === 1) {
+      const cal = calsWithAdd[0];
+      preSelectedCalendarId = cal.id;
+      const settings = cal.eventFormSettings || DEFAULT_EVENT_FORM_SETTINGS[cal.type] || DEFAULT_EVENT_FORM_SETTINGS.custom;
+      if (settings.simplifiedVolunteerMode) {
+        preSelectedTitle = `${currentUser?.fullName || currentUser?.email || 'Volunteer'} - Signup`;
+      }
+      const fixed = getFixedTimesForDate(baseDate, settings);
+      if (fixed) {
+        defaultStart = fixed.startTime;
+        defaultEnd = fixed.endTime;
+      }
+    }
+
     // Reset manual volunteer mode and clear stale data when opening new event dialog
     setIsManualVolunteerMode(false);
     setNewEvent({
-      calendarId: "",
-      title: "",
+      calendarId: preSelectedCalendarId,
+      title: preSelectedTitle,
       description: "",
-      startTime: format(startTime, "yyyy-MM-dd'T'HH:mm"),
-      endTime: format(endTime, "yyyy-MM-dd'T'HH:mm"),
+      startTime: defaultStart,
+      endTime: defaultEnd,
       location: "",
       customPageId: null,
       includeMeetLink: false,
@@ -1227,11 +1264,20 @@ export default function CalendarViewPage() {
                   } else if (wasSimplifiedMode) {
                     newTitle = "";
                   }
+
+                  let updatedTimes: Record<string, string> = {};
+                  if (newEvent.startTime) {
+                    const fixed = getFixedTimesForDate(new Date(newEvent.startTime), formSettings);
+                    if (fixed) {
+                      updatedTimes = { startTime: fixed.startTime, endTime: fixed.endTime };
+                    }
+                  }
                   
                   setNewEvent({ 
                     ...newEvent, 
                     calendarId: value,
                     title: newTitle,
+                    ...updatedTimes,
                   });
                 }}
                 required
