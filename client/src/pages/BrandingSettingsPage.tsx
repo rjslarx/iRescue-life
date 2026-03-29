@@ -230,7 +230,9 @@ function AnnouncementBarSettings({ brandingForm }: { brandingForm: any }) {
   const campaignRows = Array.isArray(campaignsData) ? campaignsData : campaignsData?.donationLinks ?? [];
   const campaigns = campaignRows.filter((c: any) => c.isActive);
   const animalRows = Array.isArray(animalsData) ? animalsData : animalsData?.animals ?? [];
-  const animals = animalRows.slice(0, 20);
+  const animals = [...animalRows]
+    .sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
+    .slice(0, 20);
 
   const staticLinks = [
     { label: "Donate Page", url: "/donate", linkText: "Donate Now" },
@@ -286,20 +288,24 @@ function AnnouncementBarSettings({ brandingForm }: { brandingForm: any }) {
 
       {watchEnabled && (
         <div className="space-y-4 pl-4 border-l-2 border-muted">
-          {watchText && (
-            <div className="space-y-1.5">
-              <p className="text-xs font-medium text-muted-foreground">Live Preview</p>
-              <div className="rounded-md overflow-hidden border pointer-events-none" data-testid="announcement-bar-preview">
+          <div className="space-y-1.5">
+            <p className="text-xs font-medium text-muted-foreground">Live Preview</p>
+            <div className="rounded-md overflow-hidden border pointer-events-none" data-testid="announcement-bar-preview">
+              {watchText ? (
                 <AnnouncementBar
                   text={watchText}
                   linkText={watchLinkText}
                   linkUrl={watchLinkUrl}
                   style={watchStyle as "info" | "warning" | "urgent"}
-                  dismissible={false}
+                  dismissible={true}
                 />
-              </div>
+              ) : (
+                <div className="bg-muted/40 py-3 px-4 text-center text-xs text-muted-foreground">
+                  Start typing to see your announcement preview
+                </div>
+              )}
             </div>
-          )}
+          </div>
 
           <div className="rounded-md bg-muted/50 p-3 space-y-2">
             <div className="flex items-start gap-2">
