@@ -32,7 +32,12 @@ import {
   X,
   Plus,
   Info,
+  Lightbulb,
+  Zap,
+  Link as LinkIcon,
 } from "lucide-react";
+import AnnouncementBar from "@/components/AnnouncementBar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { z } from "zod";
@@ -154,6 +159,303 @@ function MultiEmailInput({ control, name }: { control: any; name: string }) {
         );
       }}
     />
+  );
+}
+
+const ANNOUNCEMENT_TEMPLATES = [
+  {
+    label: "Emergency Vet Bill",
+    text: "We just took in 4 puppies with Parvo. Our emergency vet bill is $2,400. Help us save them!",
+    linkText: "Chip in $20 to Help",
+    linkUrl: "/donate",
+    style: "urgent" as const,
+  },
+  {
+    label: "Surgery Fund",
+    text: "Luna's surgery is tomorrow! We are still $450 short of our goal.",
+    linkText: "Sponsor Luna",
+    linkUrl: "/donate",
+    style: "urgent" as const,
+  },
+  {
+    label: "TNR Alert",
+    text: "TNR Alert: We trapped 12 feral cats today. Help us cover their $600 spay/neuter clinic bill.",
+    linkText: "Donate Now",
+    linkUrl: "/donate",
+    style: "warning" as const,
+  },
+  {
+    label: "Foster Need",
+    text: "We have 8 kittens arriving this week and zero foster homes available. Can you help?",
+    linkText: "Apply to Foster",
+    linkUrl: "/foster",
+    style: "info" as const,
+  },
+  {
+    label: "General Donation",
+    text: "Every dollar helps us provide food, shelter, and medical care for animals in need.",
+    linkText: "Donate Today",
+    linkUrl: "/donate",
+    style: "info" as const,
+  },
+];
+
+function AnnouncementBarSettings({ brandingForm }: { brandingForm: any }) {
+  const [linkPickerOpen, setLinkPickerOpen] = useState(false);
+  const [linkSearch, setLinkSearch] = useState("");
+
+  const { data: campaignsData } = useQuery<any>({
+    queryKey: ["/api/donation-links"],
+    enabled: linkPickerOpen,
+  });
+
+  const { data: animalsData } = useQuery<any>({
+    queryKey: ["/api/animals"],
+    enabled: linkPickerOpen,
+  });
+
+  const watchText = brandingForm.watch("announcementBarText") || "";
+  const watchLinkText = brandingForm.watch("announcementBarLinkText") || "";
+  const watchLinkUrl = brandingForm.watch("announcementBarLinkUrl") || "";
+  const watchStyle = brandingForm.watch("announcementBarStyle") || "info";
+  const watchEnabled = brandingForm.watch("announcementBarEnabled");
+
+  const applyTemplate = (tpl: typeof ANNOUNCEMENT_TEMPLATES[0]) => {
+    brandingForm.setValue("announcementBarText", tpl.text, { shouldDirty: true });
+    brandingForm.setValue("announcementBarLinkText", tpl.linkText, { shouldDirty: true });
+    brandingForm.setValue("announcementBarLinkUrl", tpl.linkUrl, { shouldDirty: true });
+    brandingForm.setValue("announcementBarStyle", tpl.style, { shouldDirty: true });
+  };
+
+  const campaignRows = Array.isArray(campaignsData) ? campaignsData : campaignsData?.donationLinks ?? [];
+  const campaigns = campaignRows.filter((c: any) => c.isActive);
+  const animalRows = Array.isArray(animalsData) ? animalsData : animalsData?.animals ?? [];
+  const animals = animalRows.slice(0, 20);
+
+  const staticLinks = [
+    { label: "Donate Page", url: "/donate", linkText: "Donate Now" },
+    { label: "Foster Application", url: "/foster", linkText: "Apply to Foster" },
+    { label: "Adopt Page", url: "/adopt", linkText: "Adopt Today" },
+    { label: "Volunteer Page", url: "/volunteer", linkText: "Volunteer" },
+    { label: "Shop", url: "/shop", linkText: "Shop Now" },
+  ];
+
+  const allLinks = [
+    ...staticLinks.map((l) => ({ ...l, type: "page" })),
+    ...campaigns.map((c: any) => ({
+      label: c.title || c.name || "Campaign",
+      url: c.slug ? `/campaign/${c.slug}` : `/campaign/${c.id}`,
+      linkText: c.title || "Support This Campaign",
+      type: "campaign",
+    })),
+    ...animals.map((a: any) => ({
+      label: a.name || "Animal",
+      url: `/animals/${a.id}`,
+      linkText: `Sponsor ${a.name || "This Pet"}`,
+      type: "animal",
+    })),
+  ];
+
+  const filteredLinks = linkSearch
+    ? allLinks.filter((l) => l.label.toLowerCase().includes(linkSearch.toLowerCase()))
+    : allLinks;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h4 className="text-sm font-medium">Announcement Bar</h4>
+          <p className="text-xs text-muted-foreground">Display an urgent banner above your hero section to drive donations</p>
+        </div>
+        <FormField
+          control={brandingForm.control}
+          name="announcementBarEnabled"
+          render={({ field }) => (
+            <FormItem>
+              <FormControl>
+                <Switch
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                  data-testid="switch-announcement-bar"
+                />
+              </FormControl>
+            </FormItem>
+          )}
+        />
+      </div>
+
+      {watchEnabled && (
+        <div className="space-y-4 pl-4 border-l-2 border-muted">
+          {watchText && (
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-muted-foreground">Live Preview</p>
+              <div className="rounded-md overflow-hidden border pointer-events-none" data-testid="announcement-bar-preview">
+                <AnnouncementBar
+                  text={watchText}
+                  linkText={watchLinkText}
+                  linkUrl={watchLinkUrl}
+                  style={watchStyle as "info" | "warning" | "urgent"}
+                  dismissible={false}
+                />
+              </div>
+            </div>
+          )}
+
+          <div className="rounded-md bg-muted/50 p-3 space-y-2">
+            <div className="flex items-start gap-2">
+              <Lightbulb className="h-4 w-4 text-amber-500 mt-0.5 flex-shrink-0" />
+              <div className="text-xs text-muted-foreground space-y-1">
+                <p className="font-medium text-foreground">High-Conversion Formula</p>
+                <p><span className="font-medium">[Urgent Situation]</span> + <span className="font-medium">[Specific Dollar Amount]</span> + <span className="font-medium">[Call to Action Link]</span></p>
+                <p className="italic">Example: "We just took in 4 puppies with Parvo. Our vet bill is $2,400." + "Chip in $20 to Help"</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-muted-foreground">Quick Templates</p>
+            <div className="flex flex-wrap gap-2">
+              {ANNOUNCEMENT_TEMPLATES.map((tpl) => (
+                <Button
+                  key={tpl.label}
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => applyTemplate(tpl)}
+                  data-testid={`button-template-${tpl.label.toLowerCase().replace(/\s+/g, "-")}`}
+                >
+                  <Zap className="h-3 w-3 mr-1" />
+                  {tpl.label}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          <FormField
+            control={brandingForm.control}
+            name="announcementBarText"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Announcement Text</FormLabel>
+                <FormControl>
+                  <Textarea
+                    placeholder="We just took in 4 puppies with Parvo. Our emergency vet bill is $2,400. Help us save them!"
+                    className="resize-none min-h-[72px]"
+                    data-testid="input-announcement-text"
+                    {...field}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <div className="grid grid-cols-2 gap-4">
+            <FormField
+              control={brandingForm.control}
+              name="announcementBarLinkText"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Link Text (optional)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Chip in $20 to Help" data-testid="input-announcement-link-text" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={brandingForm.control}
+              name="announcementBarLinkUrl"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Link URL (optional)</FormLabel>
+                  <div className="flex gap-1">
+                    <FormControl>
+                      <Input placeholder="/donate" data-testid="input-announcement-link-url" {...field} />
+                    </FormControl>
+                    <Popover open={linkPickerOpen} onOpenChange={setLinkPickerOpen}>
+                      <PopoverTrigger asChild>
+                        <Button type="button" size="icon" variant="outline" data-testid="button-browse-links">
+                          <LinkIcon className="h-4 w-4" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-72 p-0" align="end">
+                        <div className="p-2 border-b">
+                          <Input
+                            className="text-sm"
+                            placeholder="Search pages, campaigns, animals..."
+                            value={linkSearch}
+                            onChange={(e) => setLinkSearch(e.target.value)}
+                            data-testid="input-link-search"
+                          />
+                        </div>
+                        <div className="max-h-64 overflow-y-auto p-1">
+                          {filteredLinks.length === 0 && (
+                            <p className="text-xs text-muted-foreground text-center py-4">No results found</p>
+                          )}
+                          {["page", "campaign", "animal"].map((type) => {
+                            const items = filteredLinks.filter((l) => l.type === type);
+                            if (items.length === 0) return null;
+                            const heading = type === "page" ? "Pages" : type === "campaign" ? "Active Campaigns" : "Animals";
+                            return (
+                              <div key={type}>
+                                <p className="text-[10px] font-semibold uppercase text-muted-foreground px-2 py-1.5">{heading}</p>
+                                {items.map((link) => (
+                                  <button
+                                    key={link.url}
+                                    type="button"
+                                    className="w-full text-left px-2 py-1.5 text-sm rounded-sm hover-elevate flex items-center justify-between gap-2"
+                                    onClick={() => {
+                                      brandingForm.setValue("announcementBarLinkUrl", link.url, { shouldDirty: true });
+                                      brandingForm.setValue("announcementBarLinkText", link.linkText, { shouldDirty: true });
+                                      setLinkPickerOpen(false);
+                                      setLinkSearch("");
+                                    }}
+                                    data-testid={`link-pick-${link.url}`}
+                                  >
+                                    <span className="truncate">{link.label}</span>
+                                    <span className="text-[10px] text-muted-foreground flex-shrink-0">{link.url}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+
+          <FormField
+            control={brandingForm.control}
+            name="announcementBarStyle"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Style</FormLabel>
+                <Select onValueChange={field.onChange} value={field.value || "info"}>
+                  <FormControl>
+                    <SelectTrigger data-testid="select-announcement-style">
+                      <SelectValue placeholder="Choose a style" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="info">Info (Blue)</SelectItem>
+                    <SelectItem value="warning">Warning (Yellow)</SelectItem>
+                    <SelectItem value="urgent">Urgent (Red)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -649,97 +951,7 @@ export default function BrandingSettingsPage() {
                   <Separator />
 
                   {/* Announcement Bar */}
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h4 className="text-sm font-medium">Announcement Bar</h4>
-                        <p className="text-xs text-muted-foreground">Display an urgent banner above your hero section</p>
-                      </div>
-                      <FormField
-                        control={brandingForm.control}
-                        name="announcementBarEnabled"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormControl>
-                              <Switch
-                                checked={field.value}
-                                onCheckedChange={field.onChange}
-                                data-testid="switch-announcement-bar"
-                              />
-                            </FormControl>
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-
-                    {brandingForm.watch("announcementBarEnabled") && (
-                      <div className="space-y-4 pl-4 border-l-2 border-muted">
-                        <FormField
-                          control={brandingForm.control}
-                          name="announcementBarText"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Announcement Text</FormLabel>
-                              <FormControl>
-                                <Input placeholder="We urgently need fosters for our kittens!" data-testid="input-announcement-text" {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <div className="grid grid-cols-2 gap-4">
-                          <FormField
-                            control={brandingForm.control}
-                            name="announcementBarLinkText"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Link Text (optional)</FormLabel>
-                                <FormControl>
-                                  <Input placeholder="Learn More" data-testid="input-announcement-link-text" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                          <FormField
-                            control={brandingForm.control}
-                            name="announcementBarLinkUrl"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Link URL (optional)</FormLabel>
-                                <FormControl>
-                                  <Input placeholder="/foster" data-testid="input-announcement-link-url" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </div>
-                        <FormField
-                          control={brandingForm.control}
-                          name="announcementBarStyle"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Style</FormLabel>
-                              <Select onValueChange={field.onChange} value={field.value || "info"}>
-                                <FormControl>
-                                  <SelectTrigger data-testid="select-announcement-style">
-                                    <SelectValue placeholder="Choose a style" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  <SelectItem value="info">Info (Blue)</SelectItem>
-                                  <SelectItem value="warning">Warning (Yellow)</SelectItem>
-                                  <SelectItem value="urgent">Urgent (Red)</SelectItem>
-                                </SelectContent>
-                              </Select>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-                    )}
-                  </div>
+                  <AnnouncementBarSettings brandingForm={brandingForm} />
 
                   <Separator />
 
