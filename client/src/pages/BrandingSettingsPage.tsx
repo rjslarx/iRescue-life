@@ -246,13 +246,13 @@ function AnnouncementBarSettings({ brandingForm }: { brandingForm: any }) {
     ...staticLinks.map((l) => ({ ...l, type: "page" })),
     ...campaigns.map((c: any) => ({
       label: c.title || c.name || "Campaign",
-      url: c.slug ? `/campaign/${c.slug}` : `/campaign/${c.id}`,
+      url: c.slug ? `/campaign/${c.slug}` : `/campaigns/${c.id}`,
       linkText: c.title || "Support This Campaign",
       type: "campaign",
     })),
     ...animals.map((a: any) => ({
       label: a.name || "Animal",
-      url: `/animals/${a.id}`,
+      url: `/animal/${a.id}`,
       linkText: `Sponsor ${a.name || "This Pet"}`,
       type: "animal",
     })),
