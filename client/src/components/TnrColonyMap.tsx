@@ -46,36 +46,58 @@ const OUTCOME_LABELS: Record<string, string> = {
 const DEFAULT_CENTER = { lat: 39.8283, lng: -98.5795 };
 
 let mapsScriptPromise: Promise<void> | null = null;
+let mapsScriptLoaded = false;
 
 function loadGoogleMapsScript(apiKey: string): Promise<void> {
   const win = window as unknown as { google?: { maps?: { Map?: unknown } } };
-  if (win.google?.maps?.Map) return Promise.resolve();
-  if (mapsScriptPromise) return mapsScriptPromise;
+  if (win.google?.maps?.Map) {
+    mapsScriptLoaded = true;
+    return Promise.resolve();
+  }
+
+  if (mapsScriptPromise && mapsScriptLoaded) return mapsScriptPromise;
+
+  mapsScriptPromise = null;
+  mapsScriptLoaded = false;
 
   mapsScriptPromise = new Promise((resolve, reject) => {
     const existing = document.querySelectorAll('script[src*="maps.googleapis.com"], script[data-gmaps]');
     existing.forEach((el) => el.remove());
+    delete (window as any).google;
 
     const callbackName = "__gmapsCallback_" + Date.now();
+
+    const timeout = setTimeout(() => {
+      delete (window as any)[callbackName];
+      mapsScriptPromise = null;
+      mapsScriptLoaded = false;
+      reject(new Error("Google Maps took too long to load. Please check your internet connection and try again."));
+    }, 15000);
+
     (window as any)[callbackName] = () => {
+      clearTimeout(timeout);
       delete (window as any)[callbackName];
       const w = window as unknown as { google?: { maps?: { Map?: unknown } } };
       if (w.google?.maps?.Map) {
+        mapsScriptLoaded = true;
         resolve();
       } else {
         mapsScriptPromise = null;
+        mapsScriptLoaded = false;
         reject(new Error("Google Maps script loaded but the Maps JavaScript API is not available. Please verify the Maps JavaScript API is enabled in Google Cloud Console."));
       }
     };
 
     const script = document.createElement("script");
     script.setAttribute("data-gmaps", "true");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&v=weekly&loading=async&callback=${callbackName}`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&v=weekly&callback=${callbackName}`;
     script.async = true;
     script.onerror = () => {
+      clearTimeout(timeout);
       delete (window as any)[callbackName];
       script.remove();
       mapsScriptPromise = null;
+      mapsScriptLoaded = false;
       reject(new Error("Could not load Google Maps. This may be caused by a browser extension, firewall, or network restriction blocking googleapis.com."));
     };
     document.head.appendChild(script);
@@ -219,9 +241,11 @@ export default function TnrColonyMap({ onViewRecord }: TnrColonyMapProps) {
   }, [records]);
 
   useEffect(() => {
+    let cancelled = false;
     fetch("/api/config/maps-key")
       .then((r) => r.json())
       .then((data: { key: string }) => {
+        if (cancelled) return;
         const key = data.key || import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
         if (!key) {
           setLoadError("Google Maps API key not configured. Set GOOGLE_MAPS_API_KEY in your environment.");
@@ -230,16 +254,41 @@ export default function TnrColonyMap({ onViewRecord }: TnrColonyMapProps) {
         return loadGoogleMapsScript(key);
       })
       .then(() => {
-        setMapLoaded(true);
+        if (!cancelled) setMapLoaded(true);
       })
       .catch((err) => {
-        setLoadError(err.message);
+        if (!cancelled) setLoadError(err.message);
       });
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
+    return () => {
+      markersRef.current.forEach((m) => m.setMap(null));
+      markersRef.current = [];
+      if (infoWindowRef.current) infoWindowRef.current.close();
+      mapRef.current = null;
+    };
+  }, []);
+
+  const hasRecords = records.length > 0;
+
+  useEffect(() => {
     if (!mapLoaded || !mapContainerRef.current) return;
-    if (mapRef.current) return;
+
+    const win = window as unknown as { google?: { maps?: { Map?: new (...args: any[]) => any } } };
+    if (!win.google?.maps?.Map) {
+      setMapLoaded(false);
+      mapsScriptPromise = null;
+      mapsScriptLoaded = false;
+      setLoadError("Google Maps API became unavailable. Please retry.");
+      return;
+    }
+
+    if (mapRef.current) {
+      google.maps.event.trigger(mapRef.current, 'resize');
+      return;
+    }
 
     try {
       const mapCenter = records.length > 0
@@ -259,11 +308,18 @@ export default function TnrColonyMap({ onViewRecord }: TnrColonyMapProps) {
       google.maps.event.addListenerOnce(mapRef.current, 'tilesloaded', () => {
         console.log('[TNR Map] Tiles loaded successfully');
       });
+
+      setTimeout(() => {
+        if (mapRef.current) {
+          google.maps.event.trigger(mapRef.current, 'resize');
+        }
+      }, 300);
     } catch (err) {
       console.error('[TNR Map] Failed to create map:', err);
+      mapRef.current = null;
       setLoadError(`Map initialization failed: ${(err as Error).message}`);
     }
-  }, [mapLoaded, records.length > 0]);
+  }, [mapLoaded, hasRecords]);
 
   useEffect(() => {
     if (!mapRef.current || !mapLoaded || !infoWindowRef.current) return;
@@ -319,7 +375,7 @@ export default function TnrColonyMap({ onViewRecord }: TnrColonyMapProps) {
 
   if (loadError) {
     return (
-      <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground" data-testid="tnr-colony-map">
+      <div className="flex flex-col items-center justify-center h-full min-h-[400px] gap-3 text-muted-foreground" data-testid="tnr-colony-map">
         <MapPin className="h-12 w-12 opacity-40" />
         <p className="text-sm font-medium">Failed to load Google Maps</p>
         <p className="text-xs max-w-md text-center">{loadError}</p>
@@ -329,6 +385,9 @@ export default function TnrColonyMap({ onViewRecord }: TnrColonyMapProps) {
           data-testid="button-retry-maps"
           onClick={() => {
             setLoadError(null);
+            mapRef.current = null;
+            mapsScriptPromise = null;
+            mapsScriptLoaded = false;
             fetch("/api/config/maps-key")
               .then((r) => r.json())
               .then((data: { key: string }) => {
