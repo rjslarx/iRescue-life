@@ -16039,6 +16039,141 @@ ${renderedHtml}
   });
 
   /**
+   * GET /api/grants/data-matrix-monthly
+   * Generate month-by-month intake/outcome breakdown for SAC reporting
+   */
+  app.get('/api/grants/data-matrix-monthly', requireTenant, requireAuth, requireRole('admin', 'owner', 'manager', 'board_member', 'staff'), async (req, res, next) => {
+    try {
+      const { startDate, endDate } = req.query;
+      if (!startDate || !endDate) return res.status(400).json({ error: 'startDate and endDate are required' });
+      const start = new Date(startDate as string);
+      const end = new Date(endDate as string);
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) return res.status(400).json({ error: 'Invalid date format' });
+      if (start > end) return res.status(400).json({ error: 'startDate must be before endDate' });
+      end.setHours(23, 59, 59, 999);
+      const tenantId = req.tenant!.id;
+
+      const months: any[] = [];
+      const cursor = new Date(start.getFullYear(), start.getMonth(), 1);
+      const endMonth = new Date(end.getFullYear(), end.getMonth(), 1);
+
+      while (cursor <= endMonth) {
+        const monthStart = new Date(cursor);
+        const monthEnd = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0, 23, 59, 59, 999);
+        const effectiveStart = monthStart < start ? start : monthStart;
+        const effectiveEnd = monthEnd > end ? end : monthEnd;
+
+        const intakeRows = await db.select({
+          intakeSource: animals.intakeSource,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(animals)
+        .where(and(
+          eq(animals.tenantId, tenantId),
+          gte(animals.intakeDate, effectiveStart),
+          lte(animals.intakeDate, effectiveEnd),
+          or(isNull(animals.recordType), ne(animals.recordType, 'tnr'))
+        ))
+        .groupBy(animals.intakeSource);
+
+        const intakeByType: Record<string, number> = {};
+        let totalIntake = 0;
+        for (const row of intakeRows) {
+          const key = row.intakeSource || 'unknown';
+          intakeByType[key] = row.count;
+          totalIntake += row.count;
+        }
+
+        const outcomeStatuses = ['adopted', 'returned_to_owner', 'transported', 'deceased', 'returned_to_field'];
+        const outcomeRows = await db.select({
+          status: animals.status,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(animals)
+        .where(and(
+          eq(animals.tenantId, tenantId),
+          inArray(animals.status, outcomeStatuses),
+          or(isNull(animals.recordType), ne(animals.recordType, 'tnr')),
+          gte(animals.updatedAt, effectiveStart),
+          lte(animals.updatedAt, effectiveEnd),
+        ))
+        .groupBy(animals.status);
+
+        const outcomeByStatus: Record<string, number> = {};
+        let totalOutcomes = 0;
+        for (const row of outcomeRows) {
+          outcomeByStatus[row.status] = row.count;
+          totalOutcomes += row.count;
+        }
+
+        const deceased = outcomeByStatus['deceased'] || 0;
+        const liveReleases = totalOutcomes - deceased;
+        const liveReleaseRate = totalOutcomes > 0 ? parseFloat(((liveReleases / totalOutcomes) * 100).toFixed(1)) : 0;
+
+        const speciesRows = await db.select({
+          species: animals.species,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(animals)
+        .where(and(
+          eq(animals.tenantId, tenantId),
+          gte(animals.intakeDate, effectiveStart),
+          lte(animals.intakeDate, effectiveEnd),
+          or(isNull(animals.recordType), ne(animals.recordType, 'tnr'))
+        ))
+        .groupBy(animals.species);
+
+        const intakeBySpecies: Record<string, number> = {};
+        for (const row of speciesRows) {
+          intakeBySpecies[row.species || 'unknown'] = row.count;
+        }
+
+        months.push({
+          month: monthStart.toISOString().slice(0, 7),
+          label: monthStart.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+          intake: { total: totalIntake, byType: intakeByType, bySpecies: intakeBySpecies },
+          outcomes: { total: totalOutcomes, byStatus: outcomeByStatus },
+          liveReleaseRate,
+        });
+
+        cursor.setMonth(cursor.getMonth() + 1);
+      }
+
+      const grandIntakeByType: Record<string, number> = {};
+      const grandOutcomeByStatus: Record<string, number> = {};
+      const grandIntakeBySpecies: Record<string, number> = {};
+      let grandTotalIntake = 0;
+      let grandTotalOutcomes = 0;
+      for (const m of months) {
+        grandTotalIntake += m.intake.total;
+        grandTotalOutcomes += m.outcomes.total;
+        for (const [k, v] of Object.entries(m.intake.byType)) {
+          grandIntakeByType[k] = (grandIntakeByType[k] || 0) + (v as number);
+        }
+        for (const [k, v] of Object.entries(m.outcomes.byStatus)) {
+          grandOutcomeByStatus[k] = (grandOutcomeByStatus[k] || 0) + (v as number);
+        }
+        for (const [k, v] of Object.entries(m.intake.bySpecies)) {
+          grandIntakeBySpecies[k] = (grandIntakeBySpecies[k] || 0) + (v as number);
+        }
+      }
+      const grandDeceased = grandOutcomeByStatus['deceased'] || 0;
+      const grandLiveReleases = grandTotalOutcomes - grandDeceased;
+      const grandLiveReleaseRate = grandTotalOutcomes > 0 ? parseFloat(((grandLiveReleases / grandTotalOutcomes) * 100).toFixed(1)) : 0;
+
+      res.json({
+        dateRange: { startDate: start.toISOString(), endDate: end.toISOString() },
+        months,
+        totals: {
+          intake: { total: grandTotalIntake, byType: grandIntakeByType, bySpecies: grandIntakeBySpecies },
+          outcomes: { total: grandTotalOutcomes, byStatus: grandOutcomeByStatus },
+          liveReleaseRate: grandLiveReleaseRate,
+        },
+      });
+    } catch (error) { next(error); }
+  });
+
+  /**
    * GET /api/grants/documents
    * Get all grant documents including boilerplate (admin only)
    */

@@ -1313,9 +1313,9 @@ export default function GrantsPage() {
               endDate={matrixEndDate}
               onStartDateChange={setMatrixStartDate}
               onEndDateChange={setMatrixEndDate}
-              matrixData={matrixData}
-              isLoading={matrixLoading}
-              onGenerate={() => refetchMatrix()}
+              summaryData={matrixData}
+              isSummaryLoading={matrixLoading}
+              onGenerateSummary={() => refetchMatrix()}
             />
           </TabsContent>
         </Tabs>
@@ -1873,34 +1873,146 @@ const outcomeStatusLabels: Record<string, string> = {
   returned_to_field: "Returned to Field (TNR)",
 };
 
+const INTAKE_TYPES = ['stray', 'owner_surrender', 'transfer', 'born_in_care', 'other', 'unknown'];
+const OUTCOME_TYPES = ['adopted', 'returned_to_owner', 'transported', 'deceased', 'returned_to_field'];
+
+function sanitizeCSVCell(val: string | number): string {
+  if (typeof val === 'number') return String(val);
+  const s = String(val);
+  const escaped = s.replace(/"/g, '""');
+  if (/^[=+\-@\t\r]/.test(escaped)) return `"'${escaped}"`;
+  if (escaped.includes(',') || escaped.includes('"') || escaped.includes('\n')) return `"${escaped}"`;
+  return escaped;
+}
+
+function generateCSV(monthlyData: any): string {
+  const headers = [
+    'Month',
+    ...INTAKE_TYPES.map(t => `Intake: ${intakeTypeLabels[t] || t}`),
+    'Total Intakes',
+    ...OUTCOME_TYPES.map(t => `Outcome: ${outcomeStatusLabels[t] || t}`),
+    'Total Outcomes',
+    'Live Release Rate (%)',
+  ];
+
+  const rows = [headers.map(h => sanitizeCSVCell(h)).join(',')];
+
+  for (const m of monthlyData.months) {
+    const row = [
+      sanitizeCSVCell(m.label),
+      ...INTAKE_TYPES.map(t => m.intake.byType[t] || 0),
+      m.intake.total,
+      ...OUTCOME_TYPES.map(t => m.outcomes.byStatus[t] || 0),
+      m.outcomes.total,
+      m.liveReleaseRate,
+    ];
+    rows.push(row.join(','));
+  }
+
+  const totals = monthlyData.totals;
+  rows.push([
+    sanitizeCSVCell('TOTALS'),
+    ...INTAKE_TYPES.map(t => totals.intake.byType[t] || 0),
+    totals.intake.total,
+    ...OUTCOME_TYPES.map(t => totals.outcomes.byStatus[t] || 0),
+    totals.outcomes.total,
+    totals.liveReleaseRate,
+  ].join(','));
+
+  const speciesEntries = Object.entries(totals.intake.bySpecies || {}).map(([s, c]) => `${s}: ${c}`).join('; ');
+  if (speciesEntries) {
+    rows.push('');
+    rows.push(`${sanitizeCSVCell('Species Breakdown')},${sanitizeCSVCell(speciesEntries)}`);
+  }
+
+  return rows.join('\n');
+}
+
+function downloadCSV(csv: string, filename: string) {
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(link.href);
+}
+
 function DataMatrixTab({
   startDate,
   endDate,
   onStartDateChange,
   onEndDateChange,
-  matrixData,
-  isLoading,
-  onGenerate,
+  summaryData,
+  isSummaryLoading,
+  onGenerateSummary,
 }: {
   startDate: string;
   endDate: string;
   onStartDateChange: (v: string) => void;
   onEndDateChange: (v: string) => void;
-  matrixData: any;
-  isLoading: boolean;
-  onGenerate: () => void;
+  summaryData: any;
+  isSummaryLoading: boolean;
+  onGenerateSummary: () => void;
 }) {
+  const [viewMode, setViewMode] = useState<"summary" | "monthly">("summary");
+  const { toast } = useToast();
+
+  const { data: monthlyData, isLoading: monthlyLoading, refetch: refetchMonthly } = useQuery<any>({
+    queryKey: ['/api/grants/data-matrix-monthly', startDate, endDate],
+    queryFn: async () => {
+      const res = await fetch(`/api/grants/data-matrix-monthly?startDate=${startDate}&endDate=${endDate}`);
+      if (!res.ok) throw new Error('Failed to generate monthly data');
+      return res.json();
+    },
+    enabled: false,
+  });
+
+  const handleGenerate = () => {
+    if (viewMode === "monthly") {
+      refetchMonthly();
+    } else {
+      onGenerateSummary();
+    }
+  };
+
+  const handleExportCSV = () => {
+    if (viewMode === "monthly" && monthlyData) {
+      const csv = generateCSV(monthlyData);
+      downloadCSV(csv, `SAC_Report_${startDate}_to_${endDate}.csv`);
+      toast({ title: "CSV exported", description: "SAC report downloaded successfully." });
+    } else if (viewMode === "summary" && summaryData) {
+      const wrapped = {
+        months: [{
+          label: `${startDate} to ${endDate}`,
+          intake: summaryData.intake,
+          outcomes: summaryData.outcomes,
+          liveReleaseRate: summaryData.liveReleaseRate,
+        }],
+        totals: summaryData,
+      };
+      const csv = generateCSV(wrapped);
+      downloadCSV(csv, `SAC_Summary_${startDate}_to_${endDate}.csv`);
+      toast({ title: "CSV exported", description: "Summary report downloaded successfully." });
+    }
+  };
+
+  const isLoading = viewMode === "monthly" ? monthlyLoading : isSummaryLoading;
+  const matrixData = viewMode === "summary" ? summaryData : (monthlyData?.totals || null);
+  const hasData = viewMode === "summary" ? !!summaryData : !!monthlyData;
+
   return (
     <div className="space-y-6">
       <Card data-testid="card-data-matrix-controls">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <BarChart3 className="h-5 w-5" />
-            Shelter Animals Count - Grant Data Matrix
+            Shelter Animals Count (SAC) Report
           </CardTitle>
-          <CardDescription>Generate aggregated intake/outcome statistics for grant reporting periods</CardDescription>
+          <CardDescription>Generate aggregated intake/outcome statistics for grant reporting periods. Switch to Monthly Breakdown for month-by-month data.</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           <div className="flex flex-wrap items-end gap-4">
             <div className="space-y-1.5">
               <Label>Start Date</Label>
@@ -1910,10 +2022,36 @@ function DataMatrixTab({
               <Label>End Date</Label>
               <Input type="date" value={endDate} onChange={e => onEndDateChange(e.target.value)} className="w-44" data-testid="input-matrix-end" />
             </div>
-            <Button onClick={onGenerate} disabled={isLoading} data-testid="button-generate-matrix">
+            <div className="space-y-1.5">
+              <Label>View</Label>
+              <Select value={viewMode} onValueChange={(v) => setViewMode(v as "summary" | "monthly")}>
+                <SelectTrigger className="w-48" data-testid="select-matrix-view">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="summary">Summary</SelectItem>
+                  <SelectItem value="monthly">Monthly Breakdown</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={handleGenerate} disabled={isLoading} data-testid="button-generate-matrix">
               {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <BarChart3 className="h-4 w-4 mr-2" />}
-              Generate Grant Data Matrix
+              Generate Report
             </Button>
+            {hasData && (
+              <Button variant="outline" onClick={handleExportCSV} data-testid="button-export-csv">
+                <Download className="h-4 w-4 mr-2" />
+                Export CSV
+              </Button>
+            )}
+            {hasData && (
+              <Button variant="outline" onClick={() => window.print()} data-testid="button-print-report">
+                <FileText className="h-4 w-4 mr-2" />
+                Print
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -1950,92 +2088,164 @@ function DataMatrixTab({
               </CardContent>
             </Card>
           </div>
-
-          <div className="grid gap-6 md:grid-cols-2">
-            <Card data-testid="card-intake-breakdown">
-              <CardHeader>
-                <CardTitle>Intake Breakdown</CardTitle>
-                <CardDescription>Animals received by intake type</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Intake Type</TableHead>
-                      <TableHead className="text-right">Count</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {Object.entries(matrixData.intake.byType).length > 0 ? (
-                      Object.entries(matrixData.intake.byType)
-                        .sort(([, a], [, b]) => (b as number) - (a as number))
-                        .map(([type, count]) => (
-                          <TableRow key={type} data-testid={`row-intake-${type}`}>
-                            <TableCell>{intakeTypeLabels[type] || type}</TableCell>
-                            <TableCell className="text-right font-medium">{count as number}</TableCell>
-                          </TableRow>
-                        ))
-                    ) : (
-                      <TableRow><TableCell colSpan={2} className="text-center text-muted-foreground">No intake data for this period</TableCell></TableRow>
-                    )}
-                    <TableRow className="font-bold border-t-2">
-                      <TableCell>Total</TableCell>
-                      <TableCell className="text-right">{matrixData.intake.total}</TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
-
-                {Object.keys(matrixData.intake.bySpecies || {}).length > 0 && (
-                  <div className="mt-4 pt-4 border-t">
-                    <p className="text-sm font-medium text-muted-foreground mb-2">By Species</p>
-                    <div className="flex flex-wrap gap-2">
-                      {Object.entries(matrixData.intake.bySpecies).map(([species, count]) => (
-                        <Badge key={species} variant="outline" data-testid={`badge-species-${species}`}>
-                          {species}: {count as number}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card data-testid="card-outcome-breakdown">
-              <CardHeader>
-                <CardTitle>Outcome Breakdown</CardTitle>
-                <CardDescription>Animals dispositioned by outcome type</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Outcome Type</TableHead>
-                      <TableHead className="text-right">Count</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {Object.entries(matrixData.outcomes.byStatus).length > 0 ? (
-                      Object.entries(matrixData.outcomes.byStatus)
-                        .sort(([, a], [, b]) => (b as number) - (a as number))
-                        .map(([status, count]) => (
-                          <TableRow key={status} data-testid={`row-outcome-${status}`}>
-                            <TableCell>{outcomeStatusLabels[status] || status}</TableCell>
-                            <TableCell className="text-right font-medium">{count as number}</TableCell>
-                          </TableRow>
-                        ))
-                    ) : (
-                      <TableRow><TableCell colSpan={2} className="text-center text-muted-foreground">No outcome data for this period</TableCell></TableRow>
-                    )}
-                    <TableRow className="font-bold border-t-2">
-                      <TableCell>Total</TableCell>
-                      <TableCell className="text-right">{matrixData.outcomes.total}</TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </div>
         </>
+      )}
+
+      {viewMode === "monthly" && monthlyData && (
+        <Card data-testid="card-monthly-grid">
+          <CardHeader>
+            <CardTitle>Monthly Intake / Outcome Grid</CardTitle>
+            <CardDescription>Month-by-month SAC data for the selected date range</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="sticky left-0 bg-background z-10 min-w-[140px]">Month</TableHead>
+                    {INTAKE_TYPES.map(t => (
+                      <TableHead key={`ih-${t}`} className="text-right text-xs min-w-[80px]">{intakeTypeLabels[t]}</TableHead>
+                    ))}
+                    <TableHead className="text-right font-bold min-w-[80px]">Total In</TableHead>
+                    {OUTCOME_TYPES.map(t => (
+                      <TableHead key={`oh-${t}`} className="text-right text-xs min-w-[80px]">{outcomeStatusLabels[t]}</TableHead>
+                    ))}
+                    <TableHead className="text-right font-bold min-w-[80px]">Total Out</TableHead>
+                    <TableHead className="text-right font-bold min-w-[80px]">LRR %</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {monthlyData.months.map((m: any) => (
+                    <TableRow key={m.month} data-testid={`row-month-${m.month}`}>
+                      <TableCell className="sticky left-0 bg-background z-10 font-medium">{m.label}</TableCell>
+                      {INTAKE_TYPES.map(t => (
+                        <TableCell key={`i-${t}`} className="text-right">{m.intake.byType[t] || 0}</TableCell>
+                      ))}
+                      <TableCell className="text-right font-bold">{m.intake.total}</TableCell>
+                      {OUTCOME_TYPES.map(t => (
+                        <TableCell key={`o-${t}`} className="text-right">{m.outcomes.byStatus[t] || 0}</TableCell>
+                      ))}
+                      <TableCell className="text-right font-bold">{m.outcomes.total}</TableCell>
+                      <TableCell className="text-right font-bold">{m.liveReleaseRate}%</TableCell>
+                    </TableRow>
+                  ))}
+                  <TableRow className="border-t-2 font-bold" data-testid="row-month-totals">
+                    <TableCell className="sticky left-0 bg-background z-10">TOTALS</TableCell>
+                    {INTAKE_TYPES.map(t => (
+                      <TableCell key={`ti-${t}`} className="text-right">{monthlyData.totals.intake.byType[t] || 0}</TableCell>
+                    ))}
+                    <TableCell className="text-right">{monthlyData.totals.intake.total}</TableCell>
+                    {OUTCOME_TYPES.map(t => (
+                      <TableCell key={`to-${t}`} className="text-right">{monthlyData.totals.outcomes.byStatus[t] || 0}</TableCell>
+                    ))}
+                    <TableCell className="text-right">{monthlyData.totals.outcomes.total}</TableCell>
+                    <TableCell className="text-right">{monthlyData.totals.liveReleaseRate}%</TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </div>
+
+            {Object.keys(monthlyData.totals.intake.bySpecies || {}).length > 0 && (
+              <div className="mt-4 pt-4 border-t">
+                <p className="text-sm font-medium text-muted-foreground mb-2">Species Breakdown (Total Period)</p>
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(monthlyData.totals.intake.bySpecies).map(([species, count]) => (
+                    <Badge key={species} variant="outline" data-testid={`badge-species-${species}`}>
+                      {species}: {count as number}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {viewMode === "summary" && summaryData && (
+        <div className="grid gap-6 md:grid-cols-2">
+          <Card data-testid="card-intake-breakdown">
+            <CardHeader>
+              <CardTitle>Intake Breakdown</CardTitle>
+              <CardDescription>Animals received by intake type</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Intake Type</TableHead>
+                    <TableHead className="text-right">Count</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {Object.entries(summaryData.intake.byType).length > 0 ? (
+                    Object.entries(summaryData.intake.byType)
+                      .sort(([, a], [, b]) => (b as number) - (a as number))
+                      .map(([type, count]) => (
+                        <TableRow key={type} data-testid={`row-intake-${type}`}>
+                          <TableCell>{intakeTypeLabels[type] || type}</TableCell>
+                          <TableCell className="text-right font-medium">{count as number}</TableCell>
+                        </TableRow>
+                      ))
+                  ) : (
+                    <TableRow><TableCell colSpan={2} className="text-center text-muted-foreground">No intake data for this period</TableCell></TableRow>
+                  )}
+                  <TableRow className="font-bold border-t-2">
+                    <TableCell>Total</TableCell>
+                    <TableCell className="text-right">{summaryData.intake.total}</TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+
+              {Object.keys(summaryData.intake.bySpecies || {}).length > 0 && (
+                <div className="mt-4 pt-4 border-t">
+                  <p className="text-sm font-medium text-muted-foreground mb-2">By Species</p>
+                  <div className="flex flex-wrap gap-2">
+                    {Object.entries(summaryData.intake.bySpecies).map(([species, count]) => (
+                      <Badge key={species} variant="outline" data-testid={`badge-species-${species}`}>
+                        {species}: {count as number}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card data-testid="card-outcome-breakdown">
+            <CardHeader>
+              <CardTitle>Outcome Breakdown</CardTitle>
+              <CardDescription>Animals dispositioned by outcome type</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Outcome Type</TableHead>
+                    <TableHead className="text-right">Count</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {Object.entries(summaryData.outcomes.byStatus).length > 0 ? (
+                    Object.entries(summaryData.outcomes.byStatus)
+                      .sort(([, a], [, b]) => (b as number) - (a as number))
+                      .map(([status, count]) => (
+                        <TableRow key={status} data-testid={`row-outcome-${status}`}>
+                          <TableCell>{outcomeStatusLabels[status] || status}</TableCell>
+                          <TableCell className="text-right font-medium">{count as number}</TableCell>
+                        </TableRow>
+                      ))
+                  ) : (
+                    <TableRow><TableCell colSpan={2} className="text-center text-muted-foreground">No outcome data for this period</TableCell></TableRow>
+                  )}
+                  <TableRow className="font-bold border-t-2">
+                    <TableCell>Total</TableCell>
+                    <TableCell className="text-right">{summaryData.outcomes.total}</TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </div>
       )}
     </div>
   );
