@@ -810,9 +810,8 @@ export class EmailService {
       let replyTo = options.replyTo;
       
       if (this.usePlatformKey) {
-        // Using platform key - MUST use verified domain sender
-        from = `Adoption Alerts <notifications@irescue.life>`;
-        // Set reply_to to tenant's email if available and not already set
+        const senderName = this.fromName || 'Adoption Alerts';
+        from = `${senderName} <notifications@irescue.life>`;
         if (!replyTo && this.tenantReplyToEmail) {
           replyTo = this.tenantReplyToEmail;
         }
