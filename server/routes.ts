@@ -25915,12 +25915,62 @@ Submitted: ${new Date().toLocaleString()}
           if (session.metadata?.fundraiser_event_id) {
             console.log('[STRIPE-WEBHOOK] Fundraiser order payment received:', session.metadata.fundraiser_order_id);
             try {
-              const { fundraiserOrders } = await import('@shared/schema');
-              const result = await db
+              const { fundraiserOrders, fundraiserEvents } = await import('@shared/schema');
+              const [updated] = await db
                 .update(fundraiserOrders)
                 .set({ paymentStatus: 'paid' })
-                .where(eq(fundraiserOrders.stripeSessionId, session.id));
-              console.log('[STRIPE-WEBHOOK] Fundraiser order marked paid for session:', session.id);
+                .where(and(
+                  eq(fundraiserOrders.stripeSessionId, session.id),
+                  eq(fundraiserOrders.paymentStatus, 'pending')
+                ))
+                .returning();
+
+              if (!updated) {
+                console.log('[STRIPE-WEBHOOK] Fundraiser order already processed or not found for session:', session.id);
+                break;
+              }
+
+              console.log('[STRIPE-WEBHOOK] Fundraiser order marked paid:', updated.id, 'qty:', updated.quantity);
+
+              // Send confirmation email to buyer
+              try {
+                const [event] = await db.select({ title: fundraiserEvents.title })
+                  .from(fundraiserEvents)
+                  .where(eq(fundraiserEvents.id, updated.eventId))
+                  .limit(1);
+
+                const { EmailService } = await import('./lib/email-service');
+                const emailService = await EmailService.forTenant(tenantId);
+                if (emailService && updated.customerEmail) {
+                  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                  const amountPaid = session.amount_total ? (session.amount_total / 100).toFixed(2) : 'N/A';
+                  const safeName = esc(updated.customerName || 'Valued Customer');
+                  const safeTitle = esc(event?.title || 'Fundraiser Event');
+                  const safeTenant = esc(tenant.name);
+                  const safePickup = updated.pickupTime ? esc(updated.pickupTime) : '';
+                  await emailService.send({
+                    to: updated.customerEmail,
+                    subject: `Order Confirmation - ${safeTitle} (${updated.quantity} ticket${updated.quantity > 1 ? 's' : ''})`,
+                    html: `
+                      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                        <h2 style="color: #1a1a1a;">Thank you for your purchase, ${safeName}!</h2>
+                        <p>Your order has been confirmed.</p>
+                        <div style="background: #f9fafb; border-radius: 8px; padding: 16px; margin: 16px 0;">
+                          <p style="margin: 4px 0;"><strong>Event:</strong> ${safeTitle}</p>
+                          <p style="margin: 4px 0;"><strong>Quantity:</strong> ${updated.quantity}</p>
+                          <p style="margin: 4px 0;"><strong>Amount Paid:</strong> $${amountPaid}</p>
+                          ${safePickup ? `<p style="margin: 4px 0;"><strong>Pickup Time:</strong> ${safePickup}</p>` : ''}
+                        </div>
+                        <p style="color: #6b7280; font-size: 14px;">If you have any questions, please contact us directly.</p>
+                        <p style="color: #6b7280; font-size: 14px;">— ${safeTenant}</p>
+                      </div>
+                    `,
+                  });
+                  console.log('[STRIPE-WEBHOOK] Sent fundraiser order confirmation email to:', updated.customerEmail);
+                }
+              } catch (emailErr) {
+                console.error('[STRIPE-WEBHOOK] Failed to send fundraiser order confirmation email:', emailErr);
+              }
             } catch (err) {
               console.error('[STRIPE-WEBHOOK] Failed to mark fundraiser order paid:', err);
             }
@@ -43423,6 +43473,66 @@ Use timestamps like [00:00] to help with pacing.`;
     } catch (error) {
       next(error);
     }
+  });
+
+  /**
+   * POST /api/fundraiser-orders/verify-payment
+   * Public: Verify and reconcile a fundraiser order payment when webhook may have been missed
+   */
+  app.post('/api/fundraiser-orders/verify-payment', requireTenant, async (req, res, next) => {
+    try {
+      const { fundraiserOrders, fundraiserEvents } = await import('@shared/schema');
+      const { eventId, customerEmail } = req.body;
+      if (!eventId || !customerEmail) return res.status(400).json({ error: 'eventId and customerEmail required' });
+
+      const tenantId = req.tenant!.id;
+      const [event] = await db.select({ id: fundraiserEvents.id })
+        .from(fundraiserEvents)
+        .where(and(eq(fundraiserEvents.id, eventId), eq(fundraiserEvents.tenantId, tenantId)))
+        .limit(1);
+      if (!event) return res.status(404).json({ error: 'Event not found' });
+
+      const pendingOrders = await db
+        .select()
+        .from(fundraiserOrders)
+        .where(and(
+          eq(fundraiserOrders.eventId, eventId),
+          eq(fundraiserOrders.customerEmail, customerEmail),
+          eq(fundraiserOrders.paymentStatus, 'pending')
+        ))
+        .orderBy(desc(fundraiserOrders.createdAt))
+        .limit(3);
+
+      if (pendingOrders.length === 0) {
+        return res.json({ verified: 0, message: 'No pending orders found (may already be processed)' });
+      }
+
+      const { getPlatformStripeSecretKey } = await import('./config/platform');
+      const platformKey = getPlatformStripeSecretKey();
+      if (!platformKey) return res.json({ verified: 0, message: 'Stripe not configured' });
+
+      const Stripe = (await import('stripe')).default;
+      const stripeClient = new Stripe(platformKey, { apiVersion: '2025-09-30.clover' as any, typescript: true });
+
+      let verified = 0;
+      for (const order of pendingOrders) {
+        if (!order.stripeSessionId) continue;
+        try {
+          const session = await stripeClient.checkout.sessions.retrieve(order.stripeSessionId);
+          if (session.payment_status === 'paid') {
+            await db.update(fundraiserOrders)
+              .set({ paymentStatus: 'paid' })
+              .where(eq(fundraiserOrders.id, order.id));
+            verified++;
+            console.log(`[FUNDRAISER-VERIFY] Reconciled pending order ${order.id} → paid`);
+          }
+        } catch (stripeErr) {
+          console.error(`[FUNDRAISER-VERIFY] Failed to check session ${order.stripeSessionId}:`, stripeErr);
+        }
+      }
+
+      res.json({ verified, message: verified > 0 ? `${verified} order(s) verified and updated` : 'No payments to reconcile' });
+    } catch (error) { next(error); }
   });
 
   // ============================================================================

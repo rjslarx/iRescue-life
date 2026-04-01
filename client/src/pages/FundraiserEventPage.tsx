@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRoute, useLocation, Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useTenant } from "@/contexts/TenantContext";
@@ -49,6 +49,21 @@ export default function FundraiserEventPage() {
   const [quantity, setQuantity] = useState(1);
   const [pickupTime, setPickupTime] = useState("");
   const [soldOutError, setSoldOutError] = useState(false);
+  const verifyAttempted = useRef(false);
+
+  useEffect(() => {
+    if (status === "success" && eventId && tenantId && !verifyAttempted.current) {
+      verifyAttempted.current = true;
+      const savedEmail = sessionStorage.getItem(`fundraiser_email_${eventId}`);
+      if (savedEmail) {
+        fetch("/api/fundraiser-orders/verify-payment", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-tenant-id": tenantId },
+          body: JSON.stringify({ eventId, customerEmail: savedEmail }),
+        }).catch(() => {});
+      }
+    }
+  }, [status, eventId, tenantId]);
 
   const { data, isLoading, error } = useQuery<{ event: FundraiserEventPublic }>({
     queryKey: ["/api/fundraiser-events", eventId, "public"],
@@ -74,7 +89,10 @@ export default function FundraiserEventPage() {
       return await res.json();
     },
     onSuccess: (data: any) => {
-      if (data.url) window.location.href = data.url;
+      if (data.url) {
+        sessionStorage.setItem(`fundraiser_email_${eventId}`, customerEmail);
+        window.location.href = data.url;
+      }
     },
     onError: (err: any) => {
       if (err.status === 409 || err.message?.includes("sold_out")) {

@@ -429,7 +429,8 @@ export class EmailService {
       }
 
       const fromEmail = tenant.resendFromEmail || 'noreply@irescue.life';
-      const fromName = tenant.resendFromName || tenant.name;
+      const tenantDisplayName = tenant.resendFromName || tenant.name;
+      const fromName = tenant.resendFromEmail ? tenantDisplayName : `${tenantDisplayName} via iRescue`;
       console.log(`[EmailService] ⚠️ Falling back to platform Resend API key with sender: ${fromName} <${fromEmail}>`);
       const service = new EmailService(platformApiKey, fromEmail, fromName, tenantId, true);
       // CRITICAL: Set reply-to for DMARC compliance when using platform key
