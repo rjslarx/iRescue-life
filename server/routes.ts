@@ -25554,13 +25554,96 @@ Submitted: ${new Date().toLocaleString()}
         eventBreakdown: Array.from(eventBreakdownMap.values()),
       };
 
+      const { fundraiserOrders, fundraiserEvents } = await import('@shared/schema');
+      const fundraiserPaidOrders = await db
+        .select({
+          orderId: fundraiserOrders.id,
+          customerName: fundraiserOrders.customerName,
+          customerEmail: fundraiserOrders.customerEmail,
+          quantity: fundraiserOrders.quantity,
+          stripeSessionId: fundraiserOrders.stripeSessionId,
+          createdAt: fundraiserOrders.createdAt,
+          eventTitle: fundraiserEvents.title,
+          eventId: fundraiserEvents.id,
+          priceCents: fundraiserEvents.priceCents,
+          passFeesToBuyer: fundraiserEvents.passFeesToBuyer,
+        })
+        .from(fundraiserOrders)
+        .innerJoin(fundraiserEvents, eq(fundraiserOrders.eventId, fundraiserEvents.id))
+        .where(and(
+          eq(fundraiserEvents.tenantId, req.tenant!.id),
+          eq(fundraiserOrders.paymentStatus, 'paid')
+        ))
+        .orderBy(desc(fundraiserOrders.createdAt));
+
+      for (const fo of fundraiserPaidOrders) {
+        const created = new Date(fo.createdAt!);
+        if (dateFrom && created < dateFrom) continue;
+        if (dateTo) {
+          const endOfDay = new Date(dateTo);
+          endOfDay.setHours(23, 59, 59, 999);
+          if (created > endOfDay) continue;
+        }
+        if (eventFilter && fo.eventTitle.toLowerCase() !== eventFilter.toLowerCase()) continue;
+
+        const amount = fo.priceCents * fo.quantity;
+        const sale = {
+          id: fo.orderId,
+          eventName: fo.eventTitle,
+          eventTicketId: null,
+          customerName: fo.customerName,
+          customerEmail: fo.customerEmail,
+          quantity: fo.quantity,
+          amount,
+          baseAmount: amount,
+          donorCoveredFees: !!fo.passFeesToBuyer,
+          currency: 'usd',
+          created: created.toISOString(),
+        };
+
+        sales.push(sale);
+
+        totalRevenue += sale.amount;
+        totalTickets += sale.quantity;
+        const existing = eventBreakdownMap.get(sale.eventName);
+        if (existing) {
+          existing.totalRevenue += sale.amount;
+          existing.totalTickets += sale.quantity;
+          existing.purchaseCount += 1;
+        } else {
+          eventBreakdownMap.set(sale.eventName, {
+            eventName: sale.eventName,
+            totalRevenue: sale.amount,
+            totalTickets: sale.quantity,
+            purchaseCount: 1,
+          });
+        }
+      }
+
+      summary.totalRevenue = totalRevenue;
+      summary.totalTickets = totalTickets;
+      summary.eventBreakdown = Array.from(eventBreakdownMap.values());
+
+      sales.sort((a, b) => new Date(b.created).getTime() - new Date(a.created).getTime());
+
       const allEvents = await db
         .select({ id: eventTicketsTable.id, eventName: eventTicketsTable.eventName, isActive: eventTicketsTable.isActive })
         .from(eventTicketsTable)
         .where(eq(eventTicketsTable.tenantId, req.tenant!.id))
         .orderBy(eventTicketsTable.eventName);
 
-      res.json({ configured: true, sales, summary, events: allEvents });
+      const fundraiserEventsList = await db
+        .select({ id: fundraiserEvents.id, title: fundraiserEvents.title, isActive: fundraiserEvents.isActive })
+        .from(fundraiserEvents)
+        .where(eq(fundraiserEvents.tenantId, req.tenant!.id))
+        .orderBy(fundraiserEvents.title);
+
+      const allEventsWithFundraisers = [
+        ...allEvents,
+        ...fundraiserEventsList.map(fe => ({ id: fe.id, eventName: fe.title, isActive: fe.isActive })),
+      ];
+
+      res.json({ configured: true, sales, summary, events: allEventsWithFundraisers });
     } catch (error) {
       next(error);
     }
