@@ -174,8 +174,8 @@ export function UserPagePermissionsManager({ userId, userRoles }: UserPagePermis
               Add Page Access
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-64 p-1" align="start" side="top" avoidCollisions>
-            <div className="space-y-0.5 max-h-64 overflow-y-auto overscroll-contain touch-pan-y">
+          <PopoverContent className="w-64 p-1 z-[100]" align="start" side="top" avoidCollisions sideOffset={5}>
+            <div className="space-y-0.5 max-h-[40vh] overflow-y-auto overscroll-contain touch-pan-y -webkit-overflow-scrolling-touch">
               {availablePages.map((page) => (
                 <Button
                   key={page.pageId}
