@@ -43323,12 +43323,12 @@ Use timestamps like [00:00] to help with pacing.`;
         return res.status(400).json({ error: 'Stripe not configured for this organization' });
       }
 
-      // Build base URL for success/cancel
-      const baseUrl = process.env.PLATFORM_URL || `https://${req.hostname}`;
-      const tenantSubdomain = req.tenant!.subdomain;
-      const tenantBase = `${baseUrl}/${tenantSubdomain}`;
-      const successUrl = `${tenantBase}/donate/event/${id}?status=success`;
-      const cancelUrl = `${tenantBase}/donate/event/${id}?status=cancelled`;
+      const host = req.get('host') || '';
+      const baseUrl = `${req.protocol}://${host}`;
+      const hasCustomDomain = req.tenant!.customDomain && host.includes(req.tenant!.customDomain);
+      const tenantPath = hasCustomDomain ? '' : (req.tenant!.subdomain ? `/${req.tenant!.subdomain}` : '');
+      const successUrl = `${baseUrl}${tenantPath}/donate/event/${id}?status=success`;
+      const cancelUrl = `${baseUrl}${tenantPath}/donate/event/${id}?status=cancelled`;
 
       // Calculate unit amount: if passFeesToBuyer, gross up per-item price to cover Stripe + platform fees
       let unitAmountCents = event.priceCents;
