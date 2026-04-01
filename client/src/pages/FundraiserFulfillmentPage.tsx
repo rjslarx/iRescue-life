@@ -46,13 +46,19 @@ export default function FundraiserFulfillmentPage() {
 
   const { data: ordersData, isLoading: ordersLoading } = useQuery<{ orders: FundraiserOrder[] }>({
     queryKey: ["/api/fundraiser-orders", eventId],
-    queryFn: () => apiRequest("GET", `/api/fundraiser-orders?eventId=${eventId}`),
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/fundraiser-orders?eventId=${eventId}`);
+      return await res.json();
+    },
     enabled: !!eventId,
     refetchInterval: 30000,
   });
 
   const pickupMutation = useMutation({
-    mutationFn: (orderId: string) => apiRequest("PATCH", `/api/fundraiser-orders/${orderId}/pickup`),
+    mutationFn: async (orderId: string) => {
+      const res = await apiRequest("PATCH", `/api/fundraiser-orders/${orderId}/pickup`);
+      return await res.json();
+    },
     onMutate: async (orderId) => {
       const current = ordersData?.orders.find((o) => o.id === orderId);
       setOptimisticPickups((prev) => ({ ...prev, [orderId]: !(current?.pickedUp ?? false) }));
