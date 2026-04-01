@@ -43194,7 +43194,7 @@ Use timestamps like [00:00] to help with pacing.`;
    * POST /api/fundraiser-events/images/upload
    * Admin: upload a hero image for a fundraiser event
    */
-  app.post('/api/fundraiser-events/images/upload', requireTenant, requireAuth, requireRole('admin', 'owner'), async (req, res, next) => {
+  app.post('/api/fundraiser-events/images/upload', requireTenant, requireAuth, requireRoleOrPageAccess('fundraiser-events', 'admin', 'owner'), async (req, res, next) => {
     try {
       const multer = (await import('multer')).default;
       const { TenantFileStorage } = await import('./lib/tenantFileStorage');
@@ -43275,7 +43275,7 @@ Use timestamps like [00:00] to help with pacing.`;
    * GET /api/fundraiser-events
    * Staff: list all fundraiser events for this tenant with sold count
    */
-  app.get('/api/fundraiser-events', requireTenant, requireAuth, requireRole('admin', 'owner', 'board_member', 'staff'), async (req, res, next) => {
+  app.get('/api/fundraiser-events', requireTenant, requireAuth, requireRoleOrPageAccess('fundraiser-events', 'admin', 'owner', 'board_member', 'staff'), async (req, res, next) => {
     try {
       const { fundraiserEvents, fundraiserOrders } = await import('@shared/schema');
       const events = await db
@@ -43317,7 +43317,7 @@ Use timestamps like [00:00] to help with pacing.`;
    * POST /api/fundraiser-events
    * Admin/owner: create a new fundraiser event
    */
-  app.post('/api/fundraiser-events', requireTenant, requireAuth, requireRole('admin', 'owner'), async (req, res, next) => {
+  app.post('/api/fundraiser-events', requireTenant, requireAuth, requireRoleOrPageAccess('fundraiser-events', 'admin', 'owner'), async (req, res, next) => {
     try {
       const { fundraiserEvents, insertFundraiserEventSchema } = await import('@shared/schema');
       const data = insertFundraiserEventSchema.parse({ ...req.body, tenantId: req.tenant!.id });
@@ -43332,7 +43332,7 @@ Use timestamps like [00:00] to help with pacing.`;
    * PATCH /api/fundraiser-events/:id
    * Admin/owner: update a fundraiser event
    */
-  app.patch('/api/fundraiser-events/:id', requireTenant, requireAuth, requireRole('admin', 'owner'), async (req, res, next) => {
+  app.patch('/api/fundraiser-events/:id', requireTenant, requireAuth, requireRoleOrPageAccess('fundraiser-events', 'admin', 'owner'), async (req, res, next) => {
     try {
       const { fundraiserEvents } = await import('@shared/schema');
       const { id } = req.params;
@@ -43360,7 +43360,7 @@ Use timestamps like [00:00] to help with pacing.`;
    * DELETE /api/fundraiser-events/:id
    * Admin/owner: soft-delete (set isActive = false)
    */
-  app.delete('/api/fundraiser-events/:id', requireTenant, requireAuth, requireRole('admin', 'owner'), async (req, res, next) => {
+  app.delete('/api/fundraiser-events/:id', requireTenant, requireAuth, requireRoleOrPageAccess('fundraiser-events', 'admin', 'owner'), async (req, res, next) => {
     try {
       const { fundraiserEvents } = await import('@shared/schema');
       const { id } = req.params;
@@ -43525,7 +43525,7 @@ Use timestamps like [00:00] to help with pacing.`;
    * GET /api/fundraiser-orders?eventId=X
    * Staff: list paid orders for a fundraiser event
    */
-  app.get('/api/fundraiser-orders', requireTenant, requireAuth, requireRole('admin', 'owner', 'board_member', 'staff'), async (req, res, next) => {
+  app.get('/api/fundraiser-orders', requireTenant, requireAuth, requireRoleOrPageAccess('fundraiser-events', 'admin', 'owner', 'board_member', 'staff'), async (req, res, next) => {
     try {
       const { fundraiserOrders } = await import('@shared/schema');
       const { eventId } = req.query as { eventId?: string };
@@ -43545,7 +43545,7 @@ Use timestamps like [00:00] to help with pacing.`;
    * PATCH /api/fundraiser-orders/:id/pickup
    * Staff: toggle picked-up status for an order
    */
-  app.patch('/api/fundraiser-orders/:id/pickup', requireTenant, requireAuth, requireRole('admin', 'owner', 'board_member', 'staff'), async (req, res, next) => {
+  app.patch('/api/fundraiser-orders/:id/pickup', requireTenant, requireAuth, requireRoleOrPageAccess('fundraiser-events', 'admin', 'owner', 'board_member', 'staff'), async (req, res, next) => {
     try {
       const { fundraiserOrders } = await import('@shared/schema');
       const { id } = req.params;

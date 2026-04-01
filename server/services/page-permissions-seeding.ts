@@ -176,6 +176,12 @@ export async function seedDefaultPagePermissions(tenantId: string) {
       description: 'View and complete daily medical roster tasks',
       allowedRoles: ['admin', 'board_member', 'staff'],
     },
+    {
+      pageId: 'fundraiser-events',
+      displayName: 'Fundraiser Events & Products',
+      description: 'Manage fundraiser events, products, and view ticket/order sales',
+      allowedRoles: ['admin', 'board_member', 'staff'],
+    },
   ];
 
   try {
@@ -233,6 +239,12 @@ const NEW_PAGE_PERMISSIONS = [
     pageId: 'daily-roster',
     displayName: 'Daily Roster',
     description: 'View and complete daily medical roster tasks',
+    allowedRoles: ['admin', 'board_member', 'staff'] as ('admin' | 'board_member' | 'staff' | 'foster' | 'volunteer')[],
+  },
+  {
+    pageId: 'fundraiser-events',
+    displayName: 'Fundraiser Events & Products',
+    description: 'Manage fundraiser events, products, and view ticket/order sales',
     allowedRoles: ['admin', 'board_member', 'staff'] as ('admin' | 'board_member' | 'staff' | 'foster' | 'volunteer')[],
   },
 ];
