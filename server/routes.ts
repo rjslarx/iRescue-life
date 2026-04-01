@@ -29873,6 +29873,18 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
         }
       }
 
+      // Protect volunteer assignments: non-admins cannot change volunteerContactId
+      // on events that already have a different volunteer assigned
+      if (req.user!.activeRole !== 'admin') {
+        if (data.volunteerContactId !== undefined && event.volunteerContactId &&
+            data.volunteerContactId !== event.volunteerContactId) {
+          return res.status(403).json({
+            error: 'Cannot reassign volunteer',
+            message: 'This shift is already assigned to another volunteer. Create a new event to sign up for the same day.'
+          });
+        }
+      }
+
       // Convert datetime strings to Date objects if provided
       const updateData: any = { updatedAt: new Date() };
       if (data.startTime) updateData.startTime = new Date(data.startTime);
@@ -29881,6 +29893,8 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
       if (data.description !== undefined) updateData.description = data.description;
       if (data.location !== undefined) updateData.location = data.location;
       if (data.customPageId !== undefined) updateData.customPageId = data.customPageId;
+      if (data.volunteerContactId !== undefined) updateData.volunteerContactId = data.volunteerContactId;
+      if (data.manualVolunteerName !== undefined) updateData.manualVolunteerName = data.manualVolunteerName;
 
       const [updatedEvent] = await db
         .update(calendarEvents)

@@ -1626,21 +1626,38 @@ export default function CalendarViewPage() {
           <DialogHeader>
             <DialogTitle>Event Details</DialogTitle>
             <DialogDescription>
-              {canEditEvent(editingEvent?.calendarId || '') 
-                ? 'View and edit event information.'
-                : 'View event information (read-only).'}
+              {(() => {
+                if (!editingEvent) return 'View event information.';
+                const cal = calendarsData?.calendars.find(c => c.id === editingEvent.calendarId);
+                const isVolunteerCal = cal?.type === 'volunteer';
+                const isOtherVolunteersEvent = isVolunteerCal && editingEvent.volunteerContactId && editingEvent.volunteerContactId !== currentUser?.id && editingEvent.createdBy !== currentUser?.id;
+                const isAdmin = currentUser?.activeRole === 'admin';
+                if (isOtherVolunteersEvent && !isAdmin) return 'This shift is assigned to another volunteer. You can sign up for the same day.';
+                if (canEditEvent(editingEvent.calendarId || '')) return 'View and edit event information.';
+                return 'View event information (read-only).';
+              })()}
             </DialogDescription>
           </DialogHeader>
-          {editingEvent && (
+          {editingEvent && (() => {
+            const cal = calendarsData?.calendars.find(c => c.id === editingEvent.calendarId);
+            const isVolunteerCal = cal?.type === 'volunteer';
+            const isOtherVolunteersEvent = isVolunteerCal && editingEvent.volunteerContactId && editingEvent.volunteerContactId !== currentUser?.id && editingEvent.createdBy !== currentUser?.id;
+            const isAdmin = currentUser?.activeRole === 'admin';
+            const isLockedForVolunteer = isOtherVolunteersEvent && !isAdmin;
+            const canEdit = canEditEvent(editingEvent.calendarId) && !isLockedForVolunteer;
+            return (
             <div className="space-y-4">
               <div>
-                <div className="flex items-center gap-2 mb-2">
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
                   <div
                     className="w-4 h-4 rounded"
                     style={{ backgroundColor: editingEvent.calendarColor }}
                   />
                   <span className="text-sm text-muted-foreground">{editingEvent.calendarName}</span>
-                  {!canEditEvent(editingEvent.calendarId) && (
+                  {isLockedForVolunteer && (
+                    <Badge variant="secondary" className="text-xs">Assigned to another volunteer</Badge>
+                  )}
+                  {!canEdit && !isLockedForVolunteer && (
                     <Badge variant="secondary" className="text-xs">View Only</Badge>
                   )}
                 </div>
@@ -1653,7 +1670,7 @@ export default function CalendarViewPage() {
                     value={editingEvent.title}
                     onChange={(e) => setEditingEvent({ ...editingEvent, title: e.target.value })}
                     required
-                    disabled={!canEditEvent(editingEvent.calendarId)}
+                    disabled={!canEdit}
                     data-testid="input-edit-event-title"
                   />
                 </div>
@@ -1663,7 +1680,7 @@ export default function CalendarViewPage() {
                     id="edit-event-description"
                     value={editingEvent.description || ""}
                     onChange={(e) => setEditingEvent({ ...editingEvent, description: e.target.value })}
-                    disabled={!canEditEvent(editingEvent.calendarId)}
+                    disabled={!canEdit}
                     data-testid="input-edit-event-description"
                   />
                 </div>
@@ -1676,7 +1693,7 @@ export default function CalendarViewPage() {
                       value={format(parseISO(editingEvent.startTime), "yyyy-MM-dd'T'HH:mm")}
                       onChange={(e) => setEditingEvent({ ...editingEvent, startTime: new Date(e.target.value).toISOString() })}
                       required
-                      disabled={!canEditEvent(editingEvent.calendarId)}
+                      disabled={!canEdit}
                       data-testid="input-edit-event-start"
                     />
                   </div>
@@ -1688,7 +1705,7 @@ export default function CalendarViewPage() {
                       value={format(parseISO(editingEvent.endTime), "yyyy-MM-dd'T'HH:mm")}
                       onChange={(e) => setEditingEvent({ ...editingEvent, endTime: new Date(e.target.value).toISOString() })}
                       required
-                      disabled={!canEditEvent(editingEvent.calendarId)}
+                      disabled={!canEdit}
                       data-testid="input-edit-event-end"
                     />
                   </div>
@@ -1699,7 +1716,7 @@ export default function CalendarViewPage() {
                     id="edit-event-location"
                     value={editingEvent.location || ""}
                     onChange={(e) => setEditingEvent({ ...editingEvent, location: e.target.value })}
-                    disabled={!canEditEvent(editingEvent.calendarId)}
+                    disabled={!canEdit}
                     data-testid="input-edit-event-location"
                   />
                 </div>
@@ -1733,7 +1750,7 @@ export default function CalendarViewPage() {
                   <Select
                     value={editingEvent.customPageId || "none"}
                     onValueChange={(value) => setEditingEvent({ ...editingEvent, customPageId: value === "none" ? null : value })}
-                    disabled={!canEditEvent(editingEvent.calendarId)}
+                    disabled={!canEdit}
                   >
                     <SelectTrigger data-testid="select-edit-event-page">
                       <SelectValue placeholder="Select a page (optional)" />
@@ -1748,8 +1765,8 @@ export default function CalendarViewPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="flex gap-2">
-                  {canDeleteEvent(editingEvent.calendarId) && (
+                <div className="flex gap-2 flex-wrap">
+                  {canDeleteEvent(editingEvent.calendarId) && !isLockedForVolunteer && (
                     <Button
                       type="button"
                       variant="outline"
@@ -1761,7 +1778,21 @@ export default function CalendarViewPage() {
                       Delete
                     </Button>
                   )}
-                  {canEditEvent(editingEvent.calendarId) ? (
+                  {isLockedForVolunteer && (
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        setEditingEvent(null);
+                        const eventDate = parseISO(editingEvent.startTime);
+                        openCreateDialog(eventDate);
+                      }}
+                      className="flex-1"
+                      data-testid="button-signup-same-day"
+                    >
+                      Sign Up for This Day
+                    </Button>
+                  )}
+                  {canEdit ? (
                     <Button
                       type="submit"
                       disabled={updateEventMutation.isPending}
@@ -1784,7 +1815,8 @@ export default function CalendarViewPage() {
                 </div>
               </form>
             </div>
-          )}
+            );
+          })()}
         </DialogContent>
       </Dialog>
 
