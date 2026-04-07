@@ -542,18 +542,70 @@ ogImageRouter.get('/api/og-image', async (req, res) => {
 
     try {
       const sharp = (await import('sharp')).default;
-      const optimized = await sharp(contents)
-        .rotate()
-        .resize(1200, 630, { fit: 'contain', background: { r: 255, g: 255, b: 255 } })
-        .jpeg({ quality: 80 })
-        .toBuffer();
+
+      const rotated = sharp(contents).rotate();
+      const metadata = await rotated.metadata();
+      const imgW = metadata.width || 1200;
+      const imgH = metadata.height || 630;
+
+      const targetW = 1200;
+      const targetH = 630;
+      const targetRatio = targetW / targetH;
+      const imgRatio = imgW / imgH;
+
+      let finalImage: Buffer;
+
+      if (Math.abs(imgRatio - targetRatio) < 0.15) {
+        finalImage = await sharp(contents)
+          .rotate()
+          .resize(targetW, targetH, { fit: 'cover', position: 'center' })
+          .jpeg({ quality: 85 })
+          .toBuffer();
+      } else {
+        const pawSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${targetW}" height="${targetH}">
+          <rect width="100%" height="100%" fill="#f0ece4"/>
+          ${Array.from({ length: 40 }, (_, i) => {
+            const x = (i % 8) * 160 + (Math.floor(i / 8) % 2 === 0 ? 0 : 80);
+            const y = Math.floor(i / 8) * 140 + 20;
+            const rot = ((i * 37) % 60) - 30;
+            return `<g transform="translate(${x},${y}) rotate(${rot} 30 30)" opacity="0.12">
+              <ellipse cx="30" cy="38" rx="14" ry="18" fill="#8B7355"/>
+              <ellipse cx="14" cy="18" rx="8" ry="10" fill="#8B7355"/>
+              <ellipse cx="46" cy="18" rx="8" ry="10" fill="#8B7355"/>
+              <ellipse cx="6" cy="32" rx="7" ry="9" fill="#8B7355"/>
+              <ellipse cx="54" cy="32" rx="7" ry="9" fill="#8B7355"/>
+            </g>`;
+          }).join('')}
+        </svg>`;
+
+        const background = await sharp(Buffer.from(pawSvg))
+          .resize(targetW, targetH)
+          .jpeg({ quality: 85 })
+          .toBuffer();
+
+        const scale = Math.min(targetW / imgW, targetH / imgH);
+        const resizedW = Math.round(imgW * scale);
+        const resizedH = Math.round(imgH * scale);
+        const offsetX = Math.round((targetW - resizedW) / 2);
+        const offsetY = Math.round((targetH - resizedH) / 2);
+
+        const photo = await sharp(contents)
+          .rotate()
+          .resize(resizedW, resizedH, { fit: 'fill' })
+          .toBuffer();
+
+        finalImage = await sharp(background)
+          .composite([{ input: photo, left: offsetX, top: offsetY }])
+          .jpeg({ quality: 85 })
+          .toBuffer();
+      }
 
       res.set({
         'Content-Type': 'image/jpeg',
-        'Content-Length': String(optimized.length),
+        'Content-Length': String(finalImage.length),
         'Cache-Control': 'public, max-age=86400',
       });
-      res.end(optimized);
+      res.end(finalImage);
     } catch (sharpErr) {
       console.error('[OG-IMAGE] Sharp processing failed, serving raw image:', sharpErr);
       const contentType = imageUrl.endsWith('.png') ? 'image/png' : 'image/jpeg';
