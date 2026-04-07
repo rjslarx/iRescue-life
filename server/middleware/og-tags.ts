@@ -562,40 +562,47 @@ ogImageRouter.get('/api/og-image', async (req, res) => {
           .jpeg({ quality: 85 })
           .toBuffer();
       } else {
+        const pawPrint = (cx: number, cy: number, s: number, rot: number) => {
+          return `<g transform="translate(${cx},${cy}) rotate(${rot}) scale(${s})">
+            <ellipse cx="0" cy="8" rx="10" ry="13" fill="#8B7355"/>
+            <ellipse cx="-12" cy="-8" rx="5.5" ry="7" fill="#8B7355"/>
+            <ellipse cx="-4" cy="-14" rx="5" ry="6.5" fill="#8B7355"/>
+            <ellipse cx="4" cy="-14" rx="5" ry="6.5" fill="#8B7355"/>
+            <ellipse cx="12" cy="-8" rx="5.5" ry="7" fill="#8B7355"/>
+          </g>`;
+        };
+        const prints: string[] = [];
+        for (let row = 0; row < 6; row++) {
+          for (let col = 0; col < 10; col++) {
+            const offsetX = row % 2 === 0 ? 0 : 65;
+            const x = col * 130 + offsetX + 30;
+            const y = row * 115 + 40;
+            const rot = ((row * 7 + col * 13) % 50) - 25;
+            prints.push(pawPrint(x, y, 0.9, rot));
+          }
+        }
         const pawSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${targetW}" height="${targetH}">
           <rect width="100%" height="100%" fill="#f0ece4"/>
-          ${Array.from({ length: 40 }, (_, i) => {
-            const x = (i % 8) * 160 + (Math.floor(i / 8) % 2 === 0 ? 0 : 80);
-            const y = Math.floor(i / 8) * 140 + 20;
-            const rot = ((i * 37) % 60) - 30;
-            return `<g transform="translate(${x},${y}) rotate(${rot} 30 30)" opacity="0.12">
-              <ellipse cx="30" cy="38" rx="14" ry="18" fill="#8B7355"/>
-              <ellipse cx="14" cy="18" rx="8" ry="10" fill="#8B7355"/>
-              <ellipse cx="46" cy="18" rx="8" ry="10" fill="#8B7355"/>
-              <ellipse cx="6" cy="32" rx="7" ry="9" fill="#8B7355"/>
-              <ellipse cx="54" cy="32" rx="7" ry="9" fill="#8B7355"/>
-            </g>`;
-          }).join('')}
+          <g opacity="0.15">${prints.join('')}</g>
         </svg>`;
 
         const background = await sharp(Buffer.from(pawSvg))
-          .resize(targetW, targetH)
-          .jpeg({ quality: 85 })
+          .png()
           .toBuffer();
 
         const scale = Math.min(targetW / imgW, targetH / imgH);
         const resizedW = Math.round(imgW * scale);
         const resizedH = Math.round(imgH * scale);
-        const offsetX = Math.round((targetW - resizedW) / 2);
-        const offsetY = Math.round((targetH - resizedH) / 2);
+        const photoLeft = Math.round((targetW - resizedW) / 2);
+        const photoTop = Math.round((targetH - resizedH) / 2);
 
         const photo = await sharp(contents)
           .rotate()
-          .resize(resizedW, resizedH, { fit: 'fill' })
+          .resize(resizedW, resizedH, { fit: 'inside' })
           .toBuffer();
 
         finalImage = await sharp(background)
-          .composite([{ input: photo, left: offsetX, top: offsetY }])
+          .composite([{ input: photo, left: photoLeft, top: photoTop }])
           .jpeg({ quality: 85 })
           .toBuffer();
       }
