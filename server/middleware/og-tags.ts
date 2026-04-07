@@ -544,7 +544,7 @@ ogImageRouter.get('/api/og-image', async (req, res) => {
       const sharp = (await import('sharp')).default;
       const optimized = await sharp(contents)
         .rotate()
-        .resize(1200, 630, { fit: 'cover', position: 'center' })
+        .resize(1200, 630, { fit: 'contain', background: { r: 255, g: 255, b: 255 } })
         .jpeg({ quality: 80 })
         .toBuffer();
 
