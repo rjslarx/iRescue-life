@@ -177,7 +177,7 @@ function getHudVariant(status: string): "active" | "adopted" | "transported" | "
   return "active";
 }
 
-function AnimalProfilePanel({ animalId }: { animalId: string }) {
+function AnimalProfilePanel({ animalId, canRegenerate, regeneratePdfMutation }: { animalId: string; canRegenerate: boolean; regeneratePdfMutation: any }) {
   const { basePath } = useTenant();
   const [, navigate] = useLocation();
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState<Record<string, number>>({});
@@ -696,7 +696,7 @@ export default function AnimalLookupPage() {
                   </Button>
                 </div>
               )}
-              <AnimalProfilePanel animalId={selectedAnimalId} />
+              <AnimalProfilePanel animalId={selectedAnimalId} canRegenerate={!!canRegenerate} regeneratePdfMutation={regeneratePdfMutation} />
             </div>
           )}
         </div>
