@@ -70,9 +70,10 @@ export async function injectOGTags(req: Request, res: Response, next: NextFuncti
   const hostname = req.get('host') || '';
   const isCustomDomain = tenant.customDomain && tenant.customDomainVerified &&
     hostname.replace(/^www\./i, '').toLowerCase() === tenant.customDomain.toLowerCase();
+  const protocol = 'https';
   const baseUrl = isCustomDomain
-    ? `${req.protocol}://${tenant.customDomain}`
-    : `${req.protocol}://${req.get('host')}`;
+    ? `${protocol}://${tenant.customDomain}`
+    : `${protocol}://${req.get('host')}`;
 
   const resolveImageUrl = (imgUrl: string | null | undefined): string | null => {
     if (!imgUrl) return null;
@@ -440,8 +441,8 @@ export async function injectOGTags(req: Request, res: Response, next: NextFuncti
     }
 
     const canonicalUrl = isCustomDomain
-      ? `${req.protocol}://${tenant.customDomain}${url}`
-      : `${req.protocol}://${req.get('host')}/${tenant.subdomain}${url}`;
+      ? `${protocol}://${tenant.customDomain}${url}`
+      : `${protocol}://${req.get('host')}/${tenant.subdomain}${url}`;
 
     let ogImage = ogData.image;
     const ogImageOriginal = ogData.image;
@@ -452,8 +453,7 @@ export async function injectOGTags(req: Request, res: Response, next: NextFuncti
       }
     }
 
-    const ogTags = `
-    <!-- Dynamic Open Graph Tags for Social Sharing -->
+    const ogMetaTags = `
     <meta property="og:type" content="website" />
     <meta property="og:url" content="${escapeHtml(canonicalUrl)}" />
     <meta property="og:title" content="${escapeHtml(ogData.title)}" />
@@ -466,11 +466,9 @@ export async function injectOGTags(req: Request, res: Response, next: NextFuncti
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="${escapeHtml(ogData.title)}" />
     <meta name="twitter:description" content="${escapeHtml(ogData.description)}" />
-    <meta name="twitter:image" content="${escapeHtml(ogImage)}" />
-    <meta name="description" content="${escapeHtml(ogData.description)}" />
-    <title>${escapeHtml(ogData.title)}</title>
-    <!-- End Dynamic Open Graph Tags -->
-`;
+    <meta name="twitter:image" content="${escapeHtml(ogImage)}" />`;
+
+    console.log(`[OG-TAGS] Generated OG data: title="${ogData.title}", image="${ogImage}", canonicalUrl="${canonicalUrl}"`);
 
     const isProduction = process.env.NODE_ENV === 'production';
     let html: string;
@@ -479,8 +477,9 @@ export async function injectOGTags(req: Request, res: Response, next: NextFuncti
       const prodPath = path.resolve(import.meta.dirname, "public", "index.html");
       try {
         html = await fs.promises.readFile(prodPath, 'utf-8');
+        console.log(`[OG-TAGS] Read production index.html (${html.length} bytes) from ${prodPath}`);
       } catch (err) {
-        console.error(`[OG-TAGS] Failed to read production index.html:`, err);
+        console.error(`[OG-TAGS] Failed to read production index.html at ${prodPath}:`, err);
         return next();
       }
     } else {
@@ -493,10 +492,16 @@ export async function injectOGTags(req: Request, res: Response, next: NextFuncti
       }
     }
 
-    html = html.replace(
-      /<meta property="og:type" content="website" \/>[\s\S]*?<meta name="twitter:image"[^>]*>/,
-      ogTags.trim()
-    );
+    const ogRegex = /<meta property="og:type" content="website"\s*\/?>([\s\S]*?)<meta name="twitter:image"[^>]*\/?>/;
+    const regexMatched = ogRegex.test(html);
+
+    if (regexMatched) {
+      html = html.replace(ogRegex, ogMetaTags.trim());
+      console.log(`[OG-TAGS] Replaced existing OG tags via regex`);
+    } else {
+      html = html.replace('</head>', `${ogMetaTags}\n</head>`);
+      console.log(`[OG-TAGS] Injected OG tags before </head> (regex fallback)`);
+    }
 
     html = html.replace(
       /<title>[^<]*<\/title>/,
@@ -504,12 +509,12 @@ export async function injectOGTags(req: Request, res: Response, next: NextFuncti
     );
 
     html = html.replace(
-      /<meta name="description" content="[^"]*" \/>/,
+      /<meta name="description" content="[^"]*"\s*\/?>/,
       `<meta name="description" content="${escapeHtml(ogData.description)}" />`
     );
 
     html = html.replace(
-      /<link rel="canonical" href="[^"]*" \/>/,
+      /<link rel="canonical" href="[^"]*"\s*\/?>/,
       `<link rel="canonical" href="${escapeHtml(canonicalUrl)}" />`
     );
 
@@ -535,20 +540,31 @@ ogImageRouter.get('/api/og-image', async (req, res) => {
 
     const [contents] = await objectFile.download();
 
-    const sharp = (await import('sharp')).default;
-    const optimized = await sharp(contents)
-      .resize(1200, 630, { fit: 'cover', position: 'center' })
-      .jpeg({ quality: 80 })
-      .toBuffer();
+    try {
+      const sharp = (await import('sharp')).default;
+      const optimized = await sharp(contents)
+        .resize(1200, 630, { fit: 'cover', position: 'center' })
+        .jpeg({ quality: 80 })
+        .toBuffer();
 
-    res.set({
-      'Content-Type': 'image/jpeg',
-      'Content-Length': String(optimized.length),
-      'Cache-Control': 'public, max-age=86400',
-    });
-    res.end(optimized);
+      res.set({
+        'Content-Type': 'image/jpeg',
+        'Content-Length': String(optimized.length),
+        'Cache-Control': 'public, max-age=86400',
+      });
+      res.end(optimized);
+    } catch (sharpErr) {
+      console.error('[OG-IMAGE] Sharp processing failed, serving raw image:', sharpErr);
+      const contentType = imageUrl.endsWith('.png') ? 'image/png' : 'image/jpeg';
+      res.set({
+        'Content-Type': contentType,
+        'Content-Length': String(contents.length),
+        'Cache-Control': 'public, max-age=86400',
+      });
+      res.end(contents);
+    }
   } catch (error) {
-    console.error('[OG-IMAGE] Error generating OG image:', error);
-    res.status(500).json({ error: 'Failed to generate image' });
+    console.error('[OG-IMAGE] Error fetching OG image:', error);
+    res.status(404).json({ error: 'Image not found' });
   }
 });
