@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { 
   Heart, 
@@ -177,6 +177,7 @@ function isUUID(str: string): boolean {
 
 export function ApplicationDetailsDialog({ application, open, onOpenChange }: ApplicationDetailsDialogProps) {
   const { user } = useAuth();
+  const [, navigate] = useLocation();
   const [showChangeAnimalDialog, setShowChangeAnimalDialog] = useState(false);
   const { data: formFieldsData, isLoading: isLoadingFields } = useQuery<{ fields: FormField[] }>({
     queryKey: [application?.type ? getFormFieldsEndpoint(application.type) : '/api/adoption-form-fields'],
@@ -362,18 +363,19 @@ export function ApplicationDetailsDialog({ application, open, onOpenChange }: Ap
           <Button variant="outline" onClick={() => onOpenChange(false)} data-testid="button-close">
             Close
           </Button>
-          <Link href={getManagementLink(application.type)}>
-            <Button data-testid="button-manage">
-              <ExternalLink className="h-4 w-4 mr-2" />
-              Manage {
-                application.type === 'adoption' ? 'Adoptions' : 
-                application.type === 'foster' ? 'Fosters' : 
-                application.type === 'volunteer' ? 'Volunteers' :
-                application.type === 'surrender' ? 'Surrenders' :
-                'Forms'
-              }
-            </Button>
-          </Link>
+          <Button data-testid="button-manage" onClick={() => {
+            onOpenChange(false);
+            navigate(getManagementLink(application.type));
+          }}>
+            <ExternalLink className="h-4 w-4 mr-2" />
+            Manage {
+              application.type === 'adoption' ? 'Adoptions' : 
+              application.type === 'foster' ? 'Fosters' : 
+              application.type === 'volunteer' ? 'Volunteers' :
+              application.type === 'surrender' ? 'Surrenders' :
+              'Forms'
+            }
+          </Button>
         </div>
       </DialogContent>
 
