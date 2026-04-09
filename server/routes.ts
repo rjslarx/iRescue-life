@@ -16889,6 +16889,8 @@ ${renderedHtml}
         status: z.enum(['pending', 'approved', 'rejected']).optional(),
         pipelineStatus: z.enum(['new_app', 'interview', 'home_check', 'orientation', 'agreement', 'active_pool', 'rejected']).optional(),
         notes: z.string().optional(),
+        skipAutomation: z.boolean().optional(),
+        sendMethod: z.enum(["email", "sms", "both"]).optional(),
       });
 
       const data = updateSchema.parse(req.body);
@@ -17008,7 +17010,8 @@ ${renderedHtml}
       // AUTOMATION: Send foster agreement email when status changes to 'agreement'
       // Uses Foster Contract Templates (not Custom Forms)
       // ========================================================================
-      const statusChangedToAgreement = data.pipelineStatus === 'agreement' && oldPipelineStatus !== 'agreement';
+      const statusChangedToAgreement = data.pipelineStatus === 'agreement' && oldPipelineStatus !== 'agreement' && !data.skipAutomation;
+      const agreementSendMethod = data.sendMethod || 'email';
       if (statusChangedToAgreement && updatedApplication.applicantEmail) {
         try {
           const { EmailService } = await import('./lib/email-service');
@@ -17075,20 +17078,20 @@ ${renderedHtml}
               formUrl = `${baseUrl}/${req.tenant!.subdomain}/foster-agreement/sign/${token}`;
             }
             
-            // Get email service for tenant
+            // Get email service for tenant (may be null if SMS-only)
             const emailService = await EmailService.forTenant(req.tenant!.id);
-            if (!emailService) {
+            if (!emailService && (agreementSendMethod === 'email' || agreementSendMethod === 'both')) {
               console.error('[Foster Automation] No email service configured for tenant');
-              throw new Error('Email service not configured');
             }
             
-            // Send email with amber button
-            const buttonStyle = 'display:inline-block;padding:12px 24px;background-color:#f59e0b;color:white;text-decoration:none;border-radius:6px;';
-            
-            await emailService.send({
-              to: updatedApplication.applicantEmail,
-              subject: `Action Required: Sign Foster Agreement - ${req.tenant!.name}`,
-              html: `
+            // Send email if method is email or both
+            if ((agreementSendMethod === 'email' || agreementSendMethod === 'both') && updatedApplication.applicantEmail && emailService) {
+              const buttonStyle = 'display:inline-block;padding:12px 24px;background-color:#f59e0b;color:white;text-decoration:none;border-radius:6px;';
+              
+              await emailService.send({
+                to: updatedApplication.applicantEmail,
+                subject: `Action Required: Sign Foster Agreement - ${req.tenant!.name}`,
+                html: `
 <h2>Foster Agreement Ready for Signature</h2>
 <p>Hello ${updatedApplication.applicantName},</p>
 <p>Your foster application with <strong>${req.tenant!.name}</strong> has advanced to the agreement stage.</p>
@@ -17098,11 +17101,33 @@ ${renderedHtml}
 <p><a href="${formUrl}" style="color:#f59e0b;">${formUrl}</a></p>
 <p style="color:#666;font-size:14px;">This link will expire in 14 days.</p>
 <p style="color:#666;font-size:14px;">Questions? Contact us at ${req.tenant!.contactEmail || 'our contact email'}.</p>
-              `.trim(),
-            });
+                `.trim(),
+              });
+            }
+
+            // Send SMS if method is sms or both
+            if ((agreementSendMethod === 'sms' || agreementSendMethod === 'both') && updatedApplication.applicantPhone) {
+              try {
+                const { sendSms } = await import('./lib/twilio-service');
+                const smsMessage = `${req.tenant!.name}: Hi ${updatedApplication.applicantName}, please sign your Foster Agreement to complete your onboarding: ${formUrl}`;
+                await sendSms(
+                  req.tenant!.id,
+                  updatedApplication.applicantPhone,
+                  smsMessage,
+                  'notification',
+                  { source: 'foster_agreement', applicationId: updatedApplication.id }
+                );
+                console.log(`[Foster Automation] Sent foster agreement SMS to ${updatedApplication.applicantPhone}`);
+              } catch (smsError) {
+                console.error('[Foster Automation] Error sending foster agreement SMS:', smsError);
+              }
+            }
             
             // Log activity
             const { logActivity } = await import('./lib/activity-logger');
+            const deliveryMethods: string[] = [];
+            if ((agreementSendMethod === 'email' || agreementSendMethod === 'both') && updatedApplication.applicantEmail) deliveryMethods.push('email');
+            if ((agreementSendMethod === 'sms' || agreementSendMethod === 'both') && updatedApplication.applicantPhone) deliveryMethods.push('SMS');
             await logActivity({
               tenantId: req.tenant!.id,
               userId: req.user!.id,
@@ -17110,14 +17135,16 @@ ${renderedHtml}
               category: 'user',
               entityType: 'foster_application',
               entityId: updatedApplication.id,
-              description: `Foster agreement email sent to ${updatedApplication.applicantName} (${updatedApplication.applicantEmail})`,
+              description: `Foster agreement sent via ${deliveryMethods.join(' & ')} to ${updatedApplication.applicantName} (${updatedApplication.applicantEmail || updatedApplication.applicantPhone})`,
               metadata: {
                 templateId: template.id,
                 templateName: template.name,
+                sendMethod: agreementSendMethod,
               },
             });
             
-            console.log(`[Foster Automation] Sent foster agreement to ${updatedApplication.applicantEmail} using template "${template.name}"`);
+            console.log(`[Foster Automation] Sent foster agreement via ${deliveryMethods.join(' & ')} to ${updatedApplication.applicantEmail || updatedApplication.applicantPhone} using template "${template.name}"`);
+
           } else {
             console.log(`[Foster Automation] No foster contract template found for tenant ${req.tenant!.id} - skipping email`);
           }
