@@ -6,7 +6,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Card, CardContent } from "@/components/ui/card";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, ArrowRight, Send, Shield, AlertCircle, Zap } from "lucide-react";
+import { Loader2, ArrowRight, Send, Shield, AlertCircle, Zap, Mail, MessageSquare, MailPlus } from "lucide-react";
 
 interface VolunteerApplicationData {
   id: string;
@@ -30,12 +30,17 @@ export function MoveAndSendVolunteerWaiverDialog({
 }: MoveAndSendVolunteerWaiverDialogProps) {
   const { toast } = useToast();
   const [moveAction, setMoveAction] = useState<"move_and_send" | "move_only">("move_and_send");
+  const [sendMethod, setSendMethod] = useState<"email" | "sms" | "both">("email");
+
+  const hasPhone = !!application?.applicantPhone;
+  const hasEmail = !!application?.applicantEmail;
 
   const moveMutation = useMutation({
-    mutationFn: async ({ applicationId, skipAutomation }: { applicationId: string; skipAutomation: boolean }) => {
+    mutationFn: async ({ applicationId, skipAutomation, sendMethod }: { applicationId: string; skipAutomation: boolean; sendMethod: string }) => {
       const response = await apiRequest('PATCH', `/api/volunteer-applications/${applicationId}`, {
         pipelineStatus: 'waiver_needed',
         skipAutomation,
+        sendMethod,
       });
       return response.json();
     },
@@ -43,9 +48,10 @@ export function MoveAndSendVolunteerWaiverDialog({
       queryClient.invalidateQueries({ queryKey: ['/api/volunteer-applications'] });
       
       if (!variables.skipAutomation) {
+        const methodLabel = variables.sendMethod === 'both' ? 'email & SMS' : variables.sendMethod === 'sms' ? 'SMS' : 'email';
         toast({
-          title: "Moved to Waiver Needed & Email Sent",
-          description: `${application?.applicantName} has been moved to Waiver Needed and sent the hold harmless agreement for e-signature.`,
+          title: `Moved to Waiver Needed & Sent via ${methodLabel}`,
+          description: `${application?.applicantName} has been sent the hold harmless agreement for e-signature.`,
         });
       } else {
         toast({
@@ -55,6 +61,7 @@ export function MoveAndSendVolunteerWaiverDialog({
       }
       
       setMoveAction("move_and_send");
+      setSendMethod("email");
       onOpenChange(false);
       onSuccess?.();
     },
@@ -72,6 +79,7 @@ export function MoveAndSendVolunteerWaiverDialog({
     moveMutation.mutate({
       applicationId: application.id,
       skipAutomation: moveAction === "move_only",
+      sendMethod,
     });
   };
 
@@ -107,7 +115,7 @@ export function MoveAndSendVolunteerWaiverDialog({
                   Move & Send Waiver
                 </span>
                 <span className="text-sm text-muted-foreground">
-                  Automatically email the hold harmless agreement for e-signature
+                  Send the hold harmless agreement for e-signature
                 </span>
               </label>
             </div>
@@ -129,21 +137,64 @@ export function MoveAndSendVolunteerWaiverDialog({
           </RadioGroup>
 
           {moveAction === "move_and_send" && (
-            <Card className="bg-purple-50 dark:bg-purple-950 border-purple-200 dark:border-purple-800">
-              <CardContent className="pt-4">
-                <div className="flex gap-3">
-                  <AlertCircle className="h-5 w-5 text-purple-600 dark:text-purple-400 shrink-0 mt-0.5" />
-                  <div className="text-sm text-purple-700 dark:text-purple-300">
-                    <p className="font-medium">What happens next:</p>
-                    <ol className="list-decimal list-inside mt-1 space-y-1 text-purple-600 dark:text-purple-400">
-                      <li>Application moves to Waiver Needed stage</li>
-                      <li>Hold harmless waiver is sent for e-signature</li>
-                      <li>After signing, volunteer is moved to Active Pool</li>
-                    </ol>
+            <div className="space-y-3">
+              <p className="text-sm font-medium text-muted-foreground">Delivery method:</p>
+              <RadioGroup
+                value={sendMethod}
+                onValueChange={(value) => setSendMethod(value as "email" | "sms" | "both")}
+                className="flex flex-col space-y-2"
+              >
+                {hasEmail && (
+                  <div className="flex items-center space-x-3 p-3 rounded-lg border hover-elevate cursor-pointer" onClick={() => setSendMethod("email")}>
+                    <RadioGroupItem value="email" id="send-email" data-testid="radio-send-email" />
+                    <label htmlFor="send-email" className="flex items-center gap-2 cursor-pointer flex-1">
+                      <Mail className="h-4 w-4 text-blue-500" />
+                      <div>
+                        <span className="font-medium">Email</span>
+                        <p className="text-xs text-muted-foreground">{application.applicantEmail}</p>
+                      </div>
+                    </label>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
+                )}
+                {hasPhone && (
+                  <div className="flex items-center space-x-3 p-3 rounded-lg border hover-elevate cursor-pointer" onClick={() => setSendMethod("sms")}>
+                    <RadioGroupItem value="sms" id="send-sms" data-testid="radio-send-sms" />
+                    <label htmlFor="send-sms" className="flex items-center gap-2 cursor-pointer flex-1">
+                      <MessageSquare className="h-4 w-4 text-green-500" />
+                      <div>
+                        <span className="font-medium">SMS</span>
+                        <p className="text-xs text-muted-foreground">{application.applicantPhone}</p>
+                      </div>
+                    </label>
+                  </div>
+                )}
+                {hasEmail && hasPhone && (
+                  <div className="flex items-center space-x-3 p-3 rounded-lg border hover-elevate cursor-pointer" onClick={() => setSendMethod("both")}>
+                    <RadioGroupItem value="both" id="send-both" data-testid="radio-send-both" />
+                    <label htmlFor="send-both" className="flex items-center gap-2 cursor-pointer flex-1">
+                      <MailPlus className="h-4 w-4 text-purple-500" />
+                      <span className="font-medium">Both (Email & SMS)</span>
+                    </label>
+                  </div>
+                )}
+              </RadioGroup>
+
+              <Card className="bg-purple-50 dark:bg-purple-950 border-purple-200 dark:border-purple-800">
+                <CardContent className="pt-4">
+                  <div className="flex gap-3">
+                    <AlertCircle className="h-5 w-5 text-purple-600 dark:text-purple-400 shrink-0 mt-0.5" />
+                    <div className="text-sm text-purple-700 dark:text-purple-300">
+                      <p className="font-medium">What happens next:</p>
+                      <ol className="list-decimal list-inside mt-1 space-y-1 text-purple-600 dark:text-purple-400">
+                        <li>Application moves to Waiver Needed stage</li>
+                        <li>Hold harmless waiver link sent via {sendMethod === 'both' ? 'email & SMS' : sendMethod}</li>
+                        <li>After signing, volunteer is moved to Active Pool</li>
+                      </ol>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           )}
         </div>
 

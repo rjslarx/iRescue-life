@@ -17573,6 +17573,8 @@ Submitted: ${new Date().toLocaleString()}
         status: z.enum(['pending', 'approved', 'rejected']).optional(),
         pipelineStatus: z.enum(['new_applicant', 'orientation_scheduled', 'waiver_needed', 'active_pool', 'rejected']).optional(),
         notes: z.string().optional(),
+        skipAutomation: z.boolean().optional(),
+        sendMethod: z.enum(['email', 'sms', 'both']).optional(),
       });
 
       const data = updateSchema.parse(req.body);
@@ -17687,10 +17689,11 @@ Submitted: ${new Date().toLocaleString()}
       }
 
       // ========================================================================
-      // AUTOMATION: Send hold harmless waiver email when status changes to 'waiver_needed'
+      // AUTOMATION: Send hold harmless waiver via email/SMS when status changes to 'waiver_needed'
       // ========================================================================
-      const statusChangedToWaiverNeeded = data.pipelineStatus === 'waiver_needed' && oldPipelineStatus !== 'waiver_needed';
-      if (statusChangedToWaiverNeeded && updatedApplication.applicantEmail) {
+      const statusChangedToWaiverNeeded = data.pipelineStatus === 'waiver_needed' && oldPipelineStatus !== 'waiver_needed' && !data.skipAutomation;
+      const waiverSendMethod = data.sendMethod || 'email';
+      if (statusChangedToWaiverNeeded && (updatedApplication.applicantEmail || updatedApplication.applicantPhone)) {
         try {
           const { EmailService } = await import('./lib/email-service');
           const { customForms, customFormSubmissions } = await import('@shared/schema');
@@ -17742,12 +17745,12 @@ Submitted: ${new Date().toLocaleString()}
               formUrl = `${baseUrl}/${req.tenant!.subdomain}/forms/sign/${token}`;
             }
             
-            // Get email service for tenant
+            // Send email if method is email or both
+            if ((waiverSendMethod === 'email' || waiverSendMethod === 'both') && updatedApplication.applicantEmail) {
             const emailService = await EmailService.forTenant(req.tenant!.id);
             if (!emailService) {
               console.error('[Volunteer Automation] No email service configured for tenant');
-              throw new Error('Email service not configured');
-            }
+            } else {
             
             // Send email to volunteer applicant
             await emailService.send({
@@ -17786,8 +17789,32 @@ If you have any questions, please contact us.
               `.trim(),
             });
             
+            } // close emailService else
+            } // close email method check
+
+            // Send SMS if requested and phone number available
+            if ((waiverSendMethod === 'sms' || waiverSendMethod === 'both') && updatedApplication.applicantPhone) {
+              try {
+                const { sendSms } = await import('./lib/twilio-service');
+                const smsMessage = `${req.tenant!.name}: Hi ${updatedApplication.applicantName}, please sign the Hold Harmless Agreement to complete your volunteer onboarding: ${formUrl}`;
+                await sendSms(
+                  req.tenant!.id,
+                  updatedApplication.applicantPhone,
+                  smsMessage,
+                  'notification',
+                  { source: 'volunteer_waiver', applicationId: updatedApplication.id }
+                );
+                console.log(`[Volunteer Automation] Sent hold harmless waiver SMS to ${updatedApplication.applicantPhone}`);
+              } catch (smsError) {
+                console.error('[Volunteer Automation] Error sending hold harmless waiver SMS:', smsError);
+              }
+            }
+
             // Log activity
             const { logActivity } = await import('./lib/activity-logger');
+            const deliveryMethods: string[] = [];
+            if ((waiverSendMethod === 'email' || waiverSendMethod === 'both') && updatedApplication.applicantEmail) deliveryMethods.push('email');
+            if ((waiverSendMethod === 'sms' || waiverSendMethod === 'both') && updatedApplication.applicantPhone) deliveryMethods.push('SMS');
             await logActivity({
               tenantId: req.tenant!.id,
               userId: req.user!.id,
@@ -17795,16 +17822,14 @@ If you have any questions, please contact us.
               category: 'user',
               entityType: 'volunteer_application',
               entityId: updatedApplication.id,
-              description: `Hold harmless waiver email sent to ${updatedApplication.applicantName} (${updatedApplication.applicantEmail})`,
+              description: `Hold harmless waiver sent via ${deliveryMethods.join(' & ')} to ${updatedApplication.applicantName} (${updatedApplication.applicantEmail || updatedApplication.applicantPhone})`,
               metadata: {
                 formId: volunteerWaiverForm.id,
                 formName: volunteerWaiverForm.name,
               },
             });
-            
-            console.log(`[Volunteer Automation] Sent hold harmless waiver to ${updatedApplication.applicantEmail}`);
           } else {
-            console.log(`[Volunteer Automation] No hold harmless waiver form found for tenant ${req.tenant!.id} - skipping email`);
+            console.log(`[Volunteer Automation] No hold harmless waiver form found for tenant ${req.tenant!.id} - skipping waiver send`);
           }
         } catch (waiverError) {
           // Log error but don't fail the status update
