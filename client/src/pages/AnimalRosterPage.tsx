@@ -82,7 +82,7 @@ export default function AnimalRosterPage() {
 
   const filteredAnimals = useMemo(() => {
     return allAnimals
-      .filter((a) => a.status !== "adopted" && a.status !== "deceased" && a.status !== "merged" && a.status !== "transported" && a.status !== "returned to owner")
+      .filter((a) => a.status !== "adopted" && a.status !== "deceased" && a.status !== "merged" && a.status !== "transported" && a.status !== "returned_to_owner" && a.status !== "returned_to_field")
       .filter((a) => {
         if (speciesFilter !== "all" && a.species?.toLowerCase() !== speciesFilter.toLowerCase()) return false;
         if (statusFilter !== "all" && a.status !== statusFilter) return false;
@@ -103,7 +103,7 @@ export default function AnimalRosterPage() {
   const speciesOptions = useMemo(() => {
     const set = new Set<string>();
     allAnimals
-      .filter((a) => a.status !== "adopted" && a.status !== "deceased" && a.status !== "merged" && a.status !== "transported" && a.status !== "returned to owner")
+      .filter((a) => a.status !== "adopted" && a.status !== "deceased" && a.status !== "merged" && a.status !== "transported" && a.status !== "returned_to_owner" && a.status !== "returned_to_field")
       .forEach((a) => {
         if (a.species) set.add(a.species);
       });
@@ -113,7 +113,7 @@ export default function AnimalRosterPage() {
   const statusOptions = useMemo(() => {
     const set = new Set<string>();
     allAnimals
-      .filter((a) => a.status !== "adopted" && a.status !== "deceased" && a.status !== "merged" && a.status !== "transported" && a.status !== "returned to owner")
+      .filter((a) => a.status !== "adopted" && a.status !== "deceased" && a.status !== "merged" && a.status !== "transported" && a.status !== "returned_to_owner" && a.status !== "returned_to_field")
       .forEach((a) => {
         if (a.status) set.add(a.status);
       });
