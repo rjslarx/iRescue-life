@@ -520,7 +520,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
         { title: "Volunteer Pipeline", url: "/dashboard/volunteer-pipeline", icon: Kanban },
         { title: "Opportunities", url: "/dashboard/opportunities", icon: UserCircle },
         { title: "Today's Medications", url: "/dashboard/volunteer-medications", icon: Pill },
-        { title: "Animals", url: "/dashboard/animals", icon: Heart, usesGoogleDrive: true },
+        { title: "Animal Roster", url: "/dashboard/animal-roster", icon: Heart },
         { title: "Help & Training", url: "/dashboard/tutorials", icon: BookOpen },
       ],
       defaultOpen: true,
@@ -586,6 +586,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
     '/dashboard/foster-pipeline': 'foster-pipeline',
     '/dashboard/tnr-log': 'tnr-log',
     '/dashboard/shop': 'shop',
+    '/dashboard/animal-roster': 'animal-roster',
   };
 
   // Helper function to check if menu item should be shown

@@ -19,8 +19,8 @@ interface UserPagePermission {
 // Default permissions when no database records exist
 // These provide sensible fallbacks for each role
 const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
-  volunteer: ['calendar', 'volunteers', 'animals', 'tutorials', 'my-account'],
-  foster: ['my-fosters', 'animals', 'tutorials', 'kennels', 'my-account'],
+  volunteer: ['calendar', 'volunteers', 'animals', 'animal-roster', 'tutorials', 'my-account'],
+  foster: ['my-fosters', 'animals', 'animal-roster', 'tutorials', 'kennels', 'my-account'],
   staff: ['dashboard', 'animals', 'applications', 'foster-management', 'volunteers', 'calendar', 'kennels', 'medical-tasks', 'daily-roster', 'tutorials', 'my-account'],
   board_member: ['dashboard', 'animals', 'applications', 'foster-management', 'volunteers', 'calendar', 'finance', 'grants', 'donors', 'analytics', 'reports', 'kennels', 'medical-tasks', 'daily-roster', 'tutorials', 'my-account'],
 };
