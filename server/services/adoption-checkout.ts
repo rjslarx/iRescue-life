@@ -874,17 +874,23 @@ export async function captureSignature(
 
   // Process signature image and upload to storage
   const { processSignatureImage, generateAdoptionContractPDF } = await import('./contract-pdf');
-  const signatureImageUrl = await processSignatureImage(signatureData.signatureImageData);
+  const sigResult = await processSignatureImage(signatureData.signatureImageData);
+  const signatureImageUrl = sigResult.objectUrl;
   const signedAt = new Date();
+
+  // Build precomputed data URIs to avoid re-downloading from object storage
+  const precomputedDataUris: { signatureDataUri?: string; driversLicenseDataUri?: string } = {
+    signatureDataUri: sigResult.dataUri,
+  };
 
   // Generate PDF contract with signature, including IP, timestamp, and driver's license for legal verification
   const contractPdfUrl = await generateAdoptionContractPDF(session, signatureImageUrl, {
     ipAddress: signatureData.ipAddress,
     signedAt,
     driversLicenseNumber: signatureData.driversLicenseNumber,
-  });
+  }, precomputedDataUris);
 
-  // Create contract record
+  // Create contract record (copy driver's license image URL from session)
   const [contract] = await db
     .insert(adoptionContracts)
     .values({
@@ -898,6 +904,7 @@ export async function captureSignature(
       signedUserAgent: signatureData.userAgent,
       signedAt,
       driversLicenseNumber: signatureData.driversLicenseNumber,
+      driversLicenseImageUrl: session.driversLicenseImageUrl || null,
     })
     .returning();
 

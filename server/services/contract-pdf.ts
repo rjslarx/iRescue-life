@@ -118,23 +118,22 @@ async function objectStorageImageToDataUri(objectUrl: string): Promise<string> {
 /**
  * Convert base64 signature data to PNG and upload to object storage
  * @param signatureBase64 - Base64 encoded signature image (data:image/png;base64,...)
- * @returns Object storage URL for the signature image
+ * @returns Object with objectUrl (storage path) and dataUri (inline base64 for PDF embedding)
  */
-export async function processSignatureImage(signatureBase64: string): Promise<string> {
-  // Remove data URL prefix if present
+export async function processSignatureImage(signatureBase64: string): Promise<{ objectUrl: string; dataUri: string }> {
   const base64Data = signatureBase64.replace(/^data:image\/\w+;base64,/, '');
   const buffer = Buffer.from(base64Data, 'base64');
 
-  // Process image with sharp - optimize and convert to PNG
   const processedImage = await sharp(buffer)
-    .resize(800, 200, { // Reasonable signature size
+    .resize(800, 200, {
       fit: 'contain',
-      background: { r: 255, g: 255, b: 255, alpha: 0 } // Transparent background
+      background: { r: 255, g: 255, b: 255, alpha: 0 }
     })
     .png({ quality: 90 })
     .toBuffer();
 
-  // Upload to object storage
+  const dataUri = `data:image/png;base64,${processedImage.toString('base64')}`;
+
   const privateObjectDir = process.env.PRIVATE_OBJECT_DIR;
   if (!privateObjectDir) {
     throw new Error('PRIVATE_OBJECT_DIR not configured');
@@ -156,8 +155,8 @@ export async function processSignatureImage(signatureBase64: string): Promise<st
     },
   });
 
-  // Return public URL
-  return `/objects/signatures/${file.name.split('/').pop()}`;
+  const objectUrl = `/objects/signatures/${file.name.split('/').pop()}`;
+  return { objectUrl, dataUri };
 }
 
 /**
@@ -574,7 +573,8 @@ function generateContractHTML(data: {
 export async function generateAdoptionContractPDF(
   session: AdoptionCheckoutSession,
   signatureImageUrl?: string,
-  signatureMetadata?: { ipAddress?: string; signedAt?: Date; driversLicenseNumber?: string }
+  signatureMetadata?: { ipAddress?: string; signedAt?: Date; driversLicenseNumber?: string },
+  precomputedDataUris?: { signatureDataUri?: string; driversLicenseDataUri?: string }
 ): Promise<string> {
   // Fetch all required data
   const [tenant] = await db
@@ -773,14 +773,18 @@ export async function generateAdoptionContractPDF(
     flea_tick_due_date: formatContractDate((session.medicalDueDates as any)?.fleaTickDueDate),
     ...buildCarePriorityMergeFields(session.carePriorities as any),
     contract_date: signedAt.toLocaleDateString(),
-    signature_image_url: signatureImageUrl
-      ? await objectStorageImageToDataUri(signatureImageUrl)
-      : undefined,
+    signature_image_url: precomputedDataUris?.signatureDataUri
+      ? precomputedDataUris.signatureDataUri
+      : signatureImageUrl
+        ? await objectStorageImageToDataUri(signatureImageUrl)
+        : undefined,
     signed_timestamp: signedAt.toISOString(),
     signed_ip: signatureMetadata?.ipAddress || 'Not recorded',
-    drivers_license_image_url: session.driversLicenseImageUrl
-      ? await objectStorageImageToDataUri(session.driversLicenseImageUrl)
-      : undefined,
+    drivers_license_image_url: precomputedDataUris?.driversLicenseDataUri
+      ? precomputedDataUris.driversLicenseDataUri
+      : session.driversLicenseImageUrl
+        ? await objectStorageImageToDataUri(session.driversLicenseImageUrl)
+        : undefined,
   };
 
   // Apply staff-confirmed variable values (overrides auto-filled data for custom fields)
