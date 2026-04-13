@@ -18,6 +18,11 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 
+function getThumbUrl(url: string): string {
+  if (!url || !url.startsWith('/objects/') || url.endsWith('-thumb')) return url;
+  return url + '-thumb';
+}
+
 interface AnimalCardProps {
   id: string;
   name: string;
@@ -29,6 +34,7 @@ interface AnimalCardProps {
   bio?: string;
   basePath?: string;
   status?: string;
+  useThumbnails?: boolean;
   onAdopt?: () => void;
   onSponsor?: () => void;
 }
@@ -44,6 +50,7 @@ export default function AnimalCard({
   bio,
   basePath = '',
   status,
+  useThumbnails = false,
   onAdopt,
   onSponsor 
 }: AnimalCardProps) {
@@ -71,7 +78,8 @@ export default function AnimalCard({
     }
   }, [bio]);
   
-  const photoArray = photos && photos.length > 0 ? photos : [photo];
+  const rawPhotoArray = photos && photos.length > 0 ? photos : [photo];
+  const photoArray = useThumbnails ? rawPhotoArray.map(getThumbUrl) : rawPhotoArray;
   const hasMultiplePhotos = photoArray.length > 1;
 
   // Auto-rotate photos continuously every 4 seconds when there are multiple photos
@@ -173,7 +181,16 @@ export default function AnimalCard({
         <img 
           src={photoArray[currentPhotoIndex]} 
           alt={name}
+          loading="lazy"
+          decoding="async"
           className="w-full h-full object-cover object-center transition-opacity duration-500"
+          onError={(e) => {
+            const target = e.currentTarget;
+            const src = target.src;
+            if (src.endsWith('-thumb')) {
+              target.src = src.slice(0, -6);
+            }
+          }}
           data-testid={`img-animal-${name.toLowerCase().replace(/\s/g, '-')}`}
         />
         {hasMultiplePhotos && (

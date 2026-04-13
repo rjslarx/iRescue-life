@@ -8598,6 +8598,25 @@ Crawl-delay: 1
 
             if (result.success) {
               uploadedPaths.push(result.fileUrl);
+              
+              try {
+                const sharpModule = (await import('sharp')).default;
+                const thumbBuffer = await sharpModule(fileBuffer)
+                  .resize(400, 300, { fit: 'cover' })
+                  .jpeg({ quality: 75 })
+                  .toBuffer();
+                
+                const { parseObjectPath, objectStorageClient } = await import('./objectStorage');
+                const privateDir = process.env.PRIVATE_OBJECT_DIR || '';
+                const entityId = result.fileUrl.slice('/objects/'.length);
+                const thumbFullPath = `${privateDir}/${entityId}-thumb`;
+                const { bucketName, objectName } = parseObjectPath(thumbFullPath);
+                const thumbFile = objectStorageClient.bucket(bucketName).file(objectName);
+                await thumbFile.save(thumbBuffer, { contentType: 'image/jpeg', resumable: false });
+                console.log(`[THUMBNAIL] Generated thumbnail for ${file.originalname} (${(thumbBuffer.length / 1024).toFixed(0)}KB)`);
+              } catch (thumbErr) {
+                console.error('[THUMBNAIL] Failed to generate thumbnail:', thumbErr);
+              }
             } else {
               console.error('Failed to upload file:', result.error);
             }
@@ -28711,6 +28730,68 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
    * Clear ACL metadata from animal photos so they default to public read
    * This fixes social media sharing for photos that were uploaded with ACL metadata
    */
+  app.post('/api/admin/generate-thumbnails', requireTenant, requireAuth, requireRole('admin'), async (req: Request, res: Response) => {
+    try {
+      const sharpModule = (await import('sharp')).default;
+      const { parseObjectPath, objectStorageClient } = await import('./objectStorage');
+      const privateDir = process.env.PRIVATE_OBJECT_DIR || '';
+      const tenantId = req.tenant!.id;
+      
+      const allAnimals = await db.select({ id: animals.id, photoUrls: animals.photoUrls })
+        .from(animals)
+        .where(eq(animals.tenantId, tenantId));
+      
+      let generated = 0;
+      let skipped = 0;
+      let failed = 0;
+      
+      for (const animal of allAnimals) {
+        if (!animal.photoUrls || animal.photoUrls.length === 0) continue;
+        
+        for (const photoUrl of animal.photoUrls) {
+          if (!photoUrl.startsWith('/objects/')) continue;
+          
+          const entityId = photoUrl.slice('/objects/'.length);
+          const thumbEntityId = entityId + '-thumb';
+          const thumbFullPath = `${privateDir}/${thumbEntityId}`;
+          const { bucketName: tBucket, objectName: tName } = parseObjectPath(thumbFullPath);
+          const thumbFile = objectStorageClient.bucket(tBucket).file(tName);
+          
+          const [thumbExists] = await thumbFile.exists();
+          if (thumbExists) {
+            skipped++;
+            continue;
+          }
+          
+          try {
+            const origFullPath = `${privateDir}/${entityId}`;
+            const { bucketName: oBucket, objectName: oName } = parseObjectPath(origFullPath);
+            const origFile = objectStorageClient.bucket(oBucket).file(oName);
+            const [origExists] = await origFile.exists();
+            if (!origExists) { skipped++; continue; }
+            
+            const [origBuffer] = await origFile.download();
+            const thumbBuffer = await sharpModule(Buffer.from(origBuffer))
+              .resize(400, 300, { fit: 'cover' })
+              .jpeg({ quality: 75 })
+              .toBuffer();
+            
+            await thumbFile.save(thumbBuffer, { contentType: 'image/jpeg', resumable: false });
+            generated++;
+          } catch (err) {
+            console.error(`[THUMBNAIL BACKFILL] Failed for ${photoUrl}:`, err);
+            failed++;
+          }
+        }
+      }
+      
+      res.json({ generated, skipped, failed, total: allAnimals.reduce((s, a) => s + (a.photoUrls?.length || 0), 0) });
+    } catch (error: any) {
+      console.error('[THUMBNAIL BACKFILL] Error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   app.post('/api/admin/fix-animal-photo-acls', requireAuth, async (req, res, next) => {
     try {
       // Only platform admins can run this fix
