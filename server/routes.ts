@@ -28737,6 +28737,7 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
       const { parseObjectPath, objectStorageClient } = await import('./objectStorage');
       const privateDir = process.env.PRIVATE_OBJECT_DIR || '';
       const tenantId = req.tenant!.id;
+      const force = req.body?.force === true;
       
       const allAnimals = await db.select({ id: animals.id, photoUrls: animals.photoUrls })
         .from(animals)
@@ -28758,10 +28759,12 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
           const { bucketName: tBucket, objectName: tName } = parseObjectPath(thumbFullPath);
           const thumbFile = objectStorageClient.bucket(tBucket).file(tName);
           
-          const [thumbExists] = await thumbFile.exists();
-          if (thumbExists) {
-            skipped++;
-            continue;
+          if (!force) {
+            const [thumbExists] = await thumbFile.exists();
+            if (thumbExists) {
+              skipped++;
+              continue;
+            }
           }
           
           try {
