@@ -8602,6 +8602,7 @@ Crawl-delay: 1
               try {
                 const sharpModule = (await import('sharp')).default;
                 const thumbBuffer = await sharpModule(fileBuffer)
+                  .rotate()
                   .resize(400, 300, { fit: 'cover' })
                   .jpeg({ quality: 75 })
                   .toBuffer();
@@ -28772,6 +28773,7 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
             
             const [origBuffer] = await origFile.download();
             const thumbBuffer = await sharpModule(Buffer.from(origBuffer))
+              .rotate()
               .resize(400, 300, { fit: 'cover' })
               .jpeg({ quality: 75 })
               .toBuffer();

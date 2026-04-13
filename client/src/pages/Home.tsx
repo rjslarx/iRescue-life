@@ -593,6 +593,7 @@ export default function Home() {
                       breed={animal.breed}
                       age={`${animal.age} years`}
                       photo={animal.photoUrls?.[0] ?? dogPhoto}
+                      photos={animal.photoUrls && animal.photoUrls.length > 0 ? animal.photoUrls : undefined}
                       bio={animal.bio ?? undefined}
                       basePath={basePath}
                       useThumbnails
