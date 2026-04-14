@@ -654,9 +654,17 @@ export default function AnimalLookupPage() {
                     <CardContent className="p-3 flex items-center gap-3">
                       {animal.photoUrls && animal.photoUrls.length > 0 ? (
                         <img
-                          src={animal.photoUrls[0]}
+                          src={animal.photoUrls[0].startsWith('/objects/') && !animal.photoUrls[0].endsWith('-thumb') ? animal.photoUrls[0] + '-thumb' : animal.photoUrls[0]}
                           alt={animal.name}
+                          loading="lazy"
+                          decoding="async"
                           className="w-12 h-12 rounded-md object-cover flex-shrink-0"
+                          onError={(e) => {
+                            const target = e.currentTarget;
+                            if (target.src.endsWith('-thumb')) {
+                              target.src = target.src.slice(0, -6);
+                            }
+                          }}
                           data-testid={`img-animal-thumb-${animal.id}`}
                         />
                       ) : (

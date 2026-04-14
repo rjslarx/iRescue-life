@@ -16,6 +16,11 @@ import {
 import { cn } from "@/lib/utils";
 import { type Animal } from "@shared/schema";
 import { MedicalFundDialog } from "@/components/MedicalFundDialog";
+
+function getThumbUrl(url: string): string {
+  if (!url || !url.startsWith('/objects/') || url.endsWith('-thumb')) return url;
+  return url + '-thumb';
+}
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -131,9 +136,18 @@ export function AnimalHudCard({
           {hasPhotos ? (
             <>
               <img
-                src={animal.photoUrls![photoIdx]}
+                src={getThumbUrl(animal.photoUrls![photoIdx])}
                 alt={`${animal.name} - Photo ${photoIdx + 1}`}
+                loading="lazy"
+                decoding="async"
                 className="w-full h-full object-cover object-center absolute inset-0"
+                onError={(e) => {
+                  const target = e.currentTarget;
+                  const src = target.src;
+                  if (src.endsWith('-thumb')) {
+                    target.src = src.slice(0, -6);
+                  }
+                }}
                 data-testid={`img-animal-photo-${animal.id}`}
               />
               {animal.photoUrls!.length > 1 && (

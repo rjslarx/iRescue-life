@@ -203,6 +203,7 @@ export default function AvailableAnimalsPage() {
                   bio={animal.bio ?? undefined}
                   basePath={basePath}
                   status={animal.status}
+                  useThumbnails
                   onAdopt={() => handleAdopt(animal)}
                   onSponsor={() => handleSponsor(animal.name)}
                 />
