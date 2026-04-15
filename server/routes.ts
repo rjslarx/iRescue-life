@@ -22996,8 +22996,7 @@ Submitted: ${new Date().toLocaleString()}
           if (tenantRecord?.twilioAuthTokenEncrypted) {
             const twilio = (await import('twilio')).default;
             const authToken = decrypt(tenantRecord.twilioAuthTokenEncrypted);
-            // Build the full URL Twilio signed — use configured base URL or reconstruct from request
-            const webhookUrl = `${process.env.APP_BASE_URL || `${req.protocol}://${req.get('host')}`}/api/webhooks/twilio/incoming`;
+            const webhookUrl = `${process.env.APP_BASE_URL || `${req.protocol}://${req.get('host')}`}${req.originalUrl || req.url}`;
             const isValid = twilio.validateRequest(authToken, twilioSignature, webhookUrl, req.body);
             if (!isValid) {
               console.warn('[TWILIO] Webhook signature validation failed — rejecting request');
@@ -23037,6 +23036,11 @@ Submitted: ${new Date().toLocaleString()}
       res.set('Content-Type', 'text/xml');
       res.send('<?xml version="1.0" encoding="UTF-8"?><Response></Response>');
     }
+  });
+
+  app.post('/api/webhooks/twilio/inbound', (req, res, next) => {
+    req.url = '/api/webhooks/twilio/incoming';
+    app.handle(req, res, next);
   });
 
   /**
