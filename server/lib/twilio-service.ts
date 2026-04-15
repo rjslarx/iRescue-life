@@ -708,9 +708,9 @@ export async function handleIncomingSms(
               let selectedShortage: ShortageInfo;
               if (numericReply !== null && numericReply >= 1 && numericReply <= currentShortages.length) {
                 selectedShortage = currentShortages[numericReply - 1];
-              } else if (isSignupKeyword && currentShortages.length === 1) {
+              } else if (currentShortages.length === 1) {
                 selectedShortage = currentShortages[0];
-              } else if (isSignupKeyword && currentShortages.length > 1) {
+              } else if (currentShortages.length > 1) {
                 const optionLines = currentShortages.map((s, i) => {
                   const dl = format(parseISO(s.date), "EEE M/d");
                   return `${i + 1}. ${s.calendarName} ${dl}`;
