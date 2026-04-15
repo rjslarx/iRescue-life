@@ -616,12 +616,13 @@ export async function handleIncomingSms(
           // For numeric replies, only proceed if a recent urgent alert was sent to this phone (within 24h)
           if (numericReply !== null && !isSignupKeyword) {
             const recentAlertCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+            const fromDigitsForAlert = fromNumber.replace(/\D/g, '').slice(-10);
             const [recentAlert] = await db
               .select({ id: smsMessageLogs.id })
               .from(smsMessageLogs)
               .where(and(
                 eq(smsMessageLogs.tenantId, tenant.id),
-                eq(smsMessageLogs.toNumber, fromNumber),
+                sql`regexp_replace(${smsMessageLogs.toNumber}, '\\D', '', 'g') LIKE ${'%' + fromDigitsForAlert}`,
                 eq(smsMessageLogs.messageType, 'volunteer_recruitment_urgent'),
                 eq(smsMessageLogs.direction, 'outbound'),
                 gte(smsMessageLogs.createdAt, recentAlertCutoff)
@@ -634,11 +635,12 @@ export async function handleIncomingSms(
             }
           }
 
-          const [user] = await db
-            .select({ id: users.id, fullName: users.fullName })
+          const fromDigits = fromNumber.replace(/\D/g, '').slice(-10);
+          const tenantUsers = await db
+            .select({ id: users.id, fullName: users.fullName, phone: users.phone })
             .from(users)
-            .where(and(eq(users.tenantId, tenant.id), eq(users.phone, fromNumber)))
-            .limit(1);
+            .where(and(eq(users.tenantId, tenant.id), isNotNull(users.phone)));
+          const user = tenantUsers.find(u => u.phone && u.phone.replace(/\D/g, '').slice(-10) === fromDigits) ?? null;
 
           if (user) {
             const daysOut = settings.urgentAlertDaysOut ?? 2;
