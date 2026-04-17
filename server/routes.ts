@@ -43538,6 +43538,9 @@ Use timestamps like [00:00] to help with pacing.`;
     try {
       const { fundraiserEvents, fundraiserOrders } = await import('@shared/schema');
       const { id } = req.params;
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+        return res.status(404).json({ error: 'Event not found' });
+      }
       const [event] = await db
         .select()
         .from(fundraiserEvents)
@@ -43563,6 +43566,9 @@ Use timestamps like [00:00] to help with pacing.`;
       const { fundraiserEvents, fundraiserOrders } = await import('@shared/schema');
       const { calculatePlatformFee } = await import('./config/platform');
       const { id } = req.params;
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+        return res.status(404).json({ error: 'Event not found' });
+      }
 
       const checkoutSchema = z.object({
         customerName: z.string().min(1),

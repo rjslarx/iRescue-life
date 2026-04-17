@@ -1,0 +1,76 @@
+2026-04-15 06:46:58.85
+e1003ec2
+User
+[Error] 500 — invalid input syntax for type uuid: "50745467-fb26-4211-ac6e-f99b37313e53l" error: invalid input syntax for type uuid: "50745467-fb26-4211-ac6e-f99b37313e53l"
+2026-04-15 06:46:58.85
+e1003ec2
+User
+at async file:///home/runner/workspace/node_modules/drizzle-orm/node-postgres/session.js:83:22
+2026-04-15 06:46:58.85
+e1003ec2
+User
+length: 169,
+2026-04-15 06:46:58.85
+e1003ec2
+User
+at /home/runner/workspace/node_modules/pg-pool/index.js:45:11
+2026-04-15 06:46:58.85
+e1003ec2
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-04-15 07:02:23.73
+e1003ec2
+User
+length: 169,
+2026-04-15 07:02:23.73
+e1003ec2
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-04-15 07:02:23.73
+e1003ec2
+User
+[Error] 500 — invalid input syntax for type uuid: "50745467-fb26-4211-ac6e-f99b37313e53l" error: invalid input syntax for type uuid: "50745467-fb26-4211-ac6e-f99b37313e53l"
+2026-04-15 07:02:23.73
+e1003ec2
+User
+at async file:///home/runner/workspace/node_modules/drizzle-orm/node-postgres/session.js:83:22
+2026-04-15 07:02:23.73
+e1003ec2
+User
+severity: 'ERROR',
+2026-04-15 07:02:23.73
+e1003ec2
+User
+at async file:///home/runner/workspace/dist/index.js:75997:23 {
+2026-04-15 07:02:23.73
+e1003ec2
+User
+at /home/runner/workspace/node_modules/pg-pool/index.js:45:11
+2026-04-15 07:13:49.65
+e1003ec2
+User
+at async file:///home/runner/workspace/dist/index.js:75997:23 {
+2026-04-15 07:13:49.65
+e1003ec2
+User
+where: "unnamed portal parameter $1 = '...'",
+2026-04-15 07:13:49.65
+e1003ec2
+User
+detail: undefined,
+2026-04-15 07:13:49.65
+e1003ec2
+User
+at async file:///home/runner/workspace/node_modules/drizzle-orm/node-postgres/session.js:83:22
+2026-04-15 07:13:49.65
+e1003ec2
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-04-15 07:13:49.65
+e1003ec2
+User
+[Error] 500 — invalid input syntax for type uuid: "50745467-fb26-4211-ac6e-f99b37313e53l" error: invalid input syntax for type uuid: "50745467-fb26-4211-ac6e-f99b37313e53l"
+2026-04-15 07:13:49.65
+e1003ec2
+User
+at /home/runner/workspace/node_modules/pg-pool/index.js:45:11
