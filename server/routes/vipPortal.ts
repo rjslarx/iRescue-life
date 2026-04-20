@@ -8,6 +8,7 @@ import {
   tenants,
 } from '@shared/schema';
 import { eq, and, desc, sql } from 'drizzle-orm';
+import { z } from 'zod';
 import { EmailService } from '../lib/email-service';
 
 const router = Router();
@@ -554,6 +555,100 @@ router.post('/billing-portal', async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('[VIP Portal] Error creating billing portal session:', error);
     res.status(500).json({ error: error?.message || 'Failed to open billing portal' });
+  }
+});
+
+/**
+ * PATCH /api/vip-portal/subscriptions/:id/wall-of-heroes
+ * Body: { displayOnWallOfHeroes: boolean, firstNameDisplay?: string | null }
+ * Update the donor's Wall of Heroes opt-in for one of their own subscriptions.
+ */
+router.patch('/subscriptions/:id/wall-of-heroes', async (req: Request, res: Response) => {
+  const auth = await authVipDonor(req, res);
+  if (!auth) return;
+  const { donorId, tenantId } = auth;
+
+  const bodySchema = z.object({
+    displayOnWallOfHeroes: z.boolean(),
+    firstNameDisplay: z
+      .string()
+      .trim()
+      .max(40)
+      .nullable()
+      .optional()
+      .transform((v) => (v === undefined ? undefined : (v === null || v.length === 0 ? null : v))),
+  });
+
+  let parsed: z.infer<typeof bodySchema>;
+  try {
+    parsed = bodySchema.parse(req.body || {});
+  } catch (err) {
+    return res.status(400).json({ error: 'Invalid request body' });
+  }
+
+  try {
+    const [existing] = await db
+      .select({
+        id: subscriptions.id,
+        displayOnWallOfHeroes: subscriptions.displayOnWallOfHeroes,
+        firstNameDisplay: subscriptions.firstNameDisplay,
+      })
+      .from(subscriptions)
+      .where(and(
+        eq(subscriptions.id, req.params.id),
+        eq(subscriptions.tenantId, tenantId),
+        eq(subscriptions.donorId, donorId),
+      ))
+      .limit(1);
+
+    if (!existing) return res.status(404).json({ error: 'Subscription not found' });
+
+    const nextFirstName = parsed.displayOnWallOfHeroes
+      ? (parsed.firstNameDisplay !== undefined ? parsed.firstNameDisplay : existing.firstNameDisplay)
+      : null;
+
+    await db
+      .update(subscriptions)
+      .set({
+        displayOnWallOfHeroes: parsed.displayOnWallOfHeroes,
+        firstNameDisplay: nextFirstName,
+      })
+      .where(and(
+        eq(subscriptions.id, existing.id),
+        eq(subscriptions.tenantId, tenantId),
+        eq(subscriptions.donorId, donorId),
+      ));
+
+    // Donor self-serve action: log to console for traceability. The
+    // audit_logs table requires a real user.id, which donors don't have, so
+    // we use the same console-based pattern as other VIP-portal donor
+    // actions (billing portal, receipt downloads, etc).
+    console.log('[VIP Portal Audit] wall_of_heroes.update', {
+      tenantId,
+      donorId,
+      subscriptionId: existing.id,
+      before: {
+        displayOnWallOfHeroes: existing.displayOnWallOfHeroes,
+        firstNameDisplay: existing.firstNameDisplay,
+      },
+      after: {
+        displayOnWallOfHeroes: parsed.displayOnWallOfHeroes,
+        firstNameDisplay: nextFirstName,
+      },
+      ipAddress: (req.get('x-forwarded-for') || '').split(',')[0].trim() || req.socket.remoteAddress,
+    });
+
+    res.json({
+      success: true,
+      subscription: {
+        id: existing.id,
+        displayOnWallOfHeroes: parsed.displayOnWallOfHeroes,
+        firstNameDisplay: nextFirstName,
+      },
+    });
+  } catch (error) {
+    console.error('[VIP Portal] Error updating wall opt-in:', error);
+    res.status(500).json({ error: 'Failed to update Wall of Heroes preference' });
   }
 });
 

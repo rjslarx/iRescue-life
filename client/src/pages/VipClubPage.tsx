@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Loader2, Sparkles, CheckCircle2, Download, FileText, Mail, History, CreditCard, AlertCircle } from "lucide-react";
 import PublicHeader from "@/components/PublicHeader";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { buildTenantUrl, getTenantHeaders } from "@/lib/tenantApi";
 import { useToast } from "@/hooks/use-toast";
 import { useSEO } from "@/hooks/useSEO";
@@ -85,6 +85,110 @@ function formatMoney(cents: number | null | undefined): string {
 
 function formatDateShort(d: string | Date): string {
   return new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+function WallOfHeroesToggle({
+  sub,
+  donorName,
+  isPending,
+  onChange,
+}: {
+  sub: VipHistorySubscription;
+  donorName: string;
+  isPending: boolean;
+  onChange: (displayOnWallOfHeroes: boolean, firstNameDisplay: string | null) => void;
+}) {
+  const fallbackName = donorName?.split(' ')[0] || '';
+  const [draftName, setDraftName] = useState<string>(sub.firstNameDisplay || '');
+  const [editing, setEditing] = useState(false);
+
+  // Keep local draft in sync if the upstream record changes (e.g. after a successful save)
+  useEffect(() => {
+    setDraftName(sub.firstNameDisplay || '');
+  }, [sub.firstNameDisplay]);
+
+  const currentDisplay = sub.firstNameDisplay || fallbackName || 'Anonymous';
+
+  const saveName = () => {
+    const trimmed = draftName.trim();
+    onChange(true, trimmed.length === 0 ? null : trimmed);
+    setEditing(false);
+  };
+
+  return (
+    <div
+      className="rounded-md border bg-muted/30 p-3 space-y-2"
+      data-testid={`wall-optin-${sub.id}`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-2 min-w-0">
+          <Checkbox
+            id={`wall-optin-${sub.id}`}
+            checked={sub.displayOnWallOfHeroes}
+            disabled={isPending}
+            onCheckedChange={(v) => {
+              const next = !!v;
+              onChange(next, next ? (sub.firstNameDisplay || null) : null);
+            }}
+            data-testid={`checkbox-wall-optin-${sub.id}`}
+          />
+          <Label
+            htmlFor={`wall-optin-${sub.id}`}
+            className="text-sm leading-snug font-normal cursor-pointer"
+          >
+            Show my first name on our public Wall of Heroes
+          </Label>
+        </div>
+        {isPending && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+      </div>
+      {sub.displayOnWallOfHeroes && (
+        <div className="pl-6 text-xs text-muted-foreground space-y-2">
+          {editing ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <Input
+                value={draftName}
+                onChange={(e) => setDraftName(e.target.value)}
+                placeholder={fallbackName || 'First name'}
+                maxLength={40}
+                className="max-w-xs"
+                data-testid={`input-wall-firstname-${sub.id}`}
+              />
+              <Button
+                onClick={saveName}
+                disabled={isPending}
+                data-testid={`button-save-wall-firstname-${sub.id}`}
+              >
+                Save
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => { setDraftName(sub.firstNameDisplay || ''); setEditing(false); }}
+                data-testid={`button-cancel-wall-firstname-${sub.id}`}
+              >
+                Cancel
+              </Button>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2">
+              <span data-testid={`text-wall-firstname-${sub.id}`}>
+                Displayed as <span className="font-medium text-foreground">{currentDisplay}</span>
+              </span>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setEditing(true)}
+                disabled={isPending}
+                data-testid={`button-edit-wall-firstname-${sub.id}`}
+              >
+                Change
+              </Button>
+            </div>
+          )}
+          <p>Only your first name and tier appear publicly. You can opt out anytime.</p>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function VipClubPage() {
@@ -335,6 +439,53 @@ export default function VipClubPage() {
     },
     onError: (err: any) => {
       toast({ title: 'Could not save', description: err?.message, variant: 'destructive' });
+    },
+  });
+
+  const wallOptInMutation = useMutation({
+    mutationFn: async (vars: { subscriptionId: string; displayOnWallOfHeroes: boolean; firstNameDisplay: string | null }) => {
+      const url = buildTenantUrl(`/api/vip-portal/subscriptions/${vars.subscriptionId}/wall-of-heroes?token=${encodeURIComponent(historyToken!)}`);
+      const res = await fetch(url, {
+        method: 'PATCH',
+        headers: { ...getTenantHeaders(), 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          displayOnWallOfHeroes: vars.displayOnWallOfHeroes,
+          firstNameDisplay: vars.firstNameDisplay,
+        }),
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        let msg = `Failed to update (${res.status})`;
+        try { const j = JSON.parse(text); if (j.error) msg = j.error; } catch {}
+        throw new Error(msg);
+      }
+      return res.json() as Promise<{ subscription: { id: string; displayOnWallOfHeroes: boolean; firstNameDisplay: string | null } }>;
+    },
+    onMutate: async (vars) => {
+      const queryKey = ['/api/vip-portal/history', historyToken];
+      await queryClient.cancelQueries({ queryKey });
+      const previous = queryClient.getQueryData<VipHistoryResponse>(queryKey);
+      if (previous) {
+        queryClient.setQueryData<VipHistoryResponse>(queryKey, {
+          ...previous,
+          subscriptions: previous.subscriptions.map((s) =>
+            s.id === vars.subscriptionId
+              ? { ...s, displayOnWallOfHeroes: vars.displayOnWallOfHeroes, firstNameDisplay: vars.displayOnWallOfHeroes ? vars.firstNameDisplay : null }
+              : s,
+          ),
+        });
+      }
+      return { previous };
+    },
+    onError: (err: any, _vars, ctx) => {
+      if (ctx?.previous) {
+        queryClient.setQueryData(['/api/vip-portal/history', historyToken], ctx.previous);
+      }
+      toast({ title: 'Could not update Wall of Heroes', description: err?.message, variant: 'destructive' });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/vip-club/wall-of-heroes'] });
     },
   });
 
@@ -701,6 +852,16 @@ export default function VipClubPage() {
                             )}
                           </div>
                           </div>
+                          {(sub.status === 'active' || sub.status === 'trialing' || sub.status === 'past_due') && (
+                            <WallOfHeroesToggle
+                              sub={sub}
+                              donorName={historyData.donor.name}
+                              isPending={wallOptInMutation.isPending && wallOptInMutation.variables?.subscriptionId === sub.id}
+                              onChange={(displayOnWallOfHeroes, firstNameDisplay) =>
+                                wallOptInMutation.mutate({ subscriptionId: sub.id, displayOnWallOfHeroes, firstNameDisplay })
+                              }
+                            />
+                          )}
                         </div>
                       );
                     })}
