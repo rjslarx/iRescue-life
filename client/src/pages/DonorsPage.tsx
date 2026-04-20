@@ -24,6 +24,7 @@ interface VipMember {
   tierName: string | null;
   amount: number;
   status: string;
+  memberSince: string;
 }
 
 interface VipMembersData {
@@ -168,14 +169,25 @@ export default function DonorsPage() {
                               </TableCell>
                               <TableCell>
                                 {vip ? (
-                                  <Badge
-                                    variant={vip.status === 'active' ? 'default' : 'outline'}
-                                    data-testid={`badge-vip-tier-${donor.id}`}
-                                  >
-                                    <Sparkles className="h-3 w-3 mr-1" />
-                                    {vip.tierName || 'VIP'}
-                                    {vip.status !== 'active' && <span className="ml-1 opacity-70">({vip.status})</span>}
-                                  </Badge>
+                                  <div className="flex flex-col gap-0.5">
+                                    <Badge
+                                      variant={vip.status === 'active' ? 'default' : 'outline'}
+                                      data-testid={`badge-vip-tier-${donor.id}`}
+                                      className="self-start"
+                                    >
+                                      <Sparkles className="h-3 w-3 mr-1" />
+                                      {vip.tierName || 'VIP'}
+                                      {vip.status !== 'active' && <span className="ml-1 opacity-70">({vip.status})</span>}
+                                    </Badge>
+                                    {vip.memberSince && (
+                                      <span
+                                        className="text-[10px] text-muted-foreground"
+                                        data-testid={`text-vip-since-${donor.id}`}
+                                      >
+                                        since {new Date(vip.memberSince).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}
+                                      </span>
+                                    )}
+                                  </div>
                                 ) : (
                                   <span className="text-xs text-muted-foreground">—</span>
                                 )}

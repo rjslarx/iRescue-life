@@ -15335,6 +15335,8 @@ ${renderedHtml}
    */
   app.patch('/api/monthly-tiers/:id', requireTenant, requireAuth, requireRoleOrPageAccess('finance', 'admin'), async (req, res, next) => {
     try {
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(req.params.id)) return res.status(404).json({ error: 'Tier not found' });
       const { monthlyGivingTiers } = await import('@shared/schema');
       const updateSchema = z.object({
         tierName: z.string().min(1).optional(),
@@ -15361,11 +15363,40 @@ ${renderedHtml}
   });
 
   /**
+   * POST /api/monthly-tiers/reorder
+   * Batch update display order for tiers (drag-to-reorder)
+   */
+  app.post('/api/monthly-tiers/reorder', requireTenant, requireAuth, requireRoleOrPageAccess('finance', 'admin'), async (req, res, next) => {
+    try {
+      const { monthlyGivingTiers } = await import('@shared/schema');
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const schema = z.object({
+        order: z.array(z.string().refine(s => uuidRegex.test(s), 'Invalid tier id')).min(1),
+      });
+      const { order } = schema.parse(req.body);
+      // Run sequentially to keep simple; could be a CASE update for perf
+      for (let i = 0; i < order.length; i++) {
+        await db.update(monthlyGivingTiers)
+          .set({ displayOrder: i })
+          .where(and(
+            eq(monthlyGivingTiers.id, order[i]),
+            eq(monthlyGivingTiers.tenantId, req.tenant!.id),
+          ));
+      }
+      res.json({ success: true });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * DELETE /api/monthly-tiers/:id
    * Delete a tier (existing subscriptions retain their tierIdSnapshot/name)
    */
   app.delete('/api/monthly-tiers/:id', requireTenant, requireAuth, requireRoleOrPageAccess('finance', 'admin'), async (req, res, next) => {
     try {
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(req.params.id)) return res.status(404).json({ error: 'Tier not found' });
       const { monthlyGivingTiers } = await import('@shared/schema');
       const result = await db
         .delete(monthlyGivingTiers)
@@ -15412,6 +15443,8 @@ ${renderedHtml}
    */
   app.post('/api/monthly-tiers/:id/checkout', requireTenant, async (req, res, next) => {
     try {
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(req.params.id)) return res.status(404).json({ error: 'Tier not found' });
       const { monthlyGivingTiers } = await import('@shared/schema');
       const bodySchema = z.object({
         customerEmail: z.string().email().optional(),
@@ -15477,8 +15510,12 @@ ${renderedHtml}
       if (!session) return res.status(500).json({ error: 'Failed to create checkout session' });
       res.json({ sessionId: session.id, url: session.url });
     } catch (error: any) {
-      console.error('[VIP Tier Checkout Error]', error?.message);
-      res.status(error?.statusCode || 500).json({ error: error?.message || 'Failed to create checkout session' });
+      console.error('[VIP Tier Checkout Error]', { message: error?.message, code: error?.code, type: error?.type });
+      // Don't leak internal error details to public callers
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Invalid request' });
+      }
+      res.status(500).json({ error: 'Unable to start checkout. Please try again later.' });
     }
   });
 

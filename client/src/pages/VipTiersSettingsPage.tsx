@@ -9,7 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Plus, Pencil, Trash2, Sparkles, Heart, Shield, PawPrint, Star, Users, Home, HandHeart } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, Sparkles, Heart, Shield, PawPrint, Star, Users, Home, HandHeart, ArrowUp, ArrowDown, GripVertical } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { MonthlyGivingTier } from "@shared/schema";
@@ -144,6 +144,32 @@ export default function VipTiersSettingsPage() {
     }
   };
 
+  const handleToggleActive = async (tier: MonthlyGivingTier, isActive: boolean) => {
+    try {
+      await apiRequest('PATCH', `/api/monthly-tiers/${tier.id}`, { isActive });
+      toast({ title: isActive ? "Tier visible to donors" : "Tier hidden" });
+      queryClient.invalidateQueries({ queryKey: ['/api/monthly-tiers'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/monthly-tiers/public'] });
+    } catch (err: any) {
+      toast({ title: "Update failed", description: err?.message, variant: "destructive" });
+    }
+  };
+
+  const handleReorder = async (index: number, direction: -1 | 1) => {
+    const newIndex = index + direction;
+    if (newIndex < 0 || newIndex >= tiers.length) return;
+    const ordered = [...tiers];
+    const [moved] = ordered.splice(index, 1);
+    ordered.splice(newIndex, 0, moved);
+    try {
+      await apiRequest('POST', '/api/monthly-tiers/reorder', { order: ordered.map(t => t.id) });
+      queryClient.invalidateQueries({ queryKey: ['/api/monthly-tiers'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/monthly-tiers/public'] });
+    } catch (err: any) {
+      toast({ title: "Reorder failed", description: err?.message, variant: "destructive" });
+    }
+  };
+
   const handleSeed = async () => {
     setBusy(true);
     try {
@@ -202,10 +228,38 @@ export default function VipTiersSettingsPage() {
         </Card>
       ) : (
         <div className="grid gap-3">
-          {tiers.map((tier) => {
+          <p className="text-xs text-muted-foreground flex items-center gap-1">
+            <GripVertical className="h-3 w-3" />
+            Use the up/down arrows to reorder tiers as they appear on your VIP Club page.
+          </p>
+          {tiers.map((tier, index) => {
             const Icon = getTierIcon(tier.iconName);
             return (
               <Card key={tier.id} className="p-4 flex items-center gap-4" data-testid={`tier-card-${tier.id}`}>
+                <div className="flex flex-col -my-1 shrink-0">
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-6 w-6"
+                    disabled={index === 0}
+                    onClick={() => handleReorder(index, -1)}
+                    data-testid={`button-tier-up-${tier.id}`}
+                    aria-label="Move up"
+                  >
+                    <ArrowUp className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-6 w-6"
+                    disabled={index === tiers.length - 1}
+                    onClick={() => handleReorder(index, 1)}
+                    data-testid={`button-tier-down-${tier.id}`}
+                    aria-label="Move down"
+                  >
+                    <ArrowDown className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
                 <div className="h-12 w-12 rounded-md bg-primary/10 text-primary flex items-center justify-center shrink-0">
                   <Icon className="h-6 w-6" />
                 </div>
@@ -217,7 +271,15 @@ export default function VipTiersSettingsPage() {
                   </div>
                   <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2">{tier.tangibleImpact}</p>
                 </div>
-                <div className="flex gap-1 shrink-0">
+                <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-2 mr-1" title={tier.isActive ? "Visible to donors" : "Hidden from donors"}>
+                    <Switch
+                      checked={tier.isActive}
+                      onCheckedChange={(v) => handleToggleActive(tier, v)}
+                      data-testid={`switch-tier-active-${tier.id}`}
+                      aria-label="Toggle visibility"
+                    />
+                  </div>
                   <Button size="icon" variant="ghost" onClick={() => openEdit(tier)} data-testid={`button-edit-tier-${tier.id}`}>
                     <Pencil className="h-4 w-4" />
                   </Button>

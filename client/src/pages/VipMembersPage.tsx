@@ -62,6 +62,23 @@ export default function VipMembersPage() {
     };
   }, [members]);
 
+  const groupedByTier = useMemo(() => {
+    const groups = new Map<string, { tierName: string; members: Member[]; activeCount: number; mrr: number }>();
+    for (const m of filtered) {
+      const key = m.tierName || 'Unassigned tier';
+      if (!groups.has(key)) {
+        groups.set(key, { tierName: key, members: [], activeCount: 0, mrr: 0 });
+      }
+      const g = groups.get(key)!;
+      g.members.push(m);
+      if (m.status === 'active') {
+        g.activeCount += 1;
+        g.mrr += m.amount;
+      }
+    }
+    return Array.from(groups.values()).sort((a, b) => b.mrr - a.mrr);
+  }, [filtered]);
+
   const exportCsv = () => {
     const headers = ['Donor Name', 'Email', 'Phone', 'Tier', 'Monthly Amount', 'Status', 'Member Since', 'Canceled At', 'Wall of Heroes Display Name'];
     const rows = filtered.map(m => [
@@ -140,62 +157,75 @@ export default function VipMembersPage() {
                 Preview VIP Club Page
               </Button>
             </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Donor</TableHead>
-                  <TableHead>Tier</TableHead>
-                  <TableHead>Monthly</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Member Since</TableHead>
-                  <TableHead>Wall</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map(m => (
-                  <TableRow key={m.subscriptionId} data-testid={`row-vip-member-${m.subscriptionId}`}>
-                    <TableCell>
-                      <div className="font-medium" data-testid={`text-vip-donor-name-${m.subscriptionId}`}>{m.donorName}</div>
-                      <div className="text-xs text-muted-foreground">{m.donorEmail}</div>
-                    </TableCell>
-                    <TableCell>
-                      {m.tierName ? (
-                        <Badge variant="secondary" data-testid={`badge-vip-tier-${m.subscriptionId}`}>
-                          <Sparkles className="h-3 w-3 mr-1" />
-                          {m.tierName}
-                        </Badge>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="font-medium">${(m.amount / 100).toFixed(0)}</TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={m.status === 'active' ? 'default' : 'outline'}
-                        data-testid={`badge-vip-status-${m.subscriptionId}`}
-                      >
-                        {m.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {new Date(m.memberSince).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell>
-                      {m.displayOnWallOfHeroes ? (
-                        <Badge variant="outline" className="text-xs">
-                          {m.firstNameDisplay || m.donorName.split(' ')[0]}
-                        </Badge>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">Opted out</span>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
+          ) : null}
         </Card>
+
+        {!isLoading && filtered.length > 0 && (
+          <div className="space-y-6">
+            {groupedByTier.map((group) => (
+              <div key={group.tierName} data-testid={`group-tier-${group.tierName.toLowerCase().replace(/\s+/g, '-')}`}>
+                <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-primary" />
+                    <h3 className="font-semibold" data-testid={`text-tier-group-name-${group.tierName.toLowerCase().replace(/\s+/g, '-')}`}>
+                      {group.tierName}
+                    </h3>
+                    <Badge variant="secondary" data-testid={`badge-tier-count-${group.tierName.toLowerCase().replace(/\s+/g, '-')}`}>
+                      {group.activeCount} active / {group.members.length} total
+                    </Badge>
+                  </div>
+                  <div className="text-sm text-muted-foreground" data-testid={`text-tier-mrr-${group.tierName.toLowerCase().replace(/\s+/g, '-')}`}>
+                    <span className="font-semibold text-foreground">${(group.mrr / 100).toFixed(0)}</span>/mo from this tier
+                  </div>
+                </div>
+                <Card>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Donor</TableHead>
+                        <TableHead>Monthly</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Member Since</TableHead>
+                        <TableHead>Wall</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {group.members.map(m => (
+                        <TableRow key={m.subscriptionId} data-testid={`row-vip-member-${m.subscriptionId}`}>
+                          <TableCell>
+                            <div className="font-medium" data-testid={`text-vip-donor-name-${m.subscriptionId}`}>{m.donorName}</div>
+                            <div className="text-xs text-muted-foreground">{m.donorEmail}</div>
+                          </TableCell>
+                          <TableCell className="font-medium">${(m.amount / 100).toFixed(0)}</TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={m.status === 'active' ? 'default' : 'outline'}
+                              data-testid={`badge-vip-status-${m.subscriptionId}`}
+                            >
+                              {m.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {new Date(m.memberSince).toLocaleDateString()}
+                          </TableCell>
+                          <TableCell>
+                            {m.displayOnWallOfHeroes ? (
+                              <Badge variant="outline" className="text-xs">
+                                {m.firstNameDisplay || m.donorName.split(' ')[0]}
+                              </Badge>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">Opted out</span>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </Card>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </DashboardLayout>
   );
