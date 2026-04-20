@@ -9,25 +9,13 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Plus, Pencil, Trash2, Sparkles, Heart, Shield, PawPrint, Star, Users, Home, HandHeart, ArrowUp, ArrowDown, GripVertical } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, Sparkles, ArrowUp, ArrowDown, GripVertical } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { MonthlyGivingTier } from "@shared/schema";
+import { VIP_ICON_OPTIONS as ICON_OPTIONS, getTierIcon } from "@/lib/vip-tier-icon";
 
-const ICON_OPTIONS = [
-  { value: "heart", label: "Heart", Icon: Heart },
-  { value: "shield", label: "Shield", Icon: Shield },
-  { value: "paw", label: "Paw", Icon: PawPrint },
-  { value: "star", label: "Star", Icon: Star },
-  { value: "hand-heart", label: "Hand Heart", Icon: HandHeart },
-  { value: "users", label: "Community", Icon: Users },
-  { value: "home", label: "Home", Icon: Home },
-];
-
-export function getTierIcon(name?: string | null) {
-  const found = ICON_OPTIONS.find(i => i.value === name);
-  return found ? found.Icon : Heart;
-}
+export { getTierIcon };
 
 interface TierFormState {
   tierName: string;

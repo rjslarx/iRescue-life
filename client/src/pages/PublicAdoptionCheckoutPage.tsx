@@ -13,9 +13,21 @@ import { Badge } from "@/components/ui/badge";
 import { SignatureCanvas } from "@/components/SignatureCanvas";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, CheckCircle2, ChevronLeft, ChevronRight, Heart, AlertCircle, FileText, CreditCard, Download, Camera, Upload, X } from "lucide-react";
+import { Loader2, CheckCircle2, ChevronLeft, ChevronRight, Heart, AlertCircle, FileText, CreditCard, Download, Camera, Upload, X, Sparkles } from "lucide-react";
 import { Elements, CardElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { loadStripe } from "@stripe/stripe-js";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
+import { getTierIcon } from "@/lib/vip-tier-icon";
+
+interface PublicVipTier {
+  id: string;
+  tierName: string;
+  amount: number;
+  tangibleImpact: string;
+  iconName: string;
+  displayOrder: number;
+}
 
 // Use test keys in development (with fallback to regular keys), production keys in production
 const isDevelopment = import.meta.env.DEV;
@@ -449,6 +461,173 @@ function PaymentForm({
   );
 }
 
+function VipUpsellSection({ animalName }: { animalName: string }) {
+  const { toast } = useToast();
+  const [selected, setSelected] = useState<PublicVipTier | null>(null);
+  const [email, setEmail] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [optInWall, setOptInWall] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+
+  const { data: tiersData } = useQuery<{ tiers: PublicVipTier[] }>({
+    queryKey: ['/api/monthly-tiers/public'],
+    retry: false,
+  });
+
+  const tiers = tiersData?.tiers || [];
+  if (tiers.length === 0) return null;
+
+  const startCheckout = async () => {
+    if (!selected) return;
+    setSubmitting(true);
+    try {
+      const res = await apiRequest('POST', `/api/monthly-tiers/${selected.id}/checkout`, {
+        customerEmail: email || undefined,
+        firstNameDisplay: optInWall ? (firstName || undefined) : undefined,
+        displayOnWallOfHeroes: optInWall,
+      });
+      const json = await res.json();
+      if (json.url) {
+        window.location.href = json.url;
+      } else {
+        throw new Error(json.error || "Could not start checkout");
+      }
+    } catch (e: any) {
+      toast({
+        title: "Couldn't start monthly giving",
+        description: e.message || "Please try again from the VIP Donor Club page.",
+        variant: "destructive",
+      });
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <>
+      <Card data-testid="card-vip-upsell" className="text-left">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-primary" />
+            <CardTitle className="text-xl">Want to keep helping animals like {animalName}?</CardTitle>
+          </div>
+          <CardDescription>
+            Become a monthly VIP donor and provide steady care for the next animal who needs us. Cancel anytime.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {tiers.map((tier) => {
+            const Icon = getTierIcon(tier.iconName);
+            return (
+              <div
+                key={tier.id}
+                data-testid={`row-vip-tier-${tier.id}`}
+                className="flex items-center justify-between gap-3 rounded-md border p-3"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="rounded-md bg-muted p-2 shrink-0">
+                    <Icon className="h-5 w-5 text-primary" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-baseline gap-2 flex-wrap">
+                      <span className="font-medium" data-testid={`text-tier-name-${tier.id}`}>{tier.tierName}</span>
+                      <span className="text-sm text-muted-foreground" data-testid={`text-tier-amount-${tier.id}`}>
+                        ${(tier.amount / 100).toFixed(0)}/mo
+                      </span>
+                    </div>
+                    {tier.tangibleImpact && (
+                      <p className="text-xs text-muted-foreground line-clamp-2">{tier.tangibleImpact}</p>
+                    )}
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setSelected(tier)}
+                  data-testid={`button-select-tier-${tier.id}`}
+                  className="shrink-0"
+                >
+                  Become a {tier.tierName}
+                </Button>
+              </div>
+            );
+          })}
+          <p className="text-xs text-muted-foreground pt-1">
+            You'll be redirected to a secure Stripe page to enter your card. This is separate from your adoption fee.
+          </p>
+        </CardContent>
+      </Card>
+
+      <Dialog open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
+        <DialogContent data-testid="dialog-vip-upsell">
+          <DialogHeader>
+            <DialogTitle>Become a {selected?.tierName}</DialogTitle>
+            <DialogDescription>
+              ${selected ? (selected.amount / 100).toFixed(0) : ""}/month, charged automatically. You can cancel anytime from your receipt email.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="vip-email">Email (optional)</Label>
+              <Input
+                id="vip-email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                data-testid="input-vip-email"
+              />
+              <p className="text-xs text-muted-foreground">
+                Leave blank to enter on the next page.
+              </p>
+            </div>
+            <div className="flex items-center justify-between rounded-md border p-3">
+              <div className="space-y-0.5 pr-3">
+                <Label htmlFor="vip-wall">Show me on the Wall of Heroes</Label>
+                <p className="text-xs text-muted-foreground">
+                  We'll display your first name publicly to thank you.
+                </p>
+              </div>
+              <Switch
+                id="vip-wall"
+                checked={optInWall}
+                onCheckedChange={setOptInWall}
+                data-testid="switch-vip-wall"
+              />
+            </div>
+            {optInWall && (
+              <div className="space-y-2">
+                <Label htmlFor="vip-first-name">First name to display (optional)</Label>
+                <Input
+                  id="vip-first-name"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  placeholder="e.g. Sarah"
+                  data-testid="input-vip-first-name"
+                />
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSelected(null)} disabled={submitting} data-testid="button-vip-cancel">
+              Cancel
+            </Button>
+            <Button onClick={startCheckout} disabled={submitting} data-testid="button-vip-confirm">
+              {submitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Redirecting...
+                </>
+              ) : (
+                <>Continue to Stripe</>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 function SuccessStep({ token, animalName }: { token: string; animalName: string }) {
   const { toast } = useToast();
   const [downloading, setDownloading] = useState(false);
@@ -518,6 +697,8 @@ function SuccessStep({ token, animalName }: { token: string; animalName: string 
           </div>
         </CardContent>
       </Card>
+
+      <VipUpsellSection animalName={animalName} />
 
       <Card>
         <CardHeader>
