@@ -27383,10 +27383,28 @@ Submitted: ${new Date().toLocaleString()}
 
           if (session.subscription) {
             const sessionMeta = session.metadata || {};
-            const vipTierId = sessionMeta.vipTierId || null;
-            const vipTierName = sessionMeta.vipTierName || null;
+            let vipTierId: string | null = sessionMeta.vipTierId || null;
+            let vipTierName: string | null = sessionMeta.vipTierName || null;
             const wallOptIn = sessionMeta.displayOnWallOfHeroes === 'true';
             const firstNameDisplay = sessionMeta.firstNameDisplay || null;
+
+            // Auto-tag any monthly subscription as a VIP member by mapping the
+            // monthly amount to the closest active tier on this tenant. This
+            // covers donations made through the regular donation form,
+            // fundraisers, etc. — not just the dedicated VIP checkout page.
+            if (!vipTierId) {
+              try {
+                const { pickVipTierForAmount } = await import('./lib/vip-tiers');
+                const matched = await pickVipTierForAmount(tenant.id, session.amount_total || 0);
+                if (matched) {
+                  vipTierId = matched.id;
+                  vipTierName = matched.name;
+                }
+              } catch (tierErr) {
+                console.error('[Webhook] VIP tier auto-tag failed (non-fatal):', tierErr);
+              }
+            }
+
             const inserted = await db.insert(subscriptions).values({
               tenantId: tenant.id,
               donorId: donor.id,
