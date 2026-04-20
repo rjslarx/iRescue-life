@@ -1,4 +1,5 @@
 import type { Express } from "express";
+import type Stripe from "stripe";
 import { toStripeStatementDescriptor } from "./lib/stripe-service";
 import express from "express";
 import { createServer, type Server } from "http";
@@ -15804,12 +15805,11 @@ ${renderedHtml}
       const stripe = stripeService.getStripeClient(tenant);
       if (!stripe) return res.status(400).json({ error: 'Stripe is not configured for this rescue' });
 
-      const stripeArgs: any = {};
-      if (tenant.stripeConnectedAccountId) {
-        stripeArgs.stripeAccount = tenant.stripeConnectedAccountId;
-      }
+      const stripeArgs: Stripe.RequestOptions = tenant.stripeConnectedAccountId
+        ? { stripeAccount: tenant.stripeConnectedAccountId }
+        : {};
 
-      let updated;
+      let updated: Stripe.Subscription;
       if (immediate) {
         updated = await stripe.subscriptions.cancel(sub.stripeSubscriptionId, undefined, stripeArgs);
       } else {
@@ -15821,19 +15821,23 @@ ${renderedHtml}
       }
 
       // Mirror to DB so the roster reflects the change without waiting for the webhook.
+      // The Stripe TS types omit `current_period_end` from the top-level Subscription
+      // object (it actually lives there in the API response), so widen narrowly here.
+      const updatedAny = updated as Stripe.Subscription & { current_period_end?: number };
       await db.update(subscriptions).set({
-        status: (updated as any).status || sub.status,
-        canceledAt: (updated as any).canceled_at ? new Date((updated as any).canceled_at * 1000) : sub.canceledAt,
-        currentPeriodEnd: (updated as any).current_period_end ? new Date((updated as any).current_period_end * 1000) : sub.currentPeriodEnd,
+        status: updated.status || sub.status,
+        canceledAt: updated.canceled_at ? new Date(updated.canceled_at * 1000) : sub.canceledAt,
+        currentPeriodEnd: updatedAny.current_period_end ? new Date(updatedAny.current_period_end * 1000) : sub.currentPeriodEnd,
       }).where(eq(subscriptions.id, sub.id));
 
-      console.log(`[VIP Cancel] tenant=${tenant.id} sub=${sub.id} immediate=${immediate} actor=${(req.user as any)?.id || 'unknown'} reason="${reason || ''}"`);
+      const actorId = (req.user as { id?: string } | undefined)?.id || 'unknown';
+      console.log(`[VIP Cancel] tenant=${tenant.id} sub=${sub.id} immediate=${immediate} actor=${actorId} reason="${reason || ''}"`);
       res.json({
         success: true,
         immediate,
         cancelAtPeriodEnd: !immediate,
-        status: (updated as any).status,
-        currentPeriodEnd: (updated as any).current_period_end ? new Date((updated as any).current_period_end * 1000).toISOString() : null,
+        status: updated.status,
+        currentPeriodEnd: updatedAny.current_period_end ? new Date(updatedAny.current_period_end * 1000).toISOString() : null,
       });
     } catch (error: any) {
       if (error instanceof z.ZodError) return res.status(400).json({ error: 'Invalid request' });
@@ -15898,21 +15902,29 @@ ${renderedHtml}
       const stripe = stripeService.getStripeClient(tenant);
       if (!stripe) return res.status(400).json({ error: 'Stripe is not configured for this rescue' });
 
-      const stripeArgs: any = {};
-      if (tenant.stripeConnectedAccountId) {
-        stripeArgs.stripeAccount = tenant.stripeConnectedAccountId;
-      }
+      const stripeArgs: Stripe.RequestOptions = tenant.stripeConnectedAccountId
+        ? { stripeAccount: tenant.stripeConnectedAccountId }
+        : {};
 
       // Resolve a charge or payment_intent for the refund.
-      let refundParams: any = { reason };
+      const refundParams: Stripe.RefundCreateParams = { reason };
       if (amount) refundParams.amount = amount;
       if (payment.stripePaymentIntentId) {
         refundParams.payment_intent = payment.stripePaymentIntentId;
       } else if (payment.stripeInvoiceId) {
-        // Look up the invoice to get its charge id.
         const invoice = await stripe.invoices.retrieve(payment.stripeInvoiceId, stripeArgs);
-        const chargeId = (invoice as any).charge;
-        const piId = (invoice as any).payment_intent;
+        // The Stripe TS types omit `charge` / `payment_intent` from the Invoice
+        // object even though the API returns them; widen narrowly here.
+        const invoiceWithIds = invoice as Stripe.Invoice & {
+          charge?: string | Stripe.Charge | null;
+          payment_intent?: string | Stripe.PaymentIntent | null;
+        };
+        const chargeId = typeof invoiceWithIds.charge === 'string'
+          ? invoiceWithIds.charge
+          : invoiceWithIds.charge?.id;
+        const piId = typeof invoiceWithIds.payment_intent === 'string'
+          ? invoiceWithIds.payment_intent
+          : invoiceWithIds.payment_intent?.id;
         if (chargeId) refundParams.charge = chargeId;
         else if (piId) refundParams.payment_intent = piId;
         else return res.status(400).json({ error: 'No Stripe charge available to refund for this payment' });
@@ -15920,25 +15932,31 @@ ${renderedHtml}
         return res.status(400).json({ error: 'No Stripe identifier available to refund this payment' });
       }
 
-      const refund = await stripe.refunds.create(refundParams, stripeArgs);
+      const refund: Stripe.Refund = await stripe.refunds.create(refundParams, stripeArgs);
 
-      const refundedAmount = (refund as any).amount || amount || payment.amount;
+      const refundedAmount: number = refund.amount || amount || payment.amount;
 
       // Determine cumulative refunded amount on the underlying Stripe charge so
       // that successive partial refunds correctly flip status to 'refunded' once
       // the full amount has been returned. Falls back to local amount on error.
-      let cumulativeRefunded = refundedAmount;
+      let cumulativeRefunded: number = refundedAmount;
       try {
-        const chargeId = (refund as any).charge || refundParams.charge;
+        const refundChargeId = typeof refund.charge === 'string'
+          ? refund.charge
+          : refund.charge?.id;
+        const chargeId = refundChargeId || (typeof refundParams.charge === 'string' ? refundParams.charge : undefined);
         if (chargeId) {
           const charge = await stripe.charges.retrieve(chargeId, stripeArgs);
-          cumulativeRefunded = (charge as any).amount_refunded || refundedAmount;
-        } else if (refundParams.payment_intent) {
+          cumulativeRefunded = charge.amount_refunded ?? refundedAmount;
+        } else if (typeof refundParams.payment_intent === 'string') {
           const pi = await stripe.paymentIntents.retrieve(refundParams.payment_intent, stripeArgs);
-          const piChargeId = (pi as any).latest_charge;
+          const piWithCharge = pi as Stripe.PaymentIntent & { latest_charge?: string | Stripe.Charge | null };
+          const piChargeId = typeof piWithCharge.latest_charge === 'string'
+            ? piWithCharge.latest_charge
+            : piWithCharge.latest_charge?.id;
           if (piChargeId) {
             const charge = await stripe.charges.retrieve(piChargeId, stripeArgs);
-            cumulativeRefunded = (charge as any).amount_refunded || refundedAmount;
+            cumulativeRefunded = charge.amount_refunded ?? refundedAmount;
           }
         }
       } catch (err) {
@@ -15958,10 +15976,11 @@ ${renderedHtml}
           .where(eq(donors.id, payment.donorId));
       }
 
-      console.log(`[VIP Refund] tenant=${tenant.id} sub=${sub.id} payment=${payment.id} amount=${refundedAmount} actor=${(req.user as any)?.id || 'unknown'} reason=${reason}`);
+      const actorId = (req.user as { id?: string } | undefined)?.id || 'unknown';
+      console.log(`[VIP Refund] tenant=${tenant.id} sub=${sub.id} payment=${payment.id} amount=${refundedAmount} actor=${actorId} reason=${reason}`);
       res.json({
         success: true,
-        refundId: (refund as any).id,
+        refundId: refund.id,
         refundedAmount,
         fullRefund: isFullRefund,
       });
