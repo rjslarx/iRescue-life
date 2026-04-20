@@ -16,6 +16,7 @@ import {
   Inbox,
   Users,
   Receipt,
+  Heart,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -230,6 +231,65 @@ function AutoSendTaxReceiptsToggle({ tenant }: { tenant?: Tenant }) {
   );
 }
 
+function ImpactLoopToggle({ tenant }: { tenant?: Tenant }) {
+  const { toast } = useToast();
+
+  const toggleMutation = useMutation({
+    mutationFn: async (enabled: boolean) => {
+      const response = await apiRequest('PATCH', '/api/tenant/settings', {
+        impactLoopEnabled: enabled,
+      });
+      return response.json();
+    },
+    onSuccess: (_, enabled) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/tenant/settings'] });
+      toast({
+        title: enabled ? "Impact Loop enabled" : "Impact Loop disabled",
+        description: enabled
+          ? "Monthly recurring receipts will include a featured recently adopted animal."
+          : "Monthly recurring receipts will be sent without the impact section.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to update setting",
+        description: error.message || "Please try again later.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const isEnabled = tenant?.impactLoopEnabled ?? false;
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <Heart className="h-5 w-5" />
+          <CardTitle>Impact Loop on Monthly Receipts</CardTitle>
+        </div>
+        <CardDescription>
+          When a recurring donor receives their monthly receipt, append a short "here's who you helped save" section featuring your most recently adopted animal (name, photo, and a brief thank-you). Receipts where no eligible animal exists fall back to the normal receipt automatically. Donors can opt out of just this section without losing their receipt.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="flex items-center justify-between gap-4">
+          <Label htmlFor="impact-loop-enabled" className="flex-1">
+            Include featured adoption in monthly receipts
+          </Label>
+          <Switch
+            id="impact-loop-enabled"
+            data-testid="switch-impact-loop-enabled"
+            checked={isEnabled}
+            disabled={toggleMutation.isPending}
+            onCheckedChange={(checked) => toggleMutation.mutate(checked)}
+          />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function NotificationsSettingsPage() {
   const { user } = useAuth();
 
@@ -297,6 +357,8 @@ export default function NotificationsSettingsPage() {
       ) : (
         <div className="max-w-2xl space-y-6">
           <AutoSendTaxReceiptsToggle tenant={data?.tenant} />
+
+          <ImpactLoopToggle tenant={data?.tenant} />
 
           <Card>
             <CardHeader>

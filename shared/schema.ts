@@ -310,6 +310,9 @@ export const tenants = pgTable("tenants", {
   jotformSurrenderUrl: text("jotform_surrender_url"),
   
   commsPaused: boolean("comms_paused").notNull().default(false),
+  // Impact Loop: when enabled, monthly recurring donor receipts include a
+  // "here's who you helped save" section featuring the most recently adopted animal.
+  impactLoopEnabled: boolean("impact_loop_enabled").notNull().default(false),
   briefingRecipientRoles: text("briefing_recipient_roles").array().default(sql`ARRAY['admin']::text[]`),
   
   isActive: boolean("is_active").notNull().default(true),
@@ -964,6 +967,9 @@ export const donors = pgTable("donors", {
   phone: text("phone"),
   totalDonated: integer("total_donated").notNull().default(0), // Total lifetime donations in cents
   lastDonationDate: timestamp("last_donation_date"),
+  // Donor-level opt-out for the Impact Loop section appended to monthly receipts.
+  // Independent of any other unsubscribe state — the receipt itself still sends.
+  impactLoopOptOut: boolean("impact_loop_opt_out").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (table) => ({
   uniqueStripeCustomer: unique().on(table.tenantId, table.stripeCustomerId),

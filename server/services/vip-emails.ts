@@ -1,11 +1,12 @@
 import { db } from '../db';
 import { eq, and } from 'drizzle-orm';
-import { monthlyGivingTiers, type Tenant } from '@shared/schema';
+import { monthlyGivingTiers, type Donor, type Tenant } from '@shared/schema';
 import { EmailService } from '../lib/email-service';
+import { buildImpactLoopSection } from './impact-loop';
 
 export type VipEmailTenant = Pick<
   Tenant,
-  'id' | 'name' | 'subdomain' | 'customDomain' | 'orgTaxEin' | 'orgLegalName' | 'transparencyVault'
+  'id' | 'name' | 'subdomain' | 'customDomain' | 'orgTaxEin' | 'orgLegalName' | 'transparencyVault' | 'impactLoopEnabled' | 'contactEmail'
 >;
 
 function escapeHtml(text: string | undefined | null): string {
@@ -164,7 +165,9 @@ export interface VipMonthlyReceiptParams {
   fallbackOrigin: string;
 }
 
-export async function sendVipMonthlyReceiptEmail(params: VipMonthlyReceiptParams): Promise<void> {
+export async function sendVipMonthlyReceiptEmail(params: VipMonthlyReceiptParams & {
+  donor?: Pick<Donor, 'id' | 'impactLoopOptOut'> | null;
+}): Promise<void> {
   const { tenant, donorEmail, donorName } = params;
   if (!donorEmail) return;
 
@@ -195,6 +198,13 @@ export async function sendVipMonthlyReceiptEmail(params: VipMonthlyReceiptParams
     ? `<p style="margin: 8px 0;"><a href="${escapeHtml(params.invoiceHostedUrl)}">View Stripe invoice</a></p>`
     : '';
 
+  const impactSection = await buildImpactLoopSection({
+    tenant,
+    donor: params.donor ?? null,
+    baseUrl: buildBaseUrl(tenant, params.fallbackOrigin),
+  });
+  const impactBlock = impactSection ? `\n  ${impactSection}\n` : '';
+
   const html = `
 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #111827;">
   <h2 style="color: #2563eb; margin-bottom: 8px;">Thank you, ${safeDonor}!</h2>
@@ -207,7 +217,7 @@ export async function sendVipMonthlyReceiptEmail(params: VipMonthlyReceiptParams
     ${safeInvoiceNumber ? `<p style="margin: 4px 0;"><strong>Invoice:</strong> ${safeInvoiceNumber}</p>` : ''}
     ${invoiceLink}
   </div>
-
+  ${impactBlock}
   <p style="margin: 4px 0;"><strong>Organization:</strong> ${safeLegal}</p>
   <p style="font-size: 12px; color: #6b7280; margin-top: 12px;">
     ${safeLegal} is a registered 501(c)(3) nonprofit organization.${einSection}
@@ -223,7 +233,12 @@ export async function sendVipMonthlyReceiptEmail(params: VipMonthlyReceiptParams
 
   const subject = `Your monthly receipt from ${tenant.name} (${amountFormatted})`;
   try {
-    const result = await emailService.send({ to: donorEmail, subject, html });
+    const result = await emailService.send({
+      to: donorEmail,
+      subject,
+      html,
+      ...(impactSection && tenant.contactEmail ? { replyTo: tenant.contactEmail } : {}),
+    });
     if (result.success) {
       console.log(`[VIP Receipt] Sent monthly receipt to ${donorEmail} for tenant ${tenant.id}`);
     } else {

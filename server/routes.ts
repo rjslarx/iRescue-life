@@ -22630,6 +22630,7 @@ Submitted: ${new Date().toLocaleString()}
         defaultSurrenderFee: z.string().optional().nullable(),
         autoSendTaxReceipts: z.boolean().optional(),
         shopEnabled: z.boolean().optional(),
+        impactLoopEnabled: z.boolean().optional(),
       });
 
       const parsedSettings = settingsSchema.parse(req.body);
@@ -22641,6 +22642,7 @@ Submitted: ${new Date().toLocaleString()}
       if (parsedSettings.defaultSurrenderFee !== undefined) settingsToUpdate.defaultSurrenderFee = parsedSettings.defaultSurrenderFee;
       if (parsedSettings.autoSendTaxReceipts !== undefined) settingsToUpdate.autoSendTaxReceipts = parsedSettings.autoSendTaxReceipts;
       if (parsedSettings.shopEnabled !== undefined) settingsToUpdate.shopEnabled = parsedSettings.shopEnabled;
+      if (parsedSettings.impactLoopEnabled !== undefined) settingsToUpdate.impactLoopEnabled = parsedSettings.impactLoopEnabled;
 
       const [updatedTenant] = await db
         .update(tenants)
@@ -22755,6 +22757,41 @@ Submitted: ${new Date().toLocaleString()}
       res.json({ success: true, preferences: results });
     } catch (error) {
       next(error);
+    }
+  });
+
+  /**
+   * GET /api/impact-loop/opt-out?token=...
+   * Public, token-authenticated link from the Impact Loop section in monthly
+   * receipt emails. Sets the donor's per-loop preference without affecting
+   * the underlying receipt or any other email subscription.
+   */
+  app.get('/api/impact-loop/opt-out', async (req, res) => {
+    try {
+      const token = String(req.query.token || '');
+      const { verifyImpactOptOutToken } = await import('./services/impact-loop');
+      const donorId = verifyImpactOptOutToken(token);
+      if (!donorId) {
+        return res.status(400).type('html').send(
+          `<!doctype html><meta charset="utf-8"><title>Invalid link</title>
+          <div style="font-family:Arial,sans-serif;max-width:520px;margin:60px auto;padding:24px;text-align:center;color:#374151;">
+            <h2 style="color:#111827;">This link is invalid or expired</h2>
+            <p>If you'd like to opt out of impact updates, please reply to your most recent receipt and we'll handle it.</p>
+          </div>`
+        );
+      }
+      await db.update(donors).set({ impactLoopOptOut: true }).where(eq(donors.id, donorId));
+      return res.status(200).type('html').send(
+        `<!doctype html><meta charset="utf-8"><title>Preference updated</title>
+        <div style="font-family:Arial,sans-serif;max-width:520px;margin:60px auto;padding:24px;text-align:center;color:#374151;">
+          <h2 style="color:#111827;">You're all set</h2>
+          <p>You'll keep receiving your monthly receipts, but we won't include the "who you helped save" section anymore.</p>
+          <p style="font-size:13px;color:#6b7280;margin-top:24px;">Thank you for your continued support.</p>
+        </div>`
+      );
+    } catch (err) {
+      console.error('[ImpactLoop] Opt-out failed:', err);
+      return res.status(500).type('html').send('<p>Sorry, something went wrong. Please try again later.</p>');
     }
   });
 
@@ -26941,6 +26978,7 @@ Submitted: ${new Date().toLocaleString()}
                   const paidAt = paidAtSeconds ? new Date(paidAtSeconds * 1000) : new Date();
                   await sendVipMonthlyReceiptEmail({
                     tenant,
+                    donor: { id: donor.id, impactLoopOptOut: donor.impactLoopOptOut },
                     donorEmail: donor.email,
                     donorName: donor.name || 'Friend',
                     tierName: subscription?.vipTierNameSnapshot || null,
@@ -26980,9 +27018,18 @@ Submitted: ${new Date().toLocaleString()}
                 const safeEin = escapeHtml(tenantEin);
                 const einSection = safeEin ? ` EIN: ${safeEin}` : '';
 
+                const { buildImpactLoopSection } = await import('./services/impact-loop');
+                const impactSection = await buildImpactLoopSection({
+                  tenant,
+                  donor: { id: donor.id, impactLoopOptOut: donor.impactLoopOptOut },
+                  baseUrl: `${req.protocol}://${req.get('host')}`,
+                });
+                const impactBlock = impactSection ? `\n  ${impactSection}\n` : '';
+
                 await emailService.send({
                   to: donor.email,
                   subject: `Thank you for your continued support of ${safeTenantName}!`,
+                  ...(impactSection && tenant.contactEmail ? { replyTo: tenant.contactEmail } : {}),
                   html: `
 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
   <h2 style="color: #2563eb;">Thank You, ${safeDonorName}!</h2>
@@ -26993,7 +27040,7 @@ Submitted: ${new Date().toLocaleString()}
     <p style="margin: 5px 0;"><strong>Amount:</strong> ${amountFormatted}</p>
     <p style="margin: 5px 0;"><strong>Date:</strong> ${dateFormatted}</p>
   </div>
-  
+  ${impactBlock}
   <p>Your ongoing support helps us continue our mission to rescue and care for animals in need. Thank you for being a vital part of our community!</p>
   
   <p>With heartfelt gratitude,<br/>
@@ -27008,7 +27055,7 @@ Submitted: ${new Date().toLocaleString()}
 </div>
                   `.trim()
                 });
-                console.log(`[Webhook] Recurring payment thank-you email sent to ${donor.email}`);
+                console.log(`[Webhook] Recurring payment thank-you email sent to ${donor.email}${impactSection ? ' (with impact loop)' : ''}`);
               }
             } catch (emailError) {
               console.error('[Webhook] Failed to send recurring payment thank-you email:', emailError);
