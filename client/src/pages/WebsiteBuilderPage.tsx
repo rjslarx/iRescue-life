@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+import { useLocation } from "wouter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import ContentPagesPage from "@/pages/ContentPagesPage";
 import ContentModulesPage from "@/pages/ContentModulesPage";
@@ -11,14 +13,34 @@ import VipTiersSettingsPage from "@/pages/VipTiersSettingsPage";
 import DashboardLayout from "@/components/DashboardLayout";
 import LegalPagesSettings from "@/components/LegalPagesSettings";
 
+const VALID_TABS = [
+  "modules", "pages", "give", "donate", "vip-tiers",
+  "adoption", "volunteer", "foster", "surrender", "legal",
+];
+
 export default function WebsiteBuilderPage() {
+  const [location] = useLocation();
+  const [tab, setTab] = useState("modules");
+
+  // Honor `?tab=vip-tiers` (or any other valid tab) so other pages can
+  // deep-link directly to a specific Website Builder tab. We read from
+  // window.location.search rather than wouter `location` because wouter's
+  // location is the path only.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const requested = params.get("tab");
+    if (requested && VALID_TABS.includes(requested)) {
+      setTab(requested);
+    }
+  }, [location]);
+
   return (
     <DashboardLayout
       title="Website Builder"
       description="Customize your public website content and application forms"
     >
       <div className="flex-1 overflow-hidden">
-            <Tabs defaultValue="modules" className="h-full flex flex-col">
+            <Tabs value={tab} onValueChange={setTab} className="h-full flex flex-col">
               <div className="border-b px-6 py-4 overflow-x-auto">
                 <TabsList className="inline-flex w-max">
                   <TabsTrigger value="modules" data-testid="tab-modules">Homepage Modules</TabsTrigger>

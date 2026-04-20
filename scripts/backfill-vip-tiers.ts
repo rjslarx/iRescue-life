@@ -2,7 +2,7 @@
  * Backfill VIP tiers for existing monthly subscriptions.
  *
  * What it does (idempotent, safe to re-run):
- *   1. Seeds the three default tiers (Friend / Guardian / Hero of Hope) on any
+ *   1. Seeds the three default tiers (Friend of the Pack / Guardian / Hero of Hope) on any
  *      active tenant that has no monthly_giving_tiers rows yet.
  *   2. For every active subscription with vipTierIdSnapshot IS NULL, picks the
  *      best matching tier on that tenant and stamps both snapshot fields.

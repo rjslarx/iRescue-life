@@ -9,11 +9,12 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Plus, Pencil, Trash2, Sparkles, ArrowUp, ArrowDown, GripVertical } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, Sparkles, ArrowUp, ArrowDown, GripVertical, Lightbulb } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { MonthlyGivingTier } from "@shared/schema";
 import { VIP_ICON_OPTIONS as ICON_OPTIONS, getTierIcon } from "@/lib/vip-tier-icon";
+import { isUsingSeededVipTiers } from "@/lib/vip-tier-defaults";
 
 export { getTierIcon };
 
@@ -47,6 +48,16 @@ export default function VipTiersSettingsPage() {
   });
 
   const tiers = data?.tiers || [];
+
+  // Detect when this tenant is still using the seeded starter tiers verbatim
+  // (Friend of the Pack $10 / Guardian $25 / Hero of Hope $50). When that's
+  // the case we surface a friendly nudge inviting the rescue to make the
+  // tiers their own — rename them, retune the prices, swap in their actual
+  // impact stories. This matters because the auto-tag backfill assigns
+  // donors to whichever tier matches their amount, so the labels donors see
+  // on their giving history, receipts, and the public Wall of Heroes are
+  // these defaults until edited.
+  const usingSeededDefaults = isUsingSeededVipTiers(tiers);
 
   const openCreate = () => {
     setForm({ ...emptyForm, displayOrder: tiers.length });
@@ -197,6 +208,20 @@ export default function VipTiersSettingsPage() {
           </Button>
         </div>
       </div>
+
+      {usingSeededDefaults && (
+        <Card className="p-4 flex items-start gap-3" data-testid="banner-seeded-defaults">
+          <div className="h-8 w-8 rounded-md bg-primary/10 text-primary flex items-center justify-center shrink-0">
+            <Lightbulb className="h-4 w-4" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-sm">You're using our starter tiers — make them your own.</p>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Friend of the Pack, Guardian, and Hero of Hope at $10 / $25 / $50 are sensible defaults, but donors connect with tiers that name <em>your</em> impact (e.g., "Kibble Hero — feeds one foster pup for a month"). Click any tier below to rename it, change the price, or rewrite the impact line.
+            </p>
+          </div>
+        </Card>
+      )}
 
       {isLoading ? (
         <div className="flex justify-center p-12">

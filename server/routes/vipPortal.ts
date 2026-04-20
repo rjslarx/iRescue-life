@@ -219,6 +219,8 @@ router.get('/history', async (req: Request, res: Response) => {
         cardBrand: subscriptions.cardBrand,
         cardLast4: subscriptions.cardLast4,
         cardUpdatedAt: subscriptions.cardUpdatedAt,
+        displayOnWallOfHeroes: subscriptions.displayOnWallOfHeroes,
+        firstNameDisplay: subscriptions.firstNameDisplay,
       })
       .from(subscriptions)
       .where(and(
@@ -269,6 +271,56 @@ router.get('/history', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('[VIP Portal] Error fetching history:', error);
     res.status(500).json({ error: 'Failed to load giving history' });
+  }
+});
+
+/**
+ * POST /api/vip-portal/wall-preferences
+ * Body: { optIn: boolean, firstNameDisplay?: string | null }
+ * Updates ALL of this donor's active subscriptions on this tenant with the new
+ * Wall of Heroes opt-in choice and (optional) display first name. Lets a donor
+ * who originally said "no thanks" — or who was auto-tagged as VIP by the
+ * monthly-donor backfill — flip their public visibility from their giving
+ * history page without having to email staff.
+ */
+router.post('/wall-preferences', async (req: Request, res: Response) => {
+  const auth = await authVipDonor(req, res);
+  if (!auth) return;
+  const { donorId, tenantId } = auth;
+
+  const body = req.body || {};
+  const optIn = body.optIn === true;
+  let firstNameDisplay: string | null = null;
+  if (typeof body.firstNameDisplay === 'string') {
+    const trimmed = body.firstNameDisplay.trim().slice(0, 60);
+    firstNameDisplay = trimmed.length > 0 ? trimmed : null;
+  }
+
+  try {
+    const updated = await db
+      .update(subscriptions)
+      .set({
+        displayOnWallOfHeroes: optIn,
+        // When opting out, clear the saved display name so re-opt-in goes back
+        // to using the donor's first name unless they explicitly type one.
+        firstNameDisplay: optIn ? firstNameDisplay : null,
+      })
+      .where(and(
+        eq(subscriptions.tenantId, tenantId),
+        eq(subscriptions.donorId, donorId),
+        eq(subscriptions.status, 'active'),
+      ))
+      .returning({ id: subscriptions.id });
+
+    res.json({
+      success: true,
+      updatedCount: updated.length,
+      optIn,
+      firstNameDisplay: optIn ? firstNameDisplay : null,
+    });
+  } catch (error) {
+    console.error('[VIP Portal] Error updating wall preferences:', error);
+    res.status(500).json({ error: 'Failed to update Wall of Heroes preferences' });
   }
 });
 

@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect, useMemo } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -67,6 +67,8 @@ interface VipHistorySubscription {
   cardBrand: string | null;
   cardLast4: string | null;
   cardUpdatedAt: string | null;
+  displayOnWallOfHeroes: boolean;
+  firstNameDisplay: string | null;
 }
 
 interface VipHistoryResponse {
@@ -88,6 +90,7 @@ function formatDateShort(d: string | Date): string {
 export default function VipClubPage() {
   const [location] = useLocation();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [selected, setSelected] = useState<PublicTier | null>(null);
   const [email, setEmail] = useState("");
   const [firstName, setFirstName] = useState("");
@@ -275,6 +278,65 @@ export default function VipClubPage() {
       }
     }
   };
+
+  // Wall of Heroes opt-in: derive current state from the donor's active
+  // subscriptions. If any active sub is opted in, treat the donor as opted in.
+  // The `firstNameDisplay` is taken from whichever active sub has one set.
+  const activeSubsForWall = useMemo(
+    () => (historyData?.subscriptions || []).filter((s) => s.status === 'active'),
+    [historyData?.subscriptions],
+  );
+  const serverOptedIn = activeSubsForWall.some((s) => s.displayOnWallOfHeroes);
+  const serverDisplayName =
+    activeSubsForWall.find((s) => s.firstNameDisplay)?.firstNameDisplay || '';
+
+  const [wallOptInDraft, setWallOptInDraft] = useState<boolean | null>(null);
+  const [wallNameDraft, setWallNameDraft] = useState<string | null>(null);
+
+  // Reset local edits whenever fresh server data lands.
+  useEffect(() => {
+    setWallOptInDraft(null);
+    setWallNameDraft(null);
+  }, [serverOptedIn, serverDisplayName]);
+
+  const effectiveWallOptIn = wallOptInDraft ?? serverOptedIn;
+  const effectiveWallName = wallNameDraft ?? serverDisplayName;
+  const wallDirty =
+    effectiveWallOptIn !== serverOptedIn ||
+    (effectiveWallOptIn && effectiveWallName.trim() !== serverDisplayName.trim());
+
+  const wallMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(
+        buildTenantUrl(`/api/vip-portal/wall-preferences?token=${encodeURIComponent(historyToken!)}`),
+        {
+          method: 'POST',
+          headers: { ...getTenantHeaders(), 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            optIn: effectiveWallOptIn,
+            firstNameDisplay: effectiveWallOptIn ? effectiveWallName.trim() : null,
+          }),
+        },
+      );
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || `Update failed (${res.status})`);
+      return json;
+    },
+    onSuccess: () => {
+      toast({
+        title: effectiveWallOptIn ? "You're on the Wall of Heroes" : 'Removed from the Wall',
+        description: effectiveWallOptIn
+          ? 'Thank you for letting us celebrate your support publicly.'
+          : 'Your name will no longer appear on the public Wall of Heroes.',
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/vip-portal/history', historyToken] });
+      queryClient.invalidateQueries({ queryKey: ['/api/vip-club/wall-of-heroes'] });
+    },
+    onError: (err: any) => {
+      toast({ title: 'Could not save', description: err?.message, variant: 'destructive' });
+    },
+  });
 
   const downloadAnnualSummary = (year: number) => {
     const url = buildTenantUrl(`/api/vip-portal/annual-summary/${year}?token=${encodeURIComponent(historyToken!)}`);
@@ -645,6 +707,66 @@ export default function VipClubPage() {
                   </div>
                 )}
               </Card>
+
+              {activeSubsForWall.length > 0 && (
+                <Card className="p-6" data-testid="card-wall-opt-in">
+                  <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+                    <div>
+                      <h3 className="font-display text-lg font-semibold mb-1">Wall of Heroes</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Let {rescueName} celebrate your support publicly. Only your first name and tier appear — never your email or amount.
+                      </p>
+                    </div>
+                    <Badge variant={serverOptedIn ? 'default' : 'secondary'} data-testid="badge-wall-current-status">
+                      {serverOptedIn ? 'On the Wall' : 'Not on the Wall'}
+                    </Badge>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="flex items-start gap-2">
+                      <Checkbox
+                        id="wall-opt-in-toggle"
+                        checked={effectiveWallOptIn}
+                        onCheckedChange={(v) => setWallOptInDraft(v === true)}
+                        data-testid="checkbox-wall-opt-in"
+                      />
+                      <Label htmlFor="wall-opt-in-toggle" className="text-sm font-normal leading-snug cursor-pointer">
+                        Yes, show my first name on the public Wall of Heroes for {rescueName}.
+                      </Label>
+                    </div>
+
+                    {effectiveWallOptIn && (
+                      <div className="space-y-1.5 pl-6">
+                        <Label htmlFor="wall-display-name" className="text-sm">
+                          Name to display (optional)
+                        </Label>
+                        <Input
+                          id="wall-display-name"
+                          value={effectiveWallName}
+                          onChange={(e) => setWallNameDraft(e.target.value)}
+                          placeholder={historyData.donor.name?.split(' ')[0] || 'Your first name'}
+                          maxLength={60}
+                          data-testid="input-wall-display-name"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Leave blank to use your first name from our records.
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="flex justify-end">
+                      <Button
+                        onClick={() => wallMutation.mutate()}
+                        disabled={!wallDirty || wallMutation.isPending}
+                        data-testid="button-save-wall-preference"
+                      >
+                        {wallMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                        Save preference
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+              )}
 
               {historyData.availableYears.length > 0 && (
                 <Card className="p-6">

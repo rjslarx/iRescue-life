@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -298,6 +299,12 @@ export default function VipMembersPage() {
                   data-testid="input-vip-search"
                 />
               </div>
+              <Button variant="outline" asChild data-testid="button-customize-tiers">
+                <Link href="/dashboard/website-builder?tab=vip-tiers">
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  Customize tiers
+                </Link>
+              </Button>
               <Button variant="outline" onClick={exportCsv} disabled={filtered.length === 0} data-testid="button-export-vip">
                 <Download className="h-4 w-4 mr-2" />
                 Export CSV
