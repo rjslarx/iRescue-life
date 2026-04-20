@@ -39996,6 +39996,10 @@ The user asking is a tenant administrator or staff member.`;
   const adopterPortalRoutes = await import('./routes/adopterPortal');
   app.use('/api/adopter', requireTenant, adopterPortalRoutes.default);
 
+  // Register VIP donor portal routes (token-authenticated giving history + receipts)
+  const vipPortalRoutes = await import('./routes/vipPortal');
+  app.use('/api/vip-portal', requireTenant, vipPortalRoutes.default);
+
   // Register foster portal routes (foster animal detail, bio, photos, weight, notes, supplies)
   const fosterPortalRoutes = await import('./routes/fosterPortal');
   app.use('/api/foster', requireTenant, fosterPortalRoutes.default);

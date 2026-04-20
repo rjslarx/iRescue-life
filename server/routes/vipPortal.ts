@@ -1,0 +1,407 @@
+import { Router, Request, Response } from 'express';
+import crypto from 'crypto';
+import { db } from '../db';
+import {
+  donors,
+  donations,
+  subscriptions,
+  tenants,
+} from '@shared/schema';
+import { eq, and, desc, sql } from 'drizzle-orm';
+import { EmailService } from '../lib/email-service';
+
+const router = Router();
+
+const TOKEN_EXPIRY_HOURS = 24;
+
+function getSecret(): string {
+  const secret = process.env.SESSION_SECRET;
+  if (!secret || secret.length < 32) {
+    // Fail closed: never sign or verify VIP donor billing access tokens with a
+    // weak/missing secret. Env validation also enforces SESSION_SECRET, so this
+    // path should be unreachable in a properly configured environment.
+    throw new Error('VIP portal token secret is not configured (SESSION_SECRET must be set and >= 32 chars)');
+  }
+  return secret;
+}
+
+function getAppBaseUrl(): string {
+  if (process.env.REPLIT_DEV_DOMAIN) {
+    return `https://${process.env.REPLIT_DEV_DOMAIN}`;
+  }
+  return process.env.APP_BASE_URL || 'https://irescue.life';
+}
+
+function buildVipPortalUrl(tenant: { subdomain: string | null; customDomain: string | null }, token: string): string {
+  const tenantPath = tenant.customDomain ? '' : (tenant.subdomain ? `/${tenant.subdomain}` : '');
+  const base = tenant.customDomain ? `https://${tenant.customDomain}` : getAppBaseUrl();
+  return `${base}${tenantPath}/vip-club?vipToken=${encodeURIComponent(token)}`;
+}
+
+function signVipToken(donorId: string, tenantId: string): string {
+  const exp = Date.now() + TOKEN_EXPIRY_HOURS * 60 * 60 * 1000;
+  const payload = `${donorId}.${tenantId}.${exp}`;
+  const sig = crypto.createHmac('sha256', getSecret()).update(payload).digest('hex');
+  return Buffer.from(`${payload}.${sig}`).toString('base64url');
+}
+
+function verifyVipToken(token: string, tenantId: string): { donorId: string } | null {
+  try {
+    const decoded = Buffer.from(token, 'base64url').toString('utf8');
+    const parts = decoded.split('.');
+    if (parts.length !== 4) return null;
+    const [donorId, tokTenantId, expStr, sig] = parts;
+    if (tokTenantId !== tenantId) return null;
+    const exp = parseInt(expStr, 10);
+    if (!exp || exp < Date.now()) return null;
+    const payload = `${donorId}.${tokTenantId}.${expStr}`;
+    const expected = crypto.createHmac('sha256', getSecret()).update(payload).digest('hex');
+    const sigBuf = Buffer.from(sig, 'hex');
+    const expBuf = Buffer.from(expected, 'hex');
+    if (sigBuf.length !== expBuf.length) return null;
+    if (!crypto.timingSafeEqual(sigBuf, expBuf)) return null;
+    return { donorId };
+  } catch {
+    return null;
+  }
+}
+
+function extractToken(req: Request): string | null {
+  const t = (req.query.token || req.query.vipToken) as string | undefined;
+  if (typeof t === 'string' && t.length > 0) return t;
+  const auth = req.headers.authorization;
+  if (auth && auth.startsWith('Bearer ')) return auth.substring(7);
+  return null;
+}
+
+async function authVipDonor(req: Request, res: Response): Promise<{ donorId: string; tenantId: string } | null> {
+  const tenantId = req.tenant?.id;
+  if (!tenantId) {
+    res.status(400).json({ error: 'Tenant context required' });
+    return null;
+  }
+  const token = extractToken(req);
+  if (!token) {
+    res.status(401).json({ error: 'Access link required' });
+    return null;
+  }
+  const verified = verifyVipToken(token, tenantId);
+  if (!verified) {
+    res.status(401).json({ error: 'Invalid or expired access link' });
+    return null;
+  }
+  return { donorId: verified.donorId, tenantId };
+}
+
+/**
+ * POST /api/vip-portal/request-link
+ * Public: Send a magic link to a VIP donor's email letting them view their giving history.
+ * Always returns success message to avoid email enumeration.
+ */
+router.post('/request-link', async (req: Request, res: Response) => {
+  try {
+    const { email } = req.body || {};
+    if (!email || typeof email !== 'string') {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    const tenantId = req.tenant?.id;
+    if (!tenantId) {
+      return res.status(400).json({ error: 'Tenant context required' });
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+
+    // Always respond success to avoid leaking which emails exist
+    res.json({ message: 'If a VIP donor account exists for this email, a secure link has been sent.' });
+
+    const [donor] = await db
+      .select()
+      .from(donors)
+      .where(and(
+        eq(donors.tenantId, tenantId),
+        sql`LOWER(${donors.email}) = ${normalizedEmail}`,
+      ))
+      .limit(1);
+
+    if (!donor) return;
+
+    // Confirm donor has at least one VIP subscription (recurring tier) to gate access to "VIP" portal
+    const [vipSub] = await db
+      .select({ id: subscriptions.id })
+      .from(subscriptions)
+      .where(and(
+        eq(subscriptions.tenantId, tenantId),
+        eq(subscriptions.donorId, donor.id),
+      ))
+      .limit(1);
+
+    if (!vipSub) return;
+
+    const token = signVipToken(donor.id, tenantId);
+
+    const [tenant] = await db
+      .select({
+        subdomain: tenants.subdomain,
+        customDomain: tenants.customDomain,
+        name: tenants.name,
+      })
+      .from(tenants)
+      .where(eq(tenants.id, tenantId))
+      .limit(1);
+
+    if (!tenant) return;
+
+    const portalUrl = buildVipPortalUrl(tenant, token);
+
+    const emailService = await EmailService.forTenant(tenantId);
+    if (!emailService) return;
+
+    await emailService.send({
+      to: donor.email,
+      subject: `Your Giving History - ${tenant.name}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #2563eb;">Your VIP Giving History</h2>
+          <p>Hi ${donor.name},</p>
+          <p>Click the button below to view and download your past donation receipts and your annual giving summary.</p>
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${portalUrl}"
+               style="background-color: #2563eb; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
+              View My Giving History
+            </a>
+          </div>
+          <p style="color: #6b7280; font-size: 14px;">
+            This secure link expires in ${TOKEN_EXPIRY_HOURS} hours. If you didn't request this, you can safely ignore this email.
+          </p>
+          <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+          <p style="color: #9ca3af; font-size: 12px;">Sent by ${tenant.name}</p>
+        </div>
+      `,
+    });
+  } catch (error) {
+    console.error('[VIP Portal] Error sending magic link:', error);
+    // Response already sent above
+  }
+});
+
+/**
+ * GET /api/vip-portal/history?token=...
+ * Returns the donor's billing history (past payments) and active subscription summary.
+ */
+router.get('/history', async (req: Request, res: Response) => {
+  const auth = await authVipDonor(req, res);
+  if (!auth) return;
+  const { donorId, tenantId } = auth;
+
+  try {
+    const [donor] = await db
+      .select()
+      .from(donors)
+      .where(and(eq(donors.id, donorId), eq(donors.tenantId, tenantId)))
+      .limit(1);
+
+    if (!donor) return res.status(404).json({ error: 'Donor not found' });
+
+    // Pull subscriptions for this donor
+    const subs = await db
+      .select({
+        id: subscriptions.id,
+        amount: subscriptions.amount,
+        interval: subscriptions.interval,
+        status: subscriptions.status,
+        currentPeriodEnd: subscriptions.currentPeriodEnd,
+        canceledAt: subscriptions.canceledAt,
+        memberSince: subscriptions.createdAt,
+        tierName: subscriptions.vipTierNameSnapshot,
+        stripeSubscriptionId: subscriptions.stripeSubscriptionId,
+      })
+      .from(subscriptions)
+      .where(and(
+        eq(subscriptions.tenantId, tenantId),
+        eq(subscriptions.donorId, donorId),
+      ))
+      .orderBy(desc(subscriptions.createdAt));
+
+    // Pull donations for this donor (by donorId or matching email).
+    // Donations created by Stripe webhook may set donorId directly.
+    const normalizedEmail = donor.email.toLowerCase();
+    const donationRows = await db
+      .select({
+        id: donations.id,
+        date: donations.date,
+        amount: donations.amount,
+        donationType: donations.donationType,
+        description: donations.description,
+        receiptNumber: donations.receiptNumber,
+        receiptSentAt: donations.receiptSentAt,
+        isRecurring: donations.isRecurring,
+        externalSubscriptionId: donations.externalSubscriptionId,
+      })
+      .from(donations)
+      .where(and(
+        eq(donations.tenantId, tenantId),
+        sql`(${donations.donorId} = ${donorId} OR LOWER(${donations.donorEmail}) = ${normalizedEmail})`,
+      ))
+      .orderBy(desc(donations.date));
+
+    // Years available for annual summary (cash-type donations)
+    const years = Array.from(new Set(
+      donationRows
+        .filter(d => d.donationType === 'cash' || d.donationType === 'online' || d.donationType === 'check')
+        .map(d => new Date(d.date).getFullYear())
+    )).sort((a, b) => b - a);
+
+    res.json({
+      donor: {
+        name: donor.name,
+        email: donor.email,
+        totalDonated: donor.totalDonated,
+      },
+      subscriptions: subs,
+      donations: donationRows,
+      availableYears: years,
+    });
+  } catch (error) {
+    console.error('[VIP Portal] Error fetching history:', error);
+    res.status(500).json({ error: 'Failed to load giving history' });
+  }
+});
+
+/**
+ * GET /api/vip-portal/receipt/:donationId?token=...
+ * Stream a PDF receipt for a single donation. Token must belong to the same donor.
+ */
+router.get('/receipt/:donationId', async (req: Request, res: Response) => {
+  const auth = await authVipDonor(req, res);
+  if (!auth) return;
+  const { donorId, tenantId } = auth;
+
+  try {
+    const [donor] = await db
+      .select({ email: donors.email })
+      .from(donors)
+      .where(and(eq(donors.id, donorId), eq(donors.tenantId, tenantId)))
+      .limit(1);
+    if (!donor) return res.status(404).json({ error: 'Donor not found' });
+
+    const [donation] = await db
+      .select()
+      .from(donations)
+      .where(and(
+        eq(donations.id, req.params.donationId),
+        eq(donations.tenantId, tenantId),
+      ))
+      .limit(1);
+
+    if (!donation) return res.status(404).json({ error: 'Donation not found' });
+
+    // Authorize: donation must belong to donor (by donorId or matching email)
+    const donorEmailLower = donor.email.toLowerCase();
+    if (donation.donorId !== donorId && (donation.donorEmail || '').toLowerCase() !== donorEmailLower) {
+      return res.status(403).json({ error: 'You do not have access to this receipt' });
+    }
+
+    const { generateDonationReceipt } = await import('../services/donation-receipt-service');
+    const result = await generateDonationReceipt({
+      donationId: donation.id,
+      tenantId,
+    });
+
+    if (!result.success || !result.pdfBuffer) {
+      return res.status(400).json({ error: result.message || 'Could not generate receipt' });
+    }
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="Receipt_${result.receiptNumber}.pdf"`);
+    res.send(result.pdfBuffer);
+  } catch (error) {
+    console.error('[VIP Portal] Error generating receipt:', error);
+    res.status(500).json({ error: 'Failed to generate receipt' });
+  }
+});
+
+/**
+ * GET /api/vip-portal/annual-summary/:year?token=...
+ * Stream a PDF annual giving summary for the donor for the given year.
+ */
+router.get('/annual-summary/:year', async (req: Request, res: Response) => {
+  const auth = await authVipDonor(req, res);
+  if (!auth) return;
+  const { donorId, tenantId } = auth;
+
+  const year = parseInt(req.params.year, 10);
+  if (!year || year < 2000 || year > 2100) {
+    return res.status(400).json({ error: 'Invalid year' });
+  }
+
+  try {
+    const [donor] = await db
+      .select()
+      .from(donors)
+      .where(and(eq(donors.id, donorId), eq(donors.tenantId, tenantId)))
+      .limit(1);
+    if (!donor) return res.status(404).json({ error: 'Donor not found' });
+
+    const startDate = new Date(year, 0, 1);
+    const endDate = new Date(year + 1, 0, 1);
+    const donorEmailLower = donor.email.toLowerCase();
+
+    const yearDonations = await db
+      .select()
+      .from(donations)
+      .where(and(
+        eq(donations.tenantId, tenantId),
+        sql`(${donations.donorId} = ${donorId} OR LOWER(${donations.donorEmail}) = ${donorEmailLower})`,
+        sql`${donations.date} >= ${startDate}`,
+        sql`${donations.date} < ${endDate}`,
+      ));
+
+    const cashDonations = yearDonations.filter(d => {
+      const t = (d.donationType || 'cash');
+      return t === 'cash' || t === 'online' || t === 'check';
+    });
+
+    if (cashDonations.length === 0) {
+      return res.status(404).json({ error: `No donations found for ${year}` });
+    }
+
+    const totalAmount = cashDonations.reduce((sum, d) => {
+      const amt = typeof d.amount === 'string' ? parseInt(d.amount, 10) : (d.amount || 0);
+      return sum + amt;
+    }, 0);
+
+    const eligibleDonor = {
+      donorName: donor.name,
+      donorEmail: donor.email,
+      donorAddress: cashDonations[0]?.donorAddress || null,
+      totalAmount,
+      donationCount: cashDonations.length,
+      donations: cashDonations
+        .map(d => ({
+          id: d.id,
+          date: d.date,
+          amount: typeof d.amount === 'string' ? parseInt(d.amount, 10) : (d.amount || 0),
+          donationType: d.donationType || 'cash',
+          description: d.description,
+        }))
+        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
+    };
+
+    const { generateAnnualSummaryPdf } = await import('../services/annual-giving-summary-service');
+    const result = await generateAnnualSummaryPdf(tenantId, eligibleDonor, year);
+
+    if (!result.success || !result.pdfBuffer) {
+      return res.status(500).json({ error: result.message || 'Could not generate summary' });
+    }
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="Annual_Giving_Summary_${year}.pdf"`);
+    res.send(result.pdfBuffer);
+  } catch (error) {
+    console.error('[VIP Portal] Error generating annual summary:', error);
+    res.status(500).json({ error: 'Failed to generate annual summary' });
+  }
+});
+
+export default router;
