@@ -1037,6 +1037,11 @@ export const subscriptions = pgTable("subscriptions", {
   // Wall of Heroes opt-in
   displayOnWallOfHeroes: boolean("display_on_wall_of_heroes").notNull().default(false),
   firstNameDisplay: text("first_name_display"), // Donor-provided first name for public display
+  // Stamped by scripts/send-vip-backfill-welcome.ts when the retroactive VIP
+  // welcome email is delivered for a sub that was grandfathered in by the
+  // VIP backfill (Task #58). Used as a sent-flag so the one-shot script
+  // can never double-send.
+  backfillWelcomeSentAt: timestamp("backfill_welcome_sent_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (table) => ({
   uniqueStripeSubscription: unique().on(table.tenantId, table.stripeSubscriptionId),

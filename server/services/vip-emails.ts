@@ -152,6 +152,107 @@ export async function sendVipWelcomeEmail(params: VipWelcomeEmailParams): Promis
   }
 }
 
+export interface VipBackfillWelcomeEmailParams {
+  tenant: VipEmailTenant;
+  donorEmail: string;
+  donorName: string;
+  tierId: string | null;
+  tierName: string | null;
+  monthlyAmountCents: number;
+  currency?: string;
+  /** When this donor's monthly subscription originally started. */
+  memberSince: Date;
+  fallbackOrigin: string;
+}
+
+/**
+ * Retroactive VIP welcome — sent to monthly donors who were silently promoted
+ * into a VIP tier by the backfill (Task #58). Different copy from the
+ * standard welcome: it acknowledges they've already been giving for a while
+ * and were grandfathered in, rather than thanking them for "becoming" a VIP.
+ * Includes a CTA to opt onto the public Wall of Heroes from giving history.
+ */
+export async function sendVipBackfillWelcomeEmail(
+  params: VipBackfillWelcomeEmailParams,
+): Promise<{ success: boolean; error?: string }> {
+  const { tenant, donorEmail, donorName } = params;
+  if (!donorEmail) return { success: false, error: 'Missing donor email' };
+
+  const emailService = await EmailService.forTenant(tenant.id);
+  if (!emailService) {
+    const msg = `No EmailService configured for tenant ${tenant.id}`;
+    console.warn(`[VIP Backfill Welcome] ${msg}`);
+    return { success: false, error: msg };
+  }
+
+  const tangibleImpact = await lookupTangibleImpact(tenant.id, params.tierId);
+
+  const safeDonor = escapeHtml(donorName || 'Friend');
+  const safeTenant = escapeHtml(tenant.name);
+  const safeTier = escapeHtml(params.tierName || 'VIP Donor');
+  const amountFormatted = formatCurrencyCents(params.monthlyAmountCents, params.currency);
+  const memberSinceFormatted = params.memberSince.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+  });
+  const safeImpact = escapeHtml(tangibleImpact || '');
+  const baseUrl = buildBaseUrl(tenant, params.fallbackOrigin);
+  const givingHistoryUrl = `${baseUrl}/vip-club#giving-history`;
+  const safeGivingHistoryUrl = escapeHtml(givingHistoryUrl);
+
+  const impactBlock = safeImpact
+    ? `<div style="background: #ecfdf5; border-left: 4px solid #10b981; padding: 14px 16px; border-radius: 6px; margin: 16px 0;">
+        <p style="margin: 0; font-size: 14px; color: #065f46;"><strong>Your monthly impact:</strong></p>
+        <p style="margin: 6px 0 0 0; font-size: 15px; color: #064e3b;">${safeImpact}</p>
+      </div>`
+    : '';
+
+  const html = `
+<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #111827;">
+  <h2 style="color: #2563eb; margin-bottom: 8px;">You're officially a ${safeTier}, ${safeDonor}.</h2>
+  <p style="margin-top: 0;">You've been quietly powering ${safeTenant} as a sustaining monthly donor since <strong>${escapeHtml(memberSinceFormatted)}</strong> &mdash; long before we launched our VIP Donor Club. We just rolled out donor tiers, and because of your existing monthly gift, we've grandfathered you in as one of our founding <strong>${safeTier}</strong> members. No action needed on your part; we just wanted to say thank you, properly.</p>
+
+  <div style="background: #f3f4f6; padding: 16px; border-radius: 8px; margin: 20px 0;">
+    <p style="margin: 4px 0;"><strong>Tier:</strong> ${safeTier}</p>
+    <p style="margin: 4px 0;"><strong>Monthly amount:</strong> ${amountFormatted}</p>
+    <p style="margin: 4px 0;"><strong>Sustaining donor since:</strong> ${escapeHtml(memberSinceFormatted)}</p>
+  </div>
+
+  ${impactBlock}
+
+  <p>You can now see your tier badge, full giving history, and download annual tax summaries from your VIP Club page:</p>
+  <p style="text-align: center; margin: 20px 0;">
+    <a href="${safeGivingHistoryUrl}" style="display: inline-block; background: #2563eb; color: #ffffff; padding: 12px 22px; border-radius: 6px; text-decoration: none; font-weight: 600;">View your giving history</a>
+  </p>
+
+  <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
+
+  <h3 style="margin: 0 0 8px 0; font-size: 16px;">Want to be celebrated publicly?</h3>
+  <p style="margin: 4px 0 12px 0;">Founding donors like you are the reason we can keep saying yes to animals in need. If you'd like, you can add your first name to our public <strong>Wall of Heroes</strong> so other supporters can see what's possible. It's totally optional &mdash; you can opt in (or back out) anytime from your giving history page.</p>
+  <p style="text-align: center; margin: 16px 0 0 0;">
+    <a href="${safeGivingHistoryUrl}" style="display: inline-block; background: #ffffff; color: #2563eb; border: 1px solid #2563eb; padding: 10px 20px; border-radius: 6px; text-decoration: none; font-weight: 600;">Add me to the Wall of Heroes</a>
+  </p>
+
+  <p style="font-size: 13px; color: #6b7280; margin-top: 28px;">Thank you for being one of the donors who showed up before there was any badge attached. We're lucky to have you.</p>
+</div>
+`.trim();
+
+  const subject = `You've been a sustaining donor since ${memberSinceFormatted} — welcome to the VIP Club, ${safeDonor}`;
+  try {
+    const result = await emailService.send({ to: donorEmail, subject, html });
+    if (result.success) {
+      console.log(`[VIP Backfill Welcome] Sent to ${donorEmail} for tenant ${tenant.id}`);
+      return { success: true };
+    }
+    console.warn(`[VIP Backfill Welcome] Email send returned failure: ${result.error}`);
+    return { success: false, error: result.error || 'Email send failed' };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    console.error('[VIP Backfill Welcome] Failed to send:', err);
+    return { success: false, error: message };
+  }
+}
+
 export interface VipMonthlyReceiptParams {
   tenant: VipEmailTenant;
   donorEmail: string;
