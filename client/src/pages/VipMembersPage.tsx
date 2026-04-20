@@ -667,7 +667,11 @@ export default function VipMembersPage() {
             </div>
             <div>
               <Label>Reason</Label>
-              <RadioGroup value={refundReason} onValueChange={(v) => setRefundReason(v as any)} className="mt-1">
+              <RadioGroup
+                value={refundReason}
+                onValueChange={(v) => setRefundReason(v as "requested_by_customer" | "duplicate" | "fraudulent")}
+                className="mt-1"
+              >
                 <label className="flex items-center gap-2 cursor-pointer">
                   <RadioGroupItem value="requested_by_customer" />
                   <span className="text-sm">Requested by donor</span>
