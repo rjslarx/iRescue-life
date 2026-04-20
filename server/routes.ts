@@ -27396,14 +27396,18 @@ Submitted: ${new Date().toLocaleString()}
             // roster only reflects monthly sustaining donors.
             if (!vipTierId) {
               try {
-                let isMonthly = true;
+                // Default to "unknown" — only auto-tag if we can confirm the
+                // subscription is monthly. A transient Stripe API failure
+                // should NOT cause a yearly/other-interval sub to be tagged
+                // as a monthly VIP member.
+                let isMonthly = false;
                 if (session.subscription && stripe) {
                   try {
                     const stripeSub = await stripe.subscriptions.retrieve(session.subscription as string);
                     const interval = stripeSub.items?.data?.[0]?.price?.recurring?.interval;
                     isMonthly = interval === 'month';
                   } catch (subFetchErr) {
-                    console.warn('[Webhook] Could not determine sub interval, defaulting to monthly:', subFetchErr);
+                    console.warn('[Webhook] Could not determine sub interval, skipping VIP auto-tag:', subFetchErr);
                   }
                 }
                 if (isMonthly) {
