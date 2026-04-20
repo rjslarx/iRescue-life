@@ -1,7 +1,9 @@
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Loader2, Download, Mail } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Loader2, Download, Mail, Sparkles } from "lucide-react";
 import type { Donor } from "@shared/schema";
 import {
   Table,
@@ -17,22 +19,55 @@ interface DonorsData {
   donors: Donor[];
 }
 
+interface VipMember {
+  donorId: string;
+  tierName: string | null;
+  amount: number;
+  status: string;
+}
+
+interface VipMembersData {
+  members: VipMember[];
+}
+
 export default function DonorsPage() {
   const { data, isLoading } = useQuery<DonorsData>({
     queryKey: ['/api/donors'],
   });
 
+  const { data: vipData } = useQuery<VipMembersData>({
+    queryKey: ['/api/vip-club/members'],
+  });
+
   const donors = data?.donors || [];
 
+  const vipByDonor = useMemo(() => {
+    const map = new Map<string, VipMember>();
+    (vipData?.members || []).forEach(m => {
+      const existing = map.get(m.donorId);
+      // Prefer active subscription, then highest amount
+      if (!existing
+        || (existing.status !== 'active' && m.status === 'active')
+        || (existing.status === m.status && m.amount > existing.amount)) {
+        map.set(m.donorId, m);
+      }
+    });
+    return map;
+  }, [vipData]);
+
   const handleExportCSV = () => {
-    const headers = ['Email', 'Name', 'Phone', 'Total Donated', 'Last Donation Date'];
-    const rows = donors.map(d => [
-      d.email,
-      d.name,
-      d.phone || '',
-      `$${(d.totalDonated / 100).toFixed(2)}`,
-      d.lastDonationDate ? new Date(d.lastDonationDate).toLocaleDateString() : 'Never'
-    ]);
+    const headers = ['Email', 'Name', 'Phone', 'VIP Tier', 'Total Donated', 'Last Donation Date'];
+    const rows = donors.map(d => {
+      const vip = vipByDonor.get(d.id);
+      return [
+        d.email,
+        d.name,
+        d.phone || '',
+        vip ? `${vip.tierName || ''} (${vip.status})` : '',
+        `$${(d.totalDonated / 100).toFixed(2)}`,
+        d.lastDonationDate ? new Date(d.lastDonationDate).toLocaleDateString() : 'Never',
+      ];
+    });
 
     const csvContent = [
       headers.join(','),
@@ -112,32 +147,50 @@ export default function DonorsPage() {
                           <TableHead>Name</TableHead>
                           <TableHead>Email</TableHead>
                           <TableHead>Phone</TableHead>
+                          <TableHead>VIP Tier</TableHead>
                           <TableHead className="text-right">Total Donated</TableHead>
                           <TableHead className="text-right">Last Donation</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {donors.map((donor) => (
-                          <TableRow key={donor.id} data-testid={`row-donor-${donor.id}`}>
-                            <TableCell className="font-medium" data-testid={`text-donor-name-${donor.id}`}>
-                              {donor.name}
-                            </TableCell>
-                            <TableCell data-testid={`text-donor-email-${donor.id}`}>
-                              {donor.email}
-                            </TableCell>
-                            <TableCell data-testid={`text-donor-phone-${donor.id}`}>
-                              {donor.phone || '—'}
-                            </TableCell>
-                            <TableCell className="text-right" data-testid={`text-donor-total-${donor.id}`}>
-                              ${(donor.totalDonated / 100).toFixed(2)}
-                            </TableCell>
-                            <TableCell className="text-right" data-testid={`text-donor-lastdate-${donor.id}`}>
-                              {donor.lastDonationDate 
-                                ? new Date(donor.lastDonationDate).toLocaleDateString()
-                                : 'Never'}
-                            </TableCell>
-                          </TableRow>
-                        ))}
+                        {donors.map((donor) => {
+                          const vip = vipByDonor.get(donor.id);
+                          return (
+                            <TableRow key={donor.id} data-testid={`row-donor-${donor.id}`}>
+                              <TableCell className="font-medium" data-testid={`text-donor-name-${donor.id}`}>
+                                {donor.name}
+                              </TableCell>
+                              <TableCell data-testid={`text-donor-email-${donor.id}`}>
+                                {donor.email}
+                              </TableCell>
+                              <TableCell data-testid={`text-donor-phone-${donor.id}`}>
+                                {donor.phone || '—'}
+                              </TableCell>
+                              <TableCell>
+                                {vip ? (
+                                  <Badge
+                                    variant={vip.status === 'active' ? 'default' : 'outline'}
+                                    data-testid={`badge-vip-tier-${donor.id}`}
+                                  >
+                                    <Sparkles className="h-3 w-3 mr-1" />
+                                    {vip.tierName || 'VIP'}
+                                    {vip.status !== 'active' && <span className="ml-1 opacity-70">({vip.status})</span>}
+                                  </Badge>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">—</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-right" data-testid={`text-donor-total-${donor.id}`}>
+                                ${(donor.totalDonated / 100).toFixed(2)}
+                              </TableCell>
+                              <TableCell className="text-right" data-testid={`text-donor-lastdate-${donor.id}`}>
+                                {donor.lastDonationDate
+                                  ? new Date(donor.lastDonationDate).toLocaleDateString()
+                                  : 'Never'}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
                       </TableBody>
                     </Table>
                   </div>

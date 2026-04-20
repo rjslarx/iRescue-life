@@ -7,6 +7,7 @@ import FosterFormSettingsPage from "@/pages/FosterFormSettingsPage";
 import SurrenderFormSettingsPage from "@/pages/SurrenderFormSettingsPage";
 import DonationPageSettingsPage from "@/pages/DonationPageSettingsPage";
 import DonatePageSettingsPage from "@/pages/DonatePageSettingsPage";
+import VipTiersSettingsPage from "@/pages/VipTiersSettingsPage";
 import DashboardLayout from "@/components/DashboardLayout";
 import LegalPagesSettings from "@/components/LegalPagesSettings";
 
@@ -24,6 +25,7 @@ export default function WebsiteBuilderPage() {
                   <TabsTrigger value="pages" data-testid="tab-pages">Custom Pages</TabsTrigger>
                   <TabsTrigger value="give" data-testid="tab-give">Give Page</TabsTrigger>
                   <TabsTrigger value="donate" data-testid="tab-donate">Donate Page</TabsTrigger>
+                  <TabsTrigger value="vip-tiers" data-testid="tab-vip-tiers">VIP Donor Tiers</TabsTrigger>
                   <TabsTrigger value="adoption" data-testid="tab-adoption">Adoption Form</TabsTrigger>
                   <TabsTrigger value="volunteer" data-testid="tab-volunteer">Volunteer Form</TabsTrigger>
                   <TabsTrigger value="foster" data-testid="tab-foster">Foster Form</TabsTrigger>
@@ -46,6 +48,10 @@ export default function WebsiteBuilderPage() {
 
               <TabsContent value="donate" className="flex-1 overflow-auto m-0">
                 <DonatePageSettingsPage />
+              </TabsContent>
+
+              <TabsContent value="vip-tiers" className="flex-1 overflow-auto m-0">
+                <VipTiersSettingsPage />
               </TabsContent>
 
               <TabsContent value="adoption" className="flex-1 overflow-auto m-0">

@@ -21,6 +21,8 @@ import FinancePage from "@/pages/FinancePage";
 import DonationLinksPage from "@/pages/DonationLinksPage";
 import GrantsPage from "@/pages/GrantsPage";
 import DonorsPage from "@/pages/DonorsPage";
+import VipClubPage from "@/pages/VipClubPage";
+import VipMembersPage from "@/pages/VipMembersPage";
 import ContactsPage from "@/pages/ContactsPage";
 import PartnerOrganizationsPage from "@/pages/PartnerOrganizationsPage";
 import ForgotPasswordPage from "@/pages/ForgotPasswordPage";
@@ -242,6 +244,7 @@ function RouterSwitch() {
       <Route path="/donate/event/:eventId" component={FundraiserEventPage} />
       <Route path="/donate/:linkId" component={DonationLinkRedirectPage} />
       <Route path="/donate" component={DonatePage} />
+      <Route path="/vip-club" component={VipClubPage} />
       <Route path="/event/:eventId" component={EventTicketCheckoutPage} />
       <Route path="/event-success" component={EventSuccessPage} />
       <Route path="/give" component={GivePage} />
@@ -289,6 +292,7 @@ function RouterSwitch() {
       <ProtectedRoute path="/dashboard/fundraisers" pageId="finance" component={FundraisersPage} />
       <ProtectedRoute path="/dashboard/grants" pageId="grants" component={GrantsPage} proOnly proFeatureName="Grants" />
       <ProtectedRoute path="/dashboard/donors" pageId="donors" component={DonorsPage} />
+      <ProtectedRoute path="/dashboard/vip-club-members" pageId="donors" component={VipMembersPage} />
       <ProtectedRoute path="/dashboard/contacts" pageId="contacts" component={ContactsPage} />
       <ProtectedRoute path="/dashboard/partner-organizations" pageId="contacts" component={PartnerOrganizationsPage} />
       <ProtectedRoute path="/dashboard/volunteers" pageId="volunteers" component={VolunteerManagementPage} proOnly proFeatureName="Volunteer Management" />

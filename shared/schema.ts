@@ -1016,6 +1016,12 @@ export const subscriptions = pgTable("subscriptions", {
   currentPeriodStart: timestamp("current_period_start"),
   currentPeriodEnd: timestamp("current_period_end"),
   canceledAt: timestamp("canceled_at"),
+  // VIP Donor Club fields - snapshot of tier at time of checkout (so renames/deletes don't break history)
+  vipTierIdSnapshot: uuid("vip_tier_id_snapshot"),
+  vipTierNameSnapshot: text("vip_tier_name_snapshot"),
+  // Wall of Heroes opt-in
+  displayOnWallOfHeroes: boolean("display_on_wall_of_heroes").notNull().default(false),
+  firstNameDisplay: text("first_name_display"), // Donor-provided first name for public display
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (table) => ({
   uniqueStripeSubscription: unique().on(table.tenantId, table.stripeSubscriptionId),
@@ -1027,6 +1033,26 @@ export const insertSubscriptionSchema = createInsertSchema(subscriptions).omit({
 });
 export type InsertSubscription = z.infer<typeof insertSubscriptionSchema>;
 export type Subscription = typeof subscriptions.$inferSelect;
+
+// Monthly Giving Tiers - "VIP Donor Club" tier definitions per tenant
+export const monthlyGivingTiers = pgTable("monthly_giving_tiers", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  tierName: text("tier_name").notNull(), // e.g. "Food Sponsor"
+  amount: integer("amount").notNull(), // Monthly amount in cents
+  tangibleImpact: text("tangible_impact").notNull(), // e.g. "Covers monthly food for one foster dog"
+  iconName: text("icon_name").notNull().default("heart"), // shield, heart, paw, star, hand-heart, users, home
+  displayOrder: integer("display_order").notNull().default(0),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertMonthlyGivingTierSchema = createInsertSchema(monthlyGivingTiers).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertMonthlyGivingTier = z.infer<typeof insertMonthlyGivingTierSchema>;
+export type MonthlyGivingTier = typeof monthlyGivingTiers.$inferSelect;
 
 // Expenditures table - expenses per tenant
 export const expenditures = pgTable("expenditures", {

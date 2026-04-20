@@ -15241,6 +15241,326 @@ ${renderedHtml}
   });
 
   // ============================================================================
+  // VIP Monthly Donor Club Routes
+  // ============================================================================
+
+  const DEFAULT_VIP_TIERS = [
+    {
+      tierName: "Friend of the Pack",
+      amount: 1000,
+      tangibleImpact: "Provides a full bag of food for one rescue every month.",
+      iconName: "paw",
+      displayOrder: 0,
+    },
+    {
+      tierName: "Guardian",
+      amount: 2500,
+      tangibleImpact: "Covers a full vet wellness check and vaccinations for a foster animal.",
+      iconName: "shield",
+      displayOrder: 1,
+    },
+    {
+      tierName: "Hero of Hope",
+      amount: 5000,
+      tangibleImpact: "Sponsors a full month of care for one shelter animal in need.",
+      iconName: "heart",
+      displayOrder: 2,
+    },
+  ];
+
+  /**
+   * GET /api/monthly-tiers
+   * List all monthly giving tiers for the tenant (admin)
+   */
+  app.get('/api/monthly-tiers', requireTenant, requireAuth, requireRoleOrPageAccess('finance', 'admin'), async (req, res, next) => {
+    try {
+      const { monthlyGivingTiers } = await import('@shared/schema');
+      const tiers = await db
+        .select()
+        .from(monthlyGivingTiers)
+        .where(eq(monthlyGivingTiers.tenantId, req.tenant!.id))
+        .orderBy(asc(monthlyGivingTiers.displayOrder), asc(monthlyGivingTiers.amount));
+      res.json({ tiers });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/monthly-tiers/public
+   * Public listing of active tiers for the tenant (used by /vip-club page)
+   */
+  app.get('/api/monthly-tiers/public', requireTenant, async (req, res, next) => {
+    try {
+      const { monthlyGivingTiers } = await import('@shared/schema');
+      const tiers = await db
+        .select({
+          id: monthlyGivingTiers.id,
+          tierName: monthlyGivingTiers.tierName,
+          amount: monthlyGivingTiers.amount,
+          tangibleImpact: monthlyGivingTiers.tangibleImpact,
+          iconName: monthlyGivingTiers.iconName,
+          displayOrder: monthlyGivingTiers.displayOrder,
+        })
+        .from(monthlyGivingTiers)
+        .where(and(
+          eq(monthlyGivingTiers.tenantId, req.tenant!.id),
+          eq(monthlyGivingTiers.isActive, true),
+        ))
+        .orderBy(asc(monthlyGivingTiers.displayOrder), asc(monthlyGivingTiers.amount));
+      res.json({ tiers });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/monthly-tiers
+   * Create a new tier
+   */
+  app.post('/api/monthly-tiers', requireTenant, requireAuth, requireRoleOrPageAccess('finance', 'admin'), async (req, res, next) => {
+    try {
+      const { monthlyGivingTiers, insertMonthlyGivingTierSchema } = await import('@shared/schema');
+      const data = insertMonthlyGivingTierSchema.parse({ ...req.body, tenantId: req.tenant!.id });
+      const [tier] = await db.insert(monthlyGivingTiers).values(data).returning();
+      res.json({ tier });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * PATCH /api/monthly-tiers/:id
+   * Update a tier
+   */
+  app.patch('/api/monthly-tiers/:id', requireTenant, requireAuth, requireRoleOrPageAccess('finance', 'admin'), async (req, res, next) => {
+    try {
+      const { monthlyGivingTiers } = await import('@shared/schema');
+      const updateSchema = z.object({
+        tierName: z.string().min(1).optional(),
+        amount: z.number().int().min(100).optional(),
+        tangibleImpact: z.string().min(1).optional(),
+        iconName: z.string().optional(),
+        displayOrder: z.number().int().optional(),
+        isActive: z.boolean().optional(),
+      });
+      const data = updateSchema.parse(req.body);
+      const [tier] = await db
+        .update(monthlyGivingTiers)
+        .set(data)
+        .where(and(
+          eq(monthlyGivingTiers.id, req.params.id),
+          eq(monthlyGivingTiers.tenantId, req.tenant!.id),
+        ))
+        .returning();
+      if (!tier) return res.status(404).json({ error: 'Tier not found' });
+      res.json({ tier });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * DELETE /api/monthly-tiers/:id
+   * Delete a tier (existing subscriptions retain their tierIdSnapshot/name)
+   */
+  app.delete('/api/monthly-tiers/:id', requireTenant, requireAuth, requireRoleOrPageAccess('finance', 'admin'), async (req, res, next) => {
+    try {
+      const { monthlyGivingTiers } = await import('@shared/schema');
+      const result = await db
+        .delete(monthlyGivingTiers)
+        .where(and(
+          eq(monthlyGivingTiers.id, req.params.id),
+          eq(monthlyGivingTiers.tenantId, req.tenant!.id),
+        ))
+        .returning({ id: monthlyGivingTiers.id });
+      if (result.length === 0) return res.status(404).json({ error: 'Tier not found' });
+      res.json({ success: true });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/monthly-tiers/seed-defaults
+   * Seed the 3 starter tiers if no tiers exist for this tenant
+   */
+  app.post('/api/monthly-tiers/seed-defaults', requireTenant, requireAuth, requireRoleOrPageAccess('finance', 'admin'), async (req, res, next) => {
+    try {
+      const { monthlyGivingTiers } = await import('@shared/schema');
+      const existing = await db
+        .select({ id: monthlyGivingTiers.id })
+        .from(monthlyGivingTiers)
+        .where(eq(monthlyGivingTiers.tenantId, req.tenant!.id))
+        .limit(1);
+      if (existing.length > 0) {
+        return res.status(400).json({ error: 'Tiers already exist. Delete existing tiers before seeding defaults.' });
+      }
+      const inserted = await db
+        .insert(monthlyGivingTiers)
+        .values(DEFAULT_VIP_TIERS.map(t => ({ ...t, tenantId: req.tenant!.id })))
+        .returning();
+      res.json({ tiers: inserted });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/monthly-tiers/:id/checkout
+   * Create a Stripe Checkout session for a specific VIP tier (public)
+   */
+  app.post('/api/monthly-tiers/:id/checkout', requireTenant, async (req, res, next) => {
+    try {
+      const { monthlyGivingTiers } = await import('@shared/schema');
+      const bodySchema = z.object({
+        customerEmail: z.string().email().optional(),
+        firstNameDisplay: z.string().max(40).optional(),
+        displayOnWallOfHeroes: z.boolean().default(false),
+      });
+      const data = bodySchema.parse(req.body);
+
+      const [tier] = await db
+        .select()
+        .from(monthlyGivingTiers)
+        .where(and(
+          eq(monthlyGivingTiers.id, req.params.id),
+          eq(monthlyGivingTiers.tenantId, req.tenant!.id),
+          eq(monthlyGivingTiers.isActive, true),
+        ))
+        .limit(1);
+      if (!tier) return res.status(404).json({ error: 'Tier not found' });
+
+      const [tenant] = await db
+        .select()
+        .from(tenants)
+        .where(eq(tenants.id, req.tenant!.id))
+        .limit(1);
+      if (!tenant || !tenant.stripeEnabled) {
+        return res.status(400).json({ error: 'Stripe is not configured for this rescue' });
+      }
+
+      const { stripeService } = await import('./lib/stripe-service');
+      const { calculatePlatformFee, getPlatformFeePercent } = await import('./config/platform');
+
+      const platformFeeAmount = calculatePlatformFee(tier.amount, tenant.subscriptionTier || 'free', tenant.platformFeePercent);
+      const platformFeePercent = getPlatformFeePercent(tenant.subscriptionTier || 'free', tenant.platformFeePercent);
+
+      const host = req.get('host') || '';
+      const baseUrl = `${req.protocol}://${host}`;
+      const hasCustomDomain = (tenant as any).customDomain && host.includes((tenant as any).customDomain);
+      const tenantPath = hasCustomDomain ? '' : (tenant.subdomain ? `/${tenant.subdomain}` : '');
+
+      const session = await stripeService.createCheckoutSession(tenant, {
+        amount: tier.amount,
+        currency: 'usd',
+        customerEmail: data.customerEmail,
+        isRecurring: true,
+        interval: 'month',
+        successUrl: `${baseUrl}${tenantPath}/vip-club?welcome=1&session_id={CHECKOUT_SESSION_ID}`,
+        cancelUrl: `${baseUrl}${tenantPath}/vip-club`,
+        platformFeeAmount: platformFeeAmount,
+        connectedAccountId: tenant.stripeConnectedAccountId || undefined,
+        metadata: {
+          source: 'vip_club',
+          vipTierId: tier.id,
+          vipTierName: tier.tierName,
+          displayOnWallOfHeroes: data.displayOnWallOfHeroes ? 'true' : 'false',
+          firstNameDisplay: data.firstNameDisplay || '',
+          baseAmount: tier.amount.toString(),
+          chargeAmount: tier.amount.toString(),
+          platformFeeAmount: platformFeeAmount.toString(),
+          platformFeePercent: platformFeePercent.toString(),
+          platformFeeCollected: (tenant.stripeConnectedAccountId && platformFeeAmount > 0 ? 'true' : 'false'),
+        },
+      });
+      if (!session) return res.status(500).json({ error: 'Failed to create checkout session' });
+      res.json({ sessionId: session.id, url: session.url });
+    } catch (error: any) {
+      console.error('[VIP Tier Checkout Error]', error?.message);
+      res.status(error?.statusCode || 500).json({ error: error?.message || 'Failed to create checkout session' });
+    }
+  });
+
+  /**
+   * GET /api/vip-club/wall-of-heroes
+   * Public list of opted-in active VIP donors (first name + tier name only)
+   */
+  app.get('/api/vip-club/wall-of-heroes', requireTenant, async (req, res, next) => {
+    try {
+      const { subscriptions: subs, donors } = await import('@shared/schema');
+      const heroes = await db
+        .select({
+          firstNameDisplay: subs.firstNameDisplay,
+          donorName: donors.name,
+          tierName: subs.vipTierNameSnapshot,
+          amount: subs.amount,
+          since: subs.createdAt,
+        })
+        .from(subs)
+        .innerJoin(donors, eq(subs.donorId, donors.id))
+        .where(and(
+          eq(subs.tenantId, req.tenant!.id),
+          eq(subs.status, 'active'),
+          eq(subs.displayOnWallOfHeroes, true),
+        ))
+        .orderBy(desc(subs.amount), asc(subs.createdAt));
+
+      // Sanitize - only first name visible
+      const sanitized = heroes.map(h => {
+        const display = h.firstNameDisplay || (h.donorName ? h.donorName.split(' ')[0] : 'Anonymous');
+        return {
+          firstName: display,
+          tierName: h.tierName,
+          since: h.since,
+        };
+      });
+      res.json({ heroes: sanitized, count: sanitized.length });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/vip-club/members
+   * Admin roster of all VIP members (active subscriptions linked to a tier)
+   */
+  app.get('/api/vip-club/members', requireTenant, requireAuth, requireRoleOrPageAccess('finance', 'admin'), async (req, res, next) => {
+    try {
+      const { subscriptions: subs, donors } = await import('@shared/schema');
+      const members = await db
+        .select({
+          subscriptionId: subs.id,
+          stripeSubscriptionId: subs.stripeSubscriptionId,
+          tierName: subs.vipTierNameSnapshot,
+          tierIdSnapshot: subs.vipTierIdSnapshot,
+          amount: subs.amount,
+          status: subs.status,
+          memberSince: subs.createdAt,
+          canceledAt: subs.canceledAt,
+          currentPeriodEnd: subs.currentPeriodEnd,
+          displayOnWallOfHeroes: subs.displayOnWallOfHeroes,
+          firstNameDisplay: subs.firstNameDisplay,
+          donorId: donors.id,
+          donorName: donors.name,
+          donorEmail: donors.email,
+          donorPhone: donors.phone,
+          totalDonated: donors.totalDonated,
+        })
+        .from(subs)
+        .innerJoin(donors, eq(subs.donorId, donors.id))
+        .where(and(
+          eq(subs.tenantId, req.tenant!.id),
+          isNotNull(subs.vipTierIdSnapshot),
+        ))
+        .orderBy(desc(subs.createdAt));
+      res.json({ members });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // ============================================================================
   // Grant Management Routes
   // ============================================================================
 
@@ -26447,6 +26767,11 @@ Submitted: ${new Date().toLocaleString()}
           }
 
           if (session.subscription) {
+            const sessionMeta = session.metadata || {};
+            const vipTierId = sessionMeta.vipTierId || null;
+            const vipTierName = sessionMeta.vipTierName || null;
+            const wallOptIn = sessionMeta.displayOnWallOfHeroes === 'true';
+            const firstNameDisplay = sessionMeta.firstNameDisplay || null;
             await db.insert(subscriptions).values({
               tenantId: tenant.id,
               donorId: donor.id,
@@ -26455,6 +26780,10 @@ Submitted: ${new Date().toLocaleString()}
               currency: session.currency || 'usd',
               interval: 'month',
               status: 'active',
+              vipTierIdSnapshot: vipTierId,
+              vipTierNameSnapshot: vipTierName,
+              displayOnWallOfHeroes: wallOptIn,
+              firstNameDisplay: firstNameDisplay,
             });
           }
 

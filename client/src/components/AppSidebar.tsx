@@ -87,6 +87,7 @@ import {
   Activity,
   Megaphone,
   ShoppingBag,
+  Sparkles,
 } from "lucide-react";
 
 interface AppSidebarProps {
@@ -318,6 +319,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
         { title: "Donation Links", url: "/dashboard/donation-links", icon: DollarSign },
         { title: "Events & Products", url: "/dashboard/fundraisers", icon: TicketPercent },
         { title: "Event Ticket Sales", url: "/dashboard/event-ticket-sales", icon: Ticket },
+        { title: "VIP Club Members", url: "/dashboard/vip-club-members", icon: Sparkles },
         { title: "Shop", url: "/dashboard/shop", icon: ShoppingBag },
       ],
       defaultOpen: false,
@@ -411,6 +413,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
         { title: "Donation Links", url: "/dashboard/donation-links", icon: DollarSign },
         { title: "Events & Products", url: "/dashboard/fundraisers", icon: TicketPercent },
         { title: "Event Ticket Sales", url: "/dashboard/event-ticket-sales", icon: Ticket },
+        { title: "VIP Club Members", url: "/dashboard/vip-club-members", icon: Sparkles },
         { title: "Shop", url: "/dashboard/shop", icon: ShoppingBag },
       ],
       defaultOpen: false,

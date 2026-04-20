@@ -339,6 +339,22 @@ export default function DonatePage() {
           </p>
         </div>
 
+        <a
+          href="/vip-club"
+          className="block mb-6 rounded-md border bg-gradient-to-r from-primary/10 via-primary/5 to-transparent p-4 hover-elevate"
+          data-testid="link-vip-club-banner"
+        >
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-full bg-primary/15 text-primary flex items-center justify-center shrink-0">
+              <span className="text-lg" aria-hidden>★</span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="font-semibold text-sm">Become a VIP Monthly Donor</div>
+              <div className="text-xs text-muted-foreground">Sustaining gifts unlock long-term impact. See our giving tiers →</div>
+            </div>
+          </div>
+        </a>
+
         {isLoading ? (
           <div className="space-y-4">
             <Skeleton className="h-[400px] w-full" />
