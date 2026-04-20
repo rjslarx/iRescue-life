@@ -441,6 +441,48 @@ export class StripeService {
       return { charges: null, error: err.message || 'Failed to fetch Stripe transactions' };
     }
   }
+  /**
+   * Create a Stripe Customer Portal session so a VIP donor can update their
+   * payment method or cancel their subscription self-serve.
+   *
+   * VIP subscriptions are created either via Stripe Connect destination charges
+   * (using the platform key) or directly with the tenant's own key. In both
+   * cases the Customer object that owns the subscription lives on whichever
+   * account created the checkout session, so we mirror that selection here.
+   */
+  async createDonorBillingPortalSession(
+    tenant: Tenant,
+    params: {
+      customerId: string;
+      returnUrl: string;
+    }
+  ): Promise<Stripe.BillingPortal.Session> {
+    let stripe: Stripe;
+    const platformKey = getPlatformStripeKey();
+    const tenantHasOwnStripeKey = tenant.stripeEnabled && tenant.stripeSecretKeyEncrypted;
+    const useStripeConnect = Boolean(tenant.stripeConnectedAccountId && platformKey);
+
+    if (useStripeConnect && platformKey) {
+      stripe = new Stripe(platformKey, {
+        apiVersion: '2025-09-30.clover',
+        typescript: true,
+      });
+    } else if (tenantHasOwnStripeKey) {
+      const tenantStripe = this.getStripeClient(tenant);
+      if (!tenantStripe) {
+        throw new Error('Failed to initialize tenant Stripe client');
+      }
+      stripe = tenantStripe;
+    } else {
+      throw new Error('Stripe is not configured for this rescue organization');
+    }
+
+    return await stripe.billingPortal.sessions.create({
+      customer: params.customerId,
+      return_url: params.returnUrl,
+    });
+  }
+
   async getCheckoutSessions(tenant: Tenant, limit: number = 100): Promise<{ sessions: Stripe.Checkout.Session[] | null; error?: string }> {
     const platformKey = getPlatformStripeKey();
     

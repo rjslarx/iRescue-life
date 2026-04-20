@@ -9,7 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Loader2, Sparkles, CheckCircle2, Download, FileText, Mail, History } from "lucide-react";
+import { Loader2, Sparkles, CheckCircle2, Download, FileText, Mail, History, CreditCard } from "lucide-react";
 import PublicHeader from "@/components/PublicHeader";
 import { apiRequest } from "@/lib/queryClient";
 import { buildTenantUrl, getTenantHeaders } from "@/lib/tenantApi";
@@ -94,6 +94,7 @@ export default function VipClubPage() {
   const [historyEmail, setHistoryEmail] = useState("");
   const [requestingLink, setRequestingLink] = useState(false);
   const [linkRequestSent, setLinkRequestSent] = useState(false);
+  const [openingPortalFor, setOpeningPortalFor] = useState<string | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -162,6 +163,33 @@ export default function VipClubPage() {
   const downloadReceipt = (donationId: string) => {
     const url = buildTenantUrl(`/api/vip-portal/receipt/${donationId}?token=${encodeURIComponent(historyToken!)}`);
     window.open(url, '_blank');
+  };
+
+  const openBillingPortal = async (subscriptionId: string) => {
+    if (!historyToken) return;
+    setOpeningPortalFor(subscriptionId);
+    try {
+      const res = await fetch(
+        buildTenantUrl(`/api/vip-portal/billing-portal?token=${encodeURIComponent(historyToken)}`),
+        {
+          method: 'POST',
+          headers: { ...getTenantHeaders(), 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            subscriptionId,
+            returnUrl: window.location.href,
+          }),
+        }
+      );
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.url) {
+        throw new Error(json.error || `Failed to open billing portal (${res.status})`);
+      }
+      window.location.href = json.url;
+    } catch (err: any) {
+      toast({ title: "Could not open billing portal", description: err?.message, variant: "destructive" });
+      setOpeningPortalFor(null);
+    }
   };
 
   const downloadAnnualSummary = (year: number) => {
@@ -379,18 +407,39 @@ export default function VipClubPage() {
                 </div>
                 {historyData.subscriptions.length > 0 && (
                   <div className="mt-4 pt-4 border-t space-y-2">
-                    {historyData.subscriptions.map((sub) => (
-                      <div key={sub.id} className="flex flex-wrap items-center justify-between gap-2 text-sm" data-testid={`row-subscription-${sub.id}`}>
-                        <div>
-                          <span className="font-medium">{sub.tierName || 'Monthly Donor'}</span>
-                          <span className="text-muted-foreground"> · {formatMoney(sub.amount)}/{sub.interval}</span>
-                          <span className="text-muted-foreground"> · since {formatDateShort(sub.memberSince)}</span>
+                    {historyData.subscriptions.map((sub) => {
+                      const isManageable = sub.status === 'active' || sub.status === 'past_due' || sub.status === 'trialing' || sub.status === 'unpaid';
+                      return (
+                        <div key={sub.id} className="flex flex-wrap items-center justify-between gap-2 text-sm" data-testid={`row-subscription-${sub.id}`}>
+                          <div>
+                            <span className="font-medium">{sub.tierName || 'Monthly Donor'}</span>
+                            <span className="text-muted-foreground"> · {formatMoney(sub.amount)}/{sub.interval}</span>
+                            <span className="text-muted-foreground"> · since {formatDateShort(sub.memberSince)}</span>
+                          </div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Badge variant={sub.status === 'active' ? 'default' : 'secondary'} data-testid={`badge-subscription-status-${sub.id}`}>
+                              {sub.status}
+                            </Badge>
+                            {isManageable && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => openBillingPortal(sub.id)}
+                                disabled={openingPortalFor === sub.id}
+                                data-testid={`button-manage-subscription-${sub.id}`}
+                              >
+                                {openingPortalFor === sub.id ? (
+                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                ) : (
+                                  <CreditCard className="h-4 w-4 mr-2" />
+                                )}
+                                Update card or cancel
+                              </Button>
+                            )}
+                          </div>
                         </div>
-                        <Badge variant={sub.status === 'active' ? 'default' : 'secondary'} data-testid={`badge-subscription-status-${sub.id}`}>
-                          {sub.status}
-                        </Badge>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </Card>

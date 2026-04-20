@@ -404,4 +404,97 @@ router.get('/annual-summary/:year', async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * POST /api/vip-portal/billing-portal
+ * Body: { subscriptionId: string, returnUrl?: string }
+ * Returns: { url } — a Stripe Customer Portal session URL where the donor can
+ * update their payment method or cancel the subscription self-serve.
+ *
+ * Gated by the same magic-link token used for the other VIP portal endpoints.
+ */
+router.post('/billing-portal', async (req: Request, res: Response) => {
+  const auth = await authVipDonor(req, res);
+  if (!auth) return;
+  const { donorId, tenantId } = auth;
+
+  const { subscriptionId, returnUrl } = (req.body || {}) as {
+    subscriptionId?: string;
+    returnUrl?: string;
+  };
+
+  if (!subscriptionId || typeof subscriptionId !== 'string') {
+    return res.status(400).json({ error: 'subscriptionId is required' });
+  }
+
+  try {
+    const [donor] = await db
+      .select({ stripeCustomerId: donors.stripeCustomerId })
+      .from(donors)
+      .where(and(eq(donors.id, donorId), eq(donors.tenantId, tenantId)))
+      .limit(1);
+    if (!donor) return res.status(404).json({ error: 'Donor not found' });
+    if (!donor.stripeCustomerId) {
+      return res.status(400).json({
+        error: 'No billing account is linked to this donor record yet. Please contact the rescue.',
+      });
+    }
+
+    // Confirm the subscription belongs to this donor on this tenant.
+    const [sub] = await db
+      .select({ id: subscriptions.id })
+      .from(subscriptions)
+      .where(and(
+        eq(subscriptions.id, subscriptionId),
+        eq(subscriptions.tenantId, tenantId),
+        eq(subscriptions.donorId, donorId),
+      ))
+      .limit(1);
+    if (!sub) return res.status(404).json({ error: 'Subscription not found' });
+
+    const [tenant] = await db
+      .select()
+      .from(tenants)
+      .where(eq(tenants.id, tenantId))
+      .limit(1);
+    if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
+
+    // Build the default (safe) return URL anchored to this tenant's own
+    // /vip-club page. Only honor a client-supplied returnUrl when its origin
+    // matches one of this tenant's allowed origins — otherwise we'd give the
+    // Stripe-hosted portal an open-redirect back into our app.
+    const tenantPath = tenant.customDomain ? '' : (tenant.subdomain ? `/${tenant.subdomain}` : '');
+    const defaultBase = tenant.customDomain ? `https://${tenant.customDomain}` : getAppBaseUrl();
+    const defaultReturnUrl = `${defaultBase}${tenantPath}/vip-club#giving-history`;
+
+    const allowedOrigins = new Set<string>();
+    try { allowedOrigins.add(new URL(getAppBaseUrl()).origin); } catch {}
+    if (tenant.customDomain) {
+      try { allowedOrigins.add(new URL(`https://${tenant.customDomain}`).origin); } catch {}
+    }
+
+    const safeReturnUrl = (() => {
+      if (typeof returnUrl === 'string') {
+        try {
+          const u = new URL(returnUrl);
+          if ((u.protocol === 'http:' || u.protocol === 'https:') && allowedOrigins.has(u.origin)) {
+            return u.toString();
+          }
+        } catch {}
+      }
+      return defaultReturnUrl;
+    })();
+
+    const { stripeService } = await import('../lib/stripe-service');
+    const session = await stripeService.createDonorBillingPortalSession(tenant, {
+      customerId: donor.stripeCustomerId,
+      returnUrl: safeReturnUrl,
+    });
+
+    res.json({ url: session.url });
+  } catch (error: any) {
+    console.error('[VIP Portal] Error creating billing portal session:', error);
+    res.status(500).json({ error: error?.message || 'Failed to open billing portal' });
+  }
+});
+
 export default router;
