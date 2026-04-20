@@ -27392,13 +27392,27 @@ Submitted: ${new Date().toLocaleString()}
             // monthly amount to the closest active tier on this tenant. This
             // covers donations made through the regular donation form,
             // fundraisers, etc. — not just the dedicated VIP checkout page.
+            // Yearly/other recurrences are intentionally excluded so the VIP
+            // roster only reflects monthly sustaining donors.
             if (!vipTierId) {
               try {
-                const { pickVipTierForAmount } = await import('./lib/vip-tiers');
-                const matched = await pickVipTierForAmount(tenant.id, session.amount_total || 0);
-                if (matched) {
-                  vipTierId = matched.id;
-                  vipTierName = matched.name;
+                let isMonthly = true;
+                if (session.subscription && stripe) {
+                  try {
+                    const stripeSub = await stripe.subscriptions.retrieve(session.subscription as string);
+                    const interval = stripeSub.items?.data?.[0]?.price?.recurring?.interval;
+                    isMonthly = interval === 'month';
+                  } catch (subFetchErr) {
+                    console.warn('[Webhook] Could not determine sub interval, defaulting to monthly:', subFetchErr);
+                  }
+                }
+                if (isMonthly) {
+                  const { pickVipTierForAmount } = await import('./lib/vip-tiers');
+                  const matched = await pickVipTierForAmount(tenant.id, session.amount_total || 0);
+                  if (matched) {
+                    vipTierId = matched.id;
+                    vipTierName = matched.name;
+                  }
                 }
               } catch (tierErr) {
                 console.error('[Webhook] VIP tier auto-tag failed (non-fatal):', tierErr);

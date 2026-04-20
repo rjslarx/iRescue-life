@@ -70,7 +70,11 @@ async function backfillSubs() {
     .from(subscriptions)
     .innerJoin(tenants, eq(tenants.id, subscriptions.tenantId))
     .innerJoin(donors, eq(donors.id, subscriptions.donorId))
-    .where(and(eq(subscriptions.status, "active"), isNull(subscriptions.vipTierIdSnapshot)));
+    .where(and(
+      eq(subscriptions.status, "active"),
+      eq(subscriptions.interval, "month"),
+      isNull(subscriptions.vipTierIdSnapshot),
+    ));
 
   if (rows.length === 0) {
     console.log("  No untagged active subs found.");
@@ -108,7 +112,10 @@ async function cleanupPlatformTestSub() {
     .select({ id: subscriptions.id, donorId: subscriptions.donorId, stripeId: subscriptions.stripeSubscriptionId })
     .from(subscriptions)
     .innerJoin(tenants, eq(tenants.id, subscriptions.tenantId))
-    .where(and(eq(tenants.name, "iRescue Platform"), sql`${subscriptions.stripeSubscriptionId} LIKE 'sub_test_%'`));
+    .where(and(
+      eq(tenants.name, "iRescue Platform"),
+      eq(subscriptions.stripeSubscriptionId, "sub_test_1776661337361"),
+    ));
 
   if (targets.length === 0) {
     console.log("  No platform test subs found.");
