@@ -15597,6 +15597,381 @@ ${renderedHtml}
     }
   });
 
+  /**
+   * GET /api/vip-club/tier-stats
+   * Per-tier performance metrics (admin) — drives "optimize pricing" view.
+   * Returns one row per defined tier (active or inactive) plus an "Unassigned" bucket
+   * for VIP subscriptions whose tier was deleted.
+   */
+  app.get('/api/vip-club/tier-stats', requireTenant, requireAuth, requireRoleOrPageAccess('admin'), async (req, res, next) => {
+    try {
+      const { subscriptions: subs, payments: pays, monthlyGivingTiers } = await import('@shared/schema');
+      const tenantId = req.tenant!.id;
+
+      const tiers = await db
+        .select()
+        .from(monthlyGivingTiers)
+        .where(eq(monthlyGivingTiers.tenantId, tenantId))
+        .orderBy(asc(monthlyGivingTiers.displayOrder));
+
+      const allSubs = await db
+        .select({
+          id: subs.id,
+          tierIdSnapshot: subs.vipTierIdSnapshot,
+          tierNameSnapshot: subs.vipTierNameSnapshot,
+          amount: subs.amount,
+          status: subs.status,
+          createdAt: subs.createdAt,
+          canceledAt: subs.canceledAt,
+        })
+        .from(subs)
+        .where(and(
+          eq(subs.tenantId, tenantId),
+          isNotNull(subs.vipTierIdSnapshot),
+        ));
+
+      // Lifetime revenue per subscription from succeeded payments.
+      // Note: fully-refunded payments are flipped to status='refunded' (and thus
+      // excluded here). Partial refunds are not netted because we don't store
+      // per-payment refund totals locally — staff should treat ARPU as
+      // approximate when partial refunds are common.
+      const revenueRows = await db
+        .select({
+          subscriptionId: pays.subscriptionId,
+          total: sql<number>`COALESCE(SUM(${pays.amount}), 0)`.as('total'),
+        })
+        .from(pays)
+        .where(and(
+          eq(pays.tenantId, tenantId),
+          eq(pays.status, 'succeeded'),
+          isNotNull(pays.subscriptionId),
+        ))
+        .groupBy(pays.subscriptionId);
+
+      const revenueBySub = new Map<string, number>();
+      for (const r of revenueRows) {
+        if (r.subscriptionId) revenueBySub.set(r.subscriptionId, Number(r.total) || 0);
+      }
+
+      const totalActiveAcrossTiers = allSubs.filter(s => s.status === 'active').length;
+
+      const buckets = new Map<string, {
+        tierId: string | null;
+        tierName: string;
+        monthlyAmount: number | null;
+        isActive: boolean;
+        isDeleted: boolean;
+        activeMembers: number;
+        canceledMembers: number;
+        pastDueMembers: number;
+        totalMembers: number;
+        mrrCents: number;
+        lifetimeRevenueCents: number;
+        totalLifespanMonths: number;
+        lifespanSamples: number;
+      }>();
+
+      // Seed buckets with all defined tiers (so empty tiers still show up).
+      for (const t of tiers) {
+        buckets.set(t.id, {
+          tierId: t.id,
+          tierName: t.tierName,
+          monthlyAmount: t.amount,
+          isActive: t.isActive,
+          isDeleted: false,
+          activeMembers: 0,
+          canceledMembers: 0,
+          pastDueMembers: 0,
+          totalMembers: 0,
+          mrrCents: 0,
+          lifetimeRevenueCents: 0,
+          totalLifespanMonths: 0,
+          lifespanSamples: 0,
+        });
+      }
+
+      const now = Date.now();
+      for (const s of allSubs) {
+        const key = s.tierIdSnapshot || `__deleted__${s.tierNameSnapshot || 'Unknown'}`;
+        let b = buckets.get(key);
+        if (!b) {
+          b = {
+            tierId: s.tierIdSnapshot,
+            tierName: s.tierNameSnapshot || 'Deleted tier',
+            monthlyAmount: null,
+            isActive: false,
+            isDeleted: true,
+            activeMembers: 0,
+            canceledMembers: 0,
+            pastDueMembers: 0,
+            totalMembers: 0,
+            mrrCents: 0,
+            lifetimeRevenueCents: 0,
+            totalLifespanMonths: 0,
+            lifespanSamples: 0,
+          };
+          buckets.set(key, b);
+        }
+        b.totalMembers += 1;
+        if (s.status === 'active') {
+          b.activeMembers += 1;
+          b.mrrCents += s.amount || 0;
+        } else if (s.status === 'canceled') {
+          b.canceledMembers += 1;
+        } else if (s.status === 'past_due') {
+          b.pastDueMembers += 1;
+        }
+        b.lifetimeRevenueCents += revenueBySub.get(s.id) || 0;
+
+        const startMs = s.createdAt ? new Date(s.createdAt).getTime() : null;
+        const endMs = s.canceledAt ? new Date(s.canceledAt).getTime() : (s.status === 'active' ? now : null);
+        if (startMs && endMs && endMs > startMs) {
+          const months = (endMs - startMs) / (1000 * 60 * 60 * 24 * 30.4375);
+          b.totalLifespanMonths += months;
+          b.lifespanSamples += 1;
+        }
+      }
+
+      const stats = Array.from(buckets.values()).map(b => {
+        const churnRate = b.totalMembers > 0 ? b.canceledMembers / b.totalMembers : 0;
+        const avgLifespanMonths = b.lifespanSamples > 0 ? b.totalLifespanMonths / b.lifespanSamples : 0;
+        const sharePct = totalActiveAcrossTiers > 0 ? b.activeMembers / totalActiveAcrossTiers : 0;
+        const arpu = b.activeMembers > 0 ? b.mrrCents / b.activeMembers : 0;
+        return {
+          tierId: b.tierId,
+          tierName: b.tierName,
+          monthlyAmount: b.monthlyAmount,
+          isActive: b.isActive,
+          isDeleted: b.isDeleted,
+          activeMembers: b.activeMembers,
+          canceledMembers: b.canceledMembers,
+          pastDueMembers: b.pastDueMembers,
+          totalMembers: b.totalMembers,
+          mrrCents: b.mrrCents,
+          lifetimeRevenueCents: b.lifetimeRevenueCents,
+          churnRate,
+          avgLifespanMonths,
+          sharePct,
+          arpuCents: arpu,
+        };
+      }).sort((a, b) => b.mrrCents - a.mrrCents);
+
+      const totals = stats.reduce((acc, s) => {
+        acc.activeMembers += s.activeMembers;
+        acc.totalMembers += s.totalMembers;
+        acc.mrrCents += s.mrrCents;
+        acc.lifetimeRevenueCents += s.lifetimeRevenueCents;
+        return acc;
+      }, { activeMembers: 0, totalMembers: 0, mrrCents: 0, lifetimeRevenueCents: 0 });
+
+      res.json({ stats, totals });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/vip-club/members/:subscriptionId/cancel
+   * Staff cancels a VIP subscription. Default is graceful (cancel_at_period_end);
+   * pass { immediate: true } to terminate now.
+   */
+  app.post('/api/vip-club/members/:subscriptionId/cancel', requireTenant, requireAuth, requireRoleOrPageAccess('admin'), async (req, res, next) => {
+    try {
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(req.params.subscriptionId)) {
+        return res.status(404).json({ error: 'Subscription not found' });
+      }
+      const bodySchema = z.object({
+        immediate: z.boolean().optional().default(false),
+        reason: z.string().max(500).optional(),
+      });
+      const { immediate, reason } = bodySchema.parse(req.body || {});
+
+      const [sub] = await db
+        .select()
+        .from(subscriptions)
+        .where(and(
+          eq(subscriptions.id, req.params.subscriptionId),
+          eq(subscriptions.tenantId, req.tenant!.id),
+        ))
+        .limit(1);
+      if (!sub) return res.status(404).json({ error: 'Subscription not found' });
+
+      const [tenant] = await db.select().from(tenants).where(eq(tenants.id, req.tenant!.id)).limit(1);
+      if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
+
+      const { stripeService } = await import('./lib/stripe-service');
+      const stripe = stripeService.getStripeClient(tenant);
+      if (!stripe) return res.status(400).json({ error: 'Stripe is not configured for this rescue' });
+
+      const stripeArgs: any = {};
+      if (tenant.stripeConnectedAccountId) {
+        stripeArgs.stripeAccount = tenant.stripeConnectedAccountId;
+      }
+
+      let updated;
+      if (immediate) {
+        updated = await stripe.subscriptions.cancel(sub.stripeSubscriptionId, undefined, stripeArgs);
+      } else {
+        updated = await stripe.subscriptions.update(
+          sub.stripeSubscriptionId,
+          { cancel_at_period_end: true, cancellation_details: reason ? { comment: reason.slice(0, 500) } : undefined },
+          stripeArgs,
+        );
+      }
+
+      // Mirror to DB so the roster reflects the change without waiting for the webhook.
+      await db.update(subscriptions).set({
+        status: (updated as any).status || sub.status,
+        canceledAt: (updated as any).canceled_at ? new Date((updated as any).canceled_at * 1000) : sub.canceledAt,
+        currentPeriodEnd: (updated as any).current_period_end ? new Date((updated as any).current_period_end * 1000) : sub.currentPeriodEnd,
+      }).where(eq(subscriptions.id, sub.id));
+
+      console.log(`[VIP Cancel] tenant=${tenant.id} sub=${sub.id} immediate=${immediate} actor=${(req.user as any)?.id || 'unknown'} reason="${reason || ''}"`);
+      res.json({
+        success: true,
+        immediate,
+        cancelAtPeriodEnd: !immediate,
+        status: (updated as any).status,
+        currentPeriodEnd: (updated as any).current_period_end ? new Date((updated as any).current_period_end * 1000).toISOString() : null,
+      });
+    } catch (error: any) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: 'Invalid request' });
+      console.error('[VIP Cancel Error]', { message: error?.message, code: error?.code, type: error?.type });
+      res.status(500).json({ error: error?.message || 'Unable to cancel subscription' });
+    }
+  });
+
+  /**
+   * POST /api/vip-club/members/:subscriptionId/refund
+   * Refund the most recent succeeded payment for a VIP subscription, or a specific
+   * payment if `paymentId` is supplied. `amount` (cents) is optional — defaults to
+   * full refund.
+   */
+  app.post('/api/vip-club/members/:subscriptionId/refund', requireTenant, requireAuth, requireRoleOrPageAccess('admin'), async (req, res, next) => {
+    try {
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(req.params.subscriptionId)) {
+        return res.status(404).json({ error: 'Subscription not found' });
+      }
+      const bodySchema = z.object({
+        paymentId: z.string().uuid().optional(),
+        amount: z.number().int().positive().optional(),
+        reason: z.enum(['requested_by_customer', 'duplicate', 'fraudulent']).optional().default('requested_by_customer'),
+      });
+      const { paymentId, amount, reason } = bodySchema.parse(req.body || {});
+
+      const [sub] = await db
+        .select()
+        .from(subscriptions)
+        .where(and(
+          eq(subscriptions.id, req.params.subscriptionId),
+          eq(subscriptions.tenantId, req.tenant!.id),
+        ))
+        .limit(1);
+      if (!sub) return res.status(404).json({ error: 'Subscription not found' });
+
+      const [tenant] = await db.select().from(tenants).where(eq(tenants.id, req.tenant!.id)).limit(1);
+      if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
+
+      // Pick the payment to refund.
+      let payment;
+      if (paymentId) {
+        const [p] = await db.select().from(payments).where(and(
+          eq(payments.id, paymentId),
+          eq(payments.tenantId, tenant.id),
+          eq(payments.subscriptionId, sub.id),
+        )).limit(1);
+        payment = p;
+      } else {
+        const [p] = await db.select().from(payments).where(and(
+          eq(payments.tenantId, tenant.id),
+          eq(payments.subscriptionId, sub.id),
+          eq(payments.status, 'succeeded'),
+        )).orderBy(desc(payments.createdAt)).limit(1);
+        payment = p;
+      }
+      if (!payment) return res.status(404).json({ error: 'No refundable payment found for this subscription' });
+      if (payment.status === 'refunded') return res.status(409).json({ error: 'Payment already refunded' });
+
+      const { stripeService } = await import('./lib/stripe-service');
+      const stripe = stripeService.getStripeClient(tenant);
+      if (!stripe) return res.status(400).json({ error: 'Stripe is not configured for this rescue' });
+
+      const stripeArgs: any = {};
+      if (tenant.stripeConnectedAccountId) {
+        stripeArgs.stripeAccount = tenant.stripeConnectedAccountId;
+      }
+
+      // Resolve a charge or payment_intent for the refund.
+      let refundParams: any = { reason };
+      if (amount) refundParams.amount = amount;
+      if (payment.stripePaymentIntentId) {
+        refundParams.payment_intent = payment.stripePaymentIntentId;
+      } else if (payment.stripeInvoiceId) {
+        // Look up the invoice to get its charge id.
+        const invoice = await stripe.invoices.retrieve(payment.stripeInvoiceId, stripeArgs);
+        const chargeId = (invoice as any).charge;
+        const piId = (invoice as any).payment_intent;
+        if (chargeId) refundParams.charge = chargeId;
+        else if (piId) refundParams.payment_intent = piId;
+        else return res.status(400).json({ error: 'No Stripe charge available to refund for this payment' });
+      } else {
+        return res.status(400).json({ error: 'No Stripe identifier available to refund this payment' });
+      }
+
+      const refund = await stripe.refunds.create(refundParams, stripeArgs);
+
+      const refundedAmount = (refund as any).amount || amount || payment.amount;
+
+      // Determine cumulative refunded amount on the underlying Stripe charge so
+      // that successive partial refunds correctly flip status to 'refunded' once
+      // the full amount has been returned. Falls back to local amount on error.
+      let cumulativeRefunded = refundedAmount;
+      try {
+        const chargeId = (refund as any).charge || refundParams.charge;
+        if (chargeId) {
+          const charge = await stripe.charges.retrieve(chargeId, stripeArgs);
+          cumulativeRefunded = (charge as any).amount_refunded || refundedAmount;
+        } else if (refundParams.payment_intent) {
+          const pi = await stripe.paymentIntents.retrieve(refundParams.payment_intent, stripeArgs);
+          const piChargeId = (pi as any).latest_charge;
+          if (piChargeId) {
+            const charge = await stripe.charges.retrieve(piChargeId, stripeArgs);
+            cumulativeRefunded = (charge as any).amount_refunded || refundedAmount;
+          }
+        }
+      } catch (err) {
+        console.warn('[VIP Refund] Could not fetch cumulative refund total from Stripe; using single-refund amount', err);
+      }
+
+      const isFullRefund = cumulativeRefunded >= payment.amount;
+      await db.update(payments).set({
+        status: isFullRefund ? 'refunded' : payment.status,
+      }).where(eq(payments.id, payment.id));
+
+      // Atomically decrement donor lifetime totals so concurrent refunds don't race.
+      if (payment.donorId) {
+        await db
+          .update(donors)
+          .set({ totalDonated: sql`GREATEST(0, ${donors.totalDonated} - ${refundedAmount})` })
+          .where(eq(donors.id, payment.donorId));
+      }
+
+      console.log(`[VIP Refund] tenant=${tenant.id} sub=${sub.id} payment=${payment.id} amount=${refundedAmount} actor=${(req.user as any)?.id || 'unknown'} reason=${reason}`);
+      res.json({
+        success: true,
+        refundId: (refund as any).id,
+        refundedAmount,
+        fullRefund: isFullRefund,
+      });
+    } catch (error: any) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: 'Invalid request' });
+      console.error('[VIP Refund Error]', { message: error?.message, code: error?.code, type: error?.type });
+      res.status(500).json({ error: error?.message || 'Unable to refund payment' });
+    }
+  });
+
   // ============================================================================
   // Grant Management Routes
   // ============================================================================
@@ -26938,18 +27313,24 @@ Submitted: ${new Date().toLocaleString()}
           const invoice = event.data.object as any;
           if (!invoice.subscription) break;
 
-          // Idempotency check: Skip if this invoice payment was already processed
+          // Idempotency check (status-aware): only skip if a SUCCEEDED payment row
+          // already exists for this invoice. A prior 'failed' row from
+          // invoice.payment_failed must NOT block a subsequent retry success.
+          let existingFailedRowToUpgrade: { id: string } | null = null;
           if (invoice.id) {
             const existingPayment = await db
-              .select({ id: payments.id })
+              .select({ id: payments.id, status: payments.status })
               .from(payments)
-              .where(eq(payments.stripeInvoiceId, invoice.id))
+              .where(and(eq(payments.tenantId, tenant.id), eq(payments.stripeInvoiceId, invoice.id)))
               .limit(1)
               .then(rows => rows[0]);
 
-            if (existingPayment) {
-              console.log(`[Webhook] Invoice ${invoice.id} already processed, skipping (idempotency)`);
+            if (existingPayment?.status === 'succeeded') {
+              console.log(`[Webhook] Invoice ${invoice.id} already succeeded, skipping (idempotency)`);
               return res.status(200).json({ received: true, idempotent: true });
+            }
+            if (existingPayment) {
+              existingFailedRowToUpgrade = { id: existingPayment.id };
             }
           }
 
@@ -26978,22 +27359,39 @@ Submitted: ${new Date().toLocaleString()}
               .limit(1)
               .then(rows => rows[0]);
 
-            await db.insert(payments).values({
-              tenantId: tenant.id,
-              donorId: donor.id,
-              stripeInvoiceId: invoice.id,
-              subscriptionId: subscription?.id,
-              amount: invoice.amount_paid,
-              currency: invoice.currency,
-              status: 'succeeded',
-              paymentMethod: 'stripe',
-              isRecurring: true,
-            });
+            // If a prior 'failed' row exists for this invoice (from invoice.payment_failed),
+            // upgrade it in place to 'succeeded' rather than inserting a duplicate row.
+            if (existingFailedRowToUpgrade) {
+              await db
+                .update(payments)
+                .set({
+                  donorId: donor.id,
+                  subscriptionId: subscription?.id,
+                  amount: invoice.amount_paid,
+                  currency: invoice.currency,
+                  status: 'succeeded',
+                  paymentMethod: 'stripe',
+                  isRecurring: true,
+                })
+                .where(eq(payments.id, existingFailedRowToUpgrade.id));
+            } else {
+              await db.insert(payments).values({
+                tenantId: tenant.id,
+                donorId: donor.id,
+                stripeInvoiceId: invoice.id,
+                subscriptionId: subscription?.id,
+                amount: invoice.amount_paid,
+                currency: invoice.currency,
+                status: 'succeeded',
+                paymentMethod: 'stripe',
+                isRecurring: true,
+              });
+            }
 
             await db
               .update(donors)
               .set({
-                totalDonated: (donor.totalDonated || 0) + invoice.amount_paid,
+                totalDonated: sql`GREATEST(0, ${donors.totalDonated} + ${invoice.amount_paid})`,
                 lastDonationDate: new Date(),
               })
               .where(eq(donors.id, donor.id));
@@ -27227,6 +27625,109 @@ Submitted: ${new Date().toLocaleString()}
               } catch (emailError) {
                 console.error('[Webhook] Failed to send ACH payment confirmation email:', emailError);
               }
+            }
+          }
+          break;
+        }
+
+        case 'invoice.payment_failed': {
+          const invoice = event.data.object as any;
+          if (!invoice.subscription) break;
+
+          // Idempotency: skip if we've already recorded a 'failed' (or anything
+          // that's already moved past failure) for this invoice. We capture the
+          // existing row so we can update-in-place rather than insert and risk
+          // duplicate rows for the same invoice.
+          let existingInvoiceRow: { id: string; status: string } | null = null;
+          if (invoice.id) {
+            const existing = await db
+              .select({ id: payments.id, status: payments.status })
+              .from(payments)
+              .where(and(eq(payments.tenantId, tenant.id), eq(payments.stripeInvoiceId, invoice.id)))
+              .limit(1)
+              .then(rows => rows[0]);
+            if (existing) {
+              if (existing.status === 'failed' || existing.status === 'succeeded' || existing.status === 'refunded') {
+                console.log(`[Webhook] Invoice ${invoice.id} payment_failed already recorded (status=${existing.status}); skipping`);
+                return res.status(200).json({ received: true, idempotent: true });
+              }
+              existingInvoiceRow = existing;
+            }
+          }
+
+          const subscription = await db
+            .select()
+            .from(subscriptions)
+            .where(and(
+              eq(subscriptions.tenantId, tenant.id),
+              eq(subscriptions.stripeSubscriptionId, invoice.subscription),
+            ))
+            .limit(1)
+            .then(rows => rows[0]);
+
+          const donor = await db
+            .select()
+            .from(donors)
+            .where(and(
+              eq(donors.tenantId, tenant.id),
+              eq(donors.stripeCustomerId, invoice.customer),
+            ))
+            .limit(1)
+            .then(rows => rows[0]);
+
+          // Record a failed payment row so the giving history shows the lapse.
+          // Upsert pattern: update an existing pending row in place, otherwise insert.
+          if (donor && invoice.id) {
+            const failedAmount = invoice.amount_due || invoice.amount_paid || subscription?.amount || 0;
+            if (existingInvoiceRow) {
+              await db.update(payments).set({
+                donorId: donor.id,
+                subscriptionId: subscription?.id,
+                amount: failedAmount,
+                currency: invoice.currency || 'usd',
+                status: 'failed',
+                paymentMethod: 'stripe',
+                isRecurring: true,
+              }).where(eq(payments.id, existingInvoiceRow.id));
+            } else {
+              await db.insert(payments).values({
+                tenantId: tenant.id,
+                donorId: donor.id,
+                stripeInvoiceId: invoice.id,
+                subscriptionId: subscription?.id,
+                amount: failedAmount,
+                currency: invoice.currency || 'usd',
+                status: 'failed',
+                paymentMethod: 'stripe',
+                isRecurring: true,
+              });
+            }
+          }
+
+          // Notify VIP donors specifically — non-VIP recurring failures are out of scope here.
+          const isVipSubscription = !!subscription?.vipTierIdSnapshot;
+          if (isVipSubscription && donor?.email) {
+            try {
+              const { sendVipPaymentFailedEmail } = await import('./services/vip-emails');
+              const tenantPath = (tenant as any).customDomain ? '' : (tenant.subdomain ? `/${tenant.subdomain}` : '');
+              const fallbackOrigin = `${req.protocol}://${req.get('host')}`;
+              const baseUrl = (tenant as any).customDomain
+                ? `https://${(tenant as any).customDomain}`
+                : `${fallbackOrigin}${tenantPath}`;
+              await sendVipPaymentFailedEmail({
+                tenant,
+                donorEmail: donor.email,
+                donorName: donor.name || 'Friend',
+                tierName: subscription?.vipTierNameSnapshot || null,
+                amountCents: invoice.amount_due || subscription?.amount || 0,
+                currency: invoice.currency || 'usd',
+                attemptNumber: invoice.attempt_count || null,
+                nextRetryAt: invoice.next_payment_attempt ? new Date(invoice.next_payment_attempt * 1000) : null,
+                hostedInvoiceUrl: invoice.hosted_invoice_url || null,
+                manageUrl: `${baseUrl}/donor/giving-history`,
+              });
+            } catch (emailErr) {
+              console.error('[Webhook] Failed to send VIP card-failure email:', emailErr);
             }
           }
           break;
