@@ -216,6 +216,9 @@ router.get('/history', async (req: Request, res: Response) => {
         memberSince: subscriptions.createdAt,
         tierName: subscriptions.vipTierNameSnapshot,
         stripeSubscriptionId: subscriptions.stripeSubscriptionId,
+        cardBrand: subscriptions.cardBrand,
+        cardLast4: subscriptions.cardLast4,
+        cardUpdatedAt: subscriptions.cardUpdatedAt,
       })
       .from(subscriptions)
       .where(and(

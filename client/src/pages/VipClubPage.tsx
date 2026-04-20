@@ -64,6 +64,9 @@ interface VipHistorySubscription {
   memberSince: string;
   tierName: string | null;
   stripeSubscriptionId: string;
+  cardBrand: string | null;
+  cardLast4: string | null;
+  cardUpdatedAt: string | null;
 }
 
 interface VipHistoryResponse {
@@ -164,7 +167,7 @@ export default function VipClubPage() {
   // tell when Stripe's webhook has actually moved the row to a new state.
   const subscriptionStateSignature = (subs: VipHistorySubscription[]): string =>
     subs
-      .map((s) => `${s.id}:${s.status}:${s.cancelAtPeriodEnd ? 1 : 0}:${s.currentPeriodEnd ?? ''}`)
+      .map((s) => `${s.id}:${s.status}:${s.cancelAtPeriodEnd ? 1 : 0}:${s.currentPeriodEnd ?? ''}:${s.cardUpdatedAt ?? ''}`)
       .sort()
       .join('|');
 
@@ -510,6 +513,18 @@ export default function VipClubPage() {
                         sub.cancelAtPeriodEnd &&
                         sub.status !== 'canceled' &&
                         !dismissedBanners.has(`scheduled-${sub.id}`);
+                      // Surface a "Card on file updated" banner for ~24h after a
+                      // payment-method change webhook lands. The dismiss key
+                      // includes the cardUpdatedAt timestamp so a *future*
+                      // update re-shows the banner instead of staying dismissed
+                      // forever.
+                      const cardUpdatedRecently =
+                        !!sub.cardUpdatedAt &&
+                        Date.now() - new Date(sub.cardUpdatedAt).getTime() < 24 * 60 * 60 * 1000;
+                      const showCardUpdatedBanner =
+                        cardUpdatedRecently &&
+                        sub.status !== 'canceled' &&
+                        !dismissedBanners.has(`card-${sub.id}-${sub.cardUpdatedAt}`);
                       const dismissBanner = (key: string) =>
                         setDismissedBanners((prev) => {
                           const next = new Set(prev);
@@ -518,6 +533,30 @@ export default function VipClubPage() {
                         });
                       return (
                         <div key={sub.id} className="space-y-2" data-testid={`row-subscription-${sub.id}`}>
+                          {showCardUpdatedBanner && (
+                            <div
+                              className="flex items-start gap-3 rounded-md border border-primary/30 bg-primary/5 p-3 text-sm"
+                              data-testid={`banner-card-updated-${sub.id}`}
+                            >
+                              <CheckCircle2 className="h-4 w-4 mt-0.5 text-primary" />
+                              <div className="flex-1">
+                                <p className="font-medium">Card on file updated</p>
+                                <p className="text-muted-foreground" data-testid={`text-card-updated-${sub.id}`}>
+                                  {sub.cardBrand && sub.cardLast4
+                                    ? `Future monthly gifts will be charged to your ${sub.cardBrand} ending in ${sub.cardLast4}.`
+                                    : 'Your new card is now on file. Future monthly gifts will be charged to it.'}
+                                </p>
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => dismissBanner(`card-${sub.id}-${sub.cardUpdatedAt}`)}
+                                data-testid={`button-dismiss-card-updated-${sub.id}`}
+                              >
+                                Dismiss
+                              </Button>
+                            </div>
+                          )}
                           {showScheduledBanner && (
                             <div
                               className="flex items-start gap-3 rounded-md border border-primary/30 bg-primary/5 p-3 text-sm"

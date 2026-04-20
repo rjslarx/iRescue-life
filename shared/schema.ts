@@ -1025,6 +1025,12 @@ export const subscriptions = pgTable("subscriptions", {
   // True when a cancellation has been scheduled (Stripe cancel_at_period_end).
   // Status remains 'active' until current_period_end actually elapses.
   cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),
+  // Cached default payment method details so the giving history view can confirm
+  // a card update without round-tripping to Stripe. Updated by Stripe webhooks
+  // (customer.subscription.updated, customer.updated, payment_method.attached).
+  cardBrand: text("card_brand"),
+  cardLast4: text("card_last4"),
+  cardUpdatedAt: timestamp("card_updated_at"),
   // VIP Donor Club fields - snapshot of tier at time of checkout (so renames/deletes don't break history)
   vipTierIdSnapshot: uuid("vip_tier_id_snapshot"),
   vipTierNameSnapshot: text("vip_tier_name_snapshot"),

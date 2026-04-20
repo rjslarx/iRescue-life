@@ -26665,6 +26665,105 @@ Submitted: ${new Date().toLocaleString()}
   });
 
   /**
+   * Refresh the cached card-on-file (brand/last4) for every subscription
+   * row belonging to a Stripe customer. Bumps `cardUpdatedAt` only when the
+   * displayed card details actually change, so the giving history view can
+   * use that timestamp to surface a "Card on file updated" confirmation
+   * banner without false positives on unrelated webhook traffic.
+   */
+  async function refreshSubscriptionCardsForCustomer(
+    tenant: { id: string },
+    stripeCustomerId: string,
+    card: { brand: string | null; last4: string | null },
+  ) {
+    if (!card.brand && !card.last4) return;
+    const { donors, subscriptions } = await import('@shared/schema');
+    const [donor] = await db
+      .select({ id: donors.id })
+      .from(donors)
+      .where(and(
+        eq(donors.tenantId, tenant.id),
+        eq(donors.stripeCustomerId, stripeCustomerId),
+      ))
+      .limit(1);
+    if (!donor) return;
+
+    const rows = await db
+      .select({
+        id: subscriptions.id,
+        cardBrand: subscriptions.cardBrand,
+        cardLast4: subscriptions.cardLast4,
+      })
+      .from(subscriptions)
+      .where(and(
+        eq(subscriptions.tenantId, tenant.id),
+        eq(subscriptions.donorId, donor.id),
+      ));
+
+    for (const row of rows) {
+      const changed = row.cardBrand !== card.brand || row.cardLast4 !== card.last4;
+      await db
+        .update(subscriptions)
+        .set({
+          cardBrand: card.brand,
+          cardLast4: card.last4,
+          ...(changed ? { cardUpdatedAt: new Date() } : {}),
+        })
+        .where(eq(subscriptions.id, row.id));
+    }
+  }
+
+  /**
+   * Refresh cached card details for a single subscription using the embedded
+   * Stripe subscription object. If the subscription has a default_payment_method
+   * we expand it via the Stripe API; otherwise we fall back to the customer's
+   * invoice-default payment method.
+   */
+  async function refreshSubscriptionCardForStripeSub(
+    tenant: any,
+    stripeSubscription: any,
+  ) {
+    const { stripeService } = await import('./lib/stripe-service');
+    const stripeClient = stripeService.getStripeClient(tenant);
+    if (!stripeClient) return;
+
+    let pmId: string | null = null;
+    if (typeof stripeSubscription.default_payment_method === 'string') {
+      pmId = stripeSubscription.default_payment_method;
+    } else if (stripeSubscription.default_payment_method?.id) {
+      pmId = stripeSubscription.default_payment_method.id;
+    }
+
+    if (!pmId && stripeSubscription.customer) {
+      const customerId = typeof stripeSubscription.customer === 'string'
+        ? stripeSubscription.customer
+        : stripeSubscription.customer?.id;
+      if (customerId) {
+        const customer = await stripeClient.customers.retrieve(customerId);
+        if (customer && !customer.deleted) {
+          const invoiceDefault = (customer as any).invoice_settings?.default_payment_method;
+          if (typeof invoiceDefault === 'string') pmId = invoiceDefault;
+          else if (invoiceDefault?.id) pmId = invoiceDefault.id;
+        }
+      }
+    }
+
+    if (!pmId) return;
+    const pm = await stripeClient.paymentMethods.retrieve(pmId);
+    if (!pm?.card) return;
+
+    const customerId = typeof stripeSubscription.customer === 'string'
+      ? stripeSubscription.customer
+      : stripeSubscription.customer?.id;
+    if (!customerId) return;
+
+    await refreshSubscriptionCardsForCustomer(tenant, customerId, {
+      brand: pm.card.brand || null,
+      last4: pm.card.last4 || null,
+    });
+  }
+
+  /**
    * POST /api/stripe/webhook
    * Handle Stripe webhook events for automatic donation tracking
    */
@@ -27548,6 +27647,69 @@ Submitted: ${new Date().toLocaleString()}
                 eq(subscriptions.stripeSubscriptionId, subscription.id)
               )
             );
+
+          // Refresh cached card-on-file (brand/last4) so the giving history view
+          // can confirm to the donor that a card update from the billing portal
+          // actually took effect. Only bumps cardUpdatedAt when the displayed
+          // card details actually changed, so we don't show a stale "card
+          // updated" banner on unrelated subscription edits.
+          if (event.type === 'customer.subscription.updated') {
+            try {
+              await refreshSubscriptionCardForStripeSub(tenant, subscription);
+            } catch (cardErr) {
+              console.error('[Webhook] Failed to refresh subscription card cache:', cardErr);
+            }
+          }
+          break;
+        }
+
+        case 'payment_method.attached': {
+          // A new payment method was attached to the customer (e.g. via the
+          // Stripe billing portal "Update payment method" flow). Refresh the
+          // cached card details on every active subscription for that customer
+          // so the giving history view can surface a "Card on file updated"
+          // confirmation banner.
+          const pm = event.data.object as any;
+          if (pm.customer && pm.card) {
+            try {
+              await refreshSubscriptionCardsForCustomer(tenant, pm.customer, {
+                brand: pm.card.brand || null,
+                last4: pm.card.last4 || null,
+              });
+            } catch (cardErr) {
+              console.error('[Webhook] Failed to cache attached payment method:', cardErr);
+            }
+          }
+          break;
+        }
+
+        case 'customer.updated': {
+          // The customer's default invoice payment method may have changed.
+          // Pull the new PM details from Stripe and update each subscription
+          // row for this customer.
+          const customer = event.data.object as any;
+          const rawPmId = customer?.invoice_settings?.default_payment_method;
+          // default_payment_method can be either an ID string or — when
+          // expansion is enabled on the event — the full PaymentMethod object.
+          const pmId = typeof rawPmId === 'string'
+            ? rawPmId
+            : (rawPmId && typeof rawPmId === 'object' ? rawPmId.id : null);
+          if (typeof pmId === 'string' && pmId) {
+            try {
+              const stripeClient = stripeService.getStripeClient(tenant);
+              if (stripeClient) {
+                const pm = await stripeClient.paymentMethods.retrieve(pmId);
+                if (pm?.card) {
+                  await refreshSubscriptionCardsForCustomer(tenant, customer.id, {
+                    brand: pm.card.brand || null,
+                    last4: pm.card.last4 || null,
+                  });
+                }
+              }
+            } catch (cardErr) {
+              console.error('[Webhook] Failed to refresh default payment method cache:', cardErr);
+            }
+          }
           break;
         }
 
