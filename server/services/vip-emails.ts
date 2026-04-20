@@ -165,18 +165,10 @@ export interface VipMonthlyReceiptParams {
   fallbackOrigin: string;
 }
 
-export async function sendVipMonthlyReceiptEmail(params: VipMonthlyReceiptParams & {
+export async function renderVipMonthlyReceiptEmail(params: VipMonthlyReceiptParams & {
   donor?: Pick<Donor, 'id' | 'impactLoopOptOut'> | null;
-}): Promise<void> {
-  const { tenant, donorEmail, donorName } = params;
-  if (!donorEmail) return;
-
-  const emailService = await EmailService.forTenant(tenant.id);
-  if (!emailService) {
-    console.warn(`[VIP Receipt] No EmailService configured for tenant ${tenant.id}`);
-    return;
-  }
-
+}): Promise<{ subject: string; html: string; impactSection: string | null }> {
+  const { tenant, donorName } = params;
   const safeDonor = escapeHtml(donorName || 'Friend');
   const safeTenant = escapeHtml(tenant.name);
   const safeTier = escapeHtml(params.tierName || 'VIP Donor');
@@ -232,6 +224,23 @@ export async function sendVipMonthlyReceiptEmail(params: VipMonthlyReceiptParams
 `.trim();
 
   const subject = `Your monthly receipt from ${tenant.name} (${amountFormatted})`;
+  return { subject, html, impactSection };
+}
+
+export async function sendVipMonthlyReceiptEmail(params: VipMonthlyReceiptParams & {
+  donor?: Pick<Donor, 'id' | 'impactLoopOptOut'> | null;
+}): Promise<void> {
+  const { tenant, donorEmail } = params;
+  if (!donorEmail) return;
+
+  const emailService = await EmailService.forTenant(tenant.id);
+  if (!emailService) {
+    console.warn(`[VIP Receipt] No EmailService configured for tenant ${tenant.id}`);
+    return;
+  }
+
+  const { subject, html, impactSection } = await renderVipMonthlyReceiptEmail(params);
+
   try {
     const result = await emailService.send({
       to: donorEmail,
@@ -246,5 +255,67 @@ export async function sendVipMonthlyReceiptEmail(params: VipMonthlyReceiptParams
     }
   } catch (err) {
     console.error('[VIP Receipt] Failed to send monthly receipt email:', err);
+  }
+}
+
+export interface ImpactLoopPreviewParams {
+  tenant: VipEmailTenant;
+  recipientEmail: string;
+  fallbackOrigin: string;
+}
+
+/**
+ * Sends a sample monthly receipt with the Impact Loop section to the
+ * requesting admin so they can preview what donors will receive. Reuses the
+ * production receipt renderer (renderVipMonthlyReceiptEmail) to ensure the
+ * preview matches actual donor emails. Caller must verify an eligible
+ * adopted animal exists before calling.
+ */
+export async function sendImpactLoopPreviewEmail(
+  params: ImpactLoopPreviewParams,
+): Promise<{ success: boolean; error?: string; impactRendered: boolean }> {
+  const { tenant, recipientEmail, fallbackOrigin } = params;
+  if (!recipientEmail) return { success: false, error: 'Missing recipient email', impactRendered: false };
+
+  const emailService = await EmailService.forTenant(tenant.id);
+  if (!emailService) {
+    return { success: false, error: 'No email service configured for this rescue.', impactRendered: false };
+  }
+
+  const previewTenant: VipEmailTenant = { ...tenant, impactLoopEnabled: true };
+  const rendered = await renderVipMonthlyReceiptEmail({
+    tenant: previewTenant,
+    donor: null,
+    donorEmail: recipientEmail,
+    donorName: 'Sample Donor',
+    tierName: 'VIP Donor',
+    amountCents: 2500,
+    currency: 'usd',
+    paidAt: new Date(),
+    invoiceNumber: 'PREVIEW-0001',
+    invoiceHostedUrl: null,
+    fallbackOrigin,
+  });
+
+  const previewBanner = `
+<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 0 20px;">
+  <div style="background: #fef3c7; border: 1px solid #fcd34d; padding: 10px 14px; border-radius: 6px; margin: 16px 0; font-size: 13px; color: #78350f;">
+    <strong>Preview only.</strong> This is a sample receipt sent to you so you can see what donors will receive when the Impact Loop is enabled. No donor received this email.
+  </div>
+</div>
+`.trim();
+
+  const html = `${previewBanner}\n${rendered.html}`;
+  const subject = `[Preview] ${rendered.subject}`;
+
+  try {
+    const result = await emailService.send({ to: recipientEmail, subject, html });
+    if (!result.success) {
+      return { success: false, error: result.error || 'Email send failed', impactRendered: !!rendered.impactSection };
+    }
+    return { success: true, impactRendered: !!rendered.impactSection };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error sending preview email';
+    return { success: false, error: message, impactRendered: !!rendered.impactSection };
   }
 }

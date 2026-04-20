@@ -22795,6 +22795,54 @@ Submitted: ${new Date().toLocaleString()}
     }
   });
 
+  /**
+   * POST /api/tenant/settings/impact-loop-test
+   * Sends a sample monthly receipt with the Impact Loop section to the
+   * requesting admin, so they can preview what donors will receive before
+   * enabling the feature.
+   */
+  app.post('/api/tenant/settings/impact-loop-test', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+    try {
+      const adminEmail = req.user?.email;
+      if (!adminEmail) {
+        return res.status(400).json({ error: 'Your account does not have an email address on file.' });
+      }
+
+      const [fullTenant] = await db
+        .select()
+        .from(tenants)
+        .where(eq(tenants.id, req.tenant!.id))
+        .limit(1);
+
+      if (!fullTenant) {
+        return res.status(404).json({ error: 'Tenant not found' });
+      }
+
+      const { getMostRecentlyAdoptedAnimal } = await import('./services/impact-loop');
+      const animal = await getMostRecentlyAdoptedAnimal(fullTenant.id);
+      if (!animal) {
+        return res.status(409).json({
+          error: 'Mark an animal as adopted (with at least one photo on file) to preview the Impact Loop section.',
+        });
+      }
+
+      const { sendImpactLoopPreviewEmail } = await import('./services/vip-emails');
+      const result = await sendImpactLoopPreviewEmail({
+        tenant: fullTenant,
+        recipientEmail: adminEmail,
+        fallbackOrigin: `${req.protocol}://${req.get('host')}`,
+      });
+
+      if (!result.success) {
+        return res.status(502).json({ error: result.error || 'Failed to send preview email.' });
+      }
+
+      return res.json({ success: true, sentTo: adminEmail, featuredAnimal: animal.name });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.patch('/api/tenant/settings/legal-pages', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
     try {
       const legalPagesSchema = z.object({

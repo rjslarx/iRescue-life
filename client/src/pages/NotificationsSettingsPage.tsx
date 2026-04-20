@@ -259,6 +259,25 @@ function ImpactLoopToggle({ tenant }: { tenant?: Tenant }) {
     },
   });
 
+  const sendTestMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest('POST', '/api/tenant/settings/impact-loop-test', {});
+      return response.json();
+    },
+    onSuccess: (data: { sentTo?: string; featuredAnimal?: string }) => {
+      toast({
+        title: "Preview email sent",
+        description: data.featuredAnimal
+          ? `Sent a sample receipt featuring ${data.featuredAnimal} to ${data.sentTo}.`
+          : `Sent a sample receipt to ${data.sentTo}.`,
+      });
+    },
+    onError: (error: unknown) => {
+      const description = error instanceof Error ? error.message : "Please try again later.";
+      toast({ title: "Could not send preview", description, variant: "destructive" });
+    },
+  });
+
   const isEnabled = tenant?.impactLoopEnabled ?? false;
 
   return (
@@ -272,7 +291,7 @@ function ImpactLoopToggle({ tenant }: { tenant?: Tenant }) {
           When a recurring donor receives their monthly receipt, append a short "here's who you helped save" section featuring your most recently adopted animal (name, photo, and a brief thank-you). Receipts where no eligible animal exists fall back to the normal receipt automatically. Donors can opt out of just this section without losing their receipt.
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4">
         <div className="flex items-center justify-between gap-4">
           <Label htmlFor="impact-loop-enabled" className="flex-1">
             Include featured adoption in monthly receipts
@@ -284,6 +303,27 @@ function ImpactLoopToggle({ tenant }: { tenant?: Tenant }) {
             disabled={toggleMutation.isPending}
             onCheckedChange={(checked) => toggleMutation.mutate(checked)}
           />
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
+          <p className="text-sm text-muted-foreground flex-1 min-w-[200px]">
+            Send yourself a sample monthly receipt to preview what donors will see.
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => sendTestMutation.mutate()}
+            disabled={sendTestMutation.isPending}
+            data-testid="button-send-impact-loop-test"
+          >
+            {sendTestMutation.isPending ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Sending…
+              </>
+            ) : (
+              "Send me a test"
+            )}
+          </Button>
         </div>
       </CardContent>
     </Card>
