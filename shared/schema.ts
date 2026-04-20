@@ -1022,8 +1022,8 @@ export const subscriptions = pgTable("subscriptions", {
   currentPeriodStart: timestamp("current_period_start"),
   currentPeriodEnd: timestamp("current_period_end"),
   canceledAt: timestamp("canceled_at"),
-  // True when the donor (or staff) scheduled cancellation at end of the current
-  // billing period via Stripe — status stays 'active' until the period ends.
+  // True when a cancellation has been scheduled (Stripe cancel_at_period_end).
+  // Status remains 'active' until current_period_end actually elapses.
   cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),
   // VIP Donor Club fields - snapshot of tier at time of checkout (so renames/deletes don't break history)
   vipTierIdSnapshot: uuid("vip_tier_id_snapshot"),
