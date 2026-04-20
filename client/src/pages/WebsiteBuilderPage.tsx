@@ -20,18 +20,24 @@ const VALID_TABS = [
 
 export default function WebsiteBuilderPage() {
   const [location] = useLocation();
-  const [tab, setTab] = useState("modules");
 
-  // Honor `?tab=vip-tiers` (or any other valid tab) so other pages can
-  // deep-link directly to a specific Website Builder tab. We read from
-  // window.location.search rather than wouter `location` because wouter's
-  // location is the path only.
-  useEffect(() => {
+  // Resolve the initial tab from the URL — honor `?tab=<name>` (any valid tab)
+  // and the `?wizard=vip` shortcut from the onboarding checklist, which deep
+  // links into the VIP Donor Tiers tab so the wizard can auto-open.
+  const resolveTabFromUrl = (): string => {
+    if (typeof window === 'undefined') return 'modules';
     const params = new URLSearchParams(window.location.search);
-    const requested = params.get("tab");
-    if (requested && VALID_TABS.includes(requested)) {
-      setTab(requested);
-    }
+    const requested = params.get('tab');
+    if (requested && VALID_TABS.includes(requested)) return requested;
+    if (params.get('wizard') === 'vip') return 'vip-tiers';
+    return 'modules';
+  };
+
+  const [tab, setTab] = useState<string>(resolveTabFromUrl);
+
+  useEffect(() => {
+    setTab(resolveTabFromUrl());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location]);
 
   return (

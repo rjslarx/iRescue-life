@@ -15439,6 +15439,100 @@ ${renderedHtml}
   });
 
   /**
+   * GET /api/monthly-tiers/defaults
+   * Returns the platform default tier template (used to prefill the
+   * "Customize your VIP Club" wizard).
+   */
+  app.get('/api/monthly-tiers/defaults', requireTenant, requireAuth, requireRoleOrPageAccess('finance', 'admin'), async (_req, res) => {
+    res.json({ defaults: DEFAULT_VIP_TIERS });
+  });
+
+  /**
+   * POST /api/monthly-tiers/replace
+   * Replace this tenant's tier set with a customized set in a single
+   * transaction. Used by the "Customize your VIP Donor Club" wizard so that a
+   * rescue can swap the seeded defaults for their own names, amounts, and
+   * impact statements without orphaning anything.
+   *
+   * Safety: refuses to overwrite tiers that have already been customized
+   * (i.e. don't match the platform default seed) unless force=true is passed.
+   */
+  app.post('/api/monthly-tiers/replace', requireTenant, requireAuth, requireRoleOrPageAccess('finance', 'admin'), async (req, res, next) => {
+    try {
+      const { monthlyGivingTiers } = await import('@shared/schema');
+      const tierSchema = z.object({
+        tierName: z.string().trim().min(1).max(100),
+        amount: z.number().int().min(100),
+        tangibleImpact: z.string().trim().min(1).max(500),
+        iconName: z.string().trim().min(1).max(50),
+        isActive: z.boolean().optional().default(true),
+      });
+      const bodySchema = z.object({
+        tiers: z.array(tierSchema).min(1).max(10),
+        force: z.boolean().optional().default(false),
+      });
+      const { tiers: newTiers, force } = bodySchema.parse(req.body);
+
+      const existing = await db
+        .select()
+        .from(monthlyGivingTiers)
+        .where(eq(monthlyGivingTiers.tenantId, req.tenant!.id));
+
+      // The DB has been seeded by two slightly different default sets over time
+      // (server/routes.ts DEFAULT_VIP_TIERS and scripts/backfill-vip-tiers.ts
+      // DEFAULT_TIERS — same names/amounts/icons, different tangibleImpact text).
+      // A tenant counts as "still on the seed" only if every field matches one
+      // of those templates exactly; any change to name, amount, impact, icon,
+      // or tier count flips them to "customized".
+      const KNOWN_SEED_TEMPLATES: Array<Array<{ tierName: string; amount: number; tangibleImpact: string; iconName: string }>> = [
+        DEFAULT_VIP_TIERS.map(t => ({ tierName: t.tierName, amount: t.amount, tangibleImpact: t.tangibleImpact, iconName: t.iconName })),
+        [
+          { tierName: "Friend of the Pack", amount: 1000, tangibleImpact: "Helps cover food, beds, and basic care for one foster animal each month.", iconName: "paw" },
+          { tierName: "Guardian", amount: 2500, tangibleImpact: "Sponsors monthly vaccinations, parasite prevention, and routine vet care for one animal.", iconName: "shield" },
+          { tierName: "Hero of Hope", amount: 5000, tangibleImpact: "Underwrites a complete medical journey — spay/neuter, dental, and emergency care.", iconName: "heart" },
+        ],
+      ];
+      const matchesSeed = KNOWN_SEED_TEMPLATES.some(template =>
+        template.length === existing.length &&
+        template.every(def =>
+          existing.some(t =>
+            t.tierName === def.tierName &&
+            t.amount === def.amount &&
+            t.tangibleImpact === def.tangibleImpact &&
+            t.iconName === def.iconName,
+          ),
+        ),
+      );
+
+      if (existing.length > 0 && !matchesSeed && !force) {
+        return res.status(409).json({
+          error: 'Tiers have already been customized. Pass force=true to overwrite.',
+          customized: true,
+        });
+      }
+
+      const inserted = await db.transaction(async (tx) => {
+        await tx.delete(monthlyGivingTiers).where(eq(monthlyGivingTiers.tenantId, req.tenant!.id));
+        return tx.insert(monthlyGivingTiers).values(
+          newTiers.map((t, idx) => ({
+            tenantId: req.tenant!.id,
+            tierName: t.tierName,
+            amount: t.amount,
+            tangibleImpact: t.tangibleImpact,
+            iconName: t.iconName,
+            isActive: t.isActive,
+            displayOrder: idx,
+          })),
+        ).returning();
+      });
+
+      res.json({ tiers: inserted });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * POST /api/monthly-tiers/:id/checkout
    * Create a Stripe Checkout session for a specific VIP tier (public)
    */

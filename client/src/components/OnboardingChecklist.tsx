@@ -1,9 +1,11 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { CheckCircle2, Circle, Settings, Mail, DollarSign, PawPrint, ChevronRight, X, FileText } from "lucide-react";
+import { CheckCircle2, Circle, Settings, Mail, DollarSign, PawPrint, ChevronRight, X, FileText, Sparkles } from "lucide-react";
 import { Link } from "wouter";
-import type { Tenant } from "@shared/schema";
+import { useQuery } from "@tanstack/react-query";
+import type { MonthlyGivingTier, Tenant } from "@shared/schema";
 import { useState } from "react";
+import { tiersMatchDefaultSeed } from "@/components/VipClubWizard";
 
 interface OnboardingChecklistProps {
   tenant: Tenant;
@@ -25,6 +27,12 @@ export function OnboardingChecklist({ tenant, animalCount = 0, hasPlatformEmailK
   const [dismissed, setDismissed] = useState(false);
 
   const isLite = !tenant.subscriptionTier || tenant.subscriptionTier === 'lite' || tenant.subscriptionTier === 'free';
+
+  const { data: tiersData } = useQuery<{ tiers: MonthlyGivingTier[] }>({
+    queryKey: ['/api/monthly-tiers'],
+  });
+  const tiers = tiersData?.tiers || [];
+  const vipCustomized = tiers.length > 0 && !tiersMatchDefaultSeed(tiers);
 
   const items: ChecklistItem[] = [
     {
@@ -62,6 +70,15 @@ export function OnboardingChecklist({ tenant, animalCount = 0, hasPlatformEmailK
       icon: <PawPrint className="h-4 w-4" />,
       actionLabel: "Add Animal",
       actionLink: "/dashboard/animals",
+    },
+    {
+      id: "vip-tiers",
+      title: "Customize Your VIP Donor Club",
+      description: "Rename the seeded monthly giving tiers and set impact statements that fit your rescue",
+      completed: vipCustomized,
+      icon: <Sparkles className="h-4 w-4" />,
+      actionLabel: "Open Wizard",
+      actionLink: "/dashboard/website-builder?wizard=vip",
     },
   ];
 

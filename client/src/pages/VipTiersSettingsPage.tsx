@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -9,12 +9,13 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Plus, Pencil, Trash2, Sparkles, ArrowUp, ArrowDown, GripVertical, Lightbulb } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, Sparkles, ArrowUp, ArrowDown, GripVertical, Wand2 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { MonthlyGivingTier } from "@shared/schema";
 import { VIP_ICON_OPTIONS as ICON_OPTIONS, getTierIcon } from "@/lib/vip-tier-icon";
-import { isUsingSeededVipTiers } from "@/lib/vip-tier-defaults";
+import { VipClubWizard, tiersMatchDefaultSeed } from "@/components/VipClubWizard";
+import { useLocation } from "wouter";
 
 export { getTierIcon };
 
@@ -42,22 +43,24 @@ export default function VipTiersSettingsPage() {
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState<TierFormState>(emptyForm);
   const [busy, setBusy] = useState(false);
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [location] = useLocation();
 
   const { data, isLoading } = useQuery<{ tiers: MonthlyGivingTier[] }>({
     queryKey: ['/api/monthly-tiers'],
   });
 
   const tiers = data?.tiers || [];
+  const isUntouchedSeed = tiers.length > 0 && tiersMatchDefaultSeed(tiers);
 
-  // Detect when this tenant is still using the seeded starter tiers verbatim
-  // (Friend of the Pack $10 / Guardian $25 / Hero of Hope $50). When that's
-  // the case we surface a friendly nudge inviting the rescue to make the
-  // tiers their own — rename them, retune the prices, swap in their actual
-  // impact stories. This matters because the auto-tag backfill assigns
-  // donors to whichever tier matches their amount, so the labels donors see
-  // on their giving history, receipts, and the public Wall of Heroes are
-  // these defaults until edited.
-  const usingSeededDefaults = isUsingSeededVipTiers(tiers);
+  // Auto-open wizard when launched from onboarding (?wizard=vip)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('wizard') === 'vip' && !wizardOpen) {
+      setWizardOpen(true);
+    }
+  }, [location]);
 
   const openCreate = () => {
     setForm({ ...emptyForm, displayOrder: tiers.length });
@@ -195,13 +198,17 @@ export default function VipTiersSettingsPage() {
             Configure the recurring monthly giving levels shown on your VIP Donor Club page at <code className="bg-muted px-1 rounded">/vip-club</code>. Donors choose a tier and start a recurring monthly contribution via Stripe.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           {tiers.length === 0 && (
             <Button variant="outline" onClick={handleSeed} disabled={busy} data-testid="button-seed-default-tiers">
               <Sparkles className="h-4 w-4 mr-2" />
               Add Starter Tiers
             </Button>
           )}
+          <Button variant="outline" onClick={() => setWizardOpen(true)} data-testid="button-open-vip-wizard">
+            <Wand2 className="h-4 w-4 mr-2" />
+            {tiers.length === 0 ? "Configure VIP Club" : "Customize VIP Club"}
+          </Button>
           <Button onClick={openCreate} data-testid="button-create-tier">
             <Plus className="h-4 w-4 mr-2" />
             Add Tier
@@ -209,17 +216,25 @@ export default function VipTiersSettingsPage() {
         </div>
       </div>
 
-      {usingSeededDefaults && (
-        <Card className="p-4 flex items-start gap-3" data-testid="banner-seeded-defaults">
-          <div className="h-8 w-8 rounded-md bg-primary/10 text-primary flex items-center justify-center shrink-0">
-            <Lightbulb className="h-4 w-4" />
+      {isUntouchedSeed && (
+        <Card
+          className="p-4 flex items-start gap-3 border-primary/40 bg-primary/5"
+          data-testid="banner-customize-vip"
+        >
+          <div className="h-9 w-9 rounded-md bg-primary/10 text-primary flex items-center justify-center shrink-0">
+            <Wand2 className="h-5 w-5" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="font-semibold text-sm">You're using our starter tiers — make them your own.</p>
+            <h3 className="font-semibold">Make these tiers your own</h3>
             <p className="text-sm text-muted-foreground mt-0.5">
-              Friend of the Pack, Guardian, and Hero of Hope at $10 / $25 / $50 are sensible defaults, but donors connect with tiers that name <em>your</em> impact (e.g., "Kibble Hero — feeds one foster pup for a month"). Click any tier below to rename it, change the price, or rewrite the impact line.
+              You're using the platform starter tiers. Spend a minute renaming them,
+              adjusting amounts, and writing impact statements that match your rescue.
             </p>
           </div>
+          <Button onClick={() => setWizardOpen(true)} data-testid="button-banner-customize-vip">
+            <Wand2 className="h-4 w-4 mr-2" />
+            Customize
+          </Button>
         </Card>
       )}
 
@@ -400,6 +415,12 @@ export default function VipTiersSettingsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <VipClubWizard
+        open={wizardOpen}
+        onOpenChange={setWizardOpen}
+        existingTiers={tiers}
+      />
     </div>
   );
 }
