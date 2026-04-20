@@ -1442,9 +1442,13 @@ export async function sendDailyBriefingForTenant(tenantId: string): Promise<{ se
     const adoptedCount = data.helpRequests.length + data.overdueObligations.length;
     const totalItems = shelterCount + fosterCount + adoptedCount;
 
+    // Prefix the rescue name so admins who serve multiple tenants can tell
+    // the two daily briefings apart in their inbox — without it they look
+    // identical and read as duplicates.
+    const subjectPrefix = `[${data.tenantName}] `;
     const subject = totalItems > 0
-      ? `Daily Briefing: ${totalItems} item${totalItems !== 1 ? 's' : ''} for ${formatDate(data.date)}`
-      : `Daily Briefing: All clear for ${formatDate(data.date)}`;
+      ? `${subjectPrefix}Daily Briefing: ${totalItems} item${totalItems !== 1 ? 's' : ''} for ${formatDate(data.date)}`
+      : `${subjectPrefix}Daily Briefing: All clear for ${formatDate(data.date)}`;
 
     const result = await emailService.send({
       to: recipients,
