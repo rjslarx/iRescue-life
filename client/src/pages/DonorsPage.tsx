@@ -43,28 +43,42 @@ export default function DonorsPage() {
   const donors = data?.donors || [];
 
   const vipByDonor = useMemo(() => {
-    const map = new Map<string, VipMember>();
+    // Show ALL active VIP subscriptions per donor (a donor can hold multiple).
+    // If no active subscription, fall back to most recent inactive one for context.
+    const map = new Map<string, VipMember[]>();
+    const inactiveFallback = new Map<string, VipMember>();
     (vipData?.members || []).forEach(m => {
-      const existing = map.get(m.donorId);
-      // Prefer active subscription, then highest amount
-      if (!existing
-        || (existing.status !== 'active' && m.status === 'active')
-        || (existing.status === m.status && m.amount > existing.amount)) {
-        map.set(m.donorId, m);
+      if (m.status === 'active') {
+        const list = map.get(m.donorId) || [];
+        list.push(m);
+        map.set(m.donorId, list);
+      } else {
+        const prev = inactiveFallback.get(m.donorId);
+        if (!prev || new Date(m.memberSince) > new Date(prev.memberSince)) {
+          inactiveFallback.set(m.donorId, m);
+        }
       }
     });
+    inactiveFallback.forEach((m, donorId) => {
+      if (!map.has(donorId)) map.set(donorId, [m]);
+    });
+    // Sort each donor's badges by amount desc (most prominent tier first)
+    map.forEach((list) => list.sort((a, b) => b.amount - a.amount));
     return map;
   }, [vipData]);
 
   const handleExportCSV = () => {
     const headers = ['Email', 'Name', 'Phone', 'VIP Tier', 'Total Donated', 'Last Donation Date'];
     const rows = donors.map(d => {
-      const vip = vipByDonor.get(d.id);
+      const vipList = vipByDonor.get(d.id) || [];
+      const vipText = vipList
+        .map(v => `${v.tierName || 'VIP'} ($${(v.amount / 100).toFixed(0)}/mo, ${v.status})`)
+        .join(' + ');
       return [
         d.email,
         d.name,
         d.phone || '',
-        vip ? `${vip.tierName || ''} (${vip.status})` : '',
+        vipText,
         `$${(d.totalDonated / 100).toFixed(2)}`,
         d.lastDonationDate ? new Date(d.lastDonationDate).toLocaleDateString() : 'Never',
       ];
@@ -155,7 +169,7 @@ export default function DonorsPage() {
                       </TableHeader>
                       <TableBody>
                         {donors.map((donor) => {
-                          const vip = vipByDonor.get(donor.id);
+                          const vipList = vipByDonor.get(donor.id) || [];
                           return (
                             <TableRow key={donor.id} data-testid={`row-donor-${donor.id}`}>
                               <TableCell className="font-medium" data-testid={`text-donor-name-${donor.id}`}>
@@ -168,25 +182,30 @@ export default function DonorsPage() {
                                 {donor.phone || '—'}
                               </TableCell>
                               <TableCell>
-                                {vip ? (
-                                  <div className="flex flex-col gap-0.5">
-                                    <Badge
-                                      variant={vip.status === 'active' ? 'default' : 'outline'}
-                                      data-testid={`badge-vip-tier-${donor.id}`}
-                                      className="self-start"
-                                    >
-                                      <Sparkles className="h-3 w-3 mr-1" />
-                                      {vip.tierName || 'VIP'}
-                                      {vip.status !== 'active' && <span className="ml-1 opacity-70">({vip.status})</span>}
-                                    </Badge>
-                                    {vip.memberSince && (
-                                      <span
-                                        className="text-[10px] text-muted-foreground"
-                                        data-testid={`text-vip-since-${donor.id}`}
-                                      >
-                                        since {new Date(vip.memberSince).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}
-                                      </span>
-                                    )}
+                                {vipList.length > 0 ? (
+                                  <div className="flex flex-col gap-1.5">
+                                    {vipList.map((vip, idx) => (
+                                      <div key={`${donor.id}-vip-${idx}`} className="flex flex-col gap-0.5">
+                                        <Badge
+                                          variant={vip.status === 'active' ? 'default' : 'outline'}
+                                          data-testid={idx === 0 ? `badge-vip-tier-${donor.id}` : `badge-vip-tier-${donor.id}-${idx}`}
+                                          className="self-start"
+                                        >
+                                          <Sparkles className="h-3 w-3 mr-1" />
+                                          {vip.tierName || 'VIP'}
+                                          <span className="ml-1 opacity-80">${(vip.amount / 100).toFixed(0)}/mo</span>
+                                          {vip.status !== 'active' && <span className="ml-1 opacity-70">({vip.status})</span>}
+                                        </Badge>
+                                        {vip.memberSince && (
+                                          <span
+                                            className="text-[10px] text-muted-foreground"
+                                            data-testid={idx === 0 ? `text-vip-since-${donor.id}` : `text-vip-since-${donor.id}-${idx}`}
+                                          >
+                                            since {new Date(vip.memberSince).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}
+                                          </span>
+                                        )}
+                                      </div>
+                                    ))}
                                   </div>
                                 ) : (
                                   <span className="text-xs text-muted-foreground">—</span>
