@@ -60,6 +60,7 @@ interface VipHistorySubscription {
   status: string;
   currentPeriodEnd: string | null;
   canceledAt: string | null;
+  cancelAtPeriodEnd: boolean;
   memberSince: string;
   tierName: string | null;
   stripeSubscriptionId: string;
@@ -95,6 +96,11 @@ export default function VipClubPage() {
   const [requestingLink, setRequestingLink] = useState(false);
   const [linkRequestSent, setLinkRequestSent] = useState(false);
   const [openingPortalFor, setOpeningPortalFor] = useState<string | null>(null);
+  // When the donor returns from the Stripe-hosted billing portal we briefly
+  // poll the history endpoint so the new state (e.g. cancelAtPeriodEnd, fresh
+  // card) shows up without waiting for the next manual refresh — the
+  // customer.subscription.updated webhook usually lands within a few seconds.
+  const [bridgePoll, setBridgePoll] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -104,6 +110,21 @@ export default function VipClubPage() {
     const token = params.get("vipToken");
     if (token) {
       setHistoryToken(token);
+    }
+    if (params.get("from_portal") === "1") {
+      toast({
+        title: "Changes saved",
+        description: "We're syncing the latest details from your secure billing portal.",
+      });
+      setBridgePoll(true);
+      // Strip from_portal so a refresh doesn't re-trigger the toast/poll.
+      params.delete("from_portal");
+      const search = params.toString();
+      const cleaned = `${window.location.pathname}${search ? `?${search}` : ''}${window.location.hash}`;
+      window.history.replaceState(null, '', cleaned);
+      // Stop polling after ~12s — far beyond the typical webhook latency.
+      const stopAt = window.setTimeout(() => setBridgePoll(false), 12000);
+      return () => window.clearTimeout(stopAt);
     }
   }, [location]);
 
@@ -141,6 +162,10 @@ export default function VipClubPage() {
       return res.json();
     },
     retry: false,
+    // While bridging the post-portal webhook delay, poll every 2s. The
+    // bridgePoll flag flips off after ~12s (or when the user navigates away)
+    // so we never poll indefinitely.
+    refetchInterval: bridgePoll ? 2000 : false,
   });
 
   const requestHistoryLink = async () => {
@@ -406,37 +431,78 @@ export default function VipClubPage() {
                   </div>
                 </div>
                 {historyData.subscriptions.length > 0 && (
-                  <div className="mt-4 pt-4 border-t space-y-2">
+                  <div className="mt-4 pt-4 border-t space-y-3">
                     {historyData.subscriptions.map((sub) => {
-                      const isManageable = sub.status === 'active' || sub.status === 'past_due' || sub.status === 'trialing' || sub.status === 'unpaid';
+                      const isCanceled = sub.status === 'canceled';
+                      const isScheduledToCancel = sub.cancelAtPeriodEnd && !isCanceled;
+                      // Keep the portal button visible while the subscription
+                      // still has billing periods remaining — Stripe's portal
+                      // lets donors reverse a scheduled cancellation, so we
+                      // must not strand them in a one-way state.
+                      const isManageable = !isCanceled && (
+                        sub.status === 'active' || sub.status === 'past_due' || sub.status === 'trialing' || sub.status === 'unpaid'
+                      );
+                      const manageLabel = isScheduledToCancel ? 'Reactivate or update card' : 'Update card or cancel';
+                      const endsOn = sub.currentPeriodEnd ? formatDateShort(sub.currentPeriodEnd) : null;
+                      const canceledOn = sub.canceledAt ? formatDateShort(sub.canceledAt) : null;
                       return (
-                        <div key={sub.id} className="flex flex-wrap items-center justify-between gap-2 text-sm" data-testid={`row-subscription-${sub.id}`}>
-                          <div>
-                            <span className="font-medium">{sub.tierName || 'Monthly Donor'}</span>
-                            <span className="text-muted-foreground"> · {formatMoney(sub.amount)}/{sub.interval}</span>
-                            <span className="text-muted-foreground"> · since {formatDateShort(sub.memberSince)}</span>
-                          </div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <Badge variant={sub.status === 'active' ? 'default' : 'secondary'} data-testid={`badge-subscription-status-${sub.id}`}>
-                              {sub.status}
-                            </Badge>
-                            {isManageable && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => openBillingPortal(sub.id)}
-                                disabled={openingPortalFor === sub.id}
-                                data-testid={`button-manage-subscription-${sub.id}`}
+                        <div key={sub.id} className="space-y-2" data-testid={`row-subscription-${sub.id}`}>
+                          <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                            <div>
+                              <span className="font-medium">{sub.tierName || 'Monthly Donor'}</span>
+                              <span className="text-muted-foreground"> · {formatMoney(sub.amount)}/{sub.interval}</span>
+                              <span className="text-muted-foreground"> · since {formatDateShort(sub.memberSince)}</span>
+                            </div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Badge
+                                variant={isCanceled || isScheduledToCancel ? 'secondary' : (sub.status === 'active' ? 'default' : 'secondary')}
+                                data-testid={`badge-subscription-status-${sub.id}`}
                               >
-                                {openingPortalFor === sub.id ? (
-                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                ) : (
-                                  <CreditCard className="h-4 w-4 mr-2" />
-                                )}
-                                Update card or cancel
-                              </Button>
-                            )}
+                                {isScheduledToCancel ? 'ending soon' : sub.status}
+                              </Badge>
+                              {bridgePoll && (
+                                <span
+                                  className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"
+                                  data-testid={`status-subscription-syncing-${sub.id}`}
+                                >
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                  Updating your account…
+                                </span>
+                              )}
+                              {isManageable && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => openBillingPortal(sub.id)}
+                                  disabled={openingPortalFor === sub.id}
+                                  data-testid={`button-manage-subscription-${sub.id}`}
+                                >
+                                  {openingPortalFor === sub.id ? (
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                  ) : (
+                                    <CreditCard className="h-4 w-4 mr-2" />
+                                  )}
+                                  {manageLabel}
+                                </Button>
+                              )}
+                            </div>
                           </div>
+                          {isScheduledToCancel && endsOn && (
+                            <div
+                              className="rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground"
+                              data-testid={`banner-subscription-scheduled-cancel-${sub.id}`}
+                            >
+                              Your monthly gift will end on <span className="font-medium text-foreground">{endsOn}</span>. Thank you for your support — no further charges will be made.
+                            </div>
+                          )}
+                          {isCanceled && canceledOn && (
+                            <div
+                              className="rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground"
+                              data-testid={`banner-subscription-canceled-${sub.id}`}
+                            >
+                              This monthly gift was canceled on <span className="font-medium text-foreground">{canceledOn}</span>.
+                            </div>
+                          )}
                         </div>
                       );
                     })}

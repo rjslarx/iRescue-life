@@ -27531,15 +27531,28 @@ Submitted: ${new Date().toLocaleString()}
 
         case 'customer.subscription.updated': 
         case 'customer.subscription.deleted': {
-          const subscription = event.data.object as any;
-          
+          const subscription = event.data.object as Stripe.Subscription & {
+            current_period_start?: number;
+            current_period_end?: number;
+            cancel_at_period_end?: boolean;
+          };
+
           await db
             .update(subscriptions)
             .set({
               status: subscription.status,
-              currentPeriodStart: new Date(subscription.current_period_start * 1000),
-              currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+              currentPeriodStart: subscription.current_period_start
+                ? new Date(subscription.current_period_start * 1000)
+                : null,
+              currentPeriodEnd: subscription.current_period_end
+                ? new Date(subscription.current_period_end * 1000)
+                : null,
               canceledAt: subscription.canceled_at ? new Date(subscription.canceled_at * 1000) : null,
+              // Capture the donor's "cancel at end of billing period" choice so
+              // the giving-history view can show a clear "ends on [date]"
+              // banner during the grace window. Stripe reports false on a
+              // re-activation (donor changed their mind in the portal).
+              cancelAtPeriodEnd: !!subscription.cancel_at_period_end,
             })
             .where(
               and(

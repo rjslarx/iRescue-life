@@ -212,6 +212,7 @@ router.get('/history', async (req: Request, res: Response) => {
         status: subscriptions.status,
         currentPeriodEnd: subscriptions.currentPeriodEnd,
         canceledAt: subscriptions.canceledAt,
+        cancelAtPeriodEnd: subscriptions.cancelAtPeriodEnd,
         memberSince: subscriptions.createdAt,
         tierName: subscriptions.vipTierNameSnapshot,
         stripeSubscriptionId: subscriptions.stripeSubscriptionId,
@@ -464,7 +465,7 @@ router.post('/billing-portal', async (req: Request, res: Response) => {
     // Stripe-hosted portal an open-redirect back into our app.
     const tenantPath = tenant.customDomain ? '' : (tenant.subdomain ? `/${tenant.subdomain}` : '');
     const defaultBase = tenant.customDomain ? `https://${tenant.customDomain}` : getAppBaseUrl();
-    const defaultReturnUrl = `${defaultBase}${tenantPath}/vip-club#giving-history`;
+    const defaultReturnUrl = `${defaultBase}${tenantPath}/vip-club?from_portal=1#giving-history`;
 
     const allowedOrigins = new Set<string>();
     try { allowedOrigins.add(new URL(getAppBaseUrl()).origin); } catch {}
@@ -472,11 +473,15 @@ router.post('/billing-portal', async (req: Request, res: Response) => {
       try { allowedOrigins.add(new URL(`https://${tenant.customDomain}`).origin); } catch {}
     }
 
+    // Always tag the return URL with from_portal=1 so the giving-history page
+    // can detect the round-trip from Stripe and bridge the few-second gap
+    // before the customer.subscription.updated webhook lands.
     const safeReturnUrl = (() => {
       if (typeof returnUrl === 'string') {
         try {
           const u = new URL(returnUrl);
           if ((u.protocol === 'http:' || u.protocol === 'https:') && allowedOrigins.has(u.origin)) {
+            u.searchParams.set('from_portal', '1');
             return u.toString();
           }
         } catch {}
