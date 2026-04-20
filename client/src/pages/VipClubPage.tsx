@@ -167,7 +167,7 @@ export default function VipClubPage() {
                     onClick={() => { setSelected(tier); setOptInWall(true); }}
                     data-testid={`button-join-tier-${tier.id}`}
                   >
-                    Join This Tier
+                    Become a {tier.tierName}
                   </Button>
                 </Card>
               );

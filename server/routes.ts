@@ -15562,7 +15562,7 @@ ${renderedHtml}
    * GET /api/vip-club/members
    * Admin roster of all VIP members (active subscriptions linked to a tier)
    */
-  app.get('/api/vip-club/members', requireTenant, requireAuth, requireRoleOrPageAccess('finance', 'admin'), async (req, res, next) => {
+  app.get('/api/vip-club/members', requireTenant, requireAuth, requireRoleOrPageAccess('admin'), async (req, res, next) => {
     try {
       const { subscriptions: subs, donors } = await import('@shared/schema');
       const members = await db
