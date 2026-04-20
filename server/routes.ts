@@ -26809,7 +26809,7 @@ Submitted: ${new Date().toLocaleString()}
             const vipTierName = sessionMeta.vipTierName || null;
             const wallOptIn = sessionMeta.displayOnWallOfHeroes === 'true';
             const firstNameDisplay = sessionMeta.firstNameDisplay || null;
-            await db.insert(subscriptions).values({
+            const inserted = await db.insert(subscriptions).values({
               tenantId: tenant.id,
               donorId: donor.id,
               stripeSubscriptionId: session.subscription,
@@ -26821,7 +26821,29 @@ Submitted: ${new Date().toLocaleString()}
               vipTierNameSnapshot: vipTierName,
               displayOnWallOfHeroes: wallOptIn,
               firstNameDisplay: firstNameDisplay,
-            });
+            })
+            .onConflictDoNothing({ target: [subscriptions.tenantId, subscriptions.stripeSubscriptionId] })
+            .returning({ id: subscriptions.id });
+
+            // Send VIP welcome email + tax-deductible receipt for new VIP donors
+            if (inserted.length > 0 && sessionMeta.source === 'vip_club' && customerEmail) {
+              try {
+                const { sendVipWelcomeEmail } = await import('./services/vip-emails');
+                const fallbackOrigin = `${req.protocol}://${req.get('host')}`;
+                await sendVipWelcomeEmail({
+                  tenant,
+                  donorEmail: customerEmail,
+                  donorName: customerName || donor.name || 'Friend',
+                  tierId: vipTierId,
+                  tierName: vipTierName,
+                  monthlyAmountCents: session.amount_total || 0,
+                  currency: session.currency || 'usd',
+                  fallbackOrigin,
+                });
+              } catch (welcomeErr) {
+                console.error('[STRIPE-WEBHOOK] Failed to send VIP welcome email:', welcomeErr);
+              }
+            }
           }
 
           break;
@@ -26900,7 +26922,43 @@ Submitted: ${new Date().toLocaleString()}
               console.error('[Webhook] Failed to create contact from recurring donation:', contactError);
             }
 
-            // Send thank-you email for recurring payment
+            // For VIP subscriptions, send a branded tax-deductible monthly receipt
+            // Only fire on subsequent (recurring) cycles — the welcome email already
+            // includes a receipt for the initial subscription_create invoice.
+            const isVipSubscription = !!subscription?.vipTierIdSnapshot;
+            const isInitialSubscriptionInvoice = invoice.billing_reason === 'subscription_create';
+            if (isVipSubscription) {
+              // First cycle is covered by the welcome email's embedded receipt; skip
+              // any further email here to avoid duplicates.
+              if (isInitialSubscriptionInvoice) {
+                break;
+              }
+              if (donor.email) {
+                try {
+                  const { sendVipMonthlyReceiptEmail } = await import('./services/vip-emails');
+                  const fallbackOrigin = `${req.protocol}://${req.get('host')}`;
+                  const paidAtSeconds = invoice.status_transitions?.paid_at;
+                  const paidAt = paidAtSeconds ? new Date(paidAtSeconds * 1000) : new Date();
+                  await sendVipMonthlyReceiptEmail({
+                    tenant,
+                    donorEmail: donor.email,
+                    donorName: donor.name || 'Friend',
+                    tierName: subscription?.vipTierNameSnapshot || null,
+                    amountCents: invoice.amount_paid || 0,
+                    currency: invoice.currency || 'usd',
+                    paidAt,
+                    invoiceNumber: invoice.number || null,
+                    invoiceHostedUrl: invoice.hosted_invoice_url || null,
+                    fallbackOrigin,
+                  });
+                } catch (vipReceiptErr) {
+                  console.error('[Webhook] Failed to send VIP monthly receipt email:', vipReceiptErr);
+                }
+              }
+              break;
+            }
+
+            // Send thank-you email for recurring payment (non-VIP recurring donors)
             try {
               const { EmailService } = await import('./lib/email-service');
               const emailService = await EmailService.forTenant(tenant.id);
@@ -26916,7 +26974,10 @@ Submitted: ${new Date().toLocaleString()}
                 // Escape user-provided content to prevent XSS
                 const safeDonorName = escapeHtml(donor.name);
                 const safeTenantName = escapeHtml(tenant.name);
-                const safeEin = escapeHtml(tenant.ein);
+                const tenantEin = tenant.orgTaxEin
+                  || (tenant.transparencyVault as { ein?: string } | null | undefined)?.ein
+                  || null;
+                const safeEin = escapeHtml(tenantEin);
                 const einSection = safeEin ? ` EIN: ${safeEin}` : '';
 
                 await emailService.send({
