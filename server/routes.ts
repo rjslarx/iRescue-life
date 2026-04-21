@@ -15733,15 +15733,15 @@ ${renderedHtml}
       }
       const bodySchema = z.object({ tierId: z.string().uuid() });
       const { tierId } = bodySchema.parse(req.body || {});
-      const { monthlyGivingTiers } = await import('@shared/schema');
+      const { subscriptions: subs, monthlyGivingTiers } = await import('@shared/schema');
 
       const [sub] = await db
         .select()
-        .from(subscriptions)
+        .from(subs)
         .where(and(
-          eq(subscriptions.id, req.params.subscriptionId),
-          eq(subscriptions.tenantId, req.tenant!.id),
-          eq(subscriptions.interval, 'month'),
+          eq(subs.id, req.params.subscriptionId),
+          eq(subs.tenantId, req.tenant!.id),
+          eq(subs.interval, 'month'),
         ))
         .limit(1);
       if (!sub) return res.status(404).json({ error: 'Subscription not found' });
@@ -15757,9 +15757,9 @@ ${renderedHtml}
       if (!tier) return res.status(404).json({ error: 'Tier not found' });
 
       await db
-        .update(subscriptions)
+        .update(subs)
         .set({ vipTierIdSnapshot: tier.id, vipTierNameSnapshot: tier.tierName })
-        .where(eq(subscriptions.id, sub.id));
+        .where(eq(subs.id, sub.id));
 
       res.json({ success: true, tierId: tier.id, tierName: tier.tierName });
     } catch (error) {
