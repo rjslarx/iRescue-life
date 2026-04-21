@@ -101,12 +101,25 @@ async function backfillSubs() {
   }
 
   let updated = 0;
-  let unmatched = 0;
+  let unmatchedNoTiers = 0;
+  let unmatchedBelowMin = 0;
   for (const r of rows) {
     const tier = await pickVipTierForAmount(r.tenantId, r.amount);
     if (!tier) {
-      console.log(`  [unmatched] ${r.tenantName} — ${r.donorName} <${r.donorEmail}> ${fmt(r.amount)} (no tiers)`);
-      unmatched++;
+      // Distinguish "tenant has zero active tiers" from "amount below the
+      // smallest active tier" so operators can see which tenants need
+      // configuration vs which donors gave under the minimum.
+      const activeTierCount = await db
+        .select({ id: monthlyGivingTiers.id })
+        .from(monthlyGivingTiers)
+        .where(and(eq(monthlyGivingTiers.tenantId, r.tenantId), eq(monthlyGivingTiers.isActive, true)));
+      if (activeTierCount.length === 0) {
+        console.log(`  [skip:no-active-tiers] ${r.tenantName} — ${r.donorName} <${r.donorEmail}> ${fmt(r.amount)}`);
+        unmatchedNoTiers++;
+      } else {
+        console.log(`  [skip:below-min] ${r.tenantName} — ${r.donorName} <${r.donorEmail}> ${fmt(r.amount)} (${activeTierCount.length} active tier(s) but none matched)`);
+        unmatchedBelowMin++;
+      }
       continue;
     }
     console.log(`  [match] ${r.tenantName} — ${r.donorName} <${r.donorEmail}> ${fmt(r.amount)} → ${tier.name} (${fmt(tier.amount)})`);
@@ -118,7 +131,7 @@ async function backfillSubs() {
     }
     updated++;
   }
-  console.log(`\n  Summary: ${updated} updated, ${unmatched} unmatched, ${rows.length} total`);
+  console.log(`\n  Summary: ${updated} updated, ${unmatchedNoTiers} skipped (no active tiers), ${unmatchedBelowMin} skipped (below min tier), ${rows.length} total`);
 }
 
 async function cleanupPlatformTestSub() {
