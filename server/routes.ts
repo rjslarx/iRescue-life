@@ -15659,8 +15659,14 @@ ${renderedHtml}
    */
   app.get('/api/vip-club/members', requireTenant, requireAuth, requireRoleOrPageAccess('admin'), async (req, res, next) => {
     try {
-      const { subscriptions: subs, donors } = await import('@shared/schema');
-      const members = await db
+      const { subscriptions: subs, donors, monthlyGivingTiers } = await import('@shared/schema');
+      const tenantId = req.tenant!.id;
+
+      // Pull every monthly subscription on this tenant — including ones whose
+      // VIP tier snapshot is NULL (auto-tag failed) or points at a tier that
+      // has since been deleted/deactivated. The page derives a tagState so
+      // staff can see and fix these silent drops.
+      const rows = await db
         .select({
           subscriptionId: subs.id,
           stripeSubscriptionId: subs.stripeSubscriptionId,
@@ -15682,12 +15688,80 @@ ${renderedHtml}
         .from(subs)
         .innerJoin(donors, eq(subs.donorId, donors.id))
         .where(and(
-          eq(subs.tenantId, req.tenant!.id),
-          isNotNull(subs.vipTierIdSnapshot),
+          eq(subs.tenantId, tenantId),
+          eq(subs.interval, 'month'),
         ))
         .orderBy(desc(subs.createdAt));
+
+      const tiers = await db
+        .select({ id: monthlyGivingTiers.id, isActive: monthlyGivingTiers.isActive })
+        .from(monthlyGivingTiers)
+        .where(eq(monthlyGivingTiers.tenantId, tenantId));
+      const tierLookup = new Map(tiers.map(t => [t.id, t]));
+
+      const members = rows.map(r => {
+        let tagState: 'tagged' | 'untagged' | 'tier_deleted' | 'tier_inactive' = 'tagged';
+        if (!r.tierIdSnapshot) {
+          tagState = 'untagged';
+        } else {
+          const t = tierLookup.get(r.tierIdSnapshot);
+          if (!t) tagState = 'tier_deleted';
+          else if (!t.isActive) tagState = 'tier_inactive';
+        }
+        return { ...r, tagState };
+      });
       res.json({ members });
     } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/vip-club/members/:subscriptionId/assign-tier
+   * Manually stamp a VIP tier onto a monthly subscription whose snapshot is
+   * missing or stale. Used by the "Assign tier" UI when auto-tag failed.
+   */
+  app.post('/api/vip-club/members/:subscriptionId/assign-tier', requireTenant, requireAuth, requireRoleOrPageAccess('admin'), async (req, res, next) => {
+    try {
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(req.params.subscriptionId)) {
+        return res.status(404).json({ error: 'Subscription not found' });
+      }
+      const bodySchema = z.object({ tierId: z.string().uuid() });
+      const { tierId } = bodySchema.parse(req.body || {});
+      const { monthlyGivingTiers } = await import('@shared/schema');
+
+      const [sub] = await db
+        .select()
+        .from(subscriptions)
+        .where(and(
+          eq(subscriptions.id, req.params.subscriptionId),
+          eq(subscriptions.tenantId, req.tenant!.id),
+          eq(subscriptions.interval, 'month'),
+        ))
+        .limit(1);
+      if (!sub) return res.status(404).json({ error: 'Subscription not found' });
+
+      const [tier] = await db
+        .select()
+        .from(monthlyGivingTiers)
+        .where(and(
+          eq(monthlyGivingTiers.id, tierId),
+          eq(monthlyGivingTiers.tenantId, req.tenant!.id),
+        ))
+        .limit(1);
+      if (!tier) return res.status(404).json({ error: 'Tier not found' });
+
+      await db
+        .update(subscriptions)
+        .set({ vipTierIdSnapshot: tier.id, vipTierNameSnapshot: tier.tierName })
+        .where(eq(subscriptions.id, sub.id));
+
+      res.json({ success: true, tierId: tier.id, tierName: tier.tierName });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Invalid request', details: error.errors });
+      }
       next(error);
     }
   });
@@ -27482,39 +27556,73 @@ Submitted: ${new Date().toLocaleString()}
             const wallOptIn = sessionMeta.displayOnWallOfHeroes === 'true';
             const firstNameDisplay = sessionMeta.firstNameDisplay || null;
 
-            // Auto-tag any monthly subscription as a VIP member by mapping the
-            // monthly amount to the closest active tier on this tenant. This
-            // covers donations made through the regular donation form,
-            // fundraisers, etc. — not just the dedicated VIP checkout page.
-            // Yearly/other recurrences are intentionally excluded so the VIP
-            // roster only reflects monthly sustaining donors.
-            if (!vipTierId) {
+            // Determine the actual subscription interval from Stripe. We do
+            // NOT trust user-supplied metadata (e.g. source=vip_club) as a
+            // fallback because the public checkout endpoint forwards arbitrary
+            // metadata. If Stripe retrieval fails, we defer VIP tagging
+            // entirely so a yearly sub can never be misclassified as monthly.
+            let actualInterval: 'month' | 'year' | null = null;
+            if (session.subscription && stripe) {
               try {
-                // Default to "unknown" — only auto-tag if we can confirm the
-                // subscription is monthly. A transient Stripe API failure
-                // should NOT cause a yearly/other-interval sub to be tagged
-                // as a monthly VIP member.
-                let isMonthly = false;
-                if (session.subscription && stripe) {
-                  try {
-                    const stripeSub = await stripe.subscriptions.retrieve(session.subscription as string);
-                    const interval = stripeSub.items?.data?.[0]?.price?.recurring?.interval;
-                    isMonthly = interval === 'month';
-                  } catch (subFetchErr) {
-                    console.warn('[Webhook] Could not determine sub interval, skipping VIP auto-tag:', subFetchErr);
-                  }
+                const stripeSub = await stripe.subscriptions.retrieve(session.subscription as string);
+                const interval = stripeSub.items?.data?.[0]?.price?.recurring?.interval;
+                if (interval === 'month' || interval === 'year') {
+                  actualInterval = interval;
                 }
-                if (isMonthly) {
-                  const { pickVipTierForAmount } = await import('./lib/vip-tiers');
-                  const matched = await pickVipTierForAmount(tenant.id, session.amount_total || 0);
-                  if (matched) {
-                    vipTierId = matched.id;
-                    vipTierName = matched.name;
-                  }
+              } catch (subFetchErr) {
+                console.warn('[Webhook] Could not determine sub interval, deferring VIP auto-tag:', subFetchErr);
+              }
+            }
+            const isMonthly = actualInterval === 'month';
+
+            // Validate that any explicit vipTierId from metadata still exists
+            // and belongs to this tenant. A stale id (e.g. tier deleted after
+            // checkout was opened) would otherwise silently land as a NULL on
+            // the snapshot via FK violation, or worse, point at a foreign
+            // tenant's tier. If invalid, fall through to amount-match.
+            if (vipTierId && isMonthly) {
+              try {
+                const { monthlyGivingTiers } = await import('@shared/schema');
+                const [validTier] = await db
+                  .select({ id: monthlyGivingTiers.id, name: monthlyGivingTiers.tierName })
+                  .from(monthlyGivingTiers)
+                  .where(and(
+                    eq(monthlyGivingTiers.id, vipTierId),
+                    eq(monthlyGivingTiers.tenantId, tenant.id),
+                  ))
+                  .limit(1);
+                if (!validTier) {
+                  console.warn('[Webhook] vipTierId from metadata not found on tenant, falling back to amount-match:', vipTierId);
+                  vipTierId = null;
+                  vipTierName = null;
+                } else {
+                  // Refresh the snapshot name in case the tier was renamed
+                  vipTierName = validTier.name;
+                }
+              } catch (validateErr) {
+                console.error('[Webhook] VIP tier validation failed (non-fatal):', validateErr);
+              }
+            }
+
+            if (!vipTierId && isMonthly) {
+              try {
+                const { pickVipTierForAmount } = await import('./lib/vip-tiers');
+                const matched = await pickVipTierForAmount(tenant.id, session.amount_total || 0);
+                if (matched) {
+                  vipTierId = matched.id;
+                  vipTierName = matched.name;
                 }
               } catch (tierErr) {
                 console.error('[Webhook] VIP tier auto-tag failed (non-fatal):', tierErr);
               }
+            }
+
+            // Final guard: never persist a VIP snapshot on a non-monthly sub.
+            // The roster query filters to interval='month', but staff might
+            // also derive donor lists from snapshot presence elsewhere.
+            if (!isMonthly) {
+              vipTierId = null;
+              vipTierName = null;
             }
 
             const inserted = await db.insert(subscriptions).values({
@@ -27523,7 +27631,11 @@ Submitted: ${new Date().toLocaleString()}
               stripeSubscriptionId: session.subscription,
               amount: session.amount_total || 0,
               currency: session.currency || 'usd',
-              interval: 'month',
+              // Persist the actual Stripe interval when known so yearly subs
+              // aren't misclassified as monthly. Fall back to 'month' only
+              // when retrieval failed (preserves prior behavior for other
+              // downstream consumers that expect a non-null interval).
+              interval: actualInterval || 'month',
               status: 'active',
               vipTierIdSnapshot: vipTierId,
               vipTierNameSnapshot: vipTierName,

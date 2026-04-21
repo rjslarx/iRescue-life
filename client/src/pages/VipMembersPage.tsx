@@ -17,7 +17,9 @@ import {
   Users,
   DollarSign,
   AlertTriangle,
+  Tag,
 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -60,6 +62,14 @@ interface Member {
   donorEmail: string;
   donorPhone: string | null;
   totalDonated: number;
+  tagState: 'tagged' | 'untagged' | 'tier_deleted' | 'tier_inactive';
+}
+
+interface AdminTier {
+  id: string;
+  tierName: string;
+  amount: number;
+  isActive: boolean;
 }
 
 interface TierStat {
@@ -103,6 +113,8 @@ export default function VipMembersPage() {
   const [tab, setTab] = useState<"members" | "performance">("members");
   const [cancelTarget, setCancelTarget] = useState<Member | null>(null);
   const [refundTarget, setRefundTarget] = useState<Member | null>(null);
+  const [assignTierTarget, setAssignTierTarget] = useState<Member | null>(null);
+  const [assignTierId, setAssignTierId] = useState<string>("");
   const [cancelMode, setCancelMode] = useState<"period_end" | "immediate">("period_end");
   const [cancelReason, setCancelReason] = useState("");
   const [refundAmount, setRefundAmount] = useState("");
@@ -115,6 +127,10 @@ export default function VipMembersPage() {
   const { data: statsData, isLoading: statsLoading } = useQuery<TierStatsResponse>({
     queryKey: ["/api/vip-club/tier-stats"],
   });
+  const { data: tiersData } = useQuery<{ tiers: AdminTier[] }>({
+    queryKey: ["/api/monthly-tiers"],
+  });
+  const adminTiers = tiersData?.tiers || [];
 
   const members = data?.members || [];
   const stats = statsData?.stats || [];
@@ -142,6 +158,31 @@ export default function VipMembersPage() {
     onError: (err: any) => {
       toast({
         title: "Could not cancel subscription",
+        description: err?.message || "An unexpected error occurred",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const assignTierMutation = useMutation({
+    mutationFn: async ({ subscriptionId, tierId }: { subscriptionId: string; tierId: string }) => {
+      const res = await apiRequest("POST", `/api/vip-club/members/${subscriptionId}/assign-tier`, { tierId });
+      return res.json() as Promise<{ success: boolean; tierId: string; tierName: string }>;
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Tier assigned",
+        description: `Donor is now tagged as ${data.tierName}.`,
+      });
+      setAssignTierTarget(null);
+      setAssignTierId("");
+      queryClient.invalidateQueries({ queryKey: ["/api/vip-club/members"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/vip-club/tier-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/vip-club/wall-of-heroes"] });
+    },
+    onError: (err: any) => {
+      toast({
+        title: "Could not assign tier",
         description: err?.message || "An unexpected error occurred",
         variant: "destructive",
       });
@@ -197,11 +238,18 @@ export default function VipMembersPage() {
   }, [members]);
 
   const groupedByTier = useMemo(() => {
-    const groups = new Map<string, { tierName: string; members: Member[]; activeCount: number; mrr: number }>();
+    const groups = new Map<string, { tierName: string; isUnassigned: boolean; members: Member[]; activeCount: number; mrr: number }>();
     for (const m of filtered) {
-      const key = m.tierName || "Unassigned tier";
+      const isUnassigned = m.tagState !== 'tagged';
+      const key = isUnassigned ? "__unassigned__" : (m.tierName || "Unassigned tier");
       if (!groups.has(key)) {
-        groups.set(key, { tierName: key, members: [], activeCount: 0, mrr: 0 });
+        groups.set(key, {
+          tierName: isUnassigned ? "Needs tier assignment" : key,
+          isUnassigned,
+          members: [],
+          activeCount: 0,
+          mrr: 0,
+        });
       }
       const g = groups.get(key)!;
       g.members.push(m);
@@ -210,8 +258,17 @@ export default function VipMembersPage() {
         g.mrr += m.amount;
       }
     }
-    return Array.from(groups.values()).sort((a, b) => b.mrr - a.mrr);
+    // Sort: unassigned bucket first (it's the actionable one), then by MRR desc
+    return Array.from(groups.values()).sort((a, b) => {
+      if (a.isUnassigned !== b.isUnassigned) return a.isUnassigned ? -1 : 1;
+      return b.mrr - a.mrr;
+    });
   }, [filtered]);
+
+  const untaggedCount = useMemo(
+    () => members.filter((m) => m.tagState !== 'tagged').length,
+    [members],
+  );
 
   const exportCsv = () => {
     const headers = [
@@ -333,15 +390,32 @@ export default function VipMembersPage() {
               </Card>
             ) : (
               <div className="space-y-6">
+                {untaggedCount > 0 ? (
+                  <div className="rounded-md border border-amber-300 bg-amber-50 dark:border-amber-700/50 dark:bg-amber-950/40 p-3 flex items-start gap-3" data-testid="alert-untagged-vips">
+                    <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+                    <div className="text-sm">
+                      <div className="font-medium text-amber-900 dark:text-amber-100">
+                        {untaggedCount} monthly donor{untaggedCount === 1 ? "" : "s"} need a tier assigned
+                      </div>
+                      <div className="text-amber-800/80 dark:text-amber-200/80 mt-0.5">
+                        These donors completed monthly checkout but their VIP tier wasn't auto-tagged. Click "Assign tier" on each row below to fix.
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
                 {groupedByTier.map((group) => (
                   <div key={group.tierName} data-testid={`group-tier-${group.tierName.toLowerCase().replace(/\s+/g, "-")}`}>
                     <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
                       <div className="flex items-center gap-2">
-                        <Sparkles className="h-4 w-4 text-primary" />
+                        {group.isUnassigned ? (
+                          <AlertTriangle className="h-4 w-4 text-amber-600" />
+                        ) : (
+                          <Sparkles className="h-4 w-4 text-primary" />
+                        )}
                         <h3 className="font-semibold" data-testid={`text-tier-group-name-${group.tierName.toLowerCase().replace(/\s+/g, "-")}`}>
                           {group.tierName}
                         </h3>
-                        <Badge variant="secondary" data-testid={`badge-tier-count-${group.tierName.toLowerCase().replace(/\s+/g, "-")}`}>
+                        <Badge variant={group.isUnassigned ? "destructive" : "secondary"} data-testid={`badge-tier-count-${group.tierName.toLowerCase().replace(/\s+/g, "-")}`}>
                           {group.activeCount} active / {group.members.length} total
                         </Badge>
                       </div>
@@ -366,10 +440,35 @@ export default function VipMembersPage() {
                             const isActive = m.status === "active";
                             const isPastDue = m.status === "past_due";
                             const cancelable = isActive || isPastDue;
+                            const needsTier = m.tagState !== 'tagged';
                             return (
                               <TableRow key={m.subscriptionId} data-testid={`row-vip-member-${m.subscriptionId}`}>
                                 <TableCell>
-                                  <div className="font-medium" data-testid={`text-vip-donor-name-${m.subscriptionId}`}>{m.donorName}</div>
+                                  <div className="font-medium flex items-center gap-2 flex-wrap" data-testid={`text-vip-donor-name-${m.subscriptionId}`}>
+                                    {m.donorName}
+                                    {m.tagState === 'untagged' ? (
+                                      <Badge variant="destructive" className="text-xs gap-1" data-testid={`badge-no-tier-${m.subscriptionId}`}>
+                                        <AlertTriangle className="h-3 w-3" />
+                                        No tier
+                                      </Badge>
+                                    ) : null}
+                                    {m.tagState === 'tier_deleted' ? (
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Badge variant="outline" className="text-xs gap-1" data-testid={`badge-tier-deleted-${m.subscriptionId}`}>
+                                            <AlertTriangle className="h-3 w-3" />
+                                            Tier deleted
+                                          </Badge>
+                                        </TooltipTrigger>
+                                        <TooltipContent>Was: {m.tierName || "Unknown"}</TooltipContent>
+                                      </Tooltip>
+                                    ) : null}
+                                    {m.tagState === 'tier_inactive' ? (
+                                      <Badge variant="outline" className="text-xs gap-1" data-testid={`badge-tier-inactive-${m.subscriptionId}`}>
+                                        Tier inactive
+                                      </Badge>
+                                    ) : null}
+                                  </div>
                                   <div className="text-xs text-muted-foreground">{m.donorEmail}</div>
                                 </TableCell>
                                 <TableCell className="font-medium">${(m.amount / 100).toFixed(0)}</TableCell>
@@ -395,6 +494,20 @@ export default function VipMembersPage() {
                                 </TableCell>
                                 <TableCell className="text-right">
                                   <div className="flex items-center justify-end gap-2 flex-wrap">
+                                    {needsTier ? (
+                                      <Button
+                                        size="sm"
+                                        variant="default"
+                                        onClick={() => {
+                                          setAssignTierTarget(m);
+                                          setAssignTierId("");
+                                        }}
+                                        data-testid={`button-assign-tier-${m.subscriptionId}`}
+                                      >
+                                        <Tag className="h-3.5 w-3.5 mr-1.5" />
+                                        Assign tier
+                                      </Button>
+                                    ) : null}
                                     <Button
                                       size="sm"
                                       variant="outline"
@@ -638,6 +751,68 @@ export default function VipMembersPage() {
             >
               {cancelMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
               {cancelMode === "immediate" ? "Cancel now" : "Schedule cancellation"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Assign tier dialog */}
+      <Dialog open={!!assignTierTarget} onOpenChange={(open) => { if (!open) { setAssignTierTarget(null); setAssignTierId(""); } }}>
+        <DialogContent data-testid="dialog-assign-tier">
+          <DialogHeader>
+            <DialogTitle>Assign VIP tier</DialogTitle>
+            <DialogDescription>
+              {assignTierTarget ? (
+                <>
+                  Tag <strong>{assignTierTarget.donorName}</strong>'s {fmtMoney(assignTierTarget.amount)}/mo gift with a VIP tier so they appear in the proper group and on the Wall of Heroes (if they opted in).
+                </>
+              ) : null}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Label htmlFor="assign-tier-select">VIP tier</Label>
+            {adminTiers.length === 0 ? (
+              <div className="text-sm text-muted-foreground">
+                You haven't created any VIP tiers yet.{" "}
+                <Link href="/dashboard/website-builder?tab=vip-tiers" className="underline" data-testid="link-create-tiers">
+                  Create one first
+                </Link>
+                .
+              </div>
+            ) : (
+              <Select value={assignTierId} onValueChange={setAssignTierId}>
+                <SelectTrigger id="assign-tier-select" data-testid="select-assign-tier">
+                  <SelectValue placeholder="Pick a tier..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {adminTiers.map((t) => (
+                    <SelectItem key={t.id} value={t.id} data-testid={`option-tier-${t.id}`}>
+                      {t.tierName} — {fmtMoney(t.amount)}/mo {t.isActive ? "" : "(inactive)"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            {assignTierTarget?.tagState === 'tier_deleted' && assignTierTarget.tierName ? (
+              <p className="text-xs text-muted-foreground">
+                Was previously tagged as <strong>{assignTierTarget.tierName}</strong> (since deleted).
+              </p>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setAssignTierTarget(null); setAssignTierId(""); }} data-testid="button-assign-tier-cancel">
+              Cancel
+            </Button>
+            <Button
+              disabled={!assignTierId || assignTierMutation.isPending}
+              onClick={() => {
+                if (!assignTierTarget || !assignTierId) return;
+                assignTierMutation.mutate({ subscriptionId: assignTierTarget.subscriptionId, tierId: assignTierId });
+              }}
+              data-testid="button-assign-tier-confirm"
+            >
+              {assignTierMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+              Assign tier
             </Button>
           </DialogFooter>
         </DialogContent>
