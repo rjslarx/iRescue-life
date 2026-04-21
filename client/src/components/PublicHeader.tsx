@@ -9,7 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Menu, ChevronDown, Package, Heart, TicketPercent, HeartHandshake, ShoppingBag } from "lucide-react";
+import { Menu, ChevronDown, Package, Heart, TicketPercent, HeartHandshake, ShoppingBag, Sparkles } from "lucide-react";
 import type { CustomPage, SupplyItem, Tenant } from "@shared/schema";
 
 interface ActiveCampaign {
@@ -77,7 +77,8 @@ export default function PublicHeader({ rescueName, logoUrl }: PublicHeaderProps)
   
   const shopEnabled = (tenant as any)?.shopEnabled ?? false;
   const hasStartFundraiser = true;
-  const showMoreDropdown = hasStartFundraiser || navigationPages.length > 0 || hasWishlistItems || activeCampaigns.length > 0 || shopEnabled;
+  const showMoreDropdown = true;
+  void hasStartFundraiser;
   
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -143,6 +144,16 @@ export default function PublicHeader({ rescueName, logoUrl }: PublicHeaderProps)
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem asChild>
+                  <Link
+                    href="/wall-of-heroes"
+                    className="cursor-pointer w-full flex items-center gap-2"
+                    data-testid="link-nav-wall-of-heroes"
+                  >
+                    <Sparkles className="h-4 w-4" />
+                    Wall of Heroes
+                  </Link>
+                </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link
                     href="/fundraise"
@@ -317,6 +328,17 @@ export default function PublicHeader({ rescueName, logoUrl }: PublicHeaderProps)
               {(showMoreDropdown || hasActiveFundraisers) && (
                 <>
                   <div className="border-t my-2" />
+                  <Link href="/wall-of-heroes">
+                    <Button
+                      variant="ghost"
+                      className="w-full justify-start"
+                      data-testid="button-wall-of-heroes-mobile"
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      <Sparkles className="h-4 w-4 mr-2" />
+                      Wall of Heroes
+                    </Button>
+                  </Link>
                   <Link href="/fundraise">
                     <Button
                       variant="ghost"
