@@ -62,7 +62,7 @@ interface Member {
   donorEmail: string;
   donorPhone: string | null;
   totalDonated: number;
-  tagState: 'tagged' | 'untagged' | 'tier_deleted' | 'tier_inactive';
+  tagState: 'tagged' | 'untagged' | 'tier_deleted' | 'tier_inactive' | 'no_tiers_configured';
 }
 
 interface AdminTier {
@@ -451,6 +451,17 @@ export default function VipMembersPage() {
                                         <AlertTriangle className="h-3 w-3" />
                                         No tier
                                       </Badge>
+                                    ) : null}
+                                    {m.tagState === 'no_tiers_configured' ? (
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Badge variant="destructive" className="text-xs gap-1" data-testid={`badge-no-tiers-configured-${m.subscriptionId}`}>
+                                            <AlertTriangle className="h-3 w-3" />
+                                            No tiers set up
+                                          </Badge>
+                                        </TooltipTrigger>
+                                        <TooltipContent>This tenant has no active VIP tiers. Create tiers in Website Builder &rarr; VIP Donor Tiers.</TooltipContent>
+                                      </Tooltip>
                                     ) : null}
                                     {m.tagState === 'tier_deleted' ? (
                                       <Tooltip>

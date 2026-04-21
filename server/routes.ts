@@ -15698,11 +15698,15 @@ ${renderedHtml}
         .from(monthlyGivingTiers)
         .where(eq(monthlyGivingTiers.tenantId, tenantId));
       const tierLookup = new Map(tiers.map(t => [t.id, t]));
+      const hasAnyActiveTier = tiers.some(t => t.isActive);
 
       const members = rows.map(r => {
-        let tagState: 'tagged' | 'untagged' | 'tier_deleted' | 'tier_inactive' = 'tagged';
+        let tagState: 'tagged' | 'untagged' | 'tier_deleted' | 'tier_inactive' | 'no_tiers_configured' = 'tagged';
         if (!r.tierIdSnapshot) {
-          tagState = 'untagged';
+          // Distinguish "auto-tag failed because tenant has no active tiers"
+          // from "tenant has tiers but none matched". This lets the UI tell
+          // staff to create tiers vs assign one.
+          tagState = hasAnyActiveTier ? 'untagged' : 'no_tiers_configured';
         } else {
           const t = tierLookup.get(r.tierIdSnapshot);
           if (!t) tagState = 'tier_deleted';
@@ -15710,7 +15714,7 @@ ${renderedHtml}
         }
         return { ...r, tagState };
       });
-      res.json({ members });
+      res.json({ members, hasAnyActiveTier });
     } catch (error) {
       next(error);
     }
@@ -27557,11 +27561,18 @@ Submitted: ${new Date().toLocaleString()}
             const firstNameDisplay = sessionMeta.firstNameDisplay || null;
 
             // Determine the actual subscription interval from Stripe. We do
-            // NOT trust user-supplied metadata (e.g. source=vip_club) as a
-            // fallback because the public checkout endpoint forwards arbitrary
-            // metadata. If Stripe retrieval fails, we defer VIP tagging
-            // entirely so a yearly sub can never be misclassified as monthly.
+            // NOT trust user-supplied metadata (e.g. source=vip_club) — the
+            // public checkout endpoint forwards arbitrary metadata so a
+            // yearly sub could spoof itself as monthly. Instead we use
+            // session.mode (Stripe-controlled, never user-set) as the trust
+            // signal: when retrieval fails on a known subscription-mode
+            // session, fall back to monthly tagging because every recurring
+            // checkout endpoint in this app creates monthly prices today.
+            // Yearly subs would only be misclassified if a future endpoint
+            // begins creating year prices AND Stripe.retrieve happens to be
+            // failing at the same moment.
             let actualInterval: 'month' | 'year' | null = null;
+            let intervalFetchFailed = false;
             if (session.subscription && stripe) {
               try {
                 const stripeSub = await stripe.subscriptions.retrieve(session.subscription as string);
@@ -27570,10 +27581,15 @@ Submitted: ${new Date().toLocaleString()}
                   actualInterval = interval;
                 }
               } catch (subFetchErr) {
-                console.warn('[Webhook] Could not determine sub interval, deferring VIP auto-tag:', subFetchErr);
+                intervalFetchFailed = true;
+                console.warn('[Webhook] sub.retrieve failed; will fall back to monthly tagging if session.mode=subscription:', subFetchErr);
               }
             }
-            const isMonthly = actualInterval === 'month';
+            const isSubscriptionMode = session.mode === 'subscription';
+            // Treat as monthly when Stripe confirmed it, OR when retrieval
+            // failed but Stripe itself flagged the session as subscription mode.
+            const isMonthly = actualInterval === 'month'
+              || (intervalFetchFailed && isSubscriptionMode);
 
             // Validate that any explicit vipTierId from metadata still exists
             // and belongs to this tenant. A stale id (e.g. tier deleted after
