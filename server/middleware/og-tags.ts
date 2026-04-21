@@ -381,6 +381,19 @@ export async function injectOGTags(req: Request, res: Response, next: NextFuncti
     }
 
     if (!ogData) {
+      const vipClubMatch = url.match(/^\/vip-club\/?(?:\?.*)?$/i);
+      if (vipClubMatch) {
+        const vipImage = `${baseUrl}/api/og/vip-club/${tenant.id}.png`;
+        ogData = {
+          title: `Join the ${tenant.name} Hero Club`,
+          description: 'Help us provide consistent, life-saving care every single month.',
+          image: vipImage,
+        };
+        console.log(`[OG-TAGS] VIP Club match for tenant=${tenant.subdomain}, image=${vipImage}`);
+      }
+    }
+
+    if (!ogData) {
       const customPageMatch = url.match(/^\/([a-z0-9]+(?:-[a-z0-9]+)*)\/?(?:\?.*)?$/i);
       if (customPageMatch) {
         const slug = customPageMatch[1].toLowerCase();
@@ -526,6 +539,75 @@ export async function injectOGTags(req: Request, res: Response, next: NextFuncti
 }
 
 export const ogImageRouter = Router();
+
+/**
+ * GET /api/og/vip-club/preview.png
+ * Admin preview of the share card for the current request's tenant context.
+ * Used by the admin VIP tier settings page. Registered BEFORE the dynamic
+ * :tenantId.png route so Express matches the literal "preview" first.
+ */
+ogImageRouter.get('/api/og/vip-club/preview.png', async (req, res) => {
+  try {
+    const tenant = req.tenant;
+    if (!tenant) {
+      return res.status(404).json({ error: 'No tenant context' });
+    }
+    const { generateVipClubShareImage, TenantNotFoundError } = await import('../services/vip-club-share-image');
+    try {
+      const png = await generateVipClubShareImage({ tenantId: tenant.id });
+      res.set({
+        'Content-Type': 'image/png',
+        'Content-Length': String(png.length),
+        // Admin preview should always be fresh; don't aggressively cache.
+        'Cache-Control': 'private, max-age=60',
+      });
+      res.end(png);
+    } catch (err) {
+      if (err instanceof TenantNotFoundError) {
+        return res.status(404).json({ error: 'Tenant not found' });
+      }
+      throw err;
+    }
+  } catch (error) {
+    console.error('[VIP-OG] Preview render failed:', error);
+    res.status(500).json({ error: 'Failed to generate preview' });
+  }
+});
+
+/**
+ * GET /api/og/vip-club/:tenantId.png
+ * Renders the dynamic VIP Club share card (1200x630 PNG) for a given tenant.
+ * Cached for 24 hours via Cache-Control. Tenant ID must be a UUID.
+ */
+ogImageRouter.get('/api/og/vip-club/:tenantId.png', async (req, res) => {
+  try {
+    const tenantId = req.params.tenantId;
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(tenantId)) {
+      return res.status(400).json({ error: 'Invalid tenant id' });
+    }
+
+    const { generateVipClubShareImage, TenantNotFoundError } = await import('../services/vip-club-share-image');
+    try {
+      const png = await generateVipClubShareImage({ tenantId });
+      res.set({
+        'Content-Type': 'image/png',
+        'Content-Length': String(png.length),
+        // Crawlers re-fetch; allow CDNs/browsers to cache for a day. Strong but bounded.
+        'Cache-Control': 'public, max-age=86400, s-maxage=86400',
+      });
+      res.end(png);
+    } catch (err) {
+      if (err instanceof TenantNotFoundError) {
+        return res.status(404).json({ error: 'Tenant not found' });
+      }
+      throw err;
+    }
+  } catch (error) {
+    console.error('[VIP-OG] Failed to generate VIP Club share image:', error);
+    res.status(500).json({ error: 'Failed to generate image' });
+  }
+});
 
 ogImageRouter.get('/api/og-image', async (req, res) => {
   try {

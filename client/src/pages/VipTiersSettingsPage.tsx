@@ -9,7 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Plus, Pencil, Trash2, Sparkles, ArrowUp, ArrowDown, GripVertical, Wand2 } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, Sparkles, ArrowUp, ArrowDown, GripVertical, Wand2, Share2, RefreshCw } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { MonthlyGivingTier } from "@shared/schema";
@@ -45,6 +45,8 @@ export default function VipTiersSettingsPage() {
   const [busy, setBusy] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [location] = useLocation();
+  const [previewKey, setPreviewKey] = useState(0);
+  const previewSrc = `/api/og/vip-club/preview.png?v=${previewKey}`;
 
   const { data, isLoading } = useQuery<{ tiers: MonthlyGivingTier[] }>({
     queryKey: ['/api/monthly-tiers'],
@@ -237,6 +239,41 @@ export default function VipTiersSettingsPage() {
           </Button>
         </Card>
       )}
+
+      <Card className="p-4 space-y-3" data-testid="card-vip-share-preview">
+        <div className="flex items-start gap-3">
+          <div className="h-9 w-9 rounded-md bg-primary/10 text-primary flex items-center justify-center shrink-0">
+            <Share2 className="h-5 w-5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="font-semibold">Social share preview</h3>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              This is the image Facebook, LinkedIn, and other platforms display when
+              someone shares your VIP Club page. The sponsor count updates automatically
+              as monthly donors join.
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setPreviewKey((k) => k + 1)}
+            data-testid="button-refresh-vip-preview"
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh
+          </Button>
+        </div>
+        <div className="rounded-md overflow-hidden border bg-muted/20">
+          <img
+            src={previewSrc}
+            alt="VIP Club social share preview"
+            width={1200}
+            height={630}
+            className="w-full h-auto block"
+            data-testid="img-vip-share-preview"
+          />
+        </div>
+      </Card>
 
       {isLoading ? (
         <div className="flex justify-center p-12">
