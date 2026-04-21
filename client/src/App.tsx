@@ -22,6 +22,7 @@ import DonationLinksPage from "@/pages/DonationLinksPage";
 import GrantsPage from "@/pages/GrantsPage";
 import DonorsPage from "@/pages/DonorsPage";
 import VipClubPage from "@/pages/VipClubPage";
+import WallOfHeroesPage from "@/pages/WallOfHeroesPage";
 import VipMembersPage from "@/pages/VipMembersPage";
 import ContactsPage from "@/pages/ContactsPage";
 import PartnerOrganizationsPage from "@/pages/PartnerOrganizationsPage";
@@ -245,6 +246,7 @@ function RouterSwitch() {
       <Route path="/donate/:linkId" component={DonationLinkRedirectPage} />
       <Route path="/donate" component={DonatePage} />
       <Route path="/vip-club" component={VipClubPage} />
+      <Route path="/wall-of-heroes" component={WallOfHeroesPage} />
       <Route path="/event/:eventId" component={EventTicketCheckoutPage} />
       <Route path="/event-success" component={EventSuccessPage} />
       <Route path="/give" component={GivePage} />

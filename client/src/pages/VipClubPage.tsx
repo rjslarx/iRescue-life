@@ -192,7 +192,7 @@ function WallOfHeroesToggle({
 }
 
 export default function VipClubPage() {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selected, setSelected] = useState<PublicTier | null>(null);
@@ -1006,7 +1006,7 @@ export default function VipClubPage() {
         </div>
       </div>
 
-      {/* Wall of Heroes */}
+      {/* Wall of Heroes — featured strip (links to full /wall-of-heroes page) */}
       {heroes.length > 0 && (
         <div className="border-t bg-muted/30">
           <div className="container max-w-5xl mx-auto py-12 px-4 sm:px-6">
@@ -1016,18 +1016,27 @@ export default function VipClubPage() {
                 {heroes.length} sustaining {heroes.length === 1 ? 'donor is' : 'donors are'} powering our mission every month. Thank you.
               </p>
             </div>
-            <div className="flex flex-wrap justify-center gap-2" data-testid="wall-of-heroes">
-              {heroes.map((hero, i) => (
+            <div className="flex flex-wrap justify-center gap-2 mb-6" data-testid="wall-of-heroes">
+              {heroes.slice(0, 18).map((hero, i) => (
                 <Badge
                   key={i}
                   variant="secondary"
                   className="text-sm py-1.5 px-3"
                   data-testid={`hero-badge-${i}`}
                 >
-                  {hero.firstName}
+                  {hero.firstName || "Anonymous"}
                   {hero.tierName && <span className="ml-1.5 opacity-70">· {hero.tierName}</span>}
                 </Badge>
               ))}
+            </div>
+            <div className="text-center">
+              <Button
+                variant="outline"
+                onClick={() => setLocation('/wall-of-heroes')}
+                data-testid="link-see-all-heroes"
+              >
+                See all {heroes.length} heroes
+              </Button>
             </div>
           </div>
         </div>
