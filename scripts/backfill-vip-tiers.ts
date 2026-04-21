@@ -19,6 +19,14 @@ import { pickVipTierForAmount } from "../server/lib/vip-tiers";
 
 const DRY_RUN = process.argv.includes("--dry-run");
 const CLEANUP_PLATFORM_TEST = process.argv.includes("--cleanup-platform-test");
+function flagValue(name: string): string | null {
+  const prefix = `--${name}=`;
+  const hit = process.argv.find((a) => a.startsWith(prefix));
+  return hit ? hit.slice(prefix.length) : null;
+}
+const ONLY_TENANT = flagValue("tenant");
+const LIMIT_RAW = flagValue("limit");
+const LIMIT = LIMIT_RAW ? Math.max(0, parseInt(LIMIT_RAW, 10) || 0) : 0;
 
 const DEFAULT_TIERS = [
   { tierName: "Friend of the Pack", amount: 1000, tangibleImpact: "Helps cover food, beds, and basic care for one foster animal each month.", iconName: "paw" },
@@ -58,7 +66,16 @@ async function seedDefaultTiers() {
 
 async function backfillSubs() {
   console.log(`\n=== Step 2: Backfilling untagged active subs ${DRY_RUN ? "(DRY RUN)" : ""} ===`);
-  const rows = await db
+  const conditions = [
+    eq(subscriptions.status, "active"),
+    eq(subscriptions.interval, "month"),
+    isNull(subscriptions.vipTierIdSnapshot),
+  ];
+  if (ONLY_TENANT) {
+    conditions.push(eq(subscriptions.tenantId, ONLY_TENANT));
+    console.log(`  Filtering to tenant=${ONLY_TENANT}`);
+  }
+  let q = db
     .select({
       id: subscriptions.id,
       tenantId: subscriptions.tenantId,
@@ -70,11 +87,13 @@ async function backfillSubs() {
     .from(subscriptions)
     .innerJoin(tenants, eq(tenants.id, subscriptions.tenantId))
     .innerJoin(donors, eq(donors.id, subscriptions.donorId))
-    .where(and(
-      eq(subscriptions.status, "active"),
-      eq(subscriptions.interval, "month"),
-      isNull(subscriptions.vipTierIdSnapshot),
-    ));
+    .where(and(...conditions))
+    .$dynamic();
+  if (LIMIT > 0) {
+    q = q.limit(LIMIT);
+    console.log(`  Capping at limit=${LIMIT}`);
+  }
+  const rows = await q;
 
   if (rows.length === 0) {
     console.log("  No untagged active subs found.");
