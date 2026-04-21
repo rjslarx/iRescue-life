@@ -10,6 +10,7 @@ import { Search, Sparkles, Heart, ArrowLeft } from "lucide-react";
 import PublicHeader from "@/components/PublicHeader";
 import { useSEO } from "@/hooks/useSEO";
 import { TenureBadge, calcTenure } from "@/components/vip/TenureBadge";
+import type { Tenant } from "@shared/schema";
 
 interface Hero {
   firstName: string;
@@ -25,10 +26,16 @@ interface WallResponse {
 const ALL_TIERS_KEY = "__all__";
 
 export default function WallOfHeroesPage() {
+  const { data: tenantData } = useQuery<{ tenant: Tenant }>({
+    queryKey: ["/api/tenant"],
+  });
+  const tenant = tenantData?.tenant;
+  const rescueName = tenant?.name || "Animal Rescue";
+
   useSEO({
-    title: "Wall of Heroes — Our Sustaining Monthly Donors",
-    description:
-      "Celebrating the monthly donors whose recurring support powers our rescue mission every single day.",
+    title: `Wall of Heroes | ${rescueName}`,
+    description: `Celebrating the monthly donors whose recurring support powers ${rescueName}'s mission every single day.`,
+    siteName: rescueName,
   });
 
   const [search, setSearch] = useState("");
@@ -74,7 +81,7 @@ export default function WallOfHeroesPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
-      <PublicHeader />
+      <PublicHeader rescueName={rescueName} logoUrl={tenant?.logoUrl || undefined} />
       <main className="flex-1">
         {/* Hero / Intro */}
         <section className="border-b bg-gradient-to-b from-primary/5 to-transparent">
