@@ -154,7 +154,10 @@ export async function resolveTenant(req: Request, res: Response, next: NextFunct
     
     // Skip tenant resolution for static assets - let static file middleware handle these
     // This is critical for production custom domains where assets must be served before tenant resolution
-    if (req.path.startsWith('/assets/') || 
+    // Exception: /api/og/ paths are dynamic image endpoints that REQUIRE tenant context
+    const isDynamicOgImage = req.path.startsWith('/api/og/');
+    if (!isDynamicOgImage && (
+        req.path.startsWith('/assets/') || 
         req.path.endsWith('.js') || 
         req.path.endsWith('.css') || 
         req.path.endsWith('.ico') || 
@@ -165,7 +168,7 @@ export async function resolveTenant(req: Request, res: Response, next: NextFunct
         req.path.endsWith('.woff') ||
         req.path.endsWith('.woff2') ||
         req.path.endsWith('.ttf') ||
-        req.path.endsWith('.map')) {
+        req.path.endsWith('.map'))) {
       return next();
     }
     
