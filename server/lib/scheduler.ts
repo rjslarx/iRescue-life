@@ -634,4 +634,29 @@ export function initializeScheduler() {
   });
 
   console.log(`✓ Message queue dispatcher scheduled: * * * * * (every minute, UTC)`);
+
+  // Reconcile any donor with an active recurring donation but no matching
+  // `subscriptions` row — happens when Stripe's checkout.session.completed
+  // event lands without `session.subscription` populated. Runs hourly so the
+  // donor shows up in the VIP roster + Wall of Heroes within an hour at most.
+  const subReconcilerSchedule = process.env.SUB_RECONCILER_SCHEDULE || "15 * * * *";
+  cron.schedule(subReconcilerSchedule, async () => {
+    try {
+      const { reconcileMissingSubscriptions } = await import("./subscription-reconciler");
+      const result = await reconcileMissingSubscriptions();
+      if (result.totalCreated > 0) {
+        console.log(`🔄 Sub reconciler: created ${result.totalCreated} missing subscription row(s) across ${result.tenantsProcessed} tenants`);
+      }
+      const errors = result.results.flatMap((r) => r.errors);
+      if (errors.length > 0) {
+        console.warn(`⚠️ Sub reconciler errors (${errors.length}): ${errors.slice(0, 5).join("; ")}${errors.length > 5 ? ` (+${errors.length - 5} more)` : ""}`);
+      }
+    } catch (error) {
+      console.error(`❌ Sub reconciler failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
+  }, {
+    timezone: "UTC",
+  });
+
+  console.log(`✓ Subscription reconciler scheduled: ${subReconcilerSchedule} (UTC)`);
 }
