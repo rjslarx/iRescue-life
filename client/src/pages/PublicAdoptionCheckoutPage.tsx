@@ -606,7 +606,7 @@ function VipUpsellSection({ animalName }: { animalName: string }) {
                   data-testid="input-vip-display-name"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Use your first name, your family name, a business name, or a memorial — for example, "The Smith Family" or "In memory of Jojo". Leave blank to use the name on file.
+                  Use your first name, your family name, a business name, or a memorial — for example, "The Smith Family" or "In memory of Jojo". If you leave this blank, the public Wall will show your first name plus your last initial (for example, "Sarah J.").
                 </p>
               </div>
             )}
