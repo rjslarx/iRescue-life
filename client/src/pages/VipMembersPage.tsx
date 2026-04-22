@@ -18,7 +18,9 @@ import {
   DollarSign,
   AlertTriangle,
   Tag,
+  Pencil,
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Table,
@@ -119,6 +121,9 @@ export default function VipMembersPage() {
   const [cancelReason, setCancelReason] = useState("");
   const [refundAmount, setRefundAmount] = useState("");
   const [refundReason, setRefundReason] = useState<"requested_by_customer" | "duplicate" | "fraudulent">("requested_by_customer");
+  const [wallEditTarget, setWallEditTarget] = useState<Member | null>(null);
+  const [wallEditOptIn, setWallEditOptIn] = useState(false);
+  const [wallEditName, setWallEditName] = useState("");
   const { toast } = useToast();
 
   const { data, isLoading } = useQuery<{ members: Member[] }>({
@@ -186,6 +191,23 @@ export default function VipMembersPage() {
         description: err?.message || "An unexpected error occurred",
         variant: "destructive",
       });
+    },
+  });
+
+  const wallEditMutation = useMutation({
+    mutationFn: async ({ subscriptionId, displayOnWallOfHeroes, displayName }: { subscriptionId: string; displayOnWallOfHeroes: boolean; displayName: string | null }) => {
+      const res = await apiRequest("PATCH", `/api/vip-club/members/${subscriptionId}/wall`, { displayOnWallOfHeroes, displayName });
+      return res.json() as Promise<{ subscription: { id: string; displayOnWallOfHeroes: boolean; displayName: string | null } }>;
+    },
+    onSuccess: () => {
+      toast({ title: "Wall of Heroes updated", description: "The donor's recognition will reflect on the public Wall." });
+      setWallEditTarget(null);
+      setWallEditName("");
+      queryClient.invalidateQueries({ queryKey: ["/api/vip-club/members"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/vip-club/wall-of-heroes"] });
+    },
+    onError: (err: any) => {
+      toast({ title: "Could not update Wall of Heroes", description: err?.message || "An unexpected error occurred", variant: "destructive" });
     },
   });
 
@@ -495,13 +517,29 @@ export default function VipMembersPage() {
                                   {new Date(m.memberSince).toLocaleDateString()}
                                 </TableCell>
                                 <TableCell>
-                                  {m.displayOnWallOfHeroes ? (
-                                    <Badge variant="outline" className="text-xs">
-                                      {m.displayName || m.donorName.split(" ")[0]}
-                                    </Badge>
-                                  ) : (
-                                    <span className="text-xs text-muted-foreground">Opted out</span>
-                                  )}
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    {m.displayOnWallOfHeroes ? (
+                                      <Badge variant="outline" className="text-xs" data-testid={`badge-wall-name-${m.subscriptionId}`}>
+                                        {m.displayName || m.donorName.split(" ")[0]}
+                                      </Badge>
+                                    ) : (
+                                      <span className="text-xs text-muted-foreground">Opted out</span>
+                                    )}
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-7 w-7"
+                                      onClick={() => {
+                                        setWallEditTarget(m);
+                                        setWallEditOptIn(m.displayOnWallOfHeroes);
+                                        setWallEditName(m.displayName || "");
+                                      }}
+                                      data-testid={`button-edit-wall-${m.subscriptionId}`}
+                                      aria-label="Edit Wall of Heroes name"
+                                    >
+                                      <Pencil className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </div>
                                 </TableCell>
                                 <TableCell className="text-right">
                                   <div className="flex items-center justify-end gap-2 flex-wrap">
@@ -696,6 +734,70 @@ export default function VipMembersPage() {
       </div>
 
       {/* Cancel dialog */}
+      <Dialog open={!!wallEditTarget} onOpenChange={(open) => { if (!open) { setWallEditTarget(null); setWallEditName(""); } }}>
+        <DialogContent data-testid="dialog-edit-wall">
+          <DialogHeader>
+            <DialogTitle>Edit Wall of Heroes recognition</DialogTitle>
+            <DialogDescription>
+              {wallEditTarget ? (
+                <>Update how <strong>{wallEditTarget.donorName}</strong> appears on the public Wall of Heroes.</>
+              ) : null}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-0.5">
+                <Label htmlFor="wall-edit-optin" className="text-sm">Show on the public Wall of Heroes</Label>
+                <p className="text-xs text-muted-foreground">Only the name you choose and the donor's tier appear publicly — never the email or amount.</p>
+              </div>
+              <Switch
+                id="wall-edit-optin"
+                checked={wallEditOptIn}
+                onCheckedChange={setWallEditOptIn}
+                data-testid="switch-edit-wall-optin"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="wall-edit-name" className="text-sm">
+                Name to display on our public Wall of Heroes
+              </Label>
+              <Input
+                id="wall-edit-name"
+                value={wallEditName}
+                onChange={(e) => setWallEditName(e.target.value)}
+                placeholder="e.g. Sarah, The Smith Family, In memory of Jojo"
+                maxLength={60}
+                disabled={!wallEditOptIn}
+                data-testid="input-edit-wall-name"
+              />
+              <p className="text-xs text-muted-foreground">
+                Use a first name, family name, business name, or memorial — for example, "The Smith Family" or "In memory of Jojo". Leave blank to fall back to the donor's first name and last initial (e.g., "Sarah J.").
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => { setWallEditTarget(null); setWallEditName(""); }} data-testid="button-cancel-edit-wall">
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (!wallEditTarget) return;
+                wallEditMutation.mutate({
+                  subscriptionId: wallEditTarget.subscriptionId,
+                  displayOnWallOfHeroes: wallEditOptIn,
+                  displayName: wallEditOptIn ? (wallEditName.trim() || null) : null,
+                });
+              }}
+              disabled={wallEditMutation.isPending}
+              data-testid="button-save-edit-wall"
+            >
+              {wallEditMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={!!cancelTarget} onOpenChange={(open) => !open && setCancelTarget(null)}>
         <DialogContent data-testid="dialog-cancel-vip">
           <DialogHeader>

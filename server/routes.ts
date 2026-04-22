@@ -16191,6 +16191,63 @@ ${renderedHtml}
     }
   });
 
+  /**
+   * PATCH /api/vip-club/members/:subscriptionId/wall
+   * Staff edit of a VIP donor's Wall of Heroes opt-in + recognition name.
+   * Accepts both `displayName` (preferred) and legacy `firstNameDisplay`.
+   */
+  app.patch('/api/vip-club/members/:subscriptionId/wall', requireTenant, requireAuth, requireRoleOrPageAccess('donors', 'admin', 'owner'), async (req, res) => {
+    try {
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(req.params.subscriptionId)) {
+        return res.status(404).json({ error: 'Subscription not found' });
+      }
+      const bodySchema = z.object({
+        displayOnWallOfHeroes: z.boolean(),
+        displayName: z.string().trim().max(60).nullable().optional(),
+        firstNameDisplay: z.string().trim().max(60).nullable().optional(),
+      });
+      const parsed = bodySchema.parse(req.body || {});
+      const rawName = parsed.displayName !== undefined ? parsed.displayName : parsed.firstNameDisplay;
+      const normalizedName = parsed.displayOnWallOfHeroes
+        ? (rawName && rawName.length > 0 ? rawName : null)
+        : null;
+
+      const [sub] = await db
+        .select()
+        .from(subscriptions)
+        .where(and(
+          eq(subscriptions.id, req.params.subscriptionId),
+          eq(subscriptions.tenantId, req.tenant!.id),
+        ))
+        .limit(1);
+      if (!sub) return res.status(404).json({ error: 'Subscription not found' });
+
+      const [updated] = await db
+        .update(subscriptions)
+        .set({
+          displayOnWallOfHeroes: parsed.displayOnWallOfHeroes,
+          displayName: normalizedName,
+        })
+        .where(eq(subscriptions.id, sub.id))
+        .returning();
+
+      const actorId = (req.user as { id?: string } | undefined)?.id || 'unknown';
+      console.log(`[VIP Wall Edit] tenant=${req.tenant!.id} sub=${sub.id} optIn=${parsed.displayOnWallOfHeroes} name="${normalizedName ?? ''}" actor=${actorId}`);
+      res.json({
+        subscription: {
+          id: updated.id,
+          displayOnWallOfHeroes: updated.displayOnWallOfHeroes,
+          displayName: updated.displayName,
+        },
+      });
+    } catch (error: any) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: 'Invalid request', details: error.errors });
+      console.error('[VIP Wall Edit Error]', { message: error?.message });
+      res.status(500).json({ error: error?.message || 'Unable to update Wall of Heroes' });
+    }
+  });
+
   // ============================================================================
   // Grant Management Routes
   // ============================================================================
