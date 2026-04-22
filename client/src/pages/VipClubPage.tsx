@@ -912,7 +912,7 @@ export default function VipClubPage() {
                           data-testid="input-wall-display-name"
                         />
                         <p className="text-xs text-muted-foreground">
-                          Use your first name, your family name, a business, or a memorial — for example, "The Smith Family" or "In memory of Jojo". Leave blank to use the name on file.
+                          Use your first name, your family name, a business name, or a memorial — for example, "The Smith Family" or "In memory of Jojo". Leave blank to use the name on file.
                         </p>
                       </div>
                     )}
@@ -1092,7 +1092,7 @@ export default function VipClubPage() {
                     data-testid="input-vip-display-name"
                   />
                   <p className="text-xs text-muted-foreground">
-                    A first name, family name, business, or memorial — however you'd like to be recognized.
+                    Use your first name, your family name, a business name, or a memorial — for example, "The Smith Family" or "In memory of Jojo". Leave blank to use the name on file.
                   </p>
                 </div>
               )}
