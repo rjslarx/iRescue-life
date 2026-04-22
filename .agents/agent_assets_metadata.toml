@@ -1,0 +1,13 @@
+uploads = []
+
+[[generated]]
+id = "LwZOOCn_N8dMfuMgp6M0_"
+uri = "file://attached_assets/generated_images/claw-machine-preview.png"
+type = "image"
+title = "generated_image"
+
+[[outputs]]
+id = "DRr31o9EMYTOhd9GzyCI-"
+uri = "file://attached_assets/generated_images/claw-machine-preview.png"
+type = "image"
+title = "Arcade Claw Machine — Preview Mockup"
