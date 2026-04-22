@@ -15657,7 +15657,7 @@ ${renderedHtml}
    * GET /api/vip-club/members
    * Admin roster of all VIP members (active subscriptions linked to a tier)
    */
-  app.get('/api/vip-club/members', requireTenant, requireAuth, requireRoleOrPageAccess('admin'), async (req, res, next) => {
+  app.get('/api/vip-club/members', requireTenant, requireAuth, requireRoleOrPageAccess('donors', 'admin', 'owner'), async (req, res, next) => {
     try {
       const { subscriptions: subs, donors, monthlyGivingTiers } = await import('@shared/schema');
       const tenantId = req.tenant!.id;
@@ -15725,7 +15725,7 @@ ${renderedHtml}
    * Manually stamp a VIP tier onto a monthly subscription whose snapshot is
    * missing or stale. Used by the "Assign tier" UI when auto-tag failed.
    */
-  app.post('/api/vip-club/members/:subscriptionId/assign-tier', requireTenant, requireAuth, requireRoleOrPageAccess('admin'), async (req, res, next) => {
+  app.post('/api/vip-club/members/:subscriptionId/assign-tier', requireTenant, requireAuth, requireRoleOrPageAccess('donors', 'admin', 'owner'), async (req, res, next) => {
     try {
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       if (!uuidRegex.test(req.params.subscriptionId)) {
@@ -15776,7 +15776,7 @@ ${renderedHtml}
    * Returns one row per defined tier (active or inactive) plus an "Unassigned" bucket
    * for VIP subscriptions whose tier was deleted.
    */
-  app.get('/api/vip-club/tier-stats', requireTenant, requireAuth, requireRoleOrPageAccess('admin'), async (req, res, next) => {
+  app.get('/api/vip-club/tier-stats', requireTenant, requireAuth, requireRoleOrPageAccess('donors', 'admin', 'owner'), async (req, res, next) => {
     try {
       const { subscriptions: subs, payments: pays, monthlyGivingTiers } = await import('@shared/schema');
       const tenantId = req.tenant!.id;
@@ -15948,7 +15948,7 @@ ${renderedHtml}
    * Staff cancels a VIP subscription. Default is graceful (cancel_at_period_end);
    * pass { immediate: true } to terminate now.
    */
-  app.post('/api/vip-club/members/:subscriptionId/cancel', requireTenant, requireAuth, requireRoleOrPageAccess('admin'), async (req, res, next) => {
+  app.post('/api/vip-club/members/:subscriptionId/cancel', requireTenant, requireAuth, requireRoleOrPageAccess('donors', 'admin', 'owner'), async (req, res, next) => {
     try {
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       if (!uuidRegex.test(req.params.subscriptionId)) {
@@ -16024,7 +16024,7 @@ ${renderedHtml}
    * payment if `paymentId` is supplied. `amount` (cents) is optional — defaults to
    * full refund.
    */
-  app.post('/api/vip-club/members/:subscriptionId/refund', requireTenant, requireAuth, requireRoleOrPageAccess('admin'), async (req, res, next) => {
+  app.post('/api/vip-club/members/:subscriptionId/refund', requireTenant, requireAuth, requireRoleOrPageAccess('donors', 'admin', 'owner'), async (req, res, next) => {
     try {
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       if (!uuidRegex.test(req.params.subscriptionId)) {
