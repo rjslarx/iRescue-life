@@ -8880,6 +8880,12 @@ Crawl-delay: 1
    */
   app.get('/objects/:objectPath(*)', async (req, res, next) => {
     try {
+      // Allow embedding from external contexts (email clients, social media, etc.).
+      // Helmet's default `Cross-Origin-Resource-Policy: same-origin` causes
+      // WebKit-based mail clients (Apple Mail, iOS Mail) to refuse to render
+      // images linked from emails, even when the underlying request succeeds.
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+
       const { ObjectStorageService, ObjectNotFoundError } = await import('./objectStorage');
       const { ObjectPermission, getObjectAclPolicy } = await import('./objectAcl');
       const objectStorageService = new ObjectStorageService();
