@@ -56,7 +56,7 @@ interface Member {
   canceledAt: string | null;
   currentPeriodEnd: string | null;
   displayOnWallOfHeroes: boolean;
-  firstNameDisplay: string | null;
+  displayName: string | null;
   donorId: string;
   donorName: string;
   donorEmail: string;
@@ -291,7 +291,7 @@ export default function VipMembersPage() {
       m.status,
       m.memberSince ? new Date(m.memberSince).toLocaleDateString() : "",
       m.canceledAt ? new Date(m.canceledAt).toLocaleDateString() : "",
-      m.displayOnWallOfHeroes ? (m.firstNameDisplay || m.donorName.split(" ")[0]) : "Opted out",
+      m.displayOnWallOfHeroes ? (m.displayName || m.donorName.split(" ")[0]) : "Opted out",
     ]);
     const csv = [headers, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
@@ -497,7 +497,7 @@ export default function VipMembersPage() {
                                 <TableCell>
                                   {m.displayOnWallOfHeroes ? (
                                     <Badge variant="outline" className="text-xs">
-                                      {m.firstNameDisplay || m.donorName.split(" ")[0]}
+                                      {m.displayName || m.donorName.split(" ")[0]}
                                     </Badge>
                                   ) : (
                                     <span className="text-xs text-muted-foreground">Opted out</span>

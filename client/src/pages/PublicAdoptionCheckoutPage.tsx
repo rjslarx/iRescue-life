@@ -465,7 +465,7 @@ function VipUpsellSection({ animalName }: { animalName: string }) {
   const { toast } = useToast();
   const [selected, setSelected] = useState<PublicVipTier | null>(null);
   const [email, setEmail] = useState("");
-  const [firstName, setFirstName] = useState("");
+  const [displayName, setDisplayName] = useState("");
   const [optInWall, setOptInWall] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
@@ -483,7 +483,7 @@ function VipUpsellSection({ animalName }: { animalName: string }) {
     try {
       const res = await apiRequest('POST', `/api/monthly-tiers/${selected.id}/checkout`, {
         customerEmail: email || undefined,
-        firstNameDisplay: optInWall ? (firstName || undefined) : undefined,
+        displayName: optInWall ? (displayName || undefined) : undefined,
         displayOnWallOfHeroes: optInWall,
       });
       const json = await res.json();
@@ -584,7 +584,7 @@ function VipUpsellSection({ animalName }: { animalName: string }) {
               <div className="space-y-0.5 pr-3">
                 <Label htmlFor="vip-wall">Show me on the Wall of Heroes</Label>
                 <p className="text-xs text-muted-foreground">
-                  We'll display your first name publicly to thank you.
+                  We'll publicly thank you using the name you choose below.
                 </p>
               </div>
               <Switch
@@ -596,14 +596,18 @@ function VipUpsellSection({ animalName }: { animalName: string }) {
             </div>
             {optInWall && (
               <div className="space-y-2">
-                <Label htmlFor="vip-first-name">First name to display (optional)</Label>
+                <Label htmlFor="vip-display-name">Name to display on our public Wall of Heroes (optional)</Label>
                 <Input
-                  id="vip-first-name"
-                  value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
-                  placeholder="e.g. Sarah"
-                  data-testid="input-vip-first-name"
+                  id="vip-display-name"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  placeholder="e.g. Sarah, The Smith Family, In memory of Jojo"
+                  maxLength={60}
+                  data-testid="input-vip-display-name"
                 />
+                <p className="text-xs text-muted-foreground">
+                  Use your first name, your family name, a business name, or a memorial — however you'd like to be recognized.
+                </p>
               </div>
             )}
           </div>

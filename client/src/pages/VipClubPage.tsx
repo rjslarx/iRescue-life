@@ -27,7 +27,9 @@ interface PublicTier {
 }
 
 interface Hero {
-  firstName: string;
+  displayName: string;
+  // Legacy alias for older cached responses; prefer `displayName`.
+  firstName?: string;
   tierName: string | null;
   since: string;
 }
@@ -68,7 +70,7 @@ interface VipHistorySubscription {
   cardLast4: string | null;
   cardUpdatedAt: string | null;
   displayOnWallOfHeroes: boolean;
-  firstNameDisplay: string | null;
+  displayName: string | null;
 }
 
 interface VipHistoryResponse {
@@ -96,18 +98,18 @@ function WallOfHeroesToggle({
   sub: VipHistorySubscription;
   donorName: string;
   isPending: boolean;
-  onChange: (displayOnWallOfHeroes: boolean, firstNameDisplay: string | null) => void;
+  onChange: (displayOnWallOfHeroes: boolean, displayName: string | null) => void;
 }) {
   const fallbackName = donorName?.split(' ')[0] || '';
-  const [draftName, setDraftName] = useState<string>(sub.firstNameDisplay || '');
+  const [draftName, setDraftName] = useState<string>(sub.displayName || '');
   const [editing, setEditing] = useState(false);
 
   // Keep local draft in sync if the upstream record changes (e.g. after a successful save)
   useEffect(() => {
-    setDraftName(sub.firstNameDisplay || '');
-  }, [sub.firstNameDisplay]);
+    setDraftName(sub.displayName || '');
+  }, [sub.displayName]);
 
-  const currentDisplay = sub.firstNameDisplay || fallbackName || 'Anonymous';
+  const currentDisplay = sub.displayName || fallbackName || 'Anonymous';
 
   const saveName = () => {
     const trimmed = draftName.trim();
@@ -128,7 +130,7 @@ function WallOfHeroesToggle({
             disabled={isPending}
             onCheckedChange={(v) => {
               const next = !!v;
-              onChange(next, next ? (sub.firstNameDisplay || null) : null);
+              onChange(next, next ? (sub.displayName || null) : null);
             }}
             data-testid={`checkbox-wall-optin-${sub.id}`}
           />
@@ -136,7 +138,7 @@ function WallOfHeroesToggle({
             htmlFor={`wall-optin-${sub.id}`}
             className="text-sm leading-snug font-normal cursor-pointer"
           >
-            Show my first name on our public Wall of Heroes
+            Show my name on our public Wall of Heroes
           </Label>
         </div>
         {isPending && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
@@ -148,29 +150,29 @@ function WallOfHeroesToggle({
               <Input
                 value={draftName}
                 onChange={(e) => setDraftName(e.target.value)}
-                placeholder={fallbackName || 'First name'}
-                maxLength={40}
+                placeholder={fallbackName || 'Your display name'}
+                maxLength={60}
                 className="max-w-xs"
-                data-testid={`input-wall-firstname-${sub.id}`}
+                data-testid={`input-wall-displayname-${sub.id}`}
               />
               <Button
                 onClick={saveName}
                 disabled={isPending}
-                data-testid={`button-save-wall-firstname-${sub.id}`}
+                data-testid={`button-save-wall-displayname-${sub.id}`}
               >
                 Save
               </Button>
               <Button
                 variant="ghost"
-                onClick={() => { setDraftName(sub.firstNameDisplay || ''); setEditing(false); }}
-                data-testid={`button-cancel-wall-firstname-${sub.id}`}
+                onClick={() => { setDraftName(sub.displayName || ''); setEditing(false); }}
+                data-testid={`button-cancel-wall-displayname-${sub.id}`}
               >
                 Cancel
               </Button>
             </div>
           ) : (
             <div className="flex flex-wrap items-center gap-2">
-              <span data-testid={`text-wall-firstname-${sub.id}`}>
+              <span data-testid={`text-wall-displayname-${sub.id}`}>
                 Displayed as <span className="font-medium text-foreground">{currentDisplay}</span>
               </span>
               <Button
@@ -178,13 +180,13 @@ function WallOfHeroesToggle({
                 variant="ghost"
                 onClick={() => setEditing(true)}
                 disabled={isPending}
-                data-testid={`button-edit-wall-firstname-${sub.id}`}
+                data-testid={`button-edit-wall-displayname-${sub.id}`}
               >
                 Change
               </Button>
             </div>
           )}
-          <p>Only your first name and tier appear publicly. You can opt out anytime.</p>
+          <p>Only the name you choose and your tier appear publicly. You can opt out anytime.</p>
         </div>
       )}
     </div>
@@ -197,7 +199,7 @@ export default function VipClubPage() {
   const queryClient = useQueryClient();
   const [selected, setSelected] = useState<PublicTier | null>(null);
   const [email, setEmail] = useState("");
-  const [firstName, setFirstName] = useState("");
+  const [displayName, setDisplayName] = useState("");
   const [optInWall, setOptInWall] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [welcomeOpen, setWelcomeOpen] = useState(false);
@@ -385,14 +387,14 @@ export default function VipClubPage() {
 
   // Wall of Heroes opt-in: derive current state from the donor's active
   // subscriptions. If any active sub is opted in, treat the donor as opted in.
-  // The `firstNameDisplay` is taken from whichever active sub has one set.
+  // The `displayName` is taken from whichever active sub has one set.
   const activeSubsForWall = useMemo(
     () => (historyData?.subscriptions || []).filter((s) => s.status === 'active'),
     [historyData?.subscriptions],
   );
   const serverOptedIn = activeSubsForWall.some((s) => s.displayOnWallOfHeroes);
   const serverDisplayName =
-    activeSubsForWall.find((s) => s.firstNameDisplay)?.firstNameDisplay || '';
+    activeSubsForWall.find((s) => s.displayName)?.displayName || '';
 
   const [wallOptInDraft, setWallOptInDraft] = useState<boolean | null>(null);
   const [wallNameDraft, setWallNameDraft] = useState<string | null>(null);
@@ -419,7 +421,7 @@ export default function VipClubPage() {
           credentials: 'include',
           body: JSON.stringify({
             optIn: effectiveWallOptIn,
-            firstNameDisplay: effectiveWallOptIn ? effectiveWallName.trim() : null,
+            displayName: effectiveWallOptIn ? effectiveWallName.trim() : null,
           }),
         },
       );
@@ -443,7 +445,7 @@ export default function VipClubPage() {
   });
 
   const wallOptInMutation = useMutation({
-    mutationFn: async (vars: { subscriptionId: string; displayOnWallOfHeroes: boolean; firstNameDisplay: string | null }) => {
+    mutationFn: async (vars: { subscriptionId: string; displayOnWallOfHeroes: boolean; displayName: string | null }) => {
       const url = buildTenantUrl(`/api/vip-portal/subscriptions/${vars.subscriptionId}/wall-of-heroes?token=${encodeURIComponent(historyToken!)}`);
       const res = await fetch(url, {
         method: 'PATCH',
@@ -451,7 +453,7 @@ export default function VipClubPage() {
         credentials: 'include',
         body: JSON.stringify({
           displayOnWallOfHeroes: vars.displayOnWallOfHeroes,
-          firstNameDisplay: vars.firstNameDisplay,
+          displayName: vars.displayName,
         }),
       });
       if (!res.ok) {
@@ -460,7 +462,7 @@ export default function VipClubPage() {
         try { const j = JSON.parse(text); if (j.error) msg = j.error; } catch {}
         throw new Error(msg);
       }
-      return res.json() as Promise<{ subscription: { id: string; displayOnWallOfHeroes: boolean; firstNameDisplay: string | null } }>;
+      return res.json() as Promise<{ subscription: { id: string; displayOnWallOfHeroes: boolean; displayName: string | null } }>;
     },
     onMutate: async (vars) => {
       const queryKey = ['/api/vip-portal/history', historyToken];
@@ -471,7 +473,7 @@ export default function VipClubPage() {
           ...previous,
           subscriptions: previous.subscriptions.map((s) =>
             s.id === vars.subscriptionId
-              ? { ...s, displayOnWallOfHeroes: vars.displayOnWallOfHeroes, firstNameDisplay: vars.displayOnWallOfHeroes ? vars.firstNameDisplay : null }
+              ? { ...s, displayOnWallOfHeroes: vars.displayOnWallOfHeroes, displayName: vars.displayOnWallOfHeroes ? vars.displayName : null }
               : s,
           ),
         });
@@ -500,7 +502,7 @@ export default function VipClubPage() {
     try {
       const res = await apiRequest('POST', `/api/monthly-tiers/${selected.id}/checkout`, {
         customerEmail: email || undefined,
-        firstNameDisplay: optInWall ? (firstName || undefined) : undefined,
+        displayName: optInWall ? (displayName || undefined) : undefined,
         displayOnWallOfHeroes: optInWall,
       });
       const json = await res.json();
@@ -857,8 +859,8 @@ export default function VipClubPage() {
                               sub={sub}
                               donorName={historyData.donor.name}
                               isPending={wallOptInMutation.isPending && wallOptInMutation.variables?.subscriptionId === sub.id}
-                              onChange={(displayOnWallOfHeroes, firstNameDisplay) =>
-                                wallOptInMutation.mutate({ subscriptionId: sub.id, displayOnWallOfHeroes, firstNameDisplay })
+                              onChange={(displayOnWallOfHeroes, displayName) =>
+                                wallOptInMutation.mutate({ subscriptionId: sub.id, displayOnWallOfHeroes, displayName })
                               }
                             />
                           )}
@@ -875,7 +877,7 @@ export default function VipClubPage() {
                     <div>
                       <h3 className="font-display text-lg font-semibold mb-1">Wall of Heroes</h3>
                       <p className="text-sm text-muted-foreground">
-                        Let {rescueName} celebrate your support publicly. Only your first name and tier appear — never your email or amount.
+                        Let {rescueName} celebrate your support publicly. Only the name you choose and your tier appear — never your email or amount.
                       </p>
                     </div>
                     <Badge variant={serverOptedIn ? 'default' : 'secondary'} data-testid="badge-wall-current-status">
@@ -892,25 +894,25 @@ export default function VipClubPage() {
                         data-testid="checkbox-wall-opt-in"
                       />
                       <Label htmlFor="wall-opt-in-toggle" className="text-sm font-normal leading-snug cursor-pointer">
-                        Yes, show my first name on the public Wall of Heroes for {rescueName}.
+                        Yes, show my name on the public Wall of Heroes for {rescueName}.
                       </Label>
                     </div>
 
                     {effectiveWallOptIn && (
                       <div className="space-y-1.5 pl-6">
                         <Label htmlFor="wall-display-name" className="text-sm">
-                          Name to display (optional)
+                          Name to display on our public Wall of Heroes
                         </Label>
                         <Input
                           id="wall-display-name"
                           value={effectiveWallName}
                           onChange={(e) => setWallNameDraft(e.target.value)}
-                          placeholder={historyData.donor.name?.split(' ')[0] || 'Your first name'}
+                          placeholder={historyData.donor.name?.split(' ')[0] || 'How you want to be recognized'}
                           maxLength={60}
                           data-testid="input-wall-display-name"
                         />
                         <p className="text-xs text-muted-foreground">
-                          Leave blank to use your first name from our records.
+                          Use your first name, your family name, a business, or a memorial — for example, "The Smith Family" or "In memory of Jojo". Leave blank to use the name on file.
                         </p>
                       </div>
                     )}
@@ -1024,7 +1026,7 @@ export default function VipClubPage() {
                   className="text-sm py-1.5 px-3"
                   data-testid={`hero-badge-${i}`}
                 >
-                  {hero.firstName || "Anonymous"}
+                  {hero.displayName || hero.firstName || "Anonymous"}
                   {hero.tierName && <span className="ml-1.5 opacity-70">· {hero.tierName}</span>}
                 </Badge>
               ))}
@@ -1073,20 +1075,25 @@ export default function VipClubPage() {
                   data-testid="checkbox-wall-optin"
                 />
                 <Label htmlFor="vip-wall-optin" className="text-sm leading-snug font-normal cursor-pointer">
-                  Show my first name on the public Wall of Heroes
+                  Show my name on the public Wall of Heroes
                 </Label>
               </div>
               {optInWall && (
                 <div className="space-y-1 pl-6">
-                  <Label htmlFor="vip-first-name" className="text-xs">First name (or display name)</Label>
+                  <Label htmlFor="vip-display-name" className="text-xs">
+                    Name to display on our public Wall of Heroes
+                  </Label>
                   <Input
-                    id="vip-first-name"
-                    value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
-                    placeholder="Optional - leave blank to use your billing name"
-                    maxLength={40}
-                    data-testid="input-vip-first-name"
+                    id="vip-display-name"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    placeholder="e.g. Sarah, The Smith Family, In memory of Jojo"
+                    maxLength={60}
+                    data-testid="input-vip-display-name"
                   />
+                  <p className="text-xs text-muted-foreground">
+                    A first name, family name, business, or memorial — however you'd like to be recognized.
+                  </p>
                 </div>
               )}
             </div>

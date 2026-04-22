@@ -15549,10 +15549,14 @@ ${renderedHtml}
       const { monthlyGivingTiers } = await import('@shared/schema');
       const bodySchema = z.object({
         customerEmail: z.string().email().optional(),
-        firstNameDisplay: z.string().max(40).optional(),
+        // New flexible recognition name (couples, families, memorials, etc.)
+        displayName: z.string().max(60).optional(),
+        // Legacy alias kept so older clients still in the wild keep working.
+        firstNameDisplay: z.string().max(60).optional(),
         displayOnWallOfHeroes: z.boolean().default(false),
       });
       const data = bodySchema.parse(req.body);
+      const recognitionName = (data.displayName || data.firstNameDisplay || '').trim();
 
       const [tier] = await db
         .select()
@@ -15600,7 +15604,10 @@ ${renderedHtml}
           vipTierId: tier.id,
           vipTierName: tier.tierName,
           displayOnWallOfHeroes: data.displayOnWallOfHeroes ? 'true' : 'false',
-          firstNameDisplay: data.firstNameDisplay || '',
+          // Write both keys to Stripe metadata so any in-flight checkouts
+          // resumed by the older webhook/reconciler code paths still resolve.
+          displayName: recognitionName,
+          firstNameDisplay: recognitionName,
           baseAmount: tier.amount.toString(),
           chargeAmount: tier.amount.toString(),
           platformFeeAmount: platformFeeAmount.toString(),
@@ -15629,7 +15636,7 @@ ${renderedHtml}
       const { subscriptions: subs, donors } = await import('@shared/schema');
       const heroes = await db
         .select({
-          firstNameDisplay: subs.firstNameDisplay,
+          displayName: subs.displayName,
           donorName: donors.name,
           tierName: subs.vipTierNameSnapshot,
           amount: subs.amount,
@@ -15644,10 +15651,25 @@ ${renderedHtml}
         ))
         .orderBy(desc(subs.amount), asc(subs.createdAt));
 
-      // Sanitize - only first name visible
+      // Build the public name: prefer the donor-supplied recognition name; if
+      // they didn't provide one, fall back to "First L." (last initial) for a
+      // touch more dignity than just a bare first name. Final fallback is
+      // "Anonymous".
+      const firstAndLastInitial = (name?: string | null): string | null => {
+        if (!name) return null;
+        const parts = name.trim().split(/\s+/).filter(Boolean);
+        if (parts.length === 0) return null;
+        if (parts.length === 1) return parts[0];
+        const last = parts[parts.length - 1];
+        return `${parts[0]} ${last.charAt(0).toUpperCase()}.`;
+      };
       const sanitized = heroes.map(h => {
-        const display = h.firstNameDisplay || (h.donorName ? h.donorName.split(' ')[0] : 'Anonymous');
+        const display = (h.displayName && h.displayName.trim())
+          || firstAndLastInitial(h.donorName)
+          || 'Anonymous';
         return {
+          displayName: display,
+          // Kept for backward compat with any cached/old client that still reads `firstName`.
           firstName: display,
           tierName: h.tierName,
           since: h.since,
@@ -15684,7 +15706,7 @@ ${renderedHtml}
           canceledAt: subs.canceledAt,
           currentPeriodEnd: subs.currentPeriodEnd,
           displayOnWallOfHeroes: subs.displayOnWallOfHeroes,
-          firstNameDisplay: subs.firstNameDisplay,
+          displayName: subs.displayName,
           donorId: donors.id,
           donorName: donors.name,
           donorEmail: donors.email,
@@ -27564,7 +27586,10 @@ Submitted: ${new Date().toLocaleString()}
             let vipTierId: string | null = sessionMeta.vipTierId || null;
             let vipTierName: string | null = sessionMeta.vipTierName || null;
             const wallOptIn = sessionMeta.displayOnWallOfHeroes === 'true';
-            const firstNameDisplay = sessionMeta.firstNameDisplay || null;
+            // Accept the new `displayName` key first, then fall back to the
+            // legacy `firstNameDisplay` for older sessions still in flight.
+            const displayName =
+              sessionMeta.displayName || sessionMeta.firstNameDisplay || null;
 
             // Determine the actual subscription interval from Stripe. We do
             // NOT trust user-supplied metadata (e.g. source=vip_club) — the
@@ -27662,7 +27687,7 @@ Submitted: ${new Date().toLocaleString()}
               vipTierIdSnapshot: vipTierId,
               vipTierNameSnapshot: vipTierName,
               displayOnWallOfHeroes: wallOptIn,
-              firstNameDisplay: firstNameDisplay,
+              displayName: displayName,
             })
             .onConflictDoNothing({ target: [subscriptions.tenantId, subscriptions.stripeSubscriptionId] })
             .returning({ id: subscriptions.id });

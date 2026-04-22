@@ -221,7 +221,7 @@ router.get('/history', async (req: Request, res: Response) => {
         cardLast4: subscriptions.cardLast4,
         cardUpdatedAt: subscriptions.cardUpdatedAt,
         displayOnWallOfHeroes: subscriptions.displayOnWallOfHeroes,
-        firstNameDisplay: subscriptions.firstNameDisplay,
+        displayName: subscriptions.displayName,
       })
       .from(subscriptions)
       .where(and(
@@ -277,9 +277,9 @@ router.get('/history', async (req: Request, res: Response) => {
 
 /**
  * POST /api/vip-portal/wall-preferences
- * Body: { optIn: boolean, firstNameDisplay?: string | null }
+ * Body: { optIn: boolean, displayName?: string | null, firstNameDisplay?: string | null (legacy) }
  * Updates ALL of this donor's active subscriptions on this tenant with the new
- * Wall of Heroes opt-in choice and (optional) display first name. Lets a donor
+ * Wall of Heroes opt-in choice and (optional) recognition name. Lets a donor
  * who originally said "no thanks" — or who was auto-tagged as VIP by the
  * monthly-donor backfill — flip their public visibility from their giving
  * history page without having to email staff.
@@ -291,10 +291,15 @@ router.post('/wall-preferences', async (req: Request, res: Response) => {
 
   const body = req.body || {};
   const optIn = body.optIn === true;
-  let firstNameDisplay: string | null = null;
-  if (typeof body.firstNameDisplay === 'string') {
-    const trimmed = body.firstNameDisplay.trim().slice(0, 60);
-    firstNameDisplay = trimmed.length > 0 ? trimmed : null;
+  // Accept either the new `displayName` key or the legacy `firstNameDisplay`.
+  let displayName: string | null = null;
+  const rawName =
+    typeof body.displayName === 'string'
+      ? body.displayName
+      : (typeof body.firstNameDisplay === 'string' ? body.firstNameDisplay : null);
+  if (typeof rawName === 'string') {
+    const trimmed = rawName.trim().slice(0, 60);
+    displayName = trimmed.length > 0 ? trimmed : null;
   }
 
   try {
@@ -302,9 +307,9 @@ router.post('/wall-preferences', async (req: Request, res: Response) => {
       .update(subscriptions)
       .set({
         displayOnWallOfHeroes: optIn,
-        // When opting out, clear the saved display name so re-opt-in goes back
-        // to using the donor's first name unless they explicitly type one.
-        firstNameDisplay: optIn ? firstNameDisplay : null,
+        // When opting out, clear the saved recognition name so re-opt-in goes
+        // back to the auto-derived name unless they explicitly type one.
+        displayName: optIn ? displayName : null,
       })
       .where(and(
         eq(subscriptions.tenantId, tenantId),
@@ -317,7 +322,7 @@ router.post('/wall-preferences', async (req: Request, res: Response) => {
       success: true,
       updatedCount: updated.length,
       optIn,
-      firstNameDisplay: optIn ? firstNameDisplay : null,
+      displayName: optIn ? displayName : null,
     });
   } catch (error) {
     console.error('[VIP Portal] Error updating wall preferences:', error);
@@ -560,7 +565,7 @@ router.post('/billing-portal', async (req: Request, res: Response) => {
 
 /**
  * PATCH /api/vip-portal/subscriptions/:id/wall-of-heroes
- * Body: { displayOnWallOfHeroes: boolean, firstNameDisplay?: string | null }
+ * Body: { displayOnWallOfHeroes: boolean, displayName?: string | null, firstNameDisplay?: string | null (legacy) }
  * Update the donor's Wall of Heroes opt-in for one of their own subscriptions.
  */
 router.patch('/subscriptions/:id/wall-of-heroes', async (req: Request, res: Response) => {
@@ -570,10 +575,17 @@ router.patch('/subscriptions/:id/wall-of-heroes', async (req: Request, res: Resp
 
   const bodySchema = z.object({
     displayOnWallOfHeroes: z.boolean(),
+    displayName: z
+      .string()
+      .trim()
+      .max(60)
+      .nullable()
+      .optional(),
+    // Legacy alias accepted so older clients in the wild don't 400.
     firstNameDisplay: z
       .string()
       .trim()
-      .max(40)
+      .max(60)
       .nullable()
       .optional()
       .transform((v) => (v === undefined ? undefined : (v === null || v.length === 0 ? null : v))),
@@ -591,7 +603,7 @@ router.patch('/subscriptions/:id/wall-of-heroes', async (req: Request, res: Resp
       .select({
         id: subscriptions.id,
         displayOnWallOfHeroes: subscriptions.displayOnWallOfHeroes,
-        firstNameDisplay: subscriptions.firstNameDisplay,
+        displayName: subscriptions.displayName,
       })
       .from(subscriptions)
       .where(and(
@@ -603,15 +615,21 @@ router.patch('/subscriptions/:id/wall-of-heroes', async (req: Request, res: Resp
 
     if (!existing) return res.status(404).json({ error: 'Subscription not found' });
 
-    const nextFirstName = parsed.displayOnWallOfHeroes
-      ? (parsed.firstNameDisplay !== undefined ? parsed.firstNameDisplay : existing.firstNameDisplay)
+    // Prefer the new `displayName` key, then the legacy alias, then keep the
+    // existing stored value if neither was supplied. When opting out, clear.
+    const incomingName =
+      parsed.displayName !== undefined
+        ? parsed.displayName
+        : (parsed.firstNameDisplay !== undefined ? parsed.firstNameDisplay : undefined);
+    const nextDisplayName = parsed.displayOnWallOfHeroes
+      ? (incomingName !== undefined ? incomingName : existing.displayName)
       : null;
 
     await db
       .update(subscriptions)
       .set({
         displayOnWallOfHeroes: parsed.displayOnWallOfHeroes,
-        firstNameDisplay: nextFirstName,
+        displayName: nextDisplayName,
       })
       .where(and(
         eq(subscriptions.id, existing.id),
@@ -629,11 +647,11 @@ router.patch('/subscriptions/:id/wall-of-heroes', async (req: Request, res: Resp
       subscriptionId: existing.id,
       before: {
         displayOnWallOfHeroes: existing.displayOnWallOfHeroes,
-        firstNameDisplay: existing.firstNameDisplay,
+        displayName: existing.displayName,
       },
       after: {
         displayOnWallOfHeroes: parsed.displayOnWallOfHeroes,
-        firstNameDisplay: nextFirstName,
+        displayName: nextDisplayName,
       },
       ipAddress: (req.get('x-forwarded-for') || '').split(',')[0].trim() || req.socket.remoteAddress,
     });
@@ -643,7 +661,7 @@ router.patch('/subscriptions/:id/wall-of-heroes', async (req: Request, res: Resp
       subscription: {
         id: existing.id,
         displayOnWallOfHeroes: parsed.displayOnWallOfHeroes,
-        firstNameDisplay: nextFirstName,
+        displayName: nextDisplayName,
       },
     });
   } catch (error) {

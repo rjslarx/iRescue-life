@@ -172,7 +172,7 @@ async function reconcileForTenant(
         // checkout session metadata when available. Defaults to opted-out
         // (privacy-safe) when no session is found.
         let wallOptIn = false;
-        let firstNameDisplay: string | null = null;
+        let displayName: string | null = null;
         try {
           const sessionArgs: [Stripe.Checkout.SessionListParams, Stripe.RequestOptions?] = [
             { subscription: sub.id, limit: 1 },
@@ -181,7 +181,8 @@ async function reconcileForTenant(
           const sessions = await stripe.checkout.sessions.list(...sessionArgs);
           const meta = sessions.data[0]?.metadata || {};
           wallOptIn = meta.displayOnWallOfHeroes === "true";
-          firstNameDisplay = meta.firstNameDisplay || null;
+          // Prefer the new metadata key; fall back to the legacy alias.
+          displayName = meta.displayName || meta.firstNameDisplay || null;
         } catch {
           // Non-fatal — keep defaults.
         }
@@ -199,7 +200,7 @@ async function reconcileForTenant(
             vipTierIdSnapshot: vipTierId,
             vipTierNameSnapshot: vipTierName,
             displayOnWallOfHeroes: wallOptIn,
-            firstNameDisplay,
+            displayName,
           })
           .onConflictDoNothing({ target: [subscriptions.tenantId, subscriptions.stripeSubscriptionId] })
           .returning({ id: subscriptions.id });

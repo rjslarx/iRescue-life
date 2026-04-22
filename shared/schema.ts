@@ -1036,7 +1036,11 @@ export const subscriptions = pgTable("subscriptions", {
   vipTierNameSnapshot: text("vip_tier_name_snapshot"),
   // Wall of Heroes opt-in
   displayOnWallOfHeroes: boolean("display_on_wall_of_heroes").notNull().default(false),
-  firstNameDisplay: text("first_name_display"), // Donor-provided first name for public display
+  // Donor-provided recognition name for the public Wall of Heroes (couples,
+   // households, memorials, business names, or just a first name). DB column
+   // intentionally kept as `first_name_display` for backward compat with
+   // existing rows; surfaced in TS as the more flexible `displayName`.
+  displayName: text("first_name_display"),
   // Stamped by scripts/send-vip-backfill-welcome.ts when the retroactive VIP
   // welcome email is delivered for a sub that was grandfathered in by the
   // VIP backfill (Task #58). Used as a sent-flag so the one-shot script

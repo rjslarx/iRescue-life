@@ -13,7 +13,9 @@ import { TenureBadge, calcTenure } from "@/components/vip/TenureBadge";
 import type { Tenant } from "@shared/schema";
 
 interface Hero {
-  firstName: string;
+  displayName: string;
+  // Legacy alias for older cached responses; prefer `displayName`.
+  firstName?: string;
   tierName: string | null;
   since: string;
 }
@@ -59,7 +61,8 @@ export default function WallOfHeroesPage() {
     const q = search.trim().toLowerCase();
     return heroes.filter((h) => {
       if (activeTier !== ALL_TIERS_KEY && h.tierName !== activeTier) return false;
-      if (q && !(h.firstName ?? "").toLowerCase().includes(q)) return false;
+      const name = h.displayName ?? h.firstName ?? "";
+      if (q && !name.toLowerCase().includes(q)) return false;
       return true;
     });
   }, [heroes, search, activeTier]);
@@ -185,7 +188,7 @@ export default function WallOfHeroesPage() {
               data-testid="grid-heroes"
             >
               {filtered.map((h, i) => (
-                <HeroCard key={`${h.firstName}-${h.since}-${i}`} hero={h} index={i} />
+                <HeroCard key={`${h.displayName ?? h.firstName}-${h.since}-${i}`} hero={h} index={i} />
               ))}
             </div>
           )}
@@ -278,7 +281,7 @@ function HeroCard({ hero, index }: { hero: Hero; index: number }) {
             className="font-semibold text-base truncate"
             data-testid={`text-hero-name-${index}`}
           >
-            {hero.firstName || "Anonymous"}
+            {hero.displayName || hero.firstName || "Anonymous"}
           </p>
           {hero.tierName ? (
             <p className="text-xs text-primary/80 font-medium truncate">{hero.tierName}</p>
