@@ -120,7 +120,11 @@ export async function buildImpactLoopSection(
 
   const safeName = escapeHtml(animal.name);
   const safeTenant = escapeHtml(tenant.name);
-  const safePhoto = escapeHtml(animal.photoUrl);
+  // Email clients cannot resolve relative URLs — prepend baseUrl when needed.
+  const absolutePhotoUrl = /^https?:\/\//i.test(animal.photoUrl)
+    ? animal.photoUrl
+    : `${baseUrl.replace(/\/$/, '')}${animal.photoUrl.startsWith('/') ? '' : '/'}${animal.photoUrl}`;
+  const safePhoto = escapeHtml(absolutePhotoUrl);
 
   let optOutLink = '';
   if (donor?.id) {
