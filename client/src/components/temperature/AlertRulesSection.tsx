@@ -74,6 +74,14 @@ interface FormState {
   quietHoursEnd: string;
 }
 
+interface FormErrors {
+  name?: string;
+  thresholds?: string;
+  channels?: string;
+  emails?: string;
+  phones?: string;
+}
+
 const ALL_DEVICES_VALUE = "__all__";
 
 const blankForm: FormState = {
@@ -168,6 +176,7 @@ export default function AlertRulesSection({ isAdmin, devices }: Props) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingRule, setEditingRule] = useState<AlertRule | null>(null);
   const [form, setForm] = useState<FormState>(blankForm);
+  const [formErrors, setFormErrors] = useState<FormErrors>({});
   const [deleteTarget, setDeleteTarget] = useState<AlertRule | null>(null);
 
   const { data: rulesData, isLoading } = useQuery<{ rules: AlertRule[] }>({
@@ -258,21 +267,21 @@ export default function AlertRulesSection({ isAdmin, devices }: Props) {
   function openCreate() {
     setEditingRule(null);
     setForm(blankForm);
+    setFormErrors({});
     setDialogOpen(true);
   }
 
   function openEdit(rule: AlertRule) {
     setEditingRule(rule);
     setForm(ruleToForm(rule));
+    setFormErrors({});
     setDialogOpen(true);
   }
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const payload = formToPayload(form);
+  function validateForm(payload: ReturnType<typeof formToPayload>): FormErrors {
+    const errors: FormErrors = {};
     if (!payload.name) {
-      toast({ title: "Name is required", variant: "destructive" });
-      return;
+      errors.name = "Give this rule a name (e.g. \"Kennel A overheat\").";
     }
     if (
       !payload.minTemperatureF &&
@@ -280,19 +289,26 @@ export default function AlertRulesSection({ isAdmin, devices }: Props) {
       !payload.minHumidityPercent &&
       !payload.maxHumidityPercent
     ) {
-      toast({ title: "Set at least one threshold", description: "Add a min or max temperature or humidity.", variant: "destructive" });
-      return;
-    }
-    if (payload.notifyEmail && payload.notificationEmails.length === 0) {
-      toast({ title: "Add an email recipient", description: "Email alerts are on but no addresses are listed.", variant: "destructive" });
-      return;
-    }
-    if (payload.notifySms && payload.notificationPhones.length === 0) {
-      toast({ title: "Add a phone number", description: "SMS alerts are on but no phone numbers are listed.", variant: "destructive" });
-      return;
+      errors.thresholds = "Set at least one threshold — a min or max temperature or humidity.";
     }
     if (!payload.notifyEmail && !payload.notifySms) {
-      toast({ title: "Pick at least one channel", description: "Turn on email or SMS alerts.", variant: "destructive" });
+      errors.channels = "Turn on email or SMS so the alert can be delivered.";
+    }
+    if (payload.notifyEmail && payload.notificationEmails.length === 0) {
+      errors.emails = "Add at least one email address — email alerts are on but no addresses are listed.";
+    }
+    if (payload.notifySms && payload.notificationPhones.length === 0) {
+      errors.phones = "Add at least one phone number — SMS alerts are on but no numbers are listed.";
+    }
+    return errors;
+  }
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const payload = formToPayload(form);
+    const errors = validateForm(payload);
+    setFormErrors(errors);
+    if (Object.keys(errors).length > 0) {
       return;
     }
     saveMutation.mutate({ ruleId: editingRule?.id ?? null, payload });
@@ -370,6 +386,26 @@ export default function AlertRulesSection({ isAdmin, devices }: Props) {
                         <> · quiet {rule.quietHoursStart}–{rule.quietHoursEnd}</>
                       )}
                     </p>
+                    {rule.notifyEmail && (
+                      <p className="text-xs text-muted-foreground mt-1 flex items-start gap-1.5" data-testid={`text-rule-emails-${rule.id}`}>
+                        <Mail className="h-3 w-3 mt-0.5 shrink-0" />
+                        <span className="break-all">
+                          {rule.notificationEmails && rule.notificationEmails.length > 0
+                            ? rule.notificationEmails.join(", ")
+                            : "No email recipients"}
+                        </span>
+                      </p>
+                    )}
+                    {rule.notifySms && (
+                      <p className="text-xs text-muted-foreground mt-1 flex items-start gap-1.5" data-testid={`text-rule-phones-${rule.id}`}>
+                        <MessageSquare className="h-3 w-3 mt-0.5 shrink-0" />
+                        <span className="break-all">
+                          {rule.notificationPhones && rule.notificationPhones.length > 0
+                            ? rule.notificationPhones.join(", ")
+                            : "No phone recipients"}
+                        </span>
+                      </p>
+                    )}
                     <p className="text-xs text-muted-foreground mt-1" data-testid={`text-rule-last-${rule.id}`}>
                       Last fired: {lastFired}
                     </p>
@@ -430,6 +466,9 @@ export default function AlertRulesSection({ isAdmin, devices }: Props) {
                 placeholder="e.g. Kennel A overheat"
                 data-testid="input-rule-name"
               />
+              {formErrors.name && (
+                <p className="text-xs text-destructive" data-testid="error-rule-name">{formErrors.name}</p>
+              )}
             </div>
 
             <div className="space-y-1.5">
@@ -499,6 +538,9 @@ export default function AlertRulesSection({ isAdmin, devices }: Props) {
                 />
               </div>
             </div>
+            {formErrors.thresholds && (
+              <p className="text-xs text-destructive" data-testid="error-thresholds">{formErrors.thresholds}</p>
+            )}
 
             <div className="space-y-3 rounded-md border p-3">
               <div className="flex items-center justify-between gap-3">
@@ -514,13 +556,18 @@ export default function AlertRulesSection({ isAdmin, devices }: Props) {
                 />
               </div>
               {form.notifyEmail && (
-                <Textarea
-                  value={form.emailsText}
-                  onChange={(e) => setForm({ ...form, emailsText: e.target.value })}
-                  placeholder="alerts@shelter.org, manager@shelter.org"
-                  rows={2}
-                  data-testid="textarea-rule-emails"
-                />
+                <>
+                  <Textarea
+                    value={form.emailsText}
+                    onChange={(e) => setForm({ ...form, emailsText: e.target.value })}
+                    placeholder="alerts@shelter.org, manager@shelter.org"
+                    rows={2}
+                    data-testid="textarea-rule-emails"
+                  />
+                  {formErrors.emails && (
+                    <p className="text-xs text-destructive" data-testid="error-emails">{formErrors.emails}</p>
+                  )}
+                </>
               )}
 
               <div className="flex items-center justify-between gap-3 pt-2 border-t">
@@ -544,11 +591,17 @@ export default function AlertRulesSection({ isAdmin, devices }: Props) {
                     rows={2}
                     data-testid="textarea-rule-phones"
                   />
+                  {formErrors.phones && (
+                    <p className="text-xs text-destructive" data-testid="error-phones">{formErrors.phones}</p>
+                  )}
                   <p className="text-xs text-muted-foreground">
                     US 10-digit numbers are auto-formatted. International numbers must include + and country code.
                     SMS requires a configured phone provider for your shelter.
                   </p>
                 </>
+              )}
+              {formErrors.channels && (
+                <p className="text-xs text-destructive" data-testid="error-channels">{formErrors.channels}</p>
               )}
             </div>
 

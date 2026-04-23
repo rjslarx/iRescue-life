@@ -4,7 +4,8 @@ import {
   goveeDevices, 
   goveeReadings, 
   goveeAlertRules, 
-  goveeAlertEvents 
+  goveeAlertEvents,
+  tenants
 } from '@shared/schema';
 import { eq, and, lte, isNull, or, sql } from 'drizzle-orm';
 import { GoveeService, isTemperatureSensorModel } from '../lib/govee-service';
@@ -309,8 +310,41 @@ export async function sendAlertNotifications(
       if (!twilioOn) {
         console.warn(`[Govee Poller] SMS requested for tenant ${rule.tenantId} but Twilio is not configured; skipping SMS for rule "${rule.name}"`);
       } else {
+        const [tenantRow] = await db
+          .select({ subdomain: tenants.subdomain, name: tenants.name, customDomain: tenants.customDomain })
+          .from(tenants)
+          .where(eq(tenants.id, rule.tenantId));
+
+        const baseHost = process.env.APP_BASE_URL?.replace(/^https?:\/\//, '').replace(/\/$/, '') || 'irescue.life';
+        const dashboardUrl = tenantRow?.customDomain
+          ? `https://${tenantRow.customDomain}/dashboard/temperature`
+          : tenantRow?.subdomain
+            ? `https://${tenantRow.subdomain}.${baseHost}/dashboard/temperature`
+            : `https://${baseHost}/dashboard/temperature`;
+
         const locationLabel = device.locationLabel || device.deviceName;
-        const body = `${smsPrefix}TEMP ALERT: ${alertEvent.message}`.slice(0, 320);
+        const breachLabel: Record<string, string> = {
+          temp_high: 'TOO HOT',
+          temp_low: 'TOO COLD',
+          humidity_high: 'HUMIDITY HIGH',
+          humidity_low: 'HUMIDITY LOW',
+          device_offline: 'SENSOR OFFLINE',
+        };
+        const label = breachLabel[alertEvent.alertType] || 'ALERT';
+        const unit = alertEvent.alertType.startsWith('temp') ? '°F' : '%';
+        const reading = alertEvent.triggerValue ? `${parseFloat(alertEvent.triggerValue).toFixed(1)}${unit}` : '';
+        const threshold = alertEvent.thresholdValue ? `${parseFloat(alertEvent.thresholdValue).toFixed(1)}${unit}` : '';
+
+        const lines: string[] = [];
+        lines.push(`${smsPrefix}${label} at ${locationLabel}`);
+        if (reading && threshold) {
+          lines.push(`Now ${reading} (limit ${threshold})`);
+        } else if (reading) {
+          lines.push(`Now ${reading}`);
+        }
+        lines.push(dashboardUrl);
+        const body = lines.join('\n').slice(0, 320);
+
         let anySent = false;
         for (const phone of smsRecipients) {
           const result = await sendSms(rule.tenantId, phone, body, 'notification', { skipOrgPrefix: false });
