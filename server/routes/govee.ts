@@ -13,8 +13,45 @@ import { eq, and, desc, gte, lte, sql } from 'drizzle-orm';
 import { GoveeService, isTemperatureSensorModel } from '../lib/govee-service';
 import { z } from 'zod';
 import type { AuthenticatedRequest } from '../middleware/auth';
+import { sendAlertNotifications } from '../services/govee-poller';
 
 const router = Router();
+
+function normalizePhoneE164(raw: string): string | null {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const startsWithPlus = trimmed.startsWith('+');
+  const digits = trimmed.replace(/\D/g, '');
+  if (digits.length === 0) return null;
+  if (startsWithPlus) {
+    if (digits.length < 8 || digits.length > 15) return null;
+    return `+${digits}`;
+  }
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`;
+  if (digits.length >= 8 && digits.length <= 15) return `+${digits}`;
+  return null;
+}
+
+function normalizePhoneList(raw: unknown): { ok: true; phones: string[] } | { ok: false; invalid: string[] } {
+  if (!Array.isArray(raw)) return { ok: true, phones: [] };
+  const phones: string[] = [];
+  const invalid: string[] = [];
+  for (const entry of raw) {
+    if (typeof entry !== 'string') continue;
+    const trimmed = entry.trim();
+    if (!trimmed) continue;
+    const normalized = normalizePhoneE164(trimmed);
+    if (!normalized) {
+      invalid.push(trimmed);
+    } else if (!phones.includes(normalized)) {
+      phones.push(normalized);
+    }
+  }
+  if (invalid.length > 0) return { ok: false, invalid };
+  return { ok: true, phones };
+}
 
 const connectSchema = z.object({
   apiKey: z.string().min(10, 'API key is required'),
@@ -333,10 +370,24 @@ router.post('/alert-rules', async (req: AuthenticatedRequest, res: Response, nex
     const schema = insertGoveeAlertRuleSchema.omit({ tenantId: true });
     const data = schema.parse(req.body);
 
+    const phoneResult = normalizePhoneList(data.notificationPhones);
+    if (!phoneResult.ok) {
+      return res.status(400).json({ error: `Invalid phone number(s): ${phoneResult.invalid.join(', ')}. Use a 10-digit US number or +<country><number>.` });
+    }
+    const normalizedPhones = phoneResult.phones;
+
+    if (data.notifySms && normalizedPhones.length === 0) {
+      return res.status(400).json({ error: 'Add at least one phone number to send SMS alerts.' });
+    }
+    if (data.notifyEmail && (!data.notificationEmails || data.notificationEmails.length === 0)) {
+      return res.status(400).json({ error: 'Add at least one email address to send email alerts.' });
+    }
+
     const [rule] = await db
       .insert(goveeAlertRules)
       .values({
         ...data,
+        notificationPhones: normalizedPhones,
         tenantId: req.tenant!.id,
       })
       .returning();
@@ -390,9 +441,46 @@ router.patch('/alert-rules/:ruleId', async (req: AuthenticatedRequest, res: Resp
 
     const updates = updateSchema.parse(req.body);
 
+    const [existing] = await db
+      .select()
+      .from(goveeAlertRules)
+      .where(and(
+        eq(goveeAlertRules.id, ruleId),
+        eq(goveeAlertRules.tenantId, req.tenant!.id),
+      ));
+
+    if (!existing) {
+      return res.status(404).json({ error: 'Alert rule not found' });
+    }
+
+    let phonesToWrite = existing.notificationPhones ?? [];
+    if (updates.notificationPhones !== undefined) {
+      const phoneResult = normalizePhoneList(updates.notificationPhones);
+      if (!phoneResult.ok) {
+        return res.status(400).json({ error: `Invalid phone number(s): ${phoneResult.invalid.join(', ')}. Use a 10-digit US number or +<country><number>.` });
+      }
+      phonesToWrite = phoneResult.phones;
+    }
+
+    const effectiveNotifySms = updates.notifySms ?? existing.notifySms;
+    const effectiveNotifyEmail = updates.notifyEmail ?? existing.notifyEmail;
+    const effectiveEmails = updates.notificationEmails ?? existing.notificationEmails ?? [];
+
+    if (effectiveNotifySms && phonesToWrite.length === 0) {
+      return res.status(400).json({ error: 'Add at least one phone number to send SMS alerts.' });
+    }
+    if (effectiveNotifyEmail && effectiveEmails.length === 0) {
+      return res.status(400).json({ error: 'Add at least one email address to send email alerts.' });
+    }
+
+    const writeUpdates: Record<string, unknown> = { ...updates, updatedAt: new Date() };
+    if (updates.notificationPhones !== undefined) {
+      writeUpdates.notificationPhones = phonesToWrite;
+    }
+
     const [updated] = await db
       .update(goveeAlertRules)
-      .set({ ...updates, updatedAt: new Date() })
+      .set(writeUpdates)
       .where(and(
         eq(goveeAlertRules.id, ruleId),
         eq(goveeAlertRules.tenantId, req.tenant!.id)
@@ -404,6 +492,86 @@ router.patch('/alert-rules/:ruleId', async (req: AuthenticatedRequest, res: Resp
     }
 
     res.json(updated);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/alert-rules/:ruleId/test', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    if (req.user!.activeRole !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const { ruleId } = req.params;
+
+    const [rule] = await db
+      .select()
+      .from(goveeAlertRules)
+      .where(and(
+        eq(goveeAlertRules.id, ruleId),
+        eq(goveeAlertRules.tenantId, req.tenant!.id),
+      ));
+
+    if (!rule) {
+      return res.status(404).json({ error: 'Alert rule not found' });
+    }
+
+    let device: typeof goveeDevices.$inferSelect | null = null;
+    if (rule.deviceId) {
+      const [d] = await db
+        .select()
+        .from(goveeDevices)
+        .where(and(
+          eq(goveeDevices.id, rule.deviceId),
+          eq(goveeDevices.tenantId, req.tenant!.id),
+        ));
+      device = d ?? null;
+    }
+    if (!device) {
+      const [d] = await db
+        .select()
+        .from(goveeDevices)
+        .where(eq(goveeDevices.tenantId, req.tenant!.id))
+        .limit(1);
+      device = d ?? null;
+    }
+
+    if (!device) {
+      return res.status(400).json({ error: 'No sensors found. Connect at least one Govee sensor before sending a test alert.' });
+    }
+
+    const syntheticEvent = {
+      id: 'test-' + Date.now(),
+      tenantId: req.tenant!.id,
+      ruleId: rule.id,
+      deviceId: device.id,
+      readingId: null,
+      alertType: 'temp_high',
+      triggerValue: '99.99',
+      thresholdValue: '85.00',
+      message: `TEST alert from "${rule.name}" — this confirms email and SMS routing is working at ${device.locationLabel || device.deviceName}.`,
+      emailSent: false,
+      smsSent: false,
+      emailRecipients: null,
+      smsRecipients: null,
+      status: 'triggered',
+      acknowledgedAt: null,
+      acknowledgedBy: null,
+      resolvedAt: null,
+      triggeredAt: new Date(),
+    } as typeof goveeAlertEvents.$inferSelect;
+
+    const result = await sendAlertNotifications(rule, syntheticEvent, device, { isTest: true });
+
+    res.json({
+      success: result.emailSent || result.smsSent,
+      emailSent: result.emailSent,
+      emailRecipients: result.emailRecipients,
+      smsSent: result.smsSent,
+      smsRecipients: result.smsRecipients,
+      smsErrors: result.smsErrors,
+    });
   } catch (error) {
     next(error);
   }

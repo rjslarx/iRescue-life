@@ -5,6 +5,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Thermometer, Droplets, Wifi, WifiOff, AlertTriangle, Battery } from "lucide-react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { formatDistanceToNow } from "date-fns";
+import AlertRulesSection from "@/components/temperature/AlertRulesSection";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface GoveeDevice {
   id: string;
@@ -123,6 +125,9 @@ function SensorCard({ device, reading, hasAlert }: { device: GoveeDevice; readin
 }
 
 export default function TemperaturePage() {
+  const { user } = useAuth();
+  const isAdmin = user?.activeRole === 'admin';
+
   const { data: status, isLoading: statusLoading } = useQuery<GoveeStatus>({
     queryKey: ["/api/govee/status"],
     refetchInterval: 60000,
@@ -202,6 +207,17 @@ export default function TemperaturePage() {
               />
             ))}
           </div>
+        )}
+
+        {status?.connected && (
+          <AlertRulesSection
+            isAdmin={isAdmin}
+            devices={readings.map(({ device }) => ({
+              id: device.id,
+              deviceName: device.deviceName,
+              locationLabel: device.locationLabel,
+            }))}
+          />
         )}
       </div>
     </DashboardLayout>

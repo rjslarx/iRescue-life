@@ -9,6 +9,7 @@ import {
 import { eq, and, lte, isNull, or, sql } from 'drizzle-orm';
 import { GoveeService, isTemperatureSensorModel } from '../lib/govee-service';
 import { EmailService } from '../lib/email-service';
+import { sendSms, isTwilioEnabled } from '../lib/twilio-service';
 
 const POLLING_INTERVAL_MS = 10 * 60 * 1000;
 let pollingInterval: NodeJS.Timeout | null = null;
@@ -245,55 +246,100 @@ function isInQuietHours(start: string | null, end: string | null): boolean {
   }
 }
 
-async function sendAlertNotifications(
+export async function sendAlertNotifications(
   rule: typeof goveeAlertRules.$inferSelect,
   alertEvent: typeof goveeAlertEvents.$inferSelect,
-  device: typeof goveeDevices.$inferSelect
-): Promise<void> {
+  device: typeof goveeDevices.$inferSelect,
+  options: { isTest?: boolean } = {}
+): Promise<{ emailSent: boolean; emailRecipients: string[]; smsSent: boolean; smsRecipients: string[]; smsErrors: string[] }> {
+  const isTest = options.isTest === true;
+  const subjectPrefix = isTest ? '[TEST] ' : '';
+  const smsPrefix = isTest ? '[TEST] ' : '';
+
   const emailRecipients: string[] = [];
-  
+  const smsRecipients: string[] = [];
+  const smsErrors: string[] = [];
+  let emailSent = false;
+  let smsSent = false;
+
   if (rule.notifyEmail && rule.notificationEmails && rule.notificationEmails.length > 0) {
     emailRecipients.push(...rule.notificationEmails);
   }
 
+  if (rule.notifySms && rule.notificationPhones && rule.notificationPhones.length > 0) {
+    smsRecipients.push(...rule.notificationPhones);
+  }
+
   if (emailRecipients.length > 0) {
     try {
-      // Get email service for tenant
       const emailService = await EmailService.forTenant(rule.tenantId);
       if (!emailService) {
         console.warn(`[Govee Poller] No email service configured for tenant ${rule.tenantId}`);
-        return;
+      } else {
+        for (const email of emailRecipients) {
+          await emailService.send({
+            to: email,
+            subject: `${subjectPrefix}Temperature Alert: ${rule.name}`,
+            html: `
+              <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2 style="color: #dc2626;">${isTest ? 'Test Temperature Alert' : 'Temperature Alert'}</h2>
+                ${isTest ? '<p style="color: #6b7280;">This is a test message triggered manually from the Temperature Alerts settings. No real threshold was breached.</p>' : ''}
+                <p><strong>Location:</strong> ${device.locationLabel || device.deviceName}</p>
+                <p><strong>Alert:</strong> ${alertEvent.message}</p>
+                <p><strong>Time:</strong> ${new Date().toLocaleString()}</p>
+                <hr style="border: 1px solid #e5e7eb; margin: 20px 0;" />
+                <p style="color: #6b7280; font-size: 12px;">
+                  This alert was triggered by the "${rule.name}" rule.
+                  To adjust settings, visit your organization's Temperature Monitoring settings.
+                </p>
+              </div>
+            `,
+          });
+        }
+        emailSent = true;
       }
-      
-      for (const email of emailRecipients) {
-        await emailService.send({
-          to: email,
-          subject: `Temperature Alert: ${rule.name}`,
-          html: `
-            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2 style="color: #dc2626;">Temperature Alert</h2>
-              <p><strong>Location:</strong> ${device.locationLabel || device.deviceName}</p>
-              <p><strong>Alert:</strong> ${alertEvent.message}</p>
-              <p><strong>Time:</strong> ${new Date().toLocaleString()}</p>
-              <hr style="border: 1px solid #e5e7eb; margin: 20px 0;" />
-              <p style="color: #6b7280; font-size: 12px;">
-                This alert was triggered by the "${rule.name}" rule. 
-                To adjust settings, visit your organization's Temperature Monitoring settings.
-              </p>
-            </div>
-          `,
-        });
-      }
-
-      await db
-        .update(goveeAlertEvents)
-        .set({
-          emailSent: true,
-          emailRecipients,
-        })
-        .where(eq(goveeAlertEvents.id, alertEvent.id));
     } catch (error) {
       console.error('[Govee Poller] Failed to send email alert:', error);
     }
   }
+
+  if (smsRecipients.length > 0) {
+    try {
+      const twilioOn = await isTwilioEnabled(rule.tenantId);
+      if (!twilioOn) {
+        console.warn(`[Govee Poller] SMS requested for tenant ${rule.tenantId} but Twilio is not configured; skipping SMS for rule "${rule.name}"`);
+      } else {
+        const locationLabel = device.locationLabel || device.deviceName;
+        const body = `${smsPrefix}TEMP ALERT: ${alertEvent.message}`.slice(0, 320);
+        let anySent = false;
+        for (const phone of smsRecipients) {
+          const result = await sendSms(rule.tenantId, phone, body, 'notification', { skipOrgPrefix: false });
+          if (result.status === 'sent') {
+            anySent = true;
+          } else if (result.error) {
+            smsErrors.push(`${phone}: ${result.error}`);
+            console.warn(`[Govee Poller] SMS to ${phone} failed for rule "${rule.name}": ${result.error}`);
+          }
+        }
+        smsSent = anySent;
+      }
+    } catch (error) {
+      console.error('[Govee Poller] Failed to send SMS alert:', error);
+      smsErrors.push(error instanceof Error ? error.message : 'Unknown error');
+    }
+  }
+
+  if (!isTest && (emailSent || smsSent)) {
+    await db
+      .update(goveeAlertEvents)
+      .set({
+        emailSent,
+        emailRecipients: emailSent ? emailRecipients : null,
+        smsSent,
+        smsRecipients: smsSent ? smsRecipients : null,
+      })
+      .where(eq(goveeAlertEvents.id, alertEvent.id));
+  }
+
+  return { emailSent, emailRecipients, smsSent, smsRecipients, smsErrors };
 }
