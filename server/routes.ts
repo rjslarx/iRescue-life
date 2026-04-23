@@ -27339,17 +27339,25 @@ Submitted: ${new Date().toLocaleString()}
             break;
           }
 
-          // Idempotency check: Skip if this payment was already processed
-          if (session.payment_intent) {
+          // Idempotency check: Skip if this checkout session was already processed.
+          // For subscription-mode checkouts, Stripe does NOT set session.payment_intent
+          // (a Subscription + Invoice are created instead), so we must also key off
+          // session.id via payments.stripeCheckoutSessionId — otherwise Stripe webhook
+          // retries (1h/2h/2h backoff) will create duplicate donation rows for the same sign-up.
+          {
+            const idempotencyConditions = [eq(payments.stripeCheckoutSessionId, session.id)];
+            if (session.payment_intent) {
+              idempotencyConditions.push(eq(payments.stripePaymentIntentId, session.payment_intent));
+            }
             const existingPayment = await db
               .select({ id: payments.id })
               .from(payments)
-              .where(eq(payments.stripePaymentIntentId, session.payment_intent))
+              .where(or(...idempotencyConditions))
               .limit(1)
               .then(rows => rows[0]);
 
             if (existingPayment) {
-              console.log(`[Webhook] Payment ${session.payment_intent} already processed, skipping (idempotency)`);
+              console.log(`[Webhook] Checkout session ${session.id} (intent=${session.payment_intent || 'n/a'}) already processed, skipping (idempotency)`);
               return res.status(200).json({ received: true, idempotent: true });
             }
           }
