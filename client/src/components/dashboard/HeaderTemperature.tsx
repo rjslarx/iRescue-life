@@ -104,7 +104,7 @@ export default function HeaderTemperature() {
         </span>
         {humidity !== null && !isNaN(humidity) && (
           <span
-            className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground"
+            className="flex items-center gap-1 text-xs text-muted-foreground"
             data-testid="text-header-humidity-value"
           >
             <Droplets className="h-3 w-3" />
