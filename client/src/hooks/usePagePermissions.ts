@@ -16,13 +16,20 @@ interface UserPagePermission {
   createdAt: string;
 }
 
+// Pages every authenticated tenant member can reach regardless of role
+// or per-tenant permission configuration. Use sparingly — only for
+// universally-safe, read-only or self-service pages.
+const ALWAYS_ACCESSIBLE_PAGES = new Set<string>([
+  'temperature',
+]);
+
 // Default permissions when no database records exist
 // These provide sensible fallbacks for each role
 const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
-  volunteer: ['calendar', 'volunteers', 'animals', 'animal-roster', 'tutorials', 'my-account'],
-  foster: ['my-fosters', 'animals', 'animal-roster', 'tutorials', 'kennels', 'my-account'],
-  staff: ['dashboard', 'animals', 'applications', 'foster-management', 'volunteers', 'calendar', 'kennels', 'medical-tasks', 'daily-roster', 'tutorials', 'my-account'],
-  board_member: ['dashboard', 'animals', 'applications', 'foster-management', 'volunteers', 'calendar', 'finance', 'grants', 'donors', 'analytics', 'reports', 'kennels', 'medical-tasks', 'daily-roster', 'tutorials', 'my-account'],
+  volunteer: ['calendar', 'volunteers', 'animals', 'animal-roster', 'tutorials', 'my-account', 'temperature'],
+  foster: ['my-fosters', 'animals', 'animal-roster', 'tutorials', 'kennels', 'my-account', 'temperature'],
+  staff: ['dashboard', 'animals', 'applications', 'foster-management', 'volunteers', 'calendar', 'kennels', 'medical-tasks', 'daily-roster', 'tutorials', 'my-account', 'temperature'],
+  board_member: ['dashboard', 'animals', 'applications', 'foster-management', 'volunteers', 'calendar', 'finance', 'grants', 'donors', 'analytics', 'reports', 'kennels', 'medical-tasks', 'daily-roster', 'tutorials', 'my-account', 'temperature'],
 };
 
 /**
@@ -70,6 +77,12 @@ export function usePagePermissions() {
 
     // Admin and owner roles always have access to all pages
     if (userRole === 'admin' || userRole === 'owner') {
+      return true;
+    }
+
+    // Pages accessible to any authenticated tenant member, regardless of
+    // role or per-tenant permission configuration.
+    if (ALWAYS_ACCESSIBLE_PAGES.has(pageId)) {
       return true;
     }
 

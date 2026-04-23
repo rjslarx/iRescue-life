@@ -88,6 +88,7 @@ import {
   Megaphone,
   ShoppingBag,
   Sparkles,
+  Thermometer,
 } from "lucide-react";
 
 interface AppSidebarProps {
@@ -276,6 +277,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
         ...(tnrEnabled ? [{ title: "TNR Log", url: "/dashboard/tnr-log", icon: Cat }] : []),
         { title: "Adoption Applications", url: "/dashboard/applications", icon: FileText, notificationKey: "applications" },
         { title: "Intake Manager", url: "/dashboard/intake", icon: Inbox },
+        { title: "Temperature", url: "/dashboard/temperature", icon: Thermometer },
       ],
       defaultOpen: true,
     },
@@ -389,6 +391,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
         ...(tnrEnabled ? [{ title: "TNR Log", url: "/dashboard/tnr-log", icon: Cat }] : []),
         { title: "Adoption Applications", url: "/dashboard/applications", icon: FileText, notificationKey: "applications" },
         { title: "Intake Manager", url: "/dashboard/intake", icon: Inbox },
+        { title: "Temperature", url: "/dashboard/temperature", icon: Thermometer },
       ],
       defaultOpen: true,
     },
@@ -494,6 +497,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
       items: [
         { title: "Email Inbox", url: "/dashboard/inbox", icon: Inbox },
         { title: "Calendar", url: "/dashboard/calendar", icon: Calendar },
+        { title: "Temperature", url: "/dashboard/temperature", icon: Thermometer },
         { title: "Help & Training", url: "/dashboard/tutorials", icon: BookOpen },
       ],
       defaultOpen: false,
@@ -508,6 +512,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
         { title: "My Fosters", url: "/dashboard/my-fosters", icon: Heart, usesGoogleDrive: true },
         { title: "Quick Updates", url: "/dashboard/foster-mobile", icon: Smartphone, usesGoogleDrive: true },
         { title: "Kennels", url: "/dashboard/kennels", icon: Home },
+        { title: "Temperature", url: "/dashboard/temperature", icon: Thermometer },
         { title: "Help & Training", url: "/dashboard/tutorials", icon: BookOpen },
       ],
       defaultOpen: true,
@@ -524,6 +529,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
         { title: "Opportunities", url: "/dashboard/opportunities", icon: UserCircle },
         { title: "Today's Medications", url: "/dashboard/volunteer-medications", icon: Pill },
         { title: "Animal Roster", url: "/dashboard/animal-roster", icon: Heart },
+        { title: "Temperature", url: "/dashboard/temperature", icon: Thermometer },
         { title: "Help & Training", url: "/dashboard/tutorials", icon: BookOpen },
       ],
       defaultOpen: true,
@@ -590,6 +596,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
     '/dashboard/tnr-log': 'tnr-log',
     '/dashboard/shop': 'shop',
     '/dashboard/animal-roster': 'animal-roster',
+    '/dashboard/temperature': 'temperature',
   };
 
   // Helper function to check if menu item should be shown

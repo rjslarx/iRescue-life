@@ -94,10 +94,6 @@ router.delete('/disconnect', async (req: AuthenticatedRequest, res: Response, ne
 
 router.get('/status', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
-    if (req.user!.activeRole !== 'admin' && req.user!.activeRole !== 'staff') {
-      return res.status(403).json({ error: 'Admin or staff access required' });
-    }
-
     const [cred] = await db
       .select()
       .from(goveeCredentials)
@@ -189,10 +185,6 @@ router.post('/devices', async (req: AuthenticatedRequest, res: Response, next: N
 
 router.get('/devices', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
-    if (req.user!.activeRole !== 'admin' && req.user!.activeRole !== 'staff') {
-      return res.status(403).json({ error: 'Admin or staff access required' });
-    }
-
     const devices = await db
       .select()
       .from(goveeDevices)
@@ -267,10 +259,6 @@ router.delete('/devices/:deviceId', async (req: AuthenticatedRequest, res: Respo
 
 router.get('/devices/:deviceId/readings', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
-    if (req.user!.activeRole !== 'admin' && req.user!.activeRole !== 'staff') {
-      return res.status(403).json({ error: 'Admin or staff access required' });
-    }
-
     const { deviceId } = req.params;
     const hours = parseInt(req.query.hours as string) || 24;
     const since = new Date(Date.now() - hours * 60 * 60 * 1000);
@@ -294,10 +282,6 @@ router.get('/devices/:deviceId/readings', async (req: AuthenticatedRequest, res:
 
 router.get('/readings/latest', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
-    if (req.user!.activeRole !== 'admin' && req.user!.activeRole !== 'staff') {
-      return res.status(403).json({ error: 'Admin or staff access required' });
-    }
-
     const devices = await db
       .select()
       .from(goveeDevices)
@@ -441,10 +425,6 @@ router.delete('/alert-rules/:ruleId', async (req: AuthenticatedRequest, res: Res
 
 router.get('/alerts', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
-    if (req.user!.activeRole !== 'admin' && req.user!.activeRole !== 'staff') {
-      return res.status(403).json({ error: 'Admin or staff access required' });
-    }
-
     const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
     const status = req.query.status as string;
 

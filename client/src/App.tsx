@@ -15,6 +15,7 @@ import Dashboard from "@/pages/Dashboard";
 import AnimalsPage from "@/pages/AnimalsPage";
 import AnimalLookupPage from "@/pages/AnimalLookupPage";
 import AnimalRosterPage from "@/pages/AnimalRosterPage";
+import TemperaturePage from "@/pages/TemperaturePage";
 import FindDuplicatesPage from "@/pages/FindDuplicatesPage";
 import ApplicationsPage from "@/pages/ApplicationsPage";
 import FinancePage from "@/pages/FinancePage";
@@ -359,6 +360,7 @@ function RouterSwitch() {
       <ProtectedRoute path="/dashboard/site-permissions" pageId="site-permissions" component={SitePermissionsPage} proOnly proFeatureName="Site Permissions" />
       <ProtectedRoute path="/dashboard/animal-lookup" pageId="animals" component={AnimalLookupPage} />
       <ProtectedRoute path="/dashboard/animal-roster" pageId="animal-roster" component={AnimalRosterPage} />
+      <ProtectedRoute path="/dashboard/temperature" pageId="temperature" component={TemperaturePage} />
       <ProtectedRoute path="/dashboard/animals/duplicates" pageId="animals" component={FindDuplicatesPage} />
       <ProtectedRoute path="/dashboard/animals/:animalId/medical" pageId="animals" component={AnimalMedicalPage} />
       <ProtectedRoute path="/dashboard/animals/:animalId/applications" pageId="animals" component={AnimalApplicationsPage} />
