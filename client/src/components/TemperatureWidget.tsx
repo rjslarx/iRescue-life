@@ -87,7 +87,7 @@ export function TemperatureWidget() {
           <p className="text-sm text-muted-foreground mb-3">
             Monitor shelter temperature with Govee sensors
           </p>
-          <Link href="/settings">
+          <Link href={`${basePath}/dashboard/settings/integrations`}>
             <Button variant="outline" size="sm" data-testid="button-setup-govee">
               <Settings className="h-4 w-4 mr-2" />
               Set Up
@@ -125,7 +125,7 @@ export function TemperatureWidget() {
         ) : readings.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             No devices configured.{" "}
-            <Link href="/settings" className="text-primary hover:underline">
+            <Link href={`${basePath}/dashboard/settings/integrations`} className="text-primary hover:underline">
               Add sensors
             </Link>
           </p>
@@ -140,7 +140,7 @@ export function TemperatureWidget() {
               />
             ))}
             {readings.length > 4 && (
-              <Link href="/settings">
+              <Link href={`${basePath}/dashboard/settings/integrations`}>
                 <Button variant="ghost" size="sm" className="w-full text-xs">
                   View all {readings.length} sensors
                 </Button>

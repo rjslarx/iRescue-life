@@ -38,6 +38,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { z } from "zod";
 import DashboardLayout from "@/components/DashboardLayout";
 import { StripeConnectBanner } from "@/components/StripeConnectBanner";
+import { GoveeSettings } from "@/components/GoveeSettings";
 import type { Tenant } from "@shared/schema";
 
 const stripeSettingsSchema = z.object({
@@ -1338,6 +1339,8 @@ export default function IntegrationsSettingsPage() {
               </Form>
             </CardContent>
           </Card>
+
+          {canEdit && <GoveeSettings />}
         </div>
       )}
     </DashboardLayout>

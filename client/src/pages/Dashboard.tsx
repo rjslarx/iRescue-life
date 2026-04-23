@@ -24,6 +24,7 @@ import {
 } from "@/components/dashboard";
 import PipelineManager, { PipelineTab } from "@/components/dashboard/PipelineManager";
 import { DailyExecutionWidget } from "@/components/dashboard/DailyExecutionWidget";
+import { TemperatureWidget } from "@/components/TemperatureWidget";
 
 interface FosterAnimalWithDetails extends FosterAnimal {
   animal: Animal | null;
@@ -428,6 +429,12 @@ export default function Dashboard() {
                   {canViewMedical && (
                     <section data-testid="section-pending-medical-imports" className="w-full">
                       <PendingMedicalImportsWidget />
+                    </section>
+                  )}
+
+                  {canViewDashboard && (
+                    <section data-testid="section-temperature" className="w-full">
+                      <TemperatureWidget />
                     </section>
                   )}
                 </div>
