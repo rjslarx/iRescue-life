@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Thermometer, Droplets, Wifi, WifiOff, AlertTriangle, Battery } from "lucide-react";
-import { DashboardLayout } from "@/components/DashboardLayout";
+import DashboardLayout from "@/components/DashboardLayout";
 import { formatDistanceToNow } from "date-fns";
 
 interface GoveeDevice {
