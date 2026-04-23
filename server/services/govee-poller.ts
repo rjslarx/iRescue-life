@@ -31,6 +31,14 @@ export function stopGoveePoller(): void {
   }
 }
 
+/**
+ * Run a single poll cycle across all tenants. Used by the cron-scheduled
+ * runner in `server/lib/scheduler.ts` (and the legacy setInterval poller).
+ */
+export async function runGoveePollOnce(): Promise<void> {
+  await pollAllTenants();
+}
+
 async function pollAllTenants(): Promise<void> {
   try {
     const credentials = await db

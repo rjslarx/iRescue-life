@@ -659,4 +659,32 @@ export function initializeScheduler() {
   });
 
   console.log(`✓ Subscription reconciler scheduled: ${subReconcilerSchedule} (UTC)`);
+
+  // Govee temperature poller — fetch latest readings from Govee for every
+  // tenant with an active integration. Default every 10 minutes so the
+  // dashboard temperature widget never goes more than ~10 min stale.
+  const goveePollerSchedule = process.env.GOVEE_POLLER_SCHEDULE || "*/10 * * * *";
+  cron.schedule(goveePollerSchedule, async () => {
+    try {
+      const { runGoveePollOnce } = await import("../services/govee-poller");
+      await runGoveePollOnce();
+    } catch (error) {
+      console.error(`❌ Govee poller failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
+  }, {
+    timezone: "UTC",
+  });
+
+  console.log(`✓ Govee temperature poller scheduled: ${goveePollerSchedule} (UTC)`);
+
+  // Kick off an immediate poll on startup so dashboards aren't stale until
+  // the first scheduled tick fires.
+  (async () => {
+    try {
+      const { runGoveePollOnce } = await import("../services/govee-poller");
+      await runGoveePollOnce();
+    } catch (error) {
+      console.error(`❌ Initial Govee poll failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
+  })();
 }
