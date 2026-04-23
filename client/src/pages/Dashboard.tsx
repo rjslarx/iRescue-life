@@ -24,7 +24,7 @@ import {
 } from "@/components/dashboard";
 import PipelineManager, { PipelineTab } from "@/components/dashboard/PipelineManager";
 import { DailyExecutionWidget } from "@/components/dashboard/DailyExecutionWidget";
-import { TemperatureWidget } from "@/components/TemperatureWidget";
+import HeaderTemperature from "@/components/dashboard/HeaderTemperature";
 
 interface FosterAnimalWithDetails extends FosterAnimal {
   animal: Animal | null;
@@ -361,7 +361,10 @@ export default function Dashboard() {
                       {formattedDate}
                     </p>
                   </div>
-                  {canViewHeaderStats && <HeaderStats />}
+                  <div className="flex items-center gap-3 flex-wrap">
+                    {canViewHeaderStats && <HeaderStats />}
+                    {canViewDashboard && <HeaderTemperature />}
+                  </div>
                 </div>
               </header>
 
@@ -432,11 +435,6 @@ export default function Dashboard() {
                     </section>
                   )}
 
-                  {canViewDashboard && (
-                    <section data-testid="section-temperature" className="w-full">
-                      <TemperatureWidget />
-                    </section>
-                  )}
                 </div>
 
                 {/* Right Column - Daily Briefing (absolute positioned so only left column determines row height) */}
