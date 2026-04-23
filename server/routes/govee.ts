@@ -426,6 +426,7 @@ router.patch('/alert-rules/:ruleId', async (req: AuthenticatedRequest, res: Resp
     const updateSchema = z.object({
       name: z.string().optional(),
       isEnabled: z.boolean().optional(),
+      deviceId: z.string().uuid().nullable().optional(),
       minTemperatureF: z.string().optional().nullable(),
       maxTemperatureF: z.string().optional().nullable(),
       minHumidityPercent: z.string().optional().nullable(),
