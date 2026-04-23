@@ -347,7 +347,10 @@ export async function sendAlertNotifications(
 
         let anySent = false;
         for (const phone of smsRecipients) {
-          const result = await sendSms(rule.tenantId, phone, body, 'notification', { skipOrgPrefix: false });
+          const result = await sendSms(rule.tenantId, phone, body, 'notification', {
+            skipOrgPrefix: false,
+            bypassQuietHours: true,
+          });
           if (result.status === 'sent') {
             anySent = true;
           } else if (result.error) {

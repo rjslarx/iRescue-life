@@ -193,6 +193,7 @@ export async function sendSms(
     recipientUserId?: string;
     relatedAnimalId?: string;
     skipOrgPrefix?: boolean;
+    bypassQuietHours?: boolean;
   }
 ): Promise<SendResult> {
   const [tenantRow] = await db.select({ commsPaused: tenants.commsPaused }).from(tenants).where(eq(tenants.id, tenantId));
@@ -204,14 +205,16 @@ export async function sendSms(
     };
   }
 
-  const nowUtc = new Date();
-  const cstHour = (nowUtc.getUTCHours() - 6 + 24) % 24;
-  if (cstHour >= 20 || cstHour < 6) {
-    return {
-      number: toNumber,
-      status: 'failed',
-      error: 'SMS blocked: quiet hours (8 PM – 6 AM CST)',
-    };
+  if (!context?.bypassQuietHours) {
+    const nowUtc = new Date();
+    const cstHour = (nowUtc.getUTCHours() - 6 + 24) % 24;
+    if (cstHour >= 20 || cstHour < 6) {
+      return {
+        number: toNumber,
+        status: 'failed',
+        error: 'SMS blocked: quiet hours (8 PM – 6 AM CST)',
+      };
+    }
   }
 
   const config = await getTwilioConfig(tenantId);
