@@ -1,6 +1,8 @@
+import { randomUUID } from 'crypto';
 import { encrypt, decrypt } from './encryption';
 
-const GOVEE_API_BASE = 'https://developer-api.govee.com/v1';
+const GOVEE_API_BASE_LEGACY = 'https://developer-api.govee.com/v1';
+const GOVEE_API_BASE_NEW = 'https://openapi.api.govee.com/router/api/v1';
 
 interface GoveeDevice {
   device: string;
@@ -24,10 +26,24 @@ interface GoveeDeviceState {
   };
 }
 
-interface GoveeApiResponse<T> {
-  code: number;
-  message: string;
-  data: T;
+interface GoveeNewDevice {
+  sku: string;
+  device: string;
+  deviceName: string;
+  type?: string;
+  capabilities?: Array<{ type: string; instance: string }>;
+}
+
+interface GoveeNewCapabilityState {
+  type: string;
+  instance: string;
+  state?: { value: unknown };
+}
+
+interface GoveeNewStatePayload {
+  sku: string;
+  device: string;
+  capabilities: GoveeNewCapabilityState[];
 }
 
 export class GoveeService {
@@ -50,19 +66,19 @@ export class GoveeService {
     return new GoveeService(apiKey);
   }
 
-  private async makeRequest<T>(endpoint: string, method: string = 'GET', body?: object): Promise<T> {
-    const response = await fetch(`${GOVEE_API_BASE}${endpoint}`, {
-      method,
+  private async fetchJson(url: string, init: RequestInit): Promise<any> {
+    const response = await fetch(url, {
+      ...init,
       headers: {
         'Govee-API-Key': this.apiKey,
         'Content-Type': 'application/json',
+        ...(init.headers || {}),
       },
-      body: body ? JSON.stringify(body) : undefined,
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      if (response.status === 401) {
+      if (response.status === 401 || response.status === 403) {
         throw new Error('Invalid Govee API key');
       }
       if (response.status === 429) {
@@ -71,13 +87,11 @@ export class GoveeService {
       throw new Error(`Govee API error: ${response.status} - ${errorText}`);
     }
 
-    const data = await response.json() as GoveeApiResponse<T>;
-    
-    if (data.code !== 200) {
-      throw new Error(`Govee API error: ${data.message}`);
+    const data = await response.json();
+    if (data?.code !== undefined && data.code !== 200) {
+      throw new Error(`Govee API error: ${data.message || `code ${data.code}`}`);
     }
-
-    return data.data;
+    return data;
   }
 
   async validateApiKey(): Promise<boolean> {
@@ -93,20 +107,108 @@ export class GoveeService {
   }
 
   async getDevices(): Promise<GoveeDevice[]> {
-    const result = await this.makeRequest<{ devices: GoveeDevice[] }>('/devices');
-    return result.devices || [];
+    const newDevices = await this.getDevicesNewApi().catch((err) => {
+      console.error('Govee new API getDevices failed, falling back to legacy:', err);
+      return null;
+    });
+
+    const legacyDevices = await this.getDevicesLegacyApi().catch((err) => {
+      console.error('Govee legacy API getDevices failed:', err);
+      return [] as GoveeDevice[];
+    });
+
+    const merged = new Map<string, GoveeDevice>();
+    for (const d of legacyDevices) {
+      merged.set(`${d.device}|${d.model}`, d);
+    }
+    if (newDevices) {
+      for (const d of newDevices) {
+        merged.set(`${d.device}|${d.model}`, d);
+      }
+    }
+    return Array.from(merged.values());
+  }
+
+  private async getDevicesLegacyApi(): Promise<GoveeDevice[]> {
+    const data = await this.fetchJson(`${GOVEE_API_BASE_LEGACY}/devices`, { method: 'GET' });
+    return (data?.data?.devices as GoveeDevice[]) || [];
+  }
+
+  private async getDevicesNewApi(): Promise<GoveeDevice[]> {
+    const data = await this.fetchJson(`${GOVEE_API_BASE_NEW}/user/devices`, { method: 'GET' });
+    const list: GoveeNewDevice[] = data?.data || [];
+    return list.map((d) => ({
+      device: d.device,
+      model: d.sku,
+      deviceName: d.deviceName,
+      controllable: false,
+      retrievable: true,
+      supportCmds: [],
+    }));
   }
 
   async getDeviceState(device: string, model: string): Promise<GoveeDeviceState | null> {
     try {
-      const result = await this.makeRequest<GoveeDeviceState>(
-        `/devices/state?device=${encodeURIComponent(device)}&model=${encodeURIComponent(model)}`
+      const newState = await this.getDeviceStateNewApi(device, model);
+      if (newState) return newState;
+    } catch (error) {
+      console.error(`Govee new API state failed for ${device}, trying legacy:`, error);
+    }
+
+    try {
+      const data = await this.fetchJson(
+        `${GOVEE_API_BASE_LEGACY}/devices/state?device=${encodeURIComponent(device)}&model=${encodeURIComponent(model)}`,
+        { method: 'GET' }
       );
-      return result;
+      return data?.data as GoveeDeviceState;
     } catch (error) {
       console.error(`Failed to get state for device ${device}:`, error);
       return null;
     }
+  }
+
+  private async getDeviceStateNewApi(device: string, model: string): Promise<GoveeDeviceState | null> {
+    const data = await this.fetchJson(`${GOVEE_API_BASE_NEW}/device/state`, {
+      method: 'POST',
+      body: JSON.stringify({
+        requestId: randomUUID(),
+        payload: { sku: model, device },
+      }),
+    });
+
+    const payload: GoveeNewStatePayload | undefined = data?.payload;
+    if (!payload || !Array.isArray(payload.capabilities)) return null;
+
+    const properties: GoveeDeviceState['properties'] = {};
+    for (const cap of payload.capabilities) {
+      const value = cap?.state?.value;
+      const instance = cap?.instance;
+      if (instance === 'online' && typeof value === 'boolean') {
+        properties.online = value;
+      } else if (instance === 'sensorTemperature' || instance === 'temperature') {
+        if (typeof value === 'number') {
+          properties.temperature = value;
+        } else if (value && typeof value === 'object' && 'currentTemperature' in (value as any)) {
+          const v = (value as any).currentTemperature;
+          if (typeof v === 'number') properties.temperature = v;
+        }
+      } else if (instance === 'sensorHumidity' || instance === 'humidity') {
+        if (typeof value === 'number') {
+          properties.humidity = value;
+        } else if (value && typeof value === 'object' && 'currentHumidity' in (value as any)) {
+          const v = (value as any).currentHumidity;
+          if (typeof v === 'number') properties.humidity = v;
+        }
+      }
+    }
+
+    if (properties.online === undefined) properties.online = true;
+
+    return {
+      device: payload.device,
+      model: payload.sku,
+      properties,
+    };
   }
 
   extractTemperatureHumidity(state: GoveeDeviceState): {
