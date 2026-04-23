@@ -1340,7 +1340,7 @@ export default function IntegrationsSettingsPage() {
             </CardContent>
           </Card>
 
-          {canEdit && <GoveeSettings />}
+          <GoveeSettings />
         </div>
       )}
     </DashboardLayout>
