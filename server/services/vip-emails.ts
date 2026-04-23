@@ -253,6 +253,78 @@ export async function sendVipBackfillWelcomeEmail(
   }
 }
 
+export interface VipRecognitionNameRequestEmailParams {
+  tenant: VipEmailTenant;
+  donorEmail: string;
+  donorName: string;
+  tierName: string | null;
+  /** What we'd display on the Wall today if they take no action — typically
+   *  "First L." derived from the donor's name. */
+  fallbackWallName: string;
+  fallbackOrigin: string;
+}
+
+/**
+ * One-shot invitation to grandfathered VIP donors who have no recognition
+ * (display) name saved on their subscription. Asks them to confirm the
+ * fallback "First L." or customize it (couples, families, business names,
+ * memorials, etc.). Deep-links into the VIP portal's giving-history section
+ * where the Wall of Heroes opt-in / display-name editor lives. Task #73.
+ */
+export async function sendVipRecognitionNameRequestEmail(
+  params: VipRecognitionNameRequestEmailParams,
+): Promise<{ success: boolean; error?: string }> {
+  const { tenant, donorEmail, donorName } = params;
+  if (!donorEmail) return { success: false, error: 'Missing donor email' };
+
+  const emailService = await EmailService.forTenant(tenant.id);
+  if (!emailService) {
+    const msg = `No EmailService configured for tenant ${tenant.id}`;
+    console.warn(`[VIP Recognition Name] ${msg}`);
+    return { success: false, error: msg };
+  }
+
+  const safeDonor = escapeHtml(donorName || 'Friend');
+  const safeTenant = escapeHtml(tenant.name);
+  const safeTier = escapeHtml(params.tierName || 'VIP Donor');
+  const safeFallback = escapeHtml(params.fallbackWallName || 'Anonymous');
+  const baseUrl = buildBaseUrl(tenant, params.fallbackOrigin);
+  const givingHistoryUrl = `${baseUrl}/vip-club#giving-history`;
+  const safeGivingHistoryUrl = escapeHtml(givingHistoryUrl);
+
+  const optInBlock = `<p style="margin: 8px 0;">You're already opted in to our public Wall of Heroes, and we're currently displaying your name as <strong>${safeFallback}</strong>. If that's perfect, you don't have to do anything &mdash; but many founding donors prefer a family name (e.g., "The Garcia Family"), a business, or a memorial dedication ("In memory of Buddy"). You can update it in one click.</p>`;
+
+  const html = `
+<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #111827;">
+  <h2 style="color: #2563eb; margin-bottom: 8px;">How should we recognize you, ${safeDonor}?</h2>
+  <p style="margin-top: 0;">You're one of our founding <strong>${safeTier}</strong> members at ${safeTenant} &mdash; thank you. When we built the public Wall of Heroes, we didn't have a "how should we list you?" field yet, so we don't have one saved for you.</p>
+
+  ${optInBlock}
+
+  <p style="text-align: center; margin: 22px 0;">
+    <a href="${safeGivingHistoryUrl}" style="display: inline-block; background: #2563eb; color: #ffffff; padding: 12px 22px; border-radius: 6px; text-decoration: none; font-weight: 600;">Set my recognition name</a>
+  </p>
+
+  <p style="font-size: 13px; color: #6b7280; margin-top: 24px;">No pressure &mdash; this is optional. If you don't update anything, we'll keep showing <strong>${safeFallback}</strong> (only if you've opted in to the Wall). You can change it anytime from your VIP Club page.</p>
+</div>
+`.trim();
+
+  const subject = `How should we list you on the Wall of Heroes, ${safeDonor}?`;
+  try {
+    const result = await emailService.send({ to: donorEmail, subject, html });
+    if (result.success) {
+      console.log(`[VIP Recognition Name] Sent to ${donorEmail} for tenant ${tenant.id}`);
+      return { success: true };
+    }
+    console.warn(`[VIP Recognition Name] Email send returned failure: ${result.error}`);
+    return { success: false, error: result.error || 'Email send failed' };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    console.error('[VIP Recognition Name] Failed to send:', err);
+    return { success: false, error: message };
+  }
+}
+
 export interface VipMonthlyReceiptParams {
   tenant: VipEmailTenant;
   donorEmail: string;

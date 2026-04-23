@@ -1044,6 +1044,11 @@ export const subscriptions = pgTable("subscriptions", {
   // VIP backfill (Task #58). Used as a sent-flag so the one-shot script
   // can never double-send.
   backfillWelcomeSentAt: timestamp("backfill_welcome_sent_at"),
+  // Stamped by scripts/send-vip-recognition-name-backfill.ts when the
+  // one-shot "please confirm or customize the name we show on the Wall of
+  // Heroes" email is delivered. Used as a sent-flag so the script can never
+  // double-send to the same grandfathered donor (Task #73).
+  recognitionNameRequestSentAt: timestamp("recognition_name_request_sent_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (table) => ({
   uniqueStripeSubscription: unique().on(table.tenantId, table.stripeSubscriptionId),
