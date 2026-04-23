@@ -127,6 +127,7 @@ function SensorCard({ device, reading, hasAlert }: { device: GoveeDevice; readin
 export default function TemperaturePage() {
   const { user } = useAuth();
   const isAdmin = user?.activeRole === 'admin';
+  const canManageAlerts = user?.activeRole === 'admin' || user?.activeRole === 'staff';
 
   const { data: status, isLoading: statusLoading } = useQuery<GoveeStatus>({
     queryKey: ["/api/govee/status"],
@@ -209,7 +210,7 @@ export default function TemperaturePage() {
           </div>
         )}
 
-        {status?.connected && (
+        {status?.connected && canManageAlerts && (
           <AlertRulesSection
             isAdmin={isAdmin}
             devices={readings.map(({ device }) => ({
