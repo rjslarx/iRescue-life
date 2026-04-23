@@ -180,26 +180,45 @@ export class GoveeService {
     if (!payload || !Array.isArray(payload.capabilities)) return null;
 
     const properties: GoveeDeviceState['properties'] = {};
+    let tempRaw: number | undefined;
+    let tempUnitHint: string | undefined;
+
     for (const cap of payload.capabilities) {
-      const value = cap?.state?.value;
+      const value: any = cap?.state?.value;
       const instance = cap?.instance;
+
       if (instance === 'online' && typeof value === 'boolean') {
         properties.online = value;
       } else if (instance === 'sensorTemperature' || instance === 'temperature') {
         if (typeof value === 'number') {
-          properties.temperature = value;
-        } else if (value && typeof value === 'object' && 'currentTemperature' in (value as any)) {
-          const v = (value as any).currentTemperature;
-          if (typeof v === 'number') properties.temperature = v;
+          tempRaw = value;
+        } else if (value && typeof value === 'object') {
+          if (typeof value.currentTemperature === 'number') tempRaw = value.currentTemperature;
+          else if (typeof value.value === 'number') tempRaw = value.value;
+          if (typeof value.unit === 'string') tempUnitHint = value.unit;
+          else if (typeof value.temperatureUnit === 'string') tempUnitHint = value.temperatureUnit;
         }
+        const stateUnit = (cap?.state as any)?.unit;
+        if (typeof stateUnit === 'string') tempUnitHint = stateUnit;
       } else if (instance === 'sensorHumidity' || instance === 'humidity') {
         if (typeof value === 'number') {
           properties.humidity = value;
-        } else if (value && typeof value === 'object' && 'currentHumidity' in (value as any)) {
-          const v = (value as any).currentHumidity;
-          if (typeof v === 'number') properties.humidity = v;
+        } else if (value && typeof value === 'object') {
+          if (typeof value.currentHumidity === 'number') properties.humidity = value.currentHumidity;
+          else if (typeof value.value === 'number') properties.humidity = value.value;
         }
       }
+    }
+
+    if (tempRaw !== undefined) {
+      // Govee's new API returns sensorTemperature in whatever unit the sensor is configured
+      // for in the Govee Home app. Sometimes the unit is reported in the response, but often
+      // it isn't, so fall back to a sanity heuristic — kennel/indoor temperatures above 50 are
+      // virtually always Fahrenheit (50°C = 122°F is unrealistic indoors).
+      const isFahrenheit = tempUnitHint
+        ? /f/i.test(tempUnitHint)
+        : tempRaw > 50;
+      properties.temperature = isFahrenheit ? (tempRaw - 32) * 5 / 9 : tempRaw;
     }
 
     if (properties.online === undefined) properties.online = true;
