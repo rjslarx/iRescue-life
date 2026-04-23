@@ -154,7 +154,19 @@ router.get('/discover-devices', async (req: AuthenticatedRequest, res: Response,
       isRegistered: existingIds.has(d.device),
     }));
 
-    res.json({ devices: discoveredDevices });
+    const otherDevices = allDevices
+      .filter(d => !isTemperatureSensorModel(d.model))
+      .map(d => ({
+        goveeDeviceId: d.device,
+        model: d.model,
+        deviceName: d.deviceName,
+      }));
+
+    res.json({
+      devices: discoveredDevices,
+      otherDevices,
+      totalReturnedByGovee: allDevices.length,
+    });
   } catch (error) {
     next(error);
   }

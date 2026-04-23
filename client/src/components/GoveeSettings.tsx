@@ -70,7 +70,11 @@ export function GoveeSettings() {
     enabled: status?.connected === true,
   });
 
-  const { data: discoveredData, isLoading: discoveringDevices, refetch: refetchDiscovered } = useQuery<{ devices: DiscoveredDevice[] }>({
+  const { data: discoveredData, isLoading: discoveringDevices, refetch: refetchDiscovered } = useQuery<{
+    devices: DiscoveredDevice[];
+    otherDevices?: { goveeDeviceId: string; model: string; deviceName: string }[];
+    totalReturnedByGovee?: number;
+  }>({
     queryKey: ["/api/govee/discover-devices"],
     enabled: false,
   });
@@ -475,6 +479,34 @@ export function GoveeSettings() {
               <p className="text-center text-muted-foreground py-4">
                 No temperature sensors found in your Govee account
               </p>
+            )}
+
+            {!discoveringDevices && discoveredData && (
+              <div className="border-t pt-3 mt-2 space-y-2">
+                <div className="text-xs text-muted-foreground" data-testid="text-govee-diagnostic-summary">
+                  Govee returned {discoveredData.totalReturnedByGovee ?? 0} device(s) on this account.
+                </div>
+                {discoveredData.otherDevices && discoveredData.otherDevices.length > 0 && (
+                  <div className="space-y-1">
+                    <div className="text-xs font-medium">Other devices on this account (not temperature sensors):</div>
+                    <ul className="text-xs text-muted-foreground space-y-0.5" data-testid="list-other-devices">
+                      {discoveredData.otherDevices.map((d) => (
+                        <li key={d.goveeDeviceId}>
+                          {d.deviceName} <span className="font-mono">({d.model})</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {(discoveredData.totalReturnedByGovee ?? 0) === 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    Govee's cloud API returned zero devices for this API key. The sensor likely
+                    isn't reaching Govee's cloud — check that it's online and Wi-Fi connected
+                    in the Govee Home app, or that the API key was generated from the same
+                    account that owns the sensor.
+                  </p>
+                )}
+              </div>
             )}
           </div>
         </DialogContent>
