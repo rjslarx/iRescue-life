@@ -273,6 +273,15 @@ function CreateTransportDialog({
   });
   
   const activePartners = (partnerOrgsResponse?.organizations || []).filter(p => p.isActive);
+  const [partnerTagFilter, setPartnerTagFilter] = useState<string>("all");
+  const allPartnerTags = Array.from(
+    new Set(activePartners.flatMap((p) => (p as any).tags || []))
+  ).sort() as string[];
+  const filteredActivePartners = partnerTagFilter === "all"
+    ? activePartners
+    : activePartners.filter((p) => ((p as any).tags || []).includes(partnerTagFilter));
+  const formatPartnerTag = (tag: string) =>
+    tag.split("_").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
   
   const form = useForm<TransportFormData>({
     resolver: zodResolver(transportFormSchema),
@@ -499,6 +508,32 @@ function CreateTransportDialog({
             <div className="space-y-4">
               <div className="space-y-2">
                 <FormLabel>Select Partner Organization</FormLabel>
+                {allPartnerTags.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5" data-testid="row-partner-tag-filters">
+                    <Badge
+                      variant={partnerTagFilter === "all" ? "default" : "outline"}
+                      className="cursor-pointer text-xs"
+                      onClick={() => setPartnerTagFilter("all")}
+                      data-testid="chip-partner-tag-all"
+                    >
+                      All ({activePartners.length})
+                    </Badge>
+                    {allPartnerTags.map((tag) => {
+                      const count = activePartners.filter((p) => ((p as any).tags || []).includes(tag)).length;
+                      return (
+                        <Badge
+                          key={tag}
+                          variant={partnerTagFilter === tag ? "default" : "outline"}
+                          className="cursor-pointer text-xs"
+                          onClick={() => setPartnerTagFilter(tag)}
+                          data-testid={`chip-partner-tag-${tag}`}
+                        >
+                          {formatPartnerTag(tag)} ({count})
+                        </Badge>
+                      );
+                    })}
+                  </div>
+                )}
                 <Select 
                   value={selectedPartnerId} 
                   onValueChange={handlePartnerSelect}
@@ -508,7 +543,7 @@ function CreateTransportDialog({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="manual">Enter manually</SelectItem>
-                    {activePartners.map((partner) => (
+                    {filteredActivePartners.map((partner) => (
                       <SelectItem key={partner.id} value={partner.id}>
                         {partner.name}
                         {partner.city && partner.state && ` - ${partner.city}, ${partner.state}`}

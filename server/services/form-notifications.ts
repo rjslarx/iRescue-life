@@ -2,7 +2,7 @@ import { db } from '../db';
 import { tenants } from '@shared/schema';
 import { eq } from 'drizzle-orm';
 
-export type FormType = 'adoption' | 'foster' | 'volunteer' | 'surrender';
+export type FormType = 'adoption' | 'foster' | 'volunteer' | 'surrender' | 'surgery_day';
 
 interface FormFieldLabel {
   id: string;
@@ -137,6 +137,7 @@ function getFormTypeLabel(formType: FormType): string {
     foster: 'Foster Application',
     volunteer: 'Volunteer Application',
     surrender: 'Animal Surrender Request',
+    surgery_day: 'Surgery Day Request',
   };
   return labels[formType];
 }
@@ -147,6 +148,7 @@ function getDashboardPath(formType: FormType): string {
     foster: '/dashboard/foster-management',
     volunteer: '/dashboard/volunteers',
     surrender: '/dashboard/intake',
+    surgery_day: '/dashboard/surgery-day-requests',
   };
   return paths[formType];
 }
@@ -156,6 +158,7 @@ const FORM_TYPE_EVENT_MAP: Record<FormType, string> = {
   foster: 'foster_application_received',
   volunteer: 'volunteer_application_received',
   surrender: 'surrender_request_received',
+  surgery_day: 'surgery_day_request_received',
 };
 
 export async function sendFormSubmissionNotification(data: FormSubmissionData): Promise<void> {

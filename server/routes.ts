@@ -8,7 +8,7 @@ import { requireAuth, requireRole, requireRoleOrPageAccess } from "./middleware/
 import { loginUser, createTenantWithAdmin, createUser } from "./services/auth";
 import { PushNotificationService } from "./services/push-notifications";
 import { db } from "./db";
-import { tenants, users, demoRequests, insertDemoRequestSchema, smsMessageLogs, emailEvents, animals, platformIntegrations, newsletterCampaigns, newsletterSubscribers, happyTails, animalMergeHistory, activityLogs, medicalExams, medicalPrescriptions, medicalBills, medicalFiles, animalNotes, applications, adoptionCheckoutSessions, adoptions, partnerOrganizations, microchipRecords, surrenderRequests, surrenderFormFields, insertSurrenderRequestSchema, insertSurrenderFormFieldSchema, inboundEmails, calendars, careInstructionSnippets, fosterApplications, volunteerApplications, adoptionContracts, fosterAgreementSessions, volunteerAgreementSessions, surrenderAgreementSessions, customFormSubmissions, customForms, placementAgreementSessions, medicationTasks, medicationPlans, fosterAnimals, messageQueue, contacts, campaignIntakeTokens } from "@shared/schema";
+import { tenants, users, demoRequests, insertDemoRequestSchema, smsMessageLogs, emailEvents, animals, platformIntegrations, newsletterCampaigns, newsletterSubscribers, happyTails, animalMergeHistory, activityLogs, medicalExams, medicalPrescriptions, medicalBills, medicalFiles, animalNotes, applications, adoptionCheckoutSessions, adoptions, partnerOrganizations, microchipRecords, surrenderRequests, surrenderFormFields, insertSurrenderRequestSchema, insertSurrenderFormFieldSchema, inboundEmails, calendars, careInstructionSnippets, fosterApplications, volunteerApplications, adoptionContracts, fosterAgreementSessions, volunteerAgreementSessions, surrenderAgreementSessions, customFormSubmissions, customForms, placementAgreementSessions, medicationTasks, medicationPlans, fosterAnimals, messageQueue, contacts, campaignIntakeTokens, surgeryDayRequests, surgeryDayRequestAnimals } from "@shared/schema";
 import { eq, and, desc, asc, sql, inArray, lt, lte, gte, not, notInArray, or, ne, isNull, isNotNull } from "drizzle-orm";
 import { z } from "zod";
 import { authLimiter, signupLimiter, passwordResetLimiter, emailLimiter } from "./config/security";
@@ -41214,6 +41214,10 @@ The user asking is a tenant administrator or staff member.`;
         return res.status(400).json({ error: 'Organization name is required' });
       }
       
+      const tagsInput = Array.isArray(req.body.tags)
+        ? Array.from(new Set(req.body.tags.filter((t: any) => typeof t === 'string' && t.trim().length > 0).map((t: string) => t.trim())))
+        : [];
+
       const [org] = await db.insert(partnerOrganizations).values({
         tenantId,
         name,
@@ -41232,6 +41236,7 @@ The user asking is a tenant administrator or staff member.`;
         zipCode: zipCode || null,
         website: website || null,
         notes: notes || null,
+        tags: tagsInput as any,
       }).returning();
       
       res.json({ organization: org });
@@ -47817,6 +47822,316 @@ Use timestamps like [00:00] to help with pacing.`;
 
       if (!session) return res.status(500).json({ error: 'Failed to create checkout session' });
       res.json({ sessionId: session.id, url: session.url });
+    } catch (error) { next(error); }
+  });
+
+  // ============================================================================
+  // SURGERY DAY REQUESTS
+  // Public form for partner rescues to request surgery dates with the in-house vet.
+  // ============================================================================
+
+  const SURGERY_DAY_PARTNER_TAG = 'surgery_day_partner';
+
+  // Public: list partner organizations tagged for surgery-day program
+  // Note: only org identity fields are exposed publicly; contact PII is intentionally
+  // omitted so that partner contact details are not leaked to anonymous callers.
+  app.get('/api/public/surgery-day-partners', requireTenant, async (req, res, next) => {
+    try {
+      const tenantId = req.tenant!.id;
+      const orgs = await db
+        .select({
+          id: partnerOrganizations.id,
+          name: partnerOrganizations.name,
+          city: partnerOrganizations.city,
+          state: partnerOrganizations.state,
+        })
+        .from(partnerOrganizations)
+        .where(and(
+          eq(partnerOrganizations.tenantId, tenantId),
+          eq(partnerOrganizations.isActive, true),
+          sql`${SURGERY_DAY_PARTNER_TAG} = ANY(${partnerOrganizations.tags})`,
+        ))
+        .orderBy(partnerOrganizations.name);
+      res.json({ partners: orgs });
+    } catch (error) { next(error); }
+  });
+
+  // Public: submit a surgery day request
+  const surgeryAnimalSchema = z.object({
+    name: z.string().trim().max(120).optional().nullable(),
+    species: z.enum(['dog', 'cat', 'other']),
+    breed: z.string().trim().max(120).optional().nullable(),
+    age: z.string().trim().max(60).optional().nullable(),
+    sex: z.enum(['male', 'female', 'unknown']).optional().nullable(),
+    color: z.string().trim().max(120).optional().nullable(),
+    weight: z.string().trim().max(60).optional().nullable(),
+    spayNeuterStatus: z.enum(['already_done', 'needs_spay', 'needs_neuter', 'unsure']),
+    hasMedicalIssues: z.boolean().default(false),
+    medicalIssues: z.string().trim().max(2000).optional().nullable(),
+    heartwormStatus: z.enum(['positive', 'negative', 'unknown', 'not_applicable']),
+    needsRabies: z.enum(['yes', 'no', 'unsure']),
+  });
+
+  app.post('/api/surgery-day-requests', emailLimiter, requireTenant, async (req, res, next) => {
+    try {
+      const tenantId = req.tenant!.id;
+      const submitSchema = z.object({
+        partnerOrganizationId: z.string().uuid().optional().nullable(),
+        organizationName: z.string().trim().min(1, 'Organization name required').max(200),
+        contactName: z.string().trim().min(1, 'Contact name required').max(200),
+        contactPhone: z.string().trim().min(7, 'Contact phone required').max(50),
+        contactEmail: z.string().trim().email().max(200).optional().nullable().or(z.literal('')),
+        signatureDataUrl: z.string().min(20, 'Signature is required'),
+        signedByName: z.string().trim().min(1, 'Signed-by name is required').max(200),
+        acknowledgmentText: z.string().min(20, 'Acknowledgment is required'),
+        animals: z.array(surgeryAnimalSchema).min(1, 'At least one animal is required').max(50),
+      });
+      const data = submitSchema.parse(req.body);
+      const cleanEmail = data.contactEmail && data.contactEmail.length > 0 ? data.contactEmail : null;
+
+      // If partnerOrganizationId provided, verify it belongs to tenant
+      if (data.partnerOrganizationId) {
+        const [exists] = await db.select({ id: partnerOrganizations.id })
+          .from(partnerOrganizations)
+          .where(and(
+            eq(partnerOrganizations.id, data.partnerOrganizationId),
+            eq(partnerOrganizations.tenantId, tenantId),
+          ));
+        if (!exists) return res.status(400).json({ error: 'Selected partner organization not found' });
+      }
+
+      const created = await db.transaction(async (tx) => {
+        const [request] = await tx.insert(surgeryDayRequests).values({
+          tenantId,
+          partnerOrganizationId: data.partnerOrganizationId || null,
+          organizationName: data.organizationName,
+          contactName: data.contactName,
+          contactPhone: data.contactPhone,
+          contactEmail: cleanEmail,
+          signatureDataUrl: data.signatureDataUrl,
+          signedByName: data.signedByName,
+          acknowledgmentText: data.acknowledgmentText,
+        }).returning();
+
+        const animalRows = data.animals.map((a, idx) => ({
+          requestId: request.id,
+          sortIndex: idx,
+          name: a.name || null,
+          species: a.species,
+          breed: a.breed || null,
+          age: a.age || null,
+          sex: a.sex || null,
+          color: a.color || null,
+          weight: a.weight || null,
+          spayNeuterStatus: a.spayNeuterStatus,
+          hasMedicalIssues: !!a.hasMedicalIssues,
+          medicalIssues: a.medicalIssues || null,
+          heartwormStatus: a.heartwormStatus,
+          needsRabies: a.needsRabies,
+        }));
+        await tx.insert(surgeryDayRequestAnimals).values(animalRows);
+        return request;
+      });
+
+      // Notify staff
+      try {
+        const { sendFormSubmissionNotification } = await import('./services/form-notifications');
+        const animalSummary = data.animals
+          .map((a, i) => `${i + 1}. ${a.name || 'Unnamed'} (${a.species}) — ${a.spayNeuterStatus.replace(/_/g, ' ')}, HW ${a.heartwormStatus}, rabies ${a.needsRabies}${a.hasMedicalIssues ? ', medical issues' : ''}`)
+          .join(' | ');
+        await sendFormSubmissionNotification({
+          formType: 'surgery_day',
+          tenantId,
+          applicantName: data.contactName,
+          applicantEmail: cleanEmail || '',
+          applicantPhone: data.contactPhone,
+          applicationId: created.id,
+          additionalDetails: `Organization: ${data.organizationName} | Animals (${data.animals.length}): ${animalSummary}`,
+        });
+      } catch (notifyError) {
+        console.error('Failed to send surgery day request notification:', notifyError);
+      }
+
+      res.status(201).json({ success: true, request: created });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Validation failed', issues: error.errors });
+      }
+      next(error);
+    }
+  });
+
+  // Auth: list surgery day requests
+  app.get('/api/surgery-day-requests', requireTenant, requireAuth, requireRole('owner', 'admin', 'staff', 'board_member', 'intake_coordinator'), async (req, res, next) => {
+    try {
+      const tenantId = req.session.tenantId!;
+      const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+      const conds = [eq(surgeryDayRequests.tenantId, tenantId)];
+      if (status && ['pending','approved','scheduled','declined','completed','cancelled'].includes(status)) {
+        conds.push(eq(surgeryDayRequests.status, status as any));
+      }
+
+      const rows = await db.select().from(surgeryDayRequests)
+        .where(and(...conds))
+        .orderBy(desc(surgeryDayRequests.submittedAt));
+
+      // Hydrate animal counts
+      const ids = rows.map(r => r.id);
+      let countMap = new Map<string, number>();
+      if (ids.length > 0) {
+        const counts = await db.select({
+          requestId: surgeryDayRequestAnimals.requestId,
+          c: sql<number>`count(*)::int`,
+        }).from(surgeryDayRequestAnimals)
+          .where(inArray(surgeryDayRequestAnimals.requestId, ids))
+          .groupBy(surgeryDayRequestAnimals.requestId);
+        countMap = new Map(counts.map(c => [c.requestId, Number(c.c)]));
+      }
+
+      const requests = rows.map(r => ({ ...r, animalCount: countMap.get(r.id) || 0 }));
+      res.json({ requests });
+    } catch (error) { next(error); }
+  });
+
+  // Auth: get single request with animals
+  app.get('/api/surgery-day-requests/:id', requireTenant, requireAuth, requireRole('owner', 'admin', 'staff', 'board_member', 'intake_coordinator'), async (req, res, next) => {
+    try {
+      const tenantId = req.session.tenantId!;
+      const { id } = req.params;
+      const [request] = await db.select().from(surgeryDayRequests)
+        .where(and(eq(surgeryDayRequests.id, id), eq(surgeryDayRequests.tenantId, tenantId)));
+      if (!request) return res.status(404).json({ error: 'Request not found' });
+
+      const animals = await db.select().from(surgeryDayRequestAnimals)
+        .where(eq(surgeryDayRequestAnimals.requestId, id))
+        .orderBy(surgeryDayRequestAnimals.sortIndex);
+
+      let partner: { id: string; name: string } | null = null;
+      if (request.partnerOrganizationId) {
+        const [p] = await db.select({ id: partnerOrganizations.id, name: partnerOrganizations.name })
+          .from(partnerOrganizations)
+          .where(and(
+            eq(partnerOrganizations.id, request.partnerOrganizationId),
+            eq(partnerOrganizations.tenantId, tenantId),
+          ));
+        partner = p || null;
+      }
+
+      res.json({ request, animals, partner });
+    } catch (error) { next(error); }
+  });
+
+  // Auth: update request
+  app.patch('/api/surgery-day-requests/:id', requireTenant, requireAuth, requireRole('owner', 'admin', 'staff', 'board_member', 'intake_coordinator'), async (req, res, next) => {
+    try {
+      const tenantId = req.session.tenantId!;
+      const { id } = req.params;
+      const patchSchema = z.object({
+        status: z.enum(['pending','approved','scheduled','declined','completed','cancelled']).optional(),
+        scheduledDate: z.string().optional().nullable(),
+        internalNotes: z.string().max(5000).optional().nullable(),
+        declinedReason: z.string().max(2000).optional().nullable(),
+        assignedUserId: z.string().uuid().optional().nullable(),
+      });
+      const data = patchSchema.parse(req.body);
+
+      const [existing] = await db.select().from(surgeryDayRequests)
+        .where(and(eq(surgeryDayRequests.id, id), eq(surgeryDayRequests.tenantId, tenantId)));
+      if (!existing) return res.status(404).json({ error: 'Request not found' });
+
+      // If assigning to a user, ensure they belong to this tenant
+      if (data.assignedUserId) {
+        const [u] = await db.select({ id: users.id })
+          .from(users)
+          .where(and(eq(users.id, data.assignedUserId), eq(users.tenantId, tenantId)));
+        if (!u) return res.status(400).json({ error: 'Assigned user not found in this tenant' });
+      }
+
+      const updates: any = { updatedAt: new Date() };
+      if (data.status !== undefined) updates.status = data.status;
+      if (data.scheduledDate !== undefined) updates.scheduledDate = data.scheduledDate || null;
+      if (data.internalNotes !== undefined) updates.internalNotes = data.internalNotes;
+      if (data.declinedReason !== undefined) updates.declinedReason = data.declinedReason;
+      if (data.assignedUserId !== undefined) updates.assignedUserId = data.assignedUserId;
+
+      // Auto-promote to scheduled if scheduledDate set and no explicit status given
+      if (data.scheduledDate && !data.status && existing.status !== 'scheduled' && existing.status !== 'completed') {
+        updates.status = 'scheduled';
+      }
+
+      const [updated] = await db.update(surgeryDayRequests)
+        .set(updates)
+        .where(and(eq(surgeryDayRequests.id, id), eq(surgeryDayRequests.tenantId, tenantId)))
+        .returning();
+      res.json({ request: updated });
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', issues: error.errors });
+      next(error);
+    }
+  });
+
+  // Auth: save free-text submitter as partner organization (auto-tag surgery_day_partner)
+  app.post('/api/surgery-day-requests/:id/save-as-partner', requireTenant, requireAuth, requireRole('owner', 'admin', 'staff'), async (req, res, next) => {
+    try {
+      const tenantId = req.session.tenantId!;
+      const { id } = req.params;
+      const [existing] = await db.select().from(surgeryDayRequests)
+        .where(and(eq(surgeryDayRequests.id, id), eq(surgeryDayRequests.tenantId, tenantId)));
+      if (!existing) return res.status(404).json({ error: 'Request not found' });
+      if (existing.partnerOrganizationId) return res.status(400).json({ error: 'Request already linked to a partner organization' });
+
+      // Check if a partner with same name already exists
+      const [dup] = await db.select().from(partnerOrganizations)
+        .where(and(
+          eq(partnerOrganizations.tenantId, tenantId),
+          eq(partnerOrganizations.name, existing.organizationName),
+        ));
+
+      let partner = dup;
+      if (partner) {
+        const newTags = Array.from(new Set([...(partner.tags || []), SURGERY_DAY_PARTNER_TAG]));
+        const [updated] = await db.update(partnerOrganizations)
+          .set({ tags: newTags as any, updatedAt: new Date() })
+          .where(and(
+            eq(partnerOrganizations.id, partner.id),
+            eq(partnerOrganizations.tenantId, tenantId),
+          ))
+          .returning();
+        partner = updated;
+      } else {
+        const [created] = await db.insert(partnerOrganizations).values({
+          tenantId,
+          name: existing.organizationName,
+          contactName: existing.contactName,
+          contactEmail: existing.contactEmail,
+          contactPhone: existing.contactPhone,
+          tags: [SURGERY_DAY_PARTNER_TAG] as any,
+        }).returning();
+        partner = created;
+      }
+
+      const [linkedRequest] = await db.update(surgeryDayRequests)
+        .set({ partnerOrganizationId: partner.id, updatedAt: new Date() })
+        .where(and(eq(surgeryDayRequests.id, id), eq(surgeryDayRequests.tenantId, tenantId)))
+        .returning();
+
+      res.json({ partner, request: linkedRequest });
+    } catch (error) { next(error); }
+  });
+
+  // Auth: list partner-orgs by tag (used by Surgery Day Partners mini-manager)
+  app.get('/api/partner-organizations/by-tag/:tag', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const tenantId = req.session.tenantId!;
+      const tag = req.params.tag;
+      const orgs = await db.select().from(partnerOrganizations)
+        .where(and(
+          eq(partnerOrganizations.tenantId, tenantId),
+          eq(partnerOrganizations.isActive, true),
+          sql`${tag} = ANY(${partnerOrganizations.tags})`,
+        ))
+        .orderBy(partnerOrganizations.name);
+      res.json({ organizations: orgs });
     } catch (error) { next(error); }
   });
 

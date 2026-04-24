@@ -64,6 +64,7 @@ interface PartnerOrganization {
   zipCode: string | null;
   website: string | null;
   notes: string | null;
+  tags: string[];
   totalTransfersTo: number;
   totalTransfersFrom: number;
   lastTransferDate: string | null;
@@ -89,6 +90,7 @@ const orgFormSchema = z.object({
   zipCode: z.string().optional(),
   website: z.string().optional(),
   notes: z.string().optional(),
+  tags: z.array(z.string()).optional(),
 });
 
 type OrgFormData = z.infer<typeof orgFormSchema>;
@@ -129,8 +131,12 @@ export default function PartnerOrganizationsPage() {
       zipCode: "",
       website: "",
       notes: "",
+      tags: [],
     },
   });
+
+  const [tagsInput, setTagsInput] = useState<string>("");
+  const [tagFilter, setTagFilter] = useState<string>("all");
 
   const { data, isLoading } = useQuery<{ organizations: PartnerOrganization[] }>({
     queryKey: ['/api/partner-organizations', showArchived],
@@ -251,18 +257,30 @@ export default function PartnerOrganizationsPage() {
         zipCode: org.zipCode || "",
         website: org.website || "",
         notes: org.notes || "",
+        tags: org.tags || [],
       });
+      setTagsInput((org.tags || []).join(", "));
     } else {
       setEditingOrg(null);
       form.reset();
+      setTagsInput("");
     }
     setDialogOpen(true);
+  };
+
+  const parseTags = (raw: string): string[] => {
+    return raw
+      .split(",")
+      .map((t) => t.trim())
+      .filter((t) => t.length > 0)
+      .map((t) => t.toLowerCase().replace(/\s+/g, "_"));
   };
 
   const onSubmit = (data: OrgFormData) => {
     const cleanData = {
       ...data,
       contactEmail: data.contactEmail || undefined,
+      tags: parseTags(tagsInput),
     };
     
     if (editingOrg) {
@@ -282,9 +300,17 @@ export default function PartnerOrganizationsPage() {
       org.state?.toLowerCase().includes(searchQuery.toLowerCase());
     
     const matchesType = typeFilter === "all" || org.organizationType === typeFilter;
+    const matchesTag = tagFilter === "all" || (org.tags || []).includes(tagFilter);
     
-    return matchesSearch && matchesType;
+    return matchesSearch && matchesType && matchesTag;
   });
+
+  const allTags = Array.from(
+    new Set(organizations.flatMap((o) => o.tags || []))
+  ).sort();
+
+  const formatTagLabel = (tag: string) =>
+    tag.split("_").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
 
   return (
     <DashboardLayout>
@@ -340,6 +366,30 @@ export default function PartnerOrganizationsPage() {
                 <Label htmlFor="show-archived" className="text-sm">Show archived</Label>
               </div>
             </div>
+            {allTags.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2 mt-3" data-testid="row-tag-filters">
+                <span className="text-xs text-muted-foreground mr-1">Tags:</span>
+                <Badge
+                  variant={tagFilter === "all" ? "default" : "outline"}
+                  className="cursor-pointer"
+                  onClick={() => setTagFilter("all")}
+                  data-testid="chip-tag-all"
+                >
+                  All
+                </Badge>
+                {allTags.map((tag) => (
+                  <Badge
+                    key={tag}
+                    variant={tagFilter === tag ? "default" : "outline"}
+                    className="cursor-pointer"
+                    onClick={() => setTagFilter(tag)}
+                    data-testid={`chip-tag-${tag}`}
+                  >
+                    {formatTagLabel(tag)}
+                  </Badge>
+                ))}
+              </div>
+            )}
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -402,6 +452,20 @@ export default function PartnerOrganizationsPage() {
                             <Badge variant="secondary">Archived</Badge>
                           )}
                         </div>
+                        {org.tags && org.tags.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1.5 ml-6">
+                            {org.tags.map((tag) => (
+                              <Badge
+                                key={tag}
+                                variant="secondary"
+                                className="text-xs"
+                                data-testid={`badge-org-${org.id}-tag-${tag}`}
+                              >
+                                {formatTagLabel(tag)}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline">
@@ -845,6 +909,30 @@ export default function PartnerOrganizationsPage() {
                     </FormItem>
                   )}
                 />
+
+                <div>
+                  <FormLabel htmlFor="input-org-tags">Tags</FormLabel>
+                  <Input
+                    id="input-org-tags"
+                    placeholder="surgery_day_partner, transport_volunteer"
+                    value={tagsInput}
+                    onChange={(e) => setTagsInput(e.target.value)}
+                    data-testid="input-org-tags"
+                    className="mt-2"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Comma-separated. Use <code>surgery_day_partner</code> to flag local Surgery Day partners.
+                  </p>
+                  {parseTags(tagsInput).length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {parseTags(tagsInput).map((tag) => (
+                        <Badge key={tag} variant="secondary" data-testid={`badge-form-tag-${tag}`}>
+                          {formatTagLabel(tag)}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </div>
 
                 <DialogFooter>
                   <Button

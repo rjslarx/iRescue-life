@@ -100,6 +100,8 @@ import VolunteerApplicationManagementPage from "@/pages/VolunteerApplicationMana
 import VolunteerApplicationsPipelinePage from "@/pages/VolunteerApplicationsPipelinePage";
 import PublicFosterPage from "@/pages/PublicFosterPage";
 import PublicSurrenderPage from "@/pages/PublicSurrenderPage";
+import PublicSurgeryDayRequestPage from "@/pages/PublicSurgeryDayRequestPage";
+import SurgeryDayRequestsPage from "@/pages/SurgeryDayRequestsPage";
 import FormSuccessPage from "@/pages/FormSuccessPage";
 import PublicAdoptionCheckoutPage from "@/pages/PublicAdoptionCheckoutPage";
 import PublicFosterAgreementPage from "@/pages/PublicFosterAgreementPage";
@@ -239,6 +241,7 @@ function RouterSwitch() {
       <Route path="/volunteer" component={PublicVolunteerPage} />
       <Route path="/become-a-foster" component={PublicFosterPage} />
       <Route path="/surrender" component={PublicSurrenderPage} />
+      <Route path="/surgery-day-request" component={PublicSurgeryDayRequestPage} />
       <Route path="/form-success/:formType" component={FormSuccessPage} />
       <Route path="/contact" component={PublicContactPage} />
       <Route path="/fundraise/:slug" component={PeerCampaignPage} />
@@ -286,6 +289,7 @@ function RouterSwitch() {
       <ProtectedRoute path="/dashboard/animals" pageId="animals" component={AnimalsPage} />
       <ProtectedRoute path="/dashboard/applications" pageId="applications" component={ApplicationsPage} proOnly proFeatureName="Adoption Applications" />
       <ProtectedRoute path="/dashboard/intake" pageId="intake" component={IntakeManagerPage} proOnly proFeatureName="Intake Manager" />
+      <ProtectedRoute path="/dashboard/surgery-day-requests" pageId="intake" component={SurgeryDayRequestsPage} />
       <ProtectedRoute path="/dashboard/team" pageId="team" component={TeamManagementPage} />
       <ProtectedRoute path="/dashboard/analytics" pageId="analytics" component={Analytics} />
       <ProtectedRoute path="/dashboard/finance" pageId="finance" component={FinancePage} />

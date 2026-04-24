@@ -5179,6 +5179,10 @@ export const partnerOrganizations = pgTable("partner_organizations", {
   totalTransfersTo: integer("total_transfers_to").notNull().default(0),
   totalTransfersFrom: integer("total_transfers_from").notNull().default(0),
   lastTransferDate: timestamp("last_transfer_date"),
+  // Free-form classification tags (e.g. "surgery_day_partner"). A GIN index
+  // (idx_partner_organizations_tags) on this column is created in the database
+  // out-of-band to keep tag-filtered lookups fast.
+  tags: text("tags").array().notNull().default(sql`ARRAY[]::text[]`),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -5194,6 +5198,81 @@ export const insertPartnerOrganizationSchema = createInsertSchema(partnerOrganiz
 });
 export type InsertPartnerOrganization = z.infer<typeof insertPartnerOrganizationSchema>;
 export type PartnerOrganization = typeof partnerOrganizations.$inferSelect;
+
+// ===== SURGERY DAY REQUESTS =====
+// Public form for partner rescues to request a surgery day for one or more animals
+export const surgeryDayRequests = pgTable("surgery_day_requests", {
+  id: text("id").primaryKey().default(sql`gen_random_uuid()::text`),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  status: text("status").notNull().default("pending").$type<"pending" | "approved" | "scheduled" | "declined" | "completed" | "cancelled">(),
+
+  // Either link to a known partner, or capture free-text org info (XOR enforced at API layer)
+  partnerOrganizationId: uuid("partner_organization_id").references(() => partnerOrganizations.id, { onDelete: 'set null' }),
+  organizationName: text("organization_name").notNull(),
+  contactName: text("contact_name").notNull(),
+  contactPhone: text("contact_phone").notNull(),
+  contactEmail: text("contact_email"),
+
+  // Liability acknowledgment + signature (covers all animals on this request)
+  acknowledgmentText: text("acknowledgment_text").notNull(),
+  signatureDataUrl: text("signature_data_url").notNull(),
+  signedByName: text("signed_by_name").notNull(),
+  signedAt: timestamp("signed_at").notNull().defaultNow(),
+
+  // Staff fields
+  scheduledDate: date("scheduled_date"),
+  internalNotes: text("internal_notes"),
+  declinedReason: text("declined_reason"),
+  assignedUserId: uuid("assigned_user_id").references(() => users.id),
+
+  submittedAt: timestamp("submitted_at").notNull().defaultNow(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertSurgeryDayRequestSchema = createInsertSchema(surgeryDayRequests).omit({
+  id: true,
+  status: true,
+  scheduledDate: true,
+  internalNotes: true,
+  declinedReason: true,
+  assignedUserId: true,
+  signedAt: true,
+  submittedAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertSurgeryDayRequest = z.infer<typeof insertSurgeryDayRequestSchema>;
+export type SurgeryDayRequest = typeof surgeryDayRequests.$inferSelect;
+
+export const surgeryDayRequestAnimals = pgTable("surgery_day_request_animals", {
+  id: text("id").primaryKey().default(sql`gen_random_uuid()::text`),
+  requestId: text("request_id").notNull().references(() => surgeryDayRequests.id, { onDelete: 'cascade' }),
+  sortIndex: integer("sort_index").notNull().default(0),
+
+  name: text("name"),
+  species: text("species").notNull().$type<"dog" | "cat" | "other">(),
+  breed: text("breed"),
+  age: text("age"),
+  sex: text("sex").$type<"male" | "female" | "unknown">(),
+  color: text("color"),
+  weight: text("weight"),
+  spayNeuterStatus: text("spay_neuter_status").notNull().$type<"already_done" | "needs_spay" | "needs_neuter" | "unsure">(),
+  hasMedicalIssues: boolean("has_medical_issues").notNull().default(false),
+  medicalIssues: text("medical_issues"),
+  heartwormStatus: text("heartworm_status").notNull().$type<"positive" | "negative" | "unknown" | "not_applicable">(),
+  needsRabies: text("needs_rabies").notNull().$type<"yes" | "no" | "unsure">(),
+
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertSurgeryDayRequestAnimalSchema = createInsertSchema(surgeryDayRequestAnimals).omit({
+  id: true,
+  requestId: true,
+  createdAt: true,
+});
+export type InsertSurgeryDayRequestAnimal = z.infer<typeof insertSurgeryDayRequestAnimalSchema>;
+export type SurgeryDayRequestAnimal = typeof surgeryDayRequestAnimals.$inferSelect;
 
 // ===== PREVENTATIVE CARE SYSTEM =====
 

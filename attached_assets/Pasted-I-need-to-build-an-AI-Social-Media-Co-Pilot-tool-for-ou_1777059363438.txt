@@ -1,0 +1,33 @@
+I need to build an "AI Social Media Co-Pilot" tool for our rescue tenants. The goal is to take a draft Facebook post, strip any outbound links (to avoid algorithm penalties), and automatically generate an optimized caption alongside a strategic "First Comment" based on the emotional context of the post.
+
+1. The Frontend UI (`/marketing/post-optimizer`):
+   - Build a clean, two-column layout.
+   - Left Column (Input): A large text area labeled "Draft Your Facebook Post". Below it, a button that says "Optimize for Facebook".
+   - Right Column (Output): Two distinct styled cards that only appear after the tool runs. 
+     - Card 1: "Optimized Caption" (with a one-click 'Copy to Clipboard' button).
+     - Card 2: "First Comment Strategy" (with a one-click 'Copy to Clipboard' button).
+
+2. The Backend Route & AI Integration (`/api/ai/optimize-post`):
+   - Create a POST route that accepts the draft text.
+   - Integrate with our existing AI API provider (OpenAI or Anthropic).
+   - We need to pass the draft text to the LLM with a very specific System Prompt.
+
+3. The LLM System Prompt (The core logic):
+   Provide the LLM with these exact instructions:
+   "You are an expert social media manager for an animal rescue. The user will provide a draft Facebook post. Your job is to return a JSON object with two fields: 'optimizedCaption' and 'firstComment'. 
+   
+   Rules for optimizedCaption:
+   - Remove ALL URLs and links from the text. 
+   - Add a subtle callout at the very end of the caption saying: 'P.S. Check the first comment for how you can help!'
+   - Keep the original tone and formatting otherwise.
+   
+   Rules for firstComment:
+   - First, classify the emotional tone of the post into one of three categories: 'Urgent/Emotional', 'Overwhelmed Shelter', or 'Happy/Adoption'.
+   - If Urgent/Emotional (e.g., medical cases, intakes, 'freedom rides'): Generate a comment driving monthly recurring donations. Example: 'Join our monthly Hero Club to make sure we always have funds to save dogs like this. Become a sponsor here: [Tenant VIP Club URL]'
+   - If Overwhelmed Shelter (e.g., out of space, desperate pleas): Generate a comment driving fosters. Example: 'We desperately need fosters to get these dogs out of kennels. Apply here: [Tenant Foster URL]'
+   - If Happy/Adoption (e.g., dog playing, ready for a home): Generate a comment driving adoption applications. Example: 'Buster is ready for his couch! Fill out an adoption app here: [Tenant Adoption URL]'
+   - Replace any removed URLs from the original draft into the appropriate first comment."
+
+4. Error Handling & Loading State:
+   - Add a skeleton loader or spinner on the frontend while the API is processing the request.
+   - Ensure the UI handles API timeouts gracefully.

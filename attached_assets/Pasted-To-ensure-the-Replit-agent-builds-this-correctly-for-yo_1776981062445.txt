@@ -1,0 +1,37 @@
+To ensure the Replit agent builds this correctly for your **Postgres/Drizzle** stack while keeping the Facebook implementation "Stripe-safe," you need to give it a prompt that emphasizes the **Referrer-based** logic and the **Social Share** generation.
+Here is the technical guide and prompt you can give to the Agent.
+## 1. The Strategy for the Agent
+The goal is to build a "Full Circle" viral loop:
+ * **Source:** User clicks a link on a Facebook post.
+ * **Action:** User lands on iRescue.life, donates, and unlocks the game.
+ * **Feedback:** User "wins" and is prompted to share a custom image back to Facebook.
+## 2. The Replit Agent Implementation Prompt
+**Copy and paste this into your Replit Agent:**
+> "I need to implement a Facebook-optimized 'Viral Loop' for the Virtual Claw Machine on **iRescue.life**. We are using **React**, **Express**, and **Drizzle ORM** with **PostgreSQL**.
+> **Task 1: The 'Shareable Win' Generator**
+>  * Create a server-side function (or use a library like canvas or satori) to generate a dynamic 'Victory Image'.
+>  * The image should overlay a photo of the specific dog (from our animals table) with text like: 'I just sponsored a treat for [Dog Name] at [Rescue Name]!'
+>  * Include the **iRescue.life** logo and a QR code/link back to that specific rescue's fundraising page.
+> **Task 2: Open Graph (OG) Meta Tags**
+>  * Implement a dynamic meta-tag generator for the game's 'Win' routes.
+>  * When this 'Win' URL is shared to Facebook, the preview must show the 'Victory Image' generated in Task 1 so it looks like a personalized accomplishment in the FB feed.
+> **Task 3: The Facebook Share Interface**
+>  * On the 'Win' modal of the Claw Machine, add a 'Share to Facebook' button.
+>  * Use the Facebook Web Share API to ensure the post includes the pre-filled link to the win page.
+> **Task 4: Tracking & Analytics**
+>  * In our gamified_donations table, add a column for social_share_count (integer) and referrer_source (string).
+>  * When a user arrives from a Facebook link (check document.referrer), record it so the rescue can see how many donations the claw machine is driving from social media in their dashboard.
+> **Constraint:** > Do NOT use any Facebook Login or SDKs that require 'Gaming' permissions. Keep it as a simple web-link sharing implementation to stay compliant with Stripe's non-profit policies."
+> 
+## 3. Why this setup is "Stripe-Safe"
+By instructing the Agent to avoid the **Facebook Gaming SDK**, you ensure that:
+ * **No App Review:** You don't have to submit your platform to Meta for a "Gaming" review, which can take months and often gets rejected for nonprofits.
+ * **Pure Web Traffic:** As far as Stripe is concerned, the user is just a web visitor who clicked a link, made a donation, and then shared a link. There is no technical "intermingling" of the payment and the social network's gaming API.
+## 4. Visualizing the "Win" Card
+The Agent should be able to create a layout that looks like a "Digital Baseball Card" for the dog.
+### Next Steps for You
+Once the Agent scaffolds this, you can test it by:
+ 1. Winning a test game on your local Replit dev environment.
+ 2. Copying the "Win" URL.
+ 3. Pasting it into the **Facebook Sharing Debugger** to see exactly how the "Victory Card" will look to your donors.
+Does that technical breakdown feel like it covers the "billboard" approach you wanted to take?
