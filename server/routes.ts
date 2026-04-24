@@ -48171,6 +48171,59 @@ Use timestamps like [00:00] to help with pacing.`;
         .set(updates)
         .where(and(eq(surgeryDayRequests.id, id), eq(surgeryDayRequests.tenantId, tenantId)))
         .returning();
+
+      // Auto-send confirmation email when the request transitions into a scheduled
+      // state with a date. Trigger when:
+      //   - scheduled date moved from empty to a value, OR
+      //   - the scheduled date changed (so the partner gets the new date), OR
+      //   - status moved into "approved"/"scheduled" while a date is set
+      //
+      // We re-send automatically on date changes (so partners always have the
+      // latest date), but we don't re-send when only unrelated fields change.
+      try {
+        const newStatus = updated.status;
+        const newDate = updated.scheduledDate;
+
+        const dateChanged = !!newDate && existing.scheduledDate !== newDate;
+        const enteredScheduledStatus =
+          (newStatus === 'scheduled' || newStatus === 'approved') &&
+          existing.status !== 'scheduled' &&
+          existing.status !== 'approved';
+
+        const becameScheduledWithDate =
+          !!newDate &&
+          (newStatus === 'scheduled' || newStatus === 'approved') &&
+          (dateChanged || enteredScheduledStatus);
+
+        // Skip re-sending if neither the date nor the entry-into-scheduled changed.
+        // This means a date change always re-notifies, but editing only notes/etc. does not.
+        const alreadyEmailedAndNothingChanged =
+          !!existing.confirmationEmailSentAt && !dateChanged && !enteredScheduledStatus;
+
+        const hasContactEmail = !!updated.contactEmail;
+
+        if (becameScheduledWithDate && !alreadyEmailedAndNothingChanged && hasContactEmail) {
+          const { sendSurgeryDayConfirmationEmail } = await import('./services/form-notifications');
+          const result = await sendSurgeryDayConfirmationEmail({ tenantId, requestId: id });
+          if (result.sent && result.recipientEmail) {
+            const [stamped] = await db.update(surgeryDayRequests)
+              .set({
+                confirmationEmailSentAt: new Date(),
+                confirmationEmailSentTo: result.recipientEmail,
+                updatedAt: new Date(),
+              })
+              .where(and(eq(surgeryDayRequests.id, id), eq(surgeryDayRequests.tenantId, tenantId)))
+              .returning();
+            return res.json({ request: stamped, confirmationEmail: { sent: true, recipientEmail: result.recipientEmail } });
+          } else {
+            return res.json({ request: updated, confirmationEmail: { sent: false, reason: result.reason } });
+          }
+        }
+      } catch (emailErr: any) {
+        console.error('[SurgeryDayRequests PATCH] Confirmation email error:', emailErr);
+        return res.json({ request: updated, confirmationEmail: { sent: false, reason: emailErr?.message || 'Email send failed' } });
+      }
+
       res.json({ request: updated });
 
       // Fire-and-forget partner email when status / scheduled date / declined reason changed.
@@ -48197,6 +48250,37 @@ Use timestamps like [00:00] to help with pacing.`;
       if (error instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', issues: error.errors });
       next(error);
     }
+  });
+
+  // Auth: resend (or send) the surgery day confirmation email to the contact on file
+  app.post('/api/surgery-day-requests/:id/send-confirmation', requireTenant, requireAuth, requireRole('owner', 'admin', 'staff', 'board_member', 'intake_coordinator'), async (req, res, next) => {
+    try {
+      const tenantId = req.session.tenantId!;
+      const { id } = req.params;
+
+      const [existing] = await db.select().from(surgeryDayRequests)
+        .where(and(eq(surgeryDayRequests.id, id), eq(surgeryDayRequests.tenantId, tenantId)));
+      if (!existing) return res.status(404).json({ error: 'Request not found' });
+      if (!existing.contactEmail) return res.status(400).json({ error: 'No contact email on file for this request' });
+      if (!existing.scheduledDate) return res.status(400).json({ error: 'Cannot send confirmation: no scheduled date set' });
+
+      const { sendSurgeryDayConfirmationEmail } = await import('./services/form-notifications');
+      const result = await sendSurgeryDayConfirmationEmail({ tenantId, requestId: id });
+      if (!result.sent) {
+        return res.status(502).json({ error: result.reason || 'Failed to send confirmation email' });
+      }
+
+      const [stamped] = await db.update(surgeryDayRequests)
+        .set({
+          confirmationEmailSentAt: new Date(),
+          confirmationEmailSentTo: result.recipientEmail || existing.contactEmail,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(surgeryDayRequests.id, id), eq(surgeryDayRequests.tenantId, tenantId)))
+        .returning();
+
+      res.json({ request: stamped, confirmationEmail: { sent: true, recipientEmail: result.recipientEmail } });
+    } catch (error) { next(error); }
   });
 
   // Auth: save free-text submitter as partner organization (auto-tag surgery_day_partner)

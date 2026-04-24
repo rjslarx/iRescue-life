@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
-import { Loader2, Calendar as CalendarIcon, Stethoscope, ExternalLink, Plus, Trash2, Edit, UserPlus } from "lucide-react";
+import { Loader2, Calendar as CalendarIcon, Stethoscope, ExternalLink, Plus, Trash2, Edit, UserPlus, Mail, MailCheck } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { format } from "date-fns";
 
@@ -34,6 +34,8 @@ type RequestRow = {
   acknowledgmentText: string;
   signedAt: string;
   submittedAt: string;
+  confirmationEmailSentAt?: string | null;
+  confirmationEmailSentTo?: string | null;
   animalCount?: number;
   speciesCounts?: { dog: number; cat: number; other: number };
 };
@@ -251,13 +253,41 @@ function RequestDetailSheet({ requestId, open, onOpenChange }: { requestId: stri
         internalNotes,
         declinedReason: declinedReason || null,
       });
-      return res.json();
+      return res.json() as Promise<{ request: RequestRow; confirmationEmail?: { sent: boolean; recipientEmail?: string; reason?: string } }>;
     },
-    onSuccess: () => {
-      toast({ title: "Updated", description: "Request updated" });
+    onSuccess: (result) => {
+      if (result?.confirmationEmail?.sent) {
+        toast({
+          title: "Updated & email sent",
+          description: `Confirmation email sent to ${result.confirmationEmail.recipientEmail}.`,
+        });
+      } else if (result?.confirmationEmail && result.confirmationEmail.sent === false) {
+        toast({
+          title: "Updated",
+          description: `Request saved, but confirmation email did not send: ${result.confirmationEmail.reason || "unknown error"}`,
+          variant: "destructive",
+        });
+      } else {
+        toast({ title: "Updated", description: "Request updated" });
+      }
       queryClient.invalidateQueries({ queryKey: ["/api/surgery-day-requests"] });
     },
     onError: (e: any) => toast({ title: "Update failed", description: e?.message || "Try again", variant: "destructive" }),
+  });
+
+  const resendEmailMut = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/surgery-day-requests/${requestId}/send-confirmation`);
+      return res.json() as Promise<{ request: RequestRow; confirmationEmail: { sent: boolean; recipientEmail?: string } }>;
+    },
+    onSuccess: (result) => {
+      toast({
+        title: "Confirmation email sent",
+        description: `Sent to ${result?.confirmationEmail?.recipientEmail || data?.request.contactEmail}.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/surgery-day-requests"] });
+    },
+    onError: (e: any) => toast({ title: "Send failed", description: e?.message || "Try again", variant: "destructive" }),
   });
 
   const saveAsPartnerMut = useMutation({
@@ -312,6 +342,47 @@ function RequestDetailSheet({ requestId, open, onOpenChange }: { requestId: stri
                 <div className="flex justify-between gap-4">
                   <span className="text-muted-foreground">Submitted</span>
                   <span>{format(new Date(data.request.submittedAt), "PPpp")}</span>
+                </div>
+                <div className="flex justify-between gap-4 items-center flex-wrap">
+                  <span className="text-muted-foreground">Confirmation email</span>
+                  <div className="flex items-center gap-2 flex-wrap justify-end">
+                    {data.request.confirmationEmailSentAt ? (
+                      <Badge variant="outline" className="gap-1" data-testid="badge-email-sent">
+                        <MailCheck className="w-3 h-3" />
+                        Sent {format(new Date(data.request.confirmationEmailSentAt), "MMM d, h:mm a")}
+                        {data.request.confirmationEmailSentTo ? ` to ${data.request.confirmationEmailSentTo}` : ""}
+                      </Badge>
+                    ) : (
+                      <Badge variant="secondary" className="gap-1" data-testid="badge-email-not-sent">
+                        <Mail className="w-3 h-3" />
+                        Not sent
+                      </Badge>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => resendEmailMut.mutate()}
+                      disabled={
+                        resendEmailMut.isPending ||
+                        !data.request.contactEmail ||
+                        !data.request.scheduledDate
+                      }
+                      title={
+                        !data.request.contactEmail
+                          ? "No contact email on file"
+                          : !data.request.scheduledDate
+                          ? "Set a scheduled date first"
+                          : data.request.confirmationEmailSentAt
+                          ? "Resend confirmation email"
+                          : "Send confirmation email"
+                      }
+                      data-testid="button-resend-confirmation-email"
+                    >
+                      {resendEmailMut.isPending && <Loader2 className="w-3 h-3 mr-1 animate-spin" />}
+                      <Mail className="w-3 h-3 mr-1" />
+                      {data.request.confirmationEmailSentAt ? "Resend" : "Send"}
+                    </Button>
+                  </div>
                 </div>
                 <div className="flex justify-between gap-4 items-center">
                   <span className="text-muted-foreground">Linked partner</span>

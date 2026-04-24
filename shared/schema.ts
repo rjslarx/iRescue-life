@@ -5225,6 +5225,10 @@ export const surgeryDayRequests = pgTable("surgery_day_requests", {
   declinedReason: text("declined_reason"),
   assignedUserId: uuid("assigned_user_id").references(() => users.id),
 
+  // Confirmation email tracking (auto-sent when status moves to scheduled with a date)
+  confirmationEmailSentAt: timestamp("confirmation_email_sent_at"),
+  confirmationEmailSentTo: text("confirmation_email_sent_to"),
+
   submittedAt: timestamp("submitted_at").notNull().defaultNow(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -5237,6 +5241,8 @@ export const insertSurgeryDayRequestSchema = createInsertSchema(surgeryDayReques
   internalNotes: true,
   declinedReason: true,
   assignedUserId: true,
+  confirmationEmailSentAt: true,
+  confirmationEmailSentTo: true,
   signedAt: true,
   submittedAt: true,
   createdAt: true,

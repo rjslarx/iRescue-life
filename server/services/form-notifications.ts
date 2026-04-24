@@ -1,6 +1,6 @@
 import { db } from '../db';
-import { tenants } from '@shared/schema';
-import { eq } from 'drizzle-orm';
+import { tenants, surgeryDayRequests } from '@shared/schema';
+import { eq, and } from 'drizzle-orm';
 
 export type FormType = 'adoption' | 'foster' | 'volunteer' | 'surrender' | 'surgery_day';
 
@@ -338,5 +338,200 @@ This notification was sent because form submission notifications are enabled for
     console.log(`Form notifications sent for ${data.formType} application to ${recipientEmails.length} recipient(s)`);
   } catch (error) {
     console.error('Failed to send form submission notification:', error);
+  }
+}
+
+const SURGERY_DAY_PRE_OP_INSTRUCTIONS = [
+  'No food after 10:00 PM the night before surgery.',
+  'Water may be removed at the same time (no food or water after 10:00 PM).',
+  'Drop-off is between 8:00 AM and 9:00 AM on the scheduled surgery day.',
+  'Pick-up is between 2:00 PM and 3:00 PM the same day.',
+  'Bring a leash for each dog and a secure carrier for each cat.',
+  'If your animal is sick, in heat, or has eaten that morning, please call to reschedule.',
+];
+
+function formatScheduledDate(scheduledDate: string): string {
+  // scheduledDate is a date-only string like 'YYYY-MM-DD'
+  const [y, m, d] = scheduledDate.split('-').map(Number);
+  if (!y || !m || !d) return scheduledDate;
+  const date = new Date(Date.UTC(y, m - 1, d));
+  return date.toLocaleDateString('en-US', {
+    timeZone: 'UTC',
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+}
+
+export interface SurgeryDayConfirmationResult {
+  sent: boolean;
+  recipientEmail?: string;
+  reason?: string;
+}
+
+/**
+ * Send a surgery day scheduling confirmation email to the partner rescue's contact.
+ * Returns metadata about whether the send succeeded so the caller can persist it.
+ */
+export async function sendSurgeryDayConfirmationEmail(params: {
+  tenantId: string;
+  requestId: string;
+}): Promise<SurgeryDayConfirmationResult> {
+  const { tenantId, requestId } = params;
+
+  try {
+    const [request] = await db
+      .select()
+      .from(surgeryDayRequests)
+      .where(and(eq(surgeryDayRequests.id, requestId), eq(surgeryDayRequests.tenantId, tenantId)))
+      .limit(1);
+
+    if (!request) {
+      return { sent: false, reason: 'Request not found' };
+    }
+    if (!request.contactEmail) {
+      return { sent: false, reason: 'No contact email on file' };
+    }
+    if (!request.scheduledDate) {
+      return { sent: false, reason: 'No scheduled date set' };
+    }
+
+    const [tenant] = await db
+      .select({
+        id: tenants.id,
+        name: tenants.name,
+        subdomain: tenants.subdomain,
+        contactEmail: tenants.contactEmail,
+        contactPhone: tenants.contactPhone,
+        customDomain: tenants.customDomain,
+      })
+      .from(tenants)
+      .where(eq(tenants.id, tenantId))
+      .limit(1);
+
+    if (!tenant) {
+      return { sent: false, reason: 'Tenant not found' };
+    }
+
+    const friendlyDate = formatScheduledDate(request.scheduledDate);
+    const subject = `Surgery day confirmed for ${friendlyDate} — ${tenant.name}`;
+
+    const instructionsHtml = SURGERY_DAY_PRE_OP_INSTRUCTIONS
+      .map(line => `<li style="margin: 4px 0;">${escapeHtml(line)}</li>`)
+      .join('');
+
+    const instructionsText = SURGERY_DAY_PRE_OP_INSTRUCTIONS.map(l => `- ${l}`).join('\n');
+
+    const contactBlock = tenant.contactPhone || tenant.contactEmail
+      ? `<p style="margin: 12px 0 0 0; font-size: 14px; color: #475569;">Questions? ${
+          tenant.contactPhone ? `Call ${escapeHtml(tenant.contactPhone)}` : ''
+        }${tenant.contactPhone && tenant.contactEmail ? ' or ' : ''}${
+          tenant.contactEmail ? `email <a href="mailto:${escapeHtml(tenant.contactEmail)}">${escapeHtml(tenant.contactEmail)}</a>` : ''
+        }.</p>`
+      : '';
+
+    const contactBlockText = tenant.contactPhone || tenant.contactEmail
+      ? `\nQuestions? ${tenant.contactPhone ? `Call ${tenant.contactPhone}` : ''}${
+          tenant.contactPhone && tenant.contactEmail ? ' or ' : ''
+        }${tenant.contactEmail ? `email ${tenant.contactEmail}` : ''}.`
+      : '';
+
+    const htmlBody = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #1e293b; }
+    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+    .header { background: #2563eb; color: white; padding: 20px; border-radius: 8px 8px 0 0; }
+    .content { background: #f8fafc; padding: 20px; border: 1px solid #e2e8f0; }
+    .footer { background: #f1f5f9; padding: 15px 20px; border-radius: 0 0 8px 8px; border: 1px solid #e2e8f0; border-top: none; font-size: 13px; color: #64748b; }
+    .window-card { display: inline-block; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px 14px; margin: 4px 6px 4px 0; }
+    .window-label { font-size: 12px; color: #64748b; text-transform: uppercase; letter-spacing: 0.04em; }
+    .window-time { font-size: 16px; font-weight: 600; color: #0f172a; }
+    h2 { color: #0f172a; font-size: 18px; margin: 24px 0 8px 0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1 style="margin: 0; font-size: 22px;">Surgery Day Confirmed</h1>
+      <p style="margin: 8px 0 0 0; opacity: 0.9;">${escapeHtml(tenant.name)}</p>
+    </div>
+    <div class="content">
+      <p>Hi ${escapeHtml(request.contactName)},</p>
+      <p>Your surgery day request for <strong>${escapeHtml(request.organizationName)}</strong> has been scheduled. Here are the details:</p>
+
+      <p style="font-size: 18px; font-weight: 600; color: #0f172a; margin: 16px 0;">
+        ${escapeHtml(friendlyDate)}
+      </p>
+
+      <div>
+        <div class="window-card">
+          <div class="window-label">Drop-off</div>
+          <div class="window-time">8:00 AM – 9:00 AM</div>
+        </div>
+        <div class="window-card">
+          <div class="window-label">Pick-up</div>
+          <div class="window-time">2:00 PM – 3:00 PM</div>
+        </div>
+      </div>
+
+      <h2>Pre-Operative Instructions</h2>
+      <ul style="padding-left: 20px; margin: 8px 0;">
+        ${instructionsHtml}
+      </ul>
+
+      <p style="margin-top: 20px;">Please reply to this email or call us if anything changes — including if any of the animals on this request need to be removed or rescheduled.</p>
+      ${contactBlock}
+    </div>
+    <div class="footer">
+      <p style="margin: 0;">This confirmation was sent automatically by ${escapeHtml(tenant.name)} when your surgery day was scheduled.</p>
+    </div>
+  </div>
+</body>
+</html>
+    `.trim();
+
+    const textBody = `
+Surgery Day Confirmed — ${tenant.name}
+
+Hi ${request.contactName},
+
+Your surgery day request for ${request.organizationName} has been scheduled.
+
+Date: ${friendlyDate}
+Drop-off: 8:00 AM – 9:00 AM
+Pick-up:  2:00 PM – 3:00 PM
+
+Pre-Operative Instructions:
+${instructionsText}
+
+Please reply to this email or call us if anything changes — including if any of the animals on this request need to be removed or rescheduled.${contactBlockText}
+
+---
+This confirmation was sent automatically by ${tenant.name} when your surgery day was scheduled.
+    `.trim();
+
+    const { EmailService } = await import('../lib/email-service');
+    const emailService = await EmailService.forTenant(tenantId);
+    if (!emailService) {
+      return { sent: false, reason: 'Email service not configured for tenant' };
+    }
+
+    await emailService.send({
+      to: request.contactEmail,
+      subject,
+      html: htmlBody,
+      text: textBody,
+    });
+
+    console.log(`[SurgeryDayConfirmation] Sent to ${request.contactEmail} for request ${requestId}`);
+    return { sent: true, recipientEmail: request.contactEmail };
+  } catch (error: any) {
+    console.error('[SurgeryDayConfirmation] Failed to send confirmation email:', error);
+    return { sent: false, reason: error?.message || 'Unknown error' };
   }
 }
