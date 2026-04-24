@@ -346,7 +346,6 @@ const SURGERY_DAY_PRE_OP_INSTRUCTIONS = [
   'Water may be removed at the same time (no food or water after 10:00 PM).',
   'Drop-off is between 8:00 AM and 9:00 AM on the scheduled surgery day.',
   'Pick-up is between 2:00 PM and 3:00 PM the same day.',
-  'Bring a leash for each dog and a secure carrier for each cat.',
   'If your animal is sick, in heat, or has eaten that morning, please call to reschedule.',
 ];
 
