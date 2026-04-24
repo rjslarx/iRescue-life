@@ -35,6 +35,7 @@ type RequestRow = {
   signedAt: string;
   submittedAt: string;
   animalCount?: number;
+  speciesCounts?: { dog: number; cat: number; other: number };
 };
 
 type AnimalRow = {
@@ -170,7 +171,25 @@ export default function SurgeryDayRequestsPage() {
                           <div>{r.contactName}</div>
                           <div className="text-muted-foreground">{r.contactPhone}</div>
                         </TableCell>
-                        <TableCell className="text-sm" data-testid={`text-row-animals-${r.id}`}>{r.animalCount ?? 0}</TableCell>
+                        <TableCell className="text-sm" data-testid={`text-row-animals-${r.id}`}>
+                          {(() => {
+                            const total = r.animalCount ?? 0;
+                            const sc = r.speciesCounts || { dog: 0, cat: 0, other: 0 };
+                            const parts: string[] = [];
+                            if (sc.dog) parts.push(`${sc.dog} dog${sc.dog === 1 ? "" : "s"}`);
+                            if (sc.cat) parts.push(`${sc.cat} cat${sc.cat === 1 ? "" : "s"}`);
+                            if (sc.other) parts.push(`${sc.other} other`);
+                            const summary = parts.join(", ");
+                            return (
+                              <div>
+                                <div className="font-medium">{total} animal{total === 1 ? "" : "s"}</div>
+                                {summary && (
+                                  <div className="text-xs text-muted-foreground" data-testid={`text-row-species-${r.id}`}>{summary}</div>
+                                )}
+                              </div>
+                            );
+                          })()}
+                        </TableCell>
                         <TableCell>
                           <Badge variant={STATUS_VARIANTS[r.status]} data-testid={`badge-row-status-${r.id}`}>
                             {STATUS_LABELS[r.status]}
@@ -409,10 +428,19 @@ function RequestDetailSheet({ requestId, open, onOpenChange }: { requestId: stri
   );
 }
 
+type PartnerOrg = {
+  id: string;
+  name: string;
+  contactName: string | null;
+  contactPhone: string | null;
+  contactEmail: string | null;
+  tags: string[] | null;
+};
+
 function SurgeryPartnersDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const { toast } = useToast();
   const TAG = "surgery_day_partner";
-  const { data, isLoading } = useQuery<{ organizations: any[] }>({
+  const { data, isLoading } = useQuery<{ organizations: PartnerOrg[] }>({
     queryKey: ["/api/partner-organizations/by-tag", TAG],
     queryFn: async () => {
       const res = await apiRequest("GET", `/api/partner-organizations/by-tag/${TAG}`);
@@ -422,10 +450,31 @@ function SurgeryPartnersDialog({ open, onOpenChange }: { open: boolean; onOpenCh
   });
 
   const [showAdd, setShowAdd] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [contactName, setContactName] = useState("");
   const [contactPhone, setContactPhone] = useState("");
   const [contactEmail, setContactEmail] = useState("");
+
+  const resetForm = () => {
+    setName(""); setContactName(""); setContactPhone(""); setContactEmail("");
+    setShowAdd(false); setEditingId(null);
+  };
+
+  const startEdit = (org: PartnerOrg) => {
+    setEditingId(org.id);
+    setName(org.name);
+    setContactName(org.contactName || "");
+    setContactPhone(org.contactPhone || "");
+    setContactEmail(org.contactEmail || "");
+    setShowAdd(true);
+  };
+
+  const invalidateAll = () => {
+    queryClient.invalidateQueries({ queryKey: ["/api/partner-organizations/by-tag", TAG] });
+    queryClient.invalidateQueries({ queryKey: ["/api/partner-organizations"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/public/surgery-day-partners"] });
+  };
 
   const createMut = useMutation({
     mutationFn: async () => {
@@ -440,27 +489,41 @@ function SurgeryPartnersDialog({ open, onOpenChange }: { open: boolean; onOpenCh
     },
     onSuccess: () => {
       toast({ title: "Partner added" });
-      setShowAdd(false);
-      setName(""); setContactName(""); setContactPhone(""); setContactEmail("");
-      queryClient.invalidateQueries({ queryKey: ["/api/partner-organizations/by-tag", TAG] });
-      queryClient.invalidateQueries({ queryKey: ["/api/partner-organizations"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/public/surgery-day-partners"] });
+      resetForm();
+      invalidateAll();
     },
-    onError: (e: any) => toast({ title: "Failed", description: e?.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Failed", description: e.message, variant: "destructive" }),
   });
 
-  const removeMut = useMutation({
-    mutationFn: async (org: any) => {
-      const newTags = (org.tags || []).filter((t: string) => t !== TAG);
-      const res = await apiRequest("PATCH", `/api/partner-organizations/${org.id}`, { tags: newTags });
+  const updateMut = useMutation({
+    mutationFn: async () => {
+      if (!editingId) throw new Error("No partner to update");
+      const res = await apiRequest("PATCH", `/api/partner-organizations/${editingId}`, {
+        name,
+        contactName: contactName || null,
+        contactPhone: contactPhone || null,
+        contactEmail: contactEmail || null,
+      });
       return res.json();
     },
     onSuccess: () => {
-      toast({ title: "Tag removed" });
-      queryClient.invalidateQueries({ queryKey: ["/api/partner-organizations/by-tag", TAG] });
-      queryClient.invalidateQueries({ queryKey: ["/api/public/surgery-day-partners"] });
+      toast({ title: "Partner updated" });
+      resetForm();
+      invalidateAll();
     },
-    onError: (e: any) => toast({ title: "Failed", description: e?.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Failed", description: e.message, variant: "destructive" }),
+  });
+
+  const archiveMut = useMutation({
+    mutationFn: async (org: PartnerOrg) => {
+      const res = await apiRequest("DELETE", `/api/partner-organizations/${org.id}`);
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Partner archived", description: "Removed from the surgery day partner list." });
+      invalidateAll();
+    },
+    onError: (e: Error) => toast({ title: "Failed", description: e.message, variant: "destructive" }),
   });
 
   return (
@@ -469,21 +532,24 @@ function SurgeryPartnersDialog({ open, onOpenChange }: { open: boolean; onOpenCh
         <DialogHeader>
           <DialogTitle>Surgery Day Partners</DialogTitle>
           <DialogDescription>
-            These rescues appear in the Surgery Day Request form's partner dropdown. Edit the full record from the Network Partners page.
+            These rescues appear in the Surgery Day Request form's partner dropdown. Add, edit, or archive them here.
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex justify-between items-center mb-2">
-          <div className="text-sm text-muted-foreground">{data?.organizations?.length || 0} partner{data?.organizations?.length === 1 ? "" : "s"}</div>
+          <div className="text-sm text-muted-foreground">
+            {data?.organizations?.length || 0} partner{data?.organizations?.length === 1 ? "" : "s"}
+          </div>
           {!showAdd && (
-            <Button size="sm" onClick={() => setShowAdd(true)} data-testid="button-add-surgery-partner">
+            <Button size="sm" onClick={() => { resetForm(); setShowAdd(true); }} data-testid="button-add-surgery-partner">
               <Plus className="w-3 h-3 mr-1" /> Add partner
             </Button>
           )}
         </div>
 
         {showAdd && (
-          <div className="rounded-md border p-3 space-y-2 mb-2">
+          <div className="rounded-md border p-3 space-y-2 mb-2" data-testid="card-partner-form">
+            <div className="text-sm font-medium">{editingId ? "Edit partner" : "Add partner"}</div>
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <Label htmlFor="add-name">Name *</Label>
@@ -503,11 +569,28 @@ function SurgeryPartnersDialog({ open, onOpenChange }: { open: boolean; onOpenCh
               </div>
             </div>
             <div className="flex justify-end gap-2">
-              <Button size="sm" variant="outline" onClick={() => setShowAdd(false)} data-testid="button-cancel-add-partner">Cancel</Button>
-              <Button size="sm" onClick={() => createMut.mutate()} disabled={createMut.isPending || !name.trim()} data-testid="button-confirm-add-partner">
-                {createMut.isPending && <Loader2 className="w-3 h-3 mr-1 animate-spin" />}
-                Add
-              </Button>
+              <Button size="sm" variant="outline" onClick={resetForm} data-testid="button-cancel-add-partner">Cancel</Button>
+              {editingId ? (
+                <Button
+                  size="sm"
+                  onClick={() => updateMut.mutate()}
+                  disabled={updateMut.isPending || !name.trim()}
+                  data-testid="button-save-partner"
+                >
+                  {updateMut.isPending && <Loader2 className="w-3 h-3 mr-1 animate-spin" />}
+                  Save
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  onClick={() => createMut.mutate()}
+                  disabled={createMut.isPending || !name.trim()}
+                  data-testid="button-confirm-add-partner"
+                >
+                  {createMut.isPending && <Loader2 className="w-3 h-3 mr-1 animate-spin" />}
+                  Add
+                </Button>
+              )}
             </div>
           </div>
         )}
@@ -527,11 +610,11 @@ function SurgeryPartnersDialog({ open, onOpenChange }: { open: boolean; onOpenCh
                 <TableRow>
                   <TableHead>Name</TableHead>
                   <TableHead>Contact</TableHead>
-                  <TableHead></TableHead>
+                  <TableHead className="w-32 text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {(data?.organizations || []).map((org: any) => (
+                {(data?.organizations || []).map((org) => (
                   <TableRow key={org.id} data-testid={`row-partner-${org.id}`}>
                     <TableCell className="font-medium">{org.name}</TableCell>
                     <TableCell className="text-sm">
@@ -539,9 +622,31 @@ function SurgeryPartnersDialog({ open, onOpenChange }: { open: boolean; onOpenCh
                       {org.contactPhone && <div className="text-muted-foreground text-xs">{org.contactPhone}</div>}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button size="sm" variant="ghost" onClick={() => removeMut.mutate(org)} disabled={removeMut.isPending} data-testid={`button-remove-partner-${org.id}`}>
-                        <Trash2 className="w-3 h-3" />
-                      </Button>
+                      <div className="flex justify-end gap-1">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => startEdit(org)}
+                          data-testid={`button-edit-partner-${org.id}`}
+                          title="Edit partner"
+                        >
+                          <Edit className="w-3 h-3" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            if (confirm(`Archive "${org.name}"? This removes them from the surgery day program.`)) {
+                              archiveMut.mutate(org);
+                            }
+                          }}
+                          disabled={archiveMut.isPending}
+                          data-testid={`button-remove-partner-${org.id}`}
+                          title="Archive partner"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

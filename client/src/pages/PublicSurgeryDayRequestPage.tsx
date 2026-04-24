@@ -36,6 +36,17 @@ const animalSchema = z.object({
   medicalIssues: z.string().trim().max(2000).optional().or(z.literal("")),
   heartwormStatus: z.enum(["positive", "negative", "unknown", "not_applicable"], { required_error: "Required" }),
   needsRabies: z.enum(["yes", "no", "unsure"], { required_error: "Required" }),
+}).superRefine((animal, ctx) => {
+  if (animal.hasMedicalIssues) {
+    const text = (animal.medicalIssues || "").trim();
+    if (text.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["medicalIssues"],
+        message: "Please describe the medical issues",
+      });
+    }
+  }
 });
 
 const formSchema = z.object({
@@ -50,12 +61,25 @@ const formSchema = z.object({
 });
 type FormValues = z.infer<typeof formSchema>;
 
-const ACK_TEXT = `By submitting this Surgery Day Request, I acknowledge and agree on behalf of my rescue/organization that:
+const PRE_OP_INSTRUCTIONS = [
+  "No food after 10:00 PM the night before surgery.",
+  "Water may be removed at the same time (no food or water after 10:00 PM).",
+  "Drop-off is between 8:00 AM and 9:00 AM on the scheduled surgery day.",
+  "Pick-up is between 2:00 PM and 3:00 PM the same day.",
+  "Bring a leash for each dog and a secure carrier for each cat.",
+  "If your animal is sick, in heat, or has eaten that morning, please call to reschedule.",
+];
+
+function buildAckText(rescueName: string) {
+  return `By submitting this Surgery Day Request to ${rescueName}, I acknowledge and agree on behalf of my rescue/organization that:
 1. The information provided for each animal is accurate to the best of my knowledge.
-2. I understand the rescue performing surgery is not liable for outcomes related to undisclosed medical conditions, age, or pre-existing conditions.
-3. I am authorized to submit this request and provide consent for procedures listed for each animal.
-4. I will transport each animal to and from the surgery location on the scheduled date.
-5. I agree to follow all post-operative care instructions provided.`;
+2. I understand that surgery and anesthesia carry inherent risks, and I assume those risks for every animal listed on this request.
+3. ${rescueName} and its veterinarian are not liable for outcomes related to undisclosed medical conditions, age, temperament, or pre-existing conditions.
+4. I have read the pre-operative instructions above and agree to follow them, including withholding food and water after 10:00 PM the night before surgery.
+5. I am authorized to submit this request and to provide consent for the procedures listed for each animal.
+6. I will transport each animal to and from the surgery location on the scheduled date during the posted drop-off and pick-up windows.
+7. I agree to follow all post-operative care instructions provided and to seek follow-up veterinary care for my own animals at my organization's expense if needed.`;
+}
 
 function emptyAnimal() {
   return {
@@ -114,13 +138,47 @@ export default function PublicSurgeryDayRequestPage() {
   const { fields, append, remove } = useFieldArray({ control: form.control, name: "animals" });
   const selectedPartnerId = form.watch("partnerOrganizationId");
 
-  // Auto-fill organization name from selected partner
+  // Fetch full partner detail (with contact info) when one is selected so we can
+  // auto-fill the contact name / phone / email fields from the partner record.
+  const { data: partnerDetailData } = useQuery<{
+    partner: {
+      id: string;
+      name: string;
+      contactName: string | null;
+      contactPhone: string | null;
+      contactEmail: string | null;
+      city: string | null;
+      state: string | null;
+    };
+  }>({
+    queryKey: ["/api/public/surgery-day-partners", selectedPartnerId, tenantId],
+    queryFn: async () => {
+      const res = await fetch(buildTenantUrl(`/api/public/surgery-day-partners/${selectedPartnerId}`), {
+        headers: getTenantHeaders(),
+      });
+      if (!res.ok) throw new Error("Failed to load partner");
+      return res.json();
+    },
+    enabled: !partnerNotListed && !!selectedPartnerId,
+  });
+
+  // Auto-fill org name + contact fields from selected partner. Only fill empty
+  // fields so we never overwrite anything the user has already typed.
   useEffect(() => {
-    if (!partnerNotListed && selectedPartnerId) {
-      const p = partners.find((x) => x.id === selectedPartnerId);
-      if (p) form.setValue("organizationName", p.name);
+    if (partnerNotListed || !selectedPartnerId) return;
+    const p = partnerDetailData?.partner;
+    if (!p) return;
+    form.setValue("organizationName", p.name);
+    if (p.contactName && !form.getValues("contactName")) {
+      form.setValue("contactName", p.contactName);
     }
-  }, [selectedPartnerId, partners, partnerNotListed, form]);
+    if (p.contactPhone && !form.getValues("contactPhone")) {
+      form.setValue("contactPhone", p.contactPhone);
+    }
+    if (p.contactEmail && !form.getValues("contactEmail")) {
+      form.setValue("contactEmail", p.contactEmail);
+    }
+  }, [partnerDetailData, selectedPartnerId, partnerNotListed, form]);
 
   const submit = useMutation({
     mutationFn: async (values: FormValues) => {
@@ -135,7 +193,7 @@ export default function PublicSurgeryDayRequestPage() {
         contactEmail: values.contactEmail || null,
         signatureDataUrl: signature,
         signedByName: values.signedByName,
-        acknowledgmentText: ACK_TEXT,
+        acknowledgmentText: `Pre-operative instructions:\n- ${PRE_OP_INSTRUCTIONS.join("\n- ")}\n\n${buildAckText(rescueName)}`,
         animals: values.animals.map((a) => ({
           ...a,
           name: a.name || null,
@@ -479,6 +537,26 @@ export default function PublicSurgeryDayRequestPage() {
               </CardContent>
             </Card>
 
+            {/* Pre-op instructions */}
+            <Card data-testid="card-pre-op-instructions">
+              <CardHeader>
+                <CardTitle>Pre-Operative Instructions</CardTitle>
+                <CardDescription>Please read carefully — these apply to every animal on this request.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Alert>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    <ul className="list-disc pl-5 space-y-1 text-sm" data-testid="list-pre-op">
+                      {PRE_OP_INSTRUCTIONS.map((line, i) => (
+                        <li key={i} data-testid={`text-pre-op-${i}`}>{line}</li>
+                      ))}
+                    </ul>
+                  </AlertDescription>
+                </Alert>
+              </CardContent>
+            </Card>
+
             {/* Acknowledgment + signature */}
             <Card>
               <CardHeader>
@@ -489,7 +567,7 @@ export default function PublicSurgeryDayRequestPage() {
                 <Alert>
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>
-                    <pre className="whitespace-pre-wrap font-sans text-sm" data-testid="text-acknowledgment">{ACK_TEXT}</pre>
+                    <pre className="whitespace-pre-wrap font-sans text-sm" data-testid="text-acknowledgment">{buildAckText(rescueName)}</pre>
                   </AlertDescription>
                 </Alert>
 

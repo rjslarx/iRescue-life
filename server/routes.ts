@@ -47903,6 +47903,34 @@ Use timestamps like [00:00] to help with pacing.`;
     } catch (error) { next(error); }
   });
 
+  // Public: get a single partner organization's safe-to-share contact info
+  // (used by the surgery day request form to autofill contact fields)
+  app.get('/api/public/surgery-day-partners/:id', requireTenant, async (req, res, next) => {
+    try {
+      const tenantId = req.tenant!.id;
+      const { id } = req.params;
+      const [org] = await db
+        .select({
+          id: partnerOrganizations.id,
+          name: partnerOrganizations.name,
+          contactName: partnerOrganizations.contactName,
+          contactPhone: partnerOrganizations.contactPhone,
+          contactEmail: partnerOrganizations.contactEmail,
+          city: partnerOrganizations.city,
+          state: partnerOrganizations.state,
+        })
+        .from(partnerOrganizations)
+        .where(and(
+          eq(partnerOrganizations.id, id),
+          eq(partnerOrganizations.tenantId, tenantId),
+          eq(partnerOrganizations.isActive, true),
+          sql`${SURGERY_DAY_PARTNER_TAG} = ANY(${partnerOrganizations.tags})`,
+        ));
+      if (!org) return res.status(404).json({ error: 'Partner not found' });
+      res.json({ partner: org });
+    } catch (error) { next(error); }
+  });
+
   // Public: submit a surgery day request
   const surgeryAnimalSchema = z.object({
     name: z.string().trim().max(120).optional().nullable(),
@@ -47917,6 +47945,17 @@ Use timestamps like [00:00] to help with pacing.`;
     medicalIssues: z.string().trim().max(2000).optional().nullable(),
     heartwormStatus: z.enum(['positive', 'negative', 'unknown', 'not_applicable']),
     needsRabies: z.enum(['yes', 'no', 'unsure']),
+  }).superRefine((animal, ctx) => {
+    if (animal.hasMedicalIssues) {
+      const text = (animal.medicalIssues || '').trim();
+      if (text.length === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['medicalIssues'],
+          message: 'Please describe the medical issues for this animal',
+        });
+      }
+    }
   });
 
   app.post('/api/surgery-day-requests', emailLimiter, requireTenant, async (req, res, next) => {
@@ -47936,22 +47975,32 @@ Use timestamps like [00:00] to help with pacing.`;
       const data = submitSchema.parse(req.body);
       const cleanEmail = data.contactEmail && data.contactEmail.length > 0 ? data.contactEmail : null;
 
-      // If partnerOrganizationId provided, verify it belongs to tenant
+      // XOR rule: if a partner is selected, the request is bound to that partner record
+      // and the organization name is derived from it (free-text org name is ignored).
+      // If no partner is selected, the submitted organizationName must be a real value.
+      let resolvedOrganizationName = data.organizationName;
       if (data.partnerOrganizationId) {
-        const [exists] = await db.select({ id: partnerOrganizations.id })
+        const [partner] = await db.select({
+          id: partnerOrganizations.id,
+          name: partnerOrganizations.name,
+          isActive: partnerOrganizations.isActive,
+        })
           .from(partnerOrganizations)
           .where(and(
             eq(partnerOrganizations.id, data.partnerOrganizationId),
             eq(partnerOrganizations.tenantId, tenantId),
           ));
-        if (!exists) return res.status(400).json({ error: 'Selected partner organization not found' });
+        if (!partner || !partner.isActive) {
+          return res.status(400).json({ error: 'Selected partner organization not found' });
+        }
+        resolvedOrganizationName = partner.name;
       }
 
       const created = await db.transaction(async (tx) => {
         const [request] = await tx.insert(surgeryDayRequests).values({
           tenantId,
           partnerOrganizationId: data.partnerOrganizationId || null,
-          organizationName: data.organizationName,
+          organizationName: resolvedOrganizationName,
           contactName: data.contactName,
           contactPhone: data.contactPhone,
           contactEmail: cleanEmail,
@@ -48022,20 +48071,32 @@ Use timestamps like [00:00] to help with pacing.`;
         .where(and(...conds))
         .orderBy(desc(surgeryDayRequests.submittedAt));
 
-      // Hydrate animal counts
+      // Hydrate animal counts + per-species breakdown for the list view
       const ids = rows.map(r => r.id);
-      let countMap = new Map<string, number>();
+      const countMap = new Map<string, number>();
+      const speciesMap = new Map<string, { dog: number; cat: number; other: number }>();
       if (ids.length > 0) {
-        const counts = await db.select({
+        const breakdown = await db.select({
           requestId: surgeryDayRequestAnimals.requestId,
+          species: surgeryDayRequestAnimals.species,
           c: sql<number>`count(*)::int`,
         }).from(surgeryDayRequestAnimals)
           .where(inArray(surgeryDayRequestAnimals.requestId, ids))
-          .groupBy(surgeryDayRequestAnimals.requestId);
-        countMap = new Map(counts.map(c => [c.requestId, Number(c.c)]));
+          .groupBy(surgeryDayRequestAnimals.requestId, surgeryDayRequestAnimals.species);
+        for (const row of breakdown) {
+          const current = speciesMap.get(row.requestId) || { dog: 0, cat: 0, other: 0 };
+          const sp = (row.species as 'dog' | 'cat' | 'other');
+          current[sp] = (current[sp] || 0) + Number(row.c);
+          speciesMap.set(row.requestId, current);
+          countMap.set(row.requestId, (countMap.get(row.requestId) || 0) + Number(row.c));
+        }
       }
 
-      const requests = rows.map(r => ({ ...r, animalCount: countMap.get(r.id) || 0 }));
+      const requests = rows.map(r => ({
+        ...r,
+        animalCount: countMap.get(r.id) || 0,
+        speciesCounts: speciesMap.get(r.id) || { dog: 0, cat: 0, other: 0 },
+      }));
       res.json({ requests });
     } catch (error) { next(error); }
   });

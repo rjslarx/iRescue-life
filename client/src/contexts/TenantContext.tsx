@@ -27,7 +27,7 @@ const RESERVED_PATHS = [
   'manifest.json', 'sw.js', 'favicon.ico', 'give', 'page',
   'medical-fund', 'contract', 'collaboration', 'reset-password', 'fundraise',
   'forgot-password', 'verify-email', 'unsubscribe', 'volunteer-waiver', 'contest',
-  'vip-club', 'wall-of-heroes'
+  'vip-club', 'wall-of-heroes', 'surgery-day-request'
 ];
 
 // Helper to check if a path segment is reserved
