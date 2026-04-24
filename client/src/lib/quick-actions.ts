@@ -16,6 +16,7 @@ import {
   UserPlus,
   MessageSquare,
   Cat,
+  Sparkles,
   type LucideIcon
 } from "lucide-react";
 
@@ -219,6 +220,15 @@ export const ALL_QUICK_ACTIONS: QuickAction[] = [
     href: "/dashboard/tnr-log",
     actionType: "navigate",
     pageId: "tnr-log",
+  },
+  {
+    id: "post-optimizer",
+    label: "Post Optimizer",
+    description: "Polish a social post with AI before publishing",
+    icon: Sparkles,
+    href: "/dashboard/post-optimizer",
+    actionType: "navigate",
+    pageId: "communications",
   },
 ];
 
