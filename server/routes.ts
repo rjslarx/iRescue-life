@@ -48167,6 +48167,17 @@ Use timestamps like [00:00] to help with pacing.`;
         updates.status = 'scheduled';
       }
 
+      // If the scheduled date is changing, clear any prior reminder-SMS stamp
+      // so the day-before reminder cron will re-send for the new date.
+      if (
+        data.scheduledDate !== undefined &&
+        (data.scheduledDate || null) !== (existing.scheduledDate || null) &&
+        existing.reminderSmsSentAt
+      ) {
+        updates.reminderSmsSentAt = null;
+        updates.reminderSmsSentTo = null;
+      }
+
       const [updated] = await db.update(surgeryDayRequests)
         .set(updates)
         .where(and(eq(surgeryDayRequests.id, id), eq(surgeryDayRequests.tenantId, tenantId)))
@@ -48280,6 +48291,37 @@ Use timestamps like [00:00] to help with pacing.`;
         .returning();
 
       res.json({ request: stamped, confirmationEmail: { sent: true, recipientEmail: result.recipientEmail } });
+    } catch (error) { next(error); }
+  });
+
+  // Auth: send (or resend) the day-before SMS reminder to the contact phone
+  app.post('/api/surgery-day-requests/:id/send-reminder-sms', requireTenant, requireAuth, requireRole('owner', 'admin', 'staff', 'board_member', 'intake_coordinator'), async (req, res, next) => {
+    try {
+      const tenantId = req.session.tenantId!;
+      const { id } = req.params;
+
+      const [existing] = await db.select().from(surgeryDayRequests)
+        .where(and(eq(surgeryDayRequests.id, id), eq(surgeryDayRequests.tenantId, tenantId)));
+      if (!existing) return res.status(404).json({ error: 'Request not found' });
+      if (!existing.contactPhone) return res.status(400).json({ error: 'No contact phone on file for this request' });
+      if (!existing.scheduledDate) return res.status(400).json({ error: 'Cannot send reminder: no scheduled date set' });
+
+      const { sendSurgeryDayReminderSms } = await import('./services/surgery-day-reminders');
+      const result = await sendSurgeryDayReminderSms({ tenantId, requestId: id });
+      if (!result.sent) {
+        return res.status(502).json({ error: result.reason || 'Failed to send reminder SMS' });
+      }
+
+      const [stamped] = await db.update(surgeryDayRequests)
+        .set({
+          reminderSmsSentAt: new Date(),
+          reminderSmsSentTo: result.recipientPhone || existing.contactPhone,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(surgeryDayRequests.id, id), eq(surgeryDayRequests.tenantId, tenantId)))
+        .returning();
+
+      res.json({ request: stamped, reminderSms: { sent: true, recipientPhone: result.recipientPhone } });
     } catch (error) { next(error); }
   });
 

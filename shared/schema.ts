@@ -5229,6 +5229,10 @@ export const surgeryDayRequests = pgTable("surgery_day_requests", {
   confirmationEmailSentAt: timestamp("confirmation_email_sent_at"),
   confirmationEmailSentTo: text("confirmation_email_sent_to"),
 
+  // Day-before reminder SMS tracking (auto-sent ~14h before scheduled date by cron)
+  reminderSmsSentAt: timestamp("reminder_sms_sent_at"),
+  reminderSmsSentTo: text("reminder_sms_sent_to"),
+
   submittedAt: timestamp("submitted_at").notNull().defaultNow(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -5243,6 +5247,8 @@ export const insertSurgeryDayRequestSchema = createInsertSchema(surgeryDayReques
   assignedUserId: true,
   confirmationEmailSentAt: true,
   confirmationEmailSentTo: true,
+  reminderSmsSentAt: true,
+  reminderSmsSentTo: true,
   signedAt: true,
   submittedAt: true,
   createdAt: true,

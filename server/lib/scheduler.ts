@@ -462,6 +462,30 @@ export function initializeScheduler() {
 
   console.log(`✓ Foster appointment reminders scheduled for: 0 14 * * * (UTC)`);
 
+  // Schedule surgery day reminder SMS at midnight UTC (~6 PM CST evening before)
+  // "0 0 * * *" means: at minute 0, hour 0, every day
+  // This sends a day-before reminder text to partner rescues whose surgery day
+  // is "tomorrow" in UTC — about 14h before the 8 AM drop-off window.
+  const surgeryDayReminderSchedule = process.env.SURGERY_DAY_REMINDER_SCHEDULE || "0 0 * * *";
+
+  cron.schedule(surgeryDayReminderSchedule, async () => {
+    console.log("🩺 Running surgery day reminder SMS job...");
+    try {
+      const { runSurgeryDayRemindersForAllTenants } = await import("../services/surgery-day-reminders");
+      const result = await runSurgeryDayRemindersForAllTenants();
+      console.log(`✓ Surgery day reminders: ${result.tenantsProcessed} tenants processed, ${result.remindersSent} SMS sent`);
+      if (result.errors.length > 0) {
+        console.warn(`⚠️ Surgery day reminder errors: ${result.errors.slice(0, 5).join('; ')}${result.errors.length > 5 ? ` (+${result.errors.length - 5} more)` : ''}`);
+      }
+    } catch (error) {
+      console.error(`❌ Surgery day reminders failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }, {
+    timezone: "UTC"
+  });
+
+  console.log(`✓ Surgery day reminders scheduled for: ${surgeryDayReminderSchedule} (UTC)`);
+
   // Schedule foster compliance escalation hourly
   // "0 * * * *" means: at minute 0, every hour
   // This escalates overdue reminders (24h → overdue, 48h → requires_intervention)

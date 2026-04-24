@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
-import { Loader2, Calendar as CalendarIcon, Stethoscope, ExternalLink, Plus, Trash2, Edit, UserPlus, Mail, MailCheck } from "lucide-react";
+import { Loader2, Calendar as CalendarIcon, Stethoscope, ExternalLink, Plus, Trash2, Edit, UserPlus, Mail, MailCheck, MessageSquare, MessageSquareText } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { format } from "date-fns";
 
@@ -36,6 +36,8 @@ type RequestRow = {
   submittedAt: string;
   confirmationEmailSentAt?: string | null;
   confirmationEmailSentTo?: string | null;
+  reminderSmsSentAt?: string | null;
+  reminderSmsSentTo?: string | null;
   animalCount?: number;
   speciesCounts?: { dog: number; cat: number; other: number };
 };
@@ -290,6 +292,21 @@ function RequestDetailSheet({ requestId, open, onOpenChange }: { requestId: stri
     onError: (e: any) => toast({ title: "Send failed", description: e?.message || "Try again", variant: "destructive" }),
   });
 
+  const sendReminderSmsMut = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/surgery-day-requests/${requestId}/send-reminder-sms`);
+      return res.json() as Promise<{ request: RequestRow; reminderSms: { sent: boolean; recipientPhone?: string } }>;
+    },
+    onSuccess: (result) => {
+      toast({
+        title: "Reminder text sent",
+        description: `Sent to ${result?.reminderSms?.recipientPhone || data?.request.contactPhone}.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/surgery-day-requests"] });
+    },
+    onError: (e: any) => toast({ title: "Send failed", description: e?.message || "Try again", variant: "destructive" }),
+  });
+
   const saveAsPartnerMut = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", `/api/surgery-day-requests/${requestId}/save-as-partner`);
@@ -381,6 +398,47 @@ function RequestDetailSheet({ requestId, open, onOpenChange }: { requestId: stri
                       {resendEmailMut.isPending && <Loader2 className="w-3 h-3 mr-1 animate-spin" />}
                       <Mail className="w-3 h-3 mr-1" />
                       {data.request.confirmationEmailSentAt ? "Resend" : "Send"}
+                    </Button>
+                  </div>
+                </div>
+                <div className="flex justify-between gap-4 items-center flex-wrap">
+                  <span className="text-muted-foreground">Reminder text (day before)</span>
+                  <div className="flex items-center gap-2 flex-wrap justify-end">
+                    {data.request.reminderSmsSentAt ? (
+                      <Badge variant="outline" className="gap-1" data-testid="badge-sms-sent">
+                        <MessageSquareText className="w-3 h-3" />
+                        Sent {format(new Date(data.request.reminderSmsSentAt), "MMM d, h:mm a")}
+                        {data.request.reminderSmsSentTo ? ` to ${data.request.reminderSmsSentTo}` : ""}
+                      </Badge>
+                    ) : (
+                      <Badge variant="secondary" className="gap-1" data-testid="badge-sms-not-sent">
+                        <MessageSquare className="w-3 h-3" />
+                        Not sent
+                      </Badge>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => sendReminderSmsMut.mutate()}
+                      disabled={
+                        sendReminderSmsMut.isPending ||
+                        !data.request.contactPhone ||
+                        !data.request.scheduledDate
+                      }
+                      title={
+                        !data.request.contactPhone
+                          ? "No contact phone on file"
+                          : !data.request.scheduledDate
+                          ? "Set a scheduled date first"
+                          : data.request.reminderSmsSentAt
+                          ? "Resend reminder text"
+                          : "Send reminder text now"
+                      }
+                      data-testid="button-send-reminder-sms"
+                    >
+                      {sendReminderSmsMut.isPending && <Loader2 className="w-3 h-3 mr-1 animate-spin" />}
+                      <MessageSquare className="w-3 h-3 mr-1" />
+                      {data.request.reminderSmsSentAt ? "Resend" : "Send"}
                     </Button>
                   </div>
                 </div>
