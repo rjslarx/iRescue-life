@@ -47967,6 +47967,7 @@ Use timestamps like [00:00] to help with pacing.`;
         contactName: z.string().trim().min(1, 'Contact name required').max(200),
         contactPhone: z.string().trim().min(7, 'Contact phone required').max(50),
         contactEmail: z.string().trim().email().max(200).optional().nullable().or(z.literal('')),
+        requestedDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Surgery date is required (YYYY-MM-DD)'),
         signatureDataUrl: z.string().min(20, 'Signature is required'),
         signedByName: z.string().trim().min(1, 'Signed-by name is required').max(200),
         acknowledgmentText: z.string().min(20, 'Acknowledgment is required'),
@@ -48004,6 +48005,7 @@ Use timestamps like [00:00] to help with pacing.`;
           contactName: data.contactName,
           contactPhone: data.contactPhone,
           contactEmail: cleanEmail,
+          requestedDate: data.requestedDate,
           signatureDataUrl: data.signatureDataUrl,
           signedByName: data.signedByName,
           acknowledgmentText: data.acknowledgmentText,
@@ -48042,7 +48044,7 @@ Use timestamps like [00:00] to help with pacing.`;
           applicantEmail: cleanEmail || '',
           applicantPhone: data.contactPhone,
           applicationId: created.id,
-          additionalDetails: `Organization: ${data.organizationName} | Animals (${data.animals.length}): ${animalSummary}`,
+          additionalDetails: `Surgery date (partner-supplied): ${data.requestedDate} | Organization: ${data.organizationName} | Animals (${data.animals.length}): ${animalSummary}`,
         });
       } catch (notifyError) {
         console.error('Failed to send surgery day request notification:', notifyError);

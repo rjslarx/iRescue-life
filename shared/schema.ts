@@ -5219,6 +5219,10 @@ export const surgeryDayRequests = pgTable("surgery_day_requests", {
   signedByName: text("signed_by_name").notNull(),
   signedAt: timestamp("signed_at").notNull().defaultNow(),
 
+  // Date the partner was told the surgery would happen (captured on the public form).
+  // Informational; staff still confirms by setting scheduledDate. Nullable for backfill.
+  requestedDate: date("requested_date"),
+
   // Staff fields
   scheduledDate: date("scheduled_date"),
   internalNotes: text("internal_notes"),

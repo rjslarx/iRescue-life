@@ -26,6 +26,7 @@ type RequestRow = {
   contactPhone: string;
   contactEmail: string | null;
   partnerOrganizationId: string | null;
+  requestedDate: string | null;
   scheduledDate: string | null;
   internalNotes: string | null;
   declinedReason: string | null;
@@ -153,6 +154,7 @@ export default function SurgeryDayRequestsPage() {
                       <TableHead>Contact</TableHead>
                       <TableHead>Animals</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead>Requested</TableHead>
                       <TableHead>Scheduled</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -199,6 +201,9 @@ export default function SurgeryDayRequestsPage() {
                             {STATUS_LABELS[r.status]}
                           </Badge>
                         </TableCell>
+                        <TableCell className="text-sm" data-testid={`text-row-requested-${r.id}`}>
+                          {r.requestedDate ? format(new Date(r.requestedDate), "MMM d, yyyy") : "—"}
+                        </TableCell>
                         <TableCell className="text-sm">{r.scheduledDate ? format(new Date(r.scheduledDate), "MMM d, yyyy") : "—"}</TableCell>
                       </TableRow>
                     ))}
@@ -239,10 +244,11 @@ function RequestDetailSheet({ requestId, open, onOpenChange }: { requestId: stri
   const [internalNotes, setInternalNotes] = useState("");
   const [declinedReason, setDeclinedReason] = useState("");
 
-  // Initialize form state when data loads
+  // Initialize form state when data loads. If staff hasn't set a scheduled date yet,
+  // pre-fill it with the date the partner provided so they only need to click Save.
   if (data && status === undefined) {
     setStatus(data.request.status);
-    setScheduledDate(data.request.scheduledDate || "");
+    setScheduledDate(data.request.scheduledDate || data.request.requestedDate || "");
     setInternalNotes(data.request.internalNotes || "");
     setDeclinedReason(data.request.declinedReason || "");
   }
@@ -359,6 +365,14 @@ function RequestDetailSheet({ requestId, open, onOpenChange }: { requestId: stri
                 <div className="flex justify-between gap-4">
                   <span className="text-muted-foreground">Submitted</span>
                   <span>{format(new Date(data.request.submittedAt), "PPpp")}</span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span className="text-muted-foreground">Date partner was told</span>
+                  <span data-testid="text-detail-requested-date">
+                    {data.request.requestedDate
+                      ? format(new Date(data.request.requestedDate), "PPP")
+                      : "—"}
+                  </span>
                 </div>
                 <div className="flex justify-between gap-4 items-center flex-wrap">
                   <span className="text-muted-foreground">Confirmation email</span>

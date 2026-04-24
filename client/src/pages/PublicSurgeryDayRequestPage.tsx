@@ -55,6 +55,7 @@ const formSchema = z.object({
   contactName: z.string().trim().min(1, "Contact name is required").max(200),
   contactPhone: z.string().trim().min(7, "Contact phone is required").max(50),
   contactEmail: z.string().trim().email("Invalid email").max(200).optional().or(z.literal("")),
+  requestedDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Surgery date is required"),
   signedByName: z.string().trim().min(1, "Your name is required").max(200),
   acknowledged: z.literal(true, { errorMap: () => ({ message: "You must acknowledge to continue" }) }),
   animals: z.array(animalSchema).min(1, "Add at least one animal"),
@@ -129,6 +130,7 @@ export default function PublicSurgeryDayRequestPage() {
       contactName: "",
       contactPhone: "",
       contactEmail: "",
+      requestedDate: "",
       signedByName: "",
       acknowledged: false as any,
       animals: [emptyAnimal()],
@@ -191,6 +193,7 @@ export default function PublicSurgeryDayRequestPage() {
         contactName: values.contactName,
         contactPhone: values.contactPhone,
         contactEmail: values.contactEmail || null,
+        requestedDate: values.requestedDate,
         signatureDataUrl: signature,
         signedByName: values.signedByName,
         acknowledgmentText: `Pre-operative instructions:\n- ${PRE_OP_INSTRUCTIONS.join("\n- ")}\n\n${buildAckText(rescueName)}`,
@@ -278,6 +281,36 @@ export default function PublicSurgeryDayRequestPage() {
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            {/* Surgery Date */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Surgery Date</CardTitle>
+                <CardDescription>
+                  Enter the date your contact at {rescueName} gave you for this surgery day.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <FormField
+                  control={form.control}
+                  name="requestedDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Surgery date *</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          type="date"
+                          min={new Date().toISOString().slice(0, 10)}
+                          data-testid="input-requested-date"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </CardContent>
+            </Card>
+
             {/* Partner Selection */}
             <Card>
               <CardHeader>
