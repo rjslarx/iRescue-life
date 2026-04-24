@@ -925,6 +925,11 @@ export default function Home() {
                     </span>
                   </Link>
                 )}
+                <Link href="/surgery-day-request" data-testid="link-footer-surgery-day-request">
+                  <span className="text-muted-foreground hover:text-foreground transition-colors cursor-pointer">
+                    Request a Surgery Day
+                  </span>
+                </Link>
                 {publishedPages.map((page) => (
                   <Link key={page.id} href={`/${page.slug}`} data-testid={`link-page-${page.slug}`}>
                     <span className="text-muted-foreground hover:text-foreground transition-colors cursor-pointer">
