@@ -63,23 +63,39 @@ async function getVerifiedCustomDomains(): Promise<Set<string>> {
  */
 
 // General API rate limiter - applies to all API routes
+//
+// Anonymous traffic is capped at 100 req / 15 min per IP, which protects the
+// public endpoints (intake forms, contact, donations, etc.) from abuse.
+// Authenticated users (anyone with a logged-in session) are exempted entirely
+// because a normal staff dashboard session legitimately fires far more than
+// 100 requests per 15 min (sidebar counts, polling widgets, multi-tab use,
+// role switching that re-fetches everything, etc.). Per-route limiters
+// (authLimiter, signupLimiter, passwordResetLimiter, emailLimiter) still
+// apply to the sensitive endpoints regardless of auth state.
 export const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
+  max: 100, // Limit each anonymous IP to 100 requests per windowMs
   message: {
     error: 'Too many requests',
     message: 'Too many requests from this IP, please try again later.',
   },
   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
-  // Skip rate limiting in development
-  skip: () => process.env.NODE_ENV === 'development',
+  skip: (req) => {
+    if (process.env.NODE_ENV === 'development') return true;
+    // Exempt any request that comes in with a logged-in session
+    const session = (req as Request & { session?: { userId?: string } }).session;
+    return !!session?.userId;
+  },
 });
 
 // Stricter rate limiter for authentication endpoints
+// Counts only failed login attempts (skipSuccessfulRequests). 10 misses per
+// 15 min per IP is forgiving enough for normal fat-fingering and password
+// managers that try a stale password, while still blocking brute-force.
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // Limit each IP to 5 login attempts per windowMs
+  max: 10, // Limit each IP to 10 failed login attempts per windowMs
   message: {
     error: 'Too many login attempts',
     message: 'Too many login attempts from this IP, please try again after 15 minutes.',
