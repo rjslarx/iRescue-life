@@ -7350,6 +7350,53 @@ Crawl-delay: 1
   });
 
   /**
+   * POST /api/ai/optimize-post
+   * Take a draft Facebook post, strip outbound URLs, and return an optimized
+   * caption + a strategic first comment with the right call-to-action URL
+   * based on the emotional tone of the post.
+   */
+  app.post('/api/ai/optimize-post', requireTenant, requireAuth, requireRoleOrPageAccess('communications', 'admin', 'staff'), async (req, res, next) => {
+    try {
+      const { optimizeFacebookPost, resolveTenantPostUrls, PostOptimizerError } = await import('./services/aiPostOptimizer');
+
+      const optimizeSchema = z.object({
+        draft: z.string().trim().min(1, 'Draft post is required').max(8000, 'Draft post is too long (max 8000 characters)'),
+      });
+
+      const parseResult = optimizeSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ error: parseResult.error.errors[0]?.message || 'Invalid request data' });
+      }
+
+      const tenant = req.tenant!;
+      const urls = resolveTenantPostUrls({
+        customDomain: tenant.customDomain,
+        customDomainVerified: tenant.customDomainVerified,
+        subdomain: tenant.subdomain,
+        jotformAdoptionUrl: tenant.jotformAdoptionUrl,
+        jotformFosterUrl: tenant.jotformFosterUrl,
+      });
+
+      try {
+        const result = await optimizeFacebookPost(parseResult.data.draft, urls);
+        return res.json({
+          success: true,
+          optimizedCaption: result.optimizedCaption,
+          firstComment: result.firstComment,
+          category: result.category,
+        });
+      } catch (err) {
+        if (err instanceof PostOptimizerError) {
+          return res.status(err.status).json({ error: err.message });
+        }
+        throw err;
+      }
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * GET /api/animals/:id/foster-history
    * Get foster placement history for a specific animal with foster names and duration
    */

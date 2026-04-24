@@ -46,6 +46,7 @@ import CommunicationsSwitchboardPage from "@/pages/CommunicationsSwitchboardPage
 import BroadcastsPage from "@/pages/BroadcastsPage";
 import NewsletterCampaignsPage from "@/pages/NewsletterCampaignsPage";
 import NewsletterDesignerPage from "@/pages/NewsletterDesignerPage";
+import PostOptimizerPage from "@/pages/PostOptimizerPage";
 import DocumentsPage from "@/pages/DocumentsPage";
 import ContractTemplatesPage from "@/pages/ContractTemplatesPage";
 import CustomFormsPage from "@/pages/CustomFormsPage";
@@ -335,6 +336,7 @@ function RouterSwitch() {
       <ProtectedRoute path="/dashboard/broadcasts" pageId="communications" component={BroadcastsPage} />
       <ProtectedRoute path="/dashboard/newsletter-campaigns" pageId="communications" component={NewsletterCampaignsPage} />
       <ProtectedRoute path="/dashboard/newsletter-designer" pageId="communications" component={NewsletterDesignerPage} proOnly proFeatureName="Newsletter Designer" />
+      <ProtectedRoute path="/dashboard/post-optimizer" pageId="communications" component={PostOptimizerPage} />
       <Route path="/dashboard/emails">
         <Redirect to="/dashboard/communications" />
       </Route>
