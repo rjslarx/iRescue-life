@@ -5278,7 +5278,10 @@ export const surgeryDayRequestAnimals = pgTable("surgery_day_request_animals", {
   sex: text("sex").$type<"male" | "female" | "unknown">(),
   color: text("color"),
   weight: text("weight"),
-  spayNeuterStatus: text("spay_neuter_status").notNull().$type<"already_done" | "needs_spay" | "needs_neuter" | "unsure">(),
+  // Legacy: this used to be collected on the public form, but the surgery being
+  // scheduled IS the spay/neuter, so the question was redundant. Kept on the
+  // table (nullable) to preserve data on requests submitted before the change.
+  spayNeuterStatus: text("spay_neuter_status").$type<"already_done" | "needs_spay" | "needs_neuter" | "unsure">(),
   hasMedicalIssues: boolean("has_medical_issues").notNull().default(false),
   medicalIssues: text("medical_issues"),
   heartwormStatus: text("heartworm_status").notNull().$type<"positive" | "negative" | "unknown" | "not_applicable">(),

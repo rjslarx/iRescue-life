@@ -47940,7 +47940,6 @@ Use timestamps like [00:00] to help with pacing.`;
     sex: z.enum(['male', 'female', 'unknown']).optional().nullable(),
     color: z.string().trim().max(120).optional().nullable(),
     weight: z.string().trim().max(60).optional().nullable(),
-    spayNeuterStatus: z.enum(['already_done', 'needs_spay', 'needs_neuter', 'unsure']),
     hasMedicalIssues: z.boolean().default(false),
     medicalIssues: z.string().trim().max(2000).optional().nullable(),
     heartwormStatus: z.enum(['positive', 'negative', 'unknown', 'not_applicable']),
@@ -48021,7 +48020,6 @@ Use timestamps like [00:00] to help with pacing.`;
           sex: a.sex || null,
           color: a.color || null,
           weight: a.weight || null,
-          spayNeuterStatus: a.spayNeuterStatus,
           hasMedicalIssues: !!a.hasMedicalIssues,
           medicalIssues: a.medicalIssues || null,
           heartwormStatus: a.heartwormStatus,
@@ -48035,7 +48033,7 @@ Use timestamps like [00:00] to help with pacing.`;
       try {
         const { sendFormSubmissionNotification } = await import('./services/form-notifications');
         const animalSummary = data.animals
-          .map((a, i) => `${i + 1}. ${a.name || 'Unnamed'} (${a.species}) — ${a.spayNeuterStatus.replace(/_/g, ' ')}, HW ${a.heartwormStatus}, rabies ${a.needsRabies}${a.hasMedicalIssues ? ', medical issues' : ''}`)
+          .map((a, i) => `${i + 1}. ${a.name || 'Unnamed'} (${a.species}) — HW ${a.heartwormStatus}, rabies ${a.needsRabies}${a.hasMedicalIssues ? ', medical issues' : ''}`)
           .join(' | ');
         await sendFormSubmissionNotification({
           formType: 'surgery_day',

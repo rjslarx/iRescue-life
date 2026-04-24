@@ -31,7 +31,6 @@ const animalSchema = z.object({
   sex: z.enum(["male", "female", "unknown"]).optional(),
   color: z.string().trim().max(120).optional().or(z.literal("")),
   weight: z.string().trim().max(60).optional().or(z.literal("")),
-  spayNeuterStatus: z.enum(["already_done", "needs_spay", "needs_neuter", "unsure"], { required_error: "Required" }),
   hasMedicalIssues: z.boolean().default(false),
   medicalIssues: z.string().trim().max(2000).optional().or(z.literal("")),
   heartwormStatus: z.enum(["positive", "negative", "unknown", "not_applicable"], { required_error: "Required" }),
@@ -90,7 +89,6 @@ function emptyAnimal() {
     sex: undefined,
     color: "",
     weight: "",
-    spayNeuterStatus: "needs_spay" as const,
     hasMedicalIssues: false,
     medicalIssues: "",
     heartwormStatus: "unknown" as const,
@@ -499,21 +497,6 @@ export default function PublicSurgeryDayRequestPage() {
                         <FormItem className="sm:col-span-2">
                           <FormLabel>Color / markings</FormLabel>
                           <FormControl><Input {...field} data-testid={`input-animal-color-${index}`} /></FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )} />
-                      <FormField control={form.control} name={`animals.${index}.spayNeuterStatus`} render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Spay / neuter *</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl><SelectTrigger data-testid={`select-animal-spay-${index}`}><SelectValue /></SelectTrigger></FormControl>
-                            <SelectContent>
-                              <SelectItem value="needs_spay">Needs spay</SelectItem>
-                              <SelectItem value="needs_neuter">Needs neuter</SelectItem>
-                              <SelectItem value="already_done">Already done</SelectItem>
-                              <SelectItem value="unsure">Unsure</SelectItem>
-                            </SelectContent>
-                          </Select>
                           <FormMessage />
                         </FormItem>
                       )} />

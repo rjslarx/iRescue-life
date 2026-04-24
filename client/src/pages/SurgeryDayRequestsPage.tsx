@@ -53,7 +53,7 @@ type AnimalRow = {
   sex: string | null;
   color: string | null;
   weight: string | null;
-  spayNeuterStatus: string;
+  spayNeuterStatus: string | null;
   hasMedicalIssues: boolean;
   medicalIssues: string | null;
   heartwormStatus: string;
@@ -491,7 +491,9 @@ function RequestDetailSheet({ requestId, open, onOpenChange }: { requestId: stri
                       <div><span className="text-muted-foreground">Sex:</span> {humanize(a.sex)}</div>
                       <div><span className="text-muted-foreground">Weight:</span> {a.weight || "—"}</div>
                       <div><span className="text-muted-foreground">Color:</span> {a.color || "—"}</div>
-                      <div><span className="text-muted-foreground">Spay/Neuter:</span> {humanize(a.spayNeuterStatus)}</div>
+                      {a.spayNeuterStatus && (
+                        <div><span className="text-muted-foreground">Spay/Neuter (legacy):</span> {humanize(a.spayNeuterStatus)}</div>
+                      )}
                       <div><span className="text-muted-foreground">Heartworm:</span> {humanize(a.heartwormStatus)}</div>
                       <div><span className="text-muted-foreground">Rabies needed:</span> {humanize(a.needsRabies)}</div>
                     </div>
