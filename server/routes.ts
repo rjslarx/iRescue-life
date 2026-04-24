@@ -48172,6 +48172,27 @@ Use timestamps like [00:00] to help with pacing.`;
         .where(and(eq(surgeryDayRequests.id, id), eq(surgeryDayRequests.tenantId, tenantId)))
         .returning();
       res.json({ request: updated });
+
+      // Fire-and-forget partner email when status / scheduled date / declined reason changed.
+      // Wrapped in setImmediate so the PATCH response is never delayed and
+      // any email failure cannot bubble back to the staff member.
+      const partnerEmailInput = {
+        tenantId,
+        requestId: id,
+        prevStatus: existing.status,
+        prevScheduledDate: existing.scheduledDate,
+        prevDeclinedReason: existing.declinedReason,
+        newStatus: updated.status,
+        newScheduledDate: updated.scheduledDate,
+        newDeclinedReason: updated.declinedReason,
+      };
+      setImmediate(() => {
+        import('./services/surgery-day-partner-emails')
+          .then((m) => m.sendSurgeryDayPartnerStatusEmail(partnerEmailInput))
+          .catch((err) => {
+            console.error('[SurgeryDayPartnerEmail] dispatch error:', err);
+          });
+      });
     } catch (error) {
       if (error instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', issues: error.errors });
       next(error);
