@@ -89,7 +89,6 @@ const PRE_OP_BLOCK_HTML = `
     <li>No food or water after 10 PM the night before surgery.</li>
     <li>Drop-off window: <strong>8:00 AM &ndash; 9:00 AM</strong> on the scheduled day.</li>
     <li>Pick-up window: <strong>2:00 PM &ndash; 3:00 PM</strong> on the scheduled day.</li>
-    <li>All dogs must arrive on a leash; cats must arrive in a secure carrier.</li>
     <li>If you need to reschedule, please contact us as soon as possible.</li>
   </ul>
 `.trim();
@@ -99,7 +98,6 @@ const PRE_OP_BLOCK_TEXT = [
   '- No food or water after 10 PM the night before surgery.',
   '- Drop-off window: 8:00 AM - 9:00 AM on the scheduled day.',
   '- Pick-up window: 2:00 PM - 3:00 PM on the scheduled day.',
-  '- All dogs must arrive on a leash; cats must arrive in a secure carrier.',
   '- If you need to reschedule, please contact us as soon as possible.',
 ].join('\n');
 
