@@ -196,7 +196,10 @@ export async function sendSms(
     bypassQuietHours?: boolean;
   }
 ): Promise<SendResult> {
-  const [tenantRow] = await db.select({ commsPaused: tenants.commsPaused }).from(tenants).where(eq(tenants.id, tenantId));
+  const [tenantRow] = await db
+    .select({ commsPaused: tenants.commsPaused, timezone: tenants.timezone })
+    .from(tenants)
+    .where(eq(tenants.id, tenantId));
   if (tenantRow?.commsPaused) {
     return {
       number: toNumber,
@@ -207,12 +210,31 @@ export async function sendSms(
 
   if (!context?.bypassQuietHours) {
     const nowUtc = new Date();
-    const cstHour = (nowUtc.getUTCHours() - 6 + 24) % 24;
-    if (cstHour >= 20 || cstHour < 6) {
+    // Default = legacy CST math (used when tenant has no timezone configured
+    // OR when the configured timezone is malformed — same semantics the
+    // surgery-day reminder service uses, so behavior is consistent).
+    let localHour = (nowUtc.getUTCHours() - 6 + 24) % 24;
+    let zoneLabel = 'CST';
+    if (tenantRow?.timezone) {
+      try {
+        const parts = new Intl.DateTimeFormat('en-US', {
+          timeZone: tenantRow.timezone,
+          hour: '2-digit',
+          hour12: false,
+        }).formatToParts(nowUtc);
+        const hourStr = parts.find((p) => p.type === 'hour')?.value ?? '0';
+        localHour = Number(hourStr) % 24;
+        zoneLabel = tenantRow.timezone;
+      } catch {
+        // Invalid IANA string — keep the legacy CST fallback above.
+        console.warn(`[twilio-service] tenant ${tenantId} has invalid timezone "${tenantRow.timezone}"; falling back to CST quiet hours`);
+      }
+    }
+    if (localHour >= 20 || localHour < 6) {
       return {
         number: toNumber,
         status: 'failed',
-        error: 'SMS blocked: quiet hours (8 PM – 6 AM CST)',
+        error: `SMS blocked: quiet hours (8 PM – 6 AM ${zoneLabel})`,
       };
     }
   }

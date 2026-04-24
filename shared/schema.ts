@@ -314,7 +314,12 @@ export const tenants = pgTable("tenants", {
   // "here's who you helped save" section featuring the most recently adopted animal.
   impactLoopEnabled: boolean("impact_loop_enabled").notNull().default(false),
   briefingRecipientRoles: text("briefing_recipient_roles").array().default(sql`ARRAY['admin']::text[]`),
-  
+
+  // IANA timezone identifier (e.g., "America/Los_Angeles"). Used to schedule
+  // tenant-local SMS reminders and gate quiet-hours blocking. Null means
+  // "fall back to legacy UTC-based behavior".
+  timezone: text("timezone"),
+
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });

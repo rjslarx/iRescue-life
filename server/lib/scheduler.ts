@@ -462,11 +462,12 @@ export function initializeScheduler() {
 
   console.log(`✓ Foster appointment reminders scheduled for: 0 14 * * * (UTC)`);
 
-  // Schedule surgery day reminder SMS at midnight UTC (~6 PM CST evening before)
-  // "0 0 * * *" means: at minute 0, hour 0, every day
-  // This sends a day-before reminder text to partner rescues whose surgery day
-  // is "tomorrow" in UTC — about 14h before the 8 AM drop-off window.
-  const surgeryDayReminderSchedule = process.env.SURGERY_DAY_REMINDER_SCHEDULE || "0 0 * * *";
+  // Schedule surgery day reminder SMS hourly so the per-tenant gate inside
+  // runSurgeryDayRemindersForAllTenants can honor each tenant's local
+  // timezone (firing ~6 PM the night before the surgery, no matter where the
+  // rescue is). Tenants without a configured timezone fall back to the legacy
+  // "midnight UTC" behavior, which the service enforces internally.
+  const surgeryDayReminderSchedule = process.env.SURGERY_DAY_REMINDER_SCHEDULE || "0 * * * *";
 
   cron.schedule(surgeryDayReminderSchedule, async () => {
     console.log("🩺 Running surgery day reminder SMS job...");

@@ -9,6 +9,10 @@ export interface SurgeryDayReminderResult {
   reason?: string;
 }
 
+// Hour-of-day (0–23, local) at which we want to fire the day-before reminder.
+// 18 == 6 PM, ~14 hours before the 8 AM drop-off window.
+const REMINDER_LOCAL_HOUR = 18;
+
 function normalizePhoneE164(raw: string | null | undefined): string | null {
   if (!raw) return null;
   const trimmed = String(raw).trim();
@@ -50,6 +54,54 @@ function buildReminderMessage(scheduledDate: string, contactName: string): strin
 }
 
 /**
+ * Compute the calendar parts (year/month/day/hour) for `now` in the given
+ * IANA timezone. Returns null if the timezone string is invalid so callers
+ * can fall back to the legacy "no timezone configured" code path instead of
+ * silently sending at the wrong hour.
+ */
+function getLocalParts(timezone: string, now: Date): {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+} | null {
+  let parts: Intl.DateTimeFormatPart[];
+  try {
+    parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      hour12: false,
+    }).formatToParts(now);
+  } catch {
+    return null;
+  }
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? '0';
+  const hour = Number(get('hour')) % 24; // some locales report "24" at midnight
+  return {
+    year: Number(get('year')),
+    month: Number(get('month')),
+    day: Number(get('day')),
+    hour,
+  };
+}
+
+/**
+ * Given local Y/M/D, return the "next day" as a YYYY-MM-DD string.
+ */
+function nextDayString(year: number, month: number, day: number): string {
+  // Use UTC math purely for date arithmetic; the resulting date string is a
+  // pure calendar date, no timezone semantics attached.
+  const next = new Date(Date.UTC(year, month - 1, day + 1));
+  const y = next.getUTCFullYear();
+  const m = String(next.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(next.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+/**
  * Send a day-before SMS reminder to the partner rescue's contact phone.
  * Returns metadata so the caller can persist it (or surface why it didn't send).
  *
@@ -82,7 +134,7 @@ export async function sendSurgeryDayReminderSms(params: {
     const message = buildReminderMessage(request.scheduledDate, request.contactName);
 
     const result = await sendSms(tenantId, toNumber, message, 'reminder', {
-      bypassQuietHours: true, // 6 PM CST evening reminder is the whole point
+      bypassQuietHours: true, // 6 PM local evening reminder is the whole point
     });
 
     if (result.status !== 'sent') {
@@ -99,10 +151,16 @@ export async function sendSurgeryDayReminderSms(params: {
 
 /**
  * Cron entrypoint: find every scheduled surgery day request that is happening
- * "tomorrow" (UTC) and hasn't yet been reminded, and text the contact.
+ * "tomorrow" in the tenant's local timezone and hasn't yet been reminded, and
+ * text the contact.
  *
- * Designed to run once a day around midnight UTC (~6 PM the night before in
- * Central Time) — about 14h before the 8 AM drop-off window.
+ * Designed to run hourly. For each tenant, we only do real work when the
+ * current hour in that tenant's local timezone is the configured reminder hour
+ * (6 PM by default). Tenants without a configured timezone fall back to the
+ * legacy behavior: send only when it is midnight UTC, using "tomorrow in UTC".
+ *
+ * The `reminder_sms_sent_at` dedupe column still prevents double-sends across
+ * runs (the cron now ticks every hour, so this is doing real work).
  */
 export async function runSurgeryDayRemindersForAllTenants(): Promise<{
   tenantsProcessed: number;
@@ -114,32 +172,53 @@ export async function runSurgeryDayRemindersForAllTenants(): Promise<{
   let remindersSent = 0;
 
   try {
-    // "Tomorrow" in UTC, formatted as YYYY-MM-DD to match the date column.
     const now = new Date();
-    const tomorrow = new Date(Date.UTC(
-      now.getUTCFullYear(),
-      now.getUTCMonth(),
-      now.getUTCDate() + 1,
-    ));
-    const tomorrowDateStr = tomorrow.toISOString().slice(0, 10);
 
     const activeTenants = await db
-      .select({ id: tenants.id })
+      .select({ id: tenants.id, timezone: tenants.timezone })
       .from(tenants)
       .where(eq(tenants.isActive, true));
 
     for (const tenant of activeTenants) {
-      tenantsProcessed++;
       try {
+        let tomorrowDateStr: string;
+        const local = tenant.timezone ? getLocalParts(tenant.timezone, now) : null;
+
+        if (local) {
+          if (local.hour !== REMINDER_LOCAL_HOUR) {
+            // Not 6 PM in this tenant's timezone; skip silently.
+            continue;
+          }
+          tomorrowDateStr = nextDayString(local.year, local.month, local.day);
+        } else {
+          // Legacy fallback: tenant has no timezone configured (or has an
+          // invalid one). Preserve the original behavior — fire only at
+          // midnight UTC so we don't silently send at the wrong hour.
+          if (tenant.timezone) {
+            errors.push(`[${tenant.id}] invalid timezone "${tenant.timezone}"; falling back to UTC schedule`);
+          }
+          if (now.getUTCHours() !== 0) {
+            continue;
+          }
+          const tomorrow = new Date(Date.UTC(
+            now.getUTCFullYear(),
+            now.getUTCMonth(),
+            now.getUTCDate() + 1,
+          ));
+          tomorrowDateStr = tomorrow.toISOString().slice(0, 10);
+        }
+
+        tenantsProcessed++;
+
         // Eligibility: any non-terminal surgery day request that is dated for
-        // tomorrow (UTC), has a contact phone on file, and hasn't already been
-        // reminded for the *current* scheduled date. We intentionally don't
-        // restrict to status='scheduled' — 'approved' requests with a date are
-        // also schedule-bearing in this app (matching the auto-confirmation
-        // email logic in PATCH /api/surgery-day-requests/:id), and we still
-        // remind 'pending' requests if staff happen to set a date without
-        // changing the status. Terminal states (declined/cancelled/completed)
-        // are excluded.
+        // tomorrow (in tenant local time), has a contact phone on file, and
+        // hasn't already been reminded for the *current* scheduled date.
+        // We intentionally don't restrict to status='scheduled' — 'approved'
+        // requests with a date are also schedule-bearing in this app
+        // (matching the auto-confirmation email logic in
+        // PATCH /api/surgery-day-requests/:id), and we still remind 'pending'
+        // requests if staff happen to set a date without changing the status.
+        // Terminal states (declined/cancelled/completed) are excluded.
         const due = await db
           .select({ id: surgeryDayRequests.id })
           .from(surgeryDayRequests)
