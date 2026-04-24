@@ -74,7 +74,7 @@ function buildAckText(rescueName: string) {
   return `By submitting this Surgery Day Request to ${rescueName}, I acknowledge and agree on behalf of my rescue/organization that:
 1. The information provided for each animal is accurate to the best of my knowledge.
 2. I understand that surgery and anesthesia carry inherent risks, and I assume those risks for every animal listed on this request.
-3. ${rescueName} and its veterinarian are not liable for outcomes related to undisclosed medical conditions, age, temperament, or pre-existing conditions.
+3. ${rescueName} and its veterinarian, Dr. Stark, are not liable for outcomes related to undisclosed medical conditions, age, temperament, or pre-existing conditions.
 4. I have read the pre-operative instructions above and agree to follow them, including withholding food and water after 10:00 PM the night before surgery.
 5. I am authorized to submit this request and to provide consent for the procedures listed for each animal.
 6. I will transport each animal to and from the surgery location on the scheduled date during the posted drop-off and pick-up windows.
