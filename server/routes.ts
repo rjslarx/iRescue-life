@@ -28635,6 +28635,25 @@ Submitted: ${new Date().toLocaleString()}
                   const safeDonorName = escapeHtml(donor.name);
                   const safeTenantName = escapeHtml(tenant.name);
 
+                  // Build a "Try again" recovery URL for the donor — pick the
+                  // most contextual surface so they land back where they came
+                  // from (campaign page, VIP tier picker, or general donate
+                  // page) instead of a generic dead end. The VIP giving-history
+                  // page also surfaces an in-app callout, so this just gives
+                  // the donor a one-click path straight from the email.
+                  const fallbackOrigin2 = `${req.protocol}://${req.get('host')}`;
+                  const tenantBaseUrl2 = (tenant as any).customDomain
+                    ? `https://${(tenant as any).customDomain}`
+                    : `${fallbackOrigin2}${tenant.subdomain ? `/${tenant.subdomain}` : ''}`;
+                  let retryPath = '/donate';
+                  if (session.metadata?.peerCampaignSlug) {
+                    retryPath = `/campaign/${session.metadata.peerCampaignSlug}`;
+                  } else if (session.mode === 'subscription' || failedPayment.isRecurring) {
+                    retryPath = '/vip-club';
+                  }
+                  const retryUrl = `${tenantBaseUrl2}${retryPath}`;
+                  const safeRetryUrl = escapeHtml(retryUrl);
+
                   await emailService.send({
                     to: donor.email,
                     subject: `Your bank transfer to ${safeTenantName} could not be completed`,
@@ -28650,9 +28669,13 @@ Submitted: ${new Date().toLocaleString()}
     <p style="margin: 0; color: #991b1b;"><strong>Payment Failed</strong></p>
     <p style="margin: 5px 0 0 0; color: #991b1b; font-size: 14px;">This can happen if there were insufficient funds, the account was closed, or bank details were incorrect.</p>
   </div>
-  
-  <p>If you'd still like to support our mission, you can try again with a different payment method or contact your bank for more information.</p>
-  
+
+  <p>If you'd still like to support our mission, you can try again with a card or a different bank account. It only takes a minute.</p>
+
+  <p style="margin: 24px 0;">
+    <a href="${safeRetryUrl}" style="display:inline-block;padding:12px 22px;background:#0f766e;color:#fff;border-radius:6px;text-decoration:none;font-weight:600;">Try again</a>
+  </p>
+
   <p>Thank you for your intended support. We appreciate your generosity!</p>
   
   <p>Best regards,<br/>

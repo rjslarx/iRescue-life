@@ -969,62 +969,128 @@ export default function VipClubPage() {
                 </Card>
               )}
 
-              {/* Bank-transfer (ACH) payments waiting on bank clearance.
-                  These don't move into "Past donations" until the transfer
-                  has actually settled (4–5 business days). Surfaced here so
-                  donors can see we received their gift even though Stripe
-                  hasn't finalised it yet. */}
-              {historyData.pendingPayments && historyData.pendingPayments.length > 0 && (
-                <Card className="p-6 border-amber-500/40">
-                  <h3 className="font-display text-lg font-semibold mb-1 flex items-center gap-2">
-                    <Building2 className="h-4 w-4 text-amber-600 dark:text-amber-500" />
-                    Bank transfers in progress
-                  </h3>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    These gifts were initiated and are waiting on your bank to clear (typically 4–5 business days). They'll move into your past donations and be eligible for a tax receipt as soon as they settle.
-                  </p>
-                  <div className="divide-y">
-                    {historyData.pendingPayments.map((p) => (
-                      <div
-                        key={p.id}
-                        className="flex flex-wrap items-center justify-between gap-3 py-3"
-                        data-testid={`row-pending-payment-${p.id}`}
+              {/* Bounced ACH bank transfers — split out of the in-progress
+                  list into a high-visibility "please try again" callout. The
+                  webhook silently deletes the optimistically-credited donation
+                  row on bounce, so without this callout the donor sees their
+                  gift disappear with no explanation. The "Try again" button
+                  routes them back to the right surface (campaign / vip /
+                  general donate) for a card or different-bank retry. */}
+              {(() => {
+                const bouncedPayments = (historyData.pendingPayments || []).filter(
+                  (p) => p.status === 'failed'
+                );
+                const inflightPayments = (historyData.pendingPayments || []).filter(
+                  (p) => p.status !== 'failed'
+                );
+                const retryPathFor = (p: VipHistoryPendingPayment) =>
+                  p.isRecurring ? '/vip-club' : '/donate';
+                return (
+                  <>
+                    {bouncedPayments.length > 0 && (
+                      <Card
+                        className="p-6 border-destructive/40 bg-destructive/5"
+                        data-testid="card-bounced-bank-transfers"
                       >
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-medium" data-testid={`text-pending-date-${p.id}`}>
-                              {formatDateShort(p.date)}
-                            </span>
-                            <span className="text-muted-foreground">·</span>
-                            <span className="font-semibold" data-testid={`text-pending-amount-${p.id}`}>
-                              {formatMoney(p.amount)}
-                            </span>
-                            {p.isRecurring && (
-                              <Badge variant="secondary" data-testid={`badge-pending-recurring-${p.id}`}>Monthly</Badge>
-                            )}
-                          </div>
-                          {p.status === 'pending' && p.expectedClearDate && (
-                            <p className="text-xs text-muted-foreground mt-0.5" data-testid={`text-pending-clear-date-${p.id}`}>
-                              Expected to clear by {formatDateShort(p.expectedClearDate)}
-                            </p>
-                          )}
+                        <h3 className="font-display text-lg font-semibold mb-1 flex items-center gap-2">
+                          <AlertCircle className="h-4 w-4 text-destructive" />
+                          Bank transfer bounced — please try again
+                        </h3>
+                        <p className="text-sm text-muted-foreground mb-4">
+                          Your bank wasn't able to complete the transfer below, so the gift didn't go through. This can happen when there aren't enough funds, the account was closed, or the bank details were entered incorrectly. You can retry with a card or a different bank account in just a moment.
+                        </p>
+                        <div className="divide-y">
+                          {bouncedPayments.map((p) => (
+                            <div
+                              key={p.id}
+                              className="flex flex-wrap items-center justify-between gap-3 py-3"
+                              data-testid={`row-bounced-payment-${p.id}`}
+                            >
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-medium" data-testid={`text-bounced-date-${p.id}`}>
+                                    {formatDateShort(p.date)}
+                                  </span>
+                                  <span className="text-muted-foreground">·</span>
+                                  <span className="font-semibold" data-testid={`text-bounced-amount-${p.id}`}>
+                                    {formatMoney(p.amount)}
+                                  </span>
+                                  {p.isRecurring && (
+                                    <Badge variant="secondary" data-testid={`badge-bounced-recurring-${p.id}`}>
+                                      Monthly
+                                    </Badge>
+                                  )}
+                                  <Badge variant="destructive" data-testid={`badge-bounced-status-${p.id}`}>
+                                    <AlertCircle className="h-3 w-3 mr-1" />
+                                    Bank declined
+                                  </Badge>
+                                </div>
+                              </div>
+                              <Button
+                                size="sm"
+                                onClick={() => setLocation(retryPathFor(p))}
+                                data-testid={`button-retry-bounced-${p.id}`}
+                              >
+                                Try again
+                              </Button>
+                            </div>
+                          ))}
                         </div>
-                        {p.status === 'failed' ? (
-                          <Badge variant="destructive" data-testid={`badge-pending-status-${p.id}`}>
-                            <AlertCircle className="h-3 w-3 mr-1" />
-                            Bank declined
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="border-amber-500/60 text-amber-700 dark:text-amber-500" data-testid={`badge-pending-status-${p.id}`}>
-                            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                            Awaiting bank clearance
-                          </Badge>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </Card>
-              )}
+                      </Card>
+                    )}
+
+                    {/* Bank-transfer (ACH) payments waiting on bank clearance.
+                        These don't move into "Past donations" until the transfer
+                        has actually settled (4–5 business days). Surfaced here so
+                        donors can see we received their gift even though Stripe
+                        hasn't finalised it yet. */}
+                    {inflightPayments.length > 0 && (
+                      <Card className="p-6 border-amber-500/40">
+                        <h3 className="font-display text-lg font-semibold mb-1 flex items-center gap-2">
+                          <Building2 className="h-4 w-4 text-amber-600 dark:text-amber-500" />
+                          Bank transfers in progress
+                        </h3>
+                        <p className="text-sm text-muted-foreground mb-4">
+                          These gifts were initiated and are waiting on your bank to clear (typically 4–5 business days). They'll move into your past donations and be eligible for a tax receipt as soon as they settle.
+                        </p>
+                        <div className="divide-y">
+                          {inflightPayments.map((p) => (
+                            <div
+                              key={p.id}
+                              className="flex flex-wrap items-center justify-between gap-3 py-3"
+                              data-testid={`row-pending-payment-${p.id}`}
+                            >
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-medium" data-testid={`text-pending-date-${p.id}`}>
+                                    {formatDateShort(p.date)}
+                                  </span>
+                                  <span className="text-muted-foreground">·</span>
+                                  <span className="font-semibold" data-testid={`text-pending-amount-${p.id}`}>
+                                    {formatMoney(p.amount)}
+                                  </span>
+                                  {p.isRecurring && (
+                                    <Badge variant="secondary" data-testid={`badge-pending-recurring-${p.id}`}>Monthly</Badge>
+                                  )}
+                                </div>
+                                {p.status === 'pending' && p.expectedClearDate && (
+                                  <p className="text-xs text-muted-foreground mt-0.5" data-testid={`text-pending-clear-date-${p.id}`}>
+                                    Expected to clear by {formatDateShort(p.expectedClearDate)}
+                                  </p>
+                                )}
+                              </div>
+                              <Badge variant="outline" className="border-amber-500/60 text-amber-700 dark:text-amber-500" data-testid={`badge-pending-status-${p.id}`}>
+                                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                Awaiting bank clearance
+                              </Badge>
+                            </div>
+                          ))}
+                        </div>
+                      </Card>
+                    )}
+                  </>
+                );
+              })()}
 
               <Card className="p-6">
                 <h3 className="font-display text-lg font-semibold mb-1">Past donations</h3>
