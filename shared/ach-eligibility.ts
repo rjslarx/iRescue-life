@@ -77,7 +77,7 @@ export function isAchEligible({
  * gentle / informational — never coercive — because card is still a fine
  * choice and we don't want to make the donor feel guilty for using one.
  */
-export function achNudgeCopy(surface: AchSurface, isRecurring: boolean): string {
+export function achNudgeCopy(surface: AchSurface, isRecurring: boolean = false): string {
   if (isRecurring) {
     return 'Pay by bank transfer instead and save us about 3% in card fees — more of every monthly gift goes directly to the animals.';
   }

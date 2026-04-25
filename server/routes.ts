@@ -28502,55 +28502,37 @@ Submitted: ${new Date().toLocaleString()}
             )
             .returning();
 
-          // Notify tenant admins/owners that an ACH transfer bounced. Donor
-          // gets their own email below; admins need a heads-up so they can
-          // follow up on large pledges that didn't actually clear. Gated on
-          // `failedPayment` so a redelivered webhook doesn't spam admins.
-          //
-          // Why direct admin email rather than the daily briefing pipeline:
-          // ACH bounces on $250+ gifts are time-sensitive (donor follow-up
-          // matters in hours, not the next morning's briefing). This mirrors
-          // the same admin-fan-out pattern used by the partner-campaign and
-          // VIP card-failure webhook handlers (see other `users.roles` admin
-          // queries in this file) — the codebase doesn't have a centralized
-          // event-based notification preferences subsystem to subscribe to.
+          // Notify tenant admins/owners that an ACH transfer bounced via the
+          // centralized notification preferences pipeline (event-key
+          // `donation_payment_failed`). Routing through the dispatcher means
+          // admins control recipients and channels through Settings →
+          // Notification Preferences just like every other event-driven
+          // alert in the app, instead of us hard-coding an email blast.
+          // Gated on `failedPayment` so a redelivered webhook doesn't fire
+          // the alert twice.
           if (failedPayment) try {
-            const adminUsers = await db
-              .select({ email: users.email, fullName: users.fullName })
-              .from(users)
-              .where(and(
-                eq(users.tenantId, tenant.id),
-                sql`${users.roles}::text[] && ARRAY['admin', 'owner']::text[]`
-              ))
-              .limit(5);
+            const sessionAmount = session.amount_total || failedPayment.amount || 0;
+            const amountFormatted = new Intl.NumberFormat('en-US', {
+              style: 'currency',
+              currency: (session.currency || failedPayment.currency || 'usd'),
+            }).format(sessionAmount / 100);
+            const donorEmail = session.customer_details?.email || session.customer_email || 'unknown donor';
+            const donorName = session.customer_details?.name || 'Unknown';
+            const surface = session.metadata?.peerCampaignId
+              ? 'P2P Campaign'
+              : (session.metadata?.achSurface || session.metadata?.surface || 'donation');
+            const safeTenantName = escapeHtml(tenant.name);
+            const safeDonor = escapeHtml(`${donorName} <${donorEmail}>`);
+            const safeSurface = escapeHtml(String(surface));
 
-            if (adminUsers.length > 0) {
-              const { EmailService } = await import('./lib/email-service');
-              const emailService = await EmailService.forTenant(tenant.id);
-              if (emailService) {
-                const sessionAmount = session.amount_total || failedPayment?.amount || 0;
-                const amountFormatted = new Intl.NumberFormat('en-US', {
-                  style: 'currency',
-                  currency: (session.currency || failedPayment?.currency || 'usd'),
-                }).format(sessionAmount / 100);
-                const donorEmail = session.customer_details?.email || session.customer_email || 'unknown donor';
-                const donorName = session.customer_details?.name || 'Unknown';
-                const surface = session.metadata?.peerCampaignId
-                  ? 'P2P Campaign'
-                  : (session.metadata?.achSurface || session.metadata?.surface || 'donation');
-                const safeTenantName = escapeHtml(tenant.name);
-                const safeDonor = escapeHtml(`${donorName} <${donorEmail}>`);
-                const safeSurface = escapeHtml(String(surface));
-
-                for (const admin of adminUsers) {
-                  try {
-                    await emailService.send({
-                      to: admin.email,
-                      subject: `[Action Needed] ACH bank transfer bounced — ${amountFormatted}`,
-                      html: `
+            const { dispatchEventNotification } = await import('./services/notification-dispatcher');
+            await dispatchEventNotification({
+              tenantId: tenant.id,
+              eventKey: 'donation_payment_failed',
+              subject: `[Action Needed] ACH bank transfer bounced — ${amountFormatted}`,
+              htmlBody: `
 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
   <h2 style="color: #dc2626; margin-top: 0;">ACH Bank Transfer Failed</h2>
-  <p>Hi ${escapeHtml(admin.fullName || 'team')},</p>
   <p>A donor's bank transfer to ${safeTenantName} bounced before clearing. The campaign progress was <strong>not</strong> credited and any associated public recognition (e.g. Wall of Heroes, P2P leaderboard) has been held back.</p>
   <div style="background: #fef2f2; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #dc2626;">
     <p style="margin: 5px 0;"><strong>Amount:</strong> ${amountFormatted}</p>
@@ -28560,17 +28542,12 @@ Submitted: ${new Date().toLocaleString()}
   </div>
   <p>The donor has been emailed automatically with a recovery link. You may want to follow up personally for larger pledges.</p>
 </div>
-                      `.trim(),
-                    });
-                  } catch (sendErr) {
-                    console.error('[Webhook] Failed to email admin about ACH failure:', admin.email, sendErr);
-                  }
-                }
-                console.log(`[Webhook] ACH-bounce admin alert dispatched to ${adminUsers.length} admin(s) for tenant ${tenant.id}`);
-              }
-            }
+              `.trim(),
+              textBody: `ACH bank transfer bounced for ${safeTenantName}. Amount: ${amountFormatted}. Donor: ${donorName} <${donorEmail}>. Surface: ${surface}. Stripe session: ${session.id}. Campaign progress was not credited; donor was emailed a recovery link automatically.`,
+              smsBody: `[${tenant.name}] ACH bounce: ${amountFormatted} from ${donorName}. Donor was emailed; consider personal follow-up.`,
+            });
           } catch (adminAlertErr) {
-            console.error('[Webhook] Failed to dispatch ACH-bounce admin alerts:', adminAlertErr);
+            console.error('[Webhook] Failed to dispatch ACH-bounce admin notification:', adminAlertErr);
           }
 
           // Notify donor that their bank transfer failed

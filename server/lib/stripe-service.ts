@@ -26,7 +26,7 @@ export async function connectAccountSupportsAch(
     const acct = await stripe.accounts.retrieve(connectedAccountId);
     // Stripe returns capability state as 'active' | 'inactive' | 'pending'
     // — we only enable ACH UI when it is fully active.
-    const ok = (acct.capabilities as any)?.us_bank_account_payments === 'active';
+    const ok = acct.capabilities?.us_bank_account_ach_payments === 'active';
     achCapabilityCache.set(connectedAccountId, { ok, checkedAt: Date.now() });
     return ok;
   } catch (err) {
@@ -183,7 +183,7 @@ export class StripeService {
     //   1. Caller has not force-disabled ACH (e.g. ticket sales, voting).
     //   2. The surface + amount + recurring combo is eligible per shared rules.
     //   3. If routing through Stripe Connect, the connected account must
-    //      have the us_bank_account_payments capability active.
+    //      have the us_bank_account_ach_payments capability active.
     const surface: AchSurface = params.surface ?? 'donation';
     let offerAch = false;
     if (!params.forceCardOnly) {
