@@ -20,56 +20,51 @@ Multi-tenancy is achieved through `tenant_id` foreign keys in a single PostgreSQ
 
 Core functionalities include:
 - Comprehensive animal management with Kanban-workflow-driven adoption application pipelines.
-- Financial management with Stripe integration for donations, fees, and event sales.
+- Financial management with Stripe integration for donations, fees, and event sales, including a "Donor Covers Fees" feature.
 - Contact management, "Happy Tails" success stories, supply registry, expenditure tracking, event, and volunteer coordination.
-- Medical records management, a medical pipeline dashboard, preventative care backfill, and document management with AI-powered PDF auto-import.
-- A native e-signature system for contracts with custom templates and legally verifiable PDF generation.
+- Medical records management, a medical pipeline dashboard, preventative care backfill, document management with AI-powered PDF auto-import, and a "Smart Add Medical Order Modal" (CPOE).
+- Native e-signature system for contracts with custom templates and legally verifiable PDF generation.
 - Automated daily backups of tenant files to Google Drive and PostgreSQL database backups to Google Cloud Storage.
 - Automated email and optional SMS notifications for adopters.
-- A mobile-first Foster Portal (My Fosters) for foster parents, including medication task logging.
-- A Medication Plan & Task System for staff to create and track foster completion of medication plans.
-- Subscription Feature Flags to enable differentiated features based on subscription tiers (Note: Lite tier now has all Pro features unlocked).
-- A centralized Notification Preferences system allowing admins to configure event-based notifications.
+- Mobile-first Foster Portal (My Fosters) with medication task logging and a Medication Plan & Task System for staff.
+- Subscription Feature Flags to enable differentiated features based on subscription tiers.
+- Centralized Notification Preferences system for event-based notifications.
 - **3-Pillar Animal Architecture:** Structuring animal data by `Status`, `Location`, and `Badges`.
-- Preventative Care Coverage Tracking and a "Smart Add Medical Order Modal" (CPOE) on the Animal Medical Profile page for efficient order entry.
-- Age-Aware Puppy Protocol Automation for intelligent scheduling of puppy vaccinations and preventative care.
-- Automated Adoption Packet Generator for professional PDFs of vaccination history, preventative care, and microchip information.
+- Age-Aware Puppy Protocol Automation for vaccinations and preventative care.
+- Automated Adoption Packet Generator for professional PDFs.
 - **Network Transfer Engine (Clone-and-Link):** Facilitates tenant-to-tenant animal transfers, preserving medical history.
-- **Two-Layer Animal Identity:** Each animal has a global UUID and a tenant-specific human-readable `local_shelter_id`.
-- **Unified Daily Medical Roster:** Provides an aggregated daily view of all pending medical tasks with a 30-second undo window for marked doses and admin override for foster medical tasks with audit trails.
-- **Donation & Fundraising Hub:** A centralized dashboard for general donations, targeted animal fundraising, and a fundraiser/event sales module with full campaign pages. Includes "Donor Covers Fees" feature with `fees_covered`, `gross_amount`, and `net_amount` tracking in the donations table.
-- **Help & Training Module:** Offers a two-tab page for videos and documents with role-based visibility.
-- **TNR (Trap-Neuter-Return) Log Module:** Integrates TNR record management within existing animal data. Includes a Colony Map View with Google Maps integration showing color-coded markers by outcome type, geocoding of colony locations on batch create and edit, and an interactive info panel for each mapped record.
-- **Omnichannel Communications Switchboard:** A unified admin control panel for SMS logs and queued messages, including a "Pause Outbound Comms" kill switch and a "Convert Channel" modal.
-- **Daily Staff Briefing Email:** An automated HTML email providing a daily summary of shelter, foster, and adopted animal-related tasks and alerts.
-- **Pending Applications Digest:** A daily scheduled email alerting configured recipients to new/unreviewed applications across various pipelines.
-- **Volunteer SMS Signup:** Volunteers can sign up for open shifts via SMS.
-- **Foster Medication SMS Escalation:** A 3-step system of hourly digests, evening nudges, and dashboard alerts for unconfirmed tasks, with fuzzy matching for replies.
-- **Adopter Compliance Engine:** Full post-adoption compliance tracking including microchip registration reminders and spay/neuter breach escalation with automated notifications and dashboard alerts.
-- **Medical Protocol Engine:** Tenant-customizable treatment intervals via Settings > Medical Protocols page.
-- **Medical Record Edit Audit Trail:** All six medical record tables have `lastEditedAt` and `lastEditedBy` columns, with a history timeline and "(Edited)" tooltips.
-- **Transfer Packet Section 5:** "Upcoming Preventative & Medical Care" section added to the official Medical Transfer Packet PDF, listing all future-due items.
-- **P2P Campaigns & Pledges Module:** Extended peer-to-peer fundraising with unit-based pledges (e.g., "$10/lb lost"), progress tracking, and timeline updates. Public campaign landing page at `/campaign/:slug` (with UUID fallback to legacy emergency campaigns). Staff Campaign Manager tab in Fundraising Hub with animal linking, progress updates, and donor/pledge list with payment-status filtering.
-- **Voting Contest Engine ("Vote with your Dollar"):** Gamified fundraising where $1 = 1 Vote, with a public leaderboard and Stripe Checkout integration.
-- **Fast-Track / Fee Waived Adoption:** Supports bypassing application steps and waiving adoption fees with a reason.
-- **Adoption Checkout Link SMS Delivery:** Default delivery of checkout links via SMS.
-- **Email PDF Auto-Import with Gemini IDP:** Inbound email webhook automatically downloads PDF attachments, uploads them to object storage, and triggers AI-powered medical record parsing via Gemini 2.5 Flash, creating records for human-in-the-loop approval.
-- **Email PDF Auto-Link to Animal Documents:** Fully reviewed email-imported medical batches automatically save the source PDF to the animal's Documents tab.
-- **Forwarded Email Routing via System Inbound Address:** Each tenant has a unique `system_inbound_email` for forwarded-email routing.
-- **Grant Readiness & Compliance Dashboard:** Tracks regulatory deadlines, document flags, and provides intake/outcome statistics with live release rate calculation.
-- **Social Quick Pledge UI:** Mobile-first campaign landing page layout triggered by `?source=social` URL parameter, with 9:16 vertical media hero, sticky checkout sheet, share tools with QR code generation, and video support in campaign updates.
-- **Per-Campaign Theme Customizer:** Each P2P campaign can have optional `primaryColor` and `accentColor` hex values set during creation or editing. These colors are applied to the public campaign landing page (hero gradient overlay, progress bars, CTA buttons, sticky donate bar) and participant sub-pages. Staff see color swatch indicators next to themed campaigns in the Campaign Manager table.
-- **Wall of Heroes Recognition Name:** Donors choose how they want to be recognized publicly — first name, family name ("The Smith Family"), business name, or memorial ("In memory of Jojo"). The `subscriptions.display_name` column (TS field `displayName`) is accepted via the new `displayName` field on VIP checkout, the VIP Portal `wall-preferences` POST, and the per-subscription `wall-of-heroes` PATCH (legacy `firstNameDisplay` keys still accepted from older clients and Stripe metadata for in-flight checkouts; both keys are written to Stripe Checkout metadata for transition safety). When a donor opts in but doesn't supply a recognition name, the public Wall fallback chain is: stored `displayName` → "First L." (donor first name + last initial) → "Anonymous". Max length raised to 60 chars to fit longer family/memorial names.
-- **VIP Auto-Tag for Monthly Donors:** Every monthly subscription created via Stripe Checkout — regardless of source page (VIP page, regular donation form, fundraiser, etc.) — is automatically tagged with the closest matching VIP tier on that tenant (highest tier whose price is ≤ the monthly amount). Backfill script `scripts/backfill-vip-tiers.ts` retroactively tags pre-existing monthly subs and seeds the three default tiers (Friend of the Pack $10 / Guardian $25 / Hero of Hope $50) on tenants that have none. Admins can customize seeded tiers anytime via Website Builder → VIP Donor Tiers; when the seeded defaults are still in place verbatim, that page surfaces a banner inviting customization, and the VIP Members page links directly to the tier editor. Wall of Heroes still requires the explicit donor opt-in checkbox — auto-tagged donors appear in the staff VIP roster and their own giving-history view but not on the public wall.
-- **Campaign Intake Form for External Partners:** Self-service partner invitation system. Admins click "Invite Partner" to send a branded email with a tokenized link to an external partner (school, PTA, organization). The partner fills out a public intake form at `/intake/:token` with campaign details and participant roster. On submission, the system auto-creates the campaign and all participants with random avatars, sends confirmation emails with all sub-links to both partner and admin. Tokens expire after 30 days or upon use. Partner-submitted campaigns show a "Partner-submitted" badge in Campaign Manager.
-- **Recurring-Payment Subscription-Link Backfill:** Task #104 fixed double-counting on every NEW recurring donation by stamping `payments.subscription_id` on the optimistic row created in `checkout.session.completed`, so the subsequent `invoice.payment_succeeded` dedup branch can find the seeded row and skip the second credit. To clean up rows created BEFORE that fix shipped, the one-shot script `scripts/backfill-payment-subscription-link.ts` walks every `payments` row where `is_recurring = true` and `subscription_id IS NULL`, looks up the linked Stripe invoice (`stripe_invoice_id`) or checkout session (`stripe_checkout_session_id`) to read its `subscription` field, and stamps the matching `subscriptions.id` from the same tenant. Donor totals are not touched — this is a foreign-key cleanup so subscription-scoped revenue queries (VIP per-tier revenue, etc.) stop silently dropping these renewals. Idempotent; supports `--dry-run`, `--tenant=<uuid>`, `--limit=<n>`. Backfill ran in production after Task #111.
-- **ACH Bounce Donor Notice:** When an ACH bank transfer bounces (`checkout.session.async_payment_failed`), the donor's optimistically-credited `donations` row is deleted by the webhook, which previously left the giving-history page showing only a small "Bank declined" pill in the amber "Bank transfers in progress" card. The VIP giving-history view now splits failed (`status='failed'`) ACH payments out of that card into a dedicated, destructive-styled "Bank transfer bounced — please try again" callout (`card-bounced-bank-transfers`) above it, listing each bounced gift with date, amount, optional Monthly badge, and a one-click "Try again" button that routes to `/vip-club` for recurring bounces or `/donate` for one-time bounces. The donor-facing email sent by the same webhook now also includes a contextual "Try again" CTA URL — `/campaign/<peerCampaignSlug>` for P2P bounces, `/vip-club` for subscription-mode/recurring bounces, otherwise `/donate` — built on the tenant's custom domain or subdomain path.
-- **Post Optimizer Payment Interception:** AI Post Optimizer (`/dashboard/post-optimizer`) detects P2P payment handles (Venmo `@`/`:`, `$Cashtags`, `paypal.me/x`) in the user's Facebook draft and silently re-routes the post: server-side regex strip of handles from the optimized caption, forced category override to `urgent_emotional`, guaranteed P.S. line, and a first-comment URL pointing to either the picked animal's active `emergency_fund` campaign (`/campaign/<id>`) or `/donate` as a fallback — both stamped with `utm_source=fb_optimizer&utm_medium=first_comment` and an Apple Pay / Google Pay mention. Optional animal picker combobox above the draft scopes the campaign lookup. Brand-only mentions like "We accept Venmo donations" are explicitly NOT triggered (regex requires an explicit handle marker).
+- **Two-Layer Animal Identity:** Global UUID and tenant-specific `local_shelter_id`.
+- **Unified Daily Medical Roster:** Aggregated daily view of pending medical tasks with audit trails for foster medical tasks.
+- **Donation & Fundraising Hub:** Centralized dashboard for general donations, targeted animal fundraising, and event sales with campaign pages.
+- **Help & Training Module:** Role-based visibility for videos and documents.
+- **TNR (Trap-Neuter-Return) Log Module:** Integrates TNR record management with a Colony Map View using Google Maps.
+- **Omnichannel Communications Switchboard:** Unified admin control panel for SMS logs and queued messages.
+- Automated Daily Staff Briefing Email and Pending Applications Digest.
+- Volunteer SMS Signup and Foster Medication SMS Escalation.
+- Adopter Compliance Engine for post-adoption tracking.
+- Medical Protocol Engine for tenant-customizable treatment intervals.
+- Medical Record Edit Audit Trail for all medical record tables.
+- Transfer Packet Section 5: "Upcoming Preventative & Medical Care" section.
+- **P2P Campaigns & Pledges Module:** Peer-to-peer fundraising with unit-based pledges, progress tracking, and public campaign landing pages.
+- **Voting Contest Engine ("Vote with your Dollar"):** Gamified fundraising with a public leaderboard.
+- Fast-Track / Fee Waived Adoption functionality.
+- Adoption Checkout Link SMS Delivery.
+- Email PDF Auto-Import with Gemini IDP for AI-powered medical record parsing.
+- Email PDF Auto-Link to Animal Documents.
+- Forwarded Email Routing via System Inbound Address for each tenant.
+- Grant Readiness & Compliance Dashboard for regulatory tracking and statistics.
+- Social Quick Pledge UI for mobile-first campaign landing pages.
+- Per-Campaign Theme Customizer for public campaign landing pages.
+- Wall of Heroes Recognition Name for donor display preferences.
+- VIP Auto-Tag for Monthly Donors based on subscription tiers.
+- Campaign Intake Form for External Partners for self-service campaign creation.
+- ACH Bounce Donor Notice with try-again functionality.
+- Post Optimizer Payment Interception: AI detection of P2P payment handles in social media drafts for re-routing and campaign linking.
 
 ## External Dependencies
 - **Stripe:** Payment processing and financial management.
 - **Resend:** Email delivery services.
-- **Google APIs:** OAuth 2.0, Gmail API, Calendar API, Drive API, Google Picker API.
+- **Google APIs:** Gmail API, Calendar API, Drive API, Google Picker API.
 - **PostgreSQL:** Primary relational database.
 - **Vite:** Frontend build tool.
 - **Wouter:** Client-side routing.
