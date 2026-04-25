@@ -28256,11 +28256,10 @@ Submitted: ${new Date().toLocaleString()}
             linkedSubscriptionId = subRow?.id || null;
           }
 
-          // Out-of-order webhook guard: if invoice.payment_succeeded already
-          // landed first (subscription ACH), it inserted a succeeded payment
-          // row + bumped donor totals. Drop the redundant pending checkout-
-          // session row and skip the donor-total/donation insert below to
-          // prevent double-counting.
+          // Out-of-order webhook guard: invoice.payment_succeeded may have already
+          // landed for subscription ACH. If a succeeded payment row exists for the
+          // first invoice, it bumped donor totals — we must skip that bump here but
+          // still materialize the donation row (invoice handler does not insert one).
           let invoiceAlreadySettled = false;
           if (firstInvoiceId) {
             const [existingInvoicePayment] = await db
@@ -28274,39 +28273,64 @@ Submitted: ${new Date().toLocaleString()}
               .limit(1);
             if (existingInvoicePayment) {
               invoiceAlreadySettled = true;
-              await db
-                .delete(payments)
-                .where(and(
-                  eq(payments.tenantId, tenant.id),
-                  eq(payments.stripeCheckoutSessionId, session.id),
-                  eq(payments.status, 'pending'),
-                ));
-              console.log('[Webhook] Invoice already settled for ACH session', session.id, '— skipping duplicate increment');
             }
           }
 
           let updatedPayment: typeof payments.$inferSelect | undefined;
-          if (!invoiceAlreadySettled) {
-            const updated = await db
-              .update(payments)
-              .set({
-                status: 'succeeded',
-                ...(firstInvoiceId ? { stripeInvoiceId: firstInvoiceId } : {}),
-                ...(linkedSubscriptionId ? { subscriptionId: linkedSubscriptionId } : {}),
-              })
-              .where(
-                and(
-                  eq(payments.tenantId, tenant.id),
-                  eq(payments.stripeCheckoutSessionId, session.id),
-                  eq(payments.status, 'pending')
-                )
+          const upgrade = await db
+            .update(payments)
+            .set({
+              status: 'succeeded',
+              ...(firstInvoiceId && !invoiceAlreadySettled ? { stripeInvoiceId: firstInvoiceId } : {}),
+              ...(linkedSubscriptionId ? { subscriptionId: linkedSubscriptionId } : {}),
+            })
+            .where(
+              and(
+                eq(payments.tenantId, tenant.id),
+                eq(payments.stripeCheckoutSessionId, session.id),
+                eq(payments.status, 'pending')
               )
-              .returning();
-            updatedPayment = updated[0];
+            )
+            .returning();
+          updatedPayment = upgrade[0];
+
+          // Async-first edge case: checkout.session.completed may not have arrived
+          // yet, so no pending row exists. Create one from the session payload so
+          // downstream donor/donation/email logic still runs idempotently.
+          if (!updatedPayment && !invoiceAlreadySettled) {
+            const customerEmail = session.customer_details?.email || session.customer_email;
+            if (customerEmail) {
+              const [donorRow] = await db
+                .select()
+                .from(donors)
+                .where(and(
+                  eq(donors.tenantId, tenant.id),
+                  sql`LOWER(${donors.email}) = LOWER(${customerEmail})`,
+                ))
+                .limit(1);
+              if (donorRow) {
+                const [created] = await db
+                  .insert(payments)
+                  .values({
+                    tenantId: tenant.id,
+                    donorId: donorRow.id,
+                    stripeCheckoutSessionId: session.id,
+                    stripeInvoiceId: firstInvoiceId,
+                    subscriptionId: linkedSubscriptionId,
+                    amount: session.amount_total || 0,
+                    currency: session.currency || 'usd',
+                    status: 'succeeded',
+                    paymentMethod: 'stripe',
+                    isRecurring: session.mode === 'subscription',
+                  })
+                  .returning();
+                updatedPayment = created;
+                console.log('[Webhook] Async-first ACH success: created payment row for session', session.id);
+              }
+            }
           }
 
           if (updatedPayment) {
-            // Update donor totals now that payment succeeded
             const donor = await db
               .select()
               .from(donors)
@@ -28315,13 +28339,15 @@ Submitted: ${new Date().toLocaleString()}
               .then(rows => rows[0]);
 
             if (donor) {
-              await db
-                .update(donors)
-                .set({
-                  totalDonated: (donor.totalDonated || 0) + updatedPayment.amount,
-                  lastDonationDate: new Date(),
-                })
-                .where(eq(donors.id, donor.id));
+              if (!invoiceAlreadySettled) {
+                await db
+                  .update(donors)
+                  .set({
+                    totalDonated: (donor.totalDonated || 0) + updatedPayment.amount,
+                    lastDonationDate: new Date(),
+                  })
+                  .where(eq(donors.id, donor.id));
+              }
 
               // ACH cleared: persist donation row tagged 'ach' for receipt/summary parity.
               try {
