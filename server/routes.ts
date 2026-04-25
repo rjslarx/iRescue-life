@@ -28243,10 +28243,18 @@ Submitted: ${new Date().toLocaleString()}
           }
 
           // Update the pending payment to succeeded — status='pending' guard
-          // makes redelivered webhooks idempotent.
+          // makes redelivered webhooks idempotent. For subscription checkouts,
+          // also stamp the first invoice id so invoice.payment_succeeded short-
+          // circuits via its existing-succeeded idempotency check (prevents
+          // double-counting donor.totalDonated for ACH-funded subscription
+          // first cycle).
+          const firstInvoiceId = session.invoice || null;
           const [updatedPayment] = await db
             .update(payments)
-            .set({ status: 'succeeded' })
+            .set({
+              status: 'succeeded',
+              ...(firstInvoiceId ? { stripeInvoiceId: firstInvoiceId } : {}),
+            })
             .where(
               and(
                 eq(payments.tenantId, tenant.id),

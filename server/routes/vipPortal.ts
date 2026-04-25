@@ -464,7 +464,7 @@ router.get('/annual-summary/:year', async (req: Request, res: Response) => {
 
     const cashDonations = yearDonations.filter(d => {
       const t = (d.donationType || 'cash');
-      return t === 'cash' || t === 'online' || t === 'check';
+      return t === 'cash' || t === 'online' || t === 'check' || t === 'ach';
     });
 
     if (cashDonations.length === 0) {
