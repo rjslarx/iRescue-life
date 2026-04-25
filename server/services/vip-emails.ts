@@ -504,6 +504,12 @@ export interface VipPaymentFailedEmailParams {
   nextRetryAt?: Date | null;
   hostedInvoiceUrl?: string | null;
   manageUrl: string;
+  /** Friendly reason from Stripe (e.g. "Your card has expired."). Optional. */
+  failureReason?: string | null;
+  /** Stripe will not retry again — this is the donor's last chance to update
+   *  the card before the subscription is canceled. When true the email uses
+   *  more urgent "final reminder" copy. */
+  isFinalAttempt?: boolean;
 }
 
 export async function sendVipPaymentFailedEmail(params: VipPaymentFailedEmailParams): Promise<void> {
@@ -522,25 +528,53 @@ export async function sendVipPaymentFailedEmail(params: VipPaymentFailedEmailPar
   const amountFormatted = formatCurrencyCents(params.amountCents, params.currency);
   const safeManageUrl = escapeHtml(params.manageUrl);
   const safeInvoiceUrl = params.hostedInvoiceUrl ? escapeHtml(params.hostedInvoiceUrl) : null;
-  const attempt = params.attemptNumber && params.attemptNumber > 1
-    ? `<p style="margin: 4px 0; color: #6b7280; font-size: 13px;">This is attempt #${params.attemptNumber}.</p>`
+  const isReminder = (params.attemptNumber ?? 0) > 1;
+  const isFinal = !!params.isFinalAttempt;
+
+  const attempt = isReminder
+    ? `<p style="margin: 4px 0; color: #6b7280; font-size: 13px;">This is attempt #${params.attemptNumber}${isFinal ? ' &mdash; the final automatic retry before your subscription is canceled.' : '.'}</p>`
     : '';
-  const retryNote = params.nextRetryAt
-    ? `<p style="margin: 8px 0 0 0; font-size: 14px; color: #92400e;">We'll automatically try again on <strong>${escapeHtml(params.nextRetryAt.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }))}</strong>. To avoid any interruption to your monthly support, please update your card now.</p>`
-    : `<p style="margin: 8px 0 0 0; font-size: 14px; color: #92400e;">To avoid any interruption to your monthly support, please update your card.</p>`;
+
+  let retryNote: string;
+  if (isFinal) {
+    retryNote = `<p style="margin: 8px 0 0 0; font-size: 14px; color: #7f1d1d;"><strong>This was our last automatic retry.</strong> If we don't have a working card on file soon, your monthly subscription will be canceled and you'll drop off our VIP roster. Please update your payment method today to keep your support flowing.</p>`;
+  } else if (params.nextRetryAt) {
+    retryNote = `<p style="margin: 8px 0 0 0; font-size: 14px; color: #92400e;">We'll automatically try again on <strong>${escapeHtml(params.nextRetryAt.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }))}</strong>. To avoid any interruption to your monthly support, please update your card now.</p>`;
+  } else {
+    retryNote = `<p style="margin: 8px 0 0 0; font-size: 14px; color: #92400e;">To avoid any interruption to your monthly support, please update your card.</p>`;
+  }
+
   const invoiceLine = safeInvoiceUrl
     ? `<p style="margin: 12px 0 0 0; font-size: 13px;"><a href="${safeInvoiceUrl}" style="color: #2563eb;">View this invoice on Stripe →</a></p>`
     : '';
 
+  const safeReason = params.failureReason ? escapeHtml(params.failureReason) : null;
+  const reasonBlock = safeReason
+    ? `<p style="margin: 4px 0 0 0; font-size: 14px; color: #92400e;"><strong>What the bank told us:</strong> ${safeReason}</p>`
+    : '';
+
+  const heading = isFinal
+    ? `Last chance: your ${safeTier} subscription is about to be canceled`
+    : isReminder
+      ? `Reminder: your monthly gift still hasn't gone through`
+      : `Your monthly gift didn't go through`;
+
+  const headingColor = isFinal ? '#7f1d1d' : '#b91c1c';
+
+  const intro = isReminder
+    ? `Hi ${safeDonor}, we tried again to process your <strong>${safeTier}</strong> payment of <strong>${amountFormatted}</strong> to ${safeTenant}, but the card on file is still being declined.`
+    : `Hi ${safeDonor}, your most recent <strong>${safeTier}</strong> payment of <strong>${amountFormatted}</strong> to ${safeTenant} couldn't be processed.`;
+
   const html = `
 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #111827;">
-  <h2 style="color: #b91c1c; margin-bottom: 8px;">Your monthly gift didn't go through</h2>
-  <p style="margin-top: 0;">Hi ${safeDonor}, your most recent <strong>${safeTier}</strong> payment of <strong>${amountFormatted}</strong> to ${safeTenant} couldn't be processed.</p>
+  <h2 style="color: ${headingColor}; margin-bottom: 8px;">${heading}</h2>
+  <p style="margin-top: 0;">${intro}</p>
   ${attempt}
 
-  <div style="background: #fffbeb; border-left: 4px solid #f59e0b; padding: 14px 16px; border-radius: 6px; margin: 20px 0;">
-    <p style="margin: 0; font-weight: 600; color: #92400e;">Common reasons cards fail:</p>
-    <ul style="margin: 8px 0 0 0; padding-left: 20px; color: #92400e; font-size: 14px;">
+  <div style="background: ${isFinal ? '#fef2f2' : '#fffbeb'}; border-left: 4px solid ${isFinal ? '#dc2626' : '#f59e0b'}; padding: 14px 16px; border-radius: 6px; margin: 20px 0;">
+    ${reasonBlock}
+    <p style="margin: ${reasonBlock ? '12px' : '0'} 0 0 0; font-weight: 600; color: ${isFinal ? '#7f1d1d' : '#92400e'};">Common reasons cards fail:</p>
+    <ul style="margin: 8px 0 0 0; padding-left: 20px; color: ${isFinal ? '#7f1d1d' : '#92400e'}; font-size: 14px;">
       <li>The card has expired</li>
       <li>Insufficient funds</li>
       <li>The bank flagged it as suspicious</li>
@@ -550,7 +584,7 @@ export async function sendVipPaymentFailedEmail(params: VipPaymentFailedEmailPar
   </div>
 
   <p style="text-align: center; margin: 24px 0;">
-    <a href="${safeManageUrl}" style="display: inline-block; background: #2563eb; color: #ffffff; padding: 12px 22px; border-radius: 6px; text-decoration: none; font-weight: 600;">Update your payment method</a>
+    <a href="${safeManageUrl}" style="display: inline-block; background: ${isFinal ? '#dc2626' : '#2563eb'}; color: #ffffff; padding: 12px 22px; border-radius: 6px; text-decoration: none; font-weight: 600;">Update your payment method</a>
   </p>
 
   ${invoiceLine}
@@ -562,11 +596,15 @@ export async function sendVipPaymentFailedEmail(params: VipPaymentFailedEmailPar
 </div>
 `.trim();
 
-  const subject = `Action needed: your ${safeTier} gift to ${tenant.name} didn't go through`;
+  const subject = isFinal
+    ? `[Last chance] Update your card to keep your ${safeTier} gift to ${tenant.name} active`
+    : isReminder
+      ? `Reminder: your ${safeTier} gift to ${tenant.name} still needs a working card`
+      : `Action needed: your ${safeTier} gift to ${tenant.name} didn't go through`;
   try {
     const result = await emailService.send({ to: donorEmail, subject, html });
     if (result.success) {
-      console.log(`[VIP PaymentFailed] Sent card-failure email to ${donorEmail} for tenant ${tenant.id}`);
+      console.log(`[VIP PaymentFailed] Sent card-failure email to ${donorEmail} for tenant ${tenant.id} (attempt=${params.attemptNumber ?? 1}, final=${isFinal})`);
     } else {
       console.warn(`[VIP PaymentFailed] Email send returned failure: ${result.error}`);
     }

@@ -28215,6 +28215,80 @@ Submitted: ${new Date().toLocaleString()}
               console.error('[Webhook] Failed to refresh subscription card cache:', cardErr);
             }
           }
+
+          // VIP churn-from-payment-failure alert: when Stripe finally cancels a
+          // VIP monthly subscription after exhausting its retry schedule, give
+          // staff a heads-up so they can do a personal save attempt instead of
+          // finding out from a quiet roster shrink. We trigger this only on
+          // delete events where Stripe (not the donor or staff) caused the
+          // cancellation due to payment failure.
+          if (event.type === 'customer.subscription.deleted') {
+            try {
+              const cancellationReason = subscription?.cancellation_details?.reason || null;
+              const stripeCanceledForPaymentFailure = cancellationReason === 'payment_failed';
+              if (stripeCanceledForPaymentFailure) {
+                const dbSub = await db
+                  .select()
+                  .from(subscriptions)
+                  .where(and(
+                    eq(subscriptions.tenantId, tenant.id),
+                    eq(subscriptions.stripeSubscriptionId, subscription.id),
+                  ))
+                  .limit(1)
+                  .then(rows => rows[0]);
+
+                if (dbSub?.vipTierIdSnapshot) {
+                  const churnedDonor = dbSub.donorId
+                    ? await db.select().from(donors).where(eq(donors.id, dbSub.donorId)).limit(1).then(rows => rows[0])
+                    : null;
+
+                  const safeTenantName = escapeHtml(tenant.name);
+                  const tierLabel = escapeHtml(dbSub.vipTierNameSnapshot || 'VIP Donor');
+                  const donorName = churnedDonor?.name || 'Unknown donor';
+                  const donorEmail = churnedDonor?.email || 'unknown@example.com';
+                  const safeDonor = escapeHtml(`${donorName} <${donorEmail}>`);
+                  const monthlyAmount = new Intl.NumberFormat('en-US', {
+                    style: 'currency',
+                    currency: (dbSub.currency || 'usd'),
+                  }).format((dbSub.amount || 0) / 100);
+
+                  const fallbackOrigin = `${req.protocol}://${req.get('host')}`;
+                  const tenantBaseUrl = (tenant as any).customDomain
+                    ? `https://${(tenant as any).customDomain}`
+                    : `${fallbackOrigin}${tenant.subdomain ? `/${tenant.subdomain}` : ''}`;
+                  const donorRecordUrl = churnedDonor?.id
+                    ? `${tenantBaseUrl}/dashboard/donors?donorId=${churnedDonor.id}`
+                    : `${tenantBaseUrl}/dashboard/donors`;
+                  const safeDonorRecordUrl = escapeHtml(donorRecordUrl);
+
+                  const { dispatchEventNotification } = await import('./services/notification-dispatcher');
+                  await dispatchEventNotification({
+                    tenantId: tenant.id,
+                    eventKey: 'vip_subscription_payment_churn',
+                    subject: `[VIP churn] ${donorName}'s ${monthlyAmount}/mo subscription canceled — card kept failing`,
+                    htmlBody: `
+<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <h2 style="color: #b91c1c; margin-top: 0;">VIP subscription canceled after card kept failing</h2>
+  <p>Stripe exhausted its automatic retry schedule and canceled this VIP donor's monthly subscription to ${safeTenantName}. They received the standard donor recovery emails along the way, but a quick personal note from your team often saves these.</p>
+  <div style="background: #fef2f2; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #dc2626;">
+    <p style="margin: 5px 0;"><strong>Donor:</strong> ${safeDonor}</p>
+    <p style="margin: 5px 0;"><strong>Tier:</strong> ${tierLabel}</p>
+    <p style="margin: 5px 0;"><strong>Monthly amount:</strong> ${monthlyAmount}</p>
+    <p style="margin: 5px 0; font-family: monospace; font-size: 12px;"><strong>Stripe subscription:</strong> ${escapeHtml(subscription.id)}</p>
+  </div>
+  <p style="margin: 16px 0;"><a href="${safeDonorRecordUrl}" style="display:inline-block;padding:10px 18px;background:#0f766e;color:#fff;border-radius:6px;text-decoration:none;font-weight:600;">Open donor record</a></p>
+  <p>The donor has already been emailed an "update your card" link. If they haven't acted, a personal outreach in the next day or two has the best chance of recovering this gift.</p>
+</div>
+                    `.trim(),
+                    textBody: `VIP subscription canceled after card kept failing for ${tenant.name}. Donor: ${donorName} <${donorEmail}>. Tier: ${dbSub.vipTierNameSnapshot || 'VIP Donor'}. Monthly amount: ${monthlyAmount}. Stripe subscription: ${subscription.id}. Donor record: ${donorRecordUrl}.`,
+                    smsBody: `[${tenant.name}] VIP churn: ${donorName} (${monthlyAmount}/mo) canceled after card kept failing. ${donorRecordUrl}`,
+                  });
+                }
+              }
+            } catch (churnAlertErr) {
+              console.error('[Webhook] Failed to dispatch VIP churn notification:', churnAlertErr);
+            }
+          }
           break;
         }
 
@@ -28461,6 +28535,37 @@ Submitted: ${new Date().toLocaleString()}
               const baseUrl = (tenant as any).customDomain
                 ? `https://${(tenant as any).customDomain}`
                 : `${fallbackOrigin}${tenantPath}`;
+
+              // Pull the friendly failure reason from the latest payment intent
+              // (Stripe attaches the bank's decline message to PaymentIntent
+              //  .last_payment_error.message). Best-effort: any failure here
+              // shouldn't block the donor email.
+              let failureReason: string | null = null;
+              try {
+                const piId = typeof invoice.payment_intent === 'string'
+                  ? invoice.payment_intent
+                  : invoice.payment_intent?.id;
+                if (piId) {
+                  const { stripeService } = await import('./lib/stripe-service');
+                  const stripeClient = stripeService.getStripeClient(tenant);
+                  if (stripeClient) {
+                    const pi = await stripeClient.paymentIntents.retrieve(piId);
+                    const lpe = (pi as any)?.last_payment_error;
+                    if (lpe) {
+                      failureReason = lpe.message || lpe.decline_code || lpe.code || null;
+                    }
+                  }
+                }
+              } catch (piErr) {
+                console.error('[Webhook] Failed to retrieve PI failure reason:', piErr);
+              }
+
+              // Detect "final retry": Stripe sets next_payment_attempt to null
+              // when it has exhausted its dunning schedule. The next event for
+              // this subscription will typically be customer.subscription.deleted.
+              const attemptCount = invoice.attempt_count || 0;
+              const isFinalAttempt = attemptCount >= 2 && !invoice.next_payment_attempt;
+
               await sendVipPaymentFailedEmail({
                 tenant,
                 donorEmail: donor.email,
@@ -28472,6 +28577,8 @@ Submitted: ${new Date().toLocaleString()}
                 nextRetryAt: invoice.next_payment_attempt ? new Date(invoice.next_payment_attempt * 1000) : null,
                 hostedInvoiceUrl: invoice.hosted_invoice_url || null,
                 manageUrl: `${baseUrl}/donor/giving-history`,
+                failureReason,
+                isFinalAttempt,
               });
             } catch (emailErr) {
               console.error('[Webhook] Failed to send VIP card-failure email:', emailErr);
