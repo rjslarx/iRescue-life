@@ -274,6 +274,7 @@ router.get('/history', async (req: Request, res: Response) => {
       .where(and(
         eq(payments.tenantId, tenantId),
         eq(payments.donorId, donorId),
+        eq(payments.paymentMethod, 'stripe'),
         sql`${payments.status} IN ('pending', 'failed')`,
         sql`${payments.stripeCheckoutSessionId} IS NOT NULL`,
         sql`${payments.stripeInvoiceId} IS NULL`,

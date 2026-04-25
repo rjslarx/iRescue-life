@@ -43178,22 +43178,16 @@ Use timestamps like [00:00] to help with pacing.`;
         const fullImageUrl = campaign.imageUrl!.startsWith("http") ? campaign.imageUrl! : `${protocol}://${host}${campaign.imageUrl!.startsWith("/") ? "" : "/"}${campaign.imageUrl!}`; lineItemData.price_data.product_data.images = [fullImageUrl];
       }
 
-      // Decide whether ACH (us_bank_account) qualifies for this emergency-fund
-      // gift. Same one-time threshold ($250) as regular donations. Probe the
-      // Connect account's `us_bank_account_payments` capability (cached for
-      // 10 min) — if it isn't 'active', we silently downgrade to card-only
-      // rather than letting Stripe Checkout error out at submit-time.
-      const { isAchEligible: emergencyAchEligible, connectAccountSupportsAch: emergencyAchConnectCheck } = await import('./lib/stripe-service').then(async (svc) => ({
-        connectAccountSupportsAch: svc.connectAccountSupportsAch,
-        isAchEligible: (await import('@shared/ach-eligibility')).isAchEligible,
-      }));
-      let offerEmergencyAch = emergencyAchEligible({
+      // ACH eligibility for emergency-fund gift (same $250 one-time threshold).
+      const { isAchEligible } = await import('@shared/ach-eligibility');
+      const { connectAccountSupportsAch } = await import('./lib/stripe-service');
+      let offerEmergencyAch = isAchEligible({
         amountCents: amount,
         isRecurring: false,
         surface: 'emergency_fund',
       });
       if (offerEmergencyAch && tenant.stripeConnectedAccountId) {
-        offerEmergencyAch = await emergencyAchConnectCheck(stripe, tenant.stripeConnectedAccountId);
+        offerEmergencyAch = await connectAccountSupportsAch(stripe, tenant.stripeConnectedAccountId);
       }
 
       const sessionParams: any = {
