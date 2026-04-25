@@ -48474,6 +48474,53 @@ Use timestamps like [00:00] to help with pacing.`;
     } catch (error) { next(error); }
   });
 
+  // Auth: download signed-agreement PDF (generated lazily on first request)
+  app.get('/api/surgery-day-requests/:id/signed-pdf', requireTenant, requireAuth, requireRole('owner', 'admin', 'staff', 'board_member', 'intake_coordinator'), async (req, res, next) => {
+    try {
+      const tenantId = req.session.tenantId!;
+      const { id } = req.params;
+      const [existing] = await db.select().from(surgeryDayRequests)
+        .where(and(eq(surgeryDayRequests.id, id), eq(surgeryDayRequests.tenantId, tenantId)))
+        .limit(1);
+      if (!existing) return res.status(404).json({ error: 'Request not found' });
+      if (!existing.signatureDataUrl || !existing.signedByName || !existing.signedAt) {
+        return res.status(400).json({ error: 'Request is not signed' });
+      }
+
+      const {
+        generateSurgeryDayRequestPDF,
+        generateSignedSurgeryDayRequestPdfUrl,
+      } = await import('./services/surgery-day-request-pdf');
+
+      let pdfPath = existing.signedPdfUrl;
+      if (!pdfPath) {
+        pdfPath = await generateSurgeryDayRequestPDF(id, tenantId);
+      }
+
+      let signedUrl: string;
+      try {
+        signedUrl = await generateSignedSurgeryDayRequestPdfUrl(pdfPath, 900, 'attachment');
+      } catch (err: any) {
+        // If the previously generated file is missing (e.g. storage cleared),
+        // regenerate once and retry so staff are never stuck.
+        if (existing.signedPdfUrl) {
+          pdfPath = await generateSurgeryDayRequestPDF(id, tenantId);
+          signedUrl = await generateSignedSurgeryDayRequestPdfUrl(pdfPath, 900, 'attachment');
+        } else {
+          throw err;
+        }
+      }
+
+      const safeOrg = (existing.organizationName || 'partner')
+        .replace(/[^a-z0-9]+/gi, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 60) || 'partner';
+      const fileName = `surgery-day-request-${safeOrg}-${id.slice(0, 8)}.pdf`;
+
+      res.json({ downloadUrl: signedUrl, expiresIn: 900, fileName });
+    } catch (error) { next(error); }
+  });
+
   // Auth: update request
   app.patch('/api/surgery-day-requests/:id', requireTenant, requireAuth, requireRole('owner', 'admin', 'staff', 'board_member', 'intake_coordinator'), async (req, res, next) => {
     try {

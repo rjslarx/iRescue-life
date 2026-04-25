@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
-import { Loader2, Calendar as CalendarIcon, Stethoscope, ExternalLink, Plus, Trash2, Edit, UserPlus, Mail, MailCheck, MessageSquare, MessageSquareText } from "lucide-react";
+import { Loader2, Calendar as CalendarIcon, Stethoscope, ExternalLink, Plus, Trash2, Edit, UserPlus, Mail, MailCheck, MessageSquare, MessageSquareText, FileDown } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { format } from "date-fns";
 
@@ -313,6 +313,22 @@ function RequestDetailSheet({ requestId, open, onOpenChange }: { requestId: stri
     onError: (e: any) => toast({ title: "Send failed", description: e?.message || "Try again", variant: "destructive" }),
   });
 
+  const downloadPdfMut = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("GET", `/api/surgery-day-requests/${requestId}/signed-pdf`);
+      return res.json() as Promise<{ downloadUrl: string; expiresIn: number; fileName: string }>;
+    },
+    onSuccess: (result) => {
+      if (result?.downloadUrl) {
+        window.open(result.downloadUrl, "_blank", "noopener,noreferrer");
+        toast({ title: "PDF ready", description: "Your download should start in a new tab." });
+      } else {
+        toast({ title: "Download failed", description: "No download URL was returned.", variant: "destructive" });
+      }
+    },
+    onError: (e: any) => toast({ title: "Download failed", description: e?.message || "Try again", variant: "destructive" }),
+  });
+
   const saveAsPartnerMut = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", `/api/surgery-day-requests/${requestId}/save-as-partner`);
@@ -517,6 +533,22 @@ function RequestDetailSheet({ requestId, open, onOpenChange }: { requestId: stri
                 <div><span className="text-muted-foreground">Signed at:</span> {format(new Date(data.request.signedAt), "PPpp")}</div>
                 <div className="rounded-md border bg-muted p-2">
                   <img src={data.request.signatureDataUrl} alt="Signature" className="max-h-32 mx-auto" data-testid="img-signature" />
+                </div>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => downloadPdfMut.mutate()}
+                    disabled={downloadPdfMut.isPending}
+                    data-testid="button-download-signed-pdf"
+                  >
+                    {downloadPdfMut.isPending ? (
+                      <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                    ) : (
+                      <FileDown className="w-4 h-4 mr-1" />
+                    )}
+                    Download signed agreement (PDF)
+                  </Button>
                 </div>
                 <details className="text-xs">
                   <summary className="cursor-pointer text-muted-foreground">View acknowledgment text</summary>

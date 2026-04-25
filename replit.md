@@ -60,6 +60,7 @@ Core functionalities include:
 - Campaign Intake Form for External Partners for self-service campaign creation.
 - ACH Bounce Donor Notice with try-again functionality.
 - Post Optimizer Payment Interception: AI detection of P2P payment handles in social media drafts for re-routing and campaign linking.
+- Surgery Day Request Signed-Agreement PDF: lazily-generated, downloadable PDF of the partner's signed liability agreement (signature image + acknowledgment text + animal list + signer/timestamp + linked partner organization) with strict signature data-URI sanitization, available from the staff dashboard.
 
 ## External Dependencies
 - **Stripe:** Payment processing and financial management.

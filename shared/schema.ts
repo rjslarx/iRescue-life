@@ -5243,6 +5243,11 @@ export const surgeryDayRequests = pgTable("surgery_day_requests", {
   reminderSmsSentAt: timestamp("reminder_sms_sent_at"),
   reminderSmsSentTo: text("reminder_sms_sent_to"),
 
+  // Object-storage path of the generated signed-agreement PDF.
+  // Populated lazily on first download from the staff dashboard so older
+  // requests submitted before this feature can still produce a PDF on demand.
+  signedPdfUrl: text("signed_pdf_url"),
+
   submittedAt: timestamp("submitted_at").notNull().defaultNow(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -5260,6 +5265,7 @@ export const insertSurgeryDayRequestSchema = createInsertSchema(surgeryDayReques
   reminderSmsSentAt: true,
   reminderSmsSentTo: true,
   signedAt: true,
+  signedPdfUrl: true,
   submittedAt: true,
   createdAt: true,
   updatedAt: true,
