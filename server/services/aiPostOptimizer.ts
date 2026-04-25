@@ -247,6 +247,11 @@ Return the JSON object now.`;
       }
       firstComment = swapped;
     }
+    // Guarantee the Apple Pay / Google Pay messaging the interception
+    // contract requires, in case the model omitted it.
+    if (!/apple\s*pay/i.test(firstComment) && !/google\s*pay/i.test(firstComment)) {
+      firstComment = `${firstComment.replace(/\s+$/, "")}\nApple Pay & Google Pay accepted — donate in seconds.`;
+    }
   }
 
   return {
