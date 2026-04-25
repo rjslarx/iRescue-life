@@ -7357,10 +7357,12 @@ Crawl-delay: 1
    */
   app.post('/api/ai/optimize-post', requireTenant, requireAuth, requireRoleOrPageAccess('communications', 'admin', 'staff'), async (req, res, next) => {
     try {
-      const { optimizeFacebookPost, resolveTenantPostUrls, PostOptimizerError } = await import('./services/aiPostOptimizer');
+      const { optimizeFacebookPost, resolveTenantPostUrls, resolvePublicSiteRoot, PostOptimizerError } = await import('./services/aiPostOptimizer');
+      const { donationLinks } = await import('@shared/schema');
 
       const optimizeSchema = z.object({
         draft: z.string().trim().min(1, 'Draft post is required').max(8000, 'Draft post is too long (max 8000 characters)'),
+        animalId: z.string().uuid().optional(),
       });
 
       const parseResult = optimizeSchema.safeParse(req.body);
@@ -7369,13 +7371,51 @@ Crawl-delay: 1
       }
 
       const tenant = req.tenant!;
-      const urls = resolveTenantPostUrls({
-        customDomain: tenant.customDomain,
-        customDomainVerified: tenant.customDomainVerified,
-        subdomain: tenant.subdomain,
-        jotformAdoptionUrl: tenant.jotformAdoptionUrl,
-        jotformFosterUrl: tenant.jotformFosterUrl,
-      });
+
+      // Look up the most recent active emergency-fund campaign for the
+      // selected animal, if any. If found we use its public URL; otherwise we
+      // fall back to the tenant's general /donate page (with UTM tagging).
+      let emergencyCampaignUrl: string | undefined;
+      let emergencyCampaignTitle: string | undefined;
+      if (parseResult.data.animalId) {
+        const [campaign] = await db
+          .select({
+            id: donationLinks.id,
+            title: donationLinks.title,
+          })
+          .from(donationLinks)
+          .where(
+            and(
+              eq(donationLinks.tenantId, tenant.id),
+              eq(donationLinks.animalId, parseResult.data.animalId),
+              eq(donationLinks.campaignType, 'emergency_fund'),
+              eq(donationLinks.isActive, true)
+            )
+          )
+          .orderBy(desc(donationLinks.createdAt))
+          .limit(1);
+
+        if (campaign) {
+          const root = resolvePublicSiteRoot({
+            customDomain: tenant.customDomain,
+            customDomainVerified: tenant.customDomainVerified,
+            subdomain: tenant.subdomain,
+          });
+          emergencyCampaignUrl = `${root}/campaign/${campaign.id}?utm_source=fb_optimizer&utm_medium=first_comment`;
+          emergencyCampaignTitle = campaign.title;
+        }
+      }
+
+      const urls = resolveTenantPostUrls(
+        {
+          customDomain: tenant.customDomain,
+          customDomainVerified: tenant.customDomainVerified,
+          subdomain: tenant.subdomain,
+          jotformAdoptionUrl: tenant.jotformAdoptionUrl,
+          jotformFosterUrl: tenant.jotformFosterUrl,
+        },
+        emergencyCampaignUrl
+      );
 
       try {
         const result = await optimizeFacebookPost(parseResult.data.draft, urls);
@@ -7384,6 +7424,10 @@ Crawl-delay: 1
           optimizedCaption: result.optimizedCaption,
           firstComment: result.firstComment,
           category: result.category,
+          paymentHandlesRemoved: result.paymentHandlesRemoved,
+          paymentInterceptionApplied: result.paymentInterceptionApplied,
+          usedEmergencyCampaign: Boolean(emergencyCampaignUrl) && result.paymentInterceptionApplied,
+          emergencyCampaignTitle: emergencyCampaignTitle ?? null,
         });
       } catch (err) {
         if (err instanceof PostOptimizerError) {

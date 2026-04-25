@@ -1,12 +1,34 @@
-import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { Link } from "wouter";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { Sparkles, Copy, Check, AlertTriangle, Heart, Home, PartyPopper } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Sparkles,
+  Copy,
+  Check,
+  AlertTriangle,
+  Heart,
+  Home,
+  PartyPopper,
+  ShieldAlert,
+  ChevronsUpDown,
+  X,
+} from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -17,6 +39,21 @@ interface OptimizeResponse {
   optimizedCaption: string;
   firstComment: string;
   category: PostCategory;
+  paymentHandlesRemoved: number;
+  paymentInterceptionApplied: boolean;
+  usedEmergencyCampaign: boolean;
+  emergencyCampaignTitle: string | null;
+}
+
+interface AnimalLite {
+  id: string;
+  name: string;
+  species?: string | null;
+  status?: string | null;
+}
+
+interface AnimalsResponse {
+  animals: AnimalLite[];
 }
 
 const CATEGORY_META: Record<
@@ -43,13 +80,40 @@ const CATEGORY_META: Record<
 export default function PostOptimizerPage() {
   const { toast } = useToast();
   const [draft, setDraft] = useState("");
+  const [animalId, setAnimalId] = useState<string | null>(null);
+  const [animalPopoverOpen, setAnimalPopoverOpen] = useState(false);
   const [result, setResult] = useState<OptimizeResponse | null>(null);
   const [copiedCaption, setCopiedCaption] = useState(false);
   const [copiedComment, setCopiedComment] = useState(false);
 
+  const {
+    data: animalsData,
+    isLoading: animalsLoading,
+    isError: animalsError,
+  } = useQuery<AnimalsResponse>({
+    queryKey: ["/api/animals"],
+  });
+
+  const animals = useMemo(() => {
+    const list = animalsData?.animals ?? [];
+    // Hide animals that have left the system so the picker stays focused on
+    // current cases (the optimizer is almost always used for an active animal).
+    const hidden = new Set(["adopted", "deceased", "transferred", "merged", "returned_to_field"]);
+    return list
+      .filter((a) => !a.status || !hidden.has(a.status.toLowerCase()))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [animalsData]);
+
+  const selectedAnimal = useMemo(
+    () => animals.find((a) => a.id === animalId) ?? null,
+    [animals, animalId]
+  );
+
   const optimizeMutation = useMutation({
-    mutationFn: async (input: string): Promise<OptimizeResponse> => {
-      const res = await apiRequest("POST", "/api/ai/optimize-post", { draft: input });
+    mutationFn: async (input: { draft: string; animalId: string | null }): Promise<OptimizeResponse> => {
+      const body: Record<string, unknown> = { draft: input.draft };
+      if (input.animalId) body.animalId = input.animalId;
+      const res = await apiRequest("POST", "/api/ai/optimize-post", body);
       return res.json();
     },
     onSuccess: (data) => {
@@ -78,7 +142,7 @@ export default function PostOptimizerPage() {
       return;
     }
     setResult(null);
-    optimizeMutation.mutate(trimmed);
+    optimizeMutation.mutate({ draft: trimmed, animalId });
   };
 
   const copyToClipboard = async (
@@ -120,10 +184,91 @@ export default function PostOptimizerPage() {
                 Draft Your Facebook Post
               </CardTitle>
               <CardDescription>
-                Write your post the way you normally would. We'll strip outbound links, rewrite the caption, and suggest a strategic first comment.
+                Write your post the way you normally would. We'll strip outbound links and payment handles, rewrite the caption, and suggest a strategic first comment.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="animal-picker-trigger" className="text-sm">
+                  Which animal is this post about? <span className="text-muted-foreground font-normal">(optional)</span>
+                </Label>
+                <div className="flex items-center gap-2">
+                  <Popover open={animalPopoverOpen} onOpenChange={setAnimalPopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        id="animal-picker-trigger"
+                        type="button"
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={animalPopoverOpen}
+                        className="flex-1 justify-between font-normal"
+                        data-testid="button-animal-picker"
+                        disabled={isPending}
+                      >
+                        <span className="truncate">
+                          {selectedAnimal ? selectedAnimal.name : "Skip — link to general donate page"}
+                        </span>
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                      <Command>
+                        <CommandInput placeholder="Search animals..." data-testid="input-animal-search" />
+                        <CommandList>
+                          {animalsLoading ? (
+                            <div className="px-3 py-6 text-center text-sm text-muted-foreground" data-testid="text-animals-loading">
+                              Loading animals…
+                            </div>
+                          ) : animalsError ? (
+                            <div className="px-3 py-6 text-center text-sm text-destructive" data-testid="text-animals-error">
+                              Couldn't load animals. You can still optimize without picking one.
+                            </div>
+                          ) : (
+                            <CommandEmpty>No animals found.</CommandEmpty>
+                          )}
+                          <CommandGroup className="max-h-[260px] overflow-y-auto">
+                            {animals.map((a) => (
+                              <CommandItem
+                                key={a.id}
+                                value={`${a.name} ${a.species ?? ""}`.trim()}
+                                onSelect={() => {
+                                  setAnimalId(a.id);
+                                  setAnimalPopoverOpen(false);
+                                }}
+                                data-testid={`option-animal-${a.id}`}
+                              >
+                                <span className="truncate">{a.name}</span>
+                                {a.species && (
+                                  <span className="ml-2 text-xs text-muted-foreground">
+                                    {a.species}
+                                  </span>
+                                )}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                  {selectedAnimal && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setAnimalId(null)}
+                      disabled={isPending}
+                      data-testid="button-clear-animal"
+                      aria-label="Clear selected animal"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  If this animal has an active emergency fundraiser, we'll send donors there. Otherwise we use your general donate page.
+                </p>
+              </div>
+
               <Textarea
                 placeholder="Type or paste your draft Facebook post here..."
                 value={draft}
@@ -167,6 +312,9 @@ export default function PostOptimizerPage() {
                       <li><span className="font-medium text-foreground">Overwhelmed Shelter</span> &rarr; Foster application</li>
                       <li><span className="font-medium text-foreground">Happy / Adoption</span> &rarr; Adoption application</li>
                     </ul>
+                    <p className="pt-2">
+                      If your draft mentions Venmo, CashApp, or PayPal, we'll strip those handles (Facebook hides posts that contain them) and route donors to your fundraiser instead — with Apple Pay and Google Pay so it's just as fast.
+                    </p>
                   </div>
                 </CardContent>
               </Card>
@@ -201,6 +349,42 @@ export default function PostOptimizerPage() {
 
             {!isPending && result && (
               <>
+                {result.paymentInterceptionApplied && (
+                  <div
+                    className="rounded-md border bg-card p-4 flex items-start gap-3"
+                    data-testid="callout-payment-interception"
+                  >
+                    <ShieldAlert className="h-5 w-5 mt-0.5 shrink-0 text-muted-foreground" />
+                    <div className="space-y-1 text-sm">
+                      <p className="font-medium text-foreground">
+                        Removed {result.paymentHandlesRemoved} payment handle{result.paymentHandlesRemoved === 1 ? "" : "s"} from your caption.
+                      </p>
+                      <p className="text-muted-foreground" data-testid="text-payment-interception-detail">
+                        Facebook throttles posts that mention Venmo, CashApp, or PayPal. Your first comment now points donors to{" "}
+                        {result.usedEmergencyCampaign && result.emergencyCampaignTitle ? (
+                          <span className="font-medium text-foreground">{result.emergencyCampaignTitle}</span>
+                        ) : (
+                          <span className="font-medium text-foreground">your general donate page</span>
+                        )}
+                        {" "}with Apple Pay and Google Pay.
+                      </p>
+                      {!result.usedEmergencyCampaign && (
+                        <p className="text-muted-foreground">
+                          Tip: a dedicated{" "}
+                          <Link
+                            href="/dashboard/donations"
+                            className="underline font-medium text-foreground hover-elevate active-elevate-2 rounded px-0.5"
+                            data-testid="link-create-emergency-campaign"
+                          >
+                            Emergency Campaign
+                          </Link>
+                          {" "}for {selectedAnimal ? selectedAnimal.name : "this animal"} usually converts higher than the general page.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 <Card data-testid="card-optimized-caption">
                   <CardHeader>
                     <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -246,6 +430,11 @@ export default function PostOptimizerPage() {
                         {(() => {
                           const meta = CATEGORY_META[result.category];
                           const Icon = meta.icon;
+                          const description = result.paymentInterceptionApplied
+                            ? result.usedEmergencyCampaign && result.emergencyCampaignTitle
+                              ? `Driving donors to ${result.emergencyCampaignTitle}`
+                              : "Driving donors to your general donate page"
+                            : meta.description;
                           return (
                             <div className="flex items-center gap-2 flex-wrap">
                               <Badge variant="secondary" data-testid="badge-category">
@@ -253,7 +442,7 @@ export default function PostOptimizerPage() {
                                 {meta.label}
                               </Badge>
                               <span className="text-xs text-muted-foreground" data-testid="text-category-description">
-                                {meta.description}
+                                {description}
                               </span>
                             </div>
                           );
