@@ -28544,6 +28544,15 @@ Submitted: ${new Date().toLocaleString()}
             const safeDonor = escapeHtml(`${donorName} <${donorEmail}>`);
             const safeSurface = escapeHtml(String(surface));
 
+            const fallbackOrigin = `${req.protocol}://${req.get('host')}`;
+            const tenantBaseUrl = (tenant as any).customDomain
+              ? `https://${(tenant as any).customDomain}`
+              : `${fallbackOrigin}${tenant.subdomain ? `/${tenant.subdomain}` : ''}`;
+            const donorRecordUrl = failedPayment.donorId
+              ? `${tenantBaseUrl}/dashboard/donors?donorId=${failedPayment.donorId}`
+              : `${tenantBaseUrl}/dashboard/donors`;
+            const safeDonorRecordUrl = escapeHtml(donorRecordUrl);
+
             const { dispatchEventNotification } = await import('./services/notification-dispatcher');
             await dispatchEventNotification({
               tenantId: tenant.id,
@@ -28559,11 +28568,12 @@ Submitted: ${new Date().toLocaleString()}
     <p style="margin: 5px 0;"><strong>Surface:</strong> ${safeSurface}</p>
     <p style="margin: 5px 0; font-family: monospace; font-size: 12px;"><strong>Stripe session:</strong> ${escapeHtml(session.id)}</p>
   </div>
+  <p style="margin: 16px 0;"><a href="${safeDonorRecordUrl}" style="display:inline-block;padding:10px 18px;background:#0f766e;color:#fff;border-radius:6px;text-decoration:none;font-weight:600;">Open donor record</a></p>
   <p>The donor has been emailed automatically with a recovery link. You may want to follow up personally for larger pledges.</p>
 </div>
               `.trim(),
-              textBody: `ACH bank transfer bounced for ${safeTenantName}. Amount: ${amountFormatted}. Donor: ${donorName} <${donorEmail}>. Surface: ${surface}. Stripe session: ${session.id}. Campaign progress was not credited; donor was emailed a recovery link automatically.`,
-              smsBody: `[${tenant.name}] ACH bounce: ${amountFormatted} from ${donorName}. Donor was emailed; consider personal follow-up.`,
+              textBody: `ACH bank transfer bounced for ${safeTenantName}. Amount: ${amountFormatted}. Donor: ${donorName} <${donorEmail}>. Surface: ${surface}. Stripe session: ${session.id}. Donor record: ${donorRecordUrl}. Campaign progress was not credited; donor was emailed a recovery link automatically.`,
+              smsBody: `[${tenant.name}] ACH bounce: ${amountFormatted} from ${donorName}. ${donorRecordUrl}`,
             });
           } catch (adminAlertErr) {
             console.error('[Webhook] Failed to dispatch ACH-bounce admin notification:', adminAlertErr);

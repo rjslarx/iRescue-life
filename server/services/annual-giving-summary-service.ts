@@ -333,7 +333,7 @@ export async function generateAnnualSummaryPdf(
     page.drawText('Date', { x: leftMargin, y, size: 10, font: helveticaBold, color: textColor });
     page.drawText('Amount', { x: leftMargin + 110, y, size: 10, font: helveticaBold, color: textColor });
     page.drawText('Method', { x: leftMargin + 195, y, size: 10, font: helveticaBold, color: textColor });
-    page.drawText('Description', { x: leftMargin + 290, y, size: 10, font: helveticaBold, color: textColor });
+    page.drawText('Description', { x: leftMargin + 350, y, size: 10, font: helveticaBold, color: textColor });
     y -= 5;
     
     page.drawLine({
@@ -365,18 +365,18 @@ export async function generateAnnualSummaryPdf(
         cash: 'Cash',
         check: 'Check',
         online: 'Card',
-        ach: 'ACH',
+        ach: 'Bank Transfer (ACH)',
       };
       page.drawText(methodLabels[d.donationType] || '—', {
         x: leftMargin + 195,
         y,
-        size: 10,
+        size: 9,
         font: helvetica,
         color: textColor,
       });
-      const desc = (d.description || 'General donation').substring(0, 30);
+      const desc = (d.description || 'General donation').substring(0, 22);
       page.drawText(desc, {
-        x: leftMargin + 290,
+        x: leftMargin + 350,
         y,
         size: 10,
         font: helvetica,
