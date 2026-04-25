@@ -24,14 +24,11 @@ export async function connectAccountSupportsAch(
   }
   try {
     const acct = await stripe.accounts.retrieve(connectedAccountId);
-    // Stripe returns capability state as 'active' | 'inactive' | 'pending'
-    // — we only enable ACH UI when it is fully active.
     const ok = acct.capabilities?.us_bank_account_ach_payments === 'active';
     achCapabilityCache.set(connectedAccountId, { ok, checkedAt: Date.now() });
     return ok;
   } catch (err) {
-    // If the lookup fails (network/auth/permissions), silently fall back to
-    // card-only — better than crashing the donation flow.
+    // Lookup failed: fall back to card-only.
     console.warn(
       `[stripe-service] Connect ACH capability check failed for ${connectedAccountId}; defaulting to card-only.`,
       (err as Error)?.message,
@@ -146,30 +143,21 @@ export class StripeService {
     
     // Check if tenant has their own Stripe key configured
     const tenantHasOwnStripeKey = tenant.stripeEnabled && tenant.stripeSecretKeyEncrypted;
-    
-    // Use Stripe Connect when:
-    // 1. Tenant has a connected account AND
-    // 2. Platform Stripe key is available (required for Connect flows)
     const useStripeConnect = Boolean(params.connectedAccountId && platformKey);
-    
-    // Platform fee is collected only when Connect is used AND fee amount > 0
     const collectPlatformFee = useStripeConnect && params.platformFeeAmount && params.platformFeeAmount > 0;
-    
+
     if (useStripeConnect && platformKey) {
-      // Use platform Stripe key for Connect payments (destination charges)
       stripe = new Stripe(platformKey, {
         apiVersion: '2025-09-30.clover',
         typescript: true,
       });
     } else if (tenantHasOwnStripeKey) {
-      // Fallback: use tenant's own Stripe key (direct processing, no platform fees)
       const tenantStripe = this.getStripeClient(tenant);
       if (!tenantStripe) {
         throw new Error('Failed to initialize tenant Stripe client');
       }
       stripe = tenantStripe;
     } else if (params.connectedAccountId && !platformKey) {
-      // Connect tenant but platform key not configured - provide actionable error
       throw new Error(
         'This organization uses Stripe Connect but the platform Stripe key is not configured. ' +
         'Please set PLATFORM_STRIPE_SECRET_KEY environment variable to enable donations.'
@@ -178,12 +166,7 @@ export class StripeService {
       throw new Error('Stripe is not configured for this rescue. Please complete Stripe setup in Settings.');
     }
 
-    // Decide whether ACH (us_bank_account) should be offered for this checkout.
-    // Three independent gates must all pass:
-    //   1. Caller has not force-disabled ACH (e.g. ticket sales, voting).
-    //   2. The surface + amount + recurring combo is eligible per shared rules.
-    //   3. If routing through Stripe Connect, the connected account must
-    //      have the us_bank_account_ach_payments capability active.
+    // ACH gates: not force-disabled, surface/amount/recurring eligible, Connect capability active.
     const surface: AchSurface = params.surface ?? 'donation';
     let offerAch = false;
     if (!params.forceCardOnly) {
@@ -212,17 +195,13 @@ export class StripeService {
       metadata: {
         tenantId: tenant.id,
         ...params.metadata,
-        // Stamp the surface + ACH-availability into metadata so the webhook
-        // and downstream analytics can tell ACH-eligible sessions apart.
         achSurface: surface,
         achOffered: offerAch ? 'true' : 'false',
       },
       payment_method_types: paymentMethodTypes,
     };
 
-    // Enable Stripe Financial Connections for instant bank verification when
-    // ACH is offered. Without this, donors get the slower "manually verify two
-    // micro-deposits in 1–2 business days" flow which kills conversion.
+    // Enable Financial Connections for instant ACH bank verification.
     if (offerAch) {
       sessionParams.payment_method_options = {
         ...(sessionParams.payment_method_options || {}),
@@ -266,9 +245,7 @@ export class StripeService {
           tenantId: tenant.id,
           ...(params.metadata || {}),
         },
-        // When ACH is offered, the subscription itself must also be told it can
-        // bill via us_bank_account — otherwise Stripe will reject the chosen
-        // payment method when the recurring invoice tries to charge.
+        // Subscription must accept us_bank_account when ACH is offered.
         ...(offerAch ? {
           payment_settings: {
             payment_method_types: ['card', 'us_bank_account'],
@@ -302,8 +279,6 @@ export class StripeService {
         },
       ];
 
-      // For Stripe Connect one-time payments, route to tenant with optional platform fee
-      // on_behalf_of shows the connected account's business name on the Stripe checkout page
       if (useStripeConnect && params.connectedAccountId) {
         sessionParams.payment_intent_data = {
           on_behalf_of: params.connectedAccountId,
@@ -311,7 +286,6 @@ export class StripeService {
             destination: params.connectedAccountId,
           },
           statement_descriptor_suffix: toStripeStatementDescriptor(tenant.name),
-          // Only add application fee if there is one (free tier has fee, pro tier has 0)
           ...(collectPlatformFee && params.platformFeeAmount ? {
             application_fee_amount: params.platformFeeAmount,
           } : {}),
@@ -358,22 +332,15 @@ export class StripeService {
     // Check if tenant has their own Stripe key configured
     const tenantHasOwnStripeKey = tenant.stripeEnabled && tenant.stripeSecretKeyEncrypted;
     
-    // Use Stripe Connect when:
-    // 1. Tenant has a connected account AND
-    // 2. Platform Stripe key is available (required for Connect flows)
     const useStripeConnect = Boolean(params.connectedAccountId && platformKey);
-    
-    // Platform fee is collected only when Connect is used AND fee amount > 0
     const collectPlatformFee = useStripeConnect && params.platformFeeAmount && params.platformFeeAmount > 0;
-    
+
     if (useStripeConnect && platformKey) {
-      // Use platform Stripe key for Connect payments (destination charges)
       stripe = new Stripe(platformKey, {
         apiVersion: '2025-09-30.clover',
         typescript: true,
       });
     } else if (tenantHasOwnStripeKey) {
-      // Fallback: use tenant's own Stripe key (direct processing, no platform fees)
       const tenantStripe = this.getStripeClient(tenant);
       if (!tenantStripe) {
         throw new Error('Failed to initialize tenant Stripe client');

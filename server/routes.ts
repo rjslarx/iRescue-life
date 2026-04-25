@@ -28282,16 +28282,60 @@ Submitted: ${new Date().toLocaleString()}
                 })
                 .where(eq(donors.id, donor.id));
 
-              // Create or update contact record for the donor
+              // ACH cleared: persist donation row tagged 'ach' for receipt/summary parity.
+              try {
+                const meta = (session.metadata || {}) as Record<string, string>;
+                const donorCoveredFees = meta.donorCoveredFees === 'true' || meta.donorCoversFees === 'true';
+                const baseAmountCents = meta.baseAmount ? parseInt(meta.baseAmount, 10) : updatedPayment.amount;
+                const grossAmountCents = donorCoveredFees ? updatedPayment.amount : baseAmountCents;
+                const feeNote = donorCoveredFees && meta.feesCovered
+                  ? ` (donor covered $${(parseInt(meta.feesCovered, 10) / 100).toFixed(2)} in processing fees)`
+                  : '';
+                const description = meta.sponsoredAnimalName
+                  ? `Sponsored: ${meta.sponsoredAnimalName}${feeNote}`
+                  : (feeNote || null);
+
+                const [donationRecord] = await db.insert(donations).values({
+                  tenantId: tenant.id,
+                  donorId: donor.id,
+                  donorName: donor.name,
+                  donorEmail: donor.email,
+                  amount: baseAmountCents,
+                  source: 'stripe' as any,
+                  date: new Date(),
+                  message: meta.message || null,
+                  isRecurring: session.mode === 'subscription',
+                  recurringFrequency: session.mode === 'subscription' ? 'monthly' : null,
+                  recurringStatus: session.mode === 'subscription' ? 'active' : null,
+                  donationType: 'ach',
+                  paymentMethod: 'stripe_ach',
+                  isPublic: true,
+                  description,
+                  feesCovered: donorCoveredFees,
+                  grossAmount: grossAmountCents,
+                  netAmount: baseAmountCents,
+                }).returning();
+
+                if (tenant.autoSendTaxReceipts && donationRecord?.donorEmail) {
+                  try {
+                    const { generateAndEmailReceipt } = await import('./services/donation-receipt-service');
+                    await generateAndEmailReceipt({ donationId: donationRecord.id, tenantId: tenant.id });
+                  } catch (rcptErr) {
+                    console.error('[Webhook] Failed to generate ACH tax receipt:', rcptErr);
+                  }
+                }
+              } catch (donationInsertErr) {
+                console.error('[Webhook] Failed to create ACH donation record:', donationInsertErr);
+              }
+
               try {
                 const { createContactFromDonation } = await import('./services/contacts');
                 if (donor.email) { await createContactFromDonation(tenant.id, donor.name, donor.email, updatedPayment.amount / 100); }
-                console.log(`[Webhook] Created/updated contact for ACH donor: ${donor.email}`);
               } catch (contactError) {
                 console.error('[Webhook] Failed to create contact from ACH donation:', contactError);
               }
 
-              // Send thank-you email now that ACH payment cleared
+              // Donor thank-you email now that ACH payment cleared
               try {
                 const { EmailService } = await import('./lib/email-service');
                 const emailService = await EmailService.forTenant(tenant.id);

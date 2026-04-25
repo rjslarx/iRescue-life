@@ -78,7 +78,8 @@ export async function getEligibleDonors(
 
   for (const donation of yearDonations) {
     const donationType = (donation as any).donationType || 'cash';
-    if (donationType !== 'cash') continue;
+    const monetaryTypes = ['cash', 'check', 'online', 'ach'];
+    if (!monetaryTypes.includes(donationType)) continue;
 
     // Skip donations without valid email addresses
     // IRS summaries must be sent to donors, so email is required
@@ -330,8 +331,9 @@ export async function generateAnnualSummaryPdf(
     y -= 20;
 
     page.drawText('Date', { x: leftMargin, y, size: 10, font: helveticaBold, color: textColor });
-    page.drawText('Amount', { x: leftMargin + 150, y, size: 10, font: helveticaBold, color: textColor });
-    page.drawText('Description', { x: leftMargin + 250, y, size: 10, font: helveticaBold, color: textColor });
+    page.drawText('Amount', { x: leftMargin + 110, y, size: 10, font: helveticaBold, color: textColor });
+    page.drawText('Method', { x: leftMargin + 195, y, size: 10, font: helveticaBold, color: textColor });
+    page.drawText('Description', { x: leftMargin + 290, y, size: 10, font: helveticaBold, color: textColor });
     y -= 5;
     
     page.drawLine({
@@ -353,15 +355,28 @@ export async function generateAnnualSummaryPdf(
         color: textColor,
       });
       page.drawText(formatCurrency(d.amount), {
-        x: leftMargin + 150,
+        x: leftMargin + 110,
         y,
         size: 10,
         font: helvetica,
         color: textColor,
       });
-      const desc = (d.description || 'General donation').substring(0, 35);
+      const methodLabels: Record<string, string> = {
+        cash: 'Cash',
+        check: 'Check',
+        online: 'Card',
+        ach: 'ACH',
+      };
+      page.drawText(methodLabels[d.donationType] || '—', {
+        x: leftMargin + 195,
+        y,
+        size: 10,
+        font: helvetica,
+        color: textColor,
+      });
+      const desc = (d.description || 'General donation').substring(0, 30);
       page.drawText(desc, {
-        x: leftMargin + 250,
+        x: leftMargin + 290,
         y,
         size: 10,
         font: helvetica,

@@ -260,12 +260,7 @@ router.get('/history', async (req: Request, res: Response) => {
         .map(d => new Date(d.date).getFullYear())
     )).sort((a, b) => b - a);
 
-    // Pending bank-transfer (ACH) payments — these don't yet appear in the
-    // `donations` table because we only insert that row once Stripe confirms
-    // the bank transfer has actually cleared. Surfacing them in the donor
-    // portal stops donors from worrying that their gift was lost during the
-    // 4–5 business day ACH settlement window. We pull both 'pending' and
-    // 'failed' so the donor can see why a transfer didn't go through.
+    // Pending/failed ACH payments not yet in the donations table.
     const pendingPaymentRows = await db
       .select({
         id: payments.id,
@@ -284,9 +279,7 @@ router.get('/history', async (req: Request, res: Response) => {
       .orderBy(desc(payments.createdAt))
       .limit(20);
 
-    // Stripe ACH typically settles in 4 business days. Compute a per-row
-    // "expected clear" date so the donor sees a concrete date rather than a
-    // generic "4–5 business days" blurb. Skips weekends (US holidays still
+    // ACH settles in ~4 business days; surface a concrete expected-clear date. Skips weekends (US holidays still
     // approximate; close enough for a donor-facing estimate).
     const addBusinessDays = (start: Date, days: number): Date => {
       const d = new Date(start);
