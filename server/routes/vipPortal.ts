@@ -8,7 +8,7 @@ import {
   subscriptions,
   tenants,
 } from '@shared/schema';
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { eq, and, desc, sql, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { EmailService } from '../lib/email-service';
 
@@ -357,7 +357,7 @@ router.post('/wall-preferences', async (req: Request, res: Response) => {
       .where(and(
         eq(subscriptions.tenantId, tenantId),
         eq(subscriptions.donorId, donorId),
-        eq(subscriptions.status, 'active'),
+        inArray(subscriptions.status, ['active', 'incomplete', 'trialing']),
       ))
       .returning({ id: subscriptions.id });
 

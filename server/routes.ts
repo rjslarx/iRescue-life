@@ -15728,8 +15728,11 @@ ${renderedHtml}
    */
   app.get('/api/vip-club/wall-of-heroes', requireTenant, async (req, res, next) => {
     try {
-      const { subscriptions: subs, donors, payments: paymentsTbl } = await import('@shared/schema');
-      // ACH clearance gate: require at least one succeeded payment row on the sub.
+      const { subscriptions: subs, donors } = await import('@shared/schema');
+      // Show donors as soon as they sign up. ACH-pending subs land at status
+      // 'incomplete' (Stripe overwrites our optimistic 'active' until the bank
+      // actually clears) — include them here. If the ACH bounces,
+      // async_payment_failed sets the sub status to 'cancelled' and they drop off.
       const heroes = await db
         .select({
           displayName: subs.displayName,
@@ -15742,13 +15745,8 @@ ${renderedHtml}
         .innerJoin(donors, eq(subs.donorId, donors.id))
         .where(and(
           eq(subs.tenantId, req.tenant!.id),
-          eq(subs.status, 'active'),
+          inArray(subs.status, ['active', 'incomplete', 'trialing']),
           eq(subs.displayOnWallOfHeroes, true),
-          sql`EXISTS (
-            SELECT 1 FROM ${paymentsTbl}
-            WHERE ${paymentsTbl.subscriptionId} = ${subs.id}
-              AND ${paymentsTbl.status} = 'succeeded'
-          )`,
         ))
         .orderBy(desc(subs.amount), asc(subs.createdAt));
 
@@ -27248,30 +27246,12 @@ Submitted: ${new Date().toLocaleString()}
           const session = event.data.object as any;
 
           // P2P Campaign donation fulfillment — early exit to avoid donation processing.
-          //
-          // For card payments, `checkout.session.completed` fires with
-          // `payment_status === 'paid'` and we credit the campaign immediately.
-          // For ACH, payment_status='unpaid' here; campaign credit happens in
-          // async_payment_succeeded once the bank actually clears (~4 days).
+          // Credit immediately for both card and ACH; if an ACH bounces later,
+          // async_payment_failed rolls back the campaign credit.
           if (session.metadata?.peerCampaignId) {
             console.log('[STRIPE-WEBHOOK] P2P campaign donation received:', session.metadata.peerDonationId, 'payment_status:', session.payment_status);
             try {
               const { peerCampaignDonations, peerCampaigns } = await import('@shared/schema');
-
-              if (session.payment_status !== 'paid') {
-                // ACH still processing — leave the donation row at 'pending'
-                // (or mark it 'processing' so staff can distinguish a stuck
-                // checkout from a real-but-not-yet-cleared ACH transfer).
-                await db
-                  .update(peerCampaignDonations)
-                  .set({ paymentStatus: 'processing' })
-                  .where(and(
-                    eq(peerCampaignDonations.stripeSessionId, session.id),
-                    eq(peerCampaignDonations.paymentStatus, 'pending')
-                  ));
-                console.log('[STRIPE-WEBHOOK] P2P ACH donation pending bank clearance — campaign progress NOT incremented yet');
-                break;
-              }
 
               const [updated] = await db
                 .update(peerCampaignDonations)
@@ -27502,10 +27482,14 @@ Submitted: ${new Date().toLocaleString()}
             }
           }
 
-          // For ACH payments, payment_status may be 'unpaid' until bank transfer completes
-          // We still create the donor and payment record, but mark status appropriately
-          const isPaymentComplete = session.payment_status === 'paid';
-          const paymentStatus = isPaymentComplete ? 'succeeded' : 'pending';
+          // ACH sessions arrive with payment_status='unpaid' (pending bank
+          // clearance). We credit the donor immediately for recognition
+          // purposes (Wall of Heroes, P2P leaderboard, totals); if the ACH
+          // bounces, async_payment_failed rolls everything back. The payment
+          // row keeps status='pending' so the VIP portal Giving History can
+          // show a "Pending bank confirmation" badge until the bank clears.
+          const isAchPending = session.payment_status === 'unpaid';
+          const paymentStatus = isAchPending ? 'pending' : 'succeeded';
 
           let donor = await db
             .select()
@@ -27525,11 +27509,11 @@ Submitted: ${new Date().toLocaleString()}
               email: customerEmail,
               name: customerName,
               stripeCustomerId: session.customer,
-              totalDonated: isPaymentComplete ? (session.amount_total || 0) : 0,
-              lastDonationDate: isPaymentComplete ? new Date() : null,
+              totalDonated: session.amount_total || 0,
+              lastDonationDate: new Date(),
             }).returning();
             console.log(`[STRIPE-WEBHOOK] Created new donor ${donor.id} for ${customerEmail}`);
-          } else if (isPaymentComplete) {
+          } else {
             [donor] = await db
               .update(donors)
               .set({
@@ -27563,7 +27547,7 @@ Submitted: ${new Date().toLocaleString()}
           let isDonation = true;
           let paymentTypeLabel = 'Donation';
 
-          console.log(`[STRIPE-WEBHOOK] Ticket detection for tenant "${tenant.name}": isEventTicket=${isEventTicket}, eventTicketId=${sessionMetadata.eventTicketId || 'none'}, eventName=${sessionMetadata.eventName || 'none'}, isPaymentComplete=${isPaymentComplete}, metadata keys: ${Object.keys(sessionMetadata).join(', ')}`);
+          console.log(`[STRIPE-WEBHOOK] Ticket detection for tenant "${tenant.name}": isEventTicket=${isEventTicket}, eventTicketId=${sessionMetadata.eventTicketId || 'none'}, eventName=${sessionMetadata.eventName || 'none'}, isAchPending=${isAchPending}, metadata keys: ${Object.keys(sessionMetadata).join(', ')}`);
 
           if (isEventTicket) {
             isDonation = false;
@@ -27584,8 +27568,9 @@ Submitted: ${new Date().toLocaleString()}
           }
           console.log(`[STRIPE-WEBHOOK] Payment classified as: ${paymentTypeLabel}`);
 
-          // Create donation record only for actual donations
-          if (isPaymentComplete && isDonation) {
+          // Create donation record for actual donations (including ACH-pending,
+          // which gets rolled back by async_payment_failed if the bank rejects).
+          if (isDonation) {
             const feeNote = sessionMetadata.donorCoveredFees === 'true' && sessionMetadata.feesCovered
               ? ` (donor covered $${(parseInt(sessionMetadata.feesCovered, 10) / 100).toFixed(2)} in processing fees)`
               : '';
@@ -27615,8 +27600,9 @@ Submitted: ${new Date().toLocaleString()}
               isRecurring: session.mode === 'subscription',
               recurringFrequency: session.mode === 'subscription' ? 'monthly' : null,
               recurringStatus: session.mode === 'subscription' ? 'active' : null,
-              donationType: 'online',
-              paymentMethod: 'stripe',
+              donationType: isAchPending ? 'ach' : 'online',
+              paymentMethod: isAchPending ? 'stripe_ach' : 'stripe',
+              stripeCheckoutSessionId: session.id,
               isPublic: true,
               description: donationDescription,
               feesCovered: donorCoveredFees,
@@ -27642,25 +27628,23 @@ Submitted: ${new Date().toLocaleString()}
                 console.error(`[STRIPE-WEBHOOK] Error auto-sending tax receipt for donation ${donationRecord.id}:`, receiptErr);
               }
             }
-          } else if (isPaymentComplete && !isDonation) {
+          } else {
             console.log(`[STRIPE-WEBHOOK] Skipping donation record for non-donation payment: ${paymentTypeLabel}`);
           }
           
           // Create or update contact record
-          if (isPaymentComplete) {
-            try {
-              const { createContactFromDonation } = await import('./services/contacts');
-              if (customerEmail) { await createContactFromDonation(tenant.id, customerName, customerEmail, (session.amount_total || 0) / 100); }
-              console.log(`[STRIPE-WEBHOOK] Created/updated contact for: ${customerEmail}`);
-            } catch (contactError) {
-              console.error('[STRIPE-WEBHOOK] Failed to create contact:', contactError);
-            }
+          try {
+            const { createContactFromDonation } = await import('./services/contacts');
+            if (customerEmail) { await createContactFromDonation(tenant.id, customerName, customerEmail, (session.amount_total || 0) / 100); }
+            console.log(`[STRIPE-WEBHOOK] Created/updated contact for: ${customerEmail}`);
+          } catch (contactError) {
+            console.error('[STRIPE-WEBHOOK] Failed to create contact:', contactError);
           }
 
           // Auto-record campaign contribution for emergency fund donations
           // Note: Duplicate webhook events are already handled by the payment-level
           // idempotency check above (returns early if stripePaymentIntentId already exists)
-          if (isPaymentComplete && sessionMetadata.type === 'emergency_fund' && sessionMetadata.campaignId) {
+          if (sessionMetadata.type === 'emergency_fund' && sessionMetadata.campaignId) {
             try {
               const { campaignContributions } = await import('@shared/schema');
               await db.insert(campaignContributions).values({
@@ -27701,7 +27685,7 @@ Submitted: ${new Date().toLocaleString()}
                 ? `<p style="margin: 5px 0;"><strong>Your message:</strong> ${safeMessage}</p>` 
                 : '';
 
-              if (isPaymentComplete) {
+              if (!isAchPending) {
                 // Card payment - send immediate thank-you
                 const donationType = isRecurring ? 'recurring donation' : 'donation';
                 const recurringNote = isRecurring 
@@ -27877,8 +27861,10 @@ Submitted: ${new Date().toLocaleString()}
               vipTierName = null;
             }
 
-            // ACH unpaid → 'incomplete'; flips to 'active' via customer.subscription.updated.
-            const initialSubStatus = session.payment_status === 'paid' ? 'active' : 'incomplete';
+            // Insert as 'active' immediately so the donor lands on the Wall of
+            // Heroes / VIP roster right away. customer.subscription.updated may
+            // briefly downgrade to 'incomplete' for ACH; the Wall of Heroes
+            // filter accepts 'incomplete' too, so the donor stays visible.
             const inserted = await db.insert(subscriptions).values({
               tenantId: tenant.id,
               donorId: donor.id,
@@ -27886,7 +27872,7 @@ Submitted: ${new Date().toLocaleString()}
               amount: session.amount_total || 0,
               currency: session.currency || 'usd',
               interval: actualInterval || 'month',
-              status: initialSubStatus,
+              status: 'active',
               vipTierIdSnapshot: vipTierId,
               vipTierNameSnapshot: vipTierName,
               displayOnWallOfHeroes: wallOptIn,
@@ -27894,6 +27880,17 @@ Submitted: ${new Date().toLocaleString()}
             })
             .onConflictDoNothing({ target: [subscriptions.tenantId, subscriptions.stripeSubscriptionId] })
             .returning({ id: subscriptions.id });
+
+            // Link the optimistic payment row to this subscription so
+            // invoice.payment_succeeded for the FIRST invoice can find it
+            // (via subscriptionId + stripeInvoiceId IS NULL) and just stamp
+            // the invoice id without re-bumping donor totals or inserting
+            // a duplicate payments row.
+            if (inserted.length > 0 && paymentRecord) {
+              await db.update(payments)
+                .set({ subscriptionId: inserted[0].id })
+                .where(eq(payments.id, paymentRecord.id));
+            }
 
             // Send VIP welcome email + tax-deductible receipt for new VIP donors
             if (inserted.length > 0 && sessionMeta.source === 'vip_club' && customerEmail) {
@@ -27941,6 +27938,51 @@ Submitted: ${new Date().toLocaleString()}
             }
             if (existingPayment) {
               existingFailedRowToUpgrade = { id: existingPayment.id };
+            }
+          }
+
+          // First-invoice dedup: checkout.session.completed already credited
+          // donor totals + inserted donation row + payments row for this
+          // subscription. The payments row was linked to the DB subscription
+          // and has stripeInvoiceId IS NULL. Find it and just stamp the
+          // invoice id; do NOT re-bump donor totals or insert a duplicate row.
+          if (invoice.id && !existingFailedRowToUpgrade) {
+            const dbSub = await db
+              .select({ id: subscriptions.id })
+              .from(subscriptions)
+              .where(and(
+                eq(subscriptions.tenantId, tenant.id),
+                eq(subscriptions.stripeSubscriptionId, invoice.subscription),
+              ))
+              .limit(1)
+              .then(rows => rows[0]);
+
+            if (dbSub) {
+              // Exclude 'failed' rows so a bounce-then-recovery path falls
+              // through to the full re-credit logic below instead of silently
+                // stamping the failed row.
+              const checkoutSeededRow = await db
+                .select({ id: payments.id })
+                .from(payments)
+                .where(and(
+                  eq(payments.tenantId, tenant.id),
+                  eq(payments.subscriptionId, dbSub.id),
+                  isNull(payments.stripeInvoiceId),
+                  inArray(payments.status, ['pending', 'succeeded']),
+                ))
+                .limit(1)
+                .then(rows => rows[0]);
+
+              if (checkoutSeededRow) {
+                await db.update(payments)
+                  .set({
+                    stripeInvoiceId: invoice.id,
+                    status: 'succeeded',
+                  })
+                  .where(eq(payments.id, checkoutSeededRow.id));
+                console.log(`[Webhook] First-invoice ${invoice.id} stamped on checkout-seeded row ${checkoutSeededRow.id} (no double-credit)`);
+                return res.status(200).json({ received: true, firstInvoiceStamped: true });
+              }
             }
           }
 
@@ -28209,255 +28251,80 @@ Submitted: ${new Date().toLocaleString()}
           const session = event.data.object as any;
           console.log(`[Webhook] ACH payment succeeded for session ${session.id}`);
 
-          // P2P ACH cleared — now safe to credit campaign progress.
-          if (session.metadata?.peerCampaignId) {
-            try {
-              const { peerCampaignDonations, peerCampaigns } = await import('@shared/schema');
-              const [updated] = await db
-                .update(peerCampaignDonations)
-                .set({ paymentStatus: 'paid' })
-                .where(and(
-                  eq(peerCampaignDonations.stripeSessionId, session.id),
-                  inArray(peerCampaignDonations.paymentStatus, ['pending', 'processing'])
-                ))
-                .returning({ id: peerCampaignDonations.id });
-
-              if (updated) {
-                const amountPaid = session.metadata.baseAmount
-                  ? parseInt(session.metadata.baseAmount)
-                  : (session.amount_total || 0);
-                await db
-                  .update(peerCampaigns)
-                  .set({ amountRaised: sql`${peerCampaigns.amountRaised} + ${amountPaid}` })
-                  .where(eq(peerCampaigns.id, session.metadata.peerCampaignId));
-                console.log('[Webhook] ACH-cleared P2P donation credited to campaign:', session.metadata.peerCampaignId, 'amount:', amountPaid);
-              } else {
-                console.log('[Webhook] ACH-cleared P2P donation already finalised (idempotency), skipping');
-              }
-            } catch (err) {
-              console.error('[Webhook] Failed to fulfil ACH-cleared P2P donation:', err);
-            }
-          }
-
-          // Pending→succeeded with idempotency. For subscription checkouts, stamp
-          // first invoice id (dedupes invoice.payment_succeeded) and link the
-          // subscription row (Wall-of-Heroes EXISTS gate).
+          // Recognition (donor totals, donation row, P2P credit, subscription)
+          // was already applied in checkout.session.completed. Here we just
+          // flip the optimistic 'pending' payments row to 'succeeded' and send
+          // the donor a "your bank transfer cleared" confirmation. For
+          // subscription-mode ACH, also stamp the first invoice id so
+          // invoice.payment_succeeded's idempotency check skips this row.
           const firstInvoiceId = session.invoice || null;
-          let linkedSubscriptionId: string | null = null;
-          if (session.subscription) {
-            const [subRow] = await db
-              .select({ id: subscriptions.id })
-              .from(subscriptions)
-              .where(and(
-                eq(subscriptions.tenantId, tenant.id),
-                eq(subscriptions.stripeSubscriptionId, session.subscription)
-              ))
-              .limit(1);
-            linkedSubscriptionId = subRow?.id || null;
-          }
-
-          // Out-of-order webhook guard: invoice.payment_succeeded may have already
-          // landed for subscription ACH. If a succeeded payment row exists for the
-          // first invoice, it bumped donor totals — we must skip that bump here but
-          // still materialize the donation row (invoice handler does not insert one).
-          let invoiceAlreadySettled = false;
-          if (firstInvoiceId) {
-            const [existingInvoicePayment] = await db
-              .select({ id: payments.id })
-              .from(payments)
-              .where(and(
-                eq(payments.tenantId, tenant.id),
-                eq(payments.stripeInvoiceId, firstInvoiceId),
-                eq(payments.status, 'succeeded'),
-              ))
-              .limit(1);
-            if (existingInvoicePayment) {
-              invoiceAlreadySettled = true;
-            }
-          }
-
-          let updatedPayment: typeof payments.$inferSelect | undefined;
-          const upgrade = await db
+          const [updatedPayment] = await db
             .update(payments)
             .set({
               status: 'succeeded',
-              ...(firstInvoiceId && !invoiceAlreadySettled ? { stripeInvoiceId: firstInvoiceId } : {}),
-              ...(linkedSubscriptionId ? { subscriptionId: linkedSubscriptionId } : {}),
+              ...(firstInvoiceId ? { stripeInvoiceId: firstInvoiceId } : {}),
             })
-            .where(
-              and(
-                eq(payments.tenantId, tenant.id),
-                eq(payments.stripeCheckoutSessionId, session.id),
-                eq(payments.status, 'pending')
-              )
-            )
+            .where(and(
+              eq(payments.tenantId, tenant.id),
+              eq(payments.stripeCheckoutSessionId, session.id),
+              eq(payments.status, 'pending'),
+            ))
             .returning();
-          updatedPayment = upgrade[0];
 
-          // Async-first edge case: checkout.session.completed may not have arrived
-          // yet, so no pending row exists. Create one from the session payload so
-          // downstream donor/donation/email logic still runs idempotently.
-          if (!updatedPayment && !invoiceAlreadySettled) {
-            const customerEmail = session.customer_details?.email || session.customer_email;
-            if (customerEmail) {
-              const [donorRow] = await db
-                .select()
-                .from(donors)
-                .where(and(
-                  eq(donors.tenantId, tenant.id),
-                  sql`LOWER(${donors.email}) = LOWER(${customerEmail})`,
-                ))
-                .limit(1);
-              if (donorRow) {
-                const [created] = await db
-                  .insert(payments)
-                  .values({
-                    tenantId: tenant.id,
-                    donorId: donorRow.id,
-                    stripeCheckoutSessionId: session.id,
-                    stripeInvoiceId: firstInvoiceId,
-                    subscriptionId: linkedSubscriptionId,
-                    amount: session.amount_total || 0,
-                    currency: session.currency || 'usd',
-                    status: 'succeeded',
-                    paymentMethod: 'stripe',
-                    isRecurring: session.mode === 'subscription',
-                  })
-                  .returning();
-                updatedPayment = created;
-                console.log('[Webhook] Async-first ACH success: created payment row for session', session.id);
-              }
-            }
+          if (!updatedPayment) {
+            console.log('[Webhook] async_payment_succeeded: no pending payment row to flip (already settled or unknown session)');
+            break;
           }
 
-          if (updatedPayment) {
-            const donor = await db
-              .select()
-              .from(donors)
-              .where(eq(donors.id, updatedPayment.donorId!))
-              .limit(1)
-              .then(rows => rows[0]);
+          const donor = updatedPayment.donorId
+            ? await db.select().from(donors).where(eq(donors.id, updatedPayment.donorId)).limit(1).then(r => r[0])
+            : null;
 
-            if (donor) {
-              if (!invoiceAlreadySettled) {
-                await db
-                  .update(donors)
-                  .set({
-                    totalDonated: (donor.totalDonated || 0) + updatedPayment.amount,
-                    lastDonationDate: new Date(),
-                  })
-                  .where(eq(donors.id, donor.id));
-              }
+          if (donor?.email) {
+            try {
+              const { EmailService } = await import('./lib/email-service');
+              const emailService = await EmailService.forTenant(tenant.id);
+              if (emailService) {
+                const amountFormatted = new Intl.NumberFormat('en-US', {
+                  style: 'currency',
+                  currency: updatedPayment.currency || 'usd',
+                }).format(updatedPayment.amount / 100);
+                const dateFormatted = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+                const safeDonorName = escapeHtml(donor.name);
+                const safeTenantName = escapeHtml(tenant.name);
+                const safeEin = escapeHtml(tenant.ein);
+                const einSection = safeEin ? ` EIN: ${safeEin}` : '';
 
-              // ACH cleared: persist donation row tagged 'ach' for receipt/summary parity.
-              try {
-                const meta = (session.metadata || {}) as Record<string, string>;
-                const donorCoveredFees = meta.donorCoveredFees === 'true' || meta.donorCoversFees === 'true';
-                const baseAmountCents = meta.baseAmount ? parseInt(meta.baseAmount, 10) : updatedPayment.amount;
-                const grossAmountCents = donorCoveredFees ? updatedPayment.amount : baseAmountCents;
-                const feeNote = donorCoveredFees && meta.feesCovered
-                  ? ` (donor covered $${(parseInt(meta.feesCovered, 10) / 100).toFixed(2)} in processing fees)`
-                  : '';
-                const description = meta.sponsoredAnimalName
-                  ? `Sponsored: ${meta.sponsoredAnimalName}${feeNote}`
-                  : (feeNote || null);
-
-                const [donationRecord] = await db.insert(donations).values({
-                  tenantId: tenant.id,
-                  donorId: donor.id,
-                  donorName: donor.name,
-                  donorEmail: donor.email,
-                  amount: baseAmountCents,
-                  source: 'stripe',
-                  date: new Date(),
-                  message: meta.message || null,
-                  isRecurring: session.mode === 'subscription',
-                  recurringFrequency: session.mode === 'subscription' ? 'monthly' : null,
-                  recurringStatus: session.mode === 'subscription' ? 'active' : null,
-                  donationType: 'ach',
-                  paymentMethod: 'stripe_ach',
-                  isPublic: true,
-                  description,
-                  feesCovered: donorCoveredFees,
-                  grossAmount: grossAmountCents,
-                  netAmount: baseAmountCents,
-                }).returning();
-
-                if (tenant.autoSendTaxReceipts && donationRecord?.donorEmail) {
-                  try {
-                    const { generateAndEmailReceipt } = await import('./services/donation-receipt-service');
-                    await generateAndEmailReceipt({ donationId: donationRecord.id, tenantId: tenant.id });
-                  } catch (rcptErr) {
-                    console.error('[Webhook] Failed to generate ACH tax receipt:', rcptErr);
-                  }
-                }
-              } catch (donationInsertErr) {
-                console.error('[Webhook] Failed to create ACH donation record:', donationInsertErr);
-              }
-
-              try {
-                const { createContactFromDonation } = await import('./services/contacts');
-                if (donor.email) { await createContactFromDonation(tenant.id, donor.name, donor.email, updatedPayment.amount / 100); }
-              } catch (contactError) {
-                console.error('[Webhook] Failed to create contact from ACH donation:', contactError);
-              }
-
-              // Donor thank-you email now that ACH payment cleared
-              try {
-                const { EmailService } = await import('./lib/email-service');
-                const emailService = await EmailService.forTenant(tenant.id);
-                
-                if (emailService && donor.email) {
-                  const amountFormatted = new Intl.NumberFormat('en-US', {
-                    style: 'currency',
-                    currency: updatedPayment.currency || 'usd'
-                  }).format(updatedPayment.amount / 100);
-
-                  const dateFormatted = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-                  const safeDonorName = escapeHtml(donor.name);
-                  const safeTenantName = escapeHtml(tenant.name);
-                  const safeEin = escapeHtml(tenant.ein);
-                  const einSection = safeEin ? ` EIN: ${safeEin}` : '';
-
-                  await emailService.send({
-                    to: donor.email,
-                    subject: `Your bank transfer donation to ${safeTenantName} has been received!`,
-                    html: `
+                await emailService.send({
+                  to: donor.email,
+                  subject: `Your bank transfer donation to ${safeTenantName} has been received!`,
+                  html: `
 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
   <h2 style="color: #2563eb;">Thank You, ${safeDonorName}!</h2>
-  
   <p>Great news! Your bank transfer donation of <strong>${amountFormatted}</strong> to ${safeTenantName} has been successfully processed.</p>
-  
   <div style="background: #f3f4f6; padding: 15px; border-radius: 8px; margin: 20px 0;">
     <p style="margin: 5px 0;"><strong>Amount:</strong> ${amountFormatted}</p>
     <p style="margin: 5px 0;"><strong>Date Cleared:</strong> ${dateFormatted}</p>
     <p style="margin: 5px 0;"><strong>Payment Method:</strong> Bank Transfer (ACH)</p>
   </div>
-  
   <p>Your support makes a real difference in the lives of the animals we rescue and care for. Thank you for choosing to give via bank transfer!</p>
-  
-  <p>With heartfelt gratitude,<br/>
-  <strong>The ${safeTenantName} Team</strong></p>
-  
+  <p>With heartfelt gratitude,<br/><strong>The ${safeTenantName} Team</strong></p>
   <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;" />
-  
   <p style="font-size: 12px; color: #6b7280;">
     ${safeTenantName} is a registered 501(c)(3) nonprofit organization.${einSection}<br/>
     This email serves as your donation confirmation.
   </p>
 </div>
-                    `.trim()
-                  });
-                  console.log(`[Webhook] ACH payment confirmation email sent to ${donor.email}`);
-                }
-              } catch (emailError) {
-                console.error('[Webhook] Failed to send ACH payment confirmation email:', emailError);
+                  `.trim(),
+                });
+                console.log(`[Webhook] ACH cleared confirmation email sent to ${donor.email}`);
               }
+            } catch (emailError) {
+              console.error('[Webhook] Failed to send ACH cleared confirmation email:', emailError);
             }
           }
           break;
         }
-
         case 'invoice.payment_failed': {
           const invoice = event.data.object as any;
           if (!invoice.subscription) break;
@@ -28596,6 +28463,61 @@ Submitted: ${new Date().toLocaleString()}
               )
             )
             .returning();
+
+          // Roll back the recognition that checkout.session.completed applied
+          // optimistically. Gated on failedPayment for idempotency.
+          if (failedPayment) {
+            // 1. Void the donation ledger row (so receipts, annual summary,
+            //    Finance dashboard and the public donor wall stop showing it).
+            const [voidedDonation] = await db
+              .delete(donations)
+              .where(and(
+                eq(donations.tenantId, tenant.id),
+                eq(donations.stripeCheckoutSessionId, session.id),
+              ))
+              .returning();
+
+            // 2. Reverse the donor lifetime total bump. Use failedPayment.amount
+            //    (= session.amount_total) since the credit basis at completion
+            //    was the gross amount, which differs from donations.amount when
+            //    the donor covered processing fees.
+            if (failedPayment.donorId && failedPayment.amount) {
+              await db.update(donors)
+                .set({ totalDonated: sql`GREATEST(${donors.totalDonated} - ${failedPayment.amount}, 0)` })
+                .where(eq(donors.id, failedPayment.donorId));
+            }
+
+            // 3. Reverse P2P campaign progress credited at session completion.
+            if (session.metadata?.peerCampaignId) {
+              try {
+                const { peerCampaignDonations: pcd, peerCampaigns: pc } = await import('@shared/schema');
+                const [reversed] = await db.update(pcd)
+                  .set({ paymentStatus: 'failed' })
+                  .where(and(
+                    eq(pcd.stripeSessionId, session.id),
+                    inArray(pcd.paymentStatus, ['paid', 'pending', 'processing']),
+                  ))
+                  .returning();
+                if (reversed) {
+                  await db.update(pc)
+                    .set({ amountRaised: sql`GREATEST(${pc.amountRaised} - ${reversed.amount}, 0)` })
+                    .where(eq(pc.id, session.metadata.peerCampaignId));
+                }
+              } catch (rollbackErr) {
+                console.error('[Webhook] Failed to roll back P2P credit on ACH bounce:', rollbackErr);
+              }
+            }
+
+            // 4. Cancel the subscription so VIP roster / Wall of Heroes drops the donor.
+            if (session.mode === 'subscription' && session.subscription) {
+              await db.update(subscriptions)
+                .set({ status: 'cancelled' })
+                .where(and(
+                  eq(subscriptions.tenantId, tenant.id),
+                  eq(subscriptions.stripeSubscriptionId, session.subscription),
+                ));
+            }
+          }
 
           // ACH bounce alert: routes through Notification Preferences
           // (event_key `donation_payment_failed`). Gated on `failedPayment`
