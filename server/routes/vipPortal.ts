@@ -253,14 +253,14 @@ router.get('/history', async (req: Request, res: Response) => {
       ))
       .orderBy(desc(donations.date));
 
-    // Years available for annual summary (cash-type donations)
+    // Years available for annual summary (monetary donation types)
     const years = Array.from(new Set(
       donationRows
-        .filter(d => d.donationType === 'cash' || d.donationType === 'online' || d.donationType === 'check')
+        .filter(d => d.donationType === 'cash' || d.donationType === 'online' || d.donationType === 'check' || d.donationType === 'ach')
         .map(d => new Date(d.date).getFullYear())
     )).sort((a, b) => b - a);
 
-    // Pending/failed ACH payments not yet in the donations table.
+    // Pending/failed ACH payments only (checkout-session-originated, not invoice-driven card retries).
     const pendingPaymentRows = await db
       .select({
         id: payments.id,
@@ -275,6 +275,8 @@ router.get('/history', async (req: Request, res: Response) => {
         eq(payments.tenantId, tenantId),
         eq(payments.donorId, donorId),
         sql`${payments.status} IN ('pending', 'failed')`,
+        sql`${payments.stripeCheckoutSessionId} IS NOT NULL`,
+        sql`${payments.stripeInvoiceId} IS NULL`,
       ))
       .orderBy(desc(payments.createdAt))
       .limit(20);

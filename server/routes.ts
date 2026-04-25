@@ -15728,14 +15728,8 @@ ${renderedHtml}
    */
   app.get('/api/vip-club/wall-of-heroes', requireTenant, async (req, res, next) => {
     try {
-      const { subscriptions: subs, donors } = await import('@shared/schema');
-      // ACH clearance gate: only show donors whose subscription has at least
-      // one payment row with status='succeeded'. Stripe's own subscription
-      // status flips to 'active' once the first invoice clears, but for
-      // ACH-funded subscriptions we don't want to trust that signal alone —
-      // a donor whose first invoice is still in `processing` (4–5 business
-      // days for ACH) must NOT show up on the public Wall until their bank
-      // transfer actually settles. The EXISTS subquery enforces that.
+      const { subscriptions: subs, donors, payments: paymentsTbl } = await import('@shared/schema');
+      // ACH clearance gate: require at least one succeeded payment row on the sub.
       const heroes = await db
         .select({
           displayName: subs.displayName,
@@ -15751,9 +15745,9 @@ ${renderedHtml}
           eq(subs.status, 'active'),
           eq(subs.displayOnWallOfHeroes, true),
           sql`EXISTS (
-            SELECT 1 FROM ${payments}
-            WHERE ${payments.subscriptionId} = ${subs.id}
-              AND ${payments.status} = 'succeeded'
+            SELECT 1 FROM ${paymentsTbl}
+            WHERE ${paymentsTbl.subscriptionId} = ${subs.id}
+              AND ${paymentsTbl.status} = 'succeeded'
           )`,
         ))
         .orderBy(desc(subs.amount), asc(subs.createdAt));
