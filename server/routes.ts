@@ -28244,16 +28244,30 @@ Submitted: ${new Date().toLocaleString()}
 
           // Update the pending payment to succeeded — status='pending' guard
           // makes redelivered webhooks idempotent. For subscription checkouts,
-          // also stamp the first invoice id so invoice.payment_succeeded short-
-          // circuits via its existing-succeeded idempotency check (prevents
-          // double-counting donor.totalDonated for ACH-funded subscription
-          // first cycle).
+          // also stamp the first invoice id (so invoice.payment_succeeded short-
+          // circuits its existing-succeeded check, preventing double-counting
+          // donor.totalDonated) AND link to the subscription row so the Wall of
+          // Heroes EXISTS gate (payments.subscriptionId = subs.id) passes after
+          // first ACH clear.
           const firstInvoiceId = session.invoice || null;
+          let linkedSubscriptionId: string | null = null;
+          if (session.subscription) {
+            const [subRow] = await db
+              .select({ id: subscriptions.id })
+              .from(subscriptions)
+              .where(and(
+                eq(subscriptions.tenantId, tenant.id),
+                eq(subscriptions.stripeSubscriptionId, session.subscription)
+              ))
+              .limit(1);
+            linkedSubscriptionId = subRow?.id || null;
+          }
           const [updatedPayment] = await db
             .update(payments)
             .set({
               status: 'succeeded',
               ...(firstInvoiceId ? { stripeInvoiceId: firstInvoiceId } : {}),
+              ...(linkedSubscriptionId ? { subscriptionId: linkedSubscriptionId } : {}),
             })
             .where(
               and(
