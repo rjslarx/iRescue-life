@@ -49,14 +49,36 @@ export class VolunteerRecruitmentSmsService {
           eq(smsMessageLogs.direction, 'outbound'),
           eq(smsMessageLogs.status, 'sent'),
           gte(smsMessageLogs.createdAt, cutoff),
-          or(
-            eq(smsMessageLogs.messageType, 'volunteer_recruitment_weekly'),
-            eq(smsMessageLogs.messageType, 'volunteer_recruitment_urgent')
-          )
+          // Suppress if ANY volunteer-recruitment-style SMS has gone out in
+          // the last 24h — including the hourly threshold-alert system —
+          // so the same volunteer never gets two "we need help" texts in
+          // the same day.
+          inArray(smsMessageLogs.messageType, [
+            'volunteer_recruitment_weekly',
+            'volunteer_recruitment_urgent',
+            'volunteer_threshold_alert',
+          ])
         )
       )
       .limit(1);
     return recent.length > 0;
+  }
+
+  /**
+   * Dedup recipients by phone number so a single run never texts the same
+   * device twice (e.g., a person with both a staff account and a separate
+   * volunteer account that share a phone).
+   */
+  private static dedupByPhone<T extends { phone: string | null }>(list: T[]): T[] {
+    const seen = new Set<string>();
+    const out: T[] = [];
+    for (const item of list) {
+      const key = (item.phone ?? "").replace(/\D/g, "");
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      out.push(item);
+    }
+    return out;
   }
 
   private static async getCalendarDayShortages(
@@ -226,12 +248,14 @@ export class VolunteerRecruitmentSmsService {
       .from(users)
       .where(and(eq(users.tenantId, tenantId)));
 
-    const recipients = allUsers.filter(
-      (u) =>
-        u.phone &&
-        u.smsRecruitmentOptIn !== false &&
-        u.roles &&
-        u.roles.some((r: string) => ["volunteer", "staff", "admin"].includes(r))
+    const recipients = this.dedupByPhone(
+      allUsers.filter(
+        (u) =>
+          u.phone &&
+          u.smsRecruitmentOptIn !== false &&
+          u.roles &&
+          u.roles.some((r: string) => ["volunteer", "staff", "admin"].includes(r))
+      )
     );
 
     for (const recipient of recipients) {
@@ -331,12 +355,14 @@ export class VolunteerRecruitmentSmsService {
       .from(users)
       .where(and(eq(users.tenantId, tenantId)));
 
-    const recipients = allUsers.filter(
-      (u) =>
-        u.phone &&
-        u.smsRecruitmentOptIn !== false &&
-        u.roles &&
-        u.roles.some((r: string) => ["volunteer", "staff", "admin"].includes(r))
+    const recipients = this.dedupByPhone(
+      allUsers.filter(
+        (u) =>
+          u.phone &&
+          u.smsRecruitmentOptIn !== false &&
+          u.roles &&
+          u.roles.some((r: string) => ["volunteer", "staff", "admin"].includes(r))
+      )
     );
 
     if (recipients.length === 0) return result;

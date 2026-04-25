@@ -5,12 +5,49 @@ import {
   volunteerOpportunities,
   volunteerSignups,
   users,
+  smsMessageLogs,
   type VolunteerThresholdAlert 
 } from "@shared/schema";
-import { eq, and, gte, lte, sql } from "drizzle-orm";
+import { eq, and, gte, lte, sql, inArray } from "drizzle-orm";
 import { PushNotificationService } from "./push-notifications";
 import { sendSms, isTwilioEnabled } from "../lib/twilio-service";
-import { format, addDays, startOfDay, endOfDay } from "date-fns";
+import { format, addDays, startOfDay, endOfDay, subHours } from "date-fns";
+
+const VOLUNTEER_SMS_MESSAGE_TYPES = [
+  'volunteer_recruitment_weekly',
+  'volunteer_recruitment_urgent',
+  'volunteer_threshold_alert',
+] as const;
+
+async function hasVolunteerSmsSentInLast24Hours(tenantId: string): Promise<boolean> {
+  const cutoff = subHours(new Date(), 24);
+  const recent = await db
+    .select({ id: smsMessageLogs.id })
+    .from(smsMessageLogs)
+    .where(
+      and(
+        eq(smsMessageLogs.tenantId, tenantId),
+        eq(smsMessageLogs.direction, 'outbound'),
+        eq(smsMessageLogs.status, 'sent'),
+        gte(smsMessageLogs.createdAt, cutoff),
+        inArray(smsMessageLogs.messageType, VOLUNTEER_SMS_MESSAGE_TYPES as unknown as string[])
+      )
+    )
+    .limit(1);
+  return recent.length > 0;
+}
+
+function dedupUsersByPhone<T extends { phone: string | null }>(list: T[]): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const item of list) {
+    const key = (item.phone ?? "").replace(/\D/g, "");
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(item);
+  }
+  return out;
+}
 
 interface OpportunityShortage {
   opportunity: {
@@ -250,7 +287,11 @@ export class VolunteerThresholdAlertService {
       user.roles && user.roles.some((role: string) => targetRoles.includes(role))
     );
 
-    const totalRecipients = eligibleUsers.length;
+    // Distinct phone audience — used both for the SMS recipient list AND
+    // for the alert-history `totalRecipients` metric so the count never
+    // overstates the people actually contacted.
+    const dedupedPhoneAudience = dedupUsersByPhone(eligibleUsers);
+    const totalRecipients = dedupedPhoneAudience.length;
 
     // Send push notifications
     if (alert.pushEnabled && PushNotificationService.isConfigured()) {
@@ -286,22 +327,33 @@ export class VolunteerThresholdAlertService {
     if (alert.smsEnabled) {
       const twilioConfigured = await isTwilioEnabled(alert.tenantId);
       if (twilioConfigured) {
-        const smsMessage = `${title}\n${body}`;
-        for (const user of eligibleUsers) {
-          if (user.phone) {
-            try {
-              const result = await sendSms(
-                alert.tenantId,
-                user.phone,
-                smsMessage,
-                'reminder',
-                { sentBy: { id: 'system', name: 'Volunteer Alert System' } }
-              );
-              if (result.status === 'sent') {
-                smsSent++;
+        // Cross-service dedup: if any volunteer-recruitment SMS has gone
+        // out to this tenant in the last 24h, skip the SMS portion to avoid
+        // double-texting the same audience about the same shortages. Push
+        // and email channels are still allowed below.
+        const alreadyTextedRecently = await hasVolunteerSmsSentInLast24Hours(alert.tenantId);
+        if (alreadyTextedRecently) {
+          console.log(`[Volunteer Threshold Alert] Skipping SMS for tenant ${alert.tenantId} — volunteer recruitment SMS already sent in last 24h`);
+        } else {
+          const smsMessage = `${title}\n${body}`;
+          // Phone-deduped audience computed above; a person with multiple
+          // user rows sharing one phone only gets one SMS.
+          for (const user of dedupedPhoneAudience) {
+            if (user.phone) {
+              try {
+                const result = await sendSms(
+                  alert.tenantId,
+                  user.phone,
+                  smsMessage,
+                  'volunteer_threshold_alert',
+                  { sentBy: { id: 'system', name: 'Volunteer Alert System' } }
+                );
+                if (result.status === 'sent') {
+                  smsSent++;
+                }
+              } catch (error) {
+                console.error(`Failed to send SMS to ${user.phone}:`, error);
               }
-            } catch (error) {
-              console.error(`Failed to send SMS to ${user.phone}:`, error);
             }
           }
         }

@@ -185,7 +185,7 @@ export async function sendSms(
   tenantId: string,
   toNumber: string,
   message: string,
-  messageType: 'transport_alert' | 'proxy_message' | 'broadcast' | 'reminder' | 'other' | 'notification' | 'volunteer_recruitment_weekly' | 'volunteer_recruitment_urgent' | 'team_invitation',
+  messageType: 'transport_alert' | 'proxy_message' | 'broadcast' | 'reminder' | 'other' | 'notification' | 'volunteer_recruitment_weekly' | 'volunteer_recruitment_urgent' | 'volunteer_threshold_alert' | 'team_invitation',
   context?: {
     transportId?: string;
     proxySessionId?: string;
