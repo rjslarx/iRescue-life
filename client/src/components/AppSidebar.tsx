@@ -652,6 +652,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
     'foster-pipeline': { title: "Foster Pipeline", url: "/dashboard/foster-pipeline", icon: Kanban },
     'event-ticket-sales': { title: "Event Ticket Sales", url: "/dashboard/event-ticket-sales", icon: Ticket },
     'tnr-log': { title: "TNR Log", url: "/dashboard/tnr-log", icon: Cat },
+    'post-optimizer': { title: "Post Optimizer", url: "/dashboard/post-optimizer", icon: Sparkles },
   };
 
   // Filter groups and items based on permissions and tier
