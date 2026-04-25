@@ -28255,7 +28255,37 @@ Submitted: ${new Date().toLocaleString()}
               .limit(1);
             linkedSubscriptionId = subRow?.id || null;
           }
-          const [updatedPayment] = await db
+
+          // Out-of-order webhook guard: if invoice.payment_succeeded already
+          // landed first (subscription ACH), it inserted a succeeded payment
+          // row + bumped donor totals. Drop the redundant pending checkout-
+          // session row and skip the donor-total/donation insert below to
+          // prevent double-counting.
+          let invoiceAlreadySettled = false;
+          if (firstInvoiceId) {
+            const [existingInvoicePayment] = await db
+              .select({ id: payments.id })
+              .from(payments)
+              .where(and(
+                eq(payments.tenantId, tenant.id),
+                eq(payments.stripeInvoiceId, firstInvoiceId),
+                eq(payments.status, 'succeeded'),
+              ))
+              .limit(1);
+            if (existingInvoicePayment) {
+              invoiceAlreadySettled = true;
+              await db
+                .delete(payments)
+                .where(and(
+                  eq(payments.tenantId, tenant.id),
+                  eq(payments.stripeCheckoutSessionId, session.id),
+                  eq(payments.status, 'pending'),
+                ));
+              console.log('[Webhook] Invoice already settled for ACH session', session.id, '— skipping duplicate increment');
+            }
+          }
+
+          const [updatedPayment] = invoiceAlreadySettled ? [null as any] : await db
             .update(payments)
             .set({
               status: 'succeeded',
