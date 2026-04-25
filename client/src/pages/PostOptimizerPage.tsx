@@ -30,6 +30,8 @@ import {
   ChevronsUpDown,
   X,
   HandHeart,
+  Link2,
+  Settings,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -40,6 +42,22 @@ type PostCategory =
   | "happy_adoption"
   | "volunteer_recruitment";
 
+type DestinationKind = "vipClub" | "foster" | "adoption" | "volunteer" | "emergencyDonate";
+type DestinationSource =
+  | "tenant_jotform"
+  | "public_site_default"
+  | "public_vip_club"
+  | "animal_emergency_campaign"
+  | "public_donate_fallback";
+
+interface OptimizeDestination {
+  url: string;
+  label: string;
+  kind: DestinationKind;
+  source: DestinationSource;
+  isFallback: boolean;
+}
+
 interface OptimizeResponse {
   success: true;
   optimizedCaption: string;
@@ -49,7 +67,40 @@ interface OptimizeResponse {
   paymentInterceptionApplied: boolean;
   usedEmergencyCampaign: boolean;
   emergencyCampaignTitle: string | null;
+  destination: OptimizeDestination;
 }
+
+/**
+ * For each destination kind that has a tenant-configurable override, point
+ * the user at the exact settings tab where they can fix the fallback. The
+ * Website Builder page reads the `?tab=` query string to deep-link tabs.
+ */
+const FALLBACK_FIX_HINTS: Record<
+  DestinationKind,
+  { href: string; linkLabel: string; explanation: string } | null
+> = {
+  vipClub: null, // VIP Club is always the public-site page; no override exists.
+  foster: {
+    href: "/dashboard/website-builder?tab=foster",
+    linkLabel: "Foster Form settings",
+    explanation: "set your JotForm foster URL so we link there next time",
+  },
+  adoption: {
+    href: "/dashboard/website-builder?tab=adoption",
+    linkLabel: "Adoption Form settings",
+    explanation: "set your JotForm adoption URL so we link there next time",
+  },
+  volunteer: {
+    href: "/dashboard/website-builder?tab=volunteer",
+    linkLabel: "Volunteer Form settings",
+    explanation: "set your JotForm volunteer URL so we link there next time",
+  },
+  emergencyDonate: {
+    href: "/dashboard/donations",
+    linkLabel: "create an Emergency Campaign",
+    explanation: "for this animal so donors land on a dedicated fundraiser",
+  },
+};
 
 interface AnimalLite {
   id: string;
@@ -96,6 +147,7 @@ export default function PostOptimizerPage() {
   const [result, setResult] = useState<OptimizeResponse | null>(null);
   const [copiedCaption, setCopiedCaption] = useState(false);
   const [copiedComment, setCopiedComment] = useState(false);
+  const [copiedDestination, setCopiedDestination] = useState(false);
 
   const {
     data: animalsData,
@@ -133,6 +185,7 @@ export default function PostOptimizerPage() {
       setResult(data);
       setCopiedCaption(false);
       setCopiedComment(false);
+      setCopiedDestination(false);
     },
     onError: (error: unknown) => {
       const message = error instanceof Error ? error.message : "Something went wrong. Please try again.";
@@ -398,6 +451,77 @@ export default function PostOptimizerPage() {
                     </div>
                   </div>
                 )}
+
+                {result.destination && (() => {
+                  const dest = result.destination;
+                  const hint = FALLBACK_FIX_HINTS[dest.kind];
+                  const showFallbackHint = dest.isFallback && hint;
+                  return (
+                    <Card data-testid="card-destination-url">
+                      <CardHeader>
+                        <div className="flex items-start justify-between gap-3 flex-wrap">
+                          <div className="space-y-1">
+                            <CardTitle className="flex items-center gap-2">
+                              <Link2 className="h-5 w-5" />
+                              First Comment Will Link To
+                            </CardTitle>
+                            <CardDescription>
+                              This is the exact URL the first comment will send people to.
+                            </CardDescription>
+                          </div>
+                          <Badge variant="secondary" data-testid="badge-destination-label">
+                            {dest.label}
+                          </Badge>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <code
+                            className="flex-1 min-w-0 text-xs sm:text-sm break-all rounded-md border bg-muted px-3 py-2 font-mono text-foreground"
+                            data-testid="text-destination-url"
+                          >
+                            {dest.url}
+                          </code>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() =>
+                              copyToClipboard(dest.url, "Link", setCopiedDestination)
+                            }
+                            data-testid="button-copy-destination"
+                          >
+                            {copiedDestination ? (
+                              <Check className="h-4 w-4 mr-2" />
+                            ) : (
+                              <Copy className="h-4 w-4 mr-2" />
+                            )}
+                            {copiedDestination ? "Copied" : "Copy Link"}
+                          </Button>
+                        </div>
+                        {showFallbackHint && (
+                          <div
+                            className="flex items-start gap-2 rounded-md border bg-muted/40 p-3 text-sm"
+                            data-testid="callout-destination-fallback"
+                          >
+                            <Settings className="h-4 w-4 mt-0.5 shrink-0 text-muted-foreground" />
+                            <p className="text-muted-foreground">
+                              Heads up: this is the public-site fallback.{" "}
+                              <Link
+                                href={hint!.href}
+                                className="underline font-medium text-foreground hover-elevate active-elevate-2 rounded px-0.5"
+                                data-testid="link-fix-destination-fallback"
+                              >
+                                {hint!.linkLabel}
+                              </Link>
+                              {" — "}
+                              {hint!.explanation}.
+                            </p>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })()}
 
                 <Card data-testid="card-optimized-caption">
                   <CardHeader>

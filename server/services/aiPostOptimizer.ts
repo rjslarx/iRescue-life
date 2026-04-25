@@ -19,6 +19,33 @@ export interface OptimizePostUrls {
   volunteerUrl: string;
 }
 
+/**
+ * Where each candidate URL came from, so the UI can tell rescues at a glance
+ * whether the optimizer used their tenant-configured override or a generic
+ * public-site fallback (which usually means the tenant should fix a setting).
+ */
+export type PostUrlSource =
+  | 'tenant_jotform'           // foster/adoption/volunteer JotForm URL set on tenant
+  | 'public_site_default'      // /foster, /adopt, /volunteer on the rescue's public site
+  | 'public_vip_club'          // /vip-club on the public site (no per-tenant override)
+  | 'animal_emergency_campaign' // animal-specific active emergency-fund campaign
+  | 'public_donate_fallback';   // /donate on the public site
+
+export interface ResolvedPostUrl {
+  url: string;
+  source: PostUrlSource;
+  /** True when this URL is a fallback the tenant probably wants to override. */
+  isFallback: boolean;
+}
+
+export interface ResolvedPostUrls {
+  vipClubUrl: ResolvedPostUrl;
+  fosterUrl: ResolvedPostUrl;
+  adoptionUrl: ResolvedPostUrl;
+  volunteerUrl: ResolvedPostUrl;
+  emergencyDonateUrl: ResolvedPostUrl;
+}
+
 export interface OptimizedPostResult {
   optimizedCaption: string;
   firstComment: string;
@@ -275,6 +302,10 @@ Return the JSON object now.`;
  * Resolve the URLs the AI needs based on the tenant's configuration plus an
  * optional emergency donate URL chosen by the route handler (which has access
  * to the database to look up animal-specific emergency campaigns).
+ *
+ * Returns each URL alongside a `source` and `isFallback` flag so the route
+ * handler can echo that metadata back to the client. The optimizer itself only
+ * needs the URL strings (see `toOptimizePostUrls`).
  */
 export function resolveTenantPostUrls(tenant: {
   customDomain?: string | null;
@@ -283,7 +314,7 @@ export function resolveTenantPostUrls(tenant: {
   jotformAdoptionUrl?: string | null;
   jotformFosterUrl?: string | null;
   jotformVolunteerUrl?: string | null;
-}, emergencyDonateUrl?: string): OptimizePostUrls {
+}, emergencyDonateUrl?: string): ResolvedPostUrls {
   const publicSiteRoot = (() => {
     if (tenant.customDomain && tenant.customDomainVerified) {
       return `https://${tenant.customDomain.replace(/^https?:\/\//, "").replace(/\/$/, "")}`;
@@ -291,19 +322,82 @@ export function resolveTenantPostUrls(tenant: {
     return `https://${tenant.subdomain}.irescue.life`;
   })();
 
-  const vipClubUrl = `${publicSiteRoot}/vip-club`;
-  const fosterUrl = tenant.jotformFosterUrl?.trim() || `${publicSiteRoot}/foster`;
-  const adoptionUrl = tenant.jotformAdoptionUrl?.trim() || `${publicSiteRoot}/adopt`;
-  const volunteerUrl = tenant.jotformVolunteerUrl?.trim() || `${publicSiteRoot}/volunteer`;
-  const fallbackDonateUrl = `${publicSiteRoot}/donate?utm_source=fb_optimizer&utm_medium=first_comment`;
+  const fosterOverride = tenant.jotformFosterUrl?.trim();
+  const adoptionOverride = tenant.jotformAdoptionUrl?.trim();
+  const volunteerOverride = tenant.jotformVolunteerUrl?.trim();
+  const emergencyOverride = emergencyDonateUrl?.trim();
 
   return {
-    vipClubUrl,
-    fosterUrl,
-    adoptionUrl,
-    volunteerUrl,
-    emergencyDonateUrl: emergencyDonateUrl?.trim() || fallbackDonateUrl,
+    // The VIP Club page is always served by the public site — there is no
+    // per-tenant override for it, so it's never considered a "fallback".
+    vipClubUrl: {
+      url: `${publicSiteRoot}/vip-club`,
+      source: 'public_vip_club',
+      isFallback: false,
+    },
+    fosterUrl: fosterOverride
+      ? { url: fosterOverride, source: 'tenant_jotform', isFallback: false }
+      : { url: `${publicSiteRoot}/foster`, source: 'public_site_default', isFallback: true },
+    adoptionUrl: adoptionOverride
+      ? { url: adoptionOverride, source: 'tenant_jotform', isFallback: false }
+      : { url: `${publicSiteRoot}/adopt`, source: 'public_site_default', isFallback: true },
+    volunteerUrl: volunteerOverride
+      ? { url: volunteerOverride, source: 'tenant_jotform', isFallback: false }
+      : { url: `${publicSiteRoot}/volunteer`, source: 'public_site_default', isFallback: true },
+    emergencyDonateUrl: emergencyOverride
+      ? { url: emergencyOverride, source: 'animal_emergency_campaign', isFallback: false }
+      : {
+          url: `${publicSiteRoot}/donate?utm_source=fb_optimizer&utm_medium=first_comment`,
+          source: 'public_donate_fallback',
+          isFallback: true,
+        },
   };
+}
+
+/**
+ * Flatten the rich resolved URLs into the plain string-only shape the AI
+ * prompt builder expects.
+ */
+export function toOptimizePostUrls(resolved: ResolvedPostUrls): OptimizePostUrls {
+  return {
+    vipClubUrl: resolved.vipClubUrl.url,
+    fosterUrl: resolved.fosterUrl.url,
+    adoptionUrl: resolved.adoptionUrl.url,
+    volunteerUrl: resolved.volunteerUrl.url,
+    emergencyDonateUrl: resolved.emergencyDonateUrl.url,
+  };
+}
+
+export interface DestinationDescriptor extends ResolvedPostUrl {
+  /** Short user-facing label for the destination, e.g. "Volunteer application". */
+  label: string;
+  /** Which of the resolved URLs the optimizer chose. */
+  kind: 'vipClub' | 'foster' | 'adoption' | 'volunteer' | 'emergencyDonate';
+}
+
+/**
+ * Pick the destination URL the optimizer's first comment will actually link
+ * to, based on the AI's chosen category and whether the payment-interception
+ * override applied. Mirrors the routing rules described in the system prompt
+ * so the UI shows the same URL the AI was instructed to use.
+ */
+export function pickDestinationForResult(
+  resolved: ResolvedPostUrls,
+  result: Pick<OptimizedPostResult, 'category' | 'paymentInterceptionApplied'>
+): DestinationDescriptor {
+  if (result.paymentInterceptionApplied) {
+    return { ...resolved.emergencyDonateUrl, label: 'Emergency donate page', kind: 'emergencyDonate' };
+  }
+  switch (result.category) {
+    case 'urgent_emotional':
+      return { ...resolved.vipClubUrl, label: 'VIP Club page', kind: 'vipClub' };
+    case 'overwhelmed_shelter':
+      return { ...resolved.fosterUrl, label: 'Foster application', kind: 'foster' };
+    case 'happy_adoption':
+      return { ...resolved.adoptionUrl, label: 'Adoption application', kind: 'adoption' };
+    case 'volunteer_recruitment':
+      return { ...resolved.volunteerUrl, label: 'Volunteer application', kind: 'volunteer' };
+  }
 }
 
 /**

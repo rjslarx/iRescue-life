@@ -7357,7 +7357,7 @@ Crawl-delay: 1
    */
   app.post('/api/ai/optimize-post', requireTenant, requireAuth, requireRoleOrPageAccess('post-optimizer', 'admin', 'staff'), async (req, res, next) => {
     try {
-      const { optimizeFacebookPost, resolveTenantPostUrls, resolvePublicSiteRoot, PostOptimizerError } = await import('./services/aiPostOptimizer');
+      const { optimizeFacebookPost, resolveTenantPostUrls, resolvePublicSiteRoot, toOptimizePostUrls, pickDestinationForResult, PostOptimizerError } = await import('./services/aiPostOptimizer');
       const { donationLinks } = await import('@shared/schema');
 
       const optimizeSchema = z.object({
@@ -7406,7 +7406,7 @@ Crawl-delay: 1
         }
       }
 
-      const urls = resolveTenantPostUrls(
+      const resolved = resolveTenantPostUrls(
         {
           customDomain: tenant.customDomain,
           customDomainVerified: tenant.customDomainVerified,
@@ -7419,7 +7419,8 @@ Crawl-delay: 1
       );
 
       try {
-        const result = await optimizeFacebookPost(parseResult.data.draft, urls);
+        const result = await optimizeFacebookPost(parseResult.data.draft, toOptimizePostUrls(resolved));
+        const destination = pickDestinationForResult(resolved, result);
         return res.json({
           success: true,
           optimizedCaption: result.optimizedCaption,
@@ -7429,6 +7430,17 @@ Crawl-delay: 1
           paymentInterceptionApplied: result.paymentInterceptionApplied,
           usedEmergencyCampaign: Boolean(emergencyCampaignUrl) && result.paymentInterceptionApplied,
           emergencyCampaignTitle: emergencyCampaignTitle ?? null,
+          // Resolved destination URL the first comment will link to. Surfaced
+          // explicitly so rescues can confirm at a glance which page donors
+          // will land on (and notice when a fallback was used because their
+          // tenant override isn't configured).
+          destination: {
+            url: destination.url,
+            label: destination.label,
+            kind: destination.kind,
+            source: destination.source,
+            isFallback: destination.isFallback,
+          },
         });
       } catch (err) {
         if (err instanceof PostOptimizerError) {
