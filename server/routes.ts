@@ -28506,6 +28506,14 @@ Submitted: ${new Date().toLocaleString()}
           // gets their own email below; admins need a heads-up so they can
           // follow up on large pledges that didn't actually clear. Gated on
           // `failedPayment` so a redelivered webhook doesn't spam admins.
+          //
+          // Why direct admin email rather than the daily briefing pipeline:
+          // ACH bounces on $250+ gifts are time-sensitive (donor follow-up
+          // matters in hours, not the next morning's briefing). This mirrors
+          // the same admin-fan-out pattern used by the partner-campaign and
+          // VIP card-failure webhook handlers (see other `users.roles` admin
+          // queries in this file) — the codebase doesn't have a centralized
+          // event-based notification preferences subsystem to subscribe to.
           if (failedPayment) try {
             const adminUsers = await db
               .select({ email: users.email, fullName: users.fullName })
@@ -43165,16 +43173,22 @@ Use timestamps like [00:00] to help with pacing.`;
       }
 
       // Decide whether ACH (us_bank_account) qualifies for this emergency-fund
-      // gift. Same one-time threshold ($250) as regular donations. We don't
-      // bother probing Connect account capabilities here — if ACH is enabled
-      // on the account, Stripe accepts the option; if not, Stripe surfaces a
-      // clear error to the donor before submit.
-      const { isAchEligible: emergencyAchEligible } = await import('@shared/ach-eligibility');
-      const offerEmergencyAch = emergencyAchEligible({
+      // gift. Same one-time threshold ($250) as regular donations. Probe the
+      // Connect account's `us_bank_account_payments` capability (cached for
+      // 10 min) — if it isn't 'active', we silently downgrade to card-only
+      // rather than letting Stripe Checkout error out at submit-time.
+      const { isAchEligible: emergencyAchEligible, connectAccountSupportsAch: emergencyAchConnectCheck } = await import('./lib/stripe-service').then(async (svc) => ({
+        connectAccountSupportsAch: svc.connectAccountSupportsAch,
+        isAchEligible: (await import('@shared/ach-eligibility')).isAchEligible,
+      }));
+      let offerEmergencyAch = emergencyAchEligible({
         amountCents: amount,
         isRecurring: false,
         surface: 'emergency_fund',
       });
+      if (offerEmergencyAch && tenant.stripeConnectedAccountId) {
+        offerEmergencyAch = await emergencyAchConnectCheck(stripe, tenant.stripeConnectedAccountId);
+      }
 
       const sessionParams: any = {
         mode: 'payment',
@@ -48139,8 +48153,8 @@ Use timestamps like [00:00] to help with pacing.`;
           tenantId: tenant.id,
           voteCount: amount.toString(),
         },
-        description: `${amount} vote${amount === 1 ? '' : 's'} for ${entrant.name} — ${contest.title}`,
-      } as any);
+        productDescription: `${amount} vote${amount === 1 ? '' : 's'} for ${entrant.name} — ${contest.title}`,
+      });
 
       if (!session) return res.status(500).json({ error: 'Failed to create checkout session' });
       res.json({ sessionId: session.id, url: session.url });

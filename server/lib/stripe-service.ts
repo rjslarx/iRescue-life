@@ -14,7 +14,7 @@ import { isAchEligible, type AchSurface } from '@shared/ach-eligibility';
 const ACH_CAPABILITY_CACHE_TTL_MS = 10 * 60 * 1000;
 const achCapabilityCache = new Map<string, { ok: boolean; checkedAt: number }>();
 
-async function connectAccountSupportsAch(
+export async function connectAccountSupportsAch(
   stripe: Stripe,
   connectedAccountId: string,
 ): Promise<boolean> {

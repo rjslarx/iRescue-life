@@ -81,6 +81,7 @@ interface VipHistoryPendingPayment {
   status: 'pending' | 'failed' | 'succeeded' | 'refunded';
   isRecurring: boolean;
   stripeCheckoutSessionId: string | null;
+  expectedClearDate: string | null;
 }
 
 interface VipHistoryResponse {
@@ -998,6 +999,11 @@ export default function VipClubPage() {
                               <Badge variant="secondary" data-testid={`badge-pending-recurring-${p.id}`}>Monthly</Badge>
                             )}
                           </div>
+                          {p.status === 'pending' && p.expectedClearDate && (
+                            <p className="text-xs text-muted-foreground mt-0.5" data-testid={`text-pending-clear-date-${p.id}`}>
+                              Expected to clear by {formatDateShort(p.expectedClearDate)}
+                            </p>
+                          )}
                         </div>
                         {p.status === 'failed' ? (
                           <Badge variant="destructive" data-testid={`badge-pending-status-${p.id}`}>

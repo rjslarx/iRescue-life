@@ -284,6 +284,27 @@ router.get('/history', async (req: Request, res: Response) => {
       .orderBy(desc(payments.createdAt))
       .limit(20);
 
+    // Stripe ACH typically settles in 4 business days. Compute a per-row
+    // "expected clear" date so the donor sees a concrete date rather than a
+    // generic "4–5 business days" blurb. Skips weekends (US holidays still
+    // approximate; close enough for a donor-facing estimate).
+    const addBusinessDays = (start: Date, days: number): Date => {
+      const d = new Date(start);
+      let added = 0;
+      while (added < days) {
+        d.setDate(d.getDate() + 1);
+        const dow = d.getDay();
+        if (dow !== 0 && dow !== 6) added++;
+      }
+      return d;
+    };
+    const pendingPaymentsWithEstimate = pendingPaymentRows.map((p) => ({
+      ...p,
+      expectedClearDate: p.status === 'pending' && p.date
+        ? addBusinessDays(p.date instanceof Date ? p.date : new Date(p.date), 4).toISOString()
+        : null,
+    }));
+
     res.json({
       donor: {
         name: donor.name,
@@ -292,7 +313,7 @@ router.get('/history', async (req: Request, res: Response) => {
       },
       subscriptions: subs,
       donations: donationRows,
-      pendingPayments: pendingPaymentRows,
+      pendingPayments: pendingPaymentsWithEstimate,
       availableYears: years,
     });
   } catch (error) {
