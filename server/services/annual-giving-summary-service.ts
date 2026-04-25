@@ -1,7 +1,7 @@
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import { db } from '../db';
-import { donations, tenants } from '@shared/schema';
-import { eq, and, gte, lt, sql } from 'drizzle-orm';
+import { donations, payments, tenants } from '@shared/schema';
+import { eq, and, gte, lt, sql, inArray } from 'drizzle-orm';
 import { EmailService } from '../lib/email-service';
 import { isPaidSubscriptionTier } from '../config/platform';
 
@@ -74,12 +74,36 @@ export async function getEligibleDonors(
       lt(donations.date, endDate)
     ));
 
+  // Exclude ACH donations whose bank transfer is still pending — they have
+  // recognition optimistically credited but the transfer can still bounce,
+  // so they aren't yet IRS-receiptable. The async_payment_succeeded webhook
+  // re-runs receipt automation once the transfer settles.
+  const candidateAchSessionIds = yearDonations
+    .filter((d): d is typeof d & { stripeCheckoutSessionId: string } =>
+      d.paymentMethod === 'stripe_ach' && !!d.stripeCheckoutSessionId)
+    .map(d => d.stripeCheckoutSessionId);
+  const pendingSessionIds = new Set<string>();
+  if (candidateAchSessionIds.length > 0) {
+    const pendingRows = await db
+      .select({ stripeCheckoutSessionId: payments.stripeCheckoutSessionId })
+      .from(payments)
+      .where(and(
+        eq(payments.tenantId, tenantId),
+        eq(payments.status, 'pending'),
+        inArray(payments.stripeCheckoutSessionId, candidateAchSessionIds),
+      ));
+    for (const r of pendingRows) {
+      if (r.stripeCheckoutSessionId) pendingSessionIds.add(r.stripeCheckoutSessionId);
+    }
+  }
+
   const donorMap = new Map<string, EligibleDonor>();
 
   for (const donation of yearDonations) {
-    const donationType = (donation as any).donationType || 'cash';
+    const donationType = donation.donationType || 'cash';
     const monetaryTypes = ['cash', 'check', 'online', 'ach'];
     if (!monetaryTypes.includes(donationType)) continue;
+    if (donation.stripeCheckoutSessionId && pendingSessionIds.has(donation.stripeCheckoutSessionId)) continue;
 
     // Skip donations without valid email addresses
     // IRS summaries must be sent to donors, so email is required

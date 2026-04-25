@@ -240,11 +240,13 @@ router.get('/history', async (req: Request, res: Response) => {
         date: donations.date,
         amount: donations.amount,
         donationType: donations.donationType,
+        paymentMethod: donations.paymentMethod,
         description: donations.description,
         receiptNumber: donations.receiptNumber,
         receiptSentAt: donations.receiptSentAt,
         isRecurring: donations.isRecurring,
         externalSubscriptionId: donations.externalSubscriptionId,
+        stripeCheckoutSessionId: donations.stripeCheckoutSessionId,
       })
       .from(donations)
       .where(and(
@@ -252,13 +254,6 @@ router.get('/history', async (req: Request, res: Response) => {
         sql`(${donations.donorId} = ${donorId} OR LOWER(${donations.donorEmail}) = ${normalizedEmail})`,
       ))
       .orderBy(desc(donations.date));
-
-    // Years available for annual summary (monetary donation types)
-    const years = Array.from(new Set(
-      donationRows
-        .filter(d => d.donationType === 'cash' || d.donationType === 'online' || d.donationType === 'check' || d.donationType === 'ach')
-        .map(d => new Date(d.date).getFullYear())
-    )).sort((a, b) => b - a);
 
     // Pending/failed ACH payments only (checkout-session-originated, not invoice-driven card retries).
     const pendingPaymentRows = await db
@@ -301,6 +296,38 @@ router.get('/history', async (req: Request, res: Response) => {
         : null,
     }));
 
+    // Build a session-id -> pending payment lookup so each ACH-pending
+    // donation can be flagged inline in "Past donations" with its
+    // estimated bank-clear date. (Recognition is credited optimistically
+    // at checkout, so the donation row exists immediately; the donor
+    // needs a clear visual cue that the underlying transfer is still in
+    // flight and could bounce.)
+    const pendingBySession = new Map<string, { expectedClearDate: string | null }>();
+    for (const p of pendingPaymentsWithEstimate) {
+      if (p.status === 'pending' && p.stripeCheckoutSessionId) {
+        pendingBySession.set(p.stripeCheckoutSessionId, { expectedClearDate: p.expectedClearDate });
+      }
+    }
+    const annotatedDonations = donationRows.map((d) => {
+      const matchedPending = d.stripeCheckoutSessionId
+        ? pendingBySession.get(d.stripeCheckoutSessionId)
+        : undefined;
+      return {
+        ...d,
+        isPendingBankTransfer: !!matchedPending,
+        expectedClearDate: matchedPending?.expectedClearDate ?? null,
+      };
+    });
+
+    // Years available for annual summary (monetary donation types).
+    // Exclude donations whose ACH transfer is still pending — those
+    // can't be receipted yet, so they shouldn't make a year "available".
+    const years = Array.from(new Set(
+      annotatedDonations
+        .filter(d => (d.donationType === 'cash' || d.donationType === 'online' || d.donationType === 'check' || d.donationType === 'ach') && !d.isPendingBankTransfer)
+        .map(d => new Date(d.date).getFullYear())
+    )).sort((a, b) => b - a);
+
     res.json({
       donor: {
         name: donor.name,
@@ -308,7 +335,7 @@ router.get('/history', async (req: Request, res: Response) => {
         totalDonated: donor.totalDonated,
       },
       subscriptions: subs,
-      donations: donationRows,
+      donations: annotatedDonations,
       pendingPayments: pendingPaymentsWithEstimate,
       availableYears: years,
     });
@@ -462,13 +489,43 @@ router.get('/annual-summary/:year', async (req: Request, res: Response) => {
         sql`${donations.date} < ${endDate}`,
       ));
 
+    // Identify ACH donations whose bank transfer is still pending — these
+    // are recognized optimistically at checkout but the underlying transfer
+    // can still bounce in 3-5 business days, so they aren't yet IRS-
+    // receiptable. Exclude them from the annual summary; the
+    // `async_payment_succeeded` webhook will trigger receipt automation
+    // once they settle. Without this filter, a year that contains a mix of
+    // settled and pending ACH would emit a tax summary that double-counts
+    // (or worse, includes amounts we may have to retract on bounce).
+    const candidateAchSessionIds = yearDonations
+      .filter((d): d is typeof d & { stripeCheckoutSessionId: string } =>
+        d.paymentMethod === 'stripe_ach' && !!d.stripeCheckoutSessionId)
+      .map(d => d.stripeCheckoutSessionId);
+    const pendingAchSessionIds = new Set<string>();
+    if (candidateAchSessionIds.length > 0) {
+      const pendingRows = await db
+        .select({ stripeCheckoutSessionId: payments.stripeCheckoutSessionId })
+        .from(payments)
+        .where(and(
+          eq(payments.tenantId, tenantId),
+          eq(payments.status, 'pending'),
+          inArray(payments.stripeCheckoutSessionId, candidateAchSessionIds),
+        ));
+      for (const r of pendingRows) {
+        if (r.stripeCheckoutSessionId) pendingAchSessionIds.add(r.stripeCheckoutSessionId);
+      }
+    }
+
     const cashDonations = yearDonations.filter(d => {
       const t = (d.donationType || 'cash');
-      return t === 'cash' || t === 'online' || t === 'check' || t === 'ach';
+      const isMonetary = t === 'cash' || t === 'online' || t === 'check' || t === 'ach';
+      if (!isMonetary) return false;
+      if (d.stripeCheckoutSessionId && pendingAchSessionIds.has(d.stripeCheckoutSessionId)) return false;
+      return true;
     });
 
     if (cashDonations.length === 0) {
-      return res.status(404).json({ error: `No donations found for ${year}` });
+      return res.status(404).json({ error: `No cleared donations found for ${year}` });
     }
 
     const totalAmount = cashDonations.reduce((sum, d) => {

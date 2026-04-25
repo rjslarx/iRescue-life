@@ -1,6 +1,6 @@
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import { db } from '../db';
-import { donations, tenants } from '@shared/schema';
+import { donations, payments, tenants } from '@shared/schema';
 import { eq, and } from 'drizzle-orm';
 import { EmailService } from '../lib/email-service';
 import { TenantFileStorage } from '../lib/tenantFileStorage';
@@ -106,6 +106,32 @@ export async function generateDonationReceipt(
         message: 'Vehicle donations require Form 1098-C. This receipt cannot be automatically generated. Please process this donation manually.',
         requiresManualReview: true
       };
+    }
+
+    // ACH bank-transfer donations: defer the official tax receipt until the
+    // underlying transfer has actually settled. The donation row is created
+    // optimistically at checkout for recognition (Wall of Heroes, donor totals,
+    // etc.) but a `pending` payment row remains until the bank confirms — and
+    // that transfer can still bounce. Issuing a tax receipt before clearance
+    // would force us to retract it on bounce, which is worse than waiting
+    // 3-5 business days. The matching `async_payment_succeeded` webhook
+    // re-runs `generateAndEmailReceipt` once the transfer clears.
+    if (donation.stripeCheckoutSessionId && donation.paymentMethod === 'stripe_ach') {
+      const [pendingPayment] = await db
+        .select({ id: payments.id })
+        .from(payments)
+        .where(and(
+          eq(payments.tenantId, data.tenantId),
+          eq(payments.stripeCheckoutSessionId, donation.stripeCheckoutSessionId),
+          eq(payments.status, 'pending'),
+        ))
+        .limit(1);
+      if (pendingPayment) {
+        return {
+          success: false,
+          message: 'Tax receipt is not available yet — the bank transfer is still pending and clears in 3-5 business days. The receipt will be sent automatically once the transfer settles.',
+        };
+      }
     }
 
     // IRS Safety Check: In-kind donations require email, address, and donor-stated value

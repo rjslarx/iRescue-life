@@ -49,11 +49,15 @@ interface VipHistoryDonation {
   date: string;
   amount: number | null;
   donationType: string;
+  paymentMethod: string | null;
   description: string | null;
   receiptNumber: string | null;
   receiptSentAt: string | null;
   isRecurring: boolean;
   externalSubscriptionId: string | null;
+  stripeCheckoutSessionId: string | null;
+  isPendingBankTransfer: boolean;
+  expectedClearDate: string | null;
 }
 
 interface VipHistorySubscription {
@@ -1051,22 +1055,48 @@ export default function VipClubPage() {
                             {d.isRecurring && (
                               <Badge variant="secondary" data-testid={`badge-recurring-${d.id}`}>Monthly</Badge>
                             )}
+                            {d.isPendingBankTransfer && (
+                              <Badge
+                                variant="outline"
+                                className="border-amber-500/60 text-amber-700 dark:text-amber-500"
+                                data-testid={`badge-donation-pending-${d.id}`}
+                              >
+                                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                Pending — clears in 3-5 business days
+                              </Badge>
+                            )}
                           </div>
-                          {d.receiptNumber && (
+                          {d.isPendingBankTransfer ? (
+                            <p className="text-xs text-muted-foreground mt-0.5" data-testid={`text-donation-pending-detail-${d.id}`}>
+                              Bank transfer in flight{d.expectedClearDate ? ` — expected to clear by ${formatDateShort(d.expectedClearDate)}` : ''}. Your tax receipt will be sent automatically once it settles.
+                            </p>
+                          ) : d.receiptNumber ? (
                             <p className="text-xs text-muted-foreground mt-0.5" data-testid={`text-receipt-number-${d.id}`}>
                               Receipt #{d.receiptNumber}
                             </p>
-                          )}
+                          ) : null}
                         </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => downloadReceipt(d.id)}
-                          data-testid={`button-download-receipt-${d.id}`}
-                        >
-                          <FileText className="h-4 w-4 mr-2" />
-                          Receipt
-                        </Button>
+                        {d.isPendingBankTransfer ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled
+                            data-testid={`button-receipt-pending-${d.id}`}
+                          >
+                            <FileText className="h-4 w-4 mr-2" />
+                            Receipt pending
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => downloadReceipt(d.id)}
+                            data-testid={`button-download-receipt-${d.id}`}
+                          >
+                            <FileText className="h-4 w-4 mr-2" />
+                            Receipt
+                          </Button>
+                        )}
                       </div>
                     ))}
                   </div>

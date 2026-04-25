@@ -27614,19 +27614,27 @@ Submitted: ${new Date().toLocaleString()}
             console.log(`[STRIPE-WEBHOOK] Created donation record ${donationRecord.id} for Finance page, donor: ${customerName} (${donor.id}), amount: $${session.amount_total / 100}${feeNote}`);
 
             if (tenant.autoSendTaxReceipts && donationRecord.donorEmail) {
-              try {
-                const { generateAndEmailReceipt } = await import('./services/donation-receipt-service');
-                const receiptResult = await generateAndEmailReceipt({
-                  donationId: donationRecord.id,
-                  tenantId: tenant.id,
-                });
-                if (receiptResult.success) {
-                  console.log(`[STRIPE-WEBHOOK] Auto-sent tax receipt #${receiptResult.receiptNumber} to ${donationRecord.donorEmail}`);
-                } else {
-                  console.warn(`[STRIPE-WEBHOOK] Auto-send tax receipt failed for donation ${donationRecord.id}: ${receiptResult.message}`);
+              if (isAchPending) {
+                // Defer the official tax receipt for ACH transfers — the bank
+                // can still bounce in the next 3-5 business days. The matching
+                // `async_payment_succeeded` webhook re-runs the auto-send once
+                // the transfer actually clears.
+                console.log(`[STRIPE-WEBHOOK] Deferring auto-send tax receipt for ACH-pending donation ${donationRecord.id}; will send after bank clearance.`);
+              } else {
+                try {
+                  const { generateAndEmailReceipt } = await import('./services/donation-receipt-service');
+                  const receiptResult = await generateAndEmailReceipt({
+                    donationId: donationRecord.id,
+                    tenantId: tenant.id,
+                  });
+                  if (receiptResult.success) {
+                    console.log(`[STRIPE-WEBHOOK] Auto-sent tax receipt #${receiptResult.receiptNumber} to ${donationRecord.donorEmail}`);
+                  } else {
+                    console.warn(`[STRIPE-WEBHOOK] Auto-send tax receipt failed for donation ${donationRecord.id}: ${receiptResult.message}`);
+                  }
+                } catch (receiptErr) {
+                  console.error(`[STRIPE-WEBHOOK] Error auto-sending tax receipt for donation ${donationRecord.id}:`, receiptErr);
                 }
-              } catch (receiptErr) {
-                console.error(`[STRIPE-WEBHOOK] Error auto-sending tax receipt for donation ${donationRecord.id}:`, receiptErr);
               }
             }
           } else {
@@ -28322,6 +28330,37 @@ Submitted: ${new Date().toLocaleString()}
               }
             } catch (emailError) {
               console.error('[Webhook] Failed to send ACH cleared confirmation email:', emailError);
+            }
+          }
+
+          // Now that the bank transfer has actually settled, the donation row
+          // is safe to receipt for tax purposes. Trigger the auto-send tax
+          // receipt that was deferred at checkout.session.completed for ACH.
+          if (tenant.autoSendTaxReceipts) {
+            try {
+              const { donations: donationsTable } = await import('@shared/schema');
+              const [achDonation] = await db
+                .select({ id: donationsTable.id, donorEmail: donationsTable.donorEmail, receiptSentAt: donationsTable.receiptSentAt })
+                .from(donationsTable)
+                .where(and(
+                  eq(donationsTable.tenantId, tenant.id),
+                  eq(donationsTable.stripeCheckoutSessionId, session.id),
+                ))
+                .limit(1);
+              if (achDonation && achDonation.donorEmail && !achDonation.receiptSentAt) {
+                const { generateAndEmailReceipt } = await import('./services/donation-receipt-service');
+                const receiptResult = await generateAndEmailReceipt({
+                  donationId: achDonation.id,
+                  tenantId: tenant.id,
+                });
+                if (receiptResult.success) {
+                  console.log(`[Webhook] Auto-sent deferred ACH tax receipt #${receiptResult.receiptNumber} to ${achDonation.donorEmail}`);
+                } else {
+                  console.warn(`[Webhook] Deferred ACH receipt send failed for donation ${achDonation.id}: ${receiptResult.message}`);
+                }
+              }
+            } catch (receiptErr) {
+              console.error('[Webhook] Failed to auto-send deferred ACH tax receipt:', receiptErr);
             }
           }
           break;
