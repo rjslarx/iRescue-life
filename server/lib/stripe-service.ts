@@ -2,6 +2,49 @@ import Stripe from 'stripe';
 import { decrypt } from './encryption';
 import type { Tenant } from '@shared/schema';
 import { getPlatformStripeSecretKey } from '../config/platform';
+import { isAchEligible, type AchSurface } from '@shared/ach-eligibility';
+
+/**
+ * In-memory cache for Connect-account ACH capability lookups.
+ * `accounts.retrieve` is rate-limited and runs on every checkout, so we
+ * memoize per Connect account for a short window (10 minutes). Refreshed on
+ * cache miss; never hold stale data long enough that a newly-enabled
+ * account stays gated for hours.
+ */
+const ACH_CAPABILITY_CACHE_TTL_MS = 10 * 60 * 1000;
+const achCapabilityCache = new Map<string, { ok: boolean; checkedAt: number }>();
+
+async function connectAccountSupportsAch(
+  stripe: Stripe,
+  connectedAccountId: string,
+): Promise<boolean> {
+  const cached = achCapabilityCache.get(connectedAccountId);
+  if (cached && Date.now() - cached.checkedAt < ACH_CAPABILITY_CACHE_TTL_MS) {
+    return cached.ok;
+  }
+  try {
+    const acct = await stripe.accounts.retrieve(connectedAccountId);
+    // Stripe returns capability state as 'active' | 'inactive' | 'pending'
+    // — we only enable ACH UI when it is fully active.
+    const ok = (acct.capabilities as any)?.us_bank_account_payments === 'active';
+    achCapabilityCache.set(connectedAccountId, { ok, checkedAt: Date.now() });
+    return ok;
+  } catch (err) {
+    // If the lookup fails (network/auth/permissions), silently fall back to
+    // card-only — better than crashing the donation flow.
+    console.warn(
+      `[stripe-service] Connect ACH capability check failed for ${connectedAccountId}; defaulting to card-only.`,
+      (err as Error)?.message,
+    );
+    achCapabilityCache.set(connectedAccountId, { ok: false, checkedAt: Date.now() });
+    return false;
+  }
+}
+
+/** Test-only escape hatch so unit tests can reset the capability cache. */
+export function _resetAchCapabilityCacheForTests() {
+  achCapabilityCache.clear();
+}
 
 // Re-export for convenience
 export { isStripeTestMode } from '../config/platform';
@@ -82,6 +125,19 @@ export class StripeService {
       productName?: string;
       productDescription?: string;
       collectEmail?: boolean;
+      /**
+       * Which user-facing surface this checkout is for. Determines whether
+       * us_bank_account (ACH) is offered as a payment method (gated by amount
+       * thresholds in shared/ach-eligibility.ts). Defaults to 'donation'
+       * which preserves the legacy "ACH on for all one-time" behaviour.
+       */
+      surface?: AchSurface;
+      /**
+       * Force-disable ACH regardless of surface/amount. Used by callers that
+       * have a hard requirement for instant settlement (votes, ticket sales,
+       * etc.) even if the surface would otherwise qualify.
+       */
+      forceCardOnly?: boolean;
     }
   ): Promise<Stripe.Checkout.Session | null> {
     // Determine which Stripe client to use
@@ -122,6 +178,32 @@ export class StripeService {
       throw new Error('Stripe is not configured for this rescue. Please complete Stripe setup in Settings.');
     }
 
+    // Decide whether ACH (us_bank_account) should be offered for this checkout.
+    // Three independent gates must all pass:
+    //   1. Caller has not force-disabled ACH (e.g. ticket sales, voting).
+    //   2. The surface + amount + recurring combo is eligible per shared rules.
+    //   3. If routing through Stripe Connect, the connected account must
+    //      have the us_bank_account_payments capability active.
+    const surface: AchSurface = params.surface ?? 'donation';
+    let offerAch = false;
+    if (!params.forceCardOnly) {
+      const eligible = isAchEligible({
+        amountCents: params.amount,
+        isRecurring: params.isRecurring,
+        surface,
+      });
+      if (eligible) {
+        if (useStripeConnect && params.connectedAccountId) {
+          offerAch = await connectAccountSupportsAch(stripe, params.connectedAccountId);
+        } else {
+          offerAch = true;
+        }
+      }
+    }
+
+    const paymentMethodTypes: Stripe.Checkout.SessionCreateParams.PaymentMethodType[] =
+      offerAch ? ['card', 'us_bank_account'] : ['card'];
+
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
       mode: params.isRecurring ? 'subscription' : 'payment',
       success_url: params.successUrl,
@@ -130,11 +212,28 @@ export class StripeService {
       metadata: {
         tenantId: tenant.id,
         ...params.metadata,
+        // Stamp the surface + ACH-availability into metadata so the webhook
+        // and downstream analytics can tell ACH-eligible sessions apart.
+        achSurface: surface,
+        achOffered: offerAch ? 'true' : 'false',
       },
-      payment_method_types: params.isRecurring 
-        ? ['card'] 
-        : ['card', 'us_bank_account'],
+      payment_method_types: paymentMethodTypes,
     };
+
+    // Enable Stripe Financial Connections for instant bank verification when
+    // ACH is offered. Without this, donors get the slower "manually verify two
+    // micro-deposits in 1–2 business days" flow which kills conversion.
+    if (offerAch) {
+      sessionParams.payment_method_options = {
+        ...(sessionParams.payment_method_options || {}),
+        us_bank_account: {
+          financial_connections: {
+            permissions: ['payment_method', 'balances'],
+          },
+          verification_method: 'instant',
+        },
+      };
+    }
 
     // Collect email if requested and not already provided
     if (params.collectEmail && !params.customerEmail) {
@@ -167,6 +266,15 @@ export class StripeService {
           tenantId: tenant.id,
           ...(params.metadata || {}),
         },
+        // When ACH is offered, the subscription itself must also be told it can
+        // bill via us_bank_account — otherwise Stripe will reject the chosen
+        // payment method when the recurring invoice tries to charge.
+        ...(offerAch ? {
+          payment_settings: {
+            payment_method_types: ['card', 'us_bank_account'],
+            save_default_payment_method: 'on_subscription',
+          },
+        } : {}),
         // For Stripe Connect subscriptions, route payments to tenant account
         ...(useStripeConnect && params.connectedAccountId ? {
           transfer_data: {

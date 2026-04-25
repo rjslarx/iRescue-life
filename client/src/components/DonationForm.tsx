@@ -8,9 +8,10 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { DollarSign, ExternalLink, Loader2, Lock, Shield, Heart, Star, Users, Home, HandHeart, PawPrint, HeartHandshake } from "lucide-react";
+import { DollarSign, ExternalLink, Loader2, Lock, Shield, Heart, Star, Users, Home, HandHeart, PawPrint, HeartHandshake, Building2 } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { Tenant } from "@shared/schema";
+import { isAchEligible, achNudgeCopy } from "@shared/ach-eligibility";
 
 interface DonationFormProps {
   sponsoredAnimalName?: string;
@@ -258,6 +259,29 @@ export default function DonationForm({ sponsoredAnimalName, tenant }: DonationFo
                   className="h-14 text-2xl pl-10 font-medium"
                   data-testid="input-custom-amount"
                 />
+              </div>
+            )}
+
+            {/* ACH bank-transfer nudge — shown when the donor's selected
+                amount qualifies for the lower-fee ACH path. We do NOT change
+                anything about the checkout flow here; Stripe will surface
+                "Bank account" as a payment method on the hosted checkout page
+                whenever the server has enabled ACH for this surface. This is
+                purely a heads-up so big-ticket donors know they have the
+                option before they click through. */}
+            {isAchEligible({
+              surface: 'donation',
+              amountCents: currentAmountCents,
+              isRecurring: !sponsoredAnimalName && isRecurring,
+            }) && (
+              <div
+                className="flex items-start gap-3 p-3 rounded-md border bg-muted/40"
+                data-testid="ach-nudge-donation"
+              >
+                <Building2 className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  {achNudgeCopy('donation', !sponsoredAnimalName && isRecurring)}
+                </p>
               </div>
             )}
 

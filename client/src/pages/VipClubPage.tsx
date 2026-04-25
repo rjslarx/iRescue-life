@@ -9,7 +9,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Loader2, Sparkles, CheckCircle2, Download, FileText, Mail, History, CreditCard, AlertCircle } from "lucide-react";
+import { Loader2, Sparkles, CheckCircle2, Download, FileText, Mail, History, CreditCard, AlertCircle, Building2 } from "lucide-react";
+import { isAchEligible, achNudgeCopy } from "@shared/ach-eligibility";
 import PublicHeader from "@/components/PublicHeader";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { buildTenantUrl, getTenantHeaders } from "@/lib/tenantApi";
@@ -73,10 +74,20 @@ interface VipHistorySubscription {
   displayName: string | null;
 }
 
+interface VipHistoryPendingPayment {
+  id: string;
+  date: string;
+  amount: number;
+  status: 'pending' | 'failed' | 'succeeded' | 'refunded';
+  isRecurring: boolean;
+  stripeCheckoutSessionId: string | null;
+}
+
 interface VipHistoryResponse {
   donor: { name: string; email: string; totalDonated: number };
   subscriptions: VipHistorySubscription[];
   donations: VipHistoryDonation[];
+  pendingPayments?: VipHistoryPendingPayment[];
   availableYears: number[];
 }
 
@@ -953,6 +964,58 @@ export default function VipClubPage() {
                 </Card>
               )}
 
+              {/* Bank-transfer (ACH) payments waiting on bank clearance.
+                  These don't move into "Past donations" until the transfer
+                  has actually settled (4–5 business days). Surfaced here so
+                  donors can see we received their gift even though Stripe
+                  hasn't finalised it yet. */}
+              {historyData.pendingPayments && historyData.pendingPayments.length > 0 && (
+                <Card className="p-6 border-amber-500/40">
+                  <h3 className="font-display text-lg font-semibold mb-1 flex items-center gap-2">
+                    <Building2 className="h-4 w-4 text-amber-600 dark:text-amber-500" />
+                    Bank transfers in progress
+                  </h3>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    These gifts were initiated and are waiting on your bank to clear (typically 4–5 business days). They'll move into your past donations and be eligible for a tax receipt as soon as they settle.
+                  </p>
+                  <div className="divide-y">
+                    {historyData.pendingPayments.map((p) => (
+                      <div
+                        key={p.id}
+                        className="flex flex-wrap items-center justify-between gap-3 py-3"
+                        data-testid={`row-pending-payment-${p.id}`}
+                      >
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-medium" data-testid={`text-pending-date-${p.id}`}>
+                              {formatDateShort(p.date)}
+                            </span>
+                            <span className="text-muted-foreground">·</span>
+                            <span className="font-semibold" data-testid={`text-pending-amount-${p.id}`}>
+                              {formatMoney(p.amount)}
+                            </span>
+                            {p.isRecurring && (
+                              <Badge variant="secondary" data-testid={`badge-pending-recurring-${p.id}`}>Monthly</Badge>
+                            )}
+                          </div>
+                        </div>
+                        {p.status === 'failed' ? (
+                          <Badge variant="destructive" data-testid={`badge-pending-status-${p.id}`}>
+                            <AlertCircle className="h-3 w-3 mr-1" />
+                            Bank declined
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="border-amber-500/60 text-amber-700 dark:text-amber-500" data-testid={`badge-pending-status-${p.id}`}>
+                            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                            Awaiting bank clearance
+                          </Badge>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              )}
+
               <Card className="p-6">
                 <h3 className="font-display text-lg font-semibold mb-1">Past donations</h3>
                 <p className="text-sm text-muted-foreground mb-4">
@@ -1054,6 +1117,26 @@ export default function VipClubPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            {/* ACH bank-transfer nudge — appears for tiers at or above the
+                monthly ACH threshold ($50/mo). The actual payment-method
+                enablement happens server-side; this is just a heads-up so
+                higher-tier donors know they can use their bank account and
+                the rescue keeps more of every recurring gift. */}
+            {selected && isAchEligible({
+              surface: 'vip',
+              amountCents: selected.amount,
+              isRecurring: true,
+            }) && (
+              <div
+                className="flex items-start gap-3 p-3 rounded-md border bg-muted/40"
+                data-testid="ach-nudge-vip"
+              >
+                <Building2 className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  {achNudgeCopy('vip', true)}
+                </p>
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="vip-email">Email (optional)</Label>
               <Input

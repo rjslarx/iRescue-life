@@ -15686,6 +15686,10 @@ ${renderedHtml}
         customerEmail: data.customerEmail,
         isRecurring: true,
         interval: 'month',
+        // 'vip' surface allows ACH on monthly subs >= $50 (per
+        // shared/ach-eligibility.ts). Below that threshold ACH is silently
+        // dropped to keep card-only UX for entry-tier "Friend of the Pack".
+        surface: 'vip',
         successUrl: `${baseUrl}${tenantPath}/vip-club?welcome=1&session_id={CHECKOUT_SESSION_ID}`,
         cancelUrl: `${baseUrl}${tenantPath}/vip-club`,
         platformFeeAmount: platformFeeAmount,
@@ -15725,6 +15729,13 @@ ${renderedHtml}
   app.get('/api/vip-club/wall-of-heroes', requireTenant, async (req, res, next) => {
     try {
       const { subscriptions: subs, donors } = await import('@shared/schema');
+      // ACH clearance gate: only show donors whose subscription has at least
+      // one payment row with status='succeeded'. Stripe's own subscription
+      // status flips to 'active' once the first invoice clears, but for
+      // ACH-funded subscriptions we don't want to trust that signal alone —
+      // a donor whose first invoice is still in `processing` (4–5 business
+      // days for ACH) must NOT show up on the public Wall until their bank
+      // transfer actually settles. The EXISTS subquery enforces that.
       const heroes = await db
         .select({
           displayName: subs.displayName,
@@ -15739,6 +15750,11 @@ ${renderedHtml}
           eq(subs.tenantId, req.tenant!.id),
           eq(subs.status, 'active'),
           eq(subs.displayOnWallOfHeroes, true),
+          sql`EXISTS (
+            SELECT 1 FROM ${payments}
+            WHERE ${payments.subscriptionId} = ${subs.id}
+              AND ${payments.status} = 'succeeded'
+          )`,
         ))
         .orderBy(desc(subs.amount), asc(subs.createdAt));
 
@@ -26969,6 +26985,10 @@ Submitted: ${new Date().toLocaleString()}
         customerEmail: data.customerEmail,
         isRecurring: data.isRecurring,
         interval: data.interval,
+        // 'donation' surface enables ACH on one-time gifts >= $250 and on
+        // monthly subs >= $50 (per shared/ach-eligibility.ts). Below those
+        // thresholds the donor only sees card.
+        surface: 'donation',
         successUrl: `${baseUrl}${tenantPath}/?donation=success&session_id={CHECKOUT_SESSION_ID}`,
         cancelUrl: `${baseUrl}${tenantPath}/donate`,
         platformFeeAmount: platformFeeAmount,
@@ -27233,18 +27253,45 @@ Submitted: ${new Date().toLocaleString()}
           console.log('[STRIPE-WEBHOOK] Processing checkout.session.completed event');
           const session = event.data.object as any;
 
-          // P2P Campaign donation fulfillment — early exit to avoid donation processing
+          // P2P Campaign donation fulfillment — early exit to avoid donation processing.
+          //
+          // For card payments, `checkout.session.completed` fires with
+          // `payment_status === 'paid'` and we credit the campaign immediately.
+          // For ACH (us_bank_account) payments, this same event fires the
+          // moment the donor authorises the bank transfer, but with
+          // `payment_status === 'unpaid'` and `payment_intent.status === 'processing'`.
+          // The actual debit takes 4–5 business days to clear; we MUST NOT
+          // bump the campaign progress bar yet, otherwise a bounced ACH would
+          // leave inflated totals on the public page.
+          //
+          // The matching credit for ACH is performed by the
+          // `checkout.session.async_payment_succeeded` handler below.
           if (session.metadata?.peerCampaignId) {
-            console.log('[STRIPE-WEBHOOK] P2P campaign donation received:', session.metadata.peerDonationId);
+            console.log('[STRIPE-WEBHOOK] P2P campaign donation received:', session.metadata.peerDonationId, 'payment_status:', session.payment_status);
             try {
               const { peerCampaignDonations, peerCampaigns } = await import('@shared/schema');
+
+              if (session.payment_status !== 'paid') {
+                // ACH still processing — leave the donation row at 'pending'
+                // (or mark it 'processing' so staff can distinguish a stuck
+                // checkout from a real-but-not-yet-cleared ACH transfer).
+                await db
+                  .update(peerCampaignDonations)
+                  .set({ paymentStatus: 'processing' })
+                  .where(and(
+                    eq(peerCampaignDonations.stripeSessionId, session.id),
+                    eq(peerCampaignDonations.paymentStatus, 'pending')
+                  ));
+                console.log('[STRIPE-WEBHOOK] P2P ACH donation pending bank clearance — campaign progress NOT incremented yet');
+                break;
+              }
 
               const [updated] = await db
                 .update(peerCampaignDonations)
                 .set({ paymentStatus: 'paid' })
                 .where(and(
                   eq(peerCampaignDonations.stripeSessionId, session.id),
-                  eq(peerCampaignDonations.paymentStatus, 'pending')
+                  inArray(peerCampaignDonations.paymentStatus, ['pending', 'processing'])
                 ))
                 .returning({ id: peerCampaignDonations.id });
 
@@ -27303,6 +27350,15 @@ Submitted: ${new Date().toLocaleString()}
                   break;
                 }
 
+                // Defense in depth: voting checkout is configured card-only
+                // upstream, so this should always be 'paid'. But if some Stripe
+                // configuration drift ever lets an ACH session through, we
+                // refuse to credit votes until the payment actually clears.
+                if (session.payment_status !== 'paid') {
+                  console.warn('[STRIPE-WEBHOOK] Voting session payment_status is', session.payment_status, '- skipping vote credit until cleared');
+                  break;
+                }
+
                 await db
                   .update(votingContestEntrants)
                   .set({ totalVotes: sql`${votingContestEntrants.totalVotes} + ${newVotes}` })
@@ -27355,9 +27411,15 @@ Submitted: ${new Date().toLocaleString()}
 
           // Fundraiser order fulfillment — early exit to avoid donation processing
           if (session.metadata?.fundraiser_event_id) {
-            console.log('[STRIPE-WEBHOOK] Fundraiser order payment received:', session.metadata.fundraiser_order_id);
+            console.log('[STRIPE-WEBHOOK] Fundraiser order payment received:', session.metadata.fundraiser_order_id, 'payment_status:', session.payment_status);
             try {
               const { fundraiserOrders, fundraiserEvents } = await import('@shared/schema');
+              // Defense in depth: ticket checkout is configured card-only, but
+              // refuse to mark an order paid until the payment actually clears.
+              if (session.payment_status !== 'paid') {
+                console.warn('[STRIPE-WEBHOOK] Fundraiser order payment_status is', session.payment_status, '- leaving order pending until cleared');
+                break;
+              }
               const [updated] = await db
                 .update(fundraiserOrders)
                 .set({ paymentStatus: 'paid' })
@@ -28161,15 +28223,55 @@ Submitted: ${new Date().toLocaleString()}
         case 'checkout.session.async_payment_succeeded': {
           const session = event.data.object as any;
           console.log(`[Webhook] ACH payment succeeded for session ${session.id}`);
-          
-          // Update the pending payment to succeeded
+
+          // P2P Campaign donation fulfillment for ACH — credit the campaign
+          // progress now that the bank transfer has actually cleared. We
+          // intentionally never bumped amountRaised in checkout.session.completed
+          // for ACH, so there's no double-counting risk here.
+          if (session.metadata?.peerCampaignId) {
+            try {
+              const { peerCampaignDonations, peerCampaigns } = await import('@shared/schema');
+              const [updated] = await db
+                .update(peerCampaignDonations)
+                .set({ paymentStatus: 'paid' })
+                .where(and(
+                  eq(peerCampaignDonations.stripeSessionId, session.id),
+                  inArray(peerCampaignDonations.paymentStatus, ['pending', 'processing'])
+                ))
+                .returning({ id: peerCampaignDonations.id });
+
+              if (updated) {
+                const amountPaid = session.metadata.baseAmount
+                  ? parseInt(session.metadata.baseAmount)
+                  : (session.amount_total || 0);
+                await db
+                  .update(peerCampaigns)
+                  .set({ amountRaised: sql`${peerCampaigns.amountRaised} + ${amountPaid}` })
+                  .where(eq(peerCampaigns.id, session.metadata.peerCampaignId));
+                console.log('[Webhook] ACH-cleared P2P donation credited to campaign:', session.metadata.peerCampaignId, 'amount:', amountPaid);
+              } else {
+                console.log('[Webhook] ACH-cleared P2P donation already finalised (idempotency), skipping');
+              }
+            } catch (err) {
+              console.error('[Webhook] Failed to fulfil ACH-cleared P2P donation:', err);
+            }
+            // Fall through so the regular payments-row update below also runs;
+            // P2P donations don't go in the payments table currently, but if
+            // that changes the bookkeeping below stays consistent.
+          }
+
+          // Update the pending payment to succeeded — gated on status='pending'
+          // so a redelivered async_payment_succeeded webhook can't double-credit
+          // donor totals or re-fire the thank-you email. Only the first
+          // pending->succeeded transition returns a row.
           const [updatedPayment] = await db
             .update(payments)
             .set({ status: 'succeeded' })
             .where(
               and(
                 eq(payments.tenantId, tenant.id),
-                eq(payments.stripeCheckoutSessionId, session.id)
+                eq(payments.stripeCheckoutSessionId, session.id),
+                eq(payments.status, 'pending')
               )
             )
             .returning();
@@ -28363,18 +28465,105 @@ Submitted: ${new Date().toLocaleString()}
         case 'checkout.session.async_payment_failed': {
           const session = event.data.object as any;
           console.log(`[Webhook] ACH payment failed for session ${session.id}`);
-          
-          // Update the pending payment to failed
+
+          // P2P Campaign donation failure for ACH — mark donation row failed.
+          // We never bumped campaign progress for a pending ACH, so there is
+          // nothing to roll back on the campaign side.
+          if (session.metadata?.peerCampaignId) {
+            try {
+              const { peerCampaignDonations } = await import('@shared/schema');
+              await db
+                .update(peerCampaignDonations)
+                .set({ paymentStatus: 'failed' })
+                .where(and(
+                  eq(peerCampaignDonations.stripeSessionId, session.id),
+                  inArray(peerCampaignDonations.paymentStatus, ['pending', 'processing'])
+                ));
+              console.log('[Webhook] P2P ACH donation marked failed for session:', session.id);
+            } catch (err) {
+              console.error('[Webhook] Failed to mark P2P ACH donation failed:', err);
+            }
+          }
+
+          // Update the pending payment to failed — gated on status='pending'
+          // so a redelivered async_payment_failed webhook can't re-fire the
+          // admin alert + donor email. Only the first pending->failed transition
+          // returns a row; all downstream notifications are wrapped in the
+          // `if (failedPayment)` (admin alert) / null guards below.
           const [failedPayment] = await db
             .update(payments)
             .set({ status: 'failed' })
             .where(
               and(
                 eq(payments.tenantId, tenant.id),
-                eq(payments.stripeCheckoutSessionId, session.id)
+                eq(payments.stripeCheckoutSessionId, session.id),
+                eq(payments.status, 'pending')
               )
             )
             .returning();
+
+          // Notify tenant admins/owners that an ACH transfer bounced. Donor
+          // gets their own email below; admins need a heads-up so they can
+          // follow up on large pledges that didn't actually clear. Gated on
+          // `failedPayment` so a redelivered webhook doesn't spam admins.
+          if (failedPayment) try {
+            const adminUsers = await db
+              .select({ email: users.email, fullName: users.fullName })
+              .from(users)
+              .where(and(
+                eq(users.tenantId, tenant.id),
+                sql`${users.roles}::text[] && ARRAY['admin', 'owner']::text[]`
+              ))
+              .limit(5);
+
+            if (adminUsers.length > 0) {
+              const { EmailService } = await import('./lib/email-service');
+              const emailService = await EmailService.forTenant(tenant.id);
+              if (emailService) {
+                const sessionAmount = session.amount_total || failedPayment?.amount || 0;
+                const amountFormatted = new Intl.NumberFormat('en-US', {
+                  style: 'currency',
+                  currency: (session.currency || failedPayment?.currency || 'usd'),
+                }).format(sessionAmount / 100);
+                const donorEmail = session.customer_details?.email || session.customer_email || 'unknown donor';
+                const donorName = session.customer_details?.name || 'Unknown';
+                const surface = session.metadata?.peerCampaignId
+                  ? 'P2P Campaign'
+                  : (session.metadata?.achSurface || session.metadata?.surface || 'donation');
+                const safeTenantName = escapeHtml(tenant.name);
+                const safeDonor = escapeHtml(`${donorName} <${donorEmail}>`);
+                const safeSurface = escapeHtml(String(surface));
+
+                for (const admin of adminUsers) {
+                  try {
+                    await emailService.send({
+                      to: admin.email,
+                      subject: `[Action Needed] ACH bank transfer bounced — ${amountFormatted}`,
+                      html: `
+<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <h2 style="color: #dc2626; margin-top: 0;">ACH Bank Transfer Failed</h2>
+  <p>Hi ${escapeHtml(admin.fullName || 'team')},</p>
+  <p>A donor's bank transfer to ${safeTenantName} bounced before clearing. The campaign progress was <strong>not</strong> credited and any associated public recognition (e.g. Wall of Heroes, P2P leaderboard) has been held back.</p>
+  <div style="background: #fef2f2; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #dc2626;">
+    <p style="margin: 5px 0;"><strong>Amount:</strong> ${amountFormatted}</p>
+    <p style="margin: 5px 0;"><strong>Donor:</strong> ${safeDonor}</p>
+    <p style="margin: 5px 0;"><strong>Surface:</strong> ${safeSurface}</p>
+    <p style="margin: 5px 0; font-family: monospace; font-size: 12px;"><strong>Stripe session:</strong> ${escapeHtml(session.id)}</p>
+  </div>
+  <p>The donor has been emailed automatically with a recovery link. You may want to follow up personally for larger pledges.</p>
+</div>
+                      `.trim(),
+                    });
+                  } catch (sendErr) {
+                    console.error('[Webhook] Failed to email admin about ACH failure:', admin.email, sendErr);
+                  }
+                }
+                console.log(`[Webhook] ACH-bounce admin alert dispatched to ${adminUsers.length} admin(s) for tenant ${tenant.id}`);
+              }
+            }
+          } catch (adminAlertErr) {
+            console.error('[Webhook] Failed to dispatch ACH-bounce admin alerts:', adminAlertErr);
+          }
 
           // Notify donor that their bank transfer failed
           if (failedPayment) {
@@ -42216,6 +42405,10 @@ Use timestamps like [00:00] to help with pacing.`;
         currency: 'usd',
         isRecurring: ticket.isRecurring,
         interval: 'month',
+        // 'ticket' surface: hard card-only. Event tickets need instant
+        // confirmation for door-list / pickup logistics; a 4-day ACH hold
+        // would mean buyers showing up before the payment clears.
+        surface: 'ticket',
         successUrl: hasCustomDomain ? `${baseUrl}/event-success?session_id={CHECKOUT_SESSION_ID}` : `${baseUrl}/${tenantPath}/event-success?session_id={CHECKOUT_SESSION_ID}`,
         cancelUrl: hasCustomDomain ? `${baseUrl}/event/${eventId}` : `${baseUrl}/${tenantPath}/event/${eventId}`,
         metadata: {
@@ -42971,6 +43164,18 @@ Use timestamps like [00:00] to help with pacing.`;
         const fullImageUrl = campaign.imageUrl!.startsWith("http") ? campaign.imageUrl! : `${protocol}://${host}${campaign.imageUrl!.startsWith("/") ? "" : "/"}${campaign.imageUrl!}`; lineItemData.price_data.product_data.images = [fullImageUrl];
       }
 
+      // Decide whether ACH (us_bank_account) qualifies for this emergency-fund
+      // gift. Same one-time threshold ($250) as regular donations. We don't
+      // bother probing Connect account capabilities here — if ACH is enabled
+      // on the account, Stripe accepts the option; if not, Stripe surfaces a
+      // clear error to the donor before submit.
+      const { isAchEligible: emergencyAchEligible } = await import('@shared/ach-eligibility');
+      const offerEmergencyAch = emergencyAchEligible({
+        amountCents: amount,
+        isRecurring: false,
+        surface: 'emergency_fund',
+      });
+
       const sessionParams: any = {
         mode: 'payment',
         submit_type: 'donate',
@@ -42986,7 +43191,18 @@ Use timestamps like [00:00] to help with pacing.`;
           campaignId: campaign.id,
           tenantId: req.tenant!.id,
           type: 'emergency_fund',
+          achSurface: 'emergency_fund',
+          achOffered: offerEmergencyAch ? 'true' : 'false',
         },
+        payment_method_types: offerEmergencyAch ? ['card', 'us_bank_account'] : ['card'],
+        ...(offerEmergencyAch ? {
+          payment_method_options: {
+            us_bank_account: {
+              financial_connections: { permissions: ['payment_method', 'balances'] },
+              verification_method: 'instant',
+            },
+          },
+        } : {}),
         payment_intent_data: { statement_descriptor_suffix: toStripeStatementDescriptor(tenant.name) },
       };
 
@@ -45312,6 +45528,11 @@ Use timestamps like [00:00] to help with pacing.`;
         success_url: successUrl,
         cancel_url: cancelUrl,
         customer_email: body.customerEmail,
+        // Fundraiser ticket sales are explicitly card-only — same logistics
+        // reasoning as the /api/event-tickets/checkout route. Buyers expect
+        // an instant order ID + pickup confirmation, which a multi-day ACH
+        // settlement window would break.
+        payment_method_types: ['card'],
         line_items: [{
           price_data: {
             currency: 'usd',
@@ -45330,6 +45551,8 @@ Use timestamps like [00:00] to help with pacing.`;
           fundraiser_event_id: id,
           fundraiser_order_id: order.id,
           tenantId: req.tenant!.id,
+          achSurface: 'ticket',
+          achOffered: 'false',
         },
       });
 
@@ -45977,6 +46200,10 @@ Use timestamps like [00:00] to help with pacing.`;
         currency: 'usd',
         customerEmail: data.donorEmail,
         isRecurring: false,
+        // 'p2p' surface: ACH offered on one-time gifts >= $250. Lower amounts
+        // stay card-only so small impulse pledges still confirm instantly on
+        // the public campaign page.
+        surface: 'p2p',
         successUrl: `${baseUrl}${tenantPath}/campaign/${campaign.slug}?donation=success`,
         cancelUrl: `${baseUrl}${tenantPath}/campaign/${campaign.slug}`,
         platformFeeAmount: platformFeeAmount,
@@ -47896,6 +48123,10 @@ Use timestamps like [00:00] to help with pacing.`;
         amount: amountCents,
         currency: 'usd',
         isRecurring: false,
+        // 'voting' surface: hard card-only. The whole UX premise is "$1 = 1 Vote
+        // shows on the leaderboard now." A 4-day ACH delay would gut the
+        // gamified urgency that makes the contest work.
+        surface: 'voting',
         successUrl: `${baseUrl}${tenantPath}/contest/${contest.slug}?voted=success`,
         cancelUrl: `${baseUrl}${tenantPath}/contest/${contest.slug}`,
         platformFeeAmount,
@@ -47909,7 +48140,7 @@ Use timestamps like [00:00] to help with pacing.`;
           voteCount: amount.toString(),
         },
         description: `${amount} vote${amount === 1 ? '' : 's'} for ${entrant.name} — ${contest.title}`,
-      });
+      } as any);
 
       if (!session) return res.status(500).json({ error: 'Failed to create checkout session' });
       res.json({ sessionId: session.id, url: session.url });

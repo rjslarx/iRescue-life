@@ -24,11 +24,13 @@ import {
   Calendar,
   QrCode,
   X,
+  Building2,
 } from "lucide-react";
 import { SiFacebook } from "react-icons/si";
 import type { Tenant, PeerCampaign, PeerCampaignDonation, PeerCampaignUpdate, CampaignParticipant } from "@shared/schema";
 import { getAvatarIcon, getAvatarColor } from "@/lib/participant-avatars";
 import { Trophy } from "lucide-react";
+import { isAchEligible, achNudgeCopy } from "@shared/ach-eligibility";
 
 const PublicCampaignPage = lazy(() => import("@/pages/PublicCampaignPage"));
 
@@ -607,6 +609,18 @@ function QuickPledgeLayout({
                     <Checkbox id="quick-fees" checked={coverFees} onCheckedChange={(c) => setCoverFees(c === true)} data-testid="quick-checkbox-fees" />
                     <label htmlFor="quick-fees" className="text-sm text-muted-foreground cursor-pointer">Cover processing fees</label>
                   </div>
+                  {isAchEligible({
+                    amountCents: showCustom
+                      ? (customAmount ? Math.round(parseFloat(customAmount) * 100) : 0)
+                      : (selectedAmount ?? 0),
+                    surface: 'p2p',
+                    isRecurring: false,
+                  }) && (
+                    <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-50 dark:bg-amber-950/30 p-3 text-sm" data-testid="ach-nudge-p2p-quick">
+                      <Building2 className="h-4 w-4 text-amber-600 dark:text-amber-500 mt-0.5 flex-shrink-0" />
+                      <p className="text-muted-foreground">{achNudgeCopy('p2p')}</p>
+                    </div>
+                  )}
                   <Button size="lg" className="w-full gap-2 h-14 text-lg" style={themeAccent ? { backgroundColor: themeAccent, borderColor: themeAccent, color: "#fff" } : undefined} onClick={handleDonate} disabled={checkoutMutation.isPending || (!showCustom && !selectedAmount) || (showCustom && (!customAmount || parseFloat(customAmount) < 1))} data-testid="quick-button-donate">
                     {checkoutMutation.isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Heart className="h-5 w-5" />}
                     {checkoutMutation.isPending ? "Processing..." : "Donate Now"}
@@ -1225,6 +1239,10 @@ function OneTimeDonationForm({
   isPending: boolean;
   themeAccent?: string | null;
 }) {
+  const effectiveAmountCents = showCustom
+    ? (customAmount ? Math.round(parseFloat(customAmount) * 100) : 0)
+    : (selectedAmount ?? 0);
+  const showAchNudge = isAchEligible({ amountCents: effectiveAmountCents, surface: 'p2p', isRecurring: false });
   return (
     <>
       <div className="grid grid-cols-2 gap-2">
@@ -1273,6 +1291,15 @@ function OneTimeDonationForm({
           Cover processing fees so 100% goes to the rescue
         </label>
       </div>
+      {showAchNudge && (
+        <div
+          className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-50 dark:bg-amber-950/30 p-3 text-sm"
+          data-testid="ach-nudge-p2p"
+        >
+          <Building2 className="h-4 w-4 text-amber-600 dark:text-amber-500 mt-0.5 flex-shrink-0" />
+          <p className="text-muted-foreground">{achNudgeCopy('p2p')}</p>
+        </div>
+      )}
       <Button
         size="lg"
         className="w-full gap-2"

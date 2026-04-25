@@ -4,6 +4,7 @@ import { db } from '../db';
 import {
   donors,
   donations,
+  payments,
   subscriptions,
   tenants,
 } from '@shared/schema';
@@ -259,6 +260,30 @@ router.get('/history', async (req: Request, res: Response) => {
         .map(d => new Date(d.date).getFullYear())
     )).sort((a, b) => b - a);
 
+    // Pending bank-transfer (ACH) payments — these don't yet appear in the
+    // `donations` table because we only insert that row once Stripe confirms
+    // the bank transfer has actually cleared. Surfacing them in the donor
+    // portal stops donors from worrying that their gift was lost during the
+    // 4–5 business day ACH settlement window. We pull both 'pending' and
+    // 'failed' so the donor can see why a transfer didn't go through.
+    const pendingPaymentRows = await db
+      .select({
+        id: payments.id,
+        date: payments.createdAt,
+        amount: payments.amount,
+        status: payments.status,
+        isRecurring: payments.isRecurring,
+        stripeCheckoutSessionId: payments.stripeCheckoutSessionId,
+      })
+      .from(payments)
+      .where(and(
+        eq(payments.tenantId, tenantId),
+        eq(payments.donorId, donorId),
+        sql`${payments.status} IN ('pending', 'failed')`,
+      ))
+      .orderBy(desc(payments.createdAt))
+      .limit(20);
+
     res.json({
       donor: {
         name: donor.name,
@@ -267,6 +292,7 @@ router.get('/history', async (req: Request, res: Response) => {
       },
       subscriptions: subs,
       donations: donationRows,
+      pendingPayments: pendingPaymentRows,
       availableYears: years,
     });
   } catch (error) {
