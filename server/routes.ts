@@ -7413,6 +7413,7 @@ Crawl-delay: 1
           subdomain: tenant.subdomain,
           jotformAdoptionUrl: tenant.jotformAdoptionUrl,
           jotformFosterUrl: tenant.jotformFosterUrl,
+          jotformVolunteerUrl: tenant.jotformVolunteerUrl,
         },
         emergencyCampaignUrl
       );

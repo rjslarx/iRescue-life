@@ -29,11 +29,16 @@ import {
   ShieldAlert,
   ChevronsUpDown,
   X,
+  HandHeart,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
-type PostCategory = "urgent_emotional" | "overwhelmed_shelter" | "happy_adoption";
+type PostCategory =
+  | "urgent_emotional"
+  | "overwhelmed_shelter"
+  | "happy_adoption"
+  | "volunteer_recruitment";
 
 interface OptimizeResponse {
   success: true;
@@ -75,6 +80,11 @@ const CATEGORY_META: Record<
     label: "Happy / Adoption",
     icon: PartyPopper,
     description: "Driving adoption applications",
+  },
+  volunteer_recruitment: {
+    label: "Volunteer Recruitment",
+    icon: HandHeart,
+    description: "Driving volunteer sign-ups",
   },
 };
 
@@ -309,11 +319,12 @@ export default function PostOptimizerPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-sm text-muted-foreground space-y-2">
-                    <p>We'll classify the emotional tone of your post into one of three categories and pick the matching link:</p>
+                    <p>We'll classify the emotional tone of your post into one of four categories and pick the matching link:</p>
                     <ul className="list-disc pl-5 space-y-1">
                       <li><span className="font-medium text-foreground">Urgent / Emotional</span> &rarr; VIP Club (monthly giving)</li>
                       <li><span className="font-medium text-foreground">Overwhelmed Shelter</span> &rarr; Foster application</li>
                       <li><span className="font-medium text-foreground">Happy / Adoption</span> &rarr; Adoption application</li>
+                      <li><span className="font-medium text-foreground">Volunteer Recruitment</span> &rarr; Volunteer sign-up</li>
                     </ul>
                     <p className="pt-2">
                       If your draft mentions Venmo, CashApp, or PayPal, we'll strip those handles (Facebook hides posts that contain them) and route donors to your fundraiser instead — with Apple Pay and Google Pay so it's just as fast.
