@@ -28285,21 +28285,25 @@ Submitted: ${new Date().toLocaleString()}
             }
           }
 
-          const [updatedPayment] = invoiceAlreadySettled ? [null as any] : await db
-            .update(payments)
-            .set({
-              status: 'succeeded',
-              ...(firstInvoiceId ? { stripeInvoiceId: firstInvoiceId } : {}),
-              ...(linkedSubscriptionId ? { subscriptionId: linkedSubscriptionId } : {}),
-            })
-            .where(
-              and(
-                eq(payments.tenantId, tenant.id),
-                eq(payments.stripeCheckoutSessionId, session.id),
-                eq(payments.status, 'pending')
+          let updatedPayment: typeof payments.$inferSelect | undefined;
+          if (!invoiceAlreadySettled) {
+            const updated = await db
+              .update(payments)
+              .set({
+                status: 'succeeded',
+                ...(firstInvoiceId ? { stripeInvoiceId: firstInvoiceId } : {}),
+                ...(linkedSubscriptionId ? { subscriptionId: linkedSubscriptionId } : {}),
+              })
+              .where(
+                and(
+                  eq(payments.tenantId, tenant.id),
+                  eq(payments.stripeCheckoutSessionId, session.id),
+                  eq(payments.status, 'pending')
+                )
               )
-            )
-            .returning();
+              .returning();
+            updatedPayment = updated[0];
+          }
 
           if (updatedPayment) {
             // Update donor totals now that payment succeeded
