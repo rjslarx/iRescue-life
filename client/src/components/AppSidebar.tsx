@@ -601,6 +601,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
     '/dashboard/shop': 'shop',
     '/dashboard/animal-roster': 'animal-roster',
     '/dashboard/temperature': 'temperature',
+    '/dashboard/post-optimizer': 'post-optimizer',
   };
 
   // Helper function to check if menu item should be shown
