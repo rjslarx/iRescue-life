@@ -17,6 +17,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { TERMINAL_STATUSES } from "@shared/schema";
 import {
   Sparkles,
   Copy,
@@ -96,11 +97,13 @@ export default function PostOptimizerPage() {
 
   const animals = useMemo(() => {
     const list = animalsData?.animals ?? [];
-    // Hide animals that have left the system so the picker stays focused on
-    // current cases (the optimizer is almost always used for an active animal).
-    const hidden = new Set(["adopted", "deceased", "transferred", "merged", "returned_to_field"]);
+    // Hide archived animals — anything in a terminal status (adopted,
+    // transported, deceased, returned-to-owner, returned-to-field) — so the
+    // picker stays focused on current cases. Mirrors the same constant the
+    // Animals page uses to define its "Archived" tab.
+    const hidden = new Set<string>(TERMINAL_STATUSES as readonly string[]);
     return list
-      .filter((a) => !a.status || !hidden.has(a.status.toLowerCase()))
+      .filter((a) => !a.status || !hidden.has(a.status))
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [animalsData]);
 
