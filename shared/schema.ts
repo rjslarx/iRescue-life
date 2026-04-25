@@ -5598,7 +5598,7 @@ export const peerCampaignDonations = pgTable("peer_campaign_donations", {
   message: text("message"),
   isAnonymous: boolean("is_anonymous").notNull().default(false),
   stripeSessionId: text("stripe_session_id"),
-  paymentStatus: text("payment_status").$type<"pending" | "paid" | "cancelled">().notNull().default("pending"),
+  paymentStatus: text("payment_status").$type<"pending" | "processing" | "paid" | "failed" | "cancelled">().notNull().default("pending"),
   pledgeType: text("pledge_type").$type<"per_unit" | "flat">().notNull().default("flat"),
   pledgePerUnit: integer("pledge_per_unit"),
   participantId: uuid("participant_id").references(() => campaignParticipants.id, { onDelete: 'set null' }),

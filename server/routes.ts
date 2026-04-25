@@ -27257,15 +27257,8 @@ Submitted: ${new Date().toLocaleString()}
           //
           // For card payments, `checkout.session.completed` fires with
           // `payment_status === 'paid'` and we credit the campaign immediately.
-          // For ACH (us_bank_account) payments, this same event fires the
-          // moment the donor authorises the bank transfer, but with
-          // `payment_status === 'unpaid'` and `payment_intent.status === 'processing'`.
-          // The actual debit takes 4–5 business days to clear; we MUST NOT
-          // bump the campaign progress bar yet, otherwise a bounced ACH would
-          // leave inflated totals on the public page.
-          //
-          // The matching credit for ACH is performed by the
-          // `checkout.session.async_payment_succeeded` handler below.
+          // For ACH, payment_status='unpaid' here; campaign credit happens in
+          // async_payment_succeeded once the bank actually clears (~4 days).
           if (session.metadata?.peerCampaignId) {
             console.log('[STRIPE-WEBHOOK] P2P campaign donation received:', session.metadata.peerDonationId, 'payment_status:', session.payment_status);
             try {
@@ -28255,15 +28248,10 @@ Submitted: ${new Date().toLocaleString()}
             } catch (err) {
               console.error('[Webhook] Failed to fulfil ACH-cleared P2P donation:', err);
             }
-            // Fall through so the regular payments-row update below also runs;
-            // P2P donations don't go in the payments table currently, but if
-            // that changes the bookkeeping below stays consistent.
           }
 
-          // Update the pending payment to succeeded — gated on status='pending'
-          // so a redelivered async_payment_succeeded webhook can't double-credit
-          // donor totals or re-fire the thank-you email. Only the first
-          // pending->succeeded transition returns a row.
+          // Update the pending payment to succeeded — status='pending' guard
+          // makes redelivered webhooks idempotent.
           const [updatedPayment] = await db
             .update(payments)
             .set({ status: 'succeeded' })
@@ -28502,14 +28490,9 @@ Submitted: ${new Date().toLocaleString()}
             )
             .returning();
 
-          // Notify tenant admins/owners that an ACH transfer bounced via the
-          // centralized notification preferences pipeline (event-key
-          // `donation_payment_failed`). Routing through the dispatcher means
-          // admins control recipients and channels through Settings →
-          // Notification Preferences just like every other event-driven
-          // alert in the app, instead of us hard-coding an email blast.
-          // Gated on `failedPayment` so a redelivered webhook doesn't fire
-          // the alert twice.
+          // ACH bounce alert: routes through Notification Preferences
+          // (event_key `donation_payment_failed`). Gated on `failedPayment`
+          // for idempotency on redelivered webhooks.
           if (failedPayment) try {
             const sessionAmount = session.amount_total || failedPayment.amount || 0;
             const amountFormatted = new Intl.NumberFormat('en-US', {

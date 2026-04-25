@@ -335,7 +335,9 @@ export async function generateDonationReceipt(
       const typeLabels: Record<string, string> = {
         cash: 'Cash Contribution',
         check: 'Check Contribution',
-        online: 'Online Contribution',
+        online: 'Online Contribution (Card)',
+        ach: 'Online Contribution (Bank Transfer / ACH)',
+        bank_transfer: 'Online Contribution (Bank Transfer / ACH)',
       };
       page.drawText(`Donation Type: ${typeLabels[donationType] || 'Monetary Contribution'}`, {
         x: leftMargin,
