@@ -24,7 +24,12 @@ export async function connectAccountSupportsAch(
   }
   try {
     const acct = await stripe.accounts.retrieve(connectedAccountId);
-    const ok = acct.capabilities?.us_bank_account_ach_payments === 'active';
+    // Stripe's canonical capability key is `us_bank_account_ach_payments`;
+    // accept the legacy `us_bank_account_payments` alias to be safe across
+    // account shapes.
+    const caps = acct.capabilities as Record<string, string | undefined> | undefined;
+    const ok = caps?.us_bank_account_ach_payments === 'active'
+      || caps?.us_bank_account_payments === 'active';
     achCapabilityCache.set(connectedAccountId, { ok, checkedAt: Date.now() });
     return ok;
   } catch (err) {
