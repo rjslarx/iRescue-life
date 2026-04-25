@@ -28209,10 +28209,7 @@ Submitted: ${new Date().toLocaleString()}
           const session = event.data.object as any;
           console.log(`[Webhook] ACH payment succeeded for session ${session.id}`);
 
-          // P2P Campaign donation fulfillment for ACH — credit the campaign
-          // progress now that the bank transfer has actually cleared. We
-          // intentionally never bumped amountRaised in checkout.session.completed
-          // for ACH, so there's no double-counting risk here.
+          // P2P ACH cleared — now safe to credit campaign progress.
           if (session.metadata?.peerCampaignId) {
             try {
               const { peerCampaignDonations, peerCampaigns } = await import('@shared/schema');
@@ -28242,13 +28239,9 @@ Submitted: ${new Date().toLocaleString()}
             }
           }
 
-          // Update the pending payment to succeeded — status='pending' guard
-          // makes redelivered webhooks idempotent. For subscription checkouts,
-          // also stamp the first invoice id (so invoice.payment_succeeded short-
-          // circuits its existing-succeeded check, preventing double-counting
-          // donor.totalDonated) AND link to the subscription row so the Wall of
-          // Heroes EXISTS gate (payments.subscriptionId = subs.id) passes after
-          // first ACH clear.
+          // Pending→succeeded with idempotency. For subscription checkouts, stamp
+          // first invoice id (dedupes invoice.payment_succeeded) and link the
+          // subscription row (Wall-of-Heroes EXISTS gate).
           const firstInvoiceId = session.invoice || null;
           let linkedSubscriptionId: string | null = null;
           if (session.subscription) {
@@ -28531,11 +28524,7 @@ Submitted: ${new Date().toLocaleString()}
             }
           }
 
-          // Update the pending payment to failed — gated on status='pending'
-          // so a redelivered async_payment_failed webhook can't re-fire the
-          // admin alert + donor email. Only the first pending->failed transition
-          // returns a row; all downstream notifications are wrapped in the
-          // `if (failedPayment)` (admin alert) / null guards below.
+          // Pending→failed; status='pending' guard makes redelivery idempotent.
           const [failedPayment] = await db
             .update(payments)
             .set({ status: 'failed' })
