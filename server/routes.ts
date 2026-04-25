@@ -27883,18 +27883,16 @@ Submitted: ${new Date().toLocaleString()}
               vipTierName = null;
             }
 
+            // ACH unpaid → 'incomplete'; flips to 'active' via customer.subscription.updated.
+            const initialSubStatus = session.payment_status === 'paid' ? 'active' : 'incomplete';
             const inserted = await db.insert(subscriptions).values({
               tenantId: tenant.id,
               donorId: donor.id,
               stripeSubscriptionId: session.subscription,
               amount: session.amount_total || 0,
               currency: session.currency || 'usd',
-              // Persist the actual Stripe interval when known so yearly subs
-              // aren't misclassified as monthly. Fall back to 'month' only
-              // when retrieval failed (preserves prior behavior for other
-              // downstream consumers that expect a non-null interval).
               interval: actualInterval || 'month',
-              status: 'active',
+              status: initialSubStatus,
               vipTierIdSnapshot: vipTierId,
               vipTierNameSnapshot: vipTierName,
               displayOnWallOfHeroes: wallOptIn,
