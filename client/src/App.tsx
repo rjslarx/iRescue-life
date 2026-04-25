@@ -336,7 +336,7 @@ function RouterSwitch() {
       <ProtectedRoute path="/dashboard/broadcasts" pageId="communications" component={BroadcastsPage} />
       <ProtectedRoute path="/dashboard/newsletter-campaigns" pageId="communications" component={NewsletterCampaignsPage} />
       <ProtectedRoute path="/dashboard/newsletter-designer" pageId="communications" component={NewsletterDesignerPage} proOnly proFeatureName="Newsletter Designer" />
-      <ProtectedRoute path="/dashboard/post-optimizer" pageId="communications" component={PostOptimizerPage} />
+      <ProtectedRoute path="/dashboard/post-optimizer" pageId="post-optimizer" component={PostOptimizerPage} />
       <Route path="/dashboard/emails">
         <Redirect to="/dashboard/communications" />
       </Route>

@@ -7355,7 +7355,7 @@ Crawl-delay: 1
    * caption + a strategic first comment with the right call-to-action URL
    * based on the emotional tone of the post.
    */
-  app.post('/api/ai/optimize-post', requireTenant, requireAuth, requireRoleOrPageAccess('communications', 'admin', 'staff'), async (req, res, next) => {
+  app.post('/api/ai/optimize-post', requireTenant, requireAuth, requireRoleOrPageAccess('post-optimizer', 'admin', 'staff'), async (req, res, next) => {
     try {
       const { optimizeFacebookPost, resolveTenantPostUrls, resolvePublicSiteRoot, PostOptimizerError } = await import('./services/aiPostOptimizer');
       const { donationLinks } = await import('@shared/schema');

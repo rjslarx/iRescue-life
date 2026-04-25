@@ -38,6 +38,7 @@ const DEFAULT_GRANTABLE_PAGES = [
   { pageId: 'medical-tasks', displayName: 'Medical Tasks', description: 'View and complete medical tasks' },
   { pageId: 'calendar', displayName: 'Calendar', description: 'View organization calendar' },
   { pageId: 'volunteers', displayName: 'Volunteers', description: 'Manage volunteer opportunities' },
+  { pageId: 'post-optimizer', displayName: 'Post Optimizer', description: 'AI-assisted social media post optimization' },
 ];
 
 export function UserPagePermissionsManager({ userId, userRoles }: UserPagePermissionsManagerProps) {
