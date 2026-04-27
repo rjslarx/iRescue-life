@@ -1,10 +1,11 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -12,7 +13,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { buildTenantUrl, getTenantHeaders } from "@/lib/tenantApi";
 import { useTenant } from "@/contexts/TenantContext";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Heart, Upload, X } from "lucide-react";
+import { Loader2, Heart, Upload, X, AlertCircle } from "lucide-react";
 import type { AdoptionFormField } from "@shared/schema";
 import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -87,6 +88,114 @@ export function PublicAdoptionDialog({ animal, open, onOpenChange }: PublicAdopt
 
   const [photoUploads, setPhotoUploads] = useState<Record<string, { url: string; name: string; uploading: boolean }>>({});
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const [missingFieldLabels, setMissingFieldLabels] = useState<string[]>([]);
+
+  // Map built-in form field names -> friendly labels and DOM data-testids so we can
+  // build named missing-field lists, scroll to them, and outline them in red.
+  const BUILT_IN_FIELD_META: Record<string, { label: string; testId: string }> = {
+    applicantName: { label: "Your Full Name", testId: "input-applicant-name" },
+    applicantEmail: { label: "Email Address", testId: "input-applicant-email" },
+    applicantPhone: { label: "Mobile Phone", testId: "input-applicant-phone" },
+    notes: { label: "Tell Us About Yourself", testId: "input-applicant-notes" },
+    smsConsent: { label: "SMS Consent", testId: "checkbox-sms-consent" },
+  };
+
+  const scrollToFieldByTestId = (testId: string) => {
+    const el = document.querySelector(`[data-testid="${testId}"]`) as HTMLElement | null;
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      try { el.focus({ preventScroll: true }); } catch {}
+    }
+  };
+
+  const showMissingFieldsFeedback = (labels: string[], firstScrollTestId: string | null) => {
+    setMissingFieldLabels(labels);
+    toast({
+      variant: "destructive",
+      title: "Missing Required Fields",
+      description: `Please complete: ${labels.join(', ')}.`,
+    });
+    if (firstScrollTestId) {
+      requestAnimationFrame(() => scrollToFieldByTestId(firstScrollTestId));
+    }
+  };
+
+  // Walk required custom fields and return a list of missing ones with
+  // a scroll target for the first one.
+  const collectMissingCustomFields = (customResponses: Record<string, any> | undefined) => {
+    const requiredFields = customFieldsData?.fields?.filter(f => f.required) || [];
+    const labels: string[] = [];
+    let firstTestId: string | null = null;
+    for (const field of requiredFields) {
+      const value = customResponses?.[field.id];
+      let isMissing = false;
+      if (field.fieldType === 'checkbox') {
+        if (!value || !Array.isArray(value) || value.length === 0) isMissing = true;
+      } else if (field.fieldType === 'photo') {
+        if (!value || (typeof value === 'string' && value.trim() === '')) isMissing = true;
+      } else {
+        if (value === undefined || value === null || (typeof value === 'string' && value.trim() === '')) isMissing = true;
+      }
+      if (isMissing) {
+        labels.push(field.label);
+        if (!firstTestId) {
+          if (field.fieldType === 'photo') {
+            firstTestId = `button-upload-${field.id}`;
+          } else if (field.fieldType === 'radio') {
+            firstTestId = `radio-custom-${field.id}`;
+          } else if (field.fieldType === 'select') {
+            firstTestId = `select-custom-${field.id}`;
+          } else if (field.fieldType === 'checkbox') {
+            firstTestId = `checkbox-custom-${field.id}-${field.options?.[0] ?? ''}`;
+          } else {
+            firstTestId = `input-custom-${field.id}`;
+          }
+        }
+      }
+    }
+    return { labels, firstTestId };
+  };
+
+  const onInvalid = (formErrors: Record<string, any>) => {
+    const builtInLabels: string[] = [];
+    let firstTestId: string | null = null;
+    for (const key of Object.keys(BUILT_IN_FIELD_META)) {
+      if (formErrors[key]) {
+        const meta = BUILT_IN_FIELD_META[key];
+        builtInLabels.push(meta.label);
+        if (!firstTestId) firstTestId = meta.testId;
+      }
+    }
+
+    const customCheck = collectMissingCustomFields(form.getValues('customResponses'));
+    if (!firstTestId) firstTestId = customCheck.firstTestId;
+
+    const labels = [...builtInLabels, ...customCheck.labels];
+    if (labels.length === 0) {
+      labels.push('Required information');
+    }
+    showMissingFieldsFeedback(labels, firstTestId);
+  };
+
+  // Clear the stale missing-fields banner whenever the user starts editing again.
+  // form.watch fires for form-state changes (e.g. isSubmitted) too, so only react
+  // to actual field changes that carry a `name`.
+  useEffect(() => {
+    if (missingFieldLabels.length === 0) return;
+    const subscription = form.watch((_value, info) => {
+      if (info?.name) {
+        setMissingFieldLabels([]);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [missingFieldLabels.length, form]);
+
+  // Reset banner state whenever the dialog is closed or reopened.
+  useEffect(() => {
+    if (!open) {
+      setMissingFieldLabels([]);
+    }
+  }, [open]);
 
   const handlePhotoUpload = async (fieldId: string, file: File) => {
     setPhotoUploads(prev => ({ ...prev, [fieldId]: { url: '', name: file.name, uploading: true } }));
@@ -176,6 +285,12 @@ export function PublicAdoptionDialog({ animal, open, onOpenChange }: PublicAdopt
   });
 
   const handleSubmit = (data: PublicAdoptionFormData) => {
+    const customCheck = collectMissingCustomFields(data.customResponses);
+    if (customCheck.labels.length > 0) {
+      showMissingFieldsFeedback(customCheck.labels, customCheck.firstTestId);
+      return;
+    }
+    setMissingFieldLabels([]);
     applicationMutation.mutate(data);
   };
 
@@ -200,7 +315,7 @@ export function PublicAdoptionDialog({ animal, open, onOpenChange }: PublicAdopt
         )}
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(handleSubmit, onInvalid)} className="space-y-4">
             <FormField
               control={form.control}
               name="applicantName"
@@ -513,6 +628,33 @@ export function PublicAdoptionDialog({ animal, open, onOpenChange }: PublicAdopt
                 </FormItem>
               )}
             />
+
+            {missingFieldLabels.length > 0 && (
+              <Alert variant="destructive" data-testid="alert-missing-fields" className="relative pr-10">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  <div className="font-medium mb-1">
+                    Please complete the following before submitting:
+                  </div>
+                  <ul className="list-disc list-inside text-sm space-y-0.5">
+                    {missingFieldLabels.map((label) => (
+                      <li key={label} data-testid={`text-missing-field-${label.replace(/\s+/g, '-').toLowerCase()}`}>{label}</li>
+                    ))}
+                  </ul>
+                </AlertDescription>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  className="absolute right-1 top-1"
+                  onClick={() => setMissingFieldLabels([])}
+                  aria-label="Dismiss missing fields alert"
+                  data-testid="button-dismiss-missing-fields"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </Alert>
+            )}
 
             <div className="flex gap-2 pt-4">
               <Button

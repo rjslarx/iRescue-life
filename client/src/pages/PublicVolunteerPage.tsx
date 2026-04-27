@@ -119,6 +119,111 @@ export default function PublicVolunteerPage() {
 
   const [photoUploads, setPhotoUploads] = useState<Record<string, { url: string; name: string; uploading: boolean }>>({});
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const [missingFieldLabels, setMissingFieldLabels] = useState<string[]>([]);
+
+  // Map built-in form field names -> friendly labels and DOM data-testids so we can
+  // build named missing-field lists, scroll to them, and auto-clear on edit.
+  const BUILT_IN_FIELD_META: Record<string, { label: string; testId: string }> = {
+    applicantName: { label: "Full Name", testId: "input-applicant-name" },
+    applicantEmail: { label: "Email", testId: "input-applicant-email" },
+    applicantPhone: { label: "Mobile Phone", testId: "input-applicant-phone" },
+    smsConsent: { label: "SMS Consent", testId: "checkbox-sms-consent" },
+    experience: { label: "Experience with Animals", testId: "input-experience" },
+    availability: { label: "Availability", testId: "input-availability" },
+  };
+
+  const scrollToFieldByTestId = (testId: string) => {
+    const el = document.querySelector(`[data-testid="${testId}"]`) as HTMLElement | null;
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      try { el.focus({ preventScroll: true }); } catch {}
+    }
+  };
+
+  const showMissingFieldsFeedback = (labels: string[], firstScrollTestId: string | null) => {
+    setMissingFieldLabels(labels);
+    toast({
+      variant: "destructive",
+      title: "Missing Required Fields",
+      description: `Please complete: ${labels.join(', ')}.`,
+    });
+    if (firstScrollTestId) {
+      requestAnimationFrame(() => scrollToFieldByTestId(firstScrollTestId));
+    }
+  };
+
+  // Walk required custom fields and return a list of missing ones with
+  // a scroll target for the first one.
+  const collectMissingCustomFields = (customResponses: Record<string, any> | undefined) => {
+    const requiredFields = customFields.filter(f => f.required);
+    const labels: string[] = [];
+    let firstTestId: string | null = null;
+    for (const field of requiredFields) {
+      const value = customResponses?.[field.id];
+      let isMissing = false;
+      if (field.fieldType === 'checkbox') {
+        // This page stores checkbox values as comma-separated string.
+        if (!value || (typeof value === 'string' && value.trim() === '')) isMissing = true;
+      } else if (field.fieldType === 'photo') {
+        if (!value || (typeof value === 'string' && value.trim() === '')) isMissing = true;
+      } else {
+        if (value === undefined || value === null || (typeof value === 'string' && value.trim() === '')) isMissing = true;
+      }
+      if (isMissing) {
+        labels.push(field.label);
+        if (!firstTestId) {
+          if (field.fieldType === 'photo') {
+            firstTestId = `button-upload-${field.id}`;
+          } else if (field.fieldType === 'radio') {
+            firstTestId = `radio-custom-${field.id}-0`;
+          } else if (field.fieldType === 'select') {
+            firstTestId = `select-custom-${field.id}`;
+          } else if (field.fieldType === 'checkbox') {
+            firstTestId = `checkbox-custom-${field.id}-0`;
+          } else if (field.fieldType === 'textarea') {
+            firstTestId = `textarea-custom-${field.id}`;
+          } else {
+            firstTestId = `input-custom-${field.id}`;
+          }
+        }
+      }
+    }
+    return { labels, firstTestId };
+  };
+
+  const onInvalid = (formErrors: Record<string, any>) => {
+    const builtInLabels: string[] = [];
+    let firstTestId: string | null = null;
+    for (const key of Object.keys(BUILT_IN_FIELD_META)) {
+      if (formErrors[key]) {
+        const meta = BUILT_IN_FIELD_META[key];
+        builtInLabels.push(meta.label);
+        if (!firstTestId) firstTestId = meta.testId;
+      }
+    }
+
+    const customCheck = collectMissingCustomFields(form.getValues('customResponses') as any);
+    if (!firstTestId) firstTestId = customCheck.firstTestId;
+
+    const labels = [...builtInLabels, ...customCheck.labels];
+    if (labels.length === 0) {
+      labels.push('Required information');
+    }
+    showMissingFieldsFeedback(labels, firstTestId);
+  };
+
+  // Clear the stale missing-fields banner whenever the user starts editing again.
+  // form.watch fires for form-state changes (e.g. isSubmitted) too, so only react
+  // to actual field changes that carry a `name`.
+  useEffect(() => {
+    if (missingFieldLabels.length === 0) return;
+    const subscription = form.watch((_value, info) => {
+      if (info?.name) {
+        setMissingFieldLabels([]);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [missingFieldLabels.length, form]);
 
   const handlePhotoUpload = async (fieldId: string, file: File) => {
     setPhotoUploads(prev => ({ ...prev, [fieldId]: { url: '', name: file.name, uploading: true } }));
@@ -198,71 +303,6 @@ export default function PublicVolunteerPage() {
     queryClient.invalidateQueries({ queryKey: ['/api/volunteer-opportunities'] });
   };
 
-  // ---- Friendlier "missing required fields" feedback ----
-  const [missingFieldLabels, setMissingFieldLabels] = useState<string[]>([]);
-  const [customFieldErrors, setCustomFieldErrors] = useState<Record<string, string>>({});
-
-  const BUILT_IN_FIELD_META: Record<string, { label: string; testId: string }> = {
-    applicantName: { label: "Full Name", testId: "input-applicant-name" },
-    applicantEmail: { label: "Email", testId: "input-applicant-email" },
-    applicantPhone: { label: "Mobile Phone", testId: "input-applicant-phone" },
-    experience: { label: "Experience with Animals", testId: "input-experience" },
-    availability: { label: "Availability", testId: "input-availability" },
-    smsConsent: { label: "SMS Consent", testId: "checkbox-sms-consent" },
-  };
-
-  const scrollToFieldByTestId = (testId: string) => {
-    const el = document.querySelector(`[data-testid="${testId}"]`) as HTMLElement | null;
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      try { el.focus({ preventScroll: true }); } catch {}
-    }
-  };
-
-  const showMissingFieldsFeedback = (labels: string[], firstScrollTestId: string | null) => {
-    setMissingFieldLabels(labels);
-    toast({
-      variant: "destructive",
-      title: "Missing Required Fields",
-      description: `Please complete: ${labels.join(', ')}.`,
-    });
-    if (firstScrollTestId) {
-      requestAnimationFrame(() => scrollToFieldByTestId(firstScrollTestId));
-    }
-  };
-
-  const collectMissingCustomFields = (customResponses: Record<string, any> | undefined) => {
-    const requiredFields = customFields.filter(f => f.required) || [];
-    const errors: Record<string, string> = {};
-    const labels: string[] = [];
-    let firstTestId: string | null = null;
-    for (const field of requiredFields) {
-      const value = customResponses?.[field.id];
-      let isMissing = false;
-      if (field.fieldType === 'checkbox') {
-        // Volunteer stores checkbox as comma-joined string
-        if (!value || (typeof value === 'string' && value.trim() === '')) isMissing = true;
-      } else if (field.fieldType === 'photo') {
-        if (!value || (typeof value === 'string' && value.trim() === '')) isMissing = true;
-      } else {
-        if (value === undefined || value === null || (typeof value === 'string' && value.trim() === '')) isMissing = true;
-      }
-      if (isMissing) {
-        errors[field.id] = `${field.label} is required`;
-        labels.push(field.label);
-        if (!firstTestId) {
-          if (field.fieldType === 'photo') firstTestId = `button-upload-${field.id}`;
-          else if (field.fieldType === 'radio') firstTestId = `radio-custom-${field.id}`;
-          else if (field.fieldType === 'select') firstTestId = `select-custom-${field.id}`;
-          else if (field.fieldType === 'checkbox') firstTestId = `checkbox-group-custom-${field.id}`;
-          else if (field.fieldType === 'textarea') firstTestId = `textarea-custom-${field.id}`;
-          else firstTestId = `input-custom-${field.id}`;
-        }
-      }
-    }
-    return { errors, labels, firstTestId };
-  };
-
   const onSubmit = (data: InsertVolunteerApplication & { customResponses?: Record<string, any> }) => {
     if (formSettingsLoading || customFieldsLoading) {
       toast({
@@ -274,42 +314,12 @@ export default function PublicVolunteerPage() {
     }
     const customCheck = collectMissingCustomFields(data.customResponses);
     if (customCheck.labels.length > 0) {
-      setCustomFieldErrors(customCheck.errors);
       showMissingFieldsFeedback(customCheck.labels, customCheck.firstTestId);
       return;
     }
-    setCustomFieldErrors({});
     setMissingFieldLabels([]);
     submitMutation.mutate(data);
   };
-
-  const onInvalid = (formErrors: Record<string, any>) => {
-    const builtInLabels: string[] = [];
-    let firstTestId: string | null = null;
-    for (const key of Object.keys(BUILT_IN_FIELD_META)) {
-      if (formErrors[key]) {
-        if (key === 'smsConsent' && !smsConsentEnabled) continue;
-        const meta = BUILT_IN_FIELD_META[key];
-        builtInLabels.push(meta.label);
-        if (!firstTestId) firstTestId = meta.testId;
-      }
-    }
-    const customCheck = collectMissingCustomFields(form.getValues('customResponses' as any));
-    setCustomFieldErrors(customCheck.errors);
-    if (!firstTestId) firstTestId = customCheck.firstTestId;
-    const labels = [...builtInLabels, ...customCheck.labels];
-    if (labels.length === 0) labels.push('Required information');
-    showMissingFieldsFeedback(labels, firstTestId);
-  };
-
-  // Clear stale missing-fields banner once the user starts editing again.
-  useEffect(() => {
-    if (missingFieldLabels.length === 0) return;
-    const subscription = form.watch(() => {
-      setMissingFieldLabels([]);
-    });
-    return () => subscription.unsubscribe();
-  }, [missingFieldLabels.length, form]);
 
   return (
     <div className="min-h-screen flex flex-col">

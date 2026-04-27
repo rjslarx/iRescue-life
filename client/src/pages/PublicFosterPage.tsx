@@ -84,13 +84,10 @@ export default function PublicFosterPage() {
 
   const [photoUploads, setPhotoUploads] = useState<Record<string, { url: string; name: string; uploading: boolean }>>({});
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
-
-  // State + helpers for the friendlier "missing required fields" feedback.
   const [missingFieldLabels, setMissingFieldLabels] = useState<string[]>([]);
-  const [customFieldErrors, setCustomFieldErrors] = useState<Record<string, string>>({});
 
-  // Friendly label + DOM testid for every built-in required field, used to
-  // build the named missing-field list and scroll to the first offender.
+  // Map built-in form field names -> friendly labels and DOM data-testids so we can
+  // build named missing-field lists, scroll to them, and auto-clear on edit.
   const BUILT_IN_FIELD_META: Record<string, { label: string; testId: string }> = {
     applicantName: { label: "Full Name", testId: "input-applicant-name" },
     applicantEmail: { label: "Email", testId: "input-applicant-email" },
@@ -122,9 +119,10 @@ export default function PublicFosterPage() {
     }
   };
 
+  // Walk required custom fields and return a list of missing ones with
+  // a scroll target for the first one.
   const collectMissingCustomFields = (customResponses: Record<string, any> | undefined) => {
     const requiredFields = customFieldsData?.fields?.filter(f => f.required) || [];
-    const errors: Record<string, string> = {};
     const labels: string[] = [];
     let firstTestId: string | null = null;
     for (const field of requiredFields) {
@@ -138,19 +136,58 @@ export default function PublicFosterPage() {
         if (value === undefined || value === null || (typeof value === 'string' && value.trim() === '')) isMissing = true;
       }
       if (isMissing) {
-        errors[field.id] = `${field.label} is required`;
         labels.push(field.label);
         if (!firstTestId) {
-          if (field.fieldType === 'photo') firstTestId = `button-upload-${field.id}`;
-          else if (field.fieldType === 'radio') firstTestId = `radio-custom-${field.id}`;
-          else if (field.fieldType === 'select') firstTestId = `select-custom-${field.id}`;
-          else if (field.fieldType === 'checkbox') firstTestId = `checkbox-group-custom-${field.id}`;
-          else firstTestId = `input-custom-${field.id}`;
+          if (field.fieldType === 'photo') {
+            firstTestId = `button-upload-${field.id}`;
+          } else if (field.fieldType === 'radio') {
+            firstTestId = `radio-custom-${field.id}`;
+          } else if (field.fieldType === 'select') {
+            firstTestId = `select-custom-${field.id}`;
+          } else if (field.fieldType === 'checkbox') {
+            firstTestId = `checkbox-custom-${field.id}-${field.options?.[0] ?? ''}`;
+          } else {
+            firstTestId = `input-custom-${field.id}`;
+          }
         }
       }
     }
-    return { errors, labels, firstTestId };
+    return { labels, firstTestId };
   };
+
+  const onInvalid = (formErrors: Record<string, any>) => {
+    const builtInLabels: string[] = [];
+    let firstTestId: string | null = null;
+    for (const key of Object.keys(BUILT_IN_FIELD_META)) {
+      if (formErrors[key]) {
+        const meta = BUILT_IN_FIELD_META[key];
+        builtInLabels.push(meta.label);
+        if (!firstTestId) firstTestId = meta.testId;
+      }
+    }
+
+    const customCheck = collectMissingCustomFields(form.getValues('customResponses'));
+    if (!firstTestId) firstTestId = customCheck.firstTestId;
+
+    const labels = [...builtInLabels, ...customCheck.labels];
+    if (labels.length === 0) {
+      labels.push('Required information');
+    }
+    showMissingFieldsFeedback(labels, firstTestId);
+  };
+
+  // Clear the stale missing-fields banner whenever the user starts editing again.
+  // form.watch fires for form-state changes (e.g. isSubmitted) too, so only react
+  // to actual field changes that carry a `name`.
+  useEffect(() => {
+    if (missingFieldLabels.length === 0) return;
+    const subscription = form.watch((_value, info) => {
+      if (info?.name) {
+        setMissingFieldLabels([]);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [missingFieldLabels.length, form]);
 
   const handlePhotoUpload = async (fieldId: string, file: File) => {
     setPhotoUploads(prev => ({ ...prev, [fieldId]: { url: '', name: file.name, uploading: true } }));
@@ -237,44 +274,12 @@ export default function PublicFosterPage() {
     }
     const customCheck = collectMissingCustomFields(data.customResponses);
     if (customCheck.labels.length > 0) {
-      setCustomFieldErrors(customCheck.errors);
       showMissingFieldsFeedback(customCheck.labels, customCheck.firstTestId);
       return;
     }
-    setCustomFieldErrors({});
     setMissingFieldLabels([]);
     submitMutation.mutate(data);
   };
-
-  // Combine RHF built-in errors and custom-field errors into a single ordered
-  // missing-fields list so the user sees every required field in one banner.
-  const onInvalid = (formErrors: Record<string, any>) => {
-    const builtInLabels: string[] = [];
-    let firstTestId: string | null = null;
-    for (const key of Object.keys(BUILT_IN_FIELD_META)) {
-      if (formErrors[key]) {
-        if (key === 'smsConsent' && !smsConsentEnabled) continue;
-        const meta = BUILT_IN_FIELD_META[key];
-        builtInLabels.push(meta.label);
-        if (!firstTestId) firstTestId = meta.testId;
-      }
-    }
-    const customCheck = collectMissingCustomFields(form.getValues('customResponses' as any));
-    setCustomFieldErrors(customCheck.errors);
-    if (!firstTestId) firstTestId = customCheck.firstTestId;
-    const labels = [...builtInLabels, ...customCheck.labels];
-    if (labels.length === 0) labels.push('Required information');
-    showMissingFieldsFeedback(labels, firstTestId);
-  };
-
-  // Clear stale missing-fields banner once the user starts editing again.
-  useEffect(() => {
-    if (missingFieldLabels.length === 0) return;
-    const subscription = form.watch(() => {
-      setMissingFieldLabels([]);
-    });
-    return () => subscription.unsubscribe();
-  }, [missingFieldLabels.length, form]);
 
   const tenant = tenantData?.tenant;
   const rescueName = tenant?.name || "Animal Rescue";
@@ -870,6 +875,7 @@ export default function PublicFosterPage() {
                           </AlertDescription>
                         </Alert>
                       )}
+
 
                       <Button 
                         type="submit" 
