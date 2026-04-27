@@ -298,14 +298,10 @@ export default function PublicSurrenderPage() {
 
   const showMissingFieldsFeedback = (labels: string[], firstScrollTestId: string | null) => {
     setMissingFieldLabels(labels);
-    const preview = labels.slice(0, 3).join(', ');
-    const description = labels.length > 3
-      ? `Please complete: ${preview} and ${labels.length - 3} more.`
-      : `Please complete: ${preview}.`;
     toast({
       variant: "destructive",
       title: "Missing Required Fields",
-      description,
+      description: `Please complete: ${labels.join(', ')}.`,
     });
     if (firstScrollTestId) {
       // Defer to next frame so any newly-rendered banner doesn't fight the scroll.
@@ -366,12 +362,12 @@ export default function PublicSurrenderPage() {
     setCustomFieldErrors({});
     setMissingFieldLabels([]);
     // Default optional notes to "None" so admins always see something meaningful.
-    const submission = {
+    const submission: Omit<InsertSurrenderRequest, 'tenantId'> & { customResponses?: Record<string, any> } = {
       ...data,
       medicalIssues: data.medicalIssues && data.medicalIssues.trim() !== '' ? data.medicalIssues : 'None',
       behavioralIssues: data.behavioralIssues && data.behavioralIssues.trim() !== '' ? data.behavioralIssues : 'None',
     };
-    submitMutation.mutate(submission as any);
+    submitMutation.mutate(submission);
   };
 
   const onInvalid = (formErrors: Record<string, any>) => {
