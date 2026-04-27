@@ -330,13 +330,17 @@ export default function PublicSurrenderPage() {
         errors[field.id] = `${field.label} is required`;
         labels.push(field.label);
         if (!firstTestId) {
-          firstTestId = field.fieldType === 'photo'
-            ? `button-upload-${field.id}`
-            : (field.fieldType === 'radio'
-                ? `radio-custom-${field.id}`
-                : (field.fieldType === 'select'
-                    ? `select-custom-${field.id}`
-                    : `input-custom-${field.id}`));
+          if (field.fieldType === 'photo') {
+            firstTestId = `button-upload-${field.id}`;
+          } else if (field.fieldType === 'radio') {
+            firstTestId = `radio-custom-${field.id}`;
+          } else if (field.fieldType === 'select') {
+            firstTestId = `select-custom-${field.id}`;
+          } else if (field.fieldType === 'checkbox') {
+            firstTestId = `checkbox-group-custom-${field.id}`;
+          } else {
+            firstTestId = `input-custom-${field.id}`;
+          }
         }
       }
     }
@@ -850,7 +854,7 @@ export default function PublicSurrenderPage() {
                         <FormField
                           control={form.control}
                           name="preferredSurrenderDate"
-                          render={({ field }) => (
+                          render={({ field, fieldState }) => (
                             <FormItem className="flex flex-col">
                               <FormLabel>Preferred Surrender Date *</FormLabel>
                               <Popover>
@@ -858,7 +862,7 @@ export default function PublicSurrenderPage() {
                                   <FormControl>
                                     <Button
                                       variant="outline"
-                                      className={`w-full md:w-[280px] pl-3 text-left font-normal ${!field.value && "text-muted-foreground"}`}
+                                      className={`w-full md:w-[280px] pl-3 text-left font-normal ${!field.value && "text-muted-foreground"} ${fieldState.error ? "border-destructive" : ""}`}
                                       data-testid="input-preferred-surrender-date"
                                     >
                                       {field.value ? format(new Date(field.value), "PPP") : "Select date"}
@@ -957,7 +961,7 @@ export default function PublicSurrenderPage() {
                           <FormField
                             control={form.control}
                             name="photoUrl"
-                            render={() => (
+                            render={({ fieldState }) => (
                               <FormItem>
                                 <FormLabel>Photo of Your Animal *</FormLabel>
                                 <FormControl>
@@ -978,6 +982,7 @@ export default function PublicSurrenderPage() {
                                         type="button"
                                         variant="outline"
                                         onClick={() => mainPhotoInputRef.current?.click()}
+                                        className={fieldState.error ? "border-destructive" : ""}
                                         data-testid="button-upload-main-photo"
                                       >
                                         <Upload className="w-4 h-4 mr-2" />
@@ -1172,7 +1177,10 @@ export default function PublicSurrenderPage() {
                                   render={({ field: formField }) => (
                                     <FormItem>
                                       <FormLabel>{customField.label} {customField.required && '*'}</FormLabel>
-                                      <div className={`space-y-2 mt-2 ${customFieldErrors[customField.id] ? 'border border-destructive rounded-md p-2' : ''}`}>
+                                      <div
+                                        className={`space-y-2 mt-2 ${customFieldErrors[customField.id] ? 'border border-destructive rounded-md p-2' : ''}`}
+                                        data-testid={`checkbox-group-custom-${customField.id}`}
+                                      >
                                         {customField.options?.filter(option => option.trim()).map((option) => (
                                           <div key={option} className="flex items-center space-x-2">
                                             <Checkbox 
