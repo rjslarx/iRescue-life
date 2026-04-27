@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -16,7 +16,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { Heart, Home, Users, Upload, X, Loader2 } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Heart, Home, Users, Upload, X, Loader2, AlertCircle } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { buildTenantUrl, getTenantHeaders } from "@/lib/tenantApi";
 import { useSEO } from "@/hooks/useSEO";
@@ -34,19 +35,35 @@ export default function PublicFosterPage() {
   });
 
   // Load custom form fields
-  const { data: customFieldsData } = useQuery<{ fields: FosterFormField[] }>({
+  const { data: customFieldsData, isLoading: customFieldsLoading } = useQuery<{ fields: FosterFormField[] }>({
     queryKey: ['/api/foster-form-fields', tenantId],
   });
 
-  // Load form intro text
-  const { data: formSettingsData } = useQuery<{ setting: { introText: string | null } }>({
+  // Load form intro text + sms-consent toggle (so the gate matches surrender behavior)
+  const { data: formSettingsData, isLoading: formSettingsLoading } = useQuery<{ setting: { introText: string | null; smsConsentEnabled?: boolean } }>({
     queryKey: ['/api/form-settings', 'foster', tenantId],
   });
+  const smsConsentEnabled = formSettingsData?.setting?.smsConsentEnabled === true;
+
+  const fosterFormSchema = useMemo(() => {
+    return insertFosterApplicationSchema
+      .omit({ tenantId: true, status: true, notes: true })
+      .extend({
+        applicantName: z.string().trim().min(1, "Full name is required"),
+        applicantEmail: z.string().trim().min(1, "Email is required").email("Please enter a valid email"),
+        applicantPhone: z.string().trim().min(1, "Mobile phone is required"),
+        address: z.string().trim().min(1, "Address is required"),
+        experience: z.string().trim().min(1, "Experience with animals is required"),
+        availability: z.string().trim().min(1, "Availability is required"),
+        customResponses: z.record(z.any()).optional(),
+        smsConsent: smsConsentEnabled
+          ? z.literal(true, { errorMap: () => ({ message: "You must consent to receive SMS messages to submit this form" }) })
+          : z.boolean().optional(),
+      });
+  }, [smsConsentEnabled]);
 
   const form = useForm<InsertFosterApplication & { customResponses?: Record<string, any> }>({
-    resolver: zodResolver(insertFosterApplicationSchema.omit({ tenantId: true, status: true, notes: true }).extend({
-      smsConsent: z.literal(true, { errorMap: () => ({ message: "You must consent to receive SMS messages to submit this form" }) }),
-    })),
+    resolver: zodResolver(fosterFormSchema),
     defaultValues: {
       applicantName: "",
       applicantEmail: "",
@@ -67,6 +84,73 @@ export default function PublicFosterPage() {
 
   const [photoUploads, setPhotoUploads] = useState<Record<string, { url: string; name: string; uploading: boolean }>>({});
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+
+  // State + helpers for the friendlier "missing required fields" feedback.
+  const [missingFieldLabels, setMissingFieldLabels] = useState<string[]>([]);
+  const [customFieldErrors, setCustomFieldErrors] = useState<Record<string, string>>({});
+
+  // Friendly label + DOM testid for every built-in required field, used to
+  // build the named missing-field list and scroll to the first offender.
+  const BUILT_IN_FIELD_META: Record<string, { label: string; testId: string }> = {
+    applicantName: { label: "Full Name", testId: "input-applicant-name" },
+    applicantEmail: { label: "Email", testId: "input-applicant-email" },
+    applicantPhone: { label: "Mobile Phone", testId: "input-applicant-phone" },
+    address: { label: "Address", testId: "input-address" },
+    housingType: { label: "Housing Type", testId: "select-housing-type" },
+    experience: { label: "Fostering / Pet Care Experience", testId: "textarea-experience" },
+    availability: { label: "Time Commitment & Availability", testId: "textarea-availability" },
+    smsConsent: { label: "SMS Consent", testId: "checkbox-sms-consent" },
+  };
+
+  const scrollToFieldByTestId = (testId: string) => {
+    const el = document.querySelector(`[data-testid="${testId}"]`) as HTMLElement | null;
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      try { el.focus({ preventScroll: true }); } catch {}
+    }
+  };
+
+  const showMissingFieldsFeedback = (labels: string[], firstScrollTestId: string | null) => {
+    setMissingFieldLabels(labels);
+    toast({
+      variant: "destructive",
+      title: "Missing Required Fields",
+      description: `Please complete: ${labels.join(', ')}.`,
+    });
+    if (firstScrollTestId) {
+      requestAnimationFrame(() => scrollToFieldByTestId(firstScrollTestId));
+    }
+  };
+
+  const collectMissingCustomFields = (customResponses: Record<string, any> | undefined) => {
+    const requiredFields = customFieldsData?.fields?.filter(f => f.required) || [];
+    const errors: Record<string, string> = {};
+    const labels: string[] = [];
+    let firstTestId: string | null = null;
+    for (const field of requiredFields) {
+      const value = customResponses?.[field.id];
+      let isMissing = false;
+      if (field.fieldType === 'checkbox') {
+        if (!value || !Array.isArray(value) || value.length === 0) isMissing = true;
+      } else if (field.fieldType === 'photo') {
+        if (!value || (typeof value === 'string' && value.trim() === '')) isMissing = true;
+      } else {
+        if (value === undefined || value === null || (typeof value === 'string' && value.trim() === '')) isMissing = true;
+      }
+      if (isMissing) {
+        errors[field.id] = `${field.label} is required`;
+        labels.push(field.label);
+        if (!firstTestId) {
+          if (field.fieldType === 'photo') firstTestId = `button-upload-${field.id}`;
+          else if (field.fieldType === 'radio') firstTestId = `radio-custom-${field.id}`;
+          else if (field.fieldType === 'select') firstTestId = `select-custom-${field.id}`;
+          else if (field.fieldType === 'checkbox') firstTestId = `checkbox-group-custom-${field.id}`;
+          else firstTestId = `input-custom-${field.id}`;
+        }
+      }
+    }
+    return { errors, labels, firstTestId };
+  };
 
   const handlePhotoUpload = async (fieldId: string, file: File) => {
     setPhotoUploads(prev => ({ ...prev, [fieldId]: { url: '', name: file.name, uploading: true } }));
@@ -142,9 +226,55 @@ export default function PublicFosterPage() {
     },
   });
 
-  const onSubmit = (data: InsertFosterApplication) => {
+  const onSubmit = (data: InsertFosterApplication & { customResponses?: Record<string, any> }) => {
+    if (formSettingsLoading) {
+      toast({
+        variant: "destructive",
+        title: "Please Wait",
+        description: "Form is still loading. Please try again in a moment.",
+      });
+      return;
+    }
+    const customCheck = collectMissingCustomFields(data.customResponses);
+    if (customCheck.labels.length > 0) {
+      setCustomFieldErrors(customCheck.errors);
+      showMissingFieldsFeedback(customCheck.labels, customCheck.firstTestId);
+      return;
+    }
+    setCustomFieldErrors({});
+    setMissingFieldLabels([]);
     submitMutation.mutate(data);
   };
+
+  // Combine RHF built-in errors and custom-field errors into a single ordered
+  // missing-fields list so the user sees every required field in one banner.
+  const onInvalid = (formErrors: Record<string, any>) => {
+    const builtInLabels: string[] = [];
+    let firstTestId: string | null = null;
+    for (const key of Object.keys(BUILT_IN_FIELD_META)) {
+      if (formErrors[key]) {
+        if (key === 'smsConsent' && !smsConsentEnabled) continue;
+        const meta = BUILT_IN_FIELD_META[key];
+        builtInLabels.push(meta.label);
+        if (!firstTestId) firstTestId = meta.testId;
+      }
+    }
+    const customCheck = collectMissingCustomFields(form.getValues('customResponses' as any));
+    setCustomFieldErrors(customCheck.errors);
+    if (!firstTestId) firstTestId = customCheck.firstTestId;
+    const labels = [...builtInLabels, ...customCheck.labels];
+    if (labels.length === 0) labels.push('Required information');
+    showMissingFieldsFeedback(labels, firstTestId);
+  };
+
+  // Clear stale missing-fields banner once the user starts editing again.
+  useEffect(() => {
+    if (missingFieldLabels.length === 0) return;
+    const subscription = form.watch(() => {
+      setMissingFieldLabels([]);
+    });
+    return () => subscription.unsubscribe();
+  }, [missingFieldLabels.length, form]);
 
   const tenant = tenantData?.tenant;
   const rescueName = tenant?.name || "Animal Rescue";
@@ -241,7 +371,7 @@ export default function PublicFosterPage() {
                   )}
 
                   <Form {...form}>
-                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                    <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-6">
                       <div className="grid md:grid-cols-2 gap-6">
                         <FormField
                           control={form.control}
@@ -600,7 +730,7 @@ export default function PublicFosterPage() {
                                   render={({ field: formField }) => (
                                     <FormItem>
                                       <FormLabel>{field.label} {field.required && '*'}</FormLabel>
-                                      <div className="space-y-2">
+                                      <div className="space-y-2" data-testid={`checkbox-group-custom-${field.id}`}>
                                         {field.options?.filter(option => option.trim()).map((option) => (
                                           <div key={option} className="flex items-center space-x-2">
                                             <Checkbox
@@ -690,28 +820,56 @@ export default function PublicFosterPage() {
                         </div>
                       )}
 
-                      {/* SMS Consent Checkbox (mandatory for Twilio compliance) */}
-                      <FormField
-                        control={form.control}
-                        name="smsConsent"
-                        render={({ field }) => (
-                          <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                            <FormControl>
-                              <Checkbox
-                                checked={field.value}
-                                onCheckedChange={field.onChange}
-                                data-testid="checkbox-sms-consent"
-                              />
-                            </FormControl>
-                            <div className="space-y-1 leading-none">
-                              <FormLabel className="text-sm font-normal">
-                                I agree to receive text messages from {rescueName} regarding my foster application. Message frequency varies. Message & data rates may apply. Reply STOP to unsubscribe, HELP for help.
-                              </FormLabel>
-                              <FormMessage />
-                            </div>
-                          </FormItem>
-                        )}
-                      />
+                      {/* SMS Consent Checkbox — only shown when the tenant requires it */}
+                      {smsConsentEnabled && (
+                        <FormField
+                          control={form.control}
+                          name="smsConsent"
+                          render={({ field }) => (
+                            <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                              <FormControl>
+                                <Checkbox
+                                  checked={field.value}
+                                  onCheckedChange={field.onChange}
+                                  data-testid="checkbox-sms-consent"
+                                />
+                              </FormControl>
+                              <div className="space-y-1 leading-none">
+                                <FormLabel className="text-sm font-normal">
+                                  I agree to receive text messages from {rescueName} regarding my foster application. Message frequency varies. Message & data rates may apply. Reply STOP to unsubscribe, HELP for help.
+                                </FormLabel>
+                                <FormMessage />
+                              </div>
+                            </FormItem>
+                          )}
+                        />
+                      )}
+
+                      {missingFieldLabels.length > 0 && (
+                        <Alert variant="destructive" data-testid="alert-missing-fields">
+                          <AlertCircle className="h-4 w-4" />
+                          <AlertTitle className="flex items-center justify-between gap-2">
+                            <span>Please complete the required fields below</span>
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => setMissingFieldLabels([])}
+                              aria-label="Dismiss missing fields alert"
+                              data-testid="button-dismiss-missing-fields"
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </AlertTitle>
+                          <AlertDescription>
+                            <ul className="list-disc pl-5 mt-2 space-y-1">
+                              {missingFieldLabels.map((label) => (
+                                <li key={label} data-testid={`text-missing-${label}`}>{label}</li>
+                              ))}
+                            </ul>
+                          </AlertDescription>
+                        </Alert>
+                      )}
 
                       <Button 
                         type="submit" 
