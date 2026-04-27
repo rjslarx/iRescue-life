@@ -14572,6 +14572,7 @@ ${renderedHtml}
         tenantId: formSettings.tenantId,
         formType: formSettings.formType,
         introText: formSettings.introText,
+        smsConsentEnabled: formSettings.smsConsentEnabled,
         createdAt: formSettings.createdAt,
         updatedAt: formSettings.updatedAt,
       })
@@ -14582,7 +14583,7 @@ ${renderedHtml}
         ))
         .limit(1);
 
-      res.json({ setting: setting || { formType, introText: null } });
+      res.json({ setting: setting || { formType, introText: null, smsConsentEnabled: false } });
     } catch (error) {
       next(error);
     }
@@ -14604,6 +14605,7 @@ ${renderedHtml}
 
       const updateSchema = z.object({
         introText: z.string().nullable().optional(),
+        smsConsentEnabled: z.boolean().optional(),
       });
       
       const data = updateSchema.parse(req.body);
@@ -19462,6 +19464,18 @@ If you have any questions, please contact us.
       console.log('[Surrender API] Received customResponses:', JSON.stringify(req.body.customResponses));
       console.log('[Surrender API] Received photoUrl:', req.body.photoUrl);
       
+      // Look up tenant's surrender form settings to know whether SMS consent is required
+      const [surrenderSettings] = await db.select({
+        smsConsentEnabled: formSettings.smsConsentEnabled,
+      })
+        .from(formSettings)
+        .where(and(
+          eq(formSettings.tenantId, req.tenant!.id),
+          eq(formSettings.formType, 'surrender' as any)
+        ))
+        .limit(1);
+      const smsConsentRequired = surrenderSettings?.smsConsentEnabled === true;
+
       const surrenderSubmissionSchema = insertSurrenderRequestSchema.extend({
         ownerAddress: z.string().trim().min(3, "Street address is required"),
         ownerCity: z.string().trim().min(1, "City is required"),
@@ -19474,11 +19488,14 @@ If you have any questions, please contact us.
         goodWithKids: z.enum(["yes", "no", "unknown"], { required_error: "Required" }),
         goodWithDogs: z.enum(["yes", "no", "unknown"], { required_error: "Required" }),
         goodWithCats: z.enum(["yes", "no", "unknown"], { required_error: "Required" }),
-        medicalIssues: z.string().trim().min(1, "Medical issues is required"),
-        behavioralIssues: z.string().trim().min(1, "Behavioral issues is required"),
+        medicalIssues: z.string().trim().optional().transform(v => v && v.trim() !== '' ? v : 'None'),
+        behavioralIssues: z.string().trim().optional().transform(v => v && v.trim() !== '' ? v : 'None'),
         preferredSurrenderDate: z.string().min(1, "Preferred surrender date is required"),
         photoUrl: z.string().trim().min(1, "A photo of the animal is required"),
         customResponses: z.record(z.any()).optional().default({}),
+        smsConsent: smsConsentRequired
+          ? z.literal(true, { errorMap: () => ({ message: "SMS consent is required" }) })
+          : z.boolean().optional().default(false),
       });
       const data = surrenderSubmissionSchema.parse({
         ...req.body,
