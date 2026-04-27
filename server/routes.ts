@@ -16135,13 +16135,25 @@ ${renderedHtml}
       }
 
       // Mirror to DB so the roster reflects the change without waiting for the webhook.
-      // The Stripe TS types omit `current_period_end` from the top-level Subscription
-      // object (it actually lives there in the API response), so widen narrowly here.
-      const updatedAny = updated as Stripe.Subscription & { current_period_end?: number };
+      // Stripe API 2025-04-30+ moved current_period_end off the Subscription object
+      // and onto Subscription Items, so check the first item before falling back to
+      // the legacy top-level field. Guard with Number.isFinite so an unexpected
+      // missing/non-numeric value can never produce `new Date(NaN)` (which throws
+      // "RangeError: Invalid time value" inside Drizzle's parameter binder).
+      const updatedAny = updated as Stripe.Subscription & {
+        current_period_end?: number;
+        items?: { data?: Array<{ current_period_end?: number }> };
+      };
+      const periodEndSec =
+        updatedAny.items?.data?.[0]?.current_period_end ?? updatedAny.current_period_end;
+      const periodEndDate =
+        typeof periodEndSec === 'number' && Number.isFinite(periodEndSec)
+          ? new Date(periodEndSec * 1000)
+          : null;
       await db.update(subscriptions).set({
         status: updated.status || sub.status,
         canceledAt: updated.canceled_at ? new Date(updated.canceled_at * 1000) : sub.canceledAt,
-        currentPeriodEnd: updatedAny.current_period_end ? new Date(updatedAny.current_period_end * 1000) : sub.currentPeriodEnd,
+        currentPeriodEnd: periodEndDate ?? sub.currentPeriodEnd,
       }).where(eq(subscriptions.id, sub.id));
 
       const actorId = (req.user as { id?: string } | undefined)?.id || 'unknown';
@@ -16151,7 +16163,7 @@ ${renderedHtml}
         immediate,
         cancelAtPeriodEnd: !immediate,
         status: updated.status,
-        currentPeriodEnd: updatedAny.current_period_end ? new Date(updatedAny.current_period_end * 1000).toISOString() : null,
+        currentPeriodEnd: periodEndDate ? periodEndDate.toISOString() : null,
       });
     } catch (error: any) {
       if (error instanceof z.ZodError) return res.status(400).json({ error: 'Invalid request' });
@@ -28203,16 +28215,36 @@ Submitted: ${new Date().toLocaleString()}
         case 'customer.subscription.updated': 
         case 'customer.subscription.deleted': {
           const subscription = event.data.object as any;
-          
+
+          // Stripe API 2025-04-30+ moved current_period_start/current_period_end
+          // off the Subscription object and onto Subscription Items. Read from
+          // the first item when available, fall back to the legacy top-level
+          // fields for older API versions, and skip the column entirely when
+          // neither is present so we never construct `new Date(NaN)` (which
+          // throws "RangeError: Invalid time value" inside Drizzle's binder).
+          const subItem = subscription.items?.data?.[0];
+          const periodStartSec =
+            subItem?.current_period_start ?? subscription.current_period_start;
+          const periodEndSec =
+            subItem?.current_period_end ?? subscription.current_period_end;
+
+          const updateData: Record<string, unknown> = {
+            status: subscription.status,
+            canceledAt: subscription.canceled_at
+              ? new Date(subscription.canceled_at * 1000)
+              : null,
+            cancelAtPeriodEnd: !!subscription.cancel_at_period_end,
+          };
+          if (typeof periodStartSec === 'number' && Number.isFinite(periodStartSec)) {
+            updateData.currentPeriodStart = new Date(periodStartSec * 1000);
+          }
+          if (typeof periodEndSec === 'number' && Number.isFinite(periodEndSec)) {
+            updateData.currentPeriodEnd = new Date(periodEndSec * 1000);
+          }
+
           await db
             .update(subscriptions)
-            .set({
-              status: subscription.status,
-              currentPeriodStart: new Date(subscription.current_period_start * 1000),
-              currentPeriodEnd: new Date(subscription.current_period_end * 1000),
-              canceledAt: subscription.canceled_at ? new Date(subscription.canceled_at * 1000) : null,
-              cancelAtPeriodEnd: !!subscription.cancel_at_period_end,
-            })
+            .set(updateData)
             .where(
               and(
                 eq(subscriptions.tenantId, tenant.id),
