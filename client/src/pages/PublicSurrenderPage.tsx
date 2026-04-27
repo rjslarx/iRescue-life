@@ -385,7 +385,7 @@ export default function PublicSurrenderPage() {
       }
     }
 
-    const customCheck = collectMissingCustomFields(form.getValues('customResponses') as any);
+    const customCheck = collectMissingCustomFields(form.getValues('customResponses'));
     setCustomFieldErrors(customCheck.errors);
     if (!firstTestId) firstTestId = customCheck.firstTestId;
 
@@ -1295,7 +1295,7 @@ export default function PublicSurrenderPage() {
                       )}
 
                       {missingFieldLabels.length > 0 && (
-                        <Alert variant="destructive" data-testid="alert-missing-fields">
+                        <Alert variant="destructive" data-testid="alert-missing-fields" className="relative pr-10">
                           <AlertCircle className="h-4 w-4" />
                           <AlertDescription>
                             <div className="font-medium mb-1">
@@ -1307,6 +1307,17 @@ export default function PublicSurrenderPage() {
                               ))}
                             </ul>
                           </AlertDescription>
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="absolute right-1 top-1"
+                            onClick={() => setMissingFieldLabels([])}
+                            aria-label="Dismiss missing fields alert"
+                            data-testid="button-dismiss-missing-fields"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
                         </Alert>
                       )}
 
