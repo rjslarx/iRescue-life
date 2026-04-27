@@ -13,6 +13,13 @@ const MONTH_NAMES = [
   'July', 'August', 'September', 'October', 'November', 'December',
 ];
 
+// In-process lock keyed by `${tenantId}:${month}` so two concurrent signups
+// (in different calendars) that both push the tenant over the "all full" line
+// can't both pass the dedup check before either has inserted the dedup row.
+// The first caller does the work; the second awaits the same promise and then
+// re-runs its check, which short-circuits on the now-existing dedup row.
+const inFlightLocks = new Map<string, Promise<void>>();
+
 function isQuietHours(): boolean {
   const nowUtc = new Date();
   const cstHour = (nowUtc.getUTCHours() - 6 + 24) % 24;
@@ -37,7 +44,21 @@ export async function checkAndSendFullyStaffedThankYou(
       return;
     }
 
-    await executeFullyStaffedCheck(tenantId, calendarId, month);
+    const lockKey = `${tenantId}:${month}`;
+    const inFlight = inFlightLocks.get(lockKey);
+    if (inFlight) {
+      // Wait for the in-flight check to finish (which may insert the dedup row)
+      // and then run our own check, which will short-circuit on the dedup row.
+      await inFlight.catch(() => {});
+      await executeFullyStaffedCheck(tenantId, calendarId, month);
+      return;
+    }
+
+    const work = executeFullyStaffedCheck(tenantId, calendarId, month).finally(() => {
+      inFlightLocks.delete(lockKey);
+    });
+    inFlightLocks.set(lockKey, work);
+    await work;
   } catch (error: any) {
     console.error(`[VOLUNTEER THANKYOU] Error: ${error.message}`);
   }
@@ -70,10 +91,11 @@ async function executeFullyStaffedCheck(
   calendarId: string,
   month: string
 ): Promise<void> {
+  // Tenant-wide dedup: only one celebration per tenant per month, regardless of
+  // which calendar signup triggered the check.
   const existing = await db.query.volunteerFullyStaffedNotifications.findFirst({
     where: and(
       eq(volunteerFullyStaffedNotifications.tenantId, tenantId),
-      eq(volunteerFullyStaffedNotifications.calendarId, calendarId),
       eq(volunteerFullyStaffedNotifications.month, month),
     ),
   });
@@ -82,9 +104,30 @@ async function executeFullyStaffedCheck(
     return;
   }
 
+  // Find every active volunteer calendar in this tenant. The celebration only
+  // fires when every shift in every active volunteer calendar is fully staffed
+  // for the month.
+  const tenantVolunteerCalendars = await db
+    .select({ id: calendars.id })
+    .from(calendars)
+    .where(
+      and(
+        eq(calendars.tenantId, tenantId),
+        eq(calendars.type, 'volunteer'),
+        eq(calendars.isActive, true),
+      )
+    );
+
+  if (tenantVolunteerCalendars.length === 0) {
+    return;
+  }
+
+  const tenantCalendarIds = tenantVolunteerCalendars.map(c => c.id);
+
   const monthOpportunities = await db
     .select({
       id: volunteerOpportunities.id,
+      calendarId: volunteerOpportunities.calendarId,
       slotsTotal: volunteerOpportunities.slotsTotal,
       slotsFilled: volunteerOpportunities.slotsFilled,
     })
@@ -92,7 +135,7 @@ async function executeFullyStaffedCheck(
     .where(
       and(
         eq(volunteerOpportunities.tenantId, tenantId),
-        eq(volunteerOpportunities.calendarId, calendarId),
+        inArray(volunteerOpportunities.calendarId, tenantCalendarIds),
         like(volunteerOpportunities.date, `${month}-%`),
       )
     );
@@ -101,18 +144,15 @@ async function executeFullyStaffedCheck(
     return;
   }
 
+  // Require every active volunteer calendar that has shifts for the month to
+  // be fully booked. Calendars with zero shifts for the month are skipped (they
+  // shouldn't block the celebration), but if a calendar has shifts and any are
+  // unfilled, we wait.
   const allFull = monthOpportunities.every(opp => opp.slotsFilled >= opp.slotsTotal);
   if (!allFull) {
     return;
   }
 
-  const [calendar] = await db
-    .select({ name: calendars.name })
-    .from(calendars)
-    .where(eq(calendars.id, calendarId))
-    .limit(1);
-
-  const calendarName = calendar?.name || 'the volunteer calendar';
   const monthName = getMonthName(month);
 
   const opportunityIds = monthOpportunities.map(o => o.id);
@@ -137,7 +177,7 @@ async function executeFullyStaffedCheck(
   }
 
   if (uniquePhones.size === 0) {
-    console.log(`[VOLUNTEER THANKYOU] No volunteer phone numbers found for ${calendarName} ${monthName}`);
+    console.log(`[VOLUNTEER THANKYOU] No volunteer phone numbers found for tenant ${tenantId} ${monthName}`);
     return;
   }
 
@@ -154,9 +194,9 @@ async function executeFullyStaffedCheck(
     throw insertErr;
   }
 
-  const message = `Thank you so much for fully staffing ${calendarName} for ${monthName}! Your dedication makes all the difference for our animals. ❤️🐶`;
+  const message = `Thank you so much for fully staffing every volunteer calendar for ${monthName}! Your dedication makes all the difference for our animals. ❤️🐶`;
 
-  console.log(`[VOLUNTEER THANKYOU] Sending thank-you to ${uniquePhones.size} volunteers for ${calendarName} (${monthName})`);
+  console.log(`[VOLUNTEER THANKYOU] Sending thank-you to ${uniquePhones.size} volunteers — all volunteer calendars fully staffed for ${monthName}`);
 
   for (const phone of uniquePhones) {
     try {
@@ -166,5 +206,5 @@ async function executeFullyStaffedCheck(
     }
   }
 
-  console.log(`[VOLUNTEER THANKYOU] Completed — ${calendarName} is fully staffed for ${monthName}`);
+  console.log(`[VOLUNTEER THANKYOU] Completed — all volunteer calendars fully staffed for ${monthName}`);
 }
