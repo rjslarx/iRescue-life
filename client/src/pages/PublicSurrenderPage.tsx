@@ -309,10 +309,25 @@ export default function PublicSurrenderPage() {
     }
   };
 
+  // Tenants like Haseya configure custom fields that overlap with the built-in
+  // form (e.g. "Is the dog microchipped?", "Does the dog have any known medical
+  // problems?", "Please upload a photo of your dog."). To avoid double-asking
+  // the user we hide those custom duplicates from the rendered form (see the
+  // filteredFields logic below) and rely on the built-in equivalents instead.
+  // The validator MUST apply the same exclusion, otherwise it flags fields
+  // the user can never actually fill in and the banner is unsatisfiable.
+  const customFieldDuplicatePattern = /microchip|medical\s*problem/i;
+  const isRenderableCustomField = (f: SurrenderFormField) => {
+    if (f.fieldType === 'photo') return false;
+    if (customFieldDuplicatePattern.test(f.label)) return false;
+    return true;
+  };
+
   // Walk required custom fields and return a list of missing ones with
   // an inline-error map and a scroll target for the first one.
   const collectMissingCustomFields = (customResponses: Record<string, any> | undefined) => {
-    const requiredFields = customFieldsData?.fields?.filter(f => f.required) || [];
+    const requiredFields =
+      customFieldsData?.fields?.filter(f => f.required && isRenderableCustomField(f)) || [];
     const errors: Record<string, string> = {};
     const labels: string[] = [];
     let firstTestId: string | null = null;
@@ -401,10 +416,15 @@ export default function PublicSurrenderPage() {
   };
 
   // Clear the stale missing-fields banner whenever the user starts editing again.
+  // form.watch fires for form-state changes (e.g. isSubmitted) too, so only react
+  // to actual field changes that carry a `name`. Without this guard the banner
+  // gets cleared by the very submit attempt that surfaced it.
   useEffect(() => {
     if (missingFieldLabels.length === 0) return;
-    const subscription = form.watch(() => {
-      setMissingFieldLabels([]);
+    const subscription = form.watch((_value, info) => {
+      if (info?.name) {
+        setMissingFieldLabels([]);
+      }
     });
     return () => subscription.unsubscribe();
   }, [missingFieldLabels.length, form]);
@@ -1029,12 +1049,9 @@ export default function PublicSurrenderPage() {
 
                       {/* Render custom form fields */}
                       {customFieldsData?.fields && customFieldsData.fields.length > 0 && (() => {
-                        const duplicatePattern = /microchip|medical\s*problem/i;
-                        const filteredFields = customFieldsData.fields.filter((f) => {
-                          if (f.fieldType === 'photo') return false;
-                          if (duplicatePattern.test(f.label)) return false;
-                          return true;
-                        });
+                        // Keep render and validation in sync via the shared
+                        // isRenderableCustomField helper above.
+                        const filteredFields = customFieldsData.fields.filter(isRenderableCustomField);
                         if (filteredFields.length === 0) return null;
                         return (
                         <div className="border-t pt-6 space-y-4">

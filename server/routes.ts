@@ -19527,8 +19527,23 @@ If you have any questions, please contact us.
         )
       );
 
+      // Mirror the client's PublicSurrenderPage `isRenderableCustomField`
+      // predicate: hide custom fields that duplicate built-in equivalents
+      // (microchip / medical-problem labels, and any photo-type custom field).
+      // The built-in form already collects these via dedicated inputs
+      // (microchipped, medicalIssues, photoUrl), so requiring the duplicates
+      // on the server makes the form unsubmittable for tenants like Haseya
+      // whose admins added them as required custom fields.
+      const SURRENDER_CUSTOM_DUPLICATE_PATTERN = /microchip|medical\s*problem/i;
+      const isRenderableSurrenderCustomField = (f: { label: string; fieldType: string }) => {
+        if (f.fieldType === 'photo') return false;
+        if (SURRENDER_CUSTOM_DUPLICATE_PATTERN.test(f.label)) return false;
+        return true;
+      };
+
       const missingFields: string[] = [];
       for (const field of requiredFields) {
+        if (!isRenderableSurrenderCustomField(field)) continue;
         const value = data.customResponses?.[field.id];
         if (field.fieldType === 'checkbox') {
           if (!value || !Array.isArray(value) || value.length === 0) {
