@@ -250,6 +250,7 @@ export const DEFAULT_QUICK_ACTIONS = [
   "invite-team-member",
   "record-donation",
   "new-application",
+  "send-hold-harmless",
 ];
 
 export function getQuickActionById(id: string): QuickAction | undefined {
