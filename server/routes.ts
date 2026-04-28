@@ -19534,7 +19534,7 @@ If you have any questions, please contact us.
       // (microchipped, medicalIssues, photoUrl), so requiring the duplicates
       // on the server makes the form unsubmittable for tenants like Haseya
       // whose admins added them as required custom fields.
-      const SURRENDER_CUSTOM_DUPLICATE_PATTERN = /microchip|medical\s*problem/i;
+      const SURRENDER_CUSTOM_DUPLICATE_PATTERN = /microchip|medical\s*problem|weight/i;
       const isRenderableSurrenderCustomField = (f: { label: string; fieldType: string }) => {
         if (f.fieldType === 'photo') return false;
         if (SURRENDER_CUSTOM_DUPLICATE_PATTERN.test(f.label)) return false;

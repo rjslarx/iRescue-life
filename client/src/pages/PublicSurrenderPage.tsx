@@ -311,12 +311,13 @@ export default function PublicSurrenderPage() {
 
   // Tenants like Haseya configure custom fields that overlap with the built-in
   // form (e.g. "Is the dog microchipped?", "Does the dog have any known medical
-  // problems?", "Please upload a photo of your dog."). To avoid double-asking
-  // the user we hide those custom duplicates from the rendered form (see the
-  // filteredFields logic below) and rely on the built-in equivalents instead.
-  // The validator MUST apply the same exclusion, otherwise it flags fields
-  // the user can never actually fill in and the banner is unsatisfiable.
-  const customFieldDuplicatePattern = /microchip|medical\s*problem/i;
+  // problems?", "Please upload a photo of your dog.", "Dog's Weight"). To avoid
+  // double-asking the user we hide those custom duplicates from the rendered
+  // form (see the filteredFields logic below) and rely on the built-in
+  // equivalents instead. The validator MUST apply the same exclusion,
+  // otherwise it flags fields the user can never actually fill in and the
+  // banner is unsatisfiable.
+  const customFieldDuplicatePattern = /microchip|medical\s*problem|weight/i;
   const isRenderableCustomField = (f: SurrenderFormField) => {
     if (f.fieldType === 'photo') return false;
     if (customFieldDuplicatePattern.test(f.label)) return false;
