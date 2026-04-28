@@ -19146,7 +19146,26 @@ If you have any questions, please contact us.
       if (wantsSms && !application.applicantPhone) {
         return res.status(400).json({ error: 'Application has no phone number. Choose Email instead.' });
       }
-      
+
+      // Strict pre-checks: every requested channel must be available before we create anything
+      if (wantsEmail) {
+        const emailServiceCheck = await EmailService.forTenant(req.tenant!.id);
+        if (!emailServiceCheck) {
+          return res.status(400).json({
+            error: 'Email service is not configured for this organization. Configure email or choose SMS instead.',
+          });
+        }
+      }
+      if (wantsSms) {
+        const { isTwilioEnabled } = await import('./lib/twilio-service');
+        const smsConfigured = await isTwilioEnabled(req.tenant!.id);
+        if (!smsConfigured) {
+          return res.status(400).json({
+            error: 'SMS is not configured for this organization. Configure Twilio or choose Email instead.',
+          });
+        }
+      }
+
       // Find a hold harmless waiver form for this tenant
       const [volunteerWaiverForm] = await db
         .select({ id: customForms.id, tenantId: customForms.tenantId, name: customForms.name, isActive: customForms.isActive, htmlTemplate: customForms.htmlTemplate, requiresSignature: customForms.requiresSignature, formType: customForms.formType })
@@ -19231,7 +19250,7 @@ If you have any questions, please contact us.
       if (wantsSms && application.applicantPhone) {
         try {
           const { sendSms } = await import('./lib/twilio-service');
-          const smsMessage = `Hi ${application.applicantName}, please sign the Hold Harmless Agreement to complete your volunteer onboarding: ${formUrl}`;
+          const smsMessage = `${req.tenant!.name}: Hi ${application.applicantName}, please sign the Hold Harmless Agreement to complete your volunteer onboarding: ${formUrl}`;
           const result = await sendSms(
             req.tenant!.id,
             application.applicantPhone,
@@ -19355,6 +19374,25 @@ If you have any questions, please contact us.
         });
       }
 
+      // Strict pre-checks: every requested channel must be available before we create anything
+      if (wantsEmail) {
+        const emailServiceCheck = await EmailService.forTenant(req.tenant!.id);
+        if (!emailServiceCheck) {
+          return res.status(400).json({
+            error: 'Email service is not configured for this organization. Configure email or choose SMS instead.',
+          });
+        }
+      }
+      if (wantsSms) {
+        const { isTwilioEnabled } = await import('./lib/twilio-service');
+        const smsConfigured = await isTwilioEnabled(req.tenant!.id);
+        if (!smsConfigured) {
+          return res.status(400).json({
+            error: 'SMS is not configured for this organization. Configure Twilio or choose Email instead.',
+          });
+        }
+      }
+
       // Find a hold harmless waiver form for this tenant
       const [waiverForm] = await db
         .select({ id: customForms.id, name: customForms.name })
@@ -19437,7 +19475,7 @@ If you have any questions, please contact us.
       if (wantsSms) {
         try {
           const { sendSms } = await import('./lib/twilio-service');
-          const smsMessage = `Hi ${recipientName}, please sign the Hold Harmless Agreement before volunteering: ${formUrl}`;
+          const smsMessage = `${req.tenant!.name}: Hi ${recipientName}, please sign the Hold Harmless Agreement: ${formUrl}`;
           const result = await sendSms(
             req.tenant!.id,
             recipientPhone!,

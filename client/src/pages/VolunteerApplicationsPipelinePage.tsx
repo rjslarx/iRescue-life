@@ -80,12 +80,19 @@ export default function VolunteerApplicationsPipelinePage() {
       const response = await apiRequest('POST', `/api/volunteer-applications/${id}/send-waiver`, {
         sendMethod,
       });
-      return response.json() as Promise<{ message?: string }>;
+      return response.json() as Promise<{
+        message?: string;
+        delivery?: { email?: { ok: boolean }; sms?: { ok: boolean } };
+      }>;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['/api/volunteer-applications'] });
+      const channels: string[] = [];
+      if (data?.delivery?.email?.ok) channels.push("Email");
+      if (data?.delivery?.sms?.ok) channels.push("SMS");
+      const channelLabel = channels.join(" & ") || "Email";
       toast({
-        title: "Waiver sent",
+        title: `Sent via ${channelLabel}`,
         description: data?.message || "The volunteer has been sent a link to sign the Hold Harmless form.",
       });
       setSendingWaiverId(null);

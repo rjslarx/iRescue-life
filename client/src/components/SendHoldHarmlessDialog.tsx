@@ -80,9 +80,12 @@ export function SendHoldHarmlessDialog({ open, onOpenChange }: SendHoldHarmlessD
       return (await res.json()) as SendResponse;
     },
     onSuccess: (data) => {
-      const partial = (data.delivery.email && !data.delivery.email.ok) || (data.delivery.sms && !data.delivery.sms.ok);
+      const channels: string[] = [];
+      if (data.delivery.email?.ok) channels.push("Email");
+      if (data.delivery.sms?.ok) channels.push("SMS");
+      const channelLabel = channels.join(" & ") || "Email";
       toast({
-        title: partial ? "Sent (partial delivery)" : "Hold Harmless sent",
+        title: `Sent via ${channelLabel}`,
         description: data.message,
       });
       onOpenChange(false);
