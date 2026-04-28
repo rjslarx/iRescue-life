@@ -17,6 +17,7 @@ import {
   MessageSquare,
   Cat,
   Sparkles,
+  ShieldCheck,
   type LucideIcon
 } from "lucide-react";
 
@@ -229,6 +230,15 @@ export const ALL_QUICK_ACTIONS: QuickAction[] = [
     href: "/dashboard/post-optimizer",
     actionType: "navigate",
     pageId: "communications",
+  },
+  {
+    id: "send-hold-harmless",
+    label: "Send Hold Harmless",
+    description: "Email or text the Hold Harmless agreement to anyone",
+    icon: ShieldCheck,
+    actionType: "callback",
+    callbackName: "onSendHoldHarmless",
+    pageId: "volunteers",
   },
 ];
 

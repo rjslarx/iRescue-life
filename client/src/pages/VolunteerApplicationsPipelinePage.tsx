@@ -6,14 +6,31 @@ import { MoveAndSendVolunteerWaiverDialog } from "@/components/MoveAndSendVolunt
 import { useAuth } from "@/contexts/AuthContext";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Users, UserCheck, Search, XCircle, RotateCcw } from "lucide-react";
+import { Loader2, Users, UserCheck, Search, XCircle, RotateCcw, Mail, MessageSquare } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import type { VolunteerApplication } from "@shared/schema";
 import DashboardLayout from "@/components/DashboardLayout";
+
+type WaiverSendMethod = "email" | "sms" | "both";
+
+interface ResendTarget {
+  id: string;
+  applicantName: string;
+  applicantEmail: string | null;
+  applicantPhone: string | null;
+}
 
 export default function VolunteerApplicationsPipelinePage() {
   const { user } = useAuth();
@@ -30,6 +47,7 @@ export default function VolunteerApplicationsPipelinePage() {
     applicantEmail: string;
     applicantPhone?: string;
   } | null>(null);
+  const [resendPickerTarget, setResendPickerTarget] = useState<ResendTarget | null>(null);
 
   const { data, isLoading } = useQuery<{ applications: VolunteerApplication[] }>({
     queryKey: ['/api/volunteer-applications'],
@@ -57,21 +75,21 @@ export default function VolunteerApplicationsPipelinePage() {
   });
 
   const sendWaiverMutation = useMutation({
-    mutationFn: async (application: { id: string; applicantName: string; applicantEmail: string }) => {
-      setSendingWaiverId(application.id);
-      const response = await apiRequest('POST', `/api/volunteer-applications/${application.id}/send-waiver`, {
-        applicantEmail: application.applicantEmail,
-        applicantName: application.applicantName,
+    mutationFn: async ({ id, sendMethod }: { id: string; sendMethod: WaiverSendMethod }) => {
+      setSendingWaiverId(id);
+      const response = await apiRequest('POST', `/api/volunteer-applications/${id}/send-waiver`, {
+        sendMethod,
       });
-      return response.json();
+      return response.json() as Promise<{ message?: string }>;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['/api/volunteer-applications'] });
       toast({
         title: "Waiver sent",
-        description: "The volunteer has been sent a link to sign the Hold Harmless form.",
+        description: data?.message || "The volunteer has been sent a link to sign the Hold Harmless form.",
       });
       setSendingWaiverId(null);
+      setResendPickerTarget(null);
     },
     onError: (error: any) => {
       toast({
@@ -138,8 +156,35 @@ export default function VolunteerApplicationsPipelinePage() {
     updatePipelineStatusMutation.mutate({ id: applicationId, pipelineStatus: newStatus });
   };
 
-  const handleSendWaiver = (application: { id: string; applicantName: string; applicantEmail: string }) => {
-    sendWaiverMutation.mutate(application);
+  const handleSendWaiver = (application: { id: string; applicantName: string; applicantEmail: string | null; applicantPhone?: string | null }) => {
+    const hasEmail = !!application.applicantEmail && application.applicantEmail.trim().length > 0;
+    const hasPhone = !!application.applicantPhone && application.applicantPhone.trim().length > 0;
+
+    if (!hasEmail && !hasPhone) {
+      toast({
+        title: "No contact info",
+        description: "This applicant has no email or phone on file.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (hasEmail && hasPhone) {
+      // Let the user choose Email / SMS / Both
+      setResendPickerTarget({
+        id: application.id,
+        applicantName: application.applicantName,
+        applicantEmail: application.applicantEmail,
+        applicantPhone: application.applicantPhone || null,
+      });
+      return;
+    }
+
+    // Single channel — send immediately
+    sendWaiverMutation.mutate({
+      id: application.id,
+      sendMethod: hasEmail ? "email" : "sms",
+    });
   };
 
   const handleViewApplication = (application: { id: string; applicantName: string; applicantEmail: string; applicantPhone: string; pipelineStatus: string }) => {
@@ -377,6 +422,64 @@ export default function VolunteerApplicationsPipelinePage() {
           queryClient.invalidateQueries({ queryKey: ['/api/volunteer-applications'] });
         }}
       />
+
+      <Dialog
+        open={!!resendPickerTarget}
+        onOpenChange={(open) => {
+          if (!open && !sendWaiverMutation.isPending) {
+            setResendPickerTarget(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-sm" data-testid="dialog-resend-waiver-method">
+          <DialogHeader>
+            <DialogTitle>Send Hold Harmless waiver</DialogTitle>
+            <DialogDescription>
+              {resendPickerTarget && (
+                <>How should we send the waiver to <strong>{resendPickerTarget.applicantName}</strong>?</>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-1 gap-2 py-2">
+            <Button
+              variant="outline"
+              onClick={() => resendPickerTarget && sendWaiverMutation.mutate({ id: resendPickerTarget.id, sendMethod: "email" })}
+              disabled={sendWaiverMutation.isPending}
+              data-testid="button-resend-method-email"
+            >
+              <Mail className="h-4 w-4 mr-2" />
+              Email only
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => resendPickerTarget && sendWaiverMutation.mutate({ id: resendPickerTarget.id, sendMethod: "sms" })}
+              disabled={sendWaiverMutation.isPending}
+              data-testid="button-resend-method-sms"
+            >
+              <MessageSquare className="h-4 w-4 mr-2" />
+              SMS only
+            </Button>
+            <Button
+              onClick={() => resendPickerTarget && sendWaiverMutation.mutate({ id: resendPickerTarget.id, sendMethod: "both" })}
+              disabled={sendWaiverMutation.isPending}
+              data-testid="button-resend-method-both"
+            >
+              {sendWaiverMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+              Both Email and SMS
+            </Button>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => setResendPickerTarget(null)}
+              disabled={sendWaiverMutation.isPending}
+              data-testid="button-resend-method-cancel"
+            >
+              Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }

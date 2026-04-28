@@ -20,6 +20,7 @@ import { useQuickActions } from "@/hooks/useQuickActions";
 import NotificationBell from "@/components/NotificationBell";
 import { AddMedicalOrderDialog } from "@/components/AddMedicalOrderDialog";
 import { RecordOfflineDonationDialog } from "@/components/RecordOfflineDonationDialog";
+import { SendHoldHarmlessDialog } from "@/components/SendHoldHarmlessDialog";
 import { useState } from "react";
 
 interface BreadcrumbItem {
@@ -50,9 +51,11 @@ export default function DashboardLayout({ children, title, description, actions,
   const [, navigate] = useLocation();
   const [cpoeOpen, setCpoeOpen] = useState(false);
   const [donationDialogOpen, setDonationDialogOpen] = useState(false);
+  const [holdHarmlessOpen, setHoldHarmlessOpen] = useState(false);
   const { actions: quickActions, handleAction } = useQuickActions({
     onAddMedicalOrder: () => setCpoeOpen(true),
     onRecordDonation: () => setDonationDialogOpen(true),
+    onSendHoldHarmless: () => setHoldHarmlessOpen(true),
   });
   const [helpOpen, setHelpOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
@@ -210,6 +213,10 @@ export default function DashboardLayout({ children, title, description, actions,
       <RecordOfflineDonationDialog
         open={donationDialogOpen}
         onOpenChange={setDonationDialogOpen}
+      />
+      <SendHoldHarmlessDialog
+        open={holdHarmlessOpen}
+        onOpenChange={setHoldHarmlessOpen}
       />
     </SidebarProvider>
   );

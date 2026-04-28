@@ -19104,54 +19104,47 @@ If you have any questions, please contact us.
 
   /**
    * POST /api/volunteer-applications/:id/send-waiver
-   * Manually send/resend hold harmless waiver email to volunteer applicant
+   * Manually send/resend hold harmless waiver to volunteer applicant via email, SMS, or both.
+   * Body: { sendMethod?: 'email' | 'sms' | 'both' } (defaults to 'email' for backward compat)
    */
-  app.post('/api/volunteer-applications/:id/send-waiver', requireTenant, requireAuth, requireRoleOrPageAccess(['volunteers', 'volunteer-pipeline'], 'admin', 'staff'), async (req, res, next) => {
+  app.post('/api/volunteer-applications/:id/send-waiver', emailLimiter, requireTenant, requireAuth, requireRoleOrPageAccess(['volunteers', 'volunteer-pipeline'], 'admin', 'staff'), async (req, res, next) => {
     try {
       const { volunteerApplications, customForms, customFormSubmissions } = await import('@shared/schema');
-      const { generateSecureToken, hashToken } = await import('./services/custom-form');
+      const { generateSecureToken } = await import('./services/custom-form');
       const { EmailService } = await import('./lib/email-service');
-      
+
+      const sendMethod: 'email' | 'sms' | 'both' = req.body?.sendMethod === 'sms' || req.body?.sendMethod === 'both'
+        ? req.body.sendMethod
+        : 'email';
+
       // Get the volunteer application
       const [application] = await db
         .select({
-        id: fosterApplications.id,
-        tenantId: fosterApplications.tenantId,
-        applicantName: fosterApplications.applicantName,
-        applicantEmail: fosterApplications.applicantEmail,
-        applicantPhone: fosterApplications.applicantPhone,
-        address: fosterApplications.address,
-        housingType: fosterApplications.housingType,
-        hasYard: fosterApplications.hasYard,
-        hasOtherPets: fosterApplications.hasOtherPets,
-        otherPetsDetails: fosterApplications.otherPetsDetails,
-        experience: fosterApplications.experience,
-        availability: fosterApplications.availability,
-        preferences: fosterApplications.preferences,
-        vetReference: fosterApplications.vetReference,
-        personalReference: fosterApplications.personalReference,
-        status: fosterApplications.status,
-        pipelineStatus: fosterApplications.pipelineStatus,
-        notes: fosterApplications.notes,
-        customResponses: fosterApplications.customResponses,
-        smsConsent: fosterApplications.smsConsent,
-        driveFolderId: fosterApplications.driveFolderId,
-        createdAt: fosterApplications.createdAt,
-        updatedAt: fosterApplications.updatedAt,
-      })
+          id: volunteerApplications.id,
+          tenantId: volunteerApplications.tenantId,
+          applicantName: volunteerApplications.applicantName,
+          applicantEmail: volunteerApplications.applicantEmail,
+          applicantPhone: volunteerApplications.applicantPhone,
+        })
         .from(volunteerApplications)
         .where(and(
           eq(volunteerApplications.id, req.params.id),
           eq(volunteerApplications.tenantId, req.tenant!.id)
         ))
         .limit(1);
-      
+
       if (!application) {
         return res.status(404).json({ error: 'Volunteer application not found' });
       }
-      
-      if (!application.applicantEmail) {
-        return res.status(400).json({ error: 'Application has no email address' });
+
+      const wantsEmail = sendMethod === 'email' || sendMethod === 'both';
+      const wantsSms = sendMethod === 'sms' || sendMethod === 'both';
+
+      if (wantsEmail && !application.applicantEmail) {
+        return res.status(400).json({ error: 'Application has no email address. Choose SMS instead.' });
+      }
+      if (wantsSms && !application.applicantPhone) {
+        return res.status(400).json({ error: 'Application has no phone number. Choose Email instead.' });
       }
       
       // Find a hold harmless waiver form for this tenant
@@ -19176,7 +19169,7 @@ If you have any questions, please contact us.
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + 14); // 14 days expiry
       
-      await db.insert(customFormSubmissions).values({
+      const [insertedSubmission] = await db.insert(customFormSubmissions).values({
         tenantId: req.tenant!.id,
         formId: volunteerWaiverForm.id,
         signerName: application.applicantName,
@@ -19185,7 +19178,7 @@ If you have any questions, please contact us.
         status: 'pending',
         secureTokenHash: tokenHash,
         expiresAt,
-      });
+      }).returning({ id: customFormSubmissions.id });
       
       // Build the form signing URL - use custom domain if available
       let formUrl: string;
@@ -19201,20 +19194,20 @@ If you have any questions, please contact us.
         formUrl = `${baseUrl}/${req.tenant!.subdomain}/forms/sign/${token}`;
       }
       
-      // Get email service for tenant
-      const emailService = await EmailService.forTenant(req.tenant!.id);
-      if (!emailService) {
-        return res.status(400).json({ error: 'Email service not configured for this organization' });
-      }
-      
-      // Send email to volunteer applicant
-      // Build HTML with shorter lines to avoid encoding issues
+      const deliveryResults: { email?: { ok: boolean; error?: string }; sms?: { ok: boolean; error?: string } } = {};
       const buttonStyle = 'display:inline-block;padding:12px 24px;background-color:#22c55e;color:white;text-decoration:none;border-radius:6px;';
-      
-      await emailService.send({
-        to: application.applicantEmail,
-        subject: `Action Required: Sign Hold Harmless Agreement - ${req.tenant!.name}`,
-        html: `
+
+      // Send email if requested
+      if (wantsEmail && application.applicantEmail) {
+        const emailService = await EmailService.forTenant(req.tenant!.id);
+        if (!emailService) {
+          deliveryResults.email = { ok: false, error: 'Email service not configured for this organization' };
+        } else {
+          try {
+            await emailService.send({
+              to: application.applicantEmail,
+              subject: `Action Required: Sign Hold Harmless Agreement - ${req.tenant!.name}`,
+              html: `
 <h2>Hold Harmless Agreement Ready for Signature</h2>
 <p>Hello ${application.applicantName},</p>
 <p>Your volunteer application with <strong>${req.tenant!.name}</strong> has advanced to the waiver stage.</p>
@@ -19224,10 +19217,63 @@ If you have any questions, please contact us.
 <p><a href="${formUrl}" style="color:#22c55e;">${formUrl}</a></p>
 <p style="color:#666;font-size:14px;">This link will expire in 14 days.</p>
 <p style="color:#666;font-size:14px;">Questions? Contact us at ${req.tenant!.contactEmail || 'our contact email'}.</p>
-        `.trim(),
-      });
-      
+              `.trim(),
+            });
+            deliveryResults.email = { ok: true };
+          } catch (emailErr: any) {
+            console.error('[Volunteer Waiver] Email send failed:', emailErr);
+            deliveryResults.email = { ok: false, error: emailErr?.message || 'Failed to send email' };
+          }
+        }
+      }
+
+      // Send SMS if requested
+      if (wantsSms && application.applicantPhone) {
+        try {
+          const { sendSms } = await import('./lib/twilio-service');
+          const smsMessage = `Hi ${application.applicantName}, please sign the Hold Harmless Agreement to complete your volunteer onboarding: ${formUrl}`;
+          const result = await sendSms(
+            req.tenant!.id,
+            application.applicantPhone,
+            smsMessage,
+            'notification',
+            { sentBy: req.user ? { id: req.user.id, name: req.user.firstName || req.user.email || 'Staff' } : undefined }
+          );
+          if (result.status === 'failed') {
+            deliveryResults.sms = { ok: false, error: result.error || 'SMS send failed' };
+          } else {
+            deliveryResults.sms = { ok: true };
+          }
+        } catch (smsErr: any) {
+          console.error('[Volunteer Waiver] SMS send failed:', smsErr);
+          deliveryResults.sms = { ok: false, error: smsErr?.message || 'Failed to send SMS' };
+        }
+      }
+
+      const anySuccess = deliveryResults.email?.ok || deliveryResults.sms?.ok;
+      if (!anySuccess) {
+        // Roll back the orphan pending submission so the token cannot be used
+        if (insertedSubmission?.id) {
+          try {
+            await db.delete(customFormSubmissions).where(and(
+              eq(customFormSubmissions.id, insertedSubmission.id),
+              eq(customFormSubmissions.tenantId, req.tenant!.id),
+            ));
+          } catch (cleanupErr) {
+            console.error('[Volunteer Waiver] Failed to clean up orphan submission:', cleanupErr);
+          }
+        }
+        const errs = [
+          deliveryResults.email?.error && `Email: ${deliveryResults.email.error}`,
+          deliveryResults.sms?.error && `SMS: ${deliveryResults.sms.error}`,
+        ].filter(Boolean).join(' | ');
+        return res.status(500).json({ error: errs || 'Failed to send waiver' });
+      }
+
       // Log activity
+      const deliveredVia: string[] = [];
+      if (deliveryResults.email?.ok) deliveredVia.push('email');
+      if (deliveryResults.sms?.ok) deliveredVia.push('SMS');
       const { logActivity } = await import('./lib/activity-logger');
       await logActivity({
         tenantId: req.tenant!.id,
@@ -19236,19 +19282,232 @@ If you have any questions, please contact us.
         category: 'user',
         entityType: 'volunteer_application',
         entityId: application.id,
-        description: `Hold harmless waiver email manually sent to ${application.applicantName} (${application.applicantEmail})`,
+        description: `Hold harmless waiver manually sent via ${deliveredVia.join(' & ')} to ${application.applicantName}`,
         metadata: {
           formId: volunteerWaiverForm.id,
           formName: volunteerWaiverForm.name,
+          sendMethod,
         },
       });
-      
-      console.log(`[Volunteer Waiver] Manually sent hold harmless waiver to ${application.applicantEmail}`);
-      
-      res.json({ 
-        success: true, 
-        message: `Waiver email sent to ${application.applicantEmail}`,
-        formUrl 
+
+      console.log(`[Volunteer Waiver] Manually sent hold harmless waiver via ${deliveredVia.join(' & ')} for application ${application.id}`);
+
+      const successTargets = [
+        deliveryResults.email?.ok && application.applicantEmail,
+        deliveryResults.sms?.ok && application.applicantPhone,
+      ].filter(Boolean).join(' and ');
+
+      // Note: do NOT return formUrl — the signing token must only travel via the delivered email/SMS
+      res.json({
+        success: true,
+        message: `Waiver sent via ${deliveredVia.join(' & ')} to ${successTargets}`,
+        delivery: deliveryResults,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/hold-harmless/send-adhoc
+   * Send the Hold Harmless agreement to an ad-hoc recipient (not tied to a volunteer application).
+   * Primary use case: community-service workers, walk-in volunteers, one-off helpers.
+   * Body: { recipientName, recipientEmail?, recipientPhone?, sendMethod: 'email' | 'sms' | 'both' }
+   */
+  app.post('/api/hold-harmless/send-adhoc', emailLimiter, requireTenant, requireAuth, requireRoleOrPageAccess(['volunteers', 'volunteer-pipeline'], 'admin', 'staff'), async (req, res, next) => {
+    try {
+      const { customForms, customFormSubmissions } = await import('@shared/schema');
+      const { generateSecureToken } = await import('./services/custom-form');
+      const { EmailService } = await import('./lib/email-service');
+
+      const recipientName = (req.body?.recipientName || '').toString().trim();
+      const recipientEmailRaw = (req.body?.recipientEmail || '').toString().trim();
+      const recipientPhoneRaw = (req.body?.recipientPhone || '').toString().trim();
+      const recipientEmail = recipientEmailRaw || null;
+      const recipientPhone = recipientPhoneRaw || null;
+      const requestedMethod: 'email' | 'sms' | 'both' = req.body?.sendMethod === 'sms' || req.body?.sendMethod === 'both'
+        ? req.body.sendMethod
+        : 'email';
+
+      if (!recipientName) {
+        return res.status(400).json({ error: 'Recipient name is required' });
+      }
+      if (!recipientEmail && !recipientPhone) {
+        return res.status(400).json({ error: 'Provide an email address, phone number, or both' });
+      }
+      if (recipientEmail) {
+        const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRe.test(recipientEmail)) {
+          return res.status(400).json({ error: 'Email address is not valid' });
+        }
+      }
+
+      const wantsEmail = (requestedMethod === 'email' || requestedMethod === 'both') && !!recipientEmail;
+      const wantsSms = (requestedMethod === 'sms' || requestedMethod === 'both') && !!recipientPhone;
+
+      if (!wantsEmail && !wantsSms) {
+        return res.status(400).json({
+          error: requestedMethod === 'email'
+            ? 'Email selected but no email address provided'
+            : requestedMethod === 'sms'
+              ? 'SMS selected but no phone number provided'
+              : 'No deliverable channel for the selected method',
+        });
+      }
+
+      // Find a hold harmless waiver form for this tenant
+      const [waiverForm] = await db
+        .select({ id: customForms.id, name: customForms.name })
+        .from(customForms)
+        .where(and(
+          eq(customForms.tenantId, req.tenant!.id),
+          eq(customForms.isActive, true),
+          sql`(LOWER(${customForms.name}) LIKE '%hold harmless%' OR (LOWER(${customForms.name}) LIKE '%volunteer%' AND (LOWER(${customForms.name}) LIKE '%waiver%' OR LOWER(${customForms.name}) LIKE '%liability%')))`
+        ))
+        .limit(1);
+
+      if (!waiverForm) {
+        return res.status(400).json({
+          error: 'No hold harmless waiver form found. Please create a form with "Hold Harmless" or "Volunteer Waiver/Liability" in the name.'
+        });
+      }
+
+      // Generate secure token + create pending submission
+      const { token, hash: tokenHash } = generateSecureToken();
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 14);
+
+      const [insertedAdhocSubmission] = await db.insert(customFormSubmissions).values({
+        tenantId: req.tenant!.id,
+        formId: waiverForm.id,
+        signerName: recipientName,
+        signerEmail: recipientEmail,
+        signerPhone: recipientPhone,
+        status: 'pending',
+        secureTokenHash: tokenHash,
+        expiresAt,
+      }).returning({ id: customFormSubmissions.id });
+
+      // Build the form signing URL
+      let formUrl: string;
+      if (req.tenant!.customDomain) {
+        formUrl = `https://${req.tenant!.customDomain}/forms/sign/${token}`;
+      } else {
+        const isProduction = process.env.REPLIT_DEPLOYMENT === '1';
+        const baseUrl = isProduction
+          ? 'https://irescue.life'
+          : process.env.REPLIT_DEV_DOMAIN
+            ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+            : 'http://localhost:5000';
+        formUrl = `${baseUrl}/${req.tenant!.subdomain}/forms/sign/${token}`;
+      }
+
+      const deliveryResults: { email?: { ok: boolean; error?: string }; sms?: { ok: boolean; error?: string } } = {};
+      const buttonStyle = 'display:inline-block;padding:12px 24px;background-color:#22c55e;color:white;text-decoration:none;border-radius:6px;';
+
+      if (wantsEmail) {
+        const emailService = await EmailService.forTenant(req.tenant!.id);
+        if (!emailService) {
+          deliveryResults.email = { ok: false, error: 'Email service not configured for this organization' };
+        } else {
+          try {
+            await emailService.send({
+              to: recipientEmail!,
+              subject: `Please Sign the Hold Harmless Agreement - ${req.tenant!.name}`,
+              html: `
+<h2>Hold Harmless Agreement Ready for Signature</h2>
+<p>Hello ${recipientName},</p>
+<p><strong>${req.tenant!.name}</strong> has sent you a Hold Harmless Agreement to review and sign.</p>
+<p>This agreement is required before you can begin volunteering or assisting with rescue activities.</p>
+<p><a href="${formUrl}" style="${buttonStyle}">Sign Hold Harmless Agreement</a></p>
+<p style="color:#666;font-size:14px;">Or copy and paste this link into your browser:</p>
+<p><a href="${formUrl}" style="color:#22c55e;">${formUrl}</a></p>
+<p style="color:#666;font-size:14px;">This link will expire in 14 days.</p>
+<p style="color:#666;font-size:14px;">Questions? Contact us at ${req.tenant!.contactEmail || 'our contact email'}.</p>
+              `.trim(),
+            });
+            deliveryResults.email = { ok: true };
+          } catch (emailErr: any) {
+            console.error('[Hold Harmless Ad-Hoc] Email send failed:', emailErr);
+            deliveryResults.email = { ok: false, error: emailErr?.message || 'Failed to send email' };
+          }
+        }
+      }
+
+      if (wantsSms) {
+        try {
+          const { sendSms } = await import('./lib/twilio-service');
+          const smsMessage = `Hi ${recipientName}, please sign the Hold Harmless Agreement before volunteering: ${formUrl}`;
+          const result = await sendSms(
+            req.tenant!.id,
+            recipientPhone!,
+            smsMessage,
+            'notification',
+            { sentBy: req.user ? { id: req.user.id, name: req.user.firstName || req.user.email || 'Staff' } : undefined }
+          );
+          if (result.status === 'failed') {
+            deliveryResults.sms = { ok: false, error: result.error || 'SMS send failed' };
+          } else {
+            deliveryResults.sms = { ok: true };
+          }
+        } catch (smsErr: any) {
+          console.error('[Hold Harmless Ad-Hoc] SMS send failed:', smsErr);
+          deliveryResults.sms = { ok: false, error: smsErr?.message || 'Failed to send SMS' };
+        }
+      }
+
+      const anySuccess = deliveryResults.email?.ok || deliveryResults.sms?.ok;
+      if (!anySuccess) {
+        // Roll back the orphan pending submission so the token cannot be used
+        if (insertedAdhocSubmission?.id) {
+          try {
+            await db.delete(customFormSubmissions).where(and(
+              eq(customFormSubmissions.id, insertedAdhocSubmission.id),
+              eq(customFormSubmissions.tenantId, req.tenant!.id),
+            ));
+          } catch (cleanupErr) {
+            console.error('[Hold Harmless Ad-Hoc] Failed to clean up orphan submission:', cleanupErr);
+          }
+        }
+        const errs = [
+          deliveryResults.email?.error && `Email: ${deliveryResults.email.error}`,
+          deliveryResults.sms?.error && `SMS: ${deliveryResults.sms.error}`,
+        ].filter(Boolean).join(' | ');
+        return res.status(500).json({ error: errs || 'Failed to send waiver' });
+      }
+
+      // Log activity
+      const deliveredVia: string[] = [];
+      if (deliveryResults.email?.ok) deliveredVia.push('email');
+      if (deliveryResults.sms?.ok) deliveredVia.push('SMS');
+      const { logActivity } = await import('./lib/activity-logger');
+      await logActivity({
+        tenantId: req.tenant!.id,
+        userId: req.user!.id,
+        action: 'hold_harmless_adhoc_sent',
+        category: 'user',
+        entityType: 'custom_form',
+        entityId: waiverForm.id,
+        description: `Ad-hoc Hold Harmless waiver sent via ${deliveredVia.join(' & ')} to ${recipientName} (${recipientEmail || recipientPhone})`,
+        metadata: {
+          formId: waiverForm.id,
+          formName: waiverForm.name,
+          sendMethod: requestedMethod,
+          recipientEmail,
+          recipientPhone,
+        },
+      });
+
+      const successTargets = [
+        deliveryResults.email?.ok && recipientEmail,
+        deliveryResults.sms?.ok && recipientPhone,
+      ].filter(Boolean).join(' and ');
+
+      // Note: do NOT return formUrl — the signing token must only travel via the delivered email/SMS
+      res.json({
+        success: true,
+        message: `Hold Harmless agreement sent via ${deliveredVia.join(' & ')} to ${successTargets}`,
+        delivery: deliveryResults,
       });
     } catch (error) {
       next(error);

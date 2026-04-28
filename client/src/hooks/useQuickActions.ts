@@ -9,6 +9,7 @@ interface QuickActionsResponse {
 interface UseQuickActionsCallbacks {
   onRecordDonation?: () => void;
   onAddMedicalOrder?: () => void;
+  onSendHoldHarmless?: () => void;
 }
 
 export function useQuickActions(callbacks?: UseQuickActionsCallbacks) {
@@ -32,6 +33,8 @@ export function useQuickActions(callbacks?: UseQuickActionsCallbacks) {
         callbacks?.onRecordDonation?.();
       } else if (action.callbackName === 'onAddMedicalOrder') {
         callbacks?.onAddMedicalOrder?.();
+      } else if (action.callbackName === 'onSendHoldHarmless') {
+        callbacks?.onSendHoldHarmless?.();
       }
     } else if (action.href) {
       navigate(action.href);
