@@ -61,6 +61,7 @@ Core functionalities include:
 - ACH Bounce Donor Notice with try-again functionality.
 - Post Optimizer Payment Interception: AI detection of P2P payment handles in social media drafts for re-routing and campaign linking.
 - Surgery Day Request Signed-Agreement PDF: lazily-generated, downloadable PDF of the partner's signed liability agreement (signature image + acknowledgment text + animal list + signer/timestamp + linked partner organization) with strict signature data-URI sanitization, available from the staff dashboard.
+- **Adopter Heartworm Compliance Warning System:** Auto-sends a strongly-worded contract-enforcement warning (email + SMS) when a parasite-prevention item is overdue ≥14 days for an adopted animal with no proof uploaded and no warning sent in the past 30 days; runs daily at 14:00 UTC alongside other adopter compliance jobs. Hardcoded 7-day deadline referenced in `{{deadlineDate}}`. Per-tenant template with merge tokens `{{rescueName}} {{adopterFirstName}} {{dogName}} {{deadlineDate}} {{portalLink}}`; defaults to the Haseya manager wording. Manual "Send Warning Now" button on the Adopter Compliance "Heartworm Watch" tab is also gated by the 30-day dedup window. Bypasses adopter email/SMS opt-outs and quiet hours because it is a transactional contract-enforcement notice.
 
 ## External Dependencies
 - **Stripe:** Payment processing and financial management.

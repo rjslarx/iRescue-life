@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { requireTenant } from '../middleware/tenant';
 import { requireAuth, requireRole } from '../middleware/auth';
+import { emailLimiter } from '../config/security';
 import { db } from '../db';
 import {
   complianceObligations,
@@ -10,11 +11,22 @@ import {
   adoptionContracts,
   microchipRecords,
   adopterHelpRequests,
+  adopterComplianceWarningTemplates,
+  adopterComplianceWarnings,
   users,
   COMPLIANCE_OBLIGATION_TYPES,
 } from '@shared/schema';
 import { eq, and, or, ilike, desc, sql, inArray, ne } from 'drizzle-orm';
 import { z } from 'zod';
+import {
+  findEligibleHeartwormWarnings,
+  sendComplianceWarning,
+  getEffectiveTemplate,
+  DEFAULT_WARNING_EMAIL_SUBJECT,
+  DEFAULT_WARNING_EMAIL_BODY,
+  DEFAULT_WARNING_SMS_BODY,
+  WARNING_DEADLINE_DAYS,
+} from '../lib/adopter-compliance-warnings';
 
 const router = Router();
 
@@ -740,6 +752,195 @@ router.patch(
       }
 
       res.json({ request: updated });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// ============================================================
+// Heartworm / Parasite-Prevention Compliance Warnings (Task #137)
+// ============================================================
+
+// GET /api/adoption-compliance/heartworm-warnings
+// Returns the list of adopters with parasite-prevention items overdue ≥14d.
+router.get(
+  '/heartworm-warnings',
+  requireTenant,
+  requireAuth,
+  requireRole('admin', 'staff', 'owner', 'manager'),
+  async (req, res, next) => {
+    try {
+      const tenantId = req.tenant!.id;
+      const candidates = await findEligibleHeartwormWarnings(tenantId);
+      res.json({
+        candidates,
+        deadlineDays: WARNING_DEADLINE_DAYS,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+const sendWarningSchema = z.object({
+  animalId: z.string().uuid(),
+  itemId: z.string().min(1),
+  channels: z.array(z.enum(['email', 'sms'])).min(1).optional(),
+});
+
+// POST /api/adoption-compliance/heartworm-warnings/send
+// Manual "Send Warning Now" button. Re-fetches the candidate list to verify
+// the item is still eligible (still overdue, no proof) before sending.
+router.post(
+  '/heartworm-warnings/send',
+  requireTenant,
+  requireAuth,
+  requireRole('admin', 'staff', 'owner', 'manager'),
+  emailLimiter,
+  async (req, res, next) => {
+    try {
+      const tenantId = req.tenant!.id;
+      const userId = req.user!.id;
+      const parsed = sendWarningSchema.parse(req.body);
+
+      const candidates = await findEligibleHeartwormWarnings(tenantId);
+      const candidate = candidates.find(
+        (c) => c.animalId === parsed.animalId && c.itemId === parsed.itemId,
+      );
+      if (!candidate) {
+        return res.status(404).json({
+          error: 'No eligible warning found — the item may already be resolved or proof may have been uploaded.',
+        });
+      }
+
+      // Enforce the 30-day dedup window for manual sends too. Without this, a
+      // staff member could repeatedly hammer an adopter — defeating the
+      // contract's "one warning then escalate" intent.
+      if (candidate.warningsInLast30Days > 0) {
+        return res.status(409).json({
+          error: 'A warning was already sent for this item within the past 30 days. Please wait until the deadline passes before re-sending.',
+          lastWarningAt: candidate.lastWarningAt,
+          lastWarningDeadline: candidate.lastWarningDeadline,
+        });
+      }
+
+      // Default to both channels when adopter has a phone, but honor explicit override
+      let channels: ('email' | 'sms')[] = parsed.channels ?? ['email'];
+      if (!parsed.channels && candidate.adopterPhone) channels = ['email', 'sms'];
+
+      const result = await sendComplianceWarning({
+        tenantId,
+        animalId: candidate.animalId,
+        animalName: candidate.animalName,
+        itemId: candidate.itemId,
+        itemKey: `parasite_prevention:${candidate.careName}`,
+        careName: candidate.careName,
+        dueDate: candidate.dueDate,
+        adopterName: candidate.adopterName,
+        adopterEmail: candidate.adopterEmail,
+        adopterPhone: candidate.adopterPhone,
+        channels,
+        triggeredBy: userId,
+        trigger: 'manual',
+      });
+
+      if (!result.success) {
+        return res.status(502).json({
+          error: result.reason || 'Failed to send warning on any channel',
+          email: result.email,
+          sms: result.sms,
+        });
+      }
+
+      res.json({
+        success: true,
+        warningId: result.warningId,
+        channelsSent: result.channelsSent,
+        deadlineDate: result.deadlineDate,
+        email: result.email,
+        sms: result.sms,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// GET /api/adoption-compliance/warning-template
+// Returns the effective warning template (custom override or defaults).
+router.get(
+  '/warning-template',
+  requireTenant,
+  requireAuth,
+  requireRole('admin', 'staff', 'owner', 'manager'),
+  async (req, res, next) => {
+    try {
+      const tenantId = req.tenant!.id;
+      const tpl = await getEffectiveTemplate(tenantId);
+      res.json({
+        ...tpl,
+        defaults: {
+          emailSubject: DEFAULT_WARNING_EMAIL_SUBJECT,
+          emailBody: DEFAULT_WARNING_EMAIL_BODY,
+          smsBody: DEFAULT_WARNING_SMS_BODY,
+        },
+        deadlineDays: WARNING_DEADLINE_DAYS,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+const updateTemplateSchema = z.object({
+  emailSubject: z.string().trim().min(1).max(300).nullable().optional(),
+  emailBody: z.string().trim().min(1).max(10_000).nullable().optional(),
+  smsBody: z.string().trim().min(1).max(800).nullable().optional(),
+});
+
+// PUT /api/adoption-compliance/warning-template
+// Save a custom template. Send `null` for any field to revert that field to default.
+router.put(
+  '/warning-template',
+  requireTenant,
+  requireAuth,
+  requireRole('admin', 'owner', 'manager'),
+  async (req, res, next) => {
+    try {
+      const tenantId = req.tenant!.id;
+      const userId = req.user!.id;
+      const parsed = updateTemplateSchema.parse(req.body);
+
+      const [existing] = await db
+        .select()
+        .from(adopterComplianceWarningTemplates)
+        .where(eq(adopterComplianceWarningTemplates.tenantId, tenantId))
+        .limit(1);
+
+      if (existing) {
+        await db
+          .update(adopterComplianceWarningTemplates)
+          .set({
+            ...(parsed.emailSubject !== undefined ? { emailSubject: parsed.emailSubject } : {}),
+            ...(parsed.emailBody !== undefined ? { emailBody: parsed.emailBody } : {}),
+            ...(parsed.smsBody !== undefined ? { smsBody: parsed.smsBody } : {}),
+            updatedAt: new Date(),
+            updatedBy: userId,
+          })
+          .where(eq(adopterComplianceWarningTemplates.tenantId, tenantId));
+      } else {
+        await db.insert(adopterComplianceWarningTemplates).values({
+          tenantId,
+          emailSubject: parsed.emailSubject ?? null,
+          emailBody: parsed.emailBody ?? null,
+          smsBody: parsed.smsBody ?? null,
+          updatedBy: userId,
+        });
+      }
+
+      const tpl = await getEffectiveTemplate(tenantId);
+      res.json({ success: true, ...tpl });
     } catch (error) {
       next(error);
     }

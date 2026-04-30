@@ -555,6 +555,12 @@ export function initializeScheduler() {
       const avResult = await sendAnnualVaccineRemindersForAllTenants();
       if (avResult.sent > 0) console.log(`✓ Annual vaccine reminders: ${avResult.sent} SMS sent`);
       if (avResult.errors.length > 0) console.warn(`Annual vaccine reminder errors: ${avResult.errors.slice(0, 3).join('; ')}`);
+
+      // 5. Heartworm/parasite-prevention contract-enforcement warnings (≥14d overdue, no proof)
+      const { runComplianceWarningsForAllTenants } = await import("./adopter-compliance-warnings");
+      const hwResult = await runComplianceWarningsForAllTenants();
+      if (hwResult.totalSent > 0) console.log(`✓ Heartworm compliance warnings: ${hwResult.totalSent} sent across ${hwResult.tenantsProcessed} tenants`);
+      if (hwResult.errors.length > 0) console.warn(`Heartworm warning errors: ${hwResult.errors.slice(0, 3).join('; ')}`);
     } catch (error) {
       console.error(`Adopter compliance notifications failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }

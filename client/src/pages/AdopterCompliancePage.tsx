@@ -48,6 +48,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import DashboardLayout from "@/components/DashboardLayout";
+import HeartwormWatchTab from "@/components/compliance/HeartwormWatchTab";
 
 const OBLIGATION_LABELS: Record<string, string> = {
   spay_neuter: "Spay/Neuter",
@@ -720,6 +721,7 @@ export default function AdopterCompliancePage() {
           <TabsTrigger value="completed" data-testid="tab-completed">
             Completed ({data?.completed?.length || 0})
           </TabsTrigger>
+          <TabsTrigger value="heartworm" data-testid="tab-heartworm">Heartworm Watch</TabsTrigger>
           <TabsTrigger value="alumni" data-testid="tab-alumni">Alumni</TabsTrigger>
         </TabsList>
 
@@ -920,6 +922,10 @@ export default function AdopterCompliancePage() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="heartworm">
+          <HeartwormWatchTab />
         </TabsContent>
 
         <TabsContent value="alumni">

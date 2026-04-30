@@ -6427,3 +6427,52 @@ export const insertCampaignIntakeTokenSchema = createInsertSchema(campaignIntake
 });
 export type InsertCampaignIntakeToken = z.infer<typeof insertCampaignIntakeTokenSchema>;
 export type CampaignIntakeToken = typeof campaignIntakeTokens.$inferSelect;
+
+// ===== ADOPTER COMPLIANCE WARNING (Task #137) =====
+// Per-tenant customizable template for the strongly-worded heartworm/parasite-prevention
+// warning. When all fields are null the system falls back to the Haseya defaults defined
+// in server/lib/adopter-compliance-warnings.ts. Supports merge tokens:
+// {{rescueName}} {{adopterFirstName}} {{dogName}} {{deadlineDate}} {{portalLink}}
+export const adopterComplianceWarningTemplates = pgTable("adopter_compliance_warning_templates", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().unique().references(() => tenants.id, { onDelete: 'cascade' }),
+  emailSubject: text("email_subject"),
+  emailBody: text("email_body"),
+  smsBody: text("sms_body"),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  updatedBy: uuid("updated_by").references(() => users.id, { onDelete: 'set null' }),
+});
+
+export const insertAdopterComplianceWarningTemplateSchema = createInsertSchema(adopterComplianceWarningTemplates).omit({
+  id: true,
+  tenantId: true,
+  updatedAt: true,
+  updatedBy: true,
+});
+export type InsertAdopterComplianceWarningTemplate = z.infer<typeof insertAdopterComplianceWarningTemplateSchema>;
+export type AdopterComplianceWarningTemplate = typeof adopterComplianceWarningTemplates.$inferSelect;
+
+// Audit log of every contract-enforcement warning sent (auto or manual). Used for the
+// 30-day dedup window and for displaying "Last warned on … · N days left" badges in the UI.
+export const adopterComplianceWarnings = pgTable("adopter_compliance_warnings", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  userId: uuid("user_id").references(() => users.id, { onDelete: 'set null' }),
+  animalId: uuid("animal_id").notNull().references(() => animals.id, { onDelete: 'cascade' }),
+  itemId: text("item_id").notNull(),
+  itemKey: text("item_key").notNull(),
+  careName: text("care_name").notNull(),
+  dueDate: text("due_date").notNull(),
+  deadlineDate: text("deadline_date").notNull(),
+  channelsUsed: text("channels_used").array().notNull().default(sql`ARRAY[]::text[]`),
+  trigger: text("trigger").notNull().default("automatic").$type<"automatic" | "manual">(),
+  triggeredBy: uuid("triggered_by").references(() => users.id, { onDelete: 'set null' }),
+  recipientEmail: text("recipient_email"),
+  recipientPhone: text("recipient_phone"),
+  emailSubject: text("email_subject"),
+  emailBody: text("email_body"),
+  smsBody: text("sms_body"),
+  sentAt: timestamp("sent_at").notNull().defaultNow(),
+});
+
+export type AdopterComplianceWarning = typeof adopterComplianceWarnings.$inferSelect;
