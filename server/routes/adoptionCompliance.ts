@@ -21,6 +21,7 @@ import { z } from 'zod';
 import {
   findEligibleHeartwormWarnings,
   sendComplianceWarning,
+  previewWarning,
   getEffectiveTemplate,
   DEFAULT_WARNING_EMAIL_SUBJECT,
   DEFAULT_WARNING_EMAIL_BODY,
@@ -829,6 +830,21 @@ router.post(
       let channels: ('email' | 'sms')[] = parsed.channels ?? ['email'];
       if (!parsed.channels && candidate.adopterPhone) channels = ['email', 'sms'];
 
+      // Pre-validate explicitly requested channels: refuse with 400 (not 502)
+      // when the adopter is missing the contact info for a channel the staff
+      // member explicitly selected. This makes the failure mode obvious in the
+      // UI before any partial delivery happens.
+      if (channels.includes('email') && !candidate.adopterEmail) {
+        return res.status(400).json({
+          error: 'This adopter has no email on file. Remove the Email channel and try again.',
+        });
+      }
+      if (channels.includes('sms') && !candidate.adopterPhone) {
+        return res.status(400).json({
+          error: 'This adopter has no phone on file. Remove the SMS channel and try again.',
+        });
+      }
+
       const result = await sendComplianceWarning({
         tenantId,
         animalId: candidate.animalId,
@@ -860,6 +876,66 @@ router.post(
         deadlineDate: result.deadlineDate,
         email: result.email,
         sms: result.sms,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+const previewWarningSchema = z.object({
+  animalId: z.string().uuid(),
+  itemId: z.string().min(1),
+});
+
+// POST /api/adoption-compliance/heartworm-warnings/preview
+// Renders the email subject + body and SMS body for a candidate WITHOUT
+// sending anything. Used by the manual-send confirmation dialog so staff can
+// review the message and pick channels before triggering delivery.
+router.post(
+  '/heartworm-warnings/preview',
+  requireTenant,
+  requireAuth,
+  requireRole('admin', 'staff', 'owner', 'manager'),
+  async (req, res, next) => {
+    try {
+      const tenantId = req.tenant!.id;
+      const parsed = previewWarningSchema.parse(req.body);
+
+      const candidates = await findEligibleHeartwormWarnings(tenantId);
+      const candidate = candidates.find(
+        (c) => c.animalId === parsed.animalId && c.itemId === parsed.itemId,
+      );
+      if (!candidate) {
+        return res.status(404).json({
+          error: 'No eligible warning found for this item.',
+        });
+      }
+
+      const preview = await previewWarning({
+        tenantId,
+        animalId: candidate.animalId,
+        animalName: candidate.animalName,
+        adopterName: candidate.adopterName,
+      });
+
+      res.json({
+        ...preview,
+        candidate: {
+          animalName: candidate.animalName,
+          careName: candidate.careName,
+          dueDate: candidate.dueDate,
+          daysOverdue: candidate.daysOverdue,
+          adopterName: candidate.adopterName,
+          adopterEmail: candidate.adopterEmail,
+          adopterPhone: candidate.adopterPhone,
+          warningsInLast30Days: candidate.warningsInLast30Days,
+          lastWarningAt: candidate.lastWarningAt,
+        },
+        availableChannels: {
+          email: !!candidate.adopterEmail,
+          sms: !!candidate.adopterPhone,
+        },
       });
     } catch (error) {
       next(error);

@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -19,6 +20,7 @@ import {
 import {
   AlertCircle,
   AlertTriangle,
+  Eye,
   Heart,
   Loader2,
   Mail,
@@ -75,44 +77,10 @@ function formatDate(iso: string | null): string {
 }
 
 export default function HeartwormWatchTab() {
-  const { toast } = useToast();
-  const [sendingKey, setSendingKey] = useState<string | null>(null);
   const [templateOpen, setTemplateOpen] = useState(false);
+  const [confirmingCandidate, setConfirmingCandidate] = useState<WarningCandidate | null>(null);
 
   const { data, isLoading } = useQuery<WarningsResponse>({ queryKey: QUERY_KEY });
-
-  const sendMutation = useMutation({
-    mutationFn: async (input: {
-      animalId: string;
-      itemId: string;
-      channels?: ("email" | "sms")[];
-    }) => {
-      const res = await apiRequest(
-        "POST",
-        "/api/dashboard/adopter-compliance/heartworm-warnings/send",
-        input,
-      );
-      return res.json();
-    },
-    onSuccess: (result) => {
-      const channels: string[] = result.channelsSent || [];
-      const labelMap: Record<string, string> = { email: "Email", sms: "SMS" };
-      const label = channels.map((c) => labelMap[c] || c).join(" & ");
-      toast({
-        title: "Warning sent",
-        description: `Sent via ${label || "configured channels"}. Adopter has until ${formatDate(result.deadlineDate)} to comply.`,
-      });
-      queryClient.invalidateQueries({ queryKey: QUERY_KEY });
-    },
-    onError: (err: any) => {
-      toast({
-        title: "Failed to send warning",
-        description: err?.message || "An unexpected error occurred",
-        variant: "destructive",
-      });
-    },
-    onSettled: () => setSendingKey(null),
-  });
 
   const eligible = (data?.candidates || []).filter((c) => c.warningsInLast30Days === 0);
   const recentlyWarned = (data?.candidates || []).filter((c) => c.warningsInLast30Days > 0);
@@ -156,11 +124,7 @@ export default function HeartwormWatchTab() {
                     <CandidateRow
                       key={`${c.animalId}-${c.itemId}`}
                       candidate={c}
-                      sending={sendingKey === `${c.animalId}-${c.itemId}`}
-                      onSend={(channels) => {
-                        setSendingKey(`${c.animalId}-${c.itemId}`);
-                        sendMutation.mutate({ animalId: c.animalId, itemId: c.itemId, channels });
-                      }}
+                      onSend={() => setConfirmingCandidate(c)}
                     />
                   ))}
                 </div>
@@ -175,11 +139,7 @@ export default function HeartwormWatchTab() {
                     <CandidateRow
                       key={`${c.animalId}-${c.itemId}`}
                       candidate={c}
-                      sending={sendingKey === `${c.animalId}-${c.itemId}`}
-                      onSend={(channels) => {
-                        setSendingKey(`${c.animalId}-${c.itemId}`);
-                        sendMutation.mutate({ animalId: c.animalId, itemId: c.itemId, channels });
-                      }}
+                      onSend={() => setConfirmingCandidate(c)}
                       recentlyWarned
                     />
                   ))}
@@ -189,19 +149,22 @@ export default function HeartwormWatchTab() {
           )}
         </CardContent>
       </Card>
+
+      <ConfirmSendDialog
+        candidate={confirmingCandidate}
+        onClose={() => setConfirmingCandidate(null)}
+      />
     </div>
   );
 }
 
 function CandidateRow({
   candidate,
-  sending,
   onSend,
   recentlyWarned,
 }: {
   candidate: WarningCandidate;
-  sending: boolean;
-  onSend: (channels?: ("email" | "sms")[]) => void;
+  onSend: () => void;
   recentlyWarned?: boolean;
 }) {
   const lastWarnedDays = daysSince(candidate.lastWarningAt);
@@ -266,16 +229,11 @@ function CandidateRow({
           <Button
             size="sm"
             variant="default"
-            onClick={() => onSend()}
-            disabled={sending}
+            onClick={onSend}
             data-testid={`button-send-warning-${candidate.animalId}-${candidate.itemId}`}
           >
-            {sending ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <Send className="h-4 w-4 mr-2" />
-            )}
-            Send Warning Now
+            <Eye className="h-4 w-4 mr-2" />
+            Review &amp; Send
           </Button>
         )}
       </div>
@@ -445,6 +403,245 @@ function TemplateDialog({
           >
             {saveMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
             Save Template
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+interface PreviewResponse {
+  emailSubject: string;
+  emailBody: string;
+  smsBody: string;
+  deadlineDate: string;
+  candidate: {
+    animalName: string;
+    careName: string;
+    dueDate: string;
+    daysOverdue: number;
+    adopterName: string;
+    adopterEmail: string;
+    adopterPhone: string | null;
+    warningsInLast30Days: number;
+    lastWarningAt: string | null;
+  };
+  availableChannels: { email: boolean; sms: boolean };
+}
+
+function ConfirmSendDialog({
+  candidate,
+  onClose,
+}: {
+  candidate: WarningCandidate | null;
+  onClose: () => void;
+}) {
+  const { toast } = useToast();
+  const open = !!candidate;
+
+  const [sendEmail, setSendEmail] = useState(true);
+  const [sendSms, setSendSms] = useState(true);
+
+  // Reset channel checkboxes whenever a new candidate is opened
+  useEffect(() => {
+    if (candidate) {
+      setSendEmail(!!candidate.adopterEmail);
+      setSendSms(!!candidate.adopterPhone);
+    }
+  }, [candidate?.animalId, candidate?.itemId]);
+
+  const previewQuery = useQuery<PreviewResponse>({
+    queryKey: [
+      "/api/dashboard/adopter-compliance/heartworm-warnings/preview",
+      candidate?.animalId,
+      candidate?.itemId,
+    ],
+    queryFn: async () => {
+      const res = await apiRequest(
+        "POST",
+        "/api/dashboard/adopter-compliance/heartworm-warnings/preview",
+        { animalId: candidate!.animalId, itemId: candidate!.itemId },
+      );
+      return res.json();
+    },
+    enabled: !!candidate,
+  });
+
+  const sendMutation = useMutation({
+    mutationFn: async () => {
+      const channels: ("email" | "sms")[] = [];
+      if (sendEmail) channels.push("email");
+      if (sendSms) channels.push("sms");
+      const res = await apiRequest(
+        "POST",
+        "/api/dashboard/adopter-compliance/heartworm-warnings/send",
+        { animalId: candidate!.animalId, itemId: candidate!.itemId, channels },
+      );
+      return res.json();
+    },
+    onSuccess: (result) => {
+      const channels: string[] = result.channelsSent || [];
+      const labelMap: Record<string, string> = { email: "Email", sms: "SMS" };
+      const label = channels.map((c) => labelMap[c] || c).join(" & ");
+      toast({
+        title: "Warning sent",
+        description: `Sent via ${label || "configured channels"}. Adopter has until ${formatDate(result.deadlineDate)} to comply.`,
+      });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+      onClose();
+    },
+    onError: (err: any) => {
+      toast({
+        title: "Failed to send warning",
+        description: err?.message || "An unexpected error occurred",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const preview = previewQuery.data;
+  const noChannelSelected = !sendEmail && !sendSms;
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto" data-testid="dialog-confirm-warning">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-destructive" />
+            Review &amp; Send Compliance Warning
+          </DialogTitle>
+          <DialogDescription>
+            Review the message below, choose which channels to send through, then confirm. This message bypasses the
+            adopter's notification opt-outs because it is a transactional contract-enforcement notice.
+          </DialogDescription>
+        </DialogHeader>
+
+        {previewQuery.isLoading || !preview ? (
+          <div className="py-8 flex items-center justify-center">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="rounded-md border p-3 bg-muted/40">
+              <p className="text-sm">
+                <span className="font-medium">{preview.candidate.animalName}</span>
+                {" · "}
+                <span className="text-muted-foreground">{preview.candidate.careName}</span>
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Adopter: <span className="font-medium text-foreground">{preview.candidate.adopterName}</span>
+                {" · "}Due {formatDate(preview.candidate.dueDate)}
+                {" · "}{preview.candidate.daysOverdue} days overdue
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Compliance deadline (after sending):{" "}
+                <span className="font-medium text-foreground">{formatDate(preview.deadlineDate)}</span>
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Channels
+              </p>
+              <div className="flex items-center gap-4 flex-wrap">
+                <label
+                  className={`flex items-center gap-2 ${preview.availableChannels.email ? "" : "opacity-50"}`}
+                >
+                  <Checkbox
+                    checked={sendEmail}
+                    disabled={!preview.availableChannels.email}
+                    onCheckedChange={(v) => setSendEmail(v === true)}
+                    data-testid="checkbox-channel-email"
+                  />
+                  <span className="text-sm flex items-center gap-1">
+                    <Mail className="h-3.5 w-3.5" />
+                    Email{" "}
+                    <span className="text-muted-foreground text-xs">
+                      ({preview.candidate.adopterEmail || "no email on file"})
+                    </span>
+                  </span>
+                </label>
+                <label
+                  className={`flex items-center gap-2 ${preview.availableChannels.sms ? "" : "opacity-50"}`}
+                >
+                  <Checkbox
+                    checked={sendSms}
+                    disabled={!preview.availableChannels.sms}
+                    onCheckedChange={(v) => setSendSms(v === true)}
+                    data-testid="checkbox-channel-sms"
+                  />
+                  <span className="text-sm flex items-center gap-1">
+                    <MessageSquare className="h-3.5 w-3.5" />
+                    SMS{" "}
+                    <span className="text-muted-foreground text-xs">
+                      ({preview.candidate.adopterPhone || "no phone on file"})
+                    </span>
+                  </span>
+                </label>
+              </div>
+              {noChannelSelected && (
+                <p className="text-xs text-destructive">Select at least one channel.</p>
+              )}
+            </div>
+
+            {sendEmail && (
+              <div className="space-y-1.5">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Email preview
+                </p>
+                <div className="rounded-md border p-3 space-y-2">
+                  <p className="text-sm font-medium" data-testid="text-preview-email-subject">
+                    {preview.emailSubject}
+                  </p>
+                  <pre
+                    className="text-xs whitespace-pre-wrap font-sans text-foreground/90 max-h-64 overflow-y-auto"
+                    data-testid="text-preview-email-body"
+                  >
+                    {preview.emailBody}
+                  </pre>
+                </div>
+              </div>
+            )}
+
+            {sendSms && (
+              <div className="space-y-1.5">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  SMS preview
+                </p>
+                <div className="rounded-md border p-3">
+                  <pre
+                    className="text-xs whitespace-pre-wrap font-sans text-foreground/90"
+                    data-testid="text-preview-sms-body"
+                  >
+                    {preview.smsBody}
+                  </pre>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        <DialogFooter className="gap-2 flex-wrap">
+          <Button
+            variant="ghost"
+            onClick={onClose}
+            disabled={sendMutation.isPending}
+            data-testid="button-cancel-warning"
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={() => sendMutation.mutate()}
+            disabled={!preview || noChannelSelected || sendMutation.isPending}
+            data-testid="button-confirm-send-warning"
+          >
+            {sendMutation.isPending ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Send className="h-4 w-4 mr-2" />
+            )}
+            Send Warning
           </Button>
         </DialogFooter>
       </DialogContent>

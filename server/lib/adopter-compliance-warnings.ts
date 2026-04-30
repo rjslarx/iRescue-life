@@ -17,6 +17,7 @@ import {
   adopterComplianceConfirmations,
   adopterComplianceWarnings,
   adopterComplianceWarningTemplates,
+  adopterNotificationLogs,
   tenants,
   users,
 } from '@shared/schema';
@@ -213,11 +214,15 @@ export async function findEligibleHeartwormWarnings(
       inArray(adopterComplianceConfirmations.status, ['approved', 'pending_review']),
     ));
 
-  // Recent warnings — used for both dedup and the "last warned on" badge
+  // Recent warnings — used for both dedup and the "last warned on" badge.
+  // Dedup is keyed by (tenant, lower(adopter_email), item_id) so that a brand-
+  // new adopter for the same animal+item is NOT suppressed by a warning sent
+  // to a previous adopter (e.g. after a return + re-adoption).
   const recentWarnings = await db
     .select({
       animalId: adopterComplianceWarnings.animalId,
       itemId: adopterComplianceWarnings.itemId,
+      adopterEmail: adopterComplianceWarnings.adopterEmail,
       sentAt: adopterComplianceWarnings.sentAt,
       deadlineDate: adopterComplianceWarnings.deadlineDate,
     })
@@ -229,12 +234,15 @@ export async function findEligibleHeartwormWarnings(
     ))
     .orderBy(desc(adopterComplianceWarnings.sentAt));
 
-  const warningsByItem = new Map<string, { sentAt: Date; deadlineDate: string; count: number }>();
+  const dedupKey = (email: string | null | undefined, itemId: string) =>
+    `${(email || '').toLowerCase()}:${itemId}`;
+
+  const warningsByAdopterItem = new Map<string, { sentAt: Date; deadlineDate: string; count: number }>();
   for (const w of recentWarnings) {
-    const key = `${w.animalId}:${w.itemId}`;
-    const existing = warningsByItem.get(key);
+    const key = dedupKey(w.adopterEmail, w.itemId);
+    const existing = warningsByAdopterItem.get(key);
     if (!existing) {
-      warningsByItem.set(key, { sentAt: w.sentAt, deadlineDate: w.deadlineDate, count: 1 });
+      warningsByAdopterItem.set(key, { sentAt: w.sentAt, deadlineDate: w.deadlineDate, count: 1 });
     } else {
       existing.count += 1;
     }
@@ -255,7 +263,7 @@ export async function findEligibleHeartwormWarnings(
     );
     if (hasProof) continue;
 
-    const recent = warningsByItem.get(`${row.animalId}:${row.itemId}`);
+    const recent = warningsByAdopterItem.get(dedupKey(row.adopterEmail, row.itemId));
     const daysOverdue = Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
 
     candidates.push({
@@ -365,6 +373,34 @@ export async function sendComplianceWarning(input: SendWarningInput): Promise<Se
   const wantEmail = input.channels.includes('email') && !!input.adopterEmail;
   const wantSms = input.channels.includes('sms') && !!input.adopterPhone;
 
+  // Strict pre-validation: if the caller explicitly asked for a channel that
+  // the adopter has no contact info for, refuse before sending anything. This
+  // surfaces user errors clearly instead of silently dropping a channel.
+  if (input.channels.includes('email') && !input.adopterEmail) {
+    return {
+      success: false,
+      channelsSent: [],
+      deadlineDate: deadlineStr,
+      reason: 'Adopter has no email on file',
+    };
+  }
+  if (input.channels.includes('sms') && !input.adopterPhone) {
+    return {
+      success: false,
+      channelsSent: [],
+      deadlineDate: deadlineStr,
+      reason: 'Adopter has no phone on file',
+    };
+  }
+  if (!wantEmail && !wantSms) {
+    return {
+      success: false,
+      channelsSent: [],
+      deadlineDate: deadlineStr,
+      reason: 'No channels selected',
+    };
+  }
+
   const result: SendWarningResult = {
     success: false,
     channelsSent: [],
@@ -450,6 +486,7 @@ export async function sendComplianceWarning(input: SendWarningInput): Promise<Se
       channelsUsed: result.channelsSent,
       trigger: input.trigger,
       triggeredBy: input.triggeredBy,
+      adopterEmail: input.adopterEmail || null,
       recipientEmail: result.email?.ok ? input.adopterEmail : null,
       recipientPhone: result.sms?.ok ? input.adopterPhone : null,
       emailSubject: result.email?.ok ? emailSubject : null,
@@ -457,6 +494,52 @@ export async function sendComplianceWarning(input: SendWarningInput): Promise<Se
       smsBody: result.sms?.ok ? smsBody : null,
     }).returning({ id: adopterComplianceWarnings.id });
     result.warningId = inserted?.id;
+
+    // Also write into the unified adopter_notification_logs audit trail so the
+    // existing dashboards / reports surface this delivery alongside other
+    // compliance notifications. We only insert when we can resolve an adopter
+    // user (the column is NOT NULL); if the adopter does not have a portal
+    // account yet, the dedicated adopterComplianceWarnings row above is the
+    // sole audit record.
+    try {
+      const adopterUserRow = input.adopterEmail
+        ? (await db
+            .select({ id: users.id })
+            .from(users)
+            .where(and(
+              eq(users.tenantId, input.tenantId),
+              sql`LOWER(${users.email}) = LOWER(${input.adopterEmail})`,
+            ))
+            .limit(1))[0]
+        : undefined;
+
+      if (adopterUserRow?.id) {
+        const baseLog = {
+          tenantId: input.tenantId,
+          userId: adopterUserRow.id,
+          animalId: input.animalId,
+          notificationType: 'compliance_warning' as const,
+          itemId: input.itemId,
+        };
+        if (result.email?.ok) {
+          await db.insert(adopterNotificationLogs).values({
+            ...baseLog,
+            channel: 'email',
+            subject: emailSubject,
+            message: emailBodyText,
+          });
+        }
+        if (result.sms?.ok) {
+          await db.insert(adopterNotificationLogs).values({
+            ...baseLog,
+            channel: 'sms',
+            message: smsBody,
+          });
+        }
+      }
+    } catch (logErr) {
+      console.error('[ComplianceWarning] Failed to write adopter_notification_logs row:', logErr);
+    }
   } else {
     result.reason = [
       result.email?.error && `Email: ${result.email.error}`,
@@ -465,6 +548,74 @@ export async function sendComplianceWarning(input: SendWarningInput): Promise<Se
   }
 
   return result;
+}
+
+/**
+ * Renders the warning email subject + body and SMS body for a given
+ * candidate without sending anything. Used by the manual "Preview before send"
+ * confirmation dialog so staff can see exactly what the adopter will receive.
+ */
+export async function previewWarning(input: {
+  tenantId: string;
+  animalId: string;
+  animalName?: string;
+  adopterName: string;
+}): Promise<{
+  emailSubject: string;
+  emailBody: string;
+  smsBody: string;
+  deadlineDate: string;
+  deadlineDisplay: string;
+  isCustomTemplate: boolean;
+  portalLink: string;
+}> {
+  const [tenant] = await db
+    .select({
+      id: tenants.id,
+      name: tenants.name,
+      subdomain: tenants.subdomain,
+      customDomain: tenants.customDomain,
+    })
+    .from(tenants)
+    .where(eq(tenants.id, input.tenantId))
+    .limit(1);
+
+  if (!tenant) throw new Error('Tenant not found');
+
+  const deadline = new Date();
+  deadline.setHours(0, 0, 0, 0);
+  deadline.setDate(deadline.getDate() + WARNING_DEADLINE_DAYS);
+  const deadlineDate = deadline.toISOString().split('T')[0];
+  const deadlineDisplay = formatDeadlineDate(deadline);
+
+  let dogName = input.animalName;
+  if (!dogName) {
+    const [a] = await db
+      .select({ name: animals.name })
+      .from(animals)
+      .where(eq(animals.id, input.animalId))
+      .limit(1);
+    dogName = a?.name || 'your dog';
+  }
+
+  const tokens: WarningTokens = {
+    rescueName: tenant.name,
+    adopterFirstName: input.adopterName.split(' ')[0] || input.adopterName,
+    dogName,
+    deadlineDate: deadlineDisplay,
+    portalLink: buildAdopterPortalUrl(tenant, input.animalId),
+  };
+
+  const tpl = await getEffectiveTemplate(input.tenantId);
+  return {
+    emailSubject: renderWarningTemplate(tpl.emailSubject, tokens),
+    emailBody: renderWarningTemplate(tpl.emailBody, tokens),
+    smsBody: renderWarningTemplate(tpl.smsBody, tokens),
+    deadlineDate,
+    deadlineDisplay,
+    isCustomTemplate: tpl.isCustom,
+    portalLink: tokens.portalLink,
+  };
 }
 
 function buildEmailHtml(args: {
