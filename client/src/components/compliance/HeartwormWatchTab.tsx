@@ -68,18 +68,44 @@ interface WarningCandidate {
   engagement: WarningEngagement | null;
 }
 
-interface WarningMonthlyStats {
+type EngagementStatus =
+  | "no_response"
+  | "email_opened"
+  | "link_clicked"
+  | "proof_uploaded";
+
+interface RecentlyWarnedItem {
+  warningId: string;
+  animalId: string;
+  animalName: string;
+  itemId: string;
+  careName: string;
+  dueDate: string;
+  daysOverdue: number;
+  adopterName: string;
+  adopterEmail: string;
+  adopterPhone: string | null;
+  sentAt: string;
+  deadlineDate: string;
+  emailOpenedAt: string | null;
+  linkClickedAt: string | null;
+  proofUploadedAt: string | null;
+  engagementStatus: EngagementStatus;
+}
+
+interface MonthlyWarningStats {
   warningsSent: number;
   proofUploaded: number;
-  emailOpened: number;
-  linkClicked: number;
+  emailsOpened: number;
+  linksClicked: number;
   monthLabel: string;
 }
 
 interface WarningsResponse {
   candidates: WarningCandidate[];
+  recentlyWarned?: RecentlyWarnedItem[];
+  monthlyStats?: MonthlyWarningStats;
   deadlineDays: number;
-  monthlyStats?: WarningMonthlyStats;
 }
 
 interface TemplateResponse {
@@ -110,15 +136,18 @@ export default function HeartwormWatchTab() {
 
   const { data, isLoading } = useQuery<WarningsResponse>({ queryKey: QUERY_KEY });
 
+  // Eligible = currently overdue items with no warning in the last 30 days.
+  // We dedupe against the dedicated recently-warned list (which is sourced
+  // from the warnings audit, so it is authoritative for engagement status).
   const eligible = (data?.candidates || []).filter((c) => c.warningsInLast30Days === 0);
-  const recentlyWarned = (data?.candidates || []).filter((c) => c.warningsInLast30Days > 0);
-  const monthlyStats = data?.monthlyStats;
+  const recentlyWarned = data?.recentlyWarned || [];
+  const stats = data?.monthlyStats;
 
   return (
     <div className="space-y-4">
       <Card>
         <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
-          <div className="space-y-2">
+          <div className="min-w-0 flex-1 space-y-2">
             <CardTitle className="flex items-center gap-2">
               <Heart className="h-5 w-5 text-destructive" />
               Heartworm & Parasite-Prevention Watch
@@ -128,21 +157,37 @@ export default function HeartwormWatchTab() {
               Warnings are auto-sent daily at 14:00 UTC and bypass the adopter's notification opt-outs because they are
               transactional contract-enforcement notices.
             </CardDescription>
-            {monthlyStats && monthlyStats.warningsSent > 0 && (
-              <p
-                className="text-sm text-muted-foreground"
+            {stats && stats.warningsSent > 0 && (
+              <div
+                className="mt-3 flex items-center gap-2 flex-wrap text-xs"
                 data-testid="text-monthly-warning-stats"
               >
-                <span className="font-medium text-foreground">{monthlyStats.warningsSent}</span>{" "}
-                {monthlyStats.warningsSent === 1 ? "warning" : "warnings"} sent in {monthlyStats.monthLabel} ·{" "}
-                <span className="font-medium text-foreground">{monthlyStats.proofUploaded}</span> resulted in proof uploaded
-                {monthlyStats.warningsSent > 0 && (
-                  <span className="text-muted-foreground/80">
-                    {" "}
-                    ({Math.round((monthlyStats.proofUploaded / monthlyStats.warningsSent) * 100)}%)
-                  </span>
+                <Badge variant="secondary" className="gap-1">
+                  <Send className="h-3 w-3" />
+                  {stats.warningsSent} warning{stats.warningsSent === 1 ? "" : "s"} sent in {stats.monthLabel}
+                </Badge>
+                <Badge variant="secondary" className="gap-1">
+                  <CheckCircle2 className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+                  {stats.proofUploaded} proof upload{stats.proofUploaded === 1 ? "" : "s"}
+                  {stats.warningsSent > 0 && (
+                    <span className="text-muted-foreground">
+                      {" "}({Math.round((stats.proofUploaded / stats.warningsSent) * 100)}%)
+                    </span>
+                  )}
+                </Badge>
+                {stats.emailsOpened > 0 && (
+                  <Badge variant="secondary" className="gap-1">
+                    <MailOpen className="h-3 w-3" />
+                    {stats.emailsOpened} opened
+                  </Badge>
                 )}
-              </p>
+                {stats.linksClicked > 0 && (
+                  <Badge variant="secondary" className="gap-1">
+                    <MousePointerClick className="h-3 w-3" />
+                    {stats.linksClicked} clicked
+                  </Badge>
+                )}
+              </div>
             )}
           </div>
           <TemplateDialog open={templateOpen} onOpenChange={setTemplateOpen} />
@@ -180,13 +225,8 @@ export default function HeartwormWatchTab() {
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Recently warned ({recentlyWarned.length})
                   </p>
-                  {recentlyWarned.map((c) => (
-                    <CandidateRow
-                      key={`${c.animalId}-${c.itemId}`}
-                      candidate={c}
-                      onSend={() => setConfirmingCandidate(c)}
-                      recentlyWarned
-                    />
+                  {recentlyWarned.map((w) => (
+                    <RecentlyWarnedRow key={w.warningId} item={w} />
                   ))}
                 </div>
               )}
@@ -199,6 +239,126 @@ export default function HeartwormWatchTab() {
         candidate={confirmingCandidate}
         onClose={() => setConfirmingCandidate(null)}
       />
+    </div>
+  );
+}
+
+const ENGAGEMENT_BADGE: Record<
+  EngagementStatus,
+  { label: string; icon: typeof MailOpen; className: string }
+> = {
+  proof_uploaded: {
+    label: "Proof uploaded",
+    icon: CheckCircle2,
+    className:
+      "bg-emerald-100 text-emerald-900 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-200 dark:border-emerald-900/50",
+  },
+  link_clicked: {
+    label: "Link clicked",
+    icon: MousePointerClick,
+    className:
+      "bg-blue-100 text-blue-900 border-blue-200 dark:bg-blue-950/40 dark:text-blue-200 dark:border-blue-900/50",
+  },
+  email_opened: {
+    label: "Email opened",
+    icon: MailOpen,
+    className:
+      "bg-amber-100 text-amber-900 border-amber-200 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-900/50",
+  },
+  no_response: {
+    label: "No response",
+    icon: AlertCircle,
+    className:
+      "bg-muted text-muted-foreground border-border",
+  },
+};
+
+function RecentlyWarnedRow({ item }: { item: RecentlyWarnedItem }) {
+  const sentDaysAgo = daysSince(item.sentAt);
+  const daysUntilDeadline = item.deadlineDate
+    ? Math.max(
+        0,
+        Math.ceil(
+          (new Date(item.deadlineDate + "T00:00:00").getTime() - Date.now()) /
+            (1000 * 60 * 60 * 24),
+        ),
+      )
+    : null;
+
+  const status = ENGAGEMENT_BADGE[item.engagementStatus];
+  const StatusIcon = status.icon;
+
+  return (
+    <div
+      className="p-3 border rounded-md flex flex-col md:flex-row md:items-center justify-between gap-3"
+      data-testid={`heartworm-warned-row-${item.animalId}-${item.itemId}`}
+    >
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2 flex-wrap">
+          <p className="font-medium" data-testid={`text-warned-animal-${item.animalId}`}>
+            {item.animalName}
+          </p>
+          <Badge variant="outline" className="text-xs">{item.careName}</Badge>
+          <Badge variant="destructive" className="text-xs gap-1">
+            <AlertTriangle className="h-3 w-3" />
+            {item.daysOverdue}d overdue
+          </Badge>
+          <Badge
+            variant="outline"
+            className={`text-xs gap-1 ${status.className}`}
+            data-testid={`badge-engagement-${item.engagementStatus}-${item.warningId}`}
+          >
+            <StatusIcon className="h-3 w-3" />
+            {status.label}
+          </Badge>
+        </div>
+        <p className="text-sm text-muted-foreground mt-1">
+          Adopter: <span className="font-medium text-foreground">{item.adopterName}</span> · Due{" "}
+          {formatDate(item.dueDate)}
+        </p>
+        <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
+          <span className="flex items-center gap-1">
+            <Send className="h-3 w-3" />
+            Warned {sentDaysAgo}d ago
+            {daysUntilDeadline !== null && ` · ${daysUntilDeadline}d to deadline`}
+          </span>
+          {item.emailOpenedAt && (
+            <span
+              className="flex items-center gap-1"
+              data-testid={`text-opened-at-${item.warningId}`}
+            >
+              <MailOpen className="h-3 w-3" />
+              Opened {formatDate(item.emailOpenedAt)}
+            </span>
+          )}
+          {item.linkClickedAt && (
+            <span
+              className="flex items-center gap-1"
+              data-testid={`text-clicked-at-${item.warningId}`}
+            >
+              <MousePointerClick className="h-3 w-3" />
+              Clicked {formatDate(item.linkClickedAt)}
+            </span>
+          )}
+          {item.proofUploadedAt && (
+            <span
+              className="flex items-center gap-1 text-emerald-700 dark:text-emerald-400"
+              data-testid={`text-proof-uploaded-at-${item.warningId}`}
+            >
+              <CheckCircle2 className="h-3 w-3" />
+              Proof {formatDate(item.proofUploadedAt)}
+            </span>
+          )}
+        </div>
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        <p
+          className="text-xs text-muted-foreground italic max-w-[14rem] text-right"
+          data-testid={`text-warning-locked-${item.animalId}-${item.itemId}`}
+        >
+          Locked for 30 days after last warning
+        </p>
+      </div>
     </div>
   );
 }

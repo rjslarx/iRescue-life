@@ -6474,11 +6474,11 @@ export const adopterComplianceWarnings = pgTable("adopter_compliance_warnings", 
   emailBody: text("email_body"),
   smsBody: text("sms_body"),
   sentAt: timestamp("sent_at").notNull().defaultNow(),
-  // Engagement tracking (Task #140). `trackingToken` is an opaque random string
-  // embedded in the warning email's tracking pixel and "Upload Proof" link;
-  // public tracking endpoints flip the timestamp columns the first time the
-  // pixel is fetched / link is followed. NULL token means an SMS-only or
-  // pre-tracking warning that cannot be tracked.
+  // Engagement tracking (Task #140). `trackingToken` is an opaque random
+  // string available for tracking-pixel / click-through URLs that prefer not
+  // to expose the warning UUID; the `*_at` columns are stamped (idempotently,
+  // first-write only) by the public tracking endpoints when the adopter
+  // opens the warning email or clicks through to the upload portal.
   trackingToken: text("tracking_token").unique(),
   emailOpenedAt: timestamp("email_opened_at"),
   linkClickedAt: timestamp("link_clicked_at"),

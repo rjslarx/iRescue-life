@@ -20,6 +20,7 @@ import { eq, and, or, ilike, desc, sql, inArray, ne } from 'drizzle-orm';
 import { z } from 'zod';
 import {
   findEligibleHeartwormWarnings,
+  findRecentlyWarnedItems,
   getMonthlyWarningStats,
   sendComplianceWarning,
   previewWarning,
@@ -766,6 +767,8 @@ router.patch(
 
 // GET /api/adoption-compliance/heartworm-warnings
 // Returns the list of adopters with parasite-prevention items overdue ≥14d.
+// Also returns recently-warned items (with engagement tracking — Task #140)
+// and monthly counters for the tab header.
 router.get(
   '/heartworm-warnings',
   requireTenant,
@@ -774,14 +777,16 @@ router.get(
   async (req, res, next) => {
     try {
       const tenantId = req.tenant!.id;
-      const [candidates, monthlyStats] = await Promise.all([
+      const [candidates, recentlyWarned, monthlyStats] = await Promise.all([
         findEligibleHeartwormWarnings(tenantId),
+        findRecentlyWarnedItems(tenantId),
         getMonthlyWarningStats(tenantId),
       ]);
       res.json({
         candidates,
-        deadlineDays: WARNING_DEADLINE_DAYS,
+        recentlyWarned,
         monthlyStats,
+        deadlineDays: WARNING_DEADLINE_DAYS,
       });
     } catch (error) {
       next(error);

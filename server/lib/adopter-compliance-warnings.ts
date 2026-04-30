@@ -88,12 +88,29 @@ export function buildAdopterPortalUrl(
   return `${getAppBaseUrl()}${tenantPath}${path}`;
 }
 
-// Tracking endpoints are platform-wide (not tenant-scoped) and live under the
-// app's canonical base URL so they keep working regardless of which custom
-// domain or subdomain the warning email was sent from.
-export function buildTrackingPixelUrl(token: string): string {
+/**
+ * Tracking URLs for the warning email. Two URL families exist for backwards
+ * compatibility:
+ *  - UUID-based: /api/heartworm-tracking/{open,click}/:warningId — used by
+ *    new warning emails (this task).
+ *  - Token-based: /api/track/heartworm-warning/{open,click}/:token — used by
+ *    legacy warning emails that embedded the random `tracking_token` column.
+ * Both endpoint families stamp the same `emailOpenedAt` / `linkClickedAt`
+ * columns. The UUID-based builders are the canonical ones; the token-based
+ * builders are kept exported so any pre-existing call sites keep compiling.
+ */
+export function buildTrackingPixelUrl(warningId: string): string {
+  return `${getAppBaseUrl()}/api/heartworm-tracking/open/${warningId}.gif`;
+}
+
+export function buildTrackedClickUrl(warningId: string): string {
+  return `${getAppBaseUrl()}/api/heartworm-tracking/click/${warningId}`;
+}
+
+export function buildTrackingPixelUrlByToken(token: string): string {
   return `${getAppBaseUrl()}/api/track/heartworm-warning/open/${token}.gif`;
 }
+
 export function buildTrackingClickUrl(token: string): string {
   return `${getAppBaseUrl()}/api/track/heartworm-warning/click/${token}`;
 }
@@ -415,18 +432,204 @@ export async function findEligibleHeartwormWarnings(
   return candidates;
 }
 
+export interface RecentlyWarnedItem {
+  warningId: string;
+  animalId: string;
+  animalName: string;
+  itemId: string;
+  careName: string;
+  dueDate: string;
+  daysOverdue: number;
+  adopterName: string;
+  adopterEmail: string;
+  adopterPhone: string | null;
+  sentAt: string;            // ISO
+  deadlineDate: string;      // YYYY-MM-DD
+  emailOpenedAt: string | null;
+  linkClickedAt: string | null;
+  proofUploadedAt: string | null;
+  engagementStatus:
+    | 'no_response'
+    | 'email_opened'
+    | 'link_clicked'
+    | 'proof_uploaded';
+}
+
+export interface MonthlyWarningStats {
+  warningsSent: number;
+  proofUploaded: number;
+  emailsOpened: number;
+  linksClicked: number;
+  monthLabel: string;        // e.g. "April 2026"
+}
+
 /**
- * Returns aggregate engagement counters for the current calendar month —
- * surfaces "X warnings sent, Y resulted in proof uploaded" on the Heartworm
- * Watch tab header.
+ * Returns warnings sent in the last 30 days for a tenant, with engagement
+ * status (opened / clicked / proof uploaded) per row. Used by the Heartworm
+ * Watch tab so staff can prioritize follow-up calls based on whether the
+ * adopter actually engaged with the warning.
  */
-export async function getMonthlyWarningStats(tenantId: string): Promise<WarningMonthlyStats> {
+export async function findRecentlyWarnedItems(
+  tenantId: string,
+): Promise<RecentlyWarnedItem[]> {
+  const since = new Date();
+  since.setDate(since.getDate() - WARNING_DEDUP_DAYS);
+
+  const warnings = await db
+    .select({
+      warningId: adopterComplianceWarnings.id,
+      animalId: adopterComplianceWarnings.animalId,
+      itemId: adopterComplianceWarnings.itemId,
+      careName: adopterComplianceWarnings.careName,
+      dueDate: adopterComplianceWarnings.dueDate,
+      deadlineDate: adopterComplianceWarnings.deadlineDate,
+      sentAt: adopterComplianceWarnings.sentAt,
+      adopterEmail: adopterComplianceWarnings.adopterEmail,
+      emailOpenedAt: adopterComplianceWarnings.emailOpenedAt,
+      linkClickedAt: adopterComplianceWarnings.linkClickedAt,
+      animalName: animals.name,
+    })
+    .from(adopterComplianceWarnings)
+    .innerJoin(animals, eq(animals.id, adopterComplianceWarnings.animalId))
+    .where(and(
+      eq(adopterComplianceWarnings.tenantId, tenantId),
+      gte(adopterComplianceWarnings.sentAt, since),
+    ))
+    .orderBy(desc(adopterComplianceWarnings.sentAt));
+
+  if (warnings.length === 0) return [];
+
+  // Dedup so each (animalId, itemId) shows only the most-recent warning row —
+  // engagement is tracked per-row but the Watch tab only needs one summary
+  // row per outstanding obligation.
+  const seen = new Set<string>();
+  const latestPerKey = warnings.filter(w => {
+    const k = `${w.animalId}:${w.itemId}`;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+
+  // Pull the matching adopter info (name + phone) from the most recent
+  // adoption per animal so we don't have to denormalize it on warning rows.
+  const animalIds = Array.from(new Set(latestPerKey.map(w => w.animalId)));
+  const adoptionRows = animalIds.length === 0 ? [] : await db
+    .select({
+      animalId: adoptions.animalId,
+      adopterName: adoptions.adopterName,
+      adopterEmail: adoptions.adopterEmail,
+      adopterPhone: adoptions.adopterPhone,
+      adoptionDate: adoptions.adoptionDate,
+    })
+    .from(adoptions)
+    .where(and(
+      eq(adoptions.tenantId, tenantId),
+      inArray(adoptions.animalId, animalIds),
+    ));
+
+  const adopterByAnimal = new Map<string, { adopterName: string; adopterPhone: string | null }>();
+  for (const row of adoptionRows) {
+    const existing = adopterByAnimal.get(row.animalId);
+    if (!existing) {
+      adopterByAnimal.set(row.animalId, {
+        adopterName: row.adopterName,
+        adopterPhone: row.adopterPhone || null,
+      });
+      continue;
+    }
+    // Replace if this adoption is more recent (handles return + re-adoption)
+    const a = row.adoptionDate ? new Date(row.adoptionDate).getTime() : 0;
+    const b = adoptionRows
+      .filter(r => r.animalId === row.animalId)
+      .map(r => r.adoptionDate ? new Date(r.adoptionDate).getTime() : 0)
+      .reduce((m, t) => Math.max(m, t), 0);
+    if (a >= b) {
+      adopterByAnimal.set(row.animalId, {
+        adopterName: row.adopterName,
+        adopterPhone: row.adopterPhone || null,
+      });
+    }
+  }
+
+  // Pull all confirmations for these animals in the relevant care category so
+  // we can compute "Proof uploaded" status (any approved/pending confirmation
+  // dated on or after the warning was sent counts as a response).
+  const confirmations = animalIds.length === 0 ? [] : await db
+    .select({
+      animalId: adopterComplianceConfirmations.animalId,
+      preventativeCareRecordId: adopterComplianceConfirmations.preventativeCareRecordId,
+      careName: adopterComplianceConfirmations.careName,
+      dateAdministered: adopterComplianceConfirmations.dateAdministered,
+      createdAt: adopterComplianceConfirmations.createdAt,
+      status: adopterComplianceConfirmations.status,
+    })
+    .from(adopterComplianceConfirmations)
+    .where(and(
+      eq(adopterComplianceConfirmations.tenantId, tenantId),
+      eq(adopterComplianceConfirmations.careCategory, 'parasite_prevention'),
+      inArray(adopterComplianceConfirmations.animalId, animalIds),
+      inArray(adopterComplianceConfirmations.status, ['approved', 'pending_review']),
+    ));
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return latestPerKey.map(w => {
+    const due = new Date(w.dueDate);
+    const daysOverdue = Math.max(0, Math.floor((today.getTime() - due.getTime()) / (1000 * 60 * 60 * 24)));
+    const adopter = adopterByAnimal.get(w.animalId);
+
+    // Find a proof confirmation that arrived on or after this warning was sent
+    // for the same care item. Prefer matching by preventative_care_record_id
+    // when set (strong key), otherwise fall back to careName equality.
+    const proof = confirmations.find(c => {
+      if (c.animalId !== w.animalId) return false;
+      if (new Date(c.createdAt) < w.sentAt) return false;
+      if (c.preventativeCareRecordId === w.itemId) return true;
+      return c.preventativeCareRecordId === null && c.careName === w.careName;
+    });
+
+    let engagementStatus: RecentlyWarnedItem['engagementStatus'] = 'no_response';
+    if (proof) engagementStatus = 'proof_uploaded';
+    else if (w.linkClickedAt) engagementStatus = 'link_clicked';
+    else if (w.emailOpenedAt) engagementStatus = 'email_opened';
+
+    return {
+      warningId: w.warningId,
+      animalId: w.animalId,
+      animalName: w.animalName,
+      itemId: w.itemId,
+      careName: w.careName,
+      dueDate: w.dueDate,
+      daysOverdue,
+      adopterName: adopter?.adopterName || 'Unknown adopter',
+      adopterEmail: w.adopterEmail || '',
+      adopterPhone: adopter?.adopterPhone || null,
+      sentAt: w.sentAt.toISOString(),
+      deadlineDate: w.deadlineDate,
+      emailOpenedAt: w.emailOpenedAt ? w.emailOpenedAt.toISOString() : null,
+      linkClickedAt: w.linkClickedAt ? w.linkClickedAt.toISOString() : null,
+      proofUploadedAt: proof ? new Date(proof.createdAt).toISOString() : null,
+      engagementStatus,
+    };
+  });
+}
+
+/**
+ * Counts warnings sent and proof uploads received for the current calendar
+ * month. Drives the "X warnings sent this month, Y resulted in proof
+ * uploaded" header counter on the Heartworm Watch tab.
+ */
+export async function getMonthlyWarningStats(
+  tenantId: string,
+): Promise<MonthlyWarningStats> {
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const monthLabel = now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
-  const monthWarnings = await db
+  const monthlyWarnings = await db
     .select({
+      id: adopterComplianceWarnings.id,
       animalId: adopterComplianceWarnings.animalId,
       itemId: adopterComplianceWarnings.itemId,
       careName: adopterComplianceWarnings.careName,
@@ -440,16 +643,16 @@ export async function getMonthlyWarningStats(tenantId: string): Promise<WarningM
       gte(adopterComplianceWarnings.sentAt, monthStart),
     ));
 
-  if (monthWarnings.length === 0) {
-    return { warningsSent: 0, proofUploaded: 0, emailOpened: 0, linkClicked: 0, monthLabel };
+  if (monthlyWarnings.length === 0) {
+    return { warningsSent: 0, proofUploaded: 0, emailsOpened: 0, linksClicked: 0, monthLabel };
   }
 
-  const animalIds = Array.from(new Set(monthWarnings.map(w => w.animalId)));
-  const monthConfirmations = await db
+  const animalIds = Array.from(new Set(monthlyWarnings.map(w => w.animalId)));
+  const confirmations = await db
     .select({
       animalId: adopterComplianceConfirmations.animalId,
-      careName: adopterComplianceConfirmations.careName,
       preventativeCareRecordId: adopterComplianceConfirmations.preventativeCareRecordId,
+      careName: adopterComplianceConfirmations.careName,
       dateAdministered: adopterComplianceConfirmations.dateAdministered,
       createdAt: adopterComplianceConfirmations.createdAt,
     })
@@ -458,22 +661,22 @@ export async function getMonthlyWarningStats(tenantId: string): Promise<WarningM
       eq(adopterComplianceConfirmations.tenantId, tenantId),
       eq(adopterComplianceConfirmations.careCategory, 'parasite_prevention'),
       inArray(adopterComplianceConfirmations.animalId, animalIds),
-      // Match the candidate-eligibility logic: only count confirmations the
-      // staff has actually accepted (or is reviewing). Rejected/withdrawn
-      // confirmations should not satisfy a warning.
+      // Only count confirmations the staff has actually accepted (or is
+      // reviewing). Rejected/withdrawn confirmations do not satisfy a warning.
       inArray(adopterComplianceConfirmations.status, ['approved', 'pending_review']),
+      gte(adopterComplianceConfirmations.createdAt, monthStart),
     ));
 
   let proofUploaded = 0;
-  let emailOpened = 0;
-  let linkClicked = 0;
-  for (const w of monthWarnings) {
-    if (w.emailOpenedAt) emailOpened++;
-    if (w.linkClickedAt) linkClicked++;
+  let emailsOpened = 0;
+  let linksClicked = 0;
+  for (const w of monthlyWarnings) {
+    if (w.emailOpenedAt) emailsOpened++;
+    if (w.linkClickedAt) linksClicked++;
     // Prefer the strong key (preventativeCareRecordId) so a single confirmation
     // can't be attributed to multiple unrelated warnings on the same animal.
     // Fall back to careName matching only when the confirmation is unlinked.
-    const matched = monthConfirmations.find(c => {
+    const matched = confirmations.find(c => {
       if (c.animalId !== w.animalId) return false;
       if (new Date(c.createdAt) < w.sentAt) return false;
       if (c.preventativeCareRecordId === w.itemId) return true;
@@ -483,10 +686,10 @@ export async function getMonthlyWarningStats(tenantId: string): Promise<WarningM
   }
 
   return {
-    warningsSent: monthWarnings.length,
+    warningsSent: monthlyWarnings.length,
     proofUploaded,
-    emailOpened,
-    linkClicked,
+    emailsOpened,
+    linksClicked,
     monthLabel,
   };
 }
@@ -645,6 +848,30 @@ export async function sendComplianceWarning(input: SendWarningInput): Promise<Se
     deadlineDate: deadlineStr,
   };
 
+  // Insert the audit row BEFORE sending so the tracking pixel and tracked
+  // upload-link URLs in the email reference a row that already exists. This
+  // closes a race where an extremely fast image prefetch / click (some
+  // mailbox providers prefetch within milliseconds) would arrive at the
+  // tracking endpoints before the row was persisted, silently missing the
+  // first-write stamp. We mark channelsUsed=[] for now and update the row
+  // after the actual send completes; if every channel fails we delete the
+  // row so the 30-day dedup doesn't suppress a legitimate retry later.
+  const warningId = crypto.randomUUID();
+  await db.insert(adopterComplianceWarnings).values({
+    id: warningId,
+    tenantId: input.tenantId,
+    animalId: input.animalId,
+    itemId: input.itemId,
+    itemKey: input.itemKey || `parasite_prevention:${input.careName}`,
+    careName: input.careName,
+    dueDate: input.dueDate,
+    deadlineDate: deadlineStr,
+    channelsUsed: [],
+    trigger: input.trigger,
+    triggeredBy: input.triggeredBy,
+    adopterEmail: input.adopterEmail || null,
+  });
+
   if (wantEmail) {
     const emailService = await EmailService.forTenant(input.tenantId);
     if (!emailService) {
@@ -657,7 +884,8 @@ export async function sendComplianceWarning(input: SendWarningInput): Promise<Se
           bodyText: emailBodyText,
           portalLink: tokens.portalLink,
           deadlineDisplay,
-          trackingToken,
+          trackedClickUrl: buildTrackedClickUrl(warningId),
+          trackingPixelUrl: buildTrackingPixelUrl(warningId),
         });
         const sendRes = await emailService.send({
           to: input.adopterEmail,
@@ -738,6 +966,7 @@ export async function sendComplianceWarning(input: SendWarningInput): Promise<Se
       .where(eq(adopterComplianceWarnings.id, pendingWarningId));
   } else if (result.success && !pendingWarningId) {
     const [inserted] = await db.insert(adopterComplianceWarnings).values({
+      id: warningId,
       tenantId: input.tenantId,
       animalId: input.animalId,
       itemId: input.itemId,
@@ -807,6 +1036,17 @@ export async function sendComplianceWarning(input: SendWarningInput): Promise<Se
       console.error('[ComplianceWarning] Failed to write adopter_notification_logs row:', logErr);
     }
   } else {
+    // Every channel failed — remove the placeholder row so a retry isn't
+    // suppressed by the 30-day dedup logic. Tracking pixel hits arriving
+    // after this delete are silently no-ops, which is the correct behavior
+    // (the email never actually went out).
+    try {
+      await db
+        .delete(adopterComplianceWarnings)
+        .where(eq(adopterComplianceWarnings.id, warningId));
+    } catch (delErr) {
+      console.error('[ComplianceWarning] Failed to clean up placeholder warning row:', delErr);
+    }
     result.reason = [
       result.email?.error && `Email: ${result.email.error}`,
       result.sms?.error && `SMS: ${result.sms.error}`,
@@ -890,35 +1130,32 @@ function buildEmailHtml(args: {
   bodyText: string;
   portalLink: string;
   deadlineDisplay: string;
-  trackingToken?: string;
+  trackedClickUrl?: string;   // Wraps the upload-link CTA when provided.
+  trackingPixelUrl?: string;  // 1x1 GIF appended to body when provided.
 }): string {
-  const escaped = args.bodyText
+  // Replace the literal portal link inside the body text (it was rendered from
+  // the {{portalLink}} merge token) with the tracked redirect URL so any
+  // adopter who clicks through gets attributed to the warning. Falls back to
+  // the bare portal link if tracking isn't configured.
+  const linkInBody = args.trackedClickUrl || args.portalLink;
+  const ctaHref = args.trackedClickUrl || args.portalLink;
+
+  const bodyForEmail = args.bodyText.split(args.portalLink).join(linkInBody);
+
+  const escaped = bodyForEmail
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
 
-  // Wrap the portal link in the tracking redirect so we can record clicks.
-  // Inline plain-text occurrences too (the rendered template body usually
-  // contains the raw URL since the merge token expands to it).
-  const clickUrl = args.trackingToken
-    ? buildTrackingClickUrl(args.trackingToken)
-    : args.portalLink;
-  const escapedPortal = args.portalLink
-    .replace(/&/g, '&amp;');
-  const bodyWithWrappedLinks = args.trackingToken
-    ? escaped.split(escapedPortal).join(clickUrl)
-    : escaped;
-
-  const paragraphs = bodyWithWrappedLinks.split(/\n\s*\n/).map(p =>
+  const paragraphs = escaped.split(/\n\s*\n/).map(p =>
     `<p style="margin:0 0 14px 0;font-size:15px;line-height:1.55;color:#374151;">${p.replace(/\n/g, '<br>')}</p>`,
   ).join('');
 
-  // 1x1 transparent tracking pixel + an explicit no-cache hint via a unique
-  // querystring fragment is unnecessary — the URL already contains a single-use
-  // token. Email clients still cache it but we capture the FIRST fetch which
-  // is what we care about.
-  const pixel = args.trackingToken
-    ? `<img src="${buildTrackingPixelUrl(args.trackingToken)}" width="1" height="1" alt="" style="display:block;border:0;width:1px;height:1px;opacity:0;" />`
+  // Open-tracking pixel: 1x1 transparent GIF served by the public tracking
+  // endpoint. Width/height/alt attributes mimic standard mailing-platform
+  // pixels so most email clients won't block it as suspicious.
+  const trackingPixel = args.trackingPixelUrl
+    ? `<img src="${args.trackingPixelUrl}" width="1" height="1" alt="" style="display:block;border:0;width:1px;height:1px;opacity:0;" />`
     : '';
 
   return `
@@ -929,14 +1166,14 @@ function buildEmailHtml(args: {
   </div>
   ${paragraphs}
   <div style="text-align:center;margin:28px 0;">
-    <a href="${clickUrl}" style="display:inline-block;background:#dc2626;color:#ffffff;text-decoration:none;padding:14px 36px;border-radius:8px;font-size:15px;font-weight:600;">
+    <a href="${ctaHref}" style="display:inline-block;background:#dc2626;color:#ffffff;text-decoration:none;padding:14px 36px;border-radius:8px;font-size:15px;font-weight:600;">
       Upload Proof in Adopter Portal
     </a>
   </div>
   <p style="font-size:12px;color:#9ca3af;text-align:center;margin-top:32px;">
     This is a transactional contract-enforcement notice from ${args.tenantName} and is not affected by your marketing notification preferences.
   </p>
-  ${pixel}
+  ${trackingPixel}
 </div>`.trim();
 }
 

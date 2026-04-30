@@ -41931,11 +41931,18 @@ The user asking is a tenant administrator or staff member.`;
   const adoptionComplianceRoutes = await import('./routes/adoptionCompliance');
   app.use('/api/dashboard/adopter-compliance', adoptionComplianceRoutes.default);
 
-  // Public tracking endpoints for heartworm-warning emails (Task #140).
-  // These are intentionally unauthenticated — the URL token is the access
-  // proof — and must be mounted before any tenant/auth middleware.
+  // Public engagement-tracking endpoints for heartworm warning emails
+  // (Task #140). Both mounts are intentionally unauthenticated — adopter
+  // email clients hit these to load the open-tracking pixel and follow the
+  // upload-proof link, with no session available. Two routers are mounted
+  // for backwards compatibility: legacy emails reference the token-based
+  // /api/track/heartworm-warning paths, newer emails reference the
+  // UUID-based /api/heartworm-tracking paths. Both stamp the same
+  // emailOpenedAt / linkClickedAt columns on the matching warning row.
   const heartwormWarningTrackingRoutes = await import('./routes/heartwormWarningTracking');
   app.use('/api/track/heartworm-warning', heartwormWarningTrackingRoutes.default);
+  const heartwormTrackingRoutes = await import('./routes/heartwormTracking');
+  app.use('/api/heartworm-tracking', heartwormTrackingRoutes.default);
 
   // Register bulk litter intake routes
   const bulkIntakeRoutes = await import('./routes/bulkIntake');
