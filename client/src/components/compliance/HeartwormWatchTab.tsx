@@ -20,11 +20,14 @@ import {
 import {
   AlertCircle,
   AlertTriangle,
+  CheckCircle2,
   Eye,
   Heart,
   Loader2,
   Mail,
+  MailOpen,
   MessageSquare,
+  MousePointerClick,
   RotateCcw,
   Send,
   Settings as SettingsIcon,
@@ -32,6 +35,21 @@ import {
 } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+
+type WarningEngagementStatus =
+  | "proof_uploaded"
+  | "link_clicked"
+  | "email_opened"
+  | "no_response"
+  | "sms_only"
+  | "never_warned";
+
+interface WarningEngagement {
+  emailOpenedAt: string | null;
+  linkClickedAt: string | null;
+  proofUploadedAt: string | null;
+  status: WarningEngagementStatus;
+}
 
 interface WarningCandidate {
   animalId: string;
@@ -47,11 +65,21 @@ interface WarningCandidate {
   lastWarningAt: string | null;
   lastWarningDeadline: string | null;
   warningsInLast30Days: number;
+  engagement: WarningEngagement | null;
+}
+
+interface WarningMonthlyStats {
+  warningsSent: number;
+  proofUploaded: number;
+  emailOpened: number;
+  linkClicked: number;
+  monthLabel: string;
 }
 
 interface WarningsResponse {
   candidates: WarningCandidate[];
   deadlineDays: number;
+  monthlyStats?: WarningMonthlyStats;
 }
 
 interface TemplateResponse {
@@ -84,12 +112,13 @@ export default function HeartwormWatchTab() {
 
   const eligible = (data?.candidates || []).filter((c) => c.warningsInLast30Days === 0);
   const recentlyWarned = (data?.candidates || []).filter((c) => c.warningsInLast30Days > 0);
+  const monthlyStats = data?.monthlyStats;
 
   return (
     <div className="space-y-4">
       <Card>
         <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
-          <div>
+          <div className="space-y-2">
             <CardTitle className="flex items-center gap-2">
               <Heart className="h-5 w-5 text-destructive" />
               Heartworm & Parasite-Prevention Watch
@@ -99,6 +128,22 @@ export default function HeartwormWatchTab() {
               Warnings are auto-sent daily at 14:00 UTC and bypass the adopter's notification opt-outs because they are
               transactional contract-enforcement notices.
             </CardDescription>
+            {monthlyStats && monthlyStats.warningsSent > 0 && (
+              <p
+                className="text-sm text-muted-foreground"
+                data-testid="text-monthly-warning-stats"
+              >
+                <span className="font-medium text-foreground">{monthlyStats.warningsSent}</span>{" "}
+                {monthlyStats.warningsSent === 1 ? "warning" : "warnings"} sent in {monthlyStats.monthLabel} ·{" "}
+                <span className="font-medium text-foreground">{monthlyStats.proofUploaded}</span> resulted in proof uploaded
+                {monthlyStats.warningsSent > 0 && (
+                  <span className="text-muted-foreground/80">
+                    {" "}
+                    ({Math.round((monthlyStats.proofUploaded / monthlyStats.warningsSent) * 100)}%)
+                  </span>
+                )}
+              </p>
+            )}
           </div>
           <TemplateDialog open={templateOpen} onOpenChange={setTemplateOpen} />
         </CardHeader>
@@ -199,6 +244,12 @@ function CandidateRow({
               {daysUntilDeadline !== null && ` · ${daysUntilDeadline}d to deadline`}
             </Badge>
           )}
+          {recentlyWarned && candidate.engagement && (
+            <EngagementBadge
+              engagement={candidate.engagement}
+              testIdSuffix={`${candidate.animalId}-${candidate.itemId}`}
+            />
+          )}
         </div>
         <p className="text-sm text-muted-foreground mt-1">
           Adopter: <span className="font-medium text-foreground">{candidate.adopterName}</span> · Due{" "}
@@ -223,7 +274,9 @@ function CandidateRow({
             className="text-xs text-muted-foreground italic max-w-[14rem] text-right"
             data-testid={`text-warning-locked-${candidate.animalId}-${candidate.itemId}`}
           >
-            Locked for 30 days after last warning
+            {candidate.engagement?.status === "proof_uploaded"
+              ? "Resolved — proof uploaded"
+              : "Locked for 30 days after last warning"}
           </p>
         ) : (
           <Button
@@ -238,6 +291,70 @@ function CandidateRow({
         )}
       </div>
     </div>
+  );
+}
+
+function EngagementBadge({
+  engagement,
+  testIdSuffix,
+}: {
+  engagement: WarningEngagement;
+  testIdSuffix: string;
+}) {
+  // Render a single status badge representing the highest engagement signal we
+  // have on the most recent warning. The order mirrors the backend logic in
+  // `buildEngagement` so what staff see matches what we record.
+  let label: string;
+  let icon: React.ReactNode;
+  let className: string;
+  let tooltip: string | undefined;
+  switch (engagement.status) {
+    case "proof_uploaded":
+      label = "Proof uploaded";
+      icon = <CheckCircle2 className="h-3 w-3" />;
+      className = "border-green-300 bg-green-50 text-green-700 dark:bg-green-950/40 dark:text-green-300 dark:border-green-900/50";
+      tooltip = engagement.proofUploadedAt
+        ? `Uploaded ${new Date(engagement.proofUploadedAt).toLocaleDateString()}`
+        : undefined;
+      break;
+    case "link_clicked":
+      label = "Link clicked";
+      icon = <MousePointerClick className="h-3 w-3" />;
+      className = "border-blue-300 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900/50";
+      tooltip = engagement.linkClickedAt
+        ? `Clicked ${new Date(engagement.linkClickedAt).toLocaleString()}`
+        : undefined;
+      break;
+    case "email_opened":
+      label = "Email opened";
+      icon = <MailOpen className="h-3 w-3" />;
+      className = "border-amber-300 bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-900/50";
+      tooltip = engagement.emailOpenedAt
+        ? `Opened ${new Date(engagement.emailOpenedAt).toLocaleString()}`
+        : undefined;
+      break;
+    case "sms_only":
+      label = "SMS-only (not tracked)";
+      icon = <MessageSquare className="h-3 w-3" />;
+      className = "border-muted bg-muted/40 text-muted-foreground";
+      break;
+    case "no_response":
+    default:
+      label = "No response";
+      icon = <AlertCircle className="h-3 w-3" />;
+      className = "border-muted bg-muted/40 text-muted-foreground";
+      break;
+  }
+  return (
+    <Badge
+      variant="outline"
+      className={`text-xs gap-1 ${className}`}
+      title={tooltip}
+      data-testid={`badge-engagement-${engagement.status}-${testIdSuffix}`}
+    >
+      {icon}
+      {label}
+    </Badge>
   );
 }
 

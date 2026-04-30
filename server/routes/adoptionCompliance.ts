@@ -20,6 +20,7 @@ import { eq, and, or, ilike, desc, sql, inArray, ne } from 'drizzle-orm';
 import { z } from 'zod';
 import {
   findEligibleHeartwormWarnings,
+  getMonthlyWarningStats,
   sendComplianceWarning,
   previewWarning,
   getEffectiveTemplate,
@@ -773,10 +774,14 @@ router.get(
   async (req, res, next) => {
     try {
       const tenantId = req.tenant!.id;
-      const candidates = await findEligibleHeartwormWarnings(tenantId);
+      const [candidates, monthlyStats] = await Promise.all([
+        findEligibleHeartwormWarnings(tenantId),
+        getMonthlyWarningStats(tenantId),
+      ]);
       res.json({
         candidates,
         deadlineDays: WARNING_DEADLINE_DAYS,
+        monthlyStats,
       });
     } catch (error) {
       next(error);

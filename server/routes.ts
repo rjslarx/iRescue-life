@@ -41931,6 +41931,12 @@ The user asking is a tenant administrator or staff member.`;
   const adoptionComplianceRoutes = await import('./routes/adoptionCompliance');
   app.use('/api/dashboard/adopter-compliance', adoptionComplianceRoutes.default);
 
+  // Public tracking endpoints for heartworm-warning emails (Task #140).
+  // These are intentionally unauthenticated — the URL token is the access
+  // proof — and must be mounted before any tenant/auth middleware.
+  const heartwormWarningTrackingRoutes = await import('./routes/heartwormWarningTracking');
+  app.use('/api/track/heartworm-warning', heartwormWarningTrackingRoutes.default);
+
   // Register bulk litter intake routes
   const bulkIntakeRoutes = await import('./routes/bulkIntake');
   app.use('/api/animals/bulk-intake', bulkIntakeRoutes.default);

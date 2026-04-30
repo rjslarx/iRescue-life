@@ -9,6 +9,7 @@
  * preferences because it is a transactional contract-enforcement notice — not
  * a marketing message.
  */
+import crypto from 'crypto';
 import { db } from '../db';
 import {
   animals,
@@ -87,6 +88,16 @@ export function buildAdopterPortalUrl(
   return `${getAppBaseUrl()}${tenantPath}${path}`;
 }
 
+// Tracking endpoints are platform-wide (not tenant-scoped) and live under the
+// app's canonical base URL so they keep working regardless of which custom
+// domain or subdomain the warning email was sent from.
+export function buildTrackingPixelUrl(token: string): string {
+  return `${getAppBaseUrl()}/api/track/heartworm-warning/open/${token}.gif`;
+}
+export function buildTrackingClickUrl(token: string): string {
+  return `${getAppBaseUrl()}/api/track/heartworm-warning/click/${token}`;
+}
+
 export function formatDeadlineDate(deadline: Date): string {
   return deadline.toLocaleDateString('en-US', {
     month: 'long', day: 'numeric', year: 'numeric',
@@ -112,6 +123,21 @@ export async function getEffectiveTemplate(tenantId: string): Promise<{
   };
 }
 
+export type WarningEngagementStatus =
+  | 'proof_uploaded'
+  | 'link_clicked'
+  | 'email_opened'
+  | 'no_response'
+  | 'sms_only'  // last warning had no email channel — nothing to track
+  | 'never_warned';
+
+export interface WarningEngagement {
+  emailOpenedAt: Date | null;
+  linkClickedAt: Date | null;
+  proofUploadedAt: Date | null;
+  status: WarningEngagementStatus;
+}
+
 export interface EligibleWarningCandidate {
   animalId: string;
   animalName: string;
@@ -126,6 +152,17 @@ export interface EligibleWarningCandidate {
   lastWarningAt: Date | null;
   lastWarningDeadline: string | null;
   warningsInLast30Days: number;
+  // Engagement signals for the most recent warning to this adopter+item.
+  // `null` when there is no recent warning at all.
+  engagement: WarningEngagement | null;
+}
+
+export interface WarningMonthlyStats {
+  warningsSent: number;
+  proofUploaded: number;
+  emailOpened: number;
+  linkClicked: number;
+  monthLabel: string;  // e.g. "April 2026"
 }
 
 /**
@@ -204,6 +241,11 @@ export async function findEligibleHeartwormWarnings(
       careName: adopterComplianceConfirmations.careName,
       preventativeCareRecordId: adopterComplianceConfirmations.preventativeCareRecordId,
       dateAdministered: adopterComplianceConfirmations.dateAdministered,
+      // createdAt is the actual upload time (i.e. when the adopter submitted
+      // proof in the portal); dateAdministered is the *treatment* date the
+      // adopter typed into the form, which can be earlier than the warning
+      // sent_at and so is not a valid signal of post-warning engagement.
+      createdAt: adopterComplianceConfirmations.createdAt,
       status: adopterComplianceConfirmations.status,
     })
     .from(adopterComplianceConfirmations)
@@ -218,6 +260,8 @@ export async function findEligibleHeartwormWarnings(
   // Dedup is keyed by (tenant, lower(adopter_email), item_id) so that a brand-
   // new adopter for the same animal+item is NOT suppressed by a warning sent
   // to a previous adopter (e.g. after a return + re-adoption).
+  // We also pull the engagement timestamps so the dashboard can show "Email
+  // opened" / "Link clicked" badges per row.
   const recentWarnings = await db
     .select({
       animalId: adopterComplianceWarnings.animalId,
@@ -225,6 +269,10 @@ export async function findEligibleHeartwormWarnings(
       adopterEmail: adopterComplianceWarnings.adopterEmail,
       sentAt: adopterComplianceWarnings.sentAt,
       deadlineDate: adopterComplianceWarnings.deadlineDate,
+      channelsUsed: adopterComplianceWarnings.channelsUsed,
+      trackingToken: adopterComplianceWarnings.trackingToken,
+      emailOpenedAt: adopterComplianceWarnings.emailOpenedAt,
+      linkClickedAt: adopterComplianceWarnings.linkClickedAt,
     })
     .from(adopterComplianceWarnings)
     .where(and(
@@ -237,15 +285,90 @@ export async function findEligibleHeartwormWarnings(
   const dedupKey = (email: string | null | undefined, itemId: string) =>
     `${(email || '').toLowerCase()}:${itemId}`;
 
-  const warningsByAdopterItem = new Map<string, { sentAt: Date; deadlineDate: string; count: number }>();
+  // Track the *most recent* warning per (adopter, item) for the dashboard
+  // (engagement signals always reflect the latest send), plus a count for the
+  // 30-day dedup. The recentWarnings query is already DESC by sent_at so the
+  // first hit per key is the latest.
+  interface RecentWarningSummary {
+    sentAt: Date;
+    deadlineDate: string;
+    count: number;
+    channelsUsed: string[];
+    emailOpenedAt: Date | null;
+    linkClickedAt: Date | null;
+    animalId: string;
+  }
+  const warningsByAdopterItem = new Map<string, RecentWarningSummary>();
   for (const w of recentWarnings) {
     const key = dedupKey(w.adopterEmail, w.itemId);
     const existing = warningsByAdopterItem.get(key);
     if (!existing) {
-      warningsByAdopterItem.set(key, { sentAt: w.sentAt, deadlineDate: w.deadlineDate, count: 1 });
+      warningsByAdopterItem.set(key, {
+        sentAt: w.sentAt,
+        deadlineDate: w.deadlineDate,
+        count: 1,
+        channelsUsed: w.channelsUsed || [],
+        emailOpenedAt: w.emailOpenedAt,
+        linkClickedAt: w.linkClickedAt,
+        animalId: w.animalId,
+      });
     } else {
       existing.count += 1;
     }
+  }
+
+  // Build a per-(animal,item) lookup of the earliest confirmation row, so we
+  // can decide both whether proof exists AND when it was uploaded (for the
+  // "Proof uploaded" engagement status). We fall back to careName + admin
+  // date matching when preventativeCareRecordId is null on the confirmation.
+  // Prefer matching by `preventativeCareRecordId` (the strong key); fall back
+  // to careName-with-coverage-date only when the confirmation is unlinked.
+  // This keeps a single confirmation from being attributed to multiple
+  // unrelated warnings.
+  function findCoveringProof(animalId: string, itemId: string, careName: string, dueDate: Date) {
+    const byId = confirmations.find(c =>
+      c.animalId === animalId && c.preventativeCareRecordId === itemId,
+    );
+    if (byId) return byId;
+    return confirmations.find(c =>
+      c.animalId === animalId
+        && c.preventativeCareRecordId === null
+        && c.careName === careName
+        && new Date(c.dateAdministered) >= dueDate,
+    );
+  }
+
+  function buildEngagement(
+    recent: RecentWarningSummary | undefined,
+    proofUploadedAt: Date | null,
+  ): WarningEngagement | null {
+    if (!recent) return null;
+    // Only count proof uploaded AFTER the warning as a response to the
+    // warning. A pre-existing confirmation means the adopter is already
+    // compliant and the warning shouldn't have been sent — it doesn't count
+    // as engagement.
+    const isPostWarningProof = !!(proofUploadedAt && proofUploadedAt >= recent.sentAt);
+    // Order matters: highest signal wins. We treat proof uploaded as the
+    // top-of-funnel resolution because that's the actual outcome the contract
+    // demanded; everything else is just a signal toward it.
+    let status: WarningEngagementStatus;
+    if (isPostWarningProof) {
+      status = 'proof_uploaded';
+    } else if (recent.linkClickedAt) {
+      status = 'link_clicked';
+    } else if (recent.emailOpenedAt) {
+      status = 'email_opened';
+    } else if (!recent.channelsUsed.includes('email')) {
+      status = 'sms_only';
+    } else {
+      status = 'no_response';
+    }
+    return {
+      emailOpenedAt: recent.emailOpenedAt,
+      linkClickedAt: recent.linkClickedAt,
+      proofUploadedAt: isPostWarningProof ? proofUploadedAt : null,
+      status,
+    };
   }
 
   const candidates: EligibleWarningCandidate[] = [];
@@ -254,16 +377,21 @@ export async function findEligibleHeartwormWarnings(
     const dueDate = row.nextDueDate instanceof Date ? row.nextDueDate : new Date(row.nextDueDate);
     const dueDateStr = dueDate.toISOString().split('T')[0];
 
-    // Has the adopter uploaded covering proof?
-    const hasProof = confirmations.some(c =>
-      c.animalId === row.animalId && (
-        c.preventativeCareRecordId === row.itemId ||
-        (c.careName === row.careName && new Date(c.dateAdministered) >= dueDate)
-      ),
-    );
-    if (hasProof) continue;
-
     const recent = warningsByAdopterItem.get(dedupKey(row.adopterEmail, row.itemId));
+    const proofConfirmation = findCoveringProof(row.animalId, row.itemId, row.careName, dueDate);
+    // Use createdAt (true upload timestamp), not dateAdministered (the
+    // adopter-typed treatment date), so the engagement signal reflects
+    // genuine post-warning action.
+    const proofUploadedAt = proofConfirmation
+      ? new Date(proofConfirmation.createdAt)
+      : null;
+
+    // If the adopter has already uploaded covering proof and we never warned
+    // them, drop the row — it isn't a compliance concern. If we DID warn them
+    // recently, keep the row visible so the dashboard can show that the
+    // warning produced a successful outcome.
+    if (proofConfirmation && !recent) continue;
+
     const daysOverdue = Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
 
     candidates.push({
@@ -280,10 +408,87 @@ export async function findEligibleHeartwormWarnings(
       lastWarningAt: recent?.sentAt || null,
       lastWarningDeadline: recent?.deadlineDate || null,
       warningsInLast30Days: recent?.count || 0,
+      engagement: buildEngagement(recent, proofUploadedAt),
     });
   }
 
   return candidates;
+}
+
+/**
+ * Returns aggregate engagement counters for the current calendar month —
+ * surfaces "X warnings sent, Y resulted in proof uploaded" on the Heartworm
+ * Watch tab header.
+ */
+export async function getMonthlyWarningStats(tenantId: string): Promise<WarningMonthlyStats> {
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const monthLabel = now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+  const monthWarnings = await db
+    .select({
+      animalId: adopterComplianceWarnings.animalId,
+      itemId: adopterComplianceWarnings.itemId,
+      careName: adopterComplianceWarnings.careName,
+      sentAt: adopterComplianceWarnings.sentAt,
+      emailOpenedAt: adopterComplianceWarnings.emailOpenedAt,
+      linkClickedAt: adopterComplianceWarnings.linkClickedAt,
+    })
+    .from(adopterComplianceWarnings)
+    .where(and(
+      eq(adopterComplianceWarnings.tenantId, tenantId),
+      gte(adopterComplianceWarnings.sentAt, monthStart),
+    ));
+
+  if (monthWarnings.length === 0) {
+    return { warningsSent: 0, proofUploaded: 0, emailOpened: 0, linkClicked: 0, monthLabel };
+  }
+
+  const animalIds = Array.from(new Set(monthWarnings.map(w => w.animalId)));
+  const monthConfirmations = await db
+    .select({
+      animalId: adopterComplianceConfirmations.animalId,
+      careName: adopterComplianceConfirmations.careName,
+      preventativeCareRecordId: adopterComplianceConfirmations.preventativeCareRecordId,
+      dateAdministered: adopterComplianceConfirmations.dateAdministered,
+      createdAt: adopterComplianceConfirmations.createdAt,
+    })
+    .from(adopterComplianceConfirmations)
+    .where(and(
+      eq(adopterComplianceConfirmations.tenantId, tenantId),
+      eq(adopterComplianceConfirmations.careCategory, 'parasite_prevention'),
+      inArray(adopterComplianceConfirmations.animalId, animalIds),
+      // Match the candidate-eligibility logic: only count confirmations the
+      // staff has actually accepted (or is reviewing). Rejected/withdrawn
+      // confirmations should not satisfy a warning.
+      inArray(adopterComplianceConfirmations.status, ['approved', 'pending_review']),
+    ));
+
+  let proofUploaded = 0;
+  let emailOpened = 0;
+  let linkClicked = 0;
+  for (const w of monthWarnings) {
+    if (w.emailOpenedAt) emailOpened++;
+    if (w.linkClickedAt) linkClicked++;
+    // Prefer the strong key (preventativeCareRecordId) so a single confirmation
+    // can't be attributed to multiple unrelated warnings on the same animal.
+    // Fall back to careName matching only when the confirmation is unlinked.
+    const matched = monthConfirmations.find(c => {
+      if (c.animalId !== w.animalId) return false;
+      if (new Date(c.createdAt) < w.sentAt) return false;
+      if (c.preventativeCareRecordId === w.itemId) return true;
+      return c.preventativeCareRecordId === null && c.careName === w.careName;
+    });
+    if (matched) proofUploaded++;
+  }
+
+  return {
+    warningsSent: monthWarnings.length,
+    proofUploaded,
+    emailOpened,
+    linkClicked,
+    monthLabel,
+  };
 }
 
 export interface SendWarningInput {
@@ -401,6 +606,39 @@ export async function sendComplianceWarning(input: SendWarningInput): Promise<Se
     };
   }
 
+  // Generate a tracking token up-front so we can embed it in the rendered
+  // email (pixel + wrapped portal link). We MUST persist a row containing the
+  // token before sending the email; otherwise an aggressive image proxy
+  // (e.g. Gmail's) can prefetch the pixel during the milliseconds between
+  // emailService.send() returning and the audit insert completing, and we
+  // would silently lose the very first open we care about most.
+  const trackingToken = crypto.randomBytes(16).toString('base64url');
+
+  // Pre-insert a placeholder audit row when we plan to send email so the
+  // tracking endpoints can resolve the token immediately. We DELETE the
+  // placeholder later if no channel ultimately delivers (so the 30-day dedup
+  // doesn't suppress a legitimate retry).
+  let pendingWarningId: string | undefined;
+  if (wantEmail) {
+    const [pending] = await db.insert(adopterComplianceWarnings).values({
+      tenantId: input.tenantId,
+      animalId: input.animalId,
+      itemId: input.itemId,
+      itemKey: input.itemKey || `parasite_prevention:${input.careName}`,
+      careName: input.careName,
+      dueDate: input.dueDate,
+      deadlineDate: deadlineStr,
+      // Empty until we know what actually delivered — this is the signal that
+      // the row is in flight.
+      channelsUsed: [],
+      trigger: input.trigger,
+      triggeredBy: input.triggeredBy,
+      adopterEmail: input.adopterEmail || null,
+      trackingToken,
+    }).returning({ id: adopterComplianceWarnings.id });
+    pendingWarningId = pending?.id;
+  }
+
   const result: SendWarningResult = {
     success: false,
     channelsSent: [],
@@ -419,6 +657,7 @@ export async function sendComplianceWarning(input: SendWarningInput): Promise<Se
           bodyText: emailBodyText,
           portalLink: tokens.portalLink,
           deadlineDisplay,
+          trackingToken,
         });
         const sendRes = await emailService.send({
           to: input.adopterEmail,
@@ -471,10 +710,33 @@ export async function sendComplianceWarning(input: SendWarningInput): Promise<Se
 
   result.success = result.channelsSent.length > 0;
 
-  // Audit row — only insert if we actually sent at least one channel; never
-  // create an "orphan" warning row that didn't deliver anything (so the 30-day
-  // dedup doesn't suppress a real attempt later).
-  if (result.success) {
+  // Audit row reconciliation:
+  //  - If we pre-inserted a placeholder (email path) and at least one channel
+  //    delivered, UPDATE it with the final delivery details.
+  //  - If we pre-inserted a placeholder but nothing delivered, DELETE it so
+  //    the 30-day dedup doesn't suppress a legitimate retry.
+  //  - If we did NOT pre-insert (SMS-only path) and SMS delivered, INSERT a
+  //    fresh row now (no tracking token needed for SMS-only).
+  if (result.success && pendingWarningId) {
+    await db.update(adopterComplianceWarnings)
+      .set({
+        channelsUsed: result.channelsSent,
+        recipientEmail: result.email?.ok ? input.adopterEmail : null,
+        recipientPhone: result.sms?.ok ? input.adopterPhone : null,
+        emailSubject: result.email?.ok ? emailSubject : null,
+        emailBody: result.email?.ok ? emailBodyText : null,
+        smsBody: result.sms?.ok ? smsBody : null,
+        // Clear the token if the email did not actually send so a stray pixel
+        // fetch doesn't get attributed to anything (pixel still 200s with
+        // a transparent GIF — see tracking endpoint).
+        trackingToken: result.email?.ok ? trackingToken : null,
+      })
+      .where(eq(adopterComplianceWarnings.id, pendingWarningId));
+    result.warningId = pendingWarningId;
+  } else if (!result.success && pendingWarningId) {
+    await db.delete(adopterComplianceWarnings)
+      .where(eq(adopterComplianceWarnings.id, pendingWarningId));
+  } else if (result.success && !pendingWarningId) {
     const [inserted] = await db.insert(adopterComplianceWarnings).values({
       tenantId: input.tenantId,
       animalId: input.animalId,
@@ -492,8 +754,12 @@ export async function sendComplianceWarning(input: SendWarningInput): Promise<Se
       emailSubject: result.email?.ok ? emailSubject : null,
       emailBody: result.email?.ok ? emailBodyText : null,
       smsBody: result.sms?.ok ? smsBody : null,
+      trackingToken: null,
     }).returning({ id: adopterComplianceWarnings.id });
     result.warningId = inserted?.id;
+  }
+
+  if (result.success) {
 
     // Also write into the unified adopter_notification_logs audit trail so the
     // existing dashboards / reports surface this delivery alongside other
@@ -624,14 +890,36 @@ function buildEmailHtml(args: {
   bodyText: string;
   portalLink: string;
   deadlineDisplay: string;
+  trackingToken?: string;
 }): string {
   const escaped = args.bodyText
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
-  const paragraphs = escaped.split(/\n\s*\n/).map(p =>
+
+  // Wrap the portal link in the tracking redirect so we can record clicks.
+  // Inline plain-text occurrences too (the rendered template body usually
+  // contains the raw URL since the merge token expands to it).
+  const clickUrl = args.trackingToken
+    ? buildTrackingClickUrl(args.trackingToken)
+    : args.portalLink;
+  const escapedPortal = args.portalLink
+    .replace(/&/g, '&amp;');
+  const bodyWithWrappedLinks = args.trackingToken
+    ? escaped.split(escapedPortal).join(clickUrl)
+    : escaped;
+
+  const paragraphs = bodyWithWrappedLinks.split(/\n\s*\n/).map(p =>
     `<p style="margin:0 0 14px 0;font-size:15px;line-height:1.55;color:#374151;">${p.replace(/\n/g, '<br>')}</p>`,
   ).join('');
+
+  // 1x1 transparent tracking pixel + an explicit no-cache hint via a unique
+  // querystring fragment is unnecessary — the URL already contains a single-use
+  // token. Email clients still cache it but we capture the FIRST fetch which
+  // is what we care about.
+  const pixel = args.trackingToken
+    ? `<img src="${buildTrackingPixelUrl(args.trackingToken)}" width="1" height="1" alt="" style="display:block;border:0;width:1px;height:1px;opacity:0;" />`
+    : '';
 
   return `
 <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:640px;margin:0 auto;padding:24px;color:#111827;background:#ffffff;">
@@ -641,13 +929,14 @@ function buildEmailHtml(args: {
   </div>
   ${paragraphs}
   <div style="text-align:center;margin:28px 0;">
-    <a href="${args.portalLink}" style="display:inline-block;background:#dc2626;color:#ffffff;text-decoration:none;padding:14px 36px;border-radius:8px;font-size:15px;font-weight:600;">
+    <a href="${clickUrl}" style="display:inline-block;background:#dc2626;color:#ffffff;text-decoration:none;padding:14px 36px;border-radius:8px;font-size:15px;font-weight:600;">
       Upload Proof in Adopter Portal
     </a>
   </div>
   <p style="font-size:12px;color:#9ca3af;text-align:center;margin-top:32px;">
     This is a transactional contract-enforcement notice from ${args.tenantName} and is not affected by your marketing notification preferences.
   </p>
+  ${pixel}
 </div>`.trim();
 }
 
