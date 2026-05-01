@@ -454,7 +454,8 @@ export default function PostOptimizerPage() {
                         Removed {result.paymentHandlesRemoved} payment handle{result.paymentHandlesRemoved === 1 ? "" : "s"} from your caption.
                       </p>
                       <p className="text-muted-foreground" data-testid="text-payment-interception-detail">
-                        Facebook throttles posts that mention Venmo, CashApp, or PayPal. Your first comment now points donors to{" "}
+                        Facebook throttles posts that mention Venmo, CashApp, or PayPal.{" "}
+                        {result.keepLinkInPost ? "Your caption now sends donors to " : "Your first comment now points donors to "}
                         {result.usedEmergencyCampaign && result.emergencyCampaignTitle ? (
                           <span className="font-medium text-foreground">{result.emergencyCampaignTitle}</span>
                         ) : (
