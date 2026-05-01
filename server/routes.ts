@@ -7363,6 +7363,10 @@ Crawl-delay: 1
       const optimizeSchema = z.object({
         draft: z.string().trim().min(1, 'Draft post is required').max(8000, 'Draft post is too long (max 8000 characters)'),
         animalId: z.string().uuid().optional(),
+        // When true, the AI keeps the destination URL inline in the caption
+        // (for paid/boosted posts, emergencies, or to trigger a Facebook
+        // link preview card) instead of stripping it to the first comment.
+        keepLinkInPost: z.boolean().optional().default(false),
       });
 
       const parseResult = optimizeSchema.safeParse(req.body);
@@ -7419,7 +7423,11 @@ Crawl-delay: 1
       );
 
       try {
-        const result = await optimizeFacebookPost(parseResult.data.draft, toOptimizePostUrls(resolved));
+        const result = await optimizeFacebookPost(
+          parseResult.data.draft,
+          toOptimizePostUrls(resolved),
+          { keepLinkInPost: parseResult.data.keepLinkInPost },
+        );
         const destination = pickDestinationForResult(resolved, result);
         return res.json({
           success: true,
@@ -7428,6 +7436,7 @@ Crawl-delay: 1
           category: result.category,
           paymentHandlesRemoved: result.paymentHandlesRemoved,
           paymentInterceptionApplied: result.paymentInterceptionApplied,
+          keepLinkInPost: result.keepLinkInPost,
           usedEmergencyCampaign: Boolean(emergencyCampaignUrl) && result.paymentInterceptionApplied,
           emergencyCampaignTitle: emergencyCampaignTitle ?? null,
           // Resolved destination URL the first comment will link to. Surfaced

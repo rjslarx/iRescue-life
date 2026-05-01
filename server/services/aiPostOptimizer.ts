@@ -52,6 +52,13 @@ export interface OptimizedPostResult {
   category: PostCategory;
   paymentHandlesRemoved: number;
   paymentInterceptionApplied: boolean;
+  /**
+   * Echoes the `keepLinkInPost` flag the caller asked for. When true, the
+   * caption keeps the destination URL inline and the firstComment is a
+   * short supportive line (no link). The UI uses this to relabel result
+   * cards so the description matches the actual mode.
+   */
+  keepLinkInPost: boolean;
 }
 
 const SYSTEM_PROMPT = `You are an expert Facebook social media strategist for animal rescues. Your job is to take a rescue's draft Facebook post and produce two outputs that maximize organic reach on Facebook and channel engagement into the right action.
@@ -138,6 +145,29 @@ export function countPaymentHandles(text: string): number {
 }
 
 /**
+ * Generic URL stripper for the firstComment. Used in keep-link-in-post mode
+ * so an AI-supplied URL of any kind (not just one of the tenant's known
+ * destinations) cannot leak into the supportive first comment. Removes
+ * http(s):// URLs, bare `www.` URLs, and tidies up orphaned punctuation /
+ * whitespace.
+ */
+export function stripAllUrls(text: string): string {
+  if (!text) return text;
+  let cleaned = text
+    // http(s)://... URLs
+    .replace(/https?:\/\/[^\s)\]>,]+/gi, "")
+    // bare www. URLs without a protocol
+    .replace(/\bwww\.[^\s)\]>,]+/gi, "");
+  cleaned = cleaned
+    .replace(/[ \t]+([.,!?;:])/g, "$1")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  return cleaned;
+}
+
+/**
  * Defense-in-depth stripper. Removes any payment handles that survived the AI
  * pass, then collapses the resulting whitespace so we don't leave dangling
  * sentences like "Send to ." behind.
@@ -165,13 +195,30 @@ export class PostOptimizerError extends Error {
   }
 }
 
+export interface OptimizePostOptions {
+  /**
+   * When true, the AI is instructed to keep the primary destination URL inline
+   * in the optimized caption (instead of stripping it to the first comment).
+   * Used for paid/boosted posts, emergency posts, or posts where the rescue
+   * wants Facebook's auto-generated link preview card.
+   *
+   * The Payment Interception override is unaffected — payment handles are
+   * always stripped from the caption regardless of this flag, because the
+   * goal there is to swap off-platform payment for the on-site Emergency
+   * Donate URL with Apple Pay / Google Pay.
+   */
+  keepLinkInPost?: boolean;
+}
+
 export async function optimizeFacebookPost(
   draft: string,
   urls: OptimizePostUrls,
+  options: OptimizePostOptions = {},
   timeoutMs: number = 30000
 ): Promise<OptimizedPostResult> {
   const paymentHandlesInDraft = countPaymentHandles(draft);
   const paymentInterceptionApplied = paymentHandlesInDraft > 0;
+  const keepLinkInPost = Boolean(options.keepLinkInPost);
 
   const userPrompt = `Tenant URLs to use when injecting links into the first comment:
 - VIP Club URL (for urgent_emotional, ONLY when no payment handles were in the draft): ${urls.vipClubUrl}
@@ -182,6 +229,16 @@ export async function optimizeFacebookPost(
 
 Payment handles detected in this draft: ${paymentHandlesInDraft}
 ${paymentInterceptionApplied ? "PAYMENT INTERCEPTION ACTIVE — category MUST be urgent_emotional and the first comment MUST use the Emergency Donate URL with Apple Pay / Google Pay messaging." : "No payment handles detected — follow normal category rules."}
+
+KEEP-LINK-IN-POST FLAG: ${keepLinkInPost ? "TRUE" : "FALSE"}
+${keepLinkInPost
+  ? `The user has explicitly opted to keep the destination URL in the main caption (paid/boosted post, emergency, or to trigger a Facebook link preview card). Override the default link-stripping behavior:
+- KEEP every URL from the original draft inline in the optimizedCaption (do not strip them).
+- After classifying the category, ALSO append the chosen destination URL on its own line at the end of optimizedCaption (so the link preview card is generated and the link is tappable).
+- DO NOT append the "P.S. Check the first comment" sentence — there is no "go look in the comments" CTA when the link is already in the caption.
+- The firstComment must be a short supportive/engagement line (1-2 sentences) — gratitude to the community, a call for shares/tags, or an emotional reinforcement of the post. DO NOT tell people to click a link, and DO NOT include any URL in the firstComment.
+- If PAYMENT INTERCEPTION is also active, the destination URL kept in the caption MUST be the Emergency Donate URL (payment-interception rules still win).`
+  : "Follow the default rules above: strip every URL from the optimizedCaption, append the P.S. line, and put the single destination URL in the firstComment."}
 
 Draft Facebook post:
 """
@@ -255,19 +312,78 @@ Return the JSON object now.`;
     throw new PostOptimizerError("The AI service returned an incomplete response. Please try again.", 502);
   }
 
-  // Defense-in-depth: scrub any payment handles the AI missed from the
-  // optimized caption. We do NOT scrub the first comment because the AI may
-  // legitimately reference brand names like "Apple Pay" there.
+  // ---- Payment Interception fix-ups (always run when handles were detected) ----
   if (paymentInterceptionApplied) {
     optimizedCaption = stripPaymentHandles(optimizedCaption);
     // Force category override server-side as a final safety net.
     category = "urgent_emotional";
-    // Guarantee the required P.S. line is present at the end of the caption,
-    // since interception promises the reader that the link is in the comment.
+  }
+
+  // Determine the URL the user should be sent to, mirroring the routing
+  // rules in `pickDestinationForResult` (which the route layer uses for the
+  // UI's destination card). Computing it here lets us deterministically
+  // enforce that the URL ends up in the right place (caption vs. comment)
+  // regardless of model compliance.
+  const destinationUrl = paymentInterceptionApplied
+    ? urls.emergencyDonateUrl
+    : (() => {
+        switch (category) {
+          case "urgent_emotional": return urls.vipClubUrl;
+          case "overwhelmed_shelter": return urls.fosterUrl;
+          case "happy_adoption": return urls.adoptionUrl;
+          case "volunteer_recruitment": return urls.volunteerUrl;
+        }
+      })();
+
+  if (keepLinkInPost) {
+    // ---- Caption-link mode ----
+    // The destination URL belongs inline in the caption (so Facebook
+    // generates a link preview card and the link is tappable without
+    // scrolling to comments). The first comment must be a short
+    // supportive line with NO URL.
+
+    // 1. Make sure the destination URL is present in the caption.
+    if (destinationUrl && !optimizedCaption.includes(destinationUrl)) {
+      optimizedCaption = `${optimizedCaption.replace(/\s+$/, "")}\n${destinationUrl}`;
+    }
+    // 2. Remove any "check the first comment" CTA the model may have added —
+    //    inappropriate when the link is already in the caption.
+    optimizedCaption = optimizedCaption
+      .replace(/^\s*P\.?\s*S\.?[^\n]*check the first comment[^\n]*$/gim, "")
+      .replace(/[^\n.!?]*check the first comment[^\n.!?]*[.!?]?/gi, "")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+    // 3. Strip ANY URL (not just known tenant URLs) from the first comment.
+    firstComment = stripAllUrls(firstComment);
+    // 4. Also strip click-the-link CTA language from the first comment.
+    firstComment = firstComment
+      .replace(/[^\n.!?]*\b(click|tap|visit)\b[^\n.!?]*\blink\b[^\n.!?]*[.!?]?/gi, "")
+      .replace(/[^\n.!?]*\blink (?:is )?(?:in (?:the )?)?(?:bio|comments?|caption)\b[^\n.!?]*[.!?]?/gi, "")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+    // 5. If the first comment is now empty (e.g. it was only a URL line),
+    //    fall back to a generic supportive nudge so the UI never shows a
+    //    blank result.
+    if (!firstComment) {
+      firstComment = "Thank you for being part of this community — every share helps us reach the right person.";
+    }
+    // 6. When payment interception is also active, the Apple Pay / Google
+    //    Pay messaging needs to be in the caption (not the comment, which
+    //    no longer drives traffic). Enforce both phrases independently.
+    if (paymentInterceptionApplied) {
+      const captionHasApple = /apple\s*pay/i.test(optimizedCaption);
+      const captionHasGoogle = /google\s*pay/i.test(optimizedCaption);
+      if (!captionHasApple || !captionHasGoogle) {
+        optimizedCaption = `${optimizedCaption.replace(/\s+$/, "")}\nApple Pay & Google Pay accepted — donate in seconds.`;
+      }
+    }
+  } else if (paymentInterceptionApplied) {
+    // ---- Default mode + payment interception ----
+    // Link belongs in the first comment; caption tells the reader to look
+    // there. Mirrors the original behavior prior to Task #144.
     if (!/check the first comment/i.test(optimizedCaption)) {
       optimizedCaption = `${optimizedCaption.replace(/\s+$/, "")}\n\nP.S. Check the first comment for how you can help!`;
     }
-    // If the AI somehow used the wrong URL, swap it for the emergency URL.
     const otherUrls = [urls.vipClubUrl, urls.fosterUrl, urls.adoptionUrl, urls.volunteerUrl];
     if (!firstComment.includes(urls.emergencyDonateUrl)) {
       let swapped = firstComment;
@@ -276,18 +392,20 @@ Return the JSON object now.`;
           swapped = swapped.split(wrongUrl).join(urls.emergencyDonateUrl);
         }
       }
-      // If no URL was present at all, append the emergency URL on its own line.
       if (!swapped.includes(urls.emergencyDonateUrl)) {
         swapped = `${swapped.replace(/\s+$/, "")}\n${urls.emergencyDonateUrl}`;
       }
       firstComment = swapped;
     }
-    // Guarantee the Apple Pay / Google Pay messaging the interception
-    // contract requires, in case the model omitted it.
-    if (!/apple\s*pay/i.test(firstComment) && !/google\s*pay/i.test(firstComment)) {
+    // Enforce both Apple Pay AND Google Pay phrases, not just one.
+    const commentHasApple = /apple\s*pay/i.test(firstComment);
+    const commentHasGoogle = /google\s*pay/i.test(firstComment);
+    if (!commentHasApple || !commentHasGoogle) {
       firstComment = `${firstComment.replace(/\s+$/, "")}\nApple Pay & Google Pay accepted — donate in seconds.`;
     }
   }
+  // (Default mode, no payment interception → no post-processing required;
+  //  the AI's own output stands.)
 
   return {
     optimizedCaption,
@@ -295,6 +413,7 @@ Return the JSON object now.`;
     category,
     paymentHandlesRemoved: paymentHandlesInDraft,
     paymentInterceptionApplied,
+    keepLinkInPost,
   };
 }
 

@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Command,
   CommandEmpty,
@@ -65,6 +66,13 @@ interface OptimizeResponse {
   category: PostCategory;
   paymentHandlesRemoved: number;
   paymentInterceptionApplied: boolean;
+  /**
+   * Echoes the toggle state from the request. When true, the destination URL
+   * is in the caption itself and the first comment is a supportive line
+   * instead of a click-the-link CTA. The UI uses this to relabel result
+   * cards so the wording matches reality.
+   */
+  keepLinkInPost: boolean;
   usedEmergencyCampaign: boolean;
   emergencyCampaignTitle: string | null;
   destination: OptimizeDestination;
@@ -144,6 +152,7 @@ export default function PostOptimizerPage() {
   const [draft, setDraft] = useState("");
   const [animalId, setAnimalId] = useState<string | null>(null);
   const [animalPopoverOpen, setAnimalPopoverOpen] = useState(false);
+  const [keepLinkInPost, setKeepLinkInPost] = useState(false);
   const [result, setResult] = useState<OptimizeResponse | null>(null);
   const [copiedCaption, setCopiedCaption] = useState(false);
   const [copiedComment, setCopiedComment] = useState(false);
@@ -175,9 +184,10 @@ export default function PostOptimizerPage() {
   );
 
   const optimizeMutation = useMutation({
-    mutationFn: async (input: { draft: string; animalId: string | null }): Promise<OptimizeResponse> => {
+    mutationFn: async (input: { draft: string; animalId: string | null; keepLinkInPost: boolean }): Promise<OptimizeResponse> => {
       const body: Record<string, unknown> = { draft: input.draft };
       if (input.animalId) body.animalId = input.animalId;
+      if (input.keepLinkInPost) body.keepLinkInPost = true;
       const res = await apiRequest("POST", "/api/ai/optimize-post", body);
       return res.json();
     },
@@ -208,7 +218,7 @@ export default function PostOptimizerPage() {
       return;
     }
     setResult(null);
-    optimizeMutation.mutate({ draft: trimmed, animalId });
+    optimizeMutation.mutate({ draft: trimmed, animalId, keepLinkInPost });
   };
 
   const copyToClipboard = async (
@@ -344,6 +354,23 @@ export default function PostOptimizerPage() {
                 data-testid="input-draft"
                 disabled={isPending}
               />
+              <div className="flex items-start justify-between gap-3 rounded-md border bg-muted/30 p-3">
+                <div className="space-y-1 flex-1 min-w-0">
+                  <Label htmlFor="switch-keep-link-in-post" className="text-sm font-medium">
+                    Keep link in main post
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Use for paid/boosted posts, emergencies, or when you want a Facebook link preview card. May reduce organic reach.
+                  </p>
+                </div>
+                <Switch
+                  id="switch-keep-link-in-post"
+                  checked={keepLinkInPost}
+                  onCheckedChange={setKeepLinkInPost}
+                  disabled={isPending}
+                  data-testid="switch-keep-link-in-post"
+                />
+              </div>
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <p className="text-sm text-muted-foreground" data-testid="text-draft-count">
                   {draft.length.toLocaleString()} characters
@@ -463,10 +490,12 @@ export default function PostOptimizerPage() {
                           <div className="space-y-1">
                             <CardTitle className="flex items-center gap-2">
                               <Link2 className="h-5 w-5" />
-                              First Comment Will Link To
+                              {result.keepLinkInPost ? "Link in Caption" : "First Comment Will Link To"}
                             </CardTitle>
                             <CardDescription>
-                              This is the exact URL the first comment will send people to.
+                              {result.keepLinkInPost
+                                ? "This URL is kept inline in the caption above so Facebook generates a link preview card."
+                                : "This is the exact URL the first comment will send people to."}
                             </CardDescription>
                           </div>
                           <Badge variant="secondary" data-testid="badge-destination-label">
@@ -528,7 +557,11 @@ export default function PostOptimizerPage() {
                     <div className="flex items-start justify-between gap-3 flex-wrap">
                       <div>
                         <CardTitle>Optimized Caption</CardTitle>
-                        <CardDescription>No outbound links — Facebook-friendly.</CardDescription>
+                        <CardDescription>
+                          {result.keepLinkInPost
+                            ? "Link kept inline for paid/boosted posts or link previews."
+                            : "No outbound links — Facebook-friendly."}
+                        </CardDescription>
                       </div>
                       <Button
                         size="sm"
@@ -561,9 +594,13 @@ export default function PostOptimizerPage() {
                   <CardHeader>
                     <div className="flex items-start justify-between gap-3 flex-wrap">
                       <div className="space-y-2">
-                        <CardTitle>First Comment Strategy</CardTitle>
+                        <CardTitle>
+                          {result.keepLinkInPost ? "First Comment (Supportive)" : "First Comment Strategy"}
+                        </CardTitle>
                         <CardDescription>
-                          Post this as the first comment under your Facebook post.
+                          {result.keepLinkInPost
+                            ? "A short engagement line — no link, since the link is already in the caption."
+                            : "Post this as the first comment under your Facebook post."}
                         </CardDescription>
                         {(() => {
                           const meta = CATEGORY_META[result.category];
