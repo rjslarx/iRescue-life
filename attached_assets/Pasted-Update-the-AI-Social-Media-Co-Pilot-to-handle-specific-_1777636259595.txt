@@ -1,0 +1,19 @@
+Update the "AI Social Media Co-Pilot" to handle specific marketing exceptions where links should remain in the main caption instead of being moved to the first comment.
+
+1. Update the Frontend UI (`/marketing/post-optimizer`):
+   - Below the main "Draft Your Facebook Post" text area, add a section called "Post Strategy Override" with three toggle switches (or checkboxes).
+   - Toggle 1: "Paid Ad / Boosted Post" (Subtext: Keeps links in the main text since Facebook doesn't penalize paid reach).
+   - Toggle 2: "Emergency / Urgent Need" (Subtext: Keeps links front and center for immediate action).
+   - Toggle 3: "Use Link Preview Card" (Subtext: Keeps the primary link in the text so Facebook generates a clickable image card).
+
+2. Update the Backend Logic (`/api/ai/optimize-post`):
+   - Modify the POST request payload to include the boolean states of these three toggles (e.g., `isPaidAd`, `isEmergency`, `useLinkPreview`).
+   - Dynamically adjust the LLM System Prompt based on these toggles.
+
+3. The Updated LLM Prompt Logic:
+   - Inject this conditional rule into the AI's instructions: 
+   "Check the override flags provided in the payload. IF `isPaidAd`, `isEmergency`, OR `useLinkPreview` is true, DO NOT remove the URLs from the original draft. Keep the primary links clearly visible in the 'optimizedCaption'. Do not generate a 'firstComment' directing people to click a link, because the link is already in the main text. Instead, if an override is active, use the 'firstComment' purely for a supportive, engaging statement (e.g., 'Thank you to our community for always stepping up!')."
+   - IF all override flags are false, proceed with the default behavior: strip all links from the 'optimizedCaption' and place the strategic links in the 'firstComment'.
+
+4. UI Feedback:
+   - If a user toggles any of these overrides, show a small warning banner on the UI that says: "Organic reach may be reduced by keeping links in the main post, but this is the correct strategy for emergencies, ads, or link cards."
