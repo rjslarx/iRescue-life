@@ -2320,17 +2320,23 @@ router.get('/pets/:animalId/heartworm-treatment-plan/:planId/contract', async (r
       return Number.isNaN(dt.getTime()) ? null : dt;
     };
 
-    const apptRows = appointments
-      .map((a: any) => {
-        const date = parseLocalDate(a?.scheduledDate);
+    type ContractAppt = {
+      label?: string | null;
+      scheduledDate?: string | null;
+      completedDate?: string | null;
+    };
+    const apptList: ContractAppt[] = Array.isArray(appointments) ? appointments as ContractAppt[] : [];
+    const apptRows = apptList
+      .map((a) => {
+        const date = parseLocalDate(a?.scheduledDate ?? null);
         const formatted = date
           ? date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
-          : escape(a?.scheduledDate);
+          : escape(a?.scheduledDate ?? '');
         const completed = a?.completedDate
           ? `<span style="color:#16a34a;font-weight:600;"> — Completed ${escape(a.completedDate)}</span>`
           : '';
         return `<tr>
-          <td style="padding:12px;border:1px solid #d1d5db;">${escape(a?.label)}</td>
+          <td style="padding:12px;border:1px solid #d1d5db;">${escape(a?.label ?? '')}</td>
           <td style="padding:12px;border:1px solid #d1d5db;">${formatted}${completed}</td>
         </tr>`;
       })

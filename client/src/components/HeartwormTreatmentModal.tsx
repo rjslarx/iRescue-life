@@ -471,8 +471,40 @@ export function HeartwormTreatmentModal({
               </Card>
             )}
 
-            <DialogFooter>
-              <Button onClick={handleClose} data-testid="button-close-view">
+            <DialogFooter className="flex flex-row flex-wrap items-center justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setStep('schedule')}
+                data-testid="button-edit-plan-view"
+              >
+                Edit Schedule
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handlePrint}
+                data-testid="button-print-view"
+              >
+                <Printer className="mr-2 h-4 w-4" />
+                Print Treatment Contract
+              </Button>
+              <Button
+                onClick={() => sendEmailMutation.mutate()}
+                disabled={sendEmailMutation.isPending}
+                data-testid="button-send-email-view"
+              >
+                {sendEmailMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <Send className="mr-2 h-4 w-4" />
+                    Email Schedule to Adopter
+                  </>
+                )}
+              </Button>
+              <Button variant="ghost" onClick={handleClose} data-testid="button-close-view">
                 Close
               </Button>
             </DialogFooter>

@@ -1402,8 +1402,9 @@ export default function AdopterPetDetailPage() {
                       setHwReceiptFile(null);
                       setHwApptNotes('');
                       if (hwReceiptInputRef.current) hwReceiptInputRef.current.value = '';
-                    } catch (err: any) {
-                      toast({ title: err.message || 'Failed to mark appointment completed', variant: 'destructive' });
+                    } catch (err) {
+                      const msg = err instanceof Error ? err.message : 'Failed to mark appointment completed';
+                      toast({ title: msg, variant: 'destructive' });
                     } finally {
                       setIsSubmittingHwAppt(false);
                     }
