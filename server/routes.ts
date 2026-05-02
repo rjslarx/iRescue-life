@@ -28006,7 +28006,7 @@ Submitted: ${new Date().toLocaleString()}
           // Create or update contact record
           try {
             const { createContactFromDonation } = await import('./services/contacts');
-            if (customerEmail) { await createContactFromDonation(tenant.id, customerName, customerEmail, (session.amount_total || 0) / 100); }
+            if (customerEmail) { await createContactFromDonation(tenant.id, customerName, customerEmail, session.amount_total || 0); }
             console.log(`[STRIPE-WEBHOOK] Created/updated contact for: ${customerEmail}`);
           } catch (contactError) {
             console.error('[STRIPE-WEBHOOK] Failed to create contact:', contactError);
@@ -28422,7 +28422,7 @@ Submitted: ${new Date().toLocaleString()}
             // Create or update contact record for the recurring donor
             try {
               const { createContactFromDonation } = await import('./services/contacts');
-              if (donor.email) { await createContactFromDonation(tenant.id, donor.name, donor.email, invoice.amount_paid / 100); }
+              if (donor.email) { await createContactFromDonation(tenant.id, donor.name, donor.email, invoice.amount_paid); }
               console.log(`[Webhook] Created/updated contact for recurring donor: ${donor.email}`);
             } catch (contactError) {
               console.error('[Webhook] Failed to create contact from recurring donation:', contactError);
