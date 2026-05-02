@@ -22,7 +22,7 @@ interface TenantInfo {
  * To ensure the correct tenant's manifest is used when "Add to Home Screen" is invoked,
  * we update the link tag to include the tenant as a query parameter.
  * 
- * For custom domains (e.g., magapie.com), the backend resolves the tenant from the hostname,
+ * For custom domains (e.g., haseyas.org), the backend resolves the tenant from the hostname,
  * so no query parameter is needed - just use /manifest.json directly.
  * 
  * This approach is recommended for multi-tenant PWAs because:

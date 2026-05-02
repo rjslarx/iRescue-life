@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { db } from '../db';
 import { tenants } from '@shared/schema';
-import { eq, or, and } from 'drizzle-orm';
+import { eq, or, and, sql } from 'drizzle-orm';
 
 export interface TenantContext {
   id: string;
@@ -350,9 +350,14 @@ export async function resolveTenant(req: Request, res: Response, next: NextFunct
       if (tenantId) {
         whereClause = eq(tenants.id, tenantId);
       } else if (customDomain) {
-        // For custom domains, MUST check both the domain AND that it's verified
+        // For custom domains, MUST check that it's verified.
+        // Match either the primary `customDomain` OR any entry in the
+        // `customDomainAliases` array (alternate verified domains for the tenant).
         whereClause = and(
-          eq(tenants.customDomain, customDomain),
+          or(
+            eq(tenants.customDomain, customDomain),
+            sql`${tenants.customDomainAliases} @> ARRAY[${customDomain}]::text[]`
+          ),
           eq(tenants.customDomainVerified, true)
         );
       } else if (subdomain) {

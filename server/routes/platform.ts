@@ -538,6 +538,7 @@ router.get('/tenants', async (req, res, next) => {
         contactEmail: tenants.contactEmail,
         customDomain: tenants.customDomain,
         customDomainVerified: tenants.customDomainVerified,
+        customDomainAliases: tenants.customDomainAliases,
         isActive: tenants.isActive,
         createdAt: tenants.createdAt,
         platformFeePercent: tenants.platformFeePercent,
@@ -703,6 +704,121 @@ router.patch('/tenants/:id', async (req, res, next) => {
       entityType: 'tenant',
       entityId: id,
       changes: { before: existing, after: updated },
+      req,
+    });
+
+    res.json({ tenant: updated });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * PUT /api/platform/tenants/:id/custom-domain-aliases
+ * Replace the list of verified custom-domain aliases for a tenant.
+ *
+ * Aliases are alternate hostnames that resolve to the same tenant as the
+ * primary `customDomain`. They share the tenant's verification status —
+ * a tenant must have a verified primary `customDomain` for any alias to
+ * actually resolve through tenant middleware / CORS.
+ */
+router.put('/tenants/:id/custom-domain-aliases', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const aliasSchema = z.object({
+      aliases: z
+        .array(
+          z
+            .string()
+            .trim()
+            .toLowerCase()
+            .min(3, 'Domain too short')
+            .max(253, 'Domain too long')
+            .regex(
+              /^(?!-)[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/,
+              'Invalid domain format'
+            )
+        )
+        .max(20, 'Too many aliases'),
+    });
+
+    const { aliases } = aliasSchema.parse(req.body);
+
+    const [existing] = await db
+      .select()
+      .from(tenants)
+      .where(eq(tenants.id, id))
+      .limit(1);
+
+    if (!existing) {
+      return res.status(404).json({ error: 'Tenant not found' });
+    }
+
+    // Normalize: lowercase + strip leading "www." so storage matches the
+    // hostname normalization done in tenant resolution middleware (which
+    // also strips "www." before DB lookup).
+    const normalize = (a: string) => a.toLowerCase().replace(/^www\./i, '');
+    const normalizedPrimary = normalize(existing.customDomain || '');
+
+    // De-duplicate and exclude the primary customDomain (avoids redundancy)
+    const cleaned = Array.from(new Set(aliases.map(normalize))).filter(
+      (a) => a && a !== normalizedPrimary
+    );
+
+    // Cross-tenant uniqueness check: an alias must not already be in use
+    // as another tenant's primary customDomain or in another tenant's alias
+    // list. Without this check, hostname resolution becomes nondeterministic
+    // and could route traffic across tenants (data isolation breach).
+    if (cleaned.length > 0) {
+      const conflicts = await db
+        .select({
+          id: tenants.id,
+          name: tenants.name,
+          customDomain: tenants.customDomain,
+          customDomainAliases: tenants.customDomainAliases,
+        })
+        .from(tenants)
+        .where(
+          and(
+            sql`${tenants.id} != ${id}`,
+            or(
+              sql`LOWER(${tenants.customDomain}) = ANY(${cleaned}::text[])`,
+              sql`${tenants.customDomainAliases} && ${cleaned}::text[]`
+            )
+          )
+        );
+
+      if (conflicts.length > 0) {
+        const collided = new Set<string>();
+        for (const c of conflicts) {
+          for (const a of cleaned) {
+            if ((c.customDomain || '').toLowerCase() === a) collided.add(a);
+            if ((c.customDomainAliases || []).includes(a)) collided.add(a);
+          }
+        }
+        return res.status(409).json({
+          error: 'One or more aliases are already used by another tenant',
+          conflicts: Array.from(collided),
+        });
+      }
+    }
+
+    const [updated] = await db
+      .update(tenants)
+      .set({ customDomainAliases: cleaned })
+      .where(eq(tenants.id, id))
+      .returning();
+
+    await createAuditLog({
+      userId: req.user!.id,
+      action: 'tenant.update_custom_domain_aliases',
+      entityType: 'tenant',
+      entityId: id,
+      changes: {
+        before: { customDomainAliases: existing.customDomainAliases },
+        after: { customDomainAliases: cleaned },
+      },
       req,
     });
 

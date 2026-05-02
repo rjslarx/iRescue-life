@@ -26,6 +26,7 @@ interface Tenant {
   contactEmail: string | null;
   customDomain: string | null;
   customDomainVerified: boolean;
+  customDomainAliases: string[];
   isActive: boolean;
   createdAt: string;
   platformFeePercent: number | null;
@@ -48,6 +49,10 @@ export default function TenantsPage() {
   const [dnsTenant, setDnsTenant] = useState<Tenant | null>(null);
   const [aRecordValue, setARecordValue] = useState("");
   const [txtRecordValue, setTxtRecordValue] = useState("");
+  const [isAliasDialogOpen, setIsAliasDialogOpen] = useState(false);
+  const [aliasTenant, setAliasTenant] = useState<Tenant | null>(null);
+  const [aliasInput, setAliasInput] = useState("");
+  const [aliasDraft, setAliasDraft] = useState<string[]>([]);
 
   const { data: tenantsData, isLoading } = useQuery<{ tenants: Tenant[] }>({
     queryKey: ['/api/platform/tenants'],
@@ -89,6 +94,51 @@ export default function TenantsPage() {
       });
     },
   });
+
+  const updateAliasesMutation = useMutation({
+    mutationFn: async ({ id, aliases }: { id: string; aliases: string[] }) => {
+      const response = await apiRequest('PUT', `/api/platform/tenants/${id}/custom-domain-aliases`, { aliases });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/platform/tenants'] });
+      setIsAliasDialogOpen(false);
+      setAliasTenant(null);
+      setAliasInput("");
+      setAliasDraft([]);
+      toast({
+        title: "Aliases updated",
+        description: "Custom domain aliases saved. CORS cache may take up to 60s to refresh.",
+      });
+    },
+    onError: (err: any) => {
+      toast({
+        title: "Failed to save aliases",
+        description: err?.message || "Check that each domain is valid",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const openAliasDialog = (tenant: Tenant) => {
+    setAliasTenant(tenant);
+    setAliasDraft(tenant.customDomainAliases || []);
+    setAliasInput("");
+    setIsAliasDialogOpen(true);
+  };
+
+  const addAliasToDraft = () => {
+    const v = aliasInput.trim().toLowerCase();
+    if (!v) return;
+    if (aliasDraft.includes(v)) return;
+    if (aliasTenant?.customDomain && v === aliasTenant.customDomain.toLowerCase()) return;
+    setAliasDraft([...aliasDraft, v]);
+    setAliasInput("");
+  };
+
+  const removeAliasFromDraft = (alias: string) => {
+    setAliasDraft(aliasDraft.filter((a) => a !== alias));
+  };
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -276,7 +326,7 @@ export default function TenantsPage() {
                                 <span className="font-mono text-xs">{tenant.subdomain}.irescue.life</span>
                               </div>
                               {tenant.customDomain && (
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 flex-wrap">
                                   <Globe className="h-3 w-3" />
                                   <span className="font-mono text-xs">{tenant.customDomain}</span>
                                   {tenant.customDomainVerified ? (
@@ -289,6 +339,21 @@ export default function TenantsPage() {
                                       Pending
                                     </Badge>
                                   )}
+                                </div>
+                              )}
+                              {tenant.customDomainAliases && tenant.customDomainAliases.length > 0 && (
+                                <div className="flex items-center gap-1 flex-wrap pt-0.5">
+                                  <span className="text-[10px] text-muted-foreground">Aliases:</span>
+                                  {tenant.customDomainAliases.map((alias) => (
+                                    <Badge
+                                      key={alias}
+                                      variant="outline"
+                                      className="text-[10px] px-1 py-0 font-mono"
+                                      data-testid={`badge-alias-${alias}`}
+                                    >
+                                      {alias}
+                                    </Badge>
+                                  ))}
                                 </div>
                               )}
                             </CardDescription>
@@ -365,7 +430,7 @@ export default function TenantsPage() {
                             </span>
                           </div>
                           <div className="flex flex-col gap-2 pt-4">
-                            <div className="flex gap-2">
+                            <div className="flex gap-2 flex-wrap">
                               <Button size="sm" variant="outline" onClick={() => handleEdit(tenant)} data-testid={`button-edit-${tenant.subdomain}`}>
                                 <Edit className="h-3 w-3 mr-1" />
                                 Edit
@@ -378,6 +443,17 @@ export default function TenantsPage() {
                               >
                                 {tenant.isActive ? 'Disable' : 'Enable'}
                               </Button>
+                              {tenant.customDomain && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => openAliasDialog(tenant)}
+                                  data-testid={`button-aliases-${tenant.subdomain}`}
+                                >
+                                  <Globe className="h-3 w-3 mr-1" />
+                                  Aliases
+                                </Button>
+                              )}
                             </div>
                             <Button
                               size="sm"
@@ -544,6 +620,113 @@ export default function TenantsPage() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isAliasDialogOpen} onOpenChange={setIsAliasDialogOpen}>
+        <DialogContent data-testid="dialog-aliases">
+          <DialogHeader>
+            <DialogTitle>Custom Domain Aliases</DialogTitle>
+            <DialogDescription>
+              Add alternate verified domains for {aliasTenant?.name}. Each alias must be a domain you have already verified in Replit Deployments. The primary domain is{" "}
+              <span className="font-mono">{aliasTenant?.customDomain}</span>.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <Alert>
+              <Globe className="h-4 w-4" />
+              <AlertDescription>
+                Aliases share the tenant's verification status. CORS allowlist refresh can take up to 60 seconds after saving.
+              </AlertDescription>
+            </Alert>
+            <div className="space-y-2">
+              <Label htmlFor="alias-input">Add alias domain</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="alias-input"
+                  placeholder="e.g., example.org"
+                  value={aliasInput}
+                  onChange={(e) => setAliasInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      addAliasToDraft();
+                    }
+                  }}
+                  data-testid="input-alias-domain"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={addAliasToDraft}
+                  disabled={!aliasInput.trim()}
+                  data-testid="button-add-alias"
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Current aliases ({aliasDraft.length})</Label>
+              {aliasDraft.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No aliases yet.</p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {aliasDraft.map((alias) => (
+                    <Badge
+                      key={alias}
+                      variant="secondary"
+                      className="font-mono gap-1"
+                      data-testid={`draft-alias-${alias}`}
+                    >
+                      {alias}
+                      <button
+                        type="button"
+                        onClick={() => removeAliasFromDraft(alias)}
+                        className="ml-1 hover:text-destructive"
+                        aria-label={`Remove ${alias}`}
+                        data-testid={`button-remove-alias-${alias}`}
+                      >
+                        <XCircle className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setIsAliasDialogOpen(false);
+                setAliasTenant(null);
+                setAliasInput("");
+                setAliasDraft([]);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (aliasTenant) {
+                  updateAliasesMutation.mutate({ id: aliasTenant.id, aliases: aliasDraft });
+                }
+              }}
+              disabled={updateAliasesMutation.isPending || !aliasTenant}
+              data-testid="button-save-aliases"
+            >
+              {updateAliasesMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save Aliases"
+              )}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

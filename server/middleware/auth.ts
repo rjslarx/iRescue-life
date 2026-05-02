@@ -92,7 +92,7 @@ function createSessionStore() {
 
 // Session middleware configuration
 // Note: Cookie domain is NOT set - this allows cookies to work on any domain
-// (irescue.life, custom domains like magapie.com, and localhost)
+// (irescue.life, tenant custom domains, and localhost)
 // Each domain will have its own cookie, which is fine for our multi-tenant setup
 export const sessionMiddleware = session({
   secret: process.env.SESSION_SECRET || 'rescue-portal-secret-change-in-production',
