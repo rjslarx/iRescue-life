@@ -132,10 +132,16 @@ export function HeartwormTreatmentModal({
 
   // When opened, look for an existing plan for this animal so staff can see
   // adopter-marked completions and uploaded receipts instead of always going
-  // through the create wizard.
+  // through the create wizard. Use a custom queryFn because the default
+  // fetcher joins query-key parts as path segments, but this endpoint takes
+  // `animalId` as a query string parameter.
   const { data: existingPlansData, isLoading: isLoadingExisting } = useQuery<{ plans: ExistingPlan[] }>({
-    queryKey: ['/api/heartworm-treatment-plans', { animalId: resolvedAnimalId }],
+    queryKey: ['/api/heartworm-treatment-plans', 'by-animal', resolvedAnimalId],
     enabled: open && !!resolvedAnimalId,
+    queryFn: async () => {
+      const res = await apiRequest('GET', `/api/heartworm-treatment-plans?animalId=${encodeURIComponent(resolvedAnimalId!)}`);
+      return res.json();
+    },
   });
 
   const existingPlan: ExistingPlan | null = existingPlansData?.plans?.[0] ?? null;
