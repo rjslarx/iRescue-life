@@ -27,6 +27,8 @@ import {
   complianceReminderNotifications,
   complianceObligations,
   activityLogs,
+  heartwormTreatmentPlans,
+  personDocuments,
 } from '@shared/schema';
 import { eq, and, isNull, gt, desc, sql, asc, inArray } from 'drizzle-orm';
 import { z } from 'zod';
@@ -1947,6 +1949,429 @@ router.post('/pets/:animalId/compliance-obligations/:obligationId/submit-proof',
   } catch (error) {
     console.error('[Adopter Portal] Error submitting obligation proof:', error);
     res.status(500).json({ error: 'Failed to submit proof' });
+  }
+});
+
+// ===== HEARTWORM TREATMENT ROUTES =====
+
+/**
+ * GET /api/adopter/pets/:animalId/heartworm-treatment-plan
+ * Returns the most recent heartworm treatment plan for the adopter's pet, or null.
+ */
+router.get('/pets/:animalId/heartworm-treatment-plan', async (req: Request, res: Response) => {
+  try {
+    const auth = requireAdopter(req, res);
+    if (!auth) return;
+    const { animalId } = req.params;
+    const owns = await verifyAdopterOwnsAnimal(auth.userId, auth.tenantId, animalId);
+    if (!owns) return res.status(403).json({ error: 'Access denied' });
+
+    const [plan] = await db
+      .select({
+        id: heartwormTreatmentPlans.id,
+        appointments: heartwormTreatmentPlans.appointments,
+        locationName: heartwormTreatmentPlans.locationName,
+        locationAddress: heartwormTreatmentPlans.locationAddress,
+        locationPhone: heartwormTreatmentPlans.locationPhone,
+        notes: heartwormTreatmentPlans.notes,
+        contractSentAt: heartwormTreatmentPlans.contractSentAt,
+        adopterName: heartwormTreatmentPlans.adopterName,
+        createdAt: heartwormTreatmentPlans.createdAt,
+      })
+      .from(heartwormTreatmentPlans)
+      .where(and(
+        eq(heartwormTreatmentPlans.tenantId, auth.tenantId),
+        eq(heartwormTreatmentPlans.animalId, animalId),
+      ))
+      .orderBy(desc(heartwormTreatmentPlans.createdAt))
+      .limit(1);
+
+    if (!plan) {
+      return res.json(null);
+    }
+    res.json(plan);
+  } catch (error) {
+    console.error('[Adopter Portal] Error fetching heartworm treatment plan:', error);
+    res.status(500).json({ error: 'Failed to load heartworm treatment plan' });
+  }
+});
+
+/**
+ * POST /api/adopter/pets/:animalId/heartworm-treatment-plan/:planId/appointments/:appointmentIndex/complete
+ * Adopter marks a single appointment as completed, with optional vet receipt upload.
+ * Multipart form fields: completedDate (required), notes (optional), receipt (optional file: image or PDF).
+ */
+router.post(
+  '/pets/:animalId/heartworm-treatment-plan/:planId/appointments/:appointmentIndex/complete',
+  async (req: Request, res: Response) => {
+    try {
+      const auth = requireAdopter(req, res);
+      if (!auth) return;
+      const { animalId, planId, appointmentIndex } = req.params;
+      const owns = await verifyAdopterOwnsAnimal(auth.userId, auth.tenantId, animalId);
+      if (!owns) return res.status(403).json({ error: 'Access denied' });
+
+      const idx = Number(appointmentIndex);
+      if (!Number.isInteger(idx) || idx < 0) {
+        return res.status(400).json({ error: 'Invalid appointment index' });
+      }
+
+      const multer = (await import('multer')).default;
+      // Require BOTH MIME and extension to be in the allowlist (defense in depth against
+      // file-type spoofing). Each MIME-extension combination is whitelisted explicitly.
+      const allowedMimeExtPairs: Record<string, string[]> = {
+        'image/jpeg': ['jpg', 'jpeg'],
+        'image/png': ['png'],
+        'image/gif': ['gif'],
+        'image/webp': ['webp'],
+        'image/heic': ['heic', 'heif'],
+        'image/heif': ['heic', 'heif'],
+        'image/bmp': ['bmp'],
+        'image/avif': ['avif'],
+        'application/pdf': ['pdf'],
+      };
+
+      const upload = multer({
+        storage: multer.memoryStorage(),
+        limits: { fileSize: 10 * 1024 * 1024 },
+        fileFilter: (_r, file, cb) => {
+          if (file.mimetype === 'image/svg+xml') {
+            cb(new Error('SVG files are not allowed'));
+            return;
+          }
+          const ext = file.originalname.toLowerCase().split('.').pop() || '';
+          const allowedExts = allowedMimeExtPairs[file.mimetype];
+          if (!allowedExts || !allowedExts.includes(ext)) {
+            cb(new Error('Only image (JPEG/PNG/GIF/WebP/HEIC/HEIF/BMP/AVIF) or PDF files are allowed; the file type and extension must match'));
+            return;
+          }
+          cb(null, true);
+        },
+      }).single('receipt');
+
+      upload(req, res, async (uploadErr) => {
+        if (uploadErr) {
+          return res.status(400).json({ error: uploadErr.message });
+        }
+
+        try {
+          const completedDate = (req.body?.completedDate as string | undefined)?.trim();
+          if (!completedDate || !/^\d{4}-\d{2}-\d{2}$/.test(completedDate)) {
+            return res.status(400).json({ error: 'completedDate (YYYY-MM-DD) is required' });
+          }
+          const notes = typeof req.body?.notes === 'string' && req.body.notes.trim().length > 0
+            ? req.body.notes.trim().slice(0, 500)
+            : null;
+
+          const [plan] = await db
+            .select()
+            .from(heartwormTreatmentPlans)
+            .where(and(
+              eq(heartwormTreatmentPlans.tenantId, auth.tenantId),
+              eq(heartwormTreatmentPlans.id, planId),
+              eq(heartwormTreatmentPlans.animalId, animalId),
+            ))
+            .limit(1);
+
+          if (!plan) {
+            return res.status(404).json({ error: 'Treatment plan not found' });
+          }
+
+          const appointments = Array.isArray(plan.appointments) ? [...plan.appointments] : [];
+          if (idx >= appointments.length) {
+            return res.status(400).json({ error: 'Appointment index out of range' });
+          }
+
+          // Optional receipt upload
+          let receiptObjectPath: string | null = appointments[idx]?.receiptObjectPath ?? null;
+          let receiptFileName: string | null = null;
+          let receiptContentType: string | null = null;
+          let receiptFileSize: number | null = null;
+          const file = req.file as Express.Multer.File | undefined;
+
+          if (file) {
+            // Magic-byte sniff: validate the leading bytes match the claimed MIME type
+            // for the most common formats. Defense in depth on top of MIME+ext allowlist.
+            const buf = file.buffer;
+            const startsWith = (sig: number[], offset = 0) =>
+              buf.length >= offset + sig.length &&
+              sig.every((b, i) => buf[offset + i] === b);
+            let signatureOk = true;
+            switch (file.mimetype) {
+              case 'application/pdf':
+                signatureOk = startsWith([0x25, 0x50, 0x44, 0x46, 0x2d]); // %PDF-
+                break;
+              case 'image/jpeg':
+                signatureOk = startsWith([0xff, 0xd8, 0xff]);
+                break;
+              case 'image/png':
+                signatureOk = startsWith([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+                break;
+              case 'image/gif':
+                signatureOk = startsWith([0x47, 0x49, 0x46, 0x38]); // GIF8
+                break;
+              case 'image/webp':
+                signatureOk = startsWith([0x52, 0x49, 0x46, 0x46]) && // RIFF
+                  startsWith([0x57, 0x45, 0x42, 0x50], 8); // WEBP
+                break;
+              case 'image/bmp':
+                signatureOk = startsWith([0x42, 0x4d]); // BM
+                break;
+              // HEIC/HEIF/AVIF have an ftyp box at offset 4; we accept these without
+              // strict signature checks because their box brand is variable.
+              default:
+                signatureOk = true;
+            }
+            if (!signatureOk) {
+              return res.status(400).json({ error: 'File contents do not match the declared file type' });
+            }
+
+            const { ObjectStorageService, objectStorageClient } = await import('../objectStorage');
+            const { randomUUID } = await import('crypto');
+            const objectStorageService = new ObjectStorageService();
+            const privateObjectDir = objectStorageService.getPrivateObjectDir();
+
+            let fileBuffer = file.buffer;
+            let contentType = file.mimetype;
+            const ext = file.originalname.toLowerCase().split('.').pop() || '';
+            if (ext === 'heic' || ext === 'heif' || contentType === 'image/heic' || contentType === 'image/heif') {
+              try {
+                const heicConvert = (await import('heic-convert')).default;
+                const converted = await heicConvert({ buffer: file.buffer, format: 'JPEG', quality: 0.9 });
+                fileBuffer = Buffer.from(converted);
+                contentType = 'image/jpeg';
+              } catch (convErr) {
+                console.error('[Adopter Portal HW] HEIC conversion failed; uploading original:', convErr);
+              }
+            }
+
+            const objectId = randomUUID();
+            const folder = 'heartworm-receipts';
+            const fullPath = `${privateObjectDir}/${auth.tenantId}/${folder}/${objectId}`;
+            const parts = fullPath.startsWith('/') ? fullPath.split('/') : `/${fullPath}`.split('/');
+            const bucketName = parts[1];
+            const objectName = parts.slice(2).join('/');
+            const bucket = objectStorageClient.bucket(bucketName);
+            const fileObj = bucket.file(objectName);
+            await fileObj.save(fileBuffer, { metadata: { contentType } });
+
+            const normalizedPath = `/objects/${auth.tenantId}/${folder}/${objectId}`;
+            await objectStorageService.trySetObjectEntityAclPolicy(normalizedPath, {
+              owner: auth.userId,
+              visibility: 'public',
+            });
+            receiptObjectPath = normalizedPath;
+            receiptFileName = file.originalname;
+            receiptContentType = contentType;
+            receiptFileSize = fileBuffer.length;
+          }
+
+          // Update the appointment in place
+          appointments[idx] = {
+            ...appointments[idx],
+            completedDate,
+            completedByAdopter: true,
+            ...(notes !== null ? { notes } : {}),
+            ...(receiptObjectPath ? { receiptObjectPath } : {}),
+          };
+
+          const [updatedPlan] = await db
+            .update(heartwormTreatmentPlans)
+            .set({ appointments, updatedAt: new Date() })
+            .where(and(
+              eq(heartwormTreatmentPlans.tenantId, auth.tenantId),
+              eq(heartwormTreatmentPlans.id, planId),
+            ))
+            .returning();
+
+          // Link the receipt into person_documents so staff can see it alongside other adopter docs
+          if (file && receiptObjectPath && receiptFileName) {
+            try {
+              const adopterEmail = req.user!.email;
+              const normalizedEmail = adopterEmail.toLowerCase().trim();
+              const [contact] = await db
+                .select({ id: contacts.id })
+                .from(contacts)
+                .where(and(
+                  eq(contacts.tenantId, auth.tenantId),
+                  sql`LOWER(TRIM(${contacts.email})) = ${normalizedEmail}`,
+                ))
+                .limit(1);
+
+              const apptLabel = appointments[idx]?.label || 'Heartworm Appointment';
+              const [animalRow] = await db
+                .select({ name: animals.name })
+                .from(animals)
+                .where(eq(animals.id, animalId))
+                .limit(1);
+              const animalName = animalRow?.name || 'Pet';
+
+              await db.insert(personDocuments).values({
+                tenantId: auth.tenantId,
+                personType: 'contact',
+                personId: contact?.id ?? null,
+                personEmail: adopterEmail,
+                documentType: 'uploaded',
+                documentSubtype: 'other',
+                title: `Heartworm Receipt — ${animalName} — ${apptLabel}`,
+                description: `Vet receipt uploaded by adopter for "${apptLabel}" on ${completedDate}.`,
+                objectPath: receiptObjectPath,
+                fileName: receiptFileName,
+                fileSize: receiptFileSize ?? undefined,
+                contentType: receiptContentType ?? undefined,
+                uploadedBy: auth.userId,
+              });
+            } catch (docErr) {
+              console.error('[Adopter Portal HW] Failed to link receipt to person_documents:', docErr);
+              // Non-fatal — appointment update already saved.
+            }
+          }
+
+          res.json({
+            id: updatedPlan.id,
+            appointments: updatedPlan.appointments,
+          });
+        } catch (innerErr) {
+          console.error('[Adopter Portal] Error completing HW appointment:', innerErr);
+          res.status(500).json({ error: 'Failed to mark appointment completed' });
+        }
+      });
+    } catch (error) {
+      console.error('[Adopter Portal] Error in HW appointment completion handler:', error);
+      res.status(500).json({ error: 'Failed to mark appointment completed' });
+    }
+  }
+);
+
+/**
+ * GET /api/adopter/pets/:animalId/heartworm-treatment-plan/:planId/contract
+ * Returns a printable HTML view of the heartworm treatment contract.
+ * Adopter can use the browser's "Save as PDF" to download.
+ */
+router.get('/pets/:animalId/heartworm-treatment-plan/:planId/contract', async (req: Request, res: Response) => {
+  try {
+    const auth = requireAdopter(req, res);
+    if (!auth) return;
+    const { animalId, planId } = req.params;
+    const owns = await verifyAdopterOwnsAnimal(auth.userId, auth.tenantId, animalId);
+    if (!owns) return res.status(403).json({ error: 'Access denied' });
+
+    const [plan] = await db
+      .select()
+      .from(heartwormTreatmentPlans)
+      .where(and(
+        eq(heartwormTreatmentPlans.tenantId, auth.tenantId),
+        eq(heartwormTreatmentPlans.id, planId),
+        eq(heartwormTreatmentPlans.animalId, animalId),
+      ))
+      .limit(1);
+
+    if (!plan) return res.status(404).json({ error: 'Treatment plan not found' });
+
+    // Only allow contract download once the rescue has formally sent the contract.
+    // The UI hides the button when contractSentAt is null; enforce the same on the server.
+    if (!plan.contractSentAt) {
+      return res.status(404).json({ error: 'Contract is not available yet' });
+    }
+
+    const [animalRow] = await db
+      .select({ name: animals.name })
+      .from(animals)
+      .where(eq(animals.id, animalId))
+      .limit(1);
+
+    const [tenantRow] = await db
+      .select({ name: tenants.name })
+      .from(tenants)
+      .where(eq(tenants.id, auth.tenantId))
+      .limit(1);
+
+    const animalName = animalRow?.name || 'Your Pet';
+    const tenantName = tenantRow?.name || 'the rescue organization';
+    const escape = (s: string | null | undefined) =>
+      String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
+
+    const appointments = Array.isArray(plan.appointments) ? plan.appointments : [];
+    const parseLocalDate = (s: string | null | undefined): Date | null => {
+      if (!s) return null;
+      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+      if (m) {
+        const dt = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+        return Number.isNaN(dt.getTime()) ? null : dt;
+      }
+      const dt = new Date(s);
+      return Number.isNaN(dt.getTime()) ? null : dt;
+    };
+
+    const apptRows = appointments
+      .map((a: any) => {
+        const date = parseLocalDate(a?.scheduledDate);
+        const formatted = date
+          ? date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+          : escape(a?.scheduledDate);
+        const completed = a?.completedDate
+          ? `<span style="color:#16a34a;font-weight:600;"> — Completed ${escape(a.completedDate)}</span>`
+          : '';
+        return `<tr>
+          <td style="padding:12px;border:1px solid #d1d5db;">${escape(a?.label)}</td>
+          <td style="padding:12px;border:1px solid #d1d5db;">${formatted}${completed}</td>
+        </tr>`;
+      })
+      .join('');
+
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Heartworm Treatment Contract — ${escape(animalName)}</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 40px; color: #111827; }
+    h1 { color: #1f2937; border-bottom: 2px solid #dc2626; padding-bottom: 12px; }
+    .warning { background: #fef2f2; border: 2px solid #dc2626; border-radius: 8px; padding: 16px; margin: 24px 0; }
+    .warning p { color: #dc2626; font-weight: bold; margin: 0; }
+    table { width: 100%; border-collapse: collapse; margin: 24px 0; }
+    th { background: #f3f4f6; padding: 12px; text-align: left; border: 1px solid #d1d5db; }
+    .location { background: #f9fafb; border-radius: 8px; padding: 16px; margin: 24px 0; }
+    .actions { margin: 16px 0 24px; }
+    .actions button { padding: 8px 16px; font-size: 14px; cursor: pointer; }
+    @media print { body { padding: 20px; } .actions { display: none; } }
+  </style>
+</head>
+<body>
+  <div class="actions">
+    <button onclick="window.print()">Print / Save as PDF</button>
+  </div>
+  <h1>Heartworm Treatment Contract</h1>
+  <h2>Patient: ${escape(animalName)}</h2>
+  <p><strong>Adopter:</strong> ${escape(plan.adopterName)}</p>
+
+  <div class="warning">
+    <p>IMPORTANT: Completion of ALL heartworm treatment appointments is MANDATORY. Failure to complete treatment may result in the dog being reclaimed by ${escape(tenantName)}.</p>
+  </div>
+
+  <h3>Appointment Schedule</h3>
+  <table>
+    <thead><tr><th>Appointment</th><th>Date</th></tr></thead>
+    <tbody>${apptRows}</tbody>
+  </table>
+
+  <h3>Treatment Location</h3>
+  <div class="location">
+    <p style="margin:0;font-weight:bold;">${escape(plan.locationName)}</p>
+    <p style="margin:4px 0 0 0;">${escape(plan.locationAddress)}</p>
+    <p style="margin:4px 0 0 0;">Phone: ${escape(plan.locationPhone)}</p>
+  </div>
+
+  ${plan.notes ? `<h3>Additional Notes</h3><p>${escape(plan.notes)}</p>` : ''}
+</body>
+</html>`;
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-store');
+    res.send(html);
+  } catch (error) {
+    console.error('[Adopter Portal] Error generating HW contract view:', error);
+    res.status(500).json({ error: 'Failed to load contract' });
   }
 });
 

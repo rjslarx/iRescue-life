@@ -130,6 +130,91 @@ interface ComplianceObligation {
   proofDocumentUrl: string | null;
 }
 
+interface HeartwormAppointment {
+  type: 'start_doxy' | 'first_injection' | 'second_third_injection' | 'recheck' | 'proheart';
+  label: string;
+  scheduledDate: string;
+  completedDate?: string | null;
+  notes?: string | null;
+  receiptObjectPath?: string | null;
+  completedByAdopter?: boolean;
+}
+
+interface HeartwormTreatmentPlan {
+  id: string;
+  appointments: HeartwormAppointment[];
+  locationName: string;
+  locationAddress: string;
+  locationPhone: string;
+  notes?: string | null;
+  contractSentAt: string | null;
+  adopterName: string;
+  createdAt: string;
+}
+
+const HW_INJECTION_REST_DAYS = 30;
+
+function startOfToday(): Date {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function parseISODate(s: string | null | undefined): Date | null {
+  if (!s) return null;
+  // Parse pure YYYY-MM-DD strings as LOCAL midnight (not UTC) so day-boundary
+  // comparisons against startOfToday() are timezone-safe.
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if (dateOnly) {
+    const [, y, m, d] = dateOnly;
+    const dt = new Date(Number(y), Number(m) - 1, Number(d));
+    return Number.isNaN(dt.getTime()) ? null : dt;
+  }
+  const d = new Date(s);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function addDays(date: Date, days: number): Date {
+  const d = new Date(date);
+  d.setDate(d.getDate() + days);
+  return d;
+}
+
+type HwApptStatus = 'completed' | 'overdue' | 'today' | 'upcoming';
+
+function getHwApptStatus(appt: HeartwormAppointment): HwApptStatus {
+  if (appt.completedDate) return 'completed';
+  const today = startOfToday();
+  const scheduled = parseISODate(appt.scheduledDate);
+  if (!scheduled) return 'upcoming';
+  if (scheduled.getTime() === today.getTime()) return 'today';
+  if (scheduled.getTime() < today.getTime()) return 'overdue';
+  return 'upcoming';
+}
+
+function getExerciseRestriction(appointments: HeartwormAppointment[]): {
+  active: boolean;
+  endDate: Date | null;
+  startedFromLabel: string | null;
+} {
+  const today = startOfToday();
+  let latestEnd: Date | null = null;
+  let label: string | null = null;
+  for (const appt of appointments) {
+    if (appt.type !== 'first_injection' && appt.type !== 'second_third_injection') continue;
+    const start = parseISODate(appt.completedDate || appt.scheduledDate);
+    if (!start) continue;
+    const end = addDays(start, HW_INJECTION_REST_DAYS);
+    if (start.getTime() <= today.getTime() && today.getTime() <= end.getTime()) {
+      if (!latestEnd || end.getTime() > latestEnd.getTime()) {
+        latestEnd = end;
+        label = appt.label;
+      }
+    }
+  }
+  return { active: !!latestEnd, endDate: latestEnd, startedFromLabel: label };
+}
+
 export default function AdopterPetDetailPage() {
   const { animalId } = useParams<{ animalId: string }>();
   const { toast } = useToast();
@@ -155,6 +240,13 @@ export default function AdopterPetDetailPage() {
   const [obligationReceiptFile, setObligationReceiptFile] = useState<File | null>(null);
   const [obligationReceiptUrl, setObligationReceiptUrl] = useState<string | null>(null);
   const [isUploadingObligationReceipt, setIsUploadingObligationReceipt] = useState(false);
+  const [showHwApptDialog, setShowHwApptDialog] = useState(false);
+  const [selectedHwApptIndex, setSelectedHwApptIndex] = useState<number | null>(null);
+  const [hwReceiptFile, setHwReceiptFile] = useState<File | null>(null);
+  const [hwApptCompletedDate, setHwApptCompletedDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [hwApptNotes, setHwApptNotes] = useState<string>('');
+  const [isSubmittingHwAppt, setIsSubmittingHwAppt] = useState(false);
+  const hwReceiptInputRef = useRef<HTMLInputElement>(null);
 
   const { data: pet, isLoading: petLoading } = useQuery<AdoptedAnimal>({
     queryKey: ["/api/adopter/pets", animalId],
@@ -203,6 +295,11 @@ export default function AdopterPetDetailPage() {
 
   const { data: complianceObligations } = useQuery<ComplianceObligation[]>({
     queryKey: ["/api/adopter/pets", animalId, "compliance-obligations"],
+    enabled: !!animalId && activeTab === "compliance",
+  });
+
+  const { data: heartwormPlan, isLoading: isHeartwormPlanLoading } = useQuery<HeartwormTreatmentPlan | null>({
+    queryKey: ["/api/adopter/pets", animalId, "heartworm-treatment-plan"],
     enabled: !!animalId && activeTab === "compliance",
   });
 
@@ -536,6 +633,170 @@ export default function AdopterPetDetailPage() {
               </CardContent>
             </Card>
           )}
+
+          {!isHeartwormPlanLoading && heartwormPlan && Array.isArray(heartwormPlan.appointments) && heartwormPlan.appointments.length > 0 && (() => {
+            const restriction = getExerciseRestriction(heartwormPlan.appointments);
+            return (
+              <Card data-testid="card-heartworm-treatment">
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Heart className="h-5 w-5 text-red-600" />
+                    Heartworm Treatment
+                  </CardTitle>
+                  <CardDescription>
+                    Stay on schedule with {pet.name}'s heartworm treatment plan. Mark appointments completed and upload vet receipts so your rescue can verify.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Exercise restriction panel */}
+                  <div
+                    className={`rounded-md p-4 border ${
+                      restriction.active
+                        ? 'border-red-300 bg-red-50 dark:bg-red-950/30 dark:border-red-900'
+                        : 'border-border bg-muted/40'
+                    }`}
+                    data-testid="panel-exercise-restriction"
+                  >
+                    <div className="flex items-start gap-3">
+                      {restriction.active ? (
+                        <AlertTriangle className="h-5 w-5 text-red-600 mt-0.5 shrink-0" />
+                      ) : (
+                        <CheckCircle2 className="h-5 w-5 text-muted-foreground mt-0.5 shrink-0" />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold" data-testid="text-exercise-restriction-headline">
+                          {restriction.active ? 'Strict rest in effect' : 'No exercise restriction in effect'}
+                        </p>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {restriction.active && restriction.endDate ? (
+                            <>
+                              Keep {pet.name} crate-rested and on a leash for short potty breaks only — through{' '}
+                              <span className="font-semibold text-foreground" data-testid="text-restriction-end-date">
+                                {restriction.endDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+                              </span>
+                              {restriction.startedFromLabel ? <> (following the {restriction.startedFromLabel}).</> : '.'}{' '}
+                              Vigorous activity can be life-threatening during this window.
+                            </>
+                          ) : (
+                            <>Activity restrictions begin on the day of each immiticide injection and last {HW_INJECTION_REST_DAYS} days.</>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Appointment timeline */}
+                  <div className="space-y-2">
+                    {heartwormPlan.appointments.map((appt, idx) => {
+                      const status = getHwApptStatus(appt);
+                      const scheduled = parseISODate(appt.scheduledDate);
+                      const completed = parseISODate(appt.completedDate);
+                      const statusBadge =
+                        status === 'completed' ? (
+                          <Badge variant="default" className="bg-green-600 hover:bg-green-600" data-testid={`badge-hw-status-${idx}`}>
+                            <CheckCircle2 className="h-3 w-3 mr-1" /> Completed
+                          </Badge>
+                        ) : status === 'overdue' ? (
+                          <Badge variant="destructive" data-testid={`badge-hw-status-${idx}`}>
+                            <AlertTriangle className="h-3 w-3 mr-1" /> Overdue
+                          </Badge>
+                        ) : status === 'today' ? (
+                          <Badge variant="default" data-testid={`badge-hw-status-${idx}`}>
+                            <Clock className="h-3 w-3 mr-1" /> Today
+                          </Badge>
+                        ) : (
+                          <Badge variant="secondary" data-testid={`badge-hw-status-${idx}`}>
+                            <Calendar className="h-3 w-3 mr-1" /> Upcoming
+                          </Badge>
+                        );
+
+                      return (
+                        <div
+                          key={`${appt.type}-${idx}`}
+                          className="border rounded-md p-3 flex flex-row flex-wrap items-start justify-between gap-3"
+                          data-testid={`row-hw-appt-${idx}`}
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="font-medium" data-testid={`text-hw-appt-label-${idx}`}>{appt.label}</p>
+                              {statusBadge}
+                            </div>
+                            <p className="text-sm text-muted-foreground mt-1" data-testid={`text-hw-appt-scheduled-${idx}`}>
+                              Scheduled: {scheduled ? scheduled.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) : appt.scheduledDate}
+                            </p>
+                            {completed && (
+                              <p className="text-sm text-green-700 dark:text-green-400 mt-0.5" data-testid={`text-hw-appt-completed-${idx}`}>
+                                Completed: {completed.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                              </p>
+                            )}
+                            {appt.notes && (
+                              <p className="text-sm text-muted-foreground mt-0.5">{appt.notes}</p>
+                            )}
+                            {appt.receiptObjectPath && (
+                              <Button
+                                asChild
+                                variant="link"
+                                size="sm"
+                                className="px-0 h-auto mt-1"
+                                data-testid={`link-hw-receipt-${idx}`}
+                              >
+                                <a href={appt.receiptObjectPath} target="_blank" rel="noopener noreferrer">
+                                  <FileText className="h-3 w-3 mr-1" /> View uploaded receipt
+                                </a>
+                              </Button>
+                            )}
+                          </div>
+                          {!appt.completedDate && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setSelectedHwApptIndex(idx);
+                                setHwApptCompletedDate(new Date().toISOString().split('T')[0]);
+                                setHwApptNotes('');
+                                setHwReceiptFile(null);
+                                if (hwReceiptInputRef.current) hwReceiptInputRef.current.value = '';
+                                setShowHwApptDialog(true);
+                              }}
+                              data-testid={`button-mark-hw-completed-${idx}`}
+                            >
+                              <CheckCircle className="h-4 w-4 mr-1" /> Mark completed
+                            </Button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Treatment location */}
+                  <div className="rounded-md bg-muted/40 p-3" data-testid="panel-hw-location">
+                    <p className="text-sm font-medium">Treatment Location</p>
+                    <p className="text-sm text-muted-foreground">{heartwormPlan.locationName}</p>
+                    <p className="text-sm text-muted-foreground">{heartwormPlan.locationAddress}</p>
+                    <p className="text-sm text-muted-foreground">Phone: {heartwormPlan.locationPhone}</p>
+                  </div>
+
+                  {/* Contract download */}
+                  {heartwormPlan.contractSentAt && (
+                    <Button
+                      variant="outline"
+                      asChild
+                      data-testid="button-download-hw-contract"
+                    >
+                      <a
+                        href={`/api/adopter/pets/${animalId}/heartworm-treatment-plan/${heartwormPlan.id}/contract`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <Download className="h-4 w-4 mr-2" />
+                        Download Treatment Contract
+                      </a>
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })()}
 
           {complianceObligations && complianceObligations.length > 0 && (
             <Card>
@@ -1023,6 +1284,130 @@ export default function AdopterPetDetailPage() {
               )}
             </CardContent>
           </Card>
+
+          {/* Heartworm appointment completion dialog */}
+          <Dialog
+            open={showHwApptDialog}
+            onOpenChange={(open) => {
+              if (!isSubmittingHwAppt) {
+                setShowHwApptDialog(open);
+                if (!open) {
+                  setSelectedHwApptIndex(null);
+                  setHwReceiptFile(null);
+                  setHwApptNotes('');
+                  if (hwReceiptInputRef.current) hwReceiptInputRef.current.value = '';
+                }
+              }
+            }}
+          >
+            <DialogContent data-testid="dialog-mark-hw-completed">
+              <DialogHeader>
+                <DialogTitle>Mark Appointment Completed</DialogTitle>
+                <DialogDescription>
+                  {selectedHwApptIndex !== null && heartwormPlan?.appointments?.[selectedHwApptIndex]
+                    ? heartwormPlan.appointments[selectedHwApptIndex].label
+                    : 'Heartworm appointment'}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="hw-completed-date">Date completed</Label>
+                  <Input
+                    id="hw-completed-date"
+                    type="date"
+                    value={hwApptCompletedDate}
+                    onChange={(e) => setHwApptCompletedDate(e.target.value)}
+                    max={new Date().toISOString().split('T')[0]}
+                    data-testid="input-hw-completed-date"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="hw-receipt-file">Vet receipt (optional)</Label>
+                  <Input
+                    id="hw-receipt-file"
+                    ref={hwReceiptInputRef}
+                    type="file"
+                    accept="image/*,application/pdf"
+                    onChange={(e) => setHwReceiptFile(e.target.files?.[0] || null)}
+                    data-testid="input-hw-receipt-file"
+                  />
+                  <p className="text-xs text-muted-foreground">Image or PDF, up to 10MB.</p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="hw-appt-notes">Notes (optional)</Label>
+                  <Textarea
+                    id="hw-appt-notes"
+                    value={hwApptNotes}
+                    onChange={(e) => setHwApptNotes(e.target.value.slice(0, 500))}
+                    placeholder="Anything your rescue should know about this visit?"
+                    rows={3}
+                    data-testid="textarea-hw-appt-notes"
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button
+                  variant="ghost"
+                  onClick={() => setShowHwApptDialog(false)}
+                  disabled={isSubmittingHwAppt}
+                  data-testid="button-cancel-hw-completed"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={async () => {
+                    if (selectedHwApptIndex === null || !heartwormPlan) return;
+                    if (!hwApptCompletedDate || !/^\d{4}-\d{2}-\d{2}$/.test(hwApptCompletedDate)) {
+                      toast({ title: 'Please choose a valid completion date.', variant: 'destructive' });
+                      return;
+                    }
+                    setIsSubmittingHwAppt(true);
+                    try {
+                      const formData = new FormData();
+                      formData.append('completedDate', hwApptCompletedDate);
+                      if (hwApptNotes.trim().length > 0) {
+                        formData.append('notes', hwApptNotes.trim());
+                      }
+                      if (hwReceiptFile) {
+                        formData.append('receipt', hwReceiptFile);
+                      }
+                      const res = await fetch(
+                        `/api/adopter/pets/${animalId}/heartworm-treatment-plan/${heartwormPlan.id}/appointments/${selectedHwApptIndex}/complete`,
+                        { method: 'POST', body: formData, credentials: 'include' }
+                      );
+                      if (!res.ok) {
+                        const err = await res.json().catch(() => ({}));
+                        throw new Error(err.error || 'Failed to mark appointment completed');
+                      }
+                      await queryClient.invalidateQueries({
+                        queryKey: ['/api/adopter/pets', animalId, 'heartworm-treatment-plan'],
+                      });
+                      toast({ title: 'Appointment marked completed.' });
+                      setShowHwApptDialog(false);
+                      setSelectedHwApptIndex(null);
+                      setHwReceiptFile(null);
+                      setHwApptNotes('');
+                      if (hwReceiptInputRef.current) hwReceiptInputRef.current.value = '';
+                    } catch (err: any) {
+                      toast({ title: err.message || 'Failed to mark appointment completed', variant: 'destructive' });
+                    } finally {
+                      setIsSubmittingHwAppt(false);
+                    }
+                  }}
+                  disabled={isSubmittingHwAppt}
+                  data-testid="button-submit-hw-completed"
+                >
+                  {isSubmittingHwAppt ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...
+                    </>
+                  ) : (
+                    'Save'
+                  )}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </TabsContent>
 
         <TabsContent value="health" className="space-y-4">
