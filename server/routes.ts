@@ -4329,7 +4329,13 @@ Crawl-delay: 1
         .where(and(
           eq(complianceReminders.tenantId, req.tenant!.id),
           eq(complianceReminders.reminderType, 'bio_photo'),
-          eq(complianceReminders.state, 'pending')
+          eq(complianceReminders.state, 'pending'),
+          // Exclude animals that have left the shelter (adopted, transported,
+          // deceased, returned, etc.) — bio/photo follow-ups only make sense
+          // for animals still in foster care. Also restrict to active foster
+          // placements so a completed/returned foster stint doesn't keep nagging.
+          notInArray(animals.status, TERMINAL_STATUSES),
+          eq(fosterAnimals.status, 'active'),
         ));
 
       const nowMs = Date.now();
