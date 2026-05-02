@@ -21,7 +21,7 @@ import NotificationBell from "@/components/NotificationBell";
 import { AddMedicalOrderDialog } from "@/components/AddMedicalOrderDialog";
 import { RecordOfflineDonationDialog } from "@/components/RecordOfflineDonationDialog";
 import { SendHoldHarmlessDialog } from "@/components/SendHoldHarmlessDialog";
-import { useEffect, useState } from "react";
+import { useLayoutEffect, useState } from "react";
 
 interface BreadcrumbItem {
   label: string;
@@ -65,7 +65,9 @@ export default function DashboardLayout({ children, title, description, actions,
   // Radix portals (Dialog, Popover, DropdownMenu, Toast) — which render outside
   // this component's subtree — also pick up the mint surface tokens. Scoped
   // automatically: DashboardLayout only mounts on staff/admin routes.
-  useEffect(() => {
+  // Uses useLayoutEffect so the body class is set synchronously before paint,
+  // avoiding a one-frame flicker for portals that mount on first render.
+  useLayoutEffect(() => {
     document.body.classList.add("admin-portal-theme");
     return () => {
       document.body.classList.remove("admin-portal-theme");
