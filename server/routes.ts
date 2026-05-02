@@ -45103,7 +45103,6 @@ Use timestamps like [00:00] to help with pacing.`;
             fosterEmail: fosterSessionsTable.fosterEmail,
             signedAt: fosterSessionsTable.signedAt,
             contractPdfUrl: fosterSessionsTable.contractPdfUrl,
-            animalName: fosterSessionsTable.animalName,
           })
           .from(fosterSessionsTable)
           .where(
@@ -45119,12 +45118,12 @@ Use timestamps like [00:00] to help with pacing.`;
           if (existingDocSourceIds.has(ag.id)) continue;
           allDocuments.push({
             id: `fa-${ag.id}`,
-            title: `Foster Agreement - ${ag.animalName || 'Unknown'}`,
+            title: `Foster Agreement`,
             description: `Signed by ${ag.fosterName} on ${ag.signedAt?.toLocaleDateString() || 'unknown date'}`,
             documentType: 'agreement',
             documentSubtype: 'foster_agreement',
             objectPath: ag.contractPdfUrl,
-            fileName: `foster-agreement-${(ag.animalName || 'unknown').replace(/\s+/g, '-').toLowerCase()}.pdf`,
+            fileName: `foster-agreement.pdf`,
             fileSize: null,
             createdAt: ag.signedAt?.toISOString() || new Date().toISOString(),
           });
