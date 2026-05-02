@@ -398,13 +398,25 @@ export async function createContactFromDonation(
 
     return updated;
   } else {
-    return upsertContact({
-      tenantId,
-      email: donorEmail,
-      name: donorName,
-      source: 'donation',
-      tags: ['Donor'],
-    });
+    // Create new contact with the first donation already recorded.
+    // upsertContact() doesn't accept donation fields, so insert directly
+    // to make sure the first donation amount is captured (otherwise the
+    // contact would start at 0 and only later donations would increment).
+    const [created] = await db
+      .insert(contacts)
+      .values({
+        tenantId,
+        email: donorEmail,
+        name: donorName,
+        source: ['donation'],
+        tags: ['Donor'],
+        totalDonated: amount,
+        donationCount: 1,
+        lastDonationDate: new Date(),
+      })
+      .returning();
+
+    return created;
   }
 }
 
