@@ -18,7 +18,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { TERMINAL_STATUSES } from "@shared/schema";
+import { TERMINAL_STATUSES, type Tenant } from "@shared/schema";
 import {
   Sparkles,
   Copy,
@@ -35,6 +35,7 @@ import {
   Settings,
   PenLine,
   MessageCircle,
+  ExternalLink,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -205,6 +206,19 @@ export default function PostOptimizerPage() {
     queryKey: ["/api/animals"],
   });
 
+  const { data: tenantData } = useQuery<{ tenant: Tenant }>({
+    queryKey: ["/api/tenant"],
+  });
+
+  const facebookUrl = useMemo(() => {
+    const raw = tenantData?.tenant?.socialFacebook?.trim();
+    if (raw) {
+      // Make sure it has a scheme so window.open treats it as absolute.
+      return /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+    }
+    return "https://www.facebook.com";
+  }, [tenantData]);
+
   const animals = useMemo(() => {
     const list = animalsData?.animals ?? [];
     // Hide archived animals — anything in a terminal status (adopted,
@@ -280,6 +294,46 @@ export default function PostOptimizerPage() {
         variant: "destructive",
       });
     }
+  };
+
+  /**
+   * Copy a step's text to the clipboard AND open Facebook in a new tab so the
+   * user can immediately paste. Uses the tenant's configured Facebook page
+   * URL when available (so they land on their own page composer); otherwise
+   * falls back to facebook.com.
+   *
+   * Mobile note: window.open is called *before* the await so the new tab is
+   * treated as a direct user gesture by Safari/Chrome on iOS — otherwise
+   * mobile browsers will silently block the popup.
+   */
+  const copyAndOpenFacebook = (
+    text: string,
+    label: string,
+    setCopied: (v: boolean) => void
+  ) => {
+    const newWindow = window.open(facebookUrl, "_blank", "noopener,noreferrer");
+    if (newWindow) {
+      newWindow.opener = null;
+    }
+    void (async () => {
+      try {
+        await navigator.clipboard.writeText(text);
+        setCopied(true);
+        toast({
+          title: `${label} copied — paste it into Facebook`,
+          description:
+            "Facebook opened in a new tab. Long-press or Ctrl/Cmd+V to paste.",
+        });
+        setTimeout(() => setCopied(false), 2000);
+      } catch {
+        toast({
+          title: "Copy failed",
+          description:
+            "Facebook opened in a new tab, but copying was blocked. Select the text manually.",
+          variant: "destructive",
+        });
+      }
+    })();
   };
 
   const isPending = optimizeMutation.isPending;
@@ -637,21 +691,37 @@ export default function PostOptimizerPage() {
                             : "No outbound links — Facebook-friendly."}
                         </CardDescription>
                       </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() =>
-                          copyToClipboard(result.optimizedCaption, "Caption", setCopiedCaption)
-                        }
-                        data-testid="button-copy-caption"
-                      >
-                        {copiedCaption ? (
-                          <Check className="h-4 w-4 mr-2" />
-                        ) : (
-                          <Copy className="h-4 w-4 mr-2" />
-                        )}
-                        {copiedCaption ? "Copied" : "Copy to Clipboard"}
-                      </Button>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            copyToClipboard(result.optimizedCaption, "Caption", setCopiedCaption)
+                          }
+                          data-testid="button-copy-caption"
+                        >
+                          {copiedCaption ? (
+                            <Check className="h-4 w-4 mr-2" />
+                          ) : (
+                            <Copy className="h-4 w-4 mr-2" />
+                          )}
+                          {copiedCaption ? "Copied" : "Copy"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() =>
+                            copyAndOpenFacebook(
+                              result.optimizedCaption,
+                              "Caption",
+                              setCopiedCaption
+                            )
+                          }
+                          data-testid="button-open-facebook-caption"
+                        >
+                          <ExternalLink className="h-4 w-4 mr-2" />
+                          Copy &amp; Open Facebook
+                        </Button>
+                      </div>
                     </div>
                   </CardHeader>
                   <CardContent>
@@ -705,21 +775,37 @@ export default function PostOptimizerPage() {
                           );
                         })()}
                       </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() =>
-                          copyToClipboard(result.firstComment, "First comment", setCopiedComment)
-                        }
-                        data-testid="button-copy-comment"
-                      >
-                        {copiedComment ? (
-                          <Check className="h-4 w-4 mr-2" />
-                        ) : (
-                          <Copy className="h-4 w-4 mr-2" />
-                        )}
-                        {copiedComment ? "Copied" : "Copy to Clipboard"}
-                      </Button>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            copyToClipboard(result.firstComment, "First comment", setCopiedComment)
+                          }
+                          data-testid="button-copy-comment"
+                        >
+                          {copiedComment ? (
+                            <Check className="h-4 w-4 mr-2" />
+                          ) : (
+                            <Copy className="h-4 w-4 mr-2" />
+                          )}
+                          {copiedComment ? "Copied" : "Copy"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() =>
+                            copyAndOpenFacebook(
+                              result.firstComment,
+                              "First comment",
+                              setCopiedComment
+                            )
+                          }
+                          data-testid="button-open-facebook-comment"
+                        >
+                          <ExternalLink className="h-4 w-4 mr-2" />
+                          Copy &amp; Open Facebook
+                        </Button>
+                      </div>
                     </div>
                   </CardHeader>
                   <CardContent>
