@@ -61,12 +61,15 @@ export default function DashboardLayout({ children, title, description, actions,
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [fabOpen, setFabOpen] = useState(false);
 
-  // Apply mint staff-portal theme to <body> while this layout is mounted so
-  // Radix portals (Dialog, Popover, DropdownMenu, Toast) — which render outside
-  // this component's subtree — also pick up the mint surface tokens. Scoped
-  // automatically: DashboardLayout only mounts on staff/admin routes.
-  // Uses useLayoutEffect so the body class is set synchronously before paint,
-  // avoiding a one-frame flicker for portals that mount on first render.
+  // Mirror the mint sidebar theme onto <body> while this layout is mounted.
+  // The mobile sidebar renders inside a <SheetContent> that Radix portals to
+  // <body>, so it lives outside the dashboard subtree and won't inherit the
+  // mint --sidebar-* tokens unless the class is on <body> too.
+  // This is safe even though it touches every descendant of <body>: the
+  // .admin-portal-theme rule only redefines --sidebar-* tokens, so non-sidebar
+  // surfaces (cards, popovers, dialogs, dropdowns, toasts) are unaffected —
+  // they don't read sidebar tokens. useLayoutEffect runs synchronously before
+  // paint to avoid a one-frame flash on the mobile sidebar's first open.
   useLayoutEffect(() => {
     document.body.classList.add("admin-portal-theme");
     return () => {

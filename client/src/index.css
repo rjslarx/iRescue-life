@@ -244,45 +244,33 @@
 }
 
 /**
- * Tenant Staff Portal Theme — Soft Mint Palette (light mode only)
+ * Tenant Staff Portal Sidebar — Soft Mint Palette (light mode only)
  *
- * Scoped to the staff/admin DashboardLayout root so it does NOT bleed into
+ * Narrowed scope: only the left navigation sidebar uses the mint palette.
+ * The rest of the staff portal (page background, cards, popovers, dialogs,
+ * dropdowns, toasts, muted insets, borders, inputs) inherits the original
+ * cool-gray/white tokens defined in `:root`.
+ *
+ * Applied to the staff/admin DashboardLayout root so it does NOT bleed into
  * the public site, adopter portal, foster portal, platform admin, or login pages.
  *
- * Only redefines neutral surface/text tokens. Intentionally does NOT touch
- * --primary, --secondary, --accent, --success, --warning, --destructive
- * (those are set per-tenant by useTenantBranding) or chart-* tokens.
+ * Intentionally does NOT touch --primary, --secondary, --accent, --success,
+ * --warning, --destructive (set per-tenant by useTenantBranding) or chart-* tokens.
  *
- * Palette anchors:
- *   #F0FDF4 background ≈ hsl(138 76% 97%)
- *   #DCFCE7 cards/panels ≈ hsl(141 84% 93%)
- *   #1E293B text ≈ hsl(217 33% 17%)
+ * Sidebar palette anchors:
+ *   sidebar bg     ≈ hsl(141 70% 91%)  (~#DCF4E3 honeydew mint)
+ *   sidebar accent ≈ hsl(141 50% 86%)  (hover/active state)
+ *   sidebar border ≈ hsl(141 35% 82%)
+ *   sidebar text   ≈ hsl(217 33% 17%)  (#1E293B deep slate)
  */
 /* Gated to light mode only — when `.dark` is on <html> the dark token set
  * defined in `.dark` stays authoritative and the mint overrides do not apply. */
 html:not(.dark) .admin-portal-theme {
-  --background: 138 76% 97%;
-  --foreground: 217 33% 17%;
-
-  --card: 141 84% 93%;
-  --card-foreground: 217 33% 17%;
-  --card-border: 141 40% 85%;
-
-  --popover: 141 84% 93%;
-  --popover-foreground: 217 33% 17%;
-  --popover-border: 141 40% 83%;
-
   --sidebar: 141 70% 91%;
   --sidebar-foreground: 217 33% 17%;
   --sidebar-border: 141 35% 82%;
   --sidebar-accent: 141 50% 86%;
   --sidebar-accent-foreground: 217 33% 17%;
-
-  --muted: 141 60% 90%;
-  --muted-foreground: 217 15% 38%;
-
-  --border: 141 35% 85%;
-  --input: 141 30% 75%;
 }
 
 /**
