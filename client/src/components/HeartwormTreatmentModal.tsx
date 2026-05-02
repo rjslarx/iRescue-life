@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
-import { Loader2, Calendar, MapPin, Phone, Send, Printer, AlertTriangle, Heart, Check } from "lucide-react";
+import { Loader2, Calendar, MapPin, Phone, Send, Printer, AlertTriangle, Heart, Check, FileText, User } from "lucide-react";
 import { format, addDays, addMonths } from "date-fns";
 import type { Animal } from "@shared/schema";
 
@@ -33,6 +33,22 @@ interface Appointment {
   scheduledDate: string;
   completedDate?: string | null;
   notes?: string | null;
+  receiptObjectPath?: string | null;
+  completedByAdopter?: boolean;
+}
+
+interface ExistingPlan {
+  id: string;
+  adopterName: string;
+  adopterEmail: string;
+  adopterPhone?: string | null;
+  locationName: string;
+  locationAddress: string;
+  locationPhone: string;
+  notes?: string | null;
+  appointments: Appointment[];
+  contractSentAt?: string | null;
+  createdAt?: string | null;
 }
 
 function generateDefaultAppointments(startDate: Date): Appointment[] {
@@ -91,7 +107,7 @@ export function HeartwormTreatmentModal({
   const [locationPhone, setLocationPhone] = useState('281-993-0300');
   const [notes, setNotes] = useState('');
   const [planId, setPlanId] = useState<string | null>(null);
-  const [step, setStep] = useState<'schedule' | 'review' | 'complete'>('schedule');
+  const [step, setStep] = useState<'schedule' | 'review' | 'complete' | 'view'>('schedule');
   const [adopterName, setAdopterName] = useState(initialAdopterName);
   const [adopterEmail, setAdopterEmail] = useState(initialAdopterEmail);
   const [adopterPhone, setAdopterPhone] = useState(initialAdopterPhone);
@@ -113,6 +129,35 @@ export function HeartwormTreatmentModal({
       setAdopterPhone(initialAdopterPhone);
     }
   }, [open, initialAdopterName, initialAdopterEmail, initialAdopterPhone]);
+
+  // When opened, look for an existing plan for this animal so staff can see
+  // adopter-marked completions and uploaded receipts instead of always going
+  // through the create wizard.
+  const { data: existingPlansData, isLoading: isLoadingExisting } = useQuery<{ plans: ExistingPlan[] }>({
+    queryKey: ['/api/heartworm-treatment-plans', { animalId: resolvedAnimalId }],
+    enabled: open && !!resolvedAnimalId,
+  });
+
+  const existingPlan: ExistingPlan | null = existingPlansData?.plans?.[0] ?? null;
+
+  // If a plan already exists, switch the modal into "view" mode and hydrate
+  // local state from the saved plan.
+  useEffect(() => {
+    if (!open || !existingPlan || step === 'complete') return;
+    setPlanId(existingPlan.id);
+    setAdopterName(existingPlan.adopterName ?? '');
+    setAdopterEmail(existingPlan.adopterEmail ?? '');
+    setAdopterPhone(existingPlan.adopterPhone ?? '');
+    setLocationName(existingPlan.locationName ?? '');
+    setLocationAddress(existingPlan.locationAddress ?? '');
+    setLocationPhone(existingPlan.locationPhone ?? '');
+    setNotes(existingPlan.notes ?? '');
+    setAppointments(Array.isArray(existingPlan.appointments) ? existingPlan.appointments : []);
+    setStep('view');
+    // Intentionally NOT depending on `step` so re-loads after the user
+    // navigates inside the view don't bounce them back.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, existingPlan?.id]);
 
   const handleStartDateChange = (newDate: string) => {
     setStartDate(newDate);
@@ -284,8 +329,133 @@ export function HeartwormTreatmentModal({
             {step === 'schedule' && 'Set up the treatment schedule for this heartworm positive dog.'}
             {step === 'review' && 'Review the treatment schedule before creating the plan.'}
             {step === 'complete' && 'Treatment plan created successfully!'}
+            {step === 'view' && 'Treatment plan in progress — adopter-marked completions and uploaded receipts shown below.'}
           </DialogDescription>
         </DialogHeader>
+
+        {step === 'view' && (
+          <div className="space-y-4" data-testid="section-hw-plan-view">
+            {isLoadingExisting && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading treatment plan...
+              </div>
+            )}
+
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <User className="h-4 w-4" />
+                  Adopter
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-1 text-sm">
+                <p className="font-medium" data-testid="text-view-adopter-name">{adopterName}</p>
+                <p className="text-muted-foreground" data-testid="text-view-adopter-email">{adopterEmail}</p>
+                {adopterPhone && <p className="text-muted-foreground" data-testid="text-view-adopter-phone">{adopterPhone}</p>}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Calendar className="h-4 w-4" />
+                  Appointment Progress
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {appointments.map((appt, index) => {
+                  const completed = !!appt.completedDate;
+                  return (
+                    <div
+                      key={`${appt.type}-${index}`}
+                      className="border rounded-md p-3 flex flex-row flex-wrap items-start justify-between gap-3"
+                      data-testid={`row-staff-hw-appt-${index}`}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Badge variant="outline" className="text-xs">Appt {index + 1}</Badge>
+                          <span className="font-medium text-sm" data-testid={`text-staff-hw-appt-label-${index}`}>{appt.label}</span>
+                          {completed ? (
+                            <Badge variant="default" className="bg-green-600 hover:bg-green-600" data-testid={`badge-staff-hw-completed-${index}`}>
+                              <Check className="h-3 w-3 mr-1" /> Completed
+                            </Badge>
+                          ) : (
+                            <Badge variant="secondary" data-testid={`badge-staff-hw-pending-${index}`}>Pending</Badge>
+                          )}
+                          {appt.completedByAdopter && (
+                            <Badge variant="outline" data-testid={`badge-staff-hw-by-adopter-${index}`}>
+                              <User className="h-3 w-3 mr-1" /> Marked by adopter
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Scheduled: {format(new Date(appt.scheduledDate), 'MMM d, yyyy')}
+                        </p>
+                        {completed && appt.completedDate && (
+                          <p className="text-sm text-green-700 dark:text-green-400 mt-0.5" data-testid={`text-staff-hw-completed-date-${index}`}>
+                            Completed: {format(new Date(appt.completedDate), 'MMM d, yyyy')}
+                          </p>
+                        )}
+                        {appt.notes && (
+                          <p className="text-sm text-muted-foreground mt-1" data-testid={`text-staff-hw-notes-${index}`}>
+                            Notes: {appt.notes}
+                          </p>
+                        )}
+                      </div>
+                      {appt.receiptObjectPath && (
+                        <Button
+                          asChild
+                          variant="outline"
+                          size="sm"
+                          data-testid={`button-staff-hw-receipt-${index}`}
+                        >
+                          <a href={appt.receiptObjectPath} target="_blank" rel="noopener noreferrer">
+                            <FileText className="h-4 w-4 mr-2" />
+                            View receipt
+                          </a>
+                        </Button>
+                      )}
+                    </div>
+                  );
+                })}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <MapPin className="h-4 w-4" />
+                  Treatment Location
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-1 text-sm">
+                <p className="font-medium">{locationName}</p>
+                <p className="text-muted-foreground">{locationAddress}</p>
+                <p className="text-muted-foreground flex items-center gap-1">
+                  <Phone className="h-3 w-3" /> {locationPhone}
+                </p>
+              </CardContent>
+            </Card>
+
+            {notes && (
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">Notes</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm whitespace-pre-wrap">{notes}</p>
+                </CardContent>
+              </Card>
+            )}
+
+            <DialogFooter>
+              <Button onClick={handleClose} data-testid="button-close-view">
+                Close
+              </Button>
+            </DialogFooter>
+          </div>
+        )}
 
         {step === 'schedule' && (
           <div className="space-y-6">

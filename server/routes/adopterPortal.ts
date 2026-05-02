@@ -2082,6 +2082,16 @@ router.post(
             return res.status(400).json({ error: 'Appointment index out of range' });
           }
 
+          // Adopters can only mark an appointment completed ONCE. Re-completion or
+          // editing a previously-completed appointment (whether marked by the
+          // adopter or by staff) is not permitted from the adopter portal — staff
+          // must use the staff workflow to amend medical history.
+          if (appointments[idx]?.completedDate) {
+            return res.status(409).json({
+              error: 'This appointment has already been marked completed. Contact the rescue if you need to make a correction.',
+            });
+          }
+
           // Optional receipt upload
           let receiptObjectPath: string | null = appointments[idx]?.receiptObjectPath ?? null;
           let receiptFileName: string | null = null;
@@ -2332,15 +2342,9 @@ router.get('/pets/:animalId/heartworm-treatment-plan/:planId/contract', async (r
     table { width: 100%; border-collapse: collapse; margin: 24px 0; }
     th { background: #f3f4f6; padding: 12px; text-align: left; border: 1px solid #d1d5db; }
     .location { background: #f9fafb; border-radius: 8px; padding: 16px; margin: 24px 0; }
-    .actions { margin: 16px 0 24px; }
-    .actions button { padding: 8px 16px; font-size: 14px; cursor: pointer; }
-    @media print { body { padding: 20px; } .actions { display: none; } }
   </style>
 </head>
 <body>
-  <div class="actions">
-    <button onclick="window.print()">Print / Save as PDF</button>
-  </div>
   <h1>Heartworm Treatment Contract</h1>
   <h2>Patient: ${escape(animalName)}</h2>
   <p><strong>Adopter:</strong> ${escape(plan.adopterName)}</p>
@@ -2366,11 +2370,38 @@ router.get('/pets/:animalId/heartworm-treatment-plan/:planId/contract', async (r
 </body>
 </html>`;
 
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.setHeader('Cache-Control', 'no-store');
-    res.send(html);
+    // Render the HTML to a real PDF via puppeteer (matches existing pattern in
+    // server/services/surgery-day-request-pdf.ts, contract-pdf.ts, etc.)
+    const puppeteer = (await import('puppeteer')).default;
+    const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH
+      || '/nix/store/zi4f80l169xlmivz8vja8wlphq74qqk0-chromium-125.0.6422.141/bin/chromium';
+    let browser;
+    try {
+      browser = await puppeteer.launch({
+        headless: true,
+        executablePath,
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
+      });
+      const page = await browser.newPage();
+      await page.setContent(html, { waitUntil: 'networkidle0' });
+      const pdfBuffer = await page.pdf({
+        format: 'Letter',
+        margin: { top: '0.5in', right: '0.5in', bottom: '0.5in', left: '0.5in' },
+        printBackground: true,
+      });
+
+      const safeName = String(animalName).replace(/[^a-zA-Z0-9_-]+/g, '_').slice(0, 60) || 'pet';
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Cache-Control', 'no-store');
+      res.setHeader('Content-Disposition', `attachment; filename="heartworm-contract-${safeName}.pdf"`);
+      res.send(Buffer.from(pdfBuffer));
+    } finally {
+      if (browser) {
+        try { await browser.close(); } catch { /* ignore */ }
+      }
+    }
   } catch (error) {
-    console.error('[Adopter Portal] Error generating HW contract view:', error);
+    console.error('[Adopter Portal] Error generating HW contract PDF:', error);
     res.status(500).json({ error: 'Failed to load contract' });
   }
 });

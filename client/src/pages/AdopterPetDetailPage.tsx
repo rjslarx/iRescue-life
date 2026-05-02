@@ -195,6 +195,7 @@ function getHwApptStatus(appt: HeartwormAppointment): HwApptStatus {
 function getExerciseRestriction(appointments: HeartwormAppointment[]): {
   active: boolean;
   endDate: Date | null;
+  daysRemaining: number;
   startedFromLabel: string | null;
 } {
   const today = startOfToday();
@@ -212,7 +213,11 @@ function getExerciseRestriction(appointments: HeartwormAppointment[]): {
       }
     }
   }
-  return { active: !!latestEnd, endDate: latestEnd, startedFromLabel: label };
+  // Days remaining is inclusive of today: if end == today there is 1 more day of rest.
+  const daysRemaining = latestEnd
+    ? Math.max(0, Math.round((latestEnd.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)) + 1)
+    : 0;
+  return { active: !!latestEnd, endDate: latestEnd, daysRemaining, startedFromLabel: label };
 }
 
 export default function AdopterPetDetailPage() {
@@ -664,8 +669,13 @@ export default function AdopterPetDetailPage() {
                         <CheckCircle2 className="h-5 w-5 text-muted-foreground mt-0.5 shrink-0" />
                       )}
                       <div className="flex-1 min-w-0">
-                        <p className="font-semibold" data-testid="text-exercise-restriction-headline">
-                          {restriction.active ? 'Strict rest in effect' : 'No exercise restriction in effect'}
+                        <p className="font-semibold flex flex-wrap items-center gap-2" data-testid="text-exercise-restriction-headline">
+                          <span>{restriction.active ? 'Strict rest in effect' : 'No exercise restriction in effect'}</span>
+                          {restriction.active && restriction.daysRemaining > 0 && (
+                            <Badge variant="destructive" data-testid="badge-restriction-days-remaining">
+                              {restriction.daysRemaining} {restriction.daysRemaining === 1 ? 'day' : 'days'} left
+                            </Badge>
+                          )}
                         </p>
                         <p className="text-sm text-muted-foreground mt-1">
                           {restriction.active && restriction.endDate ? (
