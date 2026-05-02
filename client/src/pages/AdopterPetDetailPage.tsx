@@ -136,6 +136,7 @@ interface HeartwormAppointment {
   scheduledDate: string;
   completedDate?: string | null;
   notes?: string | null;
+  adopterNotes?: string | null;
   receiptObjectPath?: string | null;
   completedByAdopter?: boolean;
 }
@@ -740,7 +741,10 @@ export default function AdopterPetDetailPage() {
                               </p>
                             )}
                             {appt.notes && (
-                              <p className="text-sm text-muted-foreground mt-0.5">{appt.notes}</p>
+                              <p className="text-sm text-muted-foreground mt-0.5">Rescue notes: {appt.notes}</p>
+                            )}
+                            {appt.adopterNotes && (
+                              <p className="text-sm text-muted-foreground mt-0.5">Your notes: {appt.adopterNotes}</p>
                             )}
                             {appt.receiptObjectPath && (
                               <Button
@@ -1376,7 +1380,7 @@ export default function AdopterPetDetailPage() {
                       const formData = new FormData();
                       formData.append('completedDate', hwApptCompletedDate);
                       if (hwApptNotes.trim().length > 0) {
-                        formData.append('notes', hwApptNotes.trim());
+                        formData.append('adopterNotes', hwApptNotes.trim());
                       }
                       if (hwReceiptFile) {
                         formData.append('receipt', hwReceiptFile);

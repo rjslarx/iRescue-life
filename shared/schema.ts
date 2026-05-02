@@ -5146,7 +5146,8 @@ export const heartwormTreatmentPlans = pgTable("heartworm_treatment_plans", {
     label: string;
     scheduledDate: string; // ISO date string
     completedDate?: string | null;
-    notes?: string | null;
+    notes?: string | null; // Staff-authored appointment notes (adopter cannot write)
+    adopterNotes?: string | null; // Adopter-authored remarks captured at completion time
     receiptObjectPath?: string | null; // Adopter-uploaded vet receipt path
     completedByAdopter?: boolean; // true when adopter (vs staff) marked it
   }>>(),

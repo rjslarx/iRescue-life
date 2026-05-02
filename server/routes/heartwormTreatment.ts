@@ -16,6 +16,7 @@ const appointmentSchema = z.object({
   scheduledDate: z.string(),
   completedDate: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),
+  adopterNotes: z.string().nullable().optional(),
   receiptObjectPath: z.string().nullable().optional(),
   completedByAdopter: z.boolean().optional(),
 });

@@ -2059,8 +2059,13 @@ router.post(
           if (!completedDate || !/^\d{4}-\d{2}-\d{2}$/.test(completedDate)) {
             return res.status(400).json({ error: 'completedDate (YYYY-MM-DD) is required' });
           }
-          const notes = typeof req.body?.notes === 'string' && req.body.notes.trim().length > 0
-            ? req.body.notes.trim().slice(0, 500)
+          // Adopters can ONLY write to `adopterNotes` — they may never modify the
+          // staff-authored `notes` field on an appointment. Accept legacy
+          // `notes` form field as `adopterNotes` for backwards compatibility,
+          // but always store under `adopterNotes`.
+          const adopterNotesRaw = req.body?.adopterNotes ?? req.body?.notes;
+          const adopterNotes = typeof adopterNotesRaw === 'string' && adopterNotesRaw.trim().length > 0
+            ? adopterNotesRaw.trim().slice(0, 500)
             : null;
 
           const [plan] = await db
@@ -2176,12 +2181,14 @@ router.post(
             receiptFileSize = fileBuffer.length;
           }
 
-          // Update the appointment in place
+          // Update the appointment in place. Critically, we preserve the
+          // existing staff-authored `notes` field — adopter remarks go into
+          // `adopterNotes` so they cannot overwrite staff data.
           appointments[idx] = {
             ...appointments[idx],
             completedDate,
             completedByAdopter: true,
-            ...(notes !== null ? { notes } : {}),
+            ...(adopterNotes !== null ? { adopterNotes } : {}),
             ...(receiptObjectPath ? { receiptObjectPath } : {}),
           };
 

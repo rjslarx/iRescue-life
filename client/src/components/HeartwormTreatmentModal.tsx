@@ -33,6 +33,7 @@ interface Appointment {
   scheduledDate: string;
   completedDate?: string | null;
   notes?: string | null;
+  adopterNotes?: string | null;
   receiptObjectPath?: string | null;
   completedByAdopter?: boolean;
 }
@@ -142,12 +143,22 @@ export function HeartwormTreatmentModal({
       const res = await apiRequest('GET', `/api/heartworm-treatment-plans?animalId=${encodeURIComponent(resolvedAnimalId!)}`);
       return res.json();
     },
+    // Always refetch when the modal opens so staff see adopter-marked
+    // completions / receipts uploaded since the last view (the global
+    // queryClient is configured with staleTime: Infinity).
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 
   const existingPlan: ExistingPlan | null = existingPlansData?.plans?.[0] ?? null;
 
   // If a plan already exists, switch the modal into "view" mode and hydrate
   // local state from the saved plan.
+  // Re-hydrate whenever the modal opens, the plan id changes, OR the saved
+  // appointments change (e.g. an adopter just marked one completed and our
+  // refetch returned new data). Without depending on the appointments
+  // payload, same-id updates would not propagate into local state.
+  const existingApptsKey = JSON.stringify(existingPlan?.appointments ?? []);
   useEffect(() => {
     if (!open || !existingPlan || step === 'complete') return;
     setPlanId(existingPlan.id);
@@ -163,7 +174,7 @@ export function HeartwormTreatmentModal({
     // Intentionally NOT depending on `step` so re-loads after the user
     // navigates inside the view don't bounce them back.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, existingPlan?.id]);
+  }, [open, existingPlan?.id, existingApptsKey]);
 
   const handleStartDateChange = (newDate: string) => {
     setStartDate(newDate);
@@ -405,7 +416,12 @@ export function HeartwormTreatmentModal({
                         )}
                         {appt.notes && (
                           <p className="text-sm text-muted-foreground mt-1" data-testid={`text-staff-hw-notes-${index}`}>
-                            Notes: {appt.notes}
+                            Staff notes: {appt.notes}
+                          </p>
+                        )}
+                        {appt.adopterNotes && (
+                          <p className="text-sm text-muted-foreground mt-1" data-testid={`text-staff-hw-adopter-notes-${index}`}>
+                            Adopter notes: {appt.adopterNotes}
                           </p>
                         )}
                       </div>
