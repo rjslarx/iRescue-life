@@ -21,7 +21,7 @@ import NotificationBell from "@/components/NotificationBell";
 import { AddMedicalOrderDialog } from "@/components/AddMedicalOrderDialog";
 import { RecordOfflineDonationDialog } from "@/components/RecordOfflineDonationDialog";
 import { SendHoldHarmlessDialog } from "@/components/SendHoldHarmlessDialog";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 interface BreadcrumbItem {
   label: string;
@@ -60,7 +60,18 @@ export default function DashboardLayout({ children, title, description, actions,
   const [helpOpen, setHelpOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [fabOpen, setFabOpen] = useState(false);
-  
+
+  // Apply mint staff-portal theme to <body> while this layout is mounted so
+  // Radix portals (Dialog, Popover, DropdownMenu, Toast) — which render outside
+  // this component's subtree — also pick up the mint surface tokens. Scoped
+  // automatically: DashboardLayout only mounts on staff/admin routes.
+  useEffect(() => {
+    document.body.classList.add("admin-portal-theme");
+    return () => {
+      document.body.classList.remove("admin-portal-theme");
+    };
+  }, []);
+
   const { data: tenantData } = useQuery<{ tenant: Tenant }>({
     queryKey: ['/api/tenant'],
   });
@@ -83,7 +94,7 @@ export default function DashboardLayout({ children, title, description, actions,
 
   return (
     <SidebarProvider style={style as React.CSSProperties}>
-      <div className="flex h-screen w-full overflow-hidden">
+      <div className="admin-portal-theme flex h-screen w-full overflow-hidden">
         <AppSidebar 
           rescueName={rescueName}
           userName={user?.fullName || "User"}
