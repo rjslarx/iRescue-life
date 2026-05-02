@@ -23,8 +23,11 @@ export const tenants = pgTable("tenants", {
   contactPhone: text("contact_phone"),
   footerText: text("footer_text"), // Custom footer text (e.g., "© 2024 Happy Paws Rescue. 501(c)(3) Non-Profit")
   // Custom domain settings
-  customDomain: text("custom_domain").unique(), // e.g., "fluffypaws.org" or "www.fluffypaws.org"
+  customDomain: text("custom_domain").unique(), // Primary verified custom domain, e.g., "fluffypaws.org"
   customDomainVerified: boolean("custom_domain_verified").notNull().default(false),
+  // Additional verified custom domains (aliases) that route to the same tenant
+  // e.g., ["haseyas.org"] in addition to a primary "haseyasnewbeginningar.com"
+  customDomainAliases: text("custom_domain_aliases").array().notNull().default(sql`ARRAY[]::text[]`),
   // Payment integration settings
   stripeLink: text("stripe_link"), // Custom Stripe payment link
   // Stripe settings (encrypted API keys per tenant)

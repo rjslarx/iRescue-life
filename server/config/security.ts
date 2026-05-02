@@ -20,6 +20,18 @@ let verifiedDomainsCache: Set<string> = new Set();
 let lastCacheUpdate = 0;
 const CACHE_TTL = 60 * 1000; // 1 minute cache
 
+function addDomainWithWwwVariant(domains: Set<string>, raw: string | null | undefined): void {
+  if (!raw) return;
+  const normalized = raw.toLowerCase().trim();
+  if (!normalized) return;
+  domains.add(normalized);
+  if (normalized.startsWith('www.')) {
+    domains.add(normalized.substring(4));
+  } else {
+    domains.add(`www.${normalized}`);
+  }
+}
+
 async function getVerifiedCustomDomains(): Promise<Set<string>> {
   const now = Date.now();
   
@@ -29,22 +41,21 @@ async function getVerifiedCustomDomains(): Promise<Set<string>> {
   }
   
   try {
-    // Query all verified custom domains from the database
+    // Query all verified custom domains from the database (primary + aliases)
     const tenantsWithDomains = await db
-      .select({ customDomain: tenants.customDomain })
+      .select({
+        customDomain: tenants.customDomain,
+        customDomainAliases: tenants.customDomainAliases,
+      })
       .from(tenants)
       .where(eq(tenants.customDomainVerified, true));
     
     const domains = new Set<string>();
     for (const tenant of tenantsWithDomains) {
-      if (tenant.customDomain) {
-        // Add both with and without www
-        domains.add(tenant.customDomain.toLowerCase());
-        if (tenant.customDomain.startsWith('www.')) {
-          domains.add(tenant.customDomain.substring(4).toLowerCase());
-        } else {
-          domains.add(`www.${tenant.customDomain.toLowerCase()}`);
-        }
+      addDomainWithWwwVariant(domains, tenant.customDomain);
+      // Aliases are treated as already-verified alternate domains for the tenant.
+      for (const alias of tenant.customDomainAliases ?? []) {
+        addDomainWithWwwVariant(domains, alias);
       }
     }
     
