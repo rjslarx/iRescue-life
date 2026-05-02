@@ -33,6 +33,8 @@ import {
   HandHeart,
   Link2,
   Settings,
+  PenLine,
+  MessageCircle,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -146,6 +148,43 @@ const CATEGORY_META: Record<
     description: "Driving volunteer sign-ups",
   },
 };
+
+function StepBadge({
+  number,
+  instruction,
+}: {
+  number: 1 | 2;
+  instruction: string;
+}) {
+  const isStepOne = number === 1;
+  const circleClass = isStepOne
+    ? "bg-primary text-primary-foreground"
+    : "bg-[hsl(var(--chart-3))] text-zinc-950";
+  const labelClass = isStepOne
+    ? "text-primary"
+    : "text-[hsl(var(--chart-3))]";
+  const Icon = isStepOne ? PenLine : MessageCircle;
+  return (
+    <div
+      className="flex items-start gap-3 px-6 pt-6"
+      data-testid={`step-badge-${number}`}
+    >
+      <span
+        className={`flex h-9 w-9 items-center justify-center rounded-full text-base font-bold shrink-0 ${circleClass}`}
+        aria-hidden="true"
+      >
+        {number}
+      </span>
+      <div className="flex flex-col gap-0.5 min-w-0">
+        <span className={`flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider ${labelClass}`}>
+          <Icon className="h-3.5 w-3.5" />
+          Step {number}
+        </span>
+        <span className="text-sm text-muted-foreground">{instruction}</span>
+      </div>
+    </div>
+  );
+}
 
 export default function PostOptimizerPage() {
   const { toast } = useToast();
@@ -417,7 +456,11 @@ export default function PostOptimizerPage() {
             {isPending && (
               <>
                 <Card data-testid="card-caption-loading">
-                  <CardHeader>
+                  <StepBadge
+                    number={1}
+                    instruction="Paste this as your Facebook post"
+                  />
+                  <CardHeader className="pt-3">
                     <CardTitle>Optimized Caption</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3">
@@ -429,7 +472,11 @@ export default function PostOptimizerPage() {
                   </CardContent>
                 </Card>
                 <Card data-testid="card-comment-loading">
-                  <CardHeader>
+                  <StepBadge
+                    number={2}
+                    instruction="After you publish, paste this as the first comment under your post"
+                  />
+                  <CardHeader className="pt-3">
                     <CardTitle>First Comment Strategy</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3">
@@ -554,7 +601,11 @@ export default function PostOptimizerPage() {
                 })()}
 
                 <Card data-testid="card-optimized-caption">
-                  <CardHeader>
+                  <StepBadge
+                    number={1}
+                    instruction="Paste this as your Facebook post"
+                  />
+                  <CardHeader className="pt-3">
                     <div className="flex items-start justify-between gap-3 flex-wrap">
                       <div>
                         <CardTitle>Optimized Caption</CardTitle>
@@ -592,7 +643,15 @@ export default function PostOptimizerPage() {
                 </Card>
 
                 <Card data-testid="card-first-comment">
-                  <CardHeader>
+                  <StepBadge
+                    number={2}
+                    instruction={
+                      result.keepLinkInPost
+                        ? "Optional — paste this as a friendly first comment under your post"
+                        : "After you publish, paste this as the first comment under your post"
+                    }
+                  />
+                  <CardHeader className="pt-3">
                     <div className="flex items-start justify-between gap-3 flex-wrap">
                       <div className="space-y-2">
                         <CardTitle>
