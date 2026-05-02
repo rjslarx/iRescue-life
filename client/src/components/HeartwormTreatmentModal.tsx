@@ -553,6 +553,11 @@ export function HeartwormTreatmentModal({
                 <CardTitle className="text-base">Adopter Information</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
+                {planId && (
+                  <p className="text-xs text-muted-foreground" data-testid="text-adopter-contact-readonly-hint">
+                    Adopter contact details are locked once the plan exists. Update the adopter record itself if these need to change.
+                  </p>
+                )}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label htmlFor="adopter-name">Adopter Name *</Label>
@@ -562,6 +567,7 @@ export function HeartwormTreatmentModal({
                       onChange={(e) => setAdopterName(e.target.value)}
                       placeholder="Enter adopter name"
                       className="mt-1"
+                      disabled={!!planId}
                       data-testid="input-adopter-name"
                     />
                   </div>
@@ -574,6 +580,7 @@ export function HeartwormTreatmentModal({
                       onChange={(e) => setAdopterEmail(e.target.value)}
                       placeholder="adopter@email.com"
                       className="mt-1"
+                      disabled={!!planId}
                       data-testid="input-adopter-email"
                     />
                   </div>
@@ -587,6 +594,7 @@ export function HeartwormTreatmentModal({
                     onChange={(e) => setAdopterPhone(e.target.value)}
                     placeholder="(555) 123-4567"
                     className="mt-1"
+                    disabled={!!planId}
                     data-testid="input-adopter-phone"
                   />
                 </div>
