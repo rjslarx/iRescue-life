@@ -52,6 +52,7 @@ interface AdoptedAnimal {
   weight?: string;
   status?: string;
   deceasedDate?: string | null;
+  heartwormStatus?: 'positive' | 'negative' | 'unknown' | 'not_applicable' | null;
 }
 
 interface VaccineRecord {

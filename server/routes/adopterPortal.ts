@@ -361,6 +361,7 @@ router.get('/my-pets', async (req: Request, res: Response) => {
         weight: animals.weight,
         status: animals.status,
         deceasedDate: animals.deceasedDate,
+        heartwormStatus: animals.heartwormStatus,
       })
       .from(animals)
       .innerJoin(
@@ -513,6 +514,7 @@ router.get('/pets/:animalId', async (req: Request, res: Response) => {
         weight: animals.weight,
         status: animals.status,
         deceasedDate: animals.deceasedDate,
+        heartwormStatus: animals.heartwormStatus,
       })
       .from(animals)
       .innerJoin(
@@ -1982,6 +1984,10 @@ router.get('/pets/:animalId/heartworm-treatment-plan', async (req: Request, res:
       .where(and(
         eq(heartwormTreatmentPlans.tenantId, auth.tenantId),
         eq(heartwormTreatmentPlans.animalId, animalId),
+        // Only surface plans the rescue has published / sent — draft rows
+        // saved by staff before the schedule was emailed are not visible to
+        // the adopter, matching the contract-download gating.
+        sql`${heartwormTreatmentPlans.contractSentAt} IS NOT NULL`,
       ))
       .orderBy(desc(heartwormTreatmentPlans.createdAt))
       .limit(1);
