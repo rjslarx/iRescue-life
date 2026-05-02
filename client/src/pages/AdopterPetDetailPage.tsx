@@ -204,7 +204,10 @@ function getExerciseRestriction(appointments: HeartwormAppointment[]): {
   let label: string | null = null;
   for (const appt of appointments) {
     if (appt.type !== 'first_injection' && appt.type !== 'second_third_injection') continue;
-    const start = parseISODate(appt.completedDate || appt.scheduledDate);
+    // Only confirmed-completed injections trigger an active rest window. A
+    // missed/scheduled-but-not-given injection MUST NOT activate strict rest.
+    if (!appt.completedDate) continue;
+    const start = parseISODate(appt.completedDate);
     if (!start) continue;
     const end = addDays(start, HW_INJECTION_REST_DAYS);
     if (start.getTime() <= today.getTime() && today.getTime() <= end.getTime()) {
@@ -637,6 +640,36 @@ export default function AdopterPetDetailPage() {
                   </div>
                 </div>
               </CardContent>
+            </Card>
+          )}
+
+          {isHeartwormPlanLoading && (
+            <Card data-testid="card-heartworm-treatment-loading">
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Heart className="h-5 w-5 text-red-600" />
+                  Heartworm Treatment
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Skeleton className="h-16 w-full" />
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-12 w-full" />
+              </CardContent>
+            </Card>
+          )}
+
+          {!isHeartwormPlanLoading && (!heartwormPlan || !Array.isArray(heartwormPlan.appointments) || heartwormPlan.appointments.length === 0) && pet.heartwormStatus === 'positive' && (
+            <Card data-testid="card-heartworm-treatment-empty">
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Heart className="h-5 w-5 text-red-600" />
+                  Heartworm Treatment
+                </CardTitle>
+                <CardDescription>
+                  Your rescue hasn't published a heartworm treatment plan for {pet.name} yet. Once they do, the schedule, exercise restrictions, and contract will appear here.
+                </CardDescription>
+              </CardHeader>
             </Card>
           )}
 
