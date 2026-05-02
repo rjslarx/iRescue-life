@@ -934,12 +934,23 @@ export default function AdopterPetDetailPage() {
                       try {
                         const form = new FormData();
                         form.append('photo', file);
-                        const res = await fetch('/api/adopter/photos/upload', { method: 'POST', body: form });
+                        const res = await fetch('/api/adopter/photos/upload', {
+                          method: 'POST',
+                          body: form,
+                          credentials: 'include',
+                        });
                         const data = await res.json();
-                        setObligationReceiptUrl(data.url || data.fileUrl || null);
+                        if (!res.ok) {
+                          throw new Error(data.error || 'Upload failed');
+                        }
+                        const url = data.uploadedPaths?.[0] || data.url || null;
+                        if (!url) {
+                          throw new Error('Upload succeeded but no file URL returned');
+                        }
+                        setObligationReceiptUrl(url);
                         toast({ title: "File uploaded successfully" });
-                      } catch {
-                        toast({ title: "Upload failed", variant: "destructive" });
+                      } catch (err: any) {
+                        toast({ title: err?.message || "Upload failed", variant: "destructive" });
                         setObligationReceiptFile(null);
                       } finally {
                         setIsUploadingObligationReceipt(false);
@@ -1101,12 +1112,23 @@ export default function AdopterPetDetailPage() {
                   try {
                     const form = new FormData();
                     form.append('photo', file);
-                    const res = await fetch('/api/adopter/photos/upload', { method: 'POST', body: form });
+                    const res = await fetch('/api/adopter/photos/upload', {
+                      method: 'POST',
+                      body: form,
+                      credentials: 'include',
+                    });
                     const data = await res.json();
-                    setReceiptUrl(data.url || data.fileUrl || null);
+                    if (!res.ok) {
+                      throw new Error(data.error || 'Upload failed');
+                    }
+                    const url = data.uploadedPaths?.[0] || data.url || null;
+                    if (!url) {
+                      throw new Error('Upload succeeded but no file URL returned');
+                    }
+                    setReceiptUrl(url);
                     toast({ title: "Receipt uploaded" });
-                  } catch {
-                    toast({ title: "Upload failed", variant: "destructive" });
+                  } catch (err: any) {
+                    toast({ title: err?.message || "Upload failed", variant: "destructive" });
                     setReceiptFile(null);
                   } finally {
                     setIsUploadingReceipt(false);

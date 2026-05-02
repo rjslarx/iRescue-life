@@ -20,10 +20,14 @@ import {
 import {
   AlertCircle,
   AlertTriangle,
+  Calendar,
   CheckCircle2,
   Eye,
+  FileText,
   Heart,
+  ImageIcon,
   Loader2,
+  Lock,
   Mail,
   MailOpen,
   MessageSquare,
@@ -32,7 +36,9 @@ import {
   Send,
   Settings as SettingsIcon,
   Shield,
+  Stethoscope,
 } from "lucide-react";
+import { HeartwormTreatmentModal } from "@/components/HeartwormTreatmentModal";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -145,6 +151,8 @@ export default function HeartwormWatchTab() {
 
   return (
     <div className="space-y-4">
+      <HeartwormTreatmentProgressCard />
+
       <Card>
         <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
           <div className="min-w-0 flex-1 space-y-2">
@@ -923,5 +931,394 @@ function ConfirmSendDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ============================================================================
+// Heartworm Treatment Progress Card (Task #152)
+// ============================================================================
+//
+// Staff Command Center widget that surfaces every active heartworm treatment
+// plan grouped by derived status. Reads from
+// GET /api/heartworm-treatment-plans/summary which already does the status
+// derivation server-side; this component is a thin presentational layer with
+// filter chips, receipt thumbnails, and a launcher that opens the existing
+// HeartwormTreatmentModal for the selected animal.
+
+type TreatmentStatus = "overdue" | "restriction_window_active" | "on_track" | "completed";
+
+interface TreatmentSummaryRow {
+  id: string;
+  animalId: string;
+  animalName: string;
+  animalPhotoUrl: string | null;
+  adopterName: string;
+  adopterEmail: string;
+  adopterPhone: string | null;
+  adoptionId: string | null;
+  contractSentAt: string | null;
+  status: TreatmentStatus;
+  nextAppointment: { type: string; label: string; scheduledDate: string } | null;
+  overdueAppointmentTypes: string[];
+  overdueAppointmentLabels: string[];
+  latestReceipt: { objectPath: string; appointmentLabel: string; completedDate: string } | null;
+  hasUnverifiedAdopterCompletion: boolean;
+  appointmentsTotal: number;
+  appointmentsCompleted: number;
+}
+
+interface TreatmentSummaryResponse {
+  plans: TreatmentSummaryRow[];
+  groups: Record<TreatmentStatus, TreatmentSummaryRow[]>;
+  counts: {
+    overdue: number;
+    restriction_window_active: number;
+    on_track: number;
+    completed: number;
+    total: number;
+    totalUnfiltered: number;
+  };
+}
+
+const STATUS_META: Record<TreatmentStatus, {
+  label: string;
+  description: string;
+  Icon: React.ComponentType<{ className?: string }>;
+  iconClass: string;
+  badgeVariant: "destructive" | "secondary" | "default" | "outline";
+}> = {
+  overdue: {
+    label: "Overdue",
+    description: "Plans with at least one missed appointment past its scheduled date.",
+    Icon: AlertCircle,
+    iconClass: "text-destructive",
+    badgeVariant: "destructive",
+  },
+  restriction_window_active: {
+    label: "Restriction window active",
+    description: "First injection completed — adopter is in the strict crate-rest period until the second injection.",
+    Icon: Lock,
+    iconClass: "text-amber-600 dark:text-amber-400",
+    badgeVariant: "secondary",
+  },
+  on_track: {
+    label: "On track",
+    description: "All scheduled appointments are upcoming or recently completed.",
+    Icon: CheckCircle2,
+    iconClass: "text-emerald-600 dark:text-emerald-400",
+    badgeVariant: "secondary",
+  },
+  completed: {
+    label: "Completed",
+    description: "Every appointment in the plan has been logged as completed.",
+    Icon: Shield,
+    iconClass: "text-muted-foreground",
+    badgeVariant: "outline",
+  },
+};
+
+function HeartwormTreatmentProgressCard() {
+  const [activeStatus, setActiveStatus] = useState<TreatmentStatus | "all">("all");
+  const [unverifiedOnly, setUnverifiedOnly] = useState(false);
+  const [selectedRow, setSelectedRow] = useState<TreatmentSummaryRow | null>(null);
+
+  // Always fetch the full set; filter client-side so the chips can show counts
+  // without firing four separate requests.
+  const { data, isLoading, error } = useQuery<TreatmentSummaryResponse>({
+    queryKey: ["/api/heartworm-treatment-plans/summary"],
+  });
+
+  const plans = data?.plans ?? [];
+  const counts = data?.counts;
+
+  const filtered = plans.filter((p) => {
+    if (activeStatus !== "all" && p.status !== activeStatus) return false;
+    if (unverifiedOnly && !p.hasUnverifiedAdopterCompletion) return false;
+    return true;
+  });
+
+  // Group filtered results by status so each section's count reflects the
+  // current filter selection.
+  const groupOrder: TreatmentStatus[] = [
+    "overdue",
+    "restriction_window_active",
+    "on_track",
+    "completed",
+  ];
+  const grouped: Record<TreatmentStatus, TreatmentSummaryRow[]> = {
+    overdue: [],
+    restriction_window_active: [],
+    on_track: [],
+    completed: [],
+  };
+  for (const p of filtered) grouped[p.status].push(p);
+
+  return (
+    <Card data-testid="card-heartworm-treatment-progress">
+      <CardHeader className="space-y-3">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div className="min-w-0 flex-1 space-y-1">
+            <CardTitle className="flex items-center gap-2">
+              <Stethoscope className="h-5 w-5 text-destructive" />
+              Heartworm Treatment Progress
+            </CardTitle>
+            <CardDescription>
+              All active immiticide treatment plans grouped by status. Click any plan to
+              review or update appointments.
+            </CardDescription>
+          </div>
+          {counts && (
+            <Badge
+              variant="outline"
+              className="gap-1 shrink-0"
+              data-testid="badge-treatment-total"
+            >
+              {counts.totalUnfiltered} active plan{counts.totalUnfiltered === 1 ? "" : "s"}
+            </Badge>
+          )}
+        </div>
+
+        {/* Filter chips */}
+        {counts && counts.totalUnfiltered > 0 && (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <Button
+              variant={activeStatus === "all" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setActiveStatus("all")}
+              data-testid="button-filter-status-all"
+            >
+              All ({counts.total})
+            </Button>
+            {groupOrder.map((status) => {
+              const meta = STATUS_META[status];
+              const count = counts[status];
+              const Icon = meta.Icon;
+              return (
+                <Button
+                  key={status}
+                  variant={activeStatus === status ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setActiveStatus(status)}
+                  data-testid={`button-filter-status-${status}`}
+                >
+                  <Icon className={`h-3.5 w-3.5 mr-1 ${activeStatus === status ? "" : meta.iconClass}`} />
+                  {meta.label} ({count})
+                </Button>
+              );
+            })}
+            <div className="ml-auto flex items-center gap-2">
+              <Checkbox
+                id="filter-unverified-only"
+                checked={unverifiedOnly}
+                onCheckedChange={(v) => setUnverifiedOnly(v === true)}
+                data-testid="checkbox-filter-unverified-only"
+              />
+              <Label
+                htmlFor="filter-unverified-only"
+                className="text-xs font-normal text-muted-foreground cursor-pointer"
+              >
+                Adopter-marked, not yet verified
+              </Label>
+            </div>
+          </div>
+        )}
+      </CardHeader>
+
+      <CardContent>
+        {isLoading ? (
+          <div className="space-y-3">
+            {[0, 1, 2].map((i) => (
+              <Skeleton key={i} className="h-24 w-full" />
+            ))}
+          </div>
+        ) : error ? (
+          <div className="text-sm text-destructive" data-testid="text-treatment-error">
+            Could not load heartworm treatment plans. Please try again.
+          </div>
+        ) : !counts || counts.totalUnfiltered === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">
+            <Stethoscope className="h-10 w-10 mx-auto mb-2" />
+            <p className="font-medium">No active heartworm treatment plans</p>
+            <p className="text-sm">Plans appear here once a contract is sent to the adopter.</p>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="text-center py-6 text-muted-foreground" data-testid="text-no-treatment-results">
+            <p className="text-sm">No plans match the current filter.</p>
+          </div>
+        ) : (
+          <div className="space-y-5">
+            {groupOrder.map((status) => {
+              const rows = grouped[status];
+              if (rows.length === 0) return null;
+              const meta = STATUS_META[status];
+              const Icon = meta.Icon;
+              return (
+                <div key={status} className="space-y-2" data-testid={`group-treatment-${status}`}>
+                  <div className="flex items-center gap-2">
+                    <Icon className={`h-4 w-4 ${meta.iconClass}`} />
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      {meta.label} ({rows.length})
+                    </p>
+                  </div>
+                  <p className="text-xs text-muted-foreground -mt-1 pl-6">
+                    {meta.description}
+                  </p>
+                  <div className="space-y-2">
+                    {rows.map((row) => (
+                      <TreatmentRow
+                        key={row.id}
+                        row={row}
+                        onOpen={() => setSelectedRow(row)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+
+      {selectedRow && (
+        <HeartwormTreatmentModal
+          open={true}
+          onOpenChange={(open) => {
+            if (!open) setSelectedRow(null);
+          }}
+          animalId={selectedRow.animalId}
+          animalName={selectedRow.animalName}
+          adopterName={selectedRow.adopterName}
+          adopterEmail={selectedRow.adopterEmail}
+          adopterPhone={selectedRow.adopterPhone || undefined}
+          adoptionId={selectedRow.adoptionId || undefined}
+          onComplete={() => {
+            setSelectedRow(null);
+            queryClient.invalidateQueries({ queryKey: ["/api/heartworm-treatment-plans/summary"] });
+          }}
+        />
+      )}
+    </Card>
+  );
+}
+
+function TreatmentRow({
+  row,
+  onOpen,
+}: {
+  row: TreatmentSummaryRow;
+  onOpen: () => void;
+}) {
+  const meta = STATUS_META[row.status];
+  const isImage = row.latestReceipt
+    ? !/\.pdf$/i.test(row.latestReceipt.objectPath)
+    : false;
+
+  return (
+    <div
+      className="border rounded-md p-3 hover-elevate cursor-pointer"
+      onClick={onOpen}
+      data-testid={`row-treatment-plan-${row.id}`}
+    >
+      <div className="flex items-start gap-3 flex-wrap">
+        {/* Receipt thumbnail (or placeholder) */}
+        <div className="shrink-0">
+          {row.latestReceipt ? (
+            isImage ? (
+              <a
+                href={row.latestReceipt.objectPath}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="block"
+                data-testid={`link-receipt-${row.id}`}
+              >
+                <img
+                  src={row.latestReceipt.objectPath}
+                  alt={`Receipt for ${row.latestReceipt.appointmentLabel}`}
+                  className="h-16 w-16 rounded-md object-cover border"
+                  loading="lazy"
+                />
+              </a>
+            ) : (
+              <a
+                href={row.latestReceipt.objectPath}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="flex h-16 w-16 items-center justify-center rounded-md border bg-muted text-muted-foreground"
+                data-testid={`link-receipt-${row.id}`}
+                title={`PDF receipt for ${row.latestReceipt.appointmentLabel}`}
+              >
+                <FileText className="h-6 w-6" />
+              </a>
+            )
+          ) : (
+            <div className="flex h-16 w-16 items-center justify-center rounded-md border bg-muted/50 text-muted-foreground">
+              <ImageIcon className="h-5 w-5 opacity-40" />
+            </div>
+          )}
+        </div>
+
+        {/* Body */}
+        <div className="min-w-0 flex-1 space-y-1.5">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="font-medium truncate" data-testid={`text-animal-name-${row.id}`}>
+              {row.animalName}
+            </p>
+            <Badge variant={meta.badgeVariant} className="gap-1">
+              <meta.Icon className="h-3 w-3" />
+              {meta.label}
+            </Badge>
+            {row.hasUnverifiedAdopterCompletion && (
+              <Badge variant="secondary" className="gap-1" data-testid={`badge-unverified-${row.id}`}>
+                <Eye className="h-3 w-3" />
+                Adopter marked complete
+              </Badge>
+            )}
+            <Badge variant="outline" className="gap-1 text-xs">
+              {row.appointmentsCompleted}/{row.appointmentsTotal} appts
+            </Badge>
+          </div>
+
+          <p className="text-xs text-muted-foreground truncate">
+            <span className="font-medium text-foreground/80">{row.adopterName}</span>
+            {" · "}
+            {row.adopterEmail}
+            {row.adopterPhone ? ` · ${row.adopterPhone}` : ""}
+          </p>
+
+          {row.status === "overdue" && row.overdueAppointmentLabels.length > 0 && (
+            <p className="text-xs text-destructive flex items-center gap-1">
+              <AlertTriangle className="h-3 w-3 shrink-0" />
+              <span className="truncate">
+                Overdue: {row.overdueAppointmentLabels.join(", ")}
+              </span>
+            </p>
+          )}
+
+          {row.nextAppointment && row.status !== "completed" && (
+            <p className="text-xs text-muted-foreground flex items-center gap-1">
+              <Calendar className="h-3 w-3 shrink-0" />
+              Next: {row.nextAppointment.label} on {row.nextAppointment.scheduledDate}
+            </p>
+          )}
+        </div>
+
+        {/* CTA */}
+        <div className="shrink-0">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpen();
+            }}
+            data-testid={`button-open-treatment-${row.id}`}
+          >
+            Open
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }
