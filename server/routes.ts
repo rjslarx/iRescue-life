@@ -23233,12 +23233,13 @@ Submitted: ${new Date().toLocaleString()}
 
   /**
    * POST /api/adoptions
-   * Record a new adoption (admin/staff only)
+   * Record a new adoption (admin/staff/owner/manager)
    */
   app.post('/api/adoptions', requireTenant, requireAuth, async (req, res, next) => {
-    // Check if user is admin or staff
-    if (req.user!.activeRole !== 'admin' && req.user!.activeRole !== 'staff') {
-      return res.status(403).json({ error: 'Forbidden', message: 'Admin or staff role required' });
+    // Check role - owners/managers can also finalize adoptions, not just admin/staff
+    const allowedRoles = ['admin', 'staff', 'owner', 'manager'];
+    if (!allowedRoles.includes(req.user!.activeRole as string)) {
+      return res.status(403).json({ error: 'Forbidden', message: 'You do not have permission to record adoptions' });
     }
     
     try {
