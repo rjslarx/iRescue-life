@@ -158,8 +158,8 @@ function StepBadge({
 }) {
   const isStepOne = number === 1;
   const circleClass = isStepOne
-    ? "bg-primary text-primary-foreground"
-    : "bg-[hsl(var(--chart-3))] text-zinc-950";
+    ? "bg-[hsl(var(--primary)/0.15)] text-primary ring-2 ring-primary"
+    : "bg-[hsl(var(--chart-3)/0.15)] text-[hsl(var(--chart-3))] ring-2 ring-[hsl(var(--chart-3))]";
   const labelClass = isStepOne
     ? "text-primary"
     : "text-[hsl(var(--chart-3))]";
