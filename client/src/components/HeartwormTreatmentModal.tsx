@@ -188,13 +188,27 @@ export function HeartwormTreatmentModal({
     ));
   };
 
-  const createPlanMutation = useMutation({
+  // Save handler: PATCH the existing row when we already have a planId
+  // (staff editing a plan that was previously created), otherwise POST a
+  // new plan. This prevents creating duplicate plan rows on every edit.
+  const savePlanMutation = useMutation({
     mutationFn: async () => {
       if (!resolvedAnimalId) {
         throw new Error('Animal ID is required');
       }
       if (!adopterName || !adopterEmail) {
         throw new Error('Adopter name and email are required');
+      }
+      if (planId) {
+        const response = await apiRequest('PATCH', `/api/heartworm-treatment-plans/${planId}`, {
+          locationName,
+          locationAddress,
+          locationPhone,
+          appointments,
+          notes,
+        });
+        const json = await response.json();
+        return { plan: json.plan ?? json, isUpdate: true };
       }
       const response = await apiRequest('POST', '/api/heartworm-treatment-plans', {
         animalId: resolvedAnimalId,
@@ -208,25 +222,31 @@ export function HeartwormTreatmentModal({
         appointments,
         notes,
       });
-      return response.json();
+      const json = await response.json();
+      return { plan: json.plan ?? json, isUpdate: false };
     },
-    onSuccess: (data) => {
-      setPlanId(data.plan.id);
+    onSuccess: ({ plan, isUpdate }) => {
+      if (plan?.id) setPlanId(plan.id);
       setStep('complete');
       queryClient.invalidateQueries({ queryKey: ['/api/heartworm-treatment-plans'] });
       toast({
-        title: "Treatment plan created",
-        description: "The heartworm treatment schedule has been saved.",
+        title: isUpdate ? "Treatment plan updated" : "Treatment plan created",
+        description: isUpdate
+          ? "Your changes to the heartworm treatment schedule have been saved."
+          : "The heartworm treatment schedule has been saved.",
       });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
+      const message = error instanceof Error ? error.message : "Please try again";
       toast({
-        title: "Failed to create treatment plan",
-        description: error.message || "Please try again",
+        title: "Failed to save treatment plan",
+        description: message,
         variant: "destructive",
       });
     },
   });
+  // Backwards-compat alias so existing JSX using createPlanMutation still works.
+  const createPlanMutation = savePlanMutation;
 
   const sendEmailMutation = useMutation({
     mutationFn: async () => {
@@ -747,10 +767,10 @@ export function HeartwormTreatmentModal({
                 {createPlanMutation.isPending ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Creating...
+                    {planId ? 'Saving...' : 'Creating...'}
                   </>
                 ) : (
-                  'Create Treatment Plan'
+                  planId ? 'Save Changes' : 'Create Treatment Plan'
                 )}
               </Button>
             </DialogFooter>

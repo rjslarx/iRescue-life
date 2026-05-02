@@ -2177,9 +2177,15 @@ router.post(
             await fileObj.save(fileBuffer, { metadata: { contentType } });
 
             const normalizedPath = `/objects/${auth.tenantId}/${folder}/${objectId}`;
+            // Vet receipts can contain adopter/veterinary PII. Keep them
+            // PRIVATE and tenant-scoped — the existing /objects/ route will
+            // grant read access only to authenticated members of this tenant
+            // (the adopter who uploaded it and the rescue's staff). The
+            // adopter is the recorded owner.
             await objectStorageService.trySetObjectEntityAclPolicy(normalizedPath, {
               owner: auth.userId,
-              visibility: 'public',
+              visibility: 'private',
+              tenantId: auth.tenantId,
             });
             receiptObjectPath = normalizedPath;
             receiptFileName = file.originalname;
