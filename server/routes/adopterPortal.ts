@@ -2088,6 +2088,12 @@ router.post(
             return res.status(404).json({ error: 'Treatment plan not found' });
           }
 
+          // Mirror the GET-route guard: adopters can only act on a plan the
+          // rescue has formally published. Unsent drafts are not actionable.
+          if (!plan.contractSentAt) {
+            return res.status(404).json({ error: 'Treatment plan not found' });
+          }
+
           const appointments = Array.isArray(plan.appointments) ? [...plan.appointments] : [];
           if (idx >= appointments.length) {
             return res.status(400).json({ error: 'Appointment index out of range' });

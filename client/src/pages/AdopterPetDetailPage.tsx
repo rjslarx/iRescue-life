@@ -308,9 +308,11 @@ export default function AdopterPetDetailPage() {
     enabled: !!animalId && activeTab === "compliance",
   });
 
-  const { data: heartwormPlan, isLoading: isHeartwormPlanLoading } = useQuery<HeartwormTreatmentPlan | null>({
+  // Only fetch the heartworm plan when the pet is actually heartworm-positive.
+  // For all other dogs, no request is made and no placeholder UI ever renders.
+  const { data: heartwormPlan } = useQuery<HeartwormTreatmentPlan | null>({
     queryKey: ["/api/adopter/pets", animalId, "heartworm-treatment-plan"],
-    enabled: !!animalId && activeTab === "compliance",
+    enabled: !!animalId && activeTab === "compliance" && pet?.heartwormStatus === 'positive',
   });
 
   const submitObligationProofMutation = useMutation({
@@ -644,37 +646,11 @@ export default function AdopterPetDetailPage() {
             </Card>
           )}
 
-          {isHeartwormPlanLoading && (
-            <Card data-testid="card-heartworm-treatment-loading">
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Heart className="h-5 w-5 text-red-600" />
-                  Heartworm Treatment
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <Skeleton className="h-16 w-full" />
-                <Skeleton className="h-12 w-full" />
-                <Skeleton className="h-12 w-full" />
-              </CardContent>
-            </Card>
-          )}
-
-          {!isHeartwormPlanLoading && (!heartwormPlan || !Array.isArray(heartwormPlan.appointments) || heartwormPlan.appointments.length === 0) && pet.heartwormStatus === 'positive' && (
-            <Card data-testid="card-heartworm-treatment-empty">
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Heart className="h-5 w-5 text-red-600" />
-                  Heartworm Treatment
-                </CardTitle>
-                <CardDescription>
-                  Your rescue hasn't published a heartworm treatment plan for {pet.name} yet. Once they do, the schedule, exercise restrictions, and contract will appear here.
-                </CardDescription>
-              </CardHeader>
-            </Card>
-          )}
-
-          {!isHeartwormPlanLoading && heartwormPlan && Array.isArray(heartwormPlan.appointments) && heartwormPlan.appointments.length > 0 && (() => {
+          {/* Heartworm Treatment section is fully hidden (no loading card,
+              no empty card, no flicker) for any pet without an active,
+              published plan. It only renders when a real plan + appointments
+              exist for a heartworm-positive dog. */}
+          {heartwormPlan && Array.isArray(heartwormPlan.appointments) && heartwormPlan.appointments.length > 0 && (() => {
             const restriction = getExerciseRestriction(heartwormPlan.appointments);
             return (
               <Card data-testid="card-heartworm-treatment">
