@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { buildTenantUrl, getTenantHeaders } from "@/lib/tenantApi";
 import { 
   ArrowLeft, 
   Shield, 
@@ -308,11 +309,13 @@ export default function AdopterPetDetailPage() {
     enabled: !!animalId && activeTab === "compliance",
   });
 
-  // Only fetch the heartworm plan when the pet is actually heartworm-positive.
-  // For all other dogs, no request is made and no placeholder UI ever renders.
+  // Plan existence is the SOLE source of truth for whether the section
+  // renders. We always issue the request once the compliance tab is active
+  // (the server returns null for pets with no published plan), and the
+  // section only renders when a real plan + appointments are returned.
   const { data: heartwormPlan } = useQuery<HeartwormTreatmentPlan | null>({
     queryKey: ["/api/adopter/pets", animalId, "heartworm-treatment-plan"],
-    enabled: !!animalId && activeTab === "compliance" && pet?.heartwormStatus === 'positive',
+    enabled: !!animalId && activeTab === "compliance",
   });
 
   const submitObligationProofMutation = useMutation({
@@ -808,7 +811,7 @@ export default function AdopterPetDetailPage() {
                       data-testid="button-download-hw-contract"
                     >
                       <a
-                        href={`/api/adopter/pets/${animalId}/heartworm-treatment-plan/${heartwormPlan.id}/contract`}
+                        href={buildTenantUrl(`/api/adopter/pets/${animalId}/heartworm-treatment-plan/${heartwormPlan.id}/contract`)}
                         target="_blank"
                         rel="noopener noreferrer"
                       >
@@ -1396,8 +1399,8 @@ export default function AdopterPetDetailPage() {
                         formData.append('receipt', hwReceiptFile);
                       }
                       const res = await fetch(
-                        `/api/adopter/pets/${animalId}/heartworm-treatment-plan/${heartwormPlan.id}/appointments/${selectedHwApptIndex}/complete`,
-                        { method: 'POST', body: formData, credentials: 'include' }
+                        buildTenantUrl(`/api/adopter/pets/${animalId}/heartworm-treatment-plan/${heartwormPlan.id}/appointments/${selectedHwApptIndex}/complete`),
+                        { method: 'POST', body: formData, credentials: 'include', headers: getTenantHeaders() }
                       );
                       if (!res.ok) {
                         const err = await res.json().catch(() => ({}));
