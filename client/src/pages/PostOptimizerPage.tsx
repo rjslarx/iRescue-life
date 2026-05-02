@@ -429,28 +429,50 @@ export default function PostOptimizerPage() {
           {/* Right column: results */}
           <div className="space-y-6">
             {!isPending && !result && (
-              <Card data-testid="card-empty-state">
-                <CardHeader>
-                  <CardTitle>Your optimized post will appear here</CardTitle>
-                  <CardDescription>
-                    Click "Optimize for Facebook" to see a cleaned caption and a strategic first comment with the right call-to-action link.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-sm text-muted-foreground space-y-2">
-                    <p>We'll classify the emotional tone of your post into one of four categories and pick the matching link:</p>
-                    <ul className="list-disc pl-5 space-y-1">
-                      <li><span className="font-medium text-foreground">Urgent / Emotional</span> &rarr; VIP Club (monthly giving)</li>
-                      <li><span className="font-medium text-foreground">Overwhelmed Shelter</span> &rarr; Foster application</li>
-                      <li><span className="font-medium text-foreground">Happy / Adoption</span> &rarr; Adoption application</li>
-                      <li><span className="font-medium text-foreground">Volunteer Recruitment</span> &rarr; Volunteer sign-up</li>
-                    </ul>
-                    <p className="pt-2">
-                      If your draft mentions Venmo, CashApp, or PayPal, we'll strip those handles (Facebook hides posts that contain them) and route donors to your fundraiser instead — with Apple Pay and Google Pay so it's just as fast.
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
+              <>
+                <Card data-testid="card-empty-state">
+                  <CardHeader>
+                    <CardTitle>Your optimized post will appear here</CardTitle>
+                    <CardDescription>
+                      Click "Optimize for Facebook" to see a cleaned caption and a strategic first comment with the right call-to-action link.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-sm text-muted-foreground space-y-2">
+                      <p>We'll classify the emotional tone of your post into one of four categories and pick the matching link:</p>
+                      <ul className="list-disc pl-5 space-y-1">
+                        <li><span className="font-medium text-foreground">Urgent / Emotional</span> &rarr; VIP Club (monthly giving)</li>
+                        <li><span className="font-medium text-foreground">Overwhelmed Shelter</span> &rarr; Foster application</li>
+                        <li><span className="font-medium text-foreground">Happy / Adoption</span> &rarr; Adoption application</li>
+                        <li><span className="font-medium text-foreground">Volunteer Recruitment</span> &rarr; Volunteer sign-up</li>
+                      </ul>
+                      <p className="pt-2">
+                        If your draft mentions Venmo, CashApp, or PayPal, we'll strip those handles (Facebook hides posts that contain them) and route donors to your fundraiser instead — with Apple Pay and Google Pay so it's just as fast.
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card data-testid="card-empty-step-1" className="border-dashed bg-transparent">
+                  <StepBadge
+                    number={1}
+                    instruction="Paste this as your Facebook post"
+                  />
+                  <CardHeader className="pt-3">
+                    <CardTitle className="text-base text-muted-foreground">Your optimized caption will appear here</CardTitle>
+                  </CardHeader>
+                </Card>
+
+                <Card data-testid="card-empty-step-2" className="border-dashed bg-transparent">
+                  <StepBadge
+                    number={2}
+                    instruction="After you publish, paste this as the first comment under your post"
+                  />
+                  <CardHeader className="pt-3">
+                    <CardTitle className="text-base text-muted-foreground">Your first comment will appear here</CardTitle>
+                  </CardHeader>
+                </Card>
+              </>
             )}
 
             {isPending && (
