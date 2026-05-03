@@ -933,24 +933,31 @@ export default function AdopterPetDetailPage() {
                       setIsUploadingObligationReceipt(true);
                       try {
                         const form = new FormData();
-                        form.append('photo', file);
+                        form.append('files', file);
+                        form.append('context', 'receipt');
+                        if (animalId) form.append('animalId', animalId);
+                        if (selectedObligation?.obligationType) form.append('label', selectedObligation.obligationType);
                         const res = await fetch('/api/adopter/photos/upload', {
                           method: 'POST',
                           body: form,
                           credentials: 'include',
                         });
-                        const data = await res.json();
+                        const data = await res.json().catch(() => ({}));
                         if (!res.ok) {
-                          throw new Error(data.error || 'Upload failed');
+                          throw new Error(data?.error || 'Upload failed');
                         }
-                        const url = data.uploadedPaths?.[0] || data.url || null;
-                        if (!url) {
-                          throw new Error('Upload succeeded but no file URL returned');
+                        const uploadedPath = data.uploadedPaths?.[0] || data.url || data.fileUrl || null;
+                        if (!uploadedPath) {
+                          throw new Error('Upload did not return a file path');
                         }
-                        setObligationReceiptUrl(url);
+                        setObligationReceiptUrl(uploadedPath);
                         toast({ title: "File uploaded successfully" });
                       } catch (err: any) {
-                        toast({ title: err?.message || "Upload failed", variant: "destructive" });
+                        toast({
+                          title: "Upload failed",
+                          description: err?.message,
+                          variant: "destructive",
+                        });
                         setObligationReceiptFile(null);
                       } finally {
                         setIsUploadingObligationReceipt(false);
@@ -1111,24 +1118,31 @@ export default function AdopterPetDetailPage() {
                   setIsUploadingReceipt(true);
                   try {
                     const form = new FormData();
-                    form.append('photo', file);
+                    form.append('files', file);
+                    form.append('context', 'receipt');
+                    if (animalId) form.append('animalId', animalId);
+                    if (selectedCareItem?.careName) form.append('label', selectedCareItem.careName);
                     const res = await fetch('/api/adopter/photos/upload', {
                       method: 'POST',
                       body: form,
                       credentials: 'include',
                     });
-                    const data = await res.json();
+                    const data = await res.json().catch(() => ({}));
                     if (!res.ok) {
-                      throw new Error(data.error || 'Upload failed');
+                      throw new Error(data?.error || 'Upload failed');
                     }
-                    const url = data.uploadedPaths?.[0] || data.url || null;
-                    if (!url) {
-                      throw new Error('Upload succeeded but no file URL returned');
+                    const uploadedPath = data.uploadedPaths?.[0] || data.url || data.fileUrl || null;
+                    if (!uploadedPath) {
+                      throw new Error('Upload did not return a file path');
                     }
-                    setReceiptUrl(url);
+                    setReceiptUrl(uploadedPath);
                     toast({ title: "Receipt uploaded" });
                   } catch (err: any) {
-                    toast({ title: err?.message || "Upload failed", variant: "destructive" });
+                    toast({
+                      title: "Upload failed",
+                      description: err?.message,
+                      variant: "destructive",
+                    });
                     setReceiptFile(null);
                   } finally {
                     setIsUploadingReceipt(false);

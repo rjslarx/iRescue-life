@@ -1435,22 +1435,27 @@ router.get('/notification-history', async (req: Request, res: Response) => {
 
 /**
  * POST /api/adopter/photos/upload
- * Shared adopter document upload endpoint.
  *
- * Accepts BOTH images and PDFs (vet receipts) so any post-adoption proof flow
- * — happy tails, compliance obligations, confirm-care receipts, etc. — can
- * use one endpoint.
+ * Shared adopter document upload endpoint. Accepts BOTH images and PDFs (vet
+ * receipts) so any post-adoption proof flow — happy tails, compliance
+ * obligations, confirm-care receipts, etc. — uses a single endpoint with
+ * MIME+extension allowlist plus magic-byte sniffing (defense in depth).
  *
- * - Multi-file uploads (happy tails) send field name `files` (up to 5).
- * - Single-file proof uploads send field name `photo` (one file).
- * - Both shapes are accepted via multer's `.any()` and the response always
- *   contains `{ uploadedPaths: string[] }`. Single-file callers should read
- *   `uploadedPaths[0]`.
+ * Receipt-vs-happy-tail behaviour is determined by EITHER the optional
+ * `context` form field OR the multer field name:
+ *   - happy-tail (default): field name `files` and/or `context=happy_tail`.
+ *     Files are stored PUBLIC under `adopter-photos/`.
+ *   - receipt: field name `photo` / `file` / `receipt` / `proof`, OR
+ *     `context=receipt`. Files are stored PRIVATELY (tenant-scoped) under
+ *     `adopter-receipts/` since vet receipts contain adopter/veterinary PII.
+ *     A `person_documents` row is created for each upload so staff see the
+ *     receipt alongside other adopter docs. Optional companion fields:
+ *       - `animalId` — used to enrich the document title with the pet name
+ *       - `label`    — short obligation label, e.g. "Spay/Neuter"
  *
- * Files are stored PRIVATELY under the tenant prefix; access is enforced by
- * the existing /objects/ ACL system. Photos for happy tails get visibility
- * `public` (so the tail surfaces them); receipts/proofs are stored `private`
- * and tenant-scoped, matching the heartworm-receipt route pattern.
+ * Response: `{ uploadedPaths: string[], url: string | null, fileUrl: string | null }`.
+ * `url` and `fileUrl` mirror `uploadedPaths[0]` for backwards compatibility
+ * with older single-file callers.
  */
 router.post('/photos/upload', async (req: Request, res: Response) => {
   try {
@@ -1458,11 +1463,11 @@ router.post('/photos/upload', async (req: Request, res: Response) => {
     if (!auth) return;
 
     const multer = (await import('multer')).default;
-    const { ObjectStorageService } = await import('../objectStorage');
-    const { randomUUID } = await import('crypto');
 
-    // Defense in depth: BOTH the MIME type and file extension must be in the
-    // allowlist (the same pattern the heartworm-receipt route uses).
+    // Require BOTH MIME and extension to be in the allowlist (defense in depth
+    // against file-type spoofing). Each MIME-extension combination is whitelisted
+    // explicitly. PDFs are allowed alongside images so adopters can upload vet
+    // receipts in addition to photo proofs.
     const allowedMimeExtPairs: Record<string, string[]> = {
       'image/jpeg': ['jpg', 'jpeg'],
       'image/png': ['png'],
@@ -1525,21 +1530,30 @@ router.post('/photos/upload', async (req: Request, res: Response) => {
         return res.status(400).json({ error: 'No files uploaded' });
       }
 
+      const context = typeof req.body?.context === 'string' ? req.body.context : 'happy_tail';
+      const contextIsReceipt = context === 'receipt';
+      const animalIdField = typeof req.body?.animalId === 'string' && req.body.animalId.trim().length > 0
+        ? req.body.animalId.trim()
+        : null;
+      const label = typeof req.body?.label === 'string' && req.body.label.trim().length > 0
+        ? req.body.label.trim().slice(0, 200)
+        : null;
+
       try {
+        const { ObjectStorageService, objectStorageClient } = await import('../objectStorage');
+        const { randomUUID } = await import('crypto');
         const objectStorageService = new ObjectStorageService();
-        const { objectStorageClient } = await import('../objectStorage');
         const privateObjectDir = objectStorageService.getPrivateObjectDir();
         const uploadedPaths: string[] = [];
+        const uploadedMeta: Array<{ path: string; fileName: string; size: number; contentType: string; isReceipt: boolean }> = [];
 
         for (const file of files) {
-          let fileBuffer = file.buffer;
-          let contentType = file.mimetype;
-
-          // Magic-byte sniffing — same defense-in-depth as the heartworm route
+          // Magic-byte sniff: validate the leading bytes match the claimed MIME
+          // type for the most common formats. Defense in depth on top of the
+          // MIME+extension allowlist above.
           const buf = file.buffer;
           const startsWith = (sig: number[], offset = 0) =>
-            buf.length >= offset + sig.length &&
-            sig.every((b, i) => buf[offset + i] === b);
+            buf.length >= offset + sig.length && sig.every((b, i) => buf[offset + i] === b);
           let signatureOk = true;
           switch (file.mimetype) {
             case 'application/pdf':
@@ -1555,26 +1569,30 @@ router.post('/photos/upload', async (req: Request, res: Response) => {
               signatureOk = startsWith([0x47, 0x49, 0x46, 0x38]); // GIF8
               break;
             case 'image/webp':
-              signatureOk = startsWith([0x52, 0x49, 0x46, 0x46]) &&
-                startsWith([0x57, 0x45, 0x42, 0x50], 8);
+              signatureOk = startsWith([0x52, 0x49, 0x46, 0x46]) && startsWith([0x57, 0x45, 0x42, 0x50], 8);
               break;
             case 'image/bmp':
-              signatureOk = startsWith([0x42, 0x4d]);
+              signatureOk = startsWith([0x42, 0x4d]); // BM
               break;
-            // HEIC/HEIF/AVIF have a variable ftyp box; skip strict signature check.
+            // HEIC/HEIF/AVIF have an ftyp box at offset 4 with variable brands;
+            // we accept these without strict signature checks.
+            default:
+              signatureOk = true;
           }
           if (!signatureOk) {
             return res.status(400).json({ error: 'File contents do not match the declared file type' });
           }
 
-          const ext = file.originalname.toLowerCase().split('.').pop();
-          if (ext === 'heic' || ext === 'heif' || file.mimetype === 'image/heic' || file.mimetype === 'image/heif') {
+          let fileBuffer = file.buffer;
+          let contentType = file.mimetype;
+          const ext = file.originalname.toLowerCase().split('.').pop() || '';
+          if (ext === 'heic' || ext === 'heif' || contentType === 'image/heic' || contentType === 'image/heif') {
             try {
               const heicConvert = (await import('heic-convert')).default;
               const convertedBuffer = await heicConvert({
                 buffer: file.buffer,
                 format: 'JPEG',
-                quality: 0.9
+                quality: 0.9,
               });
               fileBuffer = Buffer.from(convertedBuffer);
               contentType = 'image/jpeg';
@@ -1584,38 +1602,26 @@ router.post('/photos/upload', async (req: Request, res: Response) => {
             }
           }
 
-          // Folder + ACL visibility depends on field name. Happy-tail `files`
-          // have always been public; proof receipts (`photo`/`receipt`/etc.)
-          // contain adopter PII so we keep them private and tenant-scoped.
-          const isProofUpload = file.fieldname !== 'files';
-          const folder = isProofUpload ? 'adopter-receipts' : 'adopter-photos';
-          const visibility: 'public' | 'private' = isProofUpload ? 'private' : 'public';
+          // Folder + ACL visibility depends on either the explicit `context`
+          // form field (preferred for new callers) OR the multer field name
+          // (legacy callers). Happy-tail `files` have always been public;
+          // proof receipts contain adopter/veterinary PII so we keep them
+          // private and tenant-scoped.
+          const isReceiptFile = contextIsReceipt || file.fieldname !== 'files';
+          const folder = isReceiptFile ? 'adopter-receipts' : 'adopter-photos';
+          const visibility: 'public' | 'private' = isReceiptFile ? 'private' : 'public';
 
           const objectId = randomUUID();
           const fullPath = `${privateObjectDir}/${auth.tenantId}/${folder}/${objectId}`;
-
-          const parseObjectPath = (path: string): { bucketName: string; objectName: string } => {
-            if (!path.startsWith("/")) {
-              path = `/${path}`;
-            }
-            const pathParts = path.split("/");
-            if (pathParts.length < 3) {
-              throw new Error("Invalid path: must contain at least a bucket name");
-            }
-            const bucketName = pathParts[1];
-            const objectName = pathParts.slice(2).join("/");
-            return { bucketName, objectName };
-          };
-
-          const { bucketName, objectName } = parseObjectPath(fullPath);
+          const parts = fullPath.startsWith('/') ? fullPath.split('/') : `/${fullPath}`.split('/');
+          if (parts.length < 3) {
+            throw new Error('Invalid object storage path');
+          }
+          const bucketName = parts[1];
+          const objectName = parts.slice(2).join('/');
           const bucket = objectStorageClient.bucket(bucketName);
           const fileObj = bucket.file(objectName);
-
-          await fileObj.save(fileBuffer, {
-            metadata: {
-              contentType: contentType,
-            },
-          });
+          await fileObj.save(fileBuffer, { metadata: { contentType } });
 
           const normalizedPath = `/objects/${auth.tenantId}/${folder}/${objectId}`;
           await objectStorageService.trySetObjectEntityAclPolicy(
@@ -1624,21 +1630,88 @@ router.post('/photos/upload', async (req: Request, res: Response) => {
               owner: auth.userId,
               visibility,
               ...(visibility === 'private' ? { tenantId: auth.tenantId } : {}),
-            }
+            },
           );
 
           uploadedPaths.push(normalizedPath);
+          uploadedMeta.push({
+            path: normalizedPath,
+            fileName: file.originalname,
+            size: fileBuffer.length,
+            contentType,
+            isReceipt: isReceiptFile,
+          });
         }
 
-        // Return both `uploadedPaths` (canonical) and `url` (single-file
-        // convenience) so older callers using either shape keep working.
+        // Link receipt uploads into person_documents so staff can see them
+        // alongside other adopter docs. Non-fatal if it fails — the upload
+        // still succeeds.
+        const receiptMeta = uploadedMeta.filter((m) => m.isReceipt);
+        if (receiptMeta.length > 0) {
+          try {
+            const adopterEmail = req.user!.email;
+            const normalizedEmail = adopterEmail.toLowerCase().trim();
+            const [contact] = await db
+              .select({ id: contacts.id })
+              .from(contacts)
+              .where(and(
+                eq(contacts.tenantId, auth.tenantId),
+                sql`LOWER(TRIM(${contacts.email})) = ${normalizedEmail}`,
+              ))
+              .limit(1);
+
+            let animalName = 'Pet';
+            // Verify the adopter actually owns the animal before using it for
+            // title enrichment — prevents a malicious caller from leaking
+            // arbitrary pet names from the same tenant via the document title.
+            if (animalIdField) {
+              const ownsAnimal = await verifyAdopterOwnsAnimal(auth.userId, auth.tenantId, animalIdField);
+              if (ownsAnimal) {
+                const [animalRow] = await db
+                  .select({ name: animals.name })
+                  .from(animals)
+                  .where(and(eq(animals.id, animalIdField), eq(animals.tenantId, auth.tenantId)))
+                  .limit(1);
+                if (animalRow?.name) animalName = animalRow.name;
+              }
+            }
+
+            const labelText = label || 'Vet Receipt';
+            const titlePrefix = `Vet Receipt — ${animalName} — ${labelText}`;
+
+            for (const meta of receiptMeta) {
+              await db.insert(personDocuments).values({
+                tenantId: auth.tenantId,
+                personType: 'contact',
+                personId: contact?.id ?? null,
+                personEmail: adopterEmail,
+                documentType: 'uploaded',
+                documentSubtype: 'other',
+                title: titlePrefix,
+                description: `Vet receipt uploaded by adopter for "${labelText}".`,
+                objectPath: meta.path,
+                fileName: meta.fileName,
+                fileSize: meta.size,
+                contentType: meta.contentType,
+                uploadedBy: auth.userId,
+              });
+            }
+          } catch (docErr) {
+            console.error('[Adopter Portal] Failed to link receipt to person_documents:', docErr);
+          }
+        }
+
+        // Return both `uploadedPaths` (canonical) and `url` / `fileUrl`
+        // (single-file convenience) so older callers using either shape
+        // keep working.
         res.json({
           uploadedPaths,
-          url: uploadedPaths[0],
+          url: uploadedPaths[0] ?? null,
+          fileUrl: uploadedPaths[0] ?? null,
         });
       } catch (error: any) {
-        console.error('[Adopter Portal] Error uploading photos:', error);
-        return res.status(500).json({ error: 'Failed to upload photos' });
+        console.error('[Adopter Portal] Error uploading files:', error);
+        return res.status(500).json({ error: 'Failed to upload files' });
       }
     });
   } catch (error) {
