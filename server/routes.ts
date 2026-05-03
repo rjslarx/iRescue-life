@@ -16722,14 +16722,39 @@ ${renderedHtml}
       
       // Get query params for filtering
       const tagFilter = req.query.tag as string | undefined;
-      
+      const startDateParam = req.query.startDate as string | undefined;
+      const endDateParam = req.query.endDate as string | undefined;
+
+      // Optional date range: include animal if adoptionDate falls in range,
+      // OR (no adoptionDate) and intakeDate falls in range.
+      // Date parsing matches /api/grants/metrics for consistent boundary semantics.
+      let dateClause: any = undefined;
+      if (startDateParam && endDateParam) {
+        const start = new Date(startDateParam + 'T00:00:00');
+        const end = new Date(endDateParam + 'T23:59:59.999');
+        if (isNaN(start.getTime()) || isNaN(end.getTime()) || start > end) {
+          return res.status(400).json({ error: 'Invalid date range' });
+        }
+        dateClause = or(
+          and(gte(animals.adoptionDate, start), lte(animals.adoptionDate, end)),
+          and(
+            isNull(animals.adoptionDate),
+            gte(animals.intakeDate, start),
+            lte(animals.intakeDate, end),
+          ),
+        );
+      }
+
+      const whereClauses = [
+        eq(animals.tenantId, req.tenant!.id),
+        eq(animals.flaggedForStory, true),
+      ];
+      if (dateClause) whereClauses.push(dateClause);
+
       let query = db
-        .select({ id: animals.id, name: animals.name, status: animals.status, storyTags: animals.storyTags, updatedAt: animals.updatedAt, photoUrls: animals.photoUrls, breed: animals.breed, species: animals.species, flaggedForStory: animals.flaggedForStory })
+        .select({ id: animals.id, name: animals.name, status: animals.status, storyTags: animals.storyTags, updatedAt: animals.updatedAt, photoUrls: animals.photoUrls, breed: animals.breed, species: animals.species, flaggedForStory: animals.flaggedForStory, intakeDate: animals.intakeDate, adoptionDate: animals.adoptionDate })
         .from(animals)
-        .where(and(
-          eq(animals.tenantId, req.tenant!.id),
-          eq(animals.flaggedForStory, true)
-        ));
+        .where(and(...whereClauses));
       
       const flaggedAnimals = await query.orderBy(desc(animals.updatedAt));
       
@@ -17349,7 +17374,22 @@ ${renderedHtml}
   app.get('/api/grants/documents', requireTenant, requireAuth, requireRole('admin', 'board_member', 'staff'), async (req, res, next) => {
     try {
       const { grantDocuments, users } = await import('@shared/schema');
-      
+
+      const startDateParam = req.query.startDate as string | undefined;
+      const endDateParam = req.query.endDate as string | undefined;
+
+      // Date parsing matches /api/grants/metrics for consistent boundary semantics.
+      const whereClauses = [eq(grantDocuments.tenantId, req.tenant!.id)];
+      if (startDateParam && endDateParam) {
+        const start = new Date(startDateParam + 'T00:00:00');
+        const end = new Date(endDateParam + 'T23:59:59.999');
+        if (isNaN(start.getTime()) || isNaN(end.getTime()) || start > end) {
+          return res.status(400).json({ error: 'Invalid date range' });
+        }
+        whereClauses.push(gte(grantDocuments.createdAt, start));
+        whereClauses.push(lte(grantDocuments.createdAt, end));
+      }
+
       const docs = await db
         .select({
           id: grantDocuments.id,
@@ -17365,7 +17405,7 @@ ${renderedHtml}
         })
         .from(grantDocuments)
         .leftJoin(users, eq(grantDocuments.uploadedBy, users.id))
-        .where(eq(grantDocuments.tenantId, req.tenant!.id))
+        .where(and(...whereClauses))
         .orderBy(desc(grantDocuments.createdAt));
       
       res.json({ documents: docs });

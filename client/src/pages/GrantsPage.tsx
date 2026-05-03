@@ -1,6 +1,8 @@
 import { useState, useRef, useMemo } from "react";
+import type { ReactNode } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
+import type { Tenant } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -260,10 +262,165 @@ export default function GrantsPage() {
     custom: "Custom",
   };
 
+  // Shared date-range selector — rendered on Overview, Documents, and Stories tabs.
+  const renderDateRangeSelector = (extra?: ReactNode) => (
+    <div className="flex flex-wrap items-center gap-2" data-testid="date-range-selector">
+      {Object.entries(presetLabels).map(([key, label]) => (
+        key !== "custom" ? (
+          <Button
+            key={key}
+            variant={datePreset === key ? "default" : "outline"}
+            size="sm"
+            onClick={() => setDatePreset(key)}
+            data-testid={`btn-preset-${key}`}
+          >
+            {label}
+          </Button>
+        ) : (
+          <Popover key={key} open={customPickerOpen} onOpenChange={setCustomPickerOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant={datePreset === "custom" ? "default" : "outline"}
+                size="sm"
+                data-testid="btn-preset-custom"
+              >
+                <Calendar className="h-4 w-4 mr-1" />
+                Custom
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <CalendarWidget
+                mode="range"
+                selected={customDateRange.from && customDateRange.to ? { from: customDateRange.from, to: customDateRange.to } : undefined}
+                onSelect={(range: any) => {
+                  if (range?.from && range?.to) {
+                    setCustomDateRange({ from: range.from, to: range.to });
+                    setDatePreset("custom");
+                    setCustomPickerOpen(false);
+                  } else if (range?.from) {
+                    setCustomDateRange({ from: range.from, to: undefined });
+                  }
+                }}
+                numberOfMonths={2}
+              />
+            </PopoverContent>
+          </Popover>
+        )
+      ))}
+      <span className="text-sm text-muted-foreground ml-2" data-testid="text-date-range-label">
+        {dateRangeLabel}
+      </span>
+      {extra ? <div className="ml-auto">{extra}</div> : null}
+    </div>
+  );
+
   // Fetch grants
   const { data: grantsData, isLoading: grantsLoading } = useQuery<{ grants: Grant[] }>({
     queryKey: ['/api/grants'],
   });
+
+  // Tenant info (used as the rescue name on exported reports)
+  const { data: tenantData } = useQuery<{ tenant: Tenant }>({
+    queryKey: ['/api/tenant'],
+  });
+  const rescueName = tenantData?.tenant?.name || "Rescue";
+
+  // Lazy PDF export of the current Overview metrics + active range.
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const handleExportPdf = async () => {
+    if (!metrics) return;
+    setIsExportingPdf(true);
+    try {
+      const jsPDFModule = await import('jspdf');
+      const autoTableModule = await import('jspdf-autotable');
+      const JsPDF = jsPDFModule.jsPDF;
+      const autoTable = (autoTableModule as any).default || autoTableModule;
+
+      const doc = new JsPDF({ unit: 'pt', format: 'letter' });
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const margin = 40;
+
+      doc.setFontSize(18);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Grant Management Metrics', margin, 60);
+
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'normal');
+      doc.text(rescueName, margin, 80);
+
+      doc.setFontSize(10);
+      doc.setTextColor(100);
+      doc.text(`Reporting period: ${dateRangeLabel}`, margin, 98);
+      doc.text(`Generated ${format(new Date(), 'MMM d, yyyy')}`, pageWidth - margin, 98, { align: 'right' });
+      doc.setTextColor(0);
+
+      const animal = metrics.animalStatistics;
+      const fin = metrics.financial;
+      const ops = metrics.operational;
+
+      autoTable(doc, {
+        startY: 120,
+        head: [['Animal Statistics', 'Value']],
+        body: [
+          ['Total intake', String(animal.totalIntake)],
+          ['Adoptions', String(animal.adoptions)],
+          ['Spay / Neuter procedures', String(animal.spayNeuterCount)],
+          ['Avg length of stay (days)', String(animal.avgLengthOfStay)],
+          ['Dogs', String(animal.bySpecies.dogs)],
+          ['Cats', String(animal.bySpecies.cats)],
+          ['Other species', String(animal.bySpecies.other)],
+        ],
+        styles: { fontSize: 10 },
+        headStyles: { fillColor: [60, 60, 60] },
+        margin: { left: margin, right: margin },
+      });
+
+      autoTable(doc, {
+        startY: (doc as any).lastAutoTable.finalY + 16,
+        head: [['Grant Financial Summary', 'Value']],
+        body: [
+          ['Total awarded', `$${fin.totalAwarded}`],
+          ['Total requested', `$${fin.totalRequested}`],
+          ['Total expenses', `$${fin.totalExpenses}`],
+          ['Cost per animal', `$${fin.costPerAnimal}`],
+          [
+            'Net balance',
+            `$${(parseFloat(fin.totalAwarded) - parseFloat(fin.totalExpenses)).toFixed(2)}`,
+          ],
+        ],
+        styles: { fontSize: 10 },
+        headStyles: { fillColor: [60, 60, 60] },
+        margin: { left: margin, right: margin },
+      });
+
+      autoTable(doc, {
+        startY: (doc as any).lastAutoTable.finalY + 16,
+        head: [['Operational (current snapshot)', 'Value']],
+        body: [
+          ['Volunteer hours (in range)', String(ops.totalVolunteerHours)],
+          ['Active foster homes', String(ops.activeFosterHomes)],
+          ['In foster (now)', String(animal.currentInFoster)],
+          ['In shelter (now)', String(animal.currentInShelter)],
+          ['Pending applications (now)', String(ops.pendingApplications)],
+        ],
+        styles: { fontSize: 10 },
+        headStyles: { fillColor: [60, 60, 60] },
+        margin: { left: margin, right: margin },
+      });
+
+      const safeName = rescueName.replace(/[^A-Za-z0-9 _-]+/g, '').trim() || 'Rescue';
+      const safeRange = dateRangeLabel.replace(/[^A-Za-z0-9 _–-]+/g, '').trim();
+      doc.save(`${safeName} - Grant Metrics ${safeRange}.pdf`);
+    } catch (err: any) {
+      toast({
+        title: 'Could not generate report',
+        description: err?.message || 'Unexpected error while building the PDF.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsExportingPdf(false);
+    }
+  };
 
   const metricsQueryParams = useMemo(() => {
     if (dateRange.startDate && dateRange.endDate) {
@@ -282,20 +439,29 @@ export default function GrantsPage() {
     enabled: activeTab === 'overview',
   });
 
-  // Fetch documents
+  // Fetch documents (scoped to selected date range)
   const { data: documentsData, isLoading: documentsLoading } = useQuery<{ documents: any[] }>({
-    queryKey: ['/api/grants/documents'],
+    queryKey: ['/api/grants/documents', metricsQueryParams],
+    queryFn: async () => {
+      const res = await fetch(`/api/grants/documents${metricsQueryParams}`, { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to fetch documents');
+      return res.json();
+    },
     enabled: activeTab === 'documents',
   });
 
-  // Fetch success stories
+  // Fetch success stories (scoped to selected date range)
   const { data: storiesData, isLoading: storiesLoading } = useQuery<{ animals: SuccessStoryAnimal[] }>({
-    queryKey: ['/api/grants/success-stories', storyTagFilter],
+    queryKey: ['/api/grants/success-stories', storyTagFilter, metricsQueryParams],
     queryFn: async () => {
-      const url = storyTagFilter && storyTagFilter !== 'all' 
-        ? `/api/grants/success-stories?tag=${encodeURIComponent(storyTagFilter)}`
-        : '/api/grants/success-stories';
-      const response = await fetch(url);
+      const params = new URLSearchParams();
+      if (storyTagFilter && storyTagFilter !== 'all') params.set('tag', storyTagFilter);
+      if (dateRange.startDate && dateRange.endDate) {
+        params.set('startDate', format(dateRange.startDate, 'yyyy-MM-dd'));
+        params.set('endDate', format(dateRange.endDate, 'yyyy-MM-dd'));
+      }
+      const qs = params.toString();
+      const response = await fetch(`/api/grants/success-stories${qs ? `?${qs}` : ''}`, { credentials: 'include' });
       if (!response.ok) {
         throw new Error('Failed to fetch success stories');
       }
@@ -624,53 +790,22 @@ export default function GrantsPage() {
 
           {/* Overview Tab - Reporting Metrics */}
           <TabsContent value="overview" className="space-y-6">
-            <div className="flex flex-wrap items-center gap-2" data-testid="date-range-selector">
-              {Object.entries(presetLabels).map(([key, label]) => (
-                key !== "custom" ? (
-                  <Button
-                    key={key}
-                    variant={datePreset === key ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setDatePreset(key)}
-                    data-testid={`btn-preset-${key}`}
-                  >
-                    {label}
-                  </Button>
+            {renderDateRangeSelector(
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleExportPdf}
+                disabled={!metrics || isExportingPdf}
+                data-testid="button-export-metrics-pdf"
+              >
+                {isExportingPdf ? (
+                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
                 ) : (
-                  <Popover key={key} open={customPickerOpen} onOpenChange={setCustomPickerOpen}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant={datePreset === "custom" ? "default" : "outline"}
-                        size="sm"
-                        data-testid="btn-preset-custom"
-                      >
-                        <Calendar className="h-4 w-4 mr-1" />
-                        Custom
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <CalendarWidget
-                        mode="range"
-                        selected={customDateRange.from && customDateRange.to ? { from: customDateRange.from, to: customDateRange.to } : undefined}
-                        onSelect={(range: any) => {
-                          if (range?.from && range?.to) {
-                            setCustomDateRange({ from: range.from, to: range.to });
-                            setDatePreset("custom");
-                            setCustomPickerOpen(false);
-                          } else if (range?.from) {
-                            setCustomDateRange({ from: range.from, to: undefined });
-                          }
-                        }}
-                        numberOfMonths={2}
-                      />
-                    </PopoverContent>
-                  </Popover>
-                )
-              ))}
-              <span className="text-sm text-muted-foreground ml-2" data-testid="text-date-range-label">
-                {dateRangeLabel}
-              </span>
-            </div>
+                  <Download className="h-4 w-4 mr-1" />
+                )}
+                Download report
+              </Button>
+            )}
 
             {metricsLoading ? (
               <div className="flex items-center justify-center h-64">
@@ -1074,6 +1209,7 @@ export default function GrantsPage() {
                 Upload Document
               </Button>
             </div>
+            {renderDateRangeSelector()}
 
             {documentsLoading ? (
               <div className="flex items-center justify-center h-64">
@@ -1215,6 +1351,7 @@ export default function GrantsPage() {
                 </SelectContent>
               </Select>
             </div>
+            {renderDateRangeSelector()}
 
             {storiesLoading ? (
               <div className="flex items-center justify-center h-64">
