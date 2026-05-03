@@ -4784,6 +4784,9 @@ export const broadcastTemplates = pgTable("broadcast_templates", {
   body: text("body").notNull(), // Message body (can include {variables})
   channels: text("channels").array().notNull().$type<("push" | "sms" | "email")[]>(),
   targetRoles: text("target_roles").array().$type<("admin" | "board_member" | "staff" | "foster" | "volunteer")[]>(),
+  targetTags: text("target_tags").array(),
+  targetTagsMode: text("target_tags_mode").$type<"any" | "all">().default("any"),
+  excludeTags: text("exclude_tags").array(),
   isActive: boolean("is_active").notNull().default(true),
   createdBy: uuid("created_by").references(() => users.id, { onDelete: 'set null' }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -4809,6 +4812,8 @@ export const broadcasts = pgTable("broadcasts", {
   targetRoles: text("target_roles").array().$type<("admin" | "board_member" | "staff" | "foster" | "volunteer")[]>(),
   targetUserIds: text("target_user_ids").array(), // Specific users (if not role-based)
   targetTags: text("target_tags").array(), // Optional tag filter (e.g. "transport", "medical")
+  targetTagsMode: text("target_tags_mode").$type<"any" | "all">().default("any"),
+  excludeTags: text("exclude_tags").array(),
   // Delivery stats
   totalRecipients: integer("total_recipients").notNull().default(0),
   pushSent: integer("push_sent").notNull().default(0),

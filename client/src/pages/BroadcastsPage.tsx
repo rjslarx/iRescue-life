@@ -33,6 +33,9 @@ import {
   Radio,
   Tag,
   X,
+  Ban,
+  Plus,
+  Minus,
 } from "lucide-react";
 import type { Broadcast, BroadcastTemplate } from "@shared/schema";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -82,6 +85,8 @@ export default function BroadcastsPage() {
   const [selectedChannels, setSelectedChannels] = useState<Channel[]>(["push"]);
   const [selectedRoles, setSelectedRoles] = useState<TargetRole[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [excludedTags, setExcludedTags] = useState<string[]>([]);
+  const [tagsMode, setTagsMode] = useState<"any" | "all">("any");
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
   const [replyToNumber, setReplyToNumber] = useState("");
 
@@ -93,26 +98,33 @@ export default function BroadcastsPage() {
     queryKey: ['/api/broadcasts/templates/list'],
   });
 
-  const { data: availableTags } = useQuery<string[]>({
-    queryKey: ['/api/users/tags'],
+  const { data: tagCountsData } = useQuery<{ poolSize: number; tags: { tag: string; count: number }[] }>({
+    queryKey: ['/api/broadcasts/tag-counts', selectedRoles.join(',')],
     queryFn: async () => {
-      const res = await fetch('/api/users/tags', { credentials: 'include' });
-      const data = await res.json();
-      return data.tags || [];
+      const params = new URLSearchParams();
+      if (selectedRoles.length > 0) params.set('roles', selectedRoles.join(','));
+      const qs = params.toString();
+      const res = await fetch(`/api/broadcasts/tag-counts${qs ? `?${qs}` : ''}`, { credentials: 'include' });
+      return res.json();
     },
   });
 
+  const availableTagsWithCounts = tagCountsData?.tags || [];
+  const availableTags = availableTagsWithCounts.map(t => t.tag);
+
   const { data: targetUsers, isLoading: usersLoading } = useQuery<TargetUser[]>({
-    queryKey: ['/api/broadcasts/recipients', selectedRoles.join(','), selectedTags.join(',')],
+    queryKey: ['/api/broadcasts/recipients', selectedRoles.join(','), selectedTags.join(','), excludedTags.join(','), tagsMode],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (selectedRoles.length > 0) params.set('roles', selectedRoles.join(','));
       if (selectedTags.length > 0) params.set('tags', selectedTags.join(','));
+      if (excludedTags.length > 0) params.set('excludeTags', excludedTags.join(','));
+      if (selectedTags.length > 1) params.set('tagsMode', tagsMode);
       const qs = params.toString();
       const res = await fetch(`/api/broadcasts/recipients${qs ? `?${qs}` : ''}`, { credentials: 'include' });
       return res.json();
     },
-    enabled: selectedRoles.length > 0,
+    enabled: selectedRoles.length > 0 || selectedTags.length > 0 || excludedTags.length > 0,
   });
 
   const { data: broadcasts, isLoading: broadcastsLoading } = useQuery<Broadcast[]>({
@@ -141,8 +153,10 @@ export default function BroadcastsPage() {
         title,
         message,
         channels: selectedChannels,
-        targetRoles: selectedRoles,
+        targetRoles: selectedRoles.length > 0 ? selectedRoles : undefined,
         targetTags: selectedTags.length > 0 ? selectedTags : undefined,
+        targetTagsMode: selectedTags.length > 1 ? tagsMode : undefined,
+        excludeTags: excludedTags.length > 0 ? excludedTags : undefined,
         templateId: selectedTemplateId || undefined,
         replyToNumber: cleanedReplyTo.length === 10 ? cleanedReplyTo : undefined,
       });
@@ -157,6 +171,8 @@ export default function BroadcastsPage() {
       setMessage("");
       setSelectedRoles([]);
       setSelectedTags([]);
+      setExcludedTags([]);
+      setTagsMode("any");
       setSelectedTemplateId("");
       queryClient.invalidateQueries({ queryKey: ['/api/broadcasts'] });
     },
@@ -176,9 +192,13 @@ export default function BroadcastsPage() {
       setTitle(template.subject);
       setMessage(template.body);
       setSelectedChannels(template.channels as Channel[]);
-      if (template.targetRoles) {
-        setSelectedRoles(template.targetRoles as TargetRole[]);
-      }
+      setSelectedRoles(Array.isArray(template.targetRoles) ? (template.targetRoles as TargetRole[]) : []);
+      const tplTags = (template as any).targetTags as string[] | null | undefined;
+      const tplExclude = (template as any).excludeTags as string[] | null | undefined;
+      const tplMode = (template as any).targetTagsMode as "any" | "all" | null | undefined;
+      setSelectedTags(Array.isArray(tplTags) ? tplTags : []);
+      setExcludedTags(Array.isArray(tplExclude) ? tplExclude : []);
+      setTagsMode(tplMode === "all" ? "all" : "any");
     }
   };
 
@@ -211,11 +231,21 @@ export default function BroadcastsPage() {
       toast({ title: "No channels selected", description: "Please select at least one notification channel.", variant: "destructive" });
       return;
     }
-    if (selectedRoles.length === 0) {
-      toast({ title: "No recipients selected", description: "Please select at least one role to notify.", variant: "destructive" });
+    if (selectedRoles.length === 0 && selectedTags.length === 0) {
+      toast({ title: "No recipients selected", description: "Please select at least one role or tag to notify.", variant: "destructive" });
       return;
     }
     sendBroadcastMutation.mutate();
+  };
+
+  const toggleIncludeTag = (tag: string) => {
+    setSelectedTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]);
+    setExcludedTags(prev => prev.filter(t => t !== tag));
+  };
+
+  const toggleExcludeTag = (tag: string) => {
+    setExcludedTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]);
+    setSelectedTags(prev => prev.filter(t => t !== tag));
   };
 
   const seedDefaultTemplatesMutation = useMutation({
@@ -468,42 +498,111 @@ export default function BroadcastsPage() {
                       </label>
                     ))}
 
-                    {availableTags && availableTags.length > 0 && selectedRoles.length > 0 && (
-                      <div className="space-y-2 pt-3 border-t">
-                        <Label className="flex items-center gap-2 text-sm">
-                          <Tag className="h-3.5 w-3.5" />
-                          Filter by Tags (optional)
-                        </Label>
-                        <p className="text-xs text-muted-foreground">
-                          Only send to team members with these tags
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          {availableTags.map(tag => (
-                            <Badge
-                              key={tag}
-                              variant={selectedTags.includes(tag) ? "default" : "outline"}
-                              className="cursor-pointer"
-                              onClick={() => {
-                                setSelectedTags(prev =>
-                                  prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
-                                );
-                              }}
-                              data-testid={`tag-filter-${tag}`}
-                            >
-                              {tag}
-                              {selectedTags.includes(tag) && <X className="h-3 w-3 ml-1" />}
-                            </Badge>
-                          ))}
+                    {availableTagsWithCounts.length > 0 && (
+                      <div className="space-y-3 pt-3 border-t">
+                        <div className="space-y-1">
+                          <Label className="flex items-center gap-2 text-sm">
+                            <Tag className="h-3.5 w-3.5" />
+                            Filter by Tags (optional)
+                          </Label>
+                          <p className="text-xs text-muted-foreground" data-testid="text-tag-filter-help">
+                            Click <Plus className="inline h-3 w-3" /> to require a tag, <Minus className="inline h-3 w-3" /> to exclude. Counts reflect the role pool.
+                          </p>
                         </div>
-                        {selectedTags.length > 0 && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setSelectedTags([])}
-                            data-testid="button-clear-tags"
-                          >
-                            Clear tags
-                          </Button>
+
+                        {selectedTags.length > 1 && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground">Match mode:</span>
+                            <Button
+                              size="sm"
+                              variant={tagsMode === "any" ? "default" : "outline"}
+                              onClick={() => setTagsMode("any")}
+                              data-testid="button-tags-mode-any"
+                            >
+                              Any tag
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant={tagsMode === "all" ? "default" : "outline"}
+                              onClick={() => setTagsMode("all")}
+                              data-testid="button-tags-mode-all"
+                            >
+                              All tags
+                            </Button>
+                          </div>
+                        )}
+
+                        <div className="flex flex-wrap gap-2">
+                          {availableTagsWithCounts.map(({ tag, count }) => {
+                            const included = selectedTags.includes(tag);
+                            const excluded = excludedTags.includes(tag);
+                            return (
+                              <div
+                                key={tag}
+                                className={`inline-flex items-center gap-1 rounded-md border pl-2 pr-1 py-0.5 text-xs ${
+                                  included
+                                    ? 'border-primary bg-primary/10'
+                                    : excluded
+                                    ? 'border-destructive bg-destructive/10'
+                                    : 'border-border'
+                                }`}
+                                data-testid={`tag-chip-${tag}`}
+                              >
+                                <span className={excluded ? 'line-through text-muted-foreground' : ''}>{tag}</span>
+                                <span className="text-muted-foreground">({count})</span>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-6 w-6"
+                                  onClick={() => toggleIncludeTag(tag)}
+                                  title={included ? 'Remove from include' : 'Include this tag'}
+                                  data-testid={`button-tag-include-${tag}`}
+                                >
+                                  {included ? <X className="h-3 w-3" /> : <Plus className="h-3 w-3" />}
+                                </Button>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-6 w-6"
+                                  onClick={() => toggleExcludeTag(tag)}
+                                  title={excluded ? 'Remove from exclude' : 'Exclude this tag'}
+                                  data-testid={`button-tag-exclude-${tag}`}
+                                >
+                                  {excluded ? <X className="h-3 w-3" /> : <Minus className="h-3 w-3" />}
+                                </Button>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {(selectedTags.length > 0 || excludedTags.length > 0) && (
+                          <div className="flex flex-wrap items-center gap-2 pt-1">
+                            {selectedTags.length > 0 && (
+                              <Badge variant="secondary" className="text-xs" data-testid="badge-include-summary">
+                                Include {tagsMode === "all" && selectedTags.length > 1 ? "all of" : "any of"}: {selectedTags.join(", ")}
+                              </Badge>
+                            )}
+                            {excludedTags.length > 0 && (
+                              <Badge variant="destructive" className="text-xs" data-testid="badge-exclude-summary">
+                                <Ban className="h-3 w-3 mr-1" />
+                                Exclude: {excludedTags.join(", ")}
+                              </Badge>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => { setSelectedTags([]); setExcludedTags([]); }}
+                              data-testid="button-clear-tags"
+                            >
+                              Clear tag filters
+                            </Button>
+                          </div>
+                        )}
+
+                        {selectedRoles.length === 0 && (selectedTags.length > 0 || excludedTags.length > 0) && (
+                          <p className="text-xs text-muted-foreground" data-testid="text-tag-only-mode">
+                            Tag-only broadcast: matches active users across all roles.
+                          </p>
                         )}
                       </div>
                     )}
@@ -518,8 +617,8 @@ export default function BroadcastsPage() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    {selectedRoles.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">Select roles to see delivery stats</p>
+                    {selectedRoles.length === 0 && selectedTags.length === 0 && excludedTags.length === 0 ? (
+                      <p className="text-sm text-muted-foreground" data-testid="text-preview-empty">Select roles or tags to see delivery stats</p>
                     ) : usersLoading ? (
                       <div className="space-y-2">
                         <Skeleton className="h-4 w-full" />
@@ -556,7 +655,7 @@ export default function BroadcastsPage() {
 
                 <Button
                   onClick={handleSendBroadcast}
-                  disabled={sendBroadcastMutation.isPending || selectedRoles.length === 0 || selectedChannels.length === 0}
+                  disabled={sendBroadcastMutation.isPending || (selectedRoles.length === 0 && selectedTags.length === 0) || selectedChannels.length === 0}
                   className="w-full"
                   size="lg"
                   data-testid="button-send-broadcast"

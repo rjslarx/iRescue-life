@@ -18,6 +18,8 @@ import webpush from 'web-push';
 type TargetRole = "admin" | "board_member" | "staff" | "foster" | "volunteer";
 type Channel = "push" | "sms" | "email";
 
+type TagsMode = "any" | "all";
+
 interface BroadcastRequest {
   tenantId: string;
   title: string;
@@ -26,9 +28,30 @@ interface BroadcastRequest {
   targetRoles?: TargetRole[];
   targetUserIds?: string[];
   targetTags?: string[];
+  targetTagsMode?: TagsMode;
+  excludeTags?: string[];
   templateId?: string;
   replyToNumber?: string;
   sentBy: { id: string; name: string };
+}
+
+function matchesTagFilter(
+  userTags: string[] | null | undefined,
+  includeTags: string[] | undefined,
+  mode: TagsMode,
+  excludeTags: string[] | undefined,
+): boolean {
+  const tags = userTags || [];
+  if (excludeTags && excludeTags.length > 0) {
+    if (tags.some(t => excludeTags.includes(t))) return false;
+  }
+  if (includeTags && includeTags.length > 0) {
+    if (mode === "all") {
+      return includeTags.every(t => tags.includes(t));
+    }
+    return tags.some(t => includeTags.includes(t));
+  }
+  return true;
 }
 
 interface BroadcastResult {
@@ -43,7 +66,8 @@ interface BroadcastResult {
 
 export class BroadcastService {
   static async sendBroadcast(request: BroadcastRequest): Promise<BroadcastResult> {
-    const { tenantId, title, message, channels, targetRoles, targetUserIds, targetTags, templateId, replyToNumber, sentBy } = request;
+    const { tenantId, title, message, channels, targetRoles, targetUserIds, targetTags, targetTagsMode, excludeTags, templateId, replyToNumber, sentBy } = request;
+    const tagsMode: TagsMode = targetTagsMode === "all" ? "all" : "any";
 
     if (templateId) {
       const [template] = await db.select()
@@ -75,7 +99,7 @@ export class BroadcastService {
         eq(users.isActive, true),
         inArray(users.id, targetUserIds)
       ));
-    } else if (targetRoles && targetRoles.length > 0) {
+    } else if ((targetRoles && targetRoles.length > 0) || (targetTags && targetTags.length > 0) || (excludeTags && excludeTags.length > 0)) {
       const allUsers = await db.select({
         id: users.id,
         fullName: users.fullName,
@@ -90,21 +114,17 @@ export class BroadcastService {
         eq(users.isActive, true)
       ));
 
-      let filtered = allUsers.filter(user => 
-        user.roles.some(role => targetRoles.includes(role as TargetRole))
-      );
+      let filtered = (targetRoles && targetRoles.length > 0)
+        ? allUsers.filter(user => user.roles.some(role => targetRoles.includes(role as TargetRole)))
+        : allUsers;
 
-      if (targetTags && targetTags.length > 0) {
-        filtered = filtered.filter(user =>
-          user.tags && user.tags.some(tag => targetTags.includes(tag))
-        );
-      }
+      filtered = filtered.filter(user => matchesTagFilter(user.tags, targetTags, tagsMode, excludeTags));
 
       targetUsers = filtered;
     }
 
     if (targetUsers.length === 0) {
-      throw new Error('No recipients found matching the selected roles. Please select different roles or verify users exist with those roles.');
+      throw new Error('No recipients found matching the selected roles and tag filters. Please adjust the filters or verify matching users exist.');
     }
 
     const [broadcast] = await db.insert(broadcasts).values({
@@ -116,6 +136,8 @@ export class BroadcastService {
       targetRoles,
       targetUserIds,
       targetTags: targetTags && targetTags.length > 0 ? targetTags : null,
+      targetTagsMode: targetTags && targetTags.length > 0 ? tagsMode : null,
+      excludeTags: excludeTags && excludeTags.length > 0 ? excludeTags : null,
       replyToNumber: replyToNumber || null,
       status: 'sending',
       sentBy: sentBy.id,
@@ -311,6 +333,9 @@ export class BroadcastService {
     body: string;
     channels: Channel[];
     targetRoles?: TargetRole[];
+    targetTags?: string[];
+    targetTagsMode?: TagsMode;
+    excludeTags?: string[];
     createdBy?: string;
   }): Promise<BroadcastTemplate> {
     const [template] = await db.insert(broadcastTemplates).values({
@@ -321,6 +346,9 @@ export class BroadcastService {
       body: data.body,
       channels: data.channels,
       targetRoles: data.targetRoles,
+      targetTags: data.targetTags && data.targetTags.length > 0 ? data.targetTags : null,
+      targetTagsMode: data.targetTags && data.targetTags.length > 0 ? (data.targetTagsMode === "all" ? "all" : "any") : null,
+      excludeTags: data.excludeTags && data.excludeTags.length > 0 ? data.excludeTags : null,
       createdBy: data.createdBy,
       isActive: true,
     }).returning();
@@ -335,6 +363,9 @@ export class BroadcastService {
     body: string;
     channels: Channel[];
     targetRoles?: TargetRole[];
+    targetTags?: string[] | null;
+    targetTagsMode?: TagsMode | null;
+    excludeTags?: string[] | null;
     isActive: boolean;
   }>): Promise<BroadcastTemplate | null> {
     const [updated] = await db.update(broadcastTemplates)
@@ -455,7 +486,13 @@ export class BroadcastService {
     return created;
   }
 
-  static async getTargetableUsers(tenantId: string, roles?: TargetRole[], tags?: string[]): Promise<{
+  static async getTargetableUsers(
+    tenantId: string,
+    roles?: TargetRole[],
+    tags?: string[],
+    tagsMode: TagsMode = "any",
+    excludeTags?: string[],
+  ): Promise<{
     id: string;
     fullName: string;
     email: string;
@@ -482,11 +519,7 @@ export class BroadcastService {
       ? allUsers.filter(user => user.roles.some(role => roles.includes(role as TargetRole)))
       : allUsers;
 
-    if (tags && tags.length > 0) {
-      filteredUsers = filteredUsers.filter(user =>
-        user.tags && user.tags.some(tag => tags.includes(tag))
-      );
-    }
+    filteredUsers = filteredUsers.filter(user => matchesTagFilter(user.tags, tags, tagsMode, excludeTags));
 
     const subscriptions = await db.select({ userId: pushSubscriptions.userId })
       .from(pushSubscriptions)

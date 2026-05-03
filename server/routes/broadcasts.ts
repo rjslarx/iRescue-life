@@ -38,14 +38,16 @@ router.post('/send', requireTenant, requireAuth, requireAdmin, async (req, res, 
       targetRoles: z.array(z.enum(['admin', 'board_member', 'staff', 'foster', 'volunteer'])).optional(),
       targetUserIds: z.array(z.string().uuid()).optional(),
       targetTags: z.array(z.string().min(1).max(50)).optional(),
+      targetTagsMode: z.enum(['any', 'all']).optional(),
+      excludeTags: z.array(z.string().min(1).max(50)).optional(),
       templateId: z.string().uuid().optional(),
       replyToNumber: z.string().regex(/^\d{10}$/, 'Must be a 10-digit phone number').optional(),
     });
 
     const data = schema.parse(req.body);
 
-    if (!data.targetRoles?.length && !data.targetUserIds?.length) {
-      return res.status(400).json({ error: 'Either targetRoles or targetUserIds must be provided' });
+    if (!data.targetRoles?.length && !data.targetUserIds?.length && !data.targetTags?.length) {
+      return res.status(400).json({ error: 'Provide at least one of: targetRoles, targetUserIds, or targetTags.' });
     }
 
     const result = await BroadcastService.sendBroadcast({
@@ -56,6 +58,8 @@ router.post('/send', requireTenant, requireAuth, requireAdmin, async (req, res, 
       targetRoles: data.targetRoles,
       targetUserIds: data.targetUserIds,
       targetTags: data.targetTags,
+      targetTagsMode: data.targetTagsMode,
+      excludeTags: data.excludeTags,
       templateId: data.templateId,
       replyToNumber: data.replyToNumber,
       sentBy: { id: req.user!.id, name: req.user!.fullName },
@@ -103,9 +107,38 @@ router.get('/recipients', requireTenant, requireAuth, requireAdmin, async (req, 
     const roles = rolesParam ? rolesParam.split(',') as any[] : undefined;
     const tagsParam = req.query.tags as string | undefined;
     const tags = tagsParam ? tagsParam.split(',').map(t => t.trim()).filter(Boolean) : undefined;
-    
-    const users = await BroadcastService.getTargetableUsers(req.tenant!.id, roles, tags);
+    const excludeParam = req.query.excludeTags as string | undefined;
+    const excludeTags = excludeParam ? excludeParam.split(',').map(t => t.trim()).filter(Boolean) : undefined;
+    const modeParam = (req.query.tagsMode as string | undefined) === 'all' ? 'all' : 'any';
+
+    const users = await BroadcastService.getTargetableUsers(req.tenant!.id, roles, tags, modeParam, excludeTags);
     res.json(users);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/tag-counts', requireTenant, requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const rolesParam = req.query.roles as string | undefined;
+    const roles = rolesParam ? rolesParam.split(',') as any[] : undefined;
+
+    // Count how many active users in the role pool have each tag.
+    const allUsers = await BroadcastService.getTargetableUsers(req.tenant!.id, roles);
+    const counts: Record<string, number> = {};
+    for (const u of allUsers) {
+      if (!u.tags) continue;
+      for (const tag of u.tags) {
+        if (!tag) continue;
+        counts[tag] = (counts[tag] || 0) + 1;
+      }
+    }
+    res.json({
+      poolSize: allUsers.length,
+      tags: Object.entries(counts)
+        .map(([tag, count]) => ({ tag, count }))
+        .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag)),
+    });
   } catch (error) {
     next(error);
   }
@@ -141,6 +174,9 @@ router.post('/templates', requireTenant, requireAuth, requireAdmin, async (req, 
       body: z.string().min(1).max(500),
       channels: z.array(z.enum(['push', 'sms', 'email'])).min(1),
       targetRoles: z.array(z.enum(['admin', 'board_member', 'staff', 'foster', 'volunteer'])).optional(),
+      targetTags: z.array(z.string().min(1).max(50)).optional(),
+      targetTagsMode: z.enum(['any', 'all']).optional(),
+      excludeTags: z.array(z.string().min(1).max(50)).optional(),
     });
 
     const data = schema.parse(req.body);
@@ -168,6 +204,9 @@ router.patch('/templates/:id', requireTenant, requireAuth, requireAdmin, async (
       body: z.string().min(1).max(500).optional(),
       channels: z.array(z.enum(['push', 'sms', 'email'])).min(1).optional(),
       targetRoles: z.array(z.enum(['admin', 'board_member', 'staff', 'foster', 'volunteer'])).optional(),
+      targetTags: z.array(z.string().min(1).max(50)).nullable().optional(),
+      targetTagsMode: z.enum(['any', 'all']).nullable().optional(),
+      excludeTags: z.array(z.string().min(1).max(50)).nullable().optional(),
       isActive: z.boolean().optional(),
     });
 
