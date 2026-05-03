@@ -57,6 +57,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Progress } from "@/components/ui/progress";
 import { useForm } from "react-hook-form";
@@ -706,6 +712,110 @@ export default function GrantsPage() {
     }
   };
 
+  // Build a filename-friendly label for the active date range
+  const fileRangeLabel = useMemo(() => {
+    const now = new Date();
+    switch (datePreset) {
+      case "this_quarter": {
+        const q = Math.floor(now.getMonth() / 3) + 1;
+        return `Q${q} ${now.getFullYear()}`;
+      }
+      case "last_quarter": {
+        const currentQ = Math.floor(now.getMonth() / 3);
+        const year = currentQ === 0 ? now.getFullYear() - 1 : now.getFullYear();
+        const prevQ = currentQ === 0 ? 4 : currentQ;
+        return `Q${prevQ} ${year}`;
+      }
+      case "ytd":
+        return `YTD ${now.getFullYear()}`;
+      case "last_12":
+        return "Last 12 Months";
+      case "all_time":
+        return "All Time";
+      case "custom":
+        if (dateRange.startDate && dateRange.endDate) {
+          return `${format(dateRange.startDate, "yyyy-MM-dd")} to ${format(dateRange.endDate, "yyyy-MM-dd")}`;
+        }
+        return "Custom";
+      default:
+        return dateRangeLabel;
+    }
+  }, [datePreset, dateRange, dateRangeLabel]);
+
+  const sanitizeFilename = (s: string) =>
+    s.replace(/[\\/:*?"<>|]/g, "").trim();
+
+  const buildExportFilename = (ext: "pdf" | "csv") =>
+    sanitizeFilename(`${rescueName} — Grant Metrics ${fileRangeLabel}`) + `.${ext}`;
+
+  const handleExportCSV = () => {
+    if (!metrics) return;
+    const rows: Array<[string, string]> = [
+      ["Rescue", rescueName],
+      ["Date Range", dateRangeLabel],
+      ["Range Preset", presetLabels[datePreset] || datePreset],
+      ["", ""],
+      ["Section", "Metric,Value"],
+      ["Animal Statistics", `Total Intake,${metrics.animalStatistics.totalIntake}`],
+      ["Animal Statistics", `Adoptions,${metrics.animalStatistics.adoptions}`],
+      ["Animal Statistics", `Dogs,${metrics.animalStatistics.bySpecies.dogs}`],
+      ["Animal Statistics", `Cats,${metrics.animalStatistics.bySpecies.cats}`],
+      ["Animal Statistics", `Other Species,${metrics.animalStatistics.bySpecies.other}`],
+      ["Animal Statistics", `Currently In Foster,${metrics.animalStatistics.currentInFoster}`],
+      ["Animal Statistics", `Currently In Shelter,${metrics.animalStatistics.currentInShelter}`],
+      ["Animal Statistics", `Avg Length of Stay (days),${metrics.animalStatistics.avgLengthOfStay}`],
+      ["Animal Statistics", `Spay/Neuter Count,${metrics.animalStatistics.spayNeuterCount}`],
+      ["Financial", `Total Awarded,$${metrics.financial.totalAwarded}`],
+      ["Financial", `Total Requested,$${metrics.financial.totalRequested}`],
+      ["Financial", `Total Expenses,$${metrics.financial.totalExpenses}`],
+      ["Financial", `Cost Per Animal,$${metrics.financial.costPerAnimal}`],
+      ["Financial", `Net Balance,$${(parseFloat(metrics.financial.totalAwarded) - parseFloat(metrics.financial.totalExpenses)).toFixed(2)}`],
+      ["Operational", `Total Volunteer Hours,${metrics.operational.totalVolunteerHours}`],
+      ["Operational", `Active Foster Homes,${metrics.operational.activeFosterHomes}`],
+      ["Operational", `Pending Applications,${metrics.operational.pendingApplications}`],
+    ];
+    const escapeCsv = (v: string) => `"${v.replace(/"/g, '""')}"`;
+    const lines: string[] = [];
+    lines.push([escapeCsv("Rescue"), escapeCsv(rescueName)].join(","));
+    lines.push([escapeCsv("Date Range"), escapeCsv(dateRangeLabel)].join(","));
+    lines.push([escapeCsv("Range Preset"), escapeCsv(presetLabels[datePreset] || datePreset)].join(","));
+    lines.push("");
+    lines.push(["Section", "Metric", "Value"].map(escapeCsv).join(","));
+    const data: Array<[string, string, string]> = [
+      ["Animal Statistics", "Total Intake", String(metrics.animalStatistics.totalIntake)],
+      ["Animal Statistics", "Adoptions", String(metrics.animalStatistics.adoptions)],
+      ["Animal Statistics", "Dogs", String(metrics.animalStatistics.bySpecies.dogs)],
+      ["Animal Statistics", "Cats", String(metrics.animalStatistics.bySpecies.cats)],
+      ["Animal Statistics", "Other Species", String(metrics.animalStatistics.bySpecies.other)],
+      ["Animal Statistics", "Currently In Foster", String(metrics.animalStatistics.currentInFoster)],
+      ["Animal Statistics", "Currently In Shelter", String(metrics.animalStatistics.currentInShelter)],
+      ["Animal Statistics", "Avg Length of Stay (days)", String(metrics.animalStatistics.avgLengthOfStay)],
+      ["Animal Statistics", "Spay/Neuter Count", String(metrics.animalStatistics.spayNeuterCount)],
+      ["Financial", "Total Awarded", `$${metrics.financial.totalAwarded}`],
+      ["Financial", "Total Requested", `$${metrics.financial.totalRequested}`],
+      ["Financial", "Total Expenses", `$${metrics.financial.totalExpenses}`],
+      ["Financial", "Cost Per Animal", `$${metrics.financial.costPerAnimal}`],
+      ["Financial", "Net Balance", `$${(parseFloat(metrics.financial.totalAwarded) - parseFloat(metrics.financial.totalExpenses)).toFixed(2)}`],
+      ["Operational", "Total Volunteer Hours", String(metrics.operational.totalVolunteerHours)],
+      ["Operational", "Active Foster Homes", String(metrics.operational.activeFosterHomes)],
+      ["Operational", "Pending Applications", String(metrics.operational.pendingApplications)],
+    ];
+    data.forEach(row => lines.push(row.map(escapeCsv).join(",")));
+    void rows;
+
+    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = buildExportFilename("csv");
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast({ title: "CSV downloaded", description: a.download });
+  };
+
+
   const onSubmit = (data: z.infer<typeof insertGrantSchema>) => {
     if (editingGrant) {
       updateGrantMutation.mutate({ id: editingGrant.id, data });
@@ -791,20 +901,39 @@ export default function GrantsPage() {
           {/* Overview Tab - Reporting Metrics */}
           <TabsContent value="overview" className="space-y-6">
             {renderDateRangeSelector(
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleExportPdf}
-                disabled={!metrics || isExportingPdf}
-                data-testid="button-export-metrics-pdf"
-              >
-                {isExportingPdf ? (
-                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                ) : (
-                  <Download className="h-4 w-4 mr-1" />
-                )}
-                Download report
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={!metrics || isExportingPdf}
+                    data-testid="button-download-report"
+                  >
+                    {isExportingPdf ? (
+                      <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                    ) : (
+                      <Download className="h-4 w-4 mr-1" />
+                    )}
+                    Download report
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    onClick={handleExportPdf}
+                    data-testid="menu-download-pdf"
+                  >
+                    <FileText className="h-4 w-4 mr-2" />
+                    Download as PDF
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={handleExportCSV}
+                    data-testid="menu-download-csv"
+                  >
+                    <FileText className="h-4 w-4 mr-2" />
+                    Download as CSV
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
 
             {metricsLoading ? (
