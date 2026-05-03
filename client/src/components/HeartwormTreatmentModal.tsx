@@ -229,6 +229,7 @@ export function HeartwormTreatmentModal({
       if (plan?.id) setPlanId(plan.id);
       setStep('complete');
       queryClient.invalidateQueries({ queryKey: ['/api/heartworm-treatment-plans'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/heartworm-treatment-plans/summary'] });
       toast({
         title: isUpdate ? "Treatment plan updated" : "Treatment plan created",
         description: isUpdate

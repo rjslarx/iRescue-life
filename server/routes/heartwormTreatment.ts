@@ -74,8 +74,9 @@ router.post('/api/heartworm-treatment-plans', requireTenant, requireAuth, requir
  * derived status:
  *   - on_track:                 has at least one upcoming/scheduled appointment, none overdue
  *   - overdue:                  at least one non-completed appointment whose scheduledDate is in the past
- *   - restriction_window_active: first_injection completed but second_third_injection not yet completed
- *                               (the strict crate-rest window after the first immiticide injection)
+ *   - restriction_window_active: today falls inside the 30-day strict-rest window
+ *       triggered by any completed immiticide injection (first_injection or
+ *       second_third_injection). Mirrors AdopterPetDetailPage exercise-restriction logic.
  *   - completed:                every appointment has a completedDate
  *
  * Each row includes:
@@ -159,10 +160,24 @@ router.get('/api/heartworm-treatment-plans/summary', requireTenant, requireAuth,
         return sched !== null && sched.getTime() < today.getTime();
       });
 
-      const firstInj = appts.find((a) => a.type === 'first_injection');
-      const secondThirdInj = appts.find((a) => a.type === 'second_third_injection');
-      const restrictionActive =
-        !!firstInj?.completedDate && !secondThirdInj?.completedDate;
+      // Strict-rest window mirrors AdopterPetDetailPage.getExerciseRestriction:
+      // each *completed* immiticide injection (first OR second/third) starts a
+      // 30-day rest window. The plan is "restriction-window-active" when today
+      // falls inside any one of those windows.
+      const HW_INJECTION_REST_DAYS = 30;
+      let restrictionActive = false;
+      for (const a of appts) {
+        if (a.type !== 'first_injection' && a.type !== 'second_third_injection') continue;
+        if (!a.completedDate) continue;
+        const start = parseLocalDate(a.completedDate);
+        if (!start) continue;
+        const end = new Date(start);
+        end.setDate(end.getDate() + HW_INJECTION_REST_DAYS);
+        if (start.getTime() <= today.getTime() && today.getTime() <= end.getTime()) {
+          restrictionActive = true;
+          break;
+        }
+      }
 
       let status: Status;
       if (allCompleted) status = 'completed';
@@ -291,6 +306,7 @@ router.get('/api/heartworm-treatment-plans', requireTenant, requireAuth, require
     next(error);
   }
 });
+
 
 router.get('/api/heartworm-treatment-plans/:id', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
   try {

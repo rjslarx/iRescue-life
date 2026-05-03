@@ -21,6 +21,7 @@ import {
   ComplianceWidget,
   DailyBriefing,
   PendingMedicalImportsWidget,
+  HeartwormWatchWidget,
 } from "@/components/dashboard";
 import PipelineManager, { PipelineTab } from "@/components/dashboard/PipelineManager";
 import { DailyExecutionWidget } from "@/components/dashboard/DailyExecutionWidget";
@@ -432,6 +433,12 @@ export default function Dashboard() {
                   {canViewMedical && (
                     <section data-testid="section-pending-medical-imports" className="w-full">
                       <PendingMedicalImportsWidget />
+                    </section>
+                  )}
+
+                  {canViewMedical && !isLiteTier && (
+                    <section data-testid="section-heartworm-watch" className="w-full">
+                      <HeartwormWatchWidget />
                     </section>
                   )}
 

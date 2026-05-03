@@ -8,3 +8,4 @@ export { default as ComplianceWidget } from './ComplianceWidget';
 export { default as ActionCenterWidget } from './ActionCenterWidget';
 export { DailyBriefing } from './DailyBriefing';
 export { default as PendingMedicalImportsWidget } from './PendingMedicalImportsWidget';
+export { default as HeartwormWatchWidget } from './HeartwormWatchWidget';
