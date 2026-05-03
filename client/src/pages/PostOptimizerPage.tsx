@@ -36,6 +36,7 @@ import {
   PenLine,
   MessageCircle,
   ExternalLink,
+  CalendarDays,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -44,9 +45,10 @@ type PostCategory =
   | "urgent_emotional"
   | "overwhelmed_shelter"
   | "happy_adoption"
-  | "volunteer_recruitment";
+  | "volunteer_recruitment"
+  | "events_fundraiser";
 
-type DestinationKind = "vipClub" | "foster" | "adoption" | "volunteer" | "emergencyDonate";
+type DestinationKind = "vipClub" | "foster" | "adoption" | "volunteer" | "emergencyDonate" | "events";
 type DestinationSource =
   | "tenant_jotform"
   | "public_site_default"
@@ -111,6 +113,7 @@ const FALLBACK_FIX_HINTS: Record<
     linkLabel: "create an Emergency Campaign",
     explanation: "for this animal so donors land on a dedicated fundraiser",
   },
+  events: null, // Events page is always the public site's /events; no override exists.
 };
 
 interface AnimalLite {
@@ -147,6 +150,11 @@ const CATEGORY_META: Record<
     label: "Volunteer Recruitment",
     icon: HandHeart,
     description: "Driving volunteer sign-ups",
+  },
+  events_fundraiser: {
+    label: "Event / Fundraiser",
+    icon: CalendarDays,
+    description: "Driving RSVPs to your events page",
   },
 };
 
@@ -493,12 +501,13 @@ export default function PostOptimizerPage() {
                   </CardHeader>
                   <CardContent>
                     <div className="text-sm text-muted-foreground space-y-2">
-                      <p>We'll classify the emotional tone of your post into one of four categories and pick the matching link:</p>
+                      <p>We'll classify the emotional tone of your post into one of five categories and pick the matching link:</p>
                       <ul className="list-disc pl-5 space-y-1">
                         <li><span className="font-medium text-foreground">Urgent / Emotional</span> &rarr; VIP Club (monthly giving)</li>
                         <li><span className="font-medium text-foreground">Overwhelmed Shelter</span> &rarr; Foster application</li>
                         <li><span className="font-medium text-foreground">Happy / Adoption</span> &rarr; Adoption application</li>
                         <li><span className="font-medium text-foreground">Volunteer Recruitment</span> &rarr; Volunteer sign-up</li>
+                        <li><span className="font-medium text-foreground">Event / Fundraiser</span> &rarr; Events page (gala, yappy hour, adoption event)</li>
                       </ul>
                       <p className="pt-2">
                         If your draft mentions Venmo, CashApp, or PayPal, we'll strip those handles (Facebook hides posts that contain them) and route donors to your fundraiser instead — with Apple Pay and Google Pay so it's just as fast.

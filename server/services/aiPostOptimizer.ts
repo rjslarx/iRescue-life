@@ -9,7 +9,8 @@ export type PostCategory =
   | "urgent_emotional"
   | "overwhelmed_shelter"
   | "happy_adoption"
-  | "volunteer_recruitment";
+  | "volunteer_recruitment"
+  | "events_fundraiser";
 
 export interface OptimizePostUrls {
   vipClubUrl: string;
@@ -17,6 +18,7 @@ export interface OptimizePostUrls {
   adoptionUrl: string;
   emergencyDonateUrl: string;
   volunteerUrl: string;
+  eventsUrl: string;
 }
 
 /**
@@ -44,6 +46,7 @@ export interface ResolvedPostUrls {
   adoptionUrl: ResolvedPostUrl;
   volunteerUrl: ResolvedPostUrl;
   emergencyDonateUrl: ResolvedPostUrl;
+  eventsUrl: ResolvedPostUrl;
 }
 
 export interface OptimizedPostResult {
@@ -67,7 +70,7 @@ Facebook's algorithm penalizes posts that contain outbound links OR third-party 
 1. Strip every URL out of the caption (no links, no "www.", no domain names).
 2. Strip every peer-to-peer payment handle out of the caption — this includes Venmo handles ("@username", "Venmo @username", "Venmo: username"), CashApp Cashtags ("$Username"), and PayPal links ("paypal.me/username"). Remove the surrounding language too (e.g. "Send to Venmo @rescue" → remove the whole instruction). Never leave a hint that money should be sent off-platform.
 3. Rewrite the caption so it stands on its own emotionally and ends with: "P.S. Check the first comment for how you can help!" (exactly that sentence, appended at the end, on its own line).
-4. Classify the emotional tone of the draft into exactly one of four categories and produce a tailored "first comment" that contains the SINGLE most appropriate URL for that category.
+4. Classify the emotional tone of the draft into exactly one of five categories and produce a tailored "first comment" that contains the SINGLE most appropriate URL for that category.
 
 PAYMENT INTERCEPTION OVERRIDE:
 - If the draft contains ANY payment handle (Venmo, CashApp, PayPal), category MUST be "urgent_emotional" regardless of other tone signals — these handles only appear on emergency asks. This override beats every other category, including volunteer_recruitment.
@@ -80,6 +83,7 @@ Categories and rules (when no payment handles were detected):
 - "overwhelmed_shelter" — the post describes the rescue being full, overwhelmed, needing fosters, kennel space, or temporary homes. The first comment should drive foster sign-ups via the Foster URL. Open by acknowledging the strain, then ask people to apply to foster.
 - "happy_adoption" — the post is a happy update, a new adoptable pet, a success story, or a celebratory adoption announcement. The first comment should drive adoption applications via the Adoption URL. Open warmly, then invite people to apply to adopt or meet other available pets.
 - "volunteer_recruitment" — the post is asking people to donate their TIME, not money or a home. Examples: recruiting volunteers, asking for help at adoption events, dog walkers, kennel cleaners, transport drivers, fundraising volunteers, event helpers, calls to "join our volunteer team", or general "we need more hands" posts that aren't specifically about fostering or adopting. The first comment should drive volunteer sign-ups via the Volunteer URL. Open warmly by thanking the community for caring, then invite people to sign up to volunteer. Do NOT pick this category if the post is primarily about fostering (use overwhelmed_shelter) or about a money emergency (use urgent_emotional).
+- "events_fundraiser" — the post is PROMOTING ATTENDANCE at a specific upcoming event the rescue is hosting or co-hosting. Examples: adoption events ("Join us this Saturday for our adoption event at PetSmart"), open houses, gala fundraisers, "yappy hours", trivia nights, fundraising dinners, ticketed events, holiday photo sessions, fun runs. The post is about getting people to SHOW UP, not asking them to apply or donate. The first comment should drive RSVPs / attendance via the Events URL. Open warmly with the date/place hook, then invite people to see all upcoming events. IMPORTANT disambiguation: if the post is recruiting *helpers* for an event (volunteers to staff the booth) use volunteer_recruitment, not this category. If the post is a generic adoptable spotlight with no dated event ("meet our adoptable Bella!") use happy_adoption. Only use this when the post's primary purpose is promoting attendance at a specific dated event. The payment-interception override still beats this category — a gala post that mentions Venmo MUST be urgent_emotional.
 
 URL injection rules:
 - Use the EXACT URL provided. Do not invent, shorten, or modify URLs.
@@ -93,7 +97,7 @@ Tone rules:
 - The first comment should be 2-4 short sentences plus the URL line.
 
 Output rules:
-- Respond with a single JSON object with exactly these keys: "optimizedCaption" (string), "firstComment" (string), "category" (one of "urgent_emotional", "overwhelmed_shelter", "happy_adoption", "volunteer_recruitment").
+- Respond with a single JSON object with exactly these keys: "optimizedCaption" (string), "firstComment" (string), "category" (one of "urgent_emotional", "overwhelmed_shelter", "happy_adoption", "volunteer_recruitment", "events_fundraiser").
 - No markdown, no commentary, no extra keys.`;
 
 const VALID_CATEGORIES: PostCategory[] = [
@@ -101,6 +105,7 @@ const VALID_CATEGORIES: PostCategory[] = [
   "overwhelmed_shelter",
   "happy_adoption",
   "volunteer_recruitment",
+  "events_fundraiser",
 ];
 
 /**
@@ -225,6 +230,7 @@ export async function optimizeFacebookPost(
 - Foster URL (for overwhelmed_shelter): ${urls.fosterUrl}
 - Adoption URL (for happy_adoption): ${urls.adoptionUrl}
 - Volunteer URL (for volunteer_recruitment): ${urls.volunteerUrl}
+- Events URL (for events_fundraiser): ${urls.eventsUrl}
 - Emergency Donate URL (REQUIRED when payment handles were stripped from the draft): ${urls.emergencyDonateUrl}
 
 Payment handles detected in this draft: ${paymentHandlesInDraft}
@@ -332,6 +338,7 @@ Return the JSON object now.`;
           case "overwhelmed_shelter": return urls.fosterUrl;
           case "happy_adoption": return urls.adoptionUrl;
           case "volunteer_recruitment": return urls.volunteerUrl;
+          case "events_fundraiser": return urls.eventsUrl;
         }
       })();
 
@@ -384,7 +391,7 @@ Return the JSON object now.`;
     if (!/check the first comment/i.test(optimizedCaption)) {
       optimizedCaption = `${optimizedCaption.replace(/\s+$/, "")}\n\nP.S. Check the first comment for how you can help!`;
     }
-    const otherUrls = [urls.vipClubUrl, urls.fosterUrl, urls.adoptionUrl, urls.volunteerUrl];
+    const otherUrls = [urls.vipClubUrl, urls.fosterUrl, urls.adoptionUrl, urls.volunteerUrl, urls.eventsUrl];
     if (!firstComment.includes(urls.emergencyDonateUrl)) {
       let swapped = firstComment;
       for (const wrongUrl of otherUrls) {
@@ -470,6 +477,13 @@ export function resolveTenantPostUrls(tenant: {
           source: 'public_donate_fallback',
           isFallback: true,
         },
+    // Events listing is always the public site's `/events` page — there is no
+    // per-tenant override (mirrors how vipClubUrl works), so it's never a fallback.
+    eventsUrl: {
+      url: `${publicSiteRoot}/events`,
+      source: 'public_site_default',
+      isFallback: false,
+    },
   };
 }
 
@@ -484,6 +498,7 @@ export function toOptimizePostUrls(resolved: ResolvedPostUrls): OptimizePostUrls
     adoptionUrl: resolved.adoptionUrl.url,
     volunteerUrl: resolved.volunteerUrl.url,
     emergencyDonateUrl: resolved.emergencyDonateUrl.url,
+    eventsUrl: resolved.eventsUrl.url,
   };
 }
 
@@ -491,7 +506,7 @@ export interface DestinationDescriptor extends ResolvedPostUrl {
   /** Short user-facing label for the destination, e.g. "Volunteer application". */
   label: string;
   /** Which of the resolved URLs the optimizer chose. */
-  kind: 'vipClub' | 'foster' | 'adoption' | 'volunteer' | 'emergencyDonate';
+  kind: 'vipClub' | 'foster' | 'adoption' | 'volunteer' | 'emergencyDonate' | 'events';
 }
 
 /**
@@ -516,6 +531,8 @@ export function pickDestinationForResult(
       return { ...resolved.adoptionUrl, label: 'Adoption application', kind: 'adoption' };
     case 'volunteer_recruitment':
       return { ...resolved.volunteerUrl, label: 'Volunteer application', kind: 'volunteer' };
+    case 'events_fundraiser':
+      return { ...resolved.eventsUrl, label: 'Events page', kind: 'events' };
   }
 }
 
