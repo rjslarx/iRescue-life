@@ -127,9 +127,59 @@ interface ComplianceConfirmation {
 interface ComplianceObligation {
   id: string;
   obligationType: string;
+  label: string;
   contractualDueDate: string | null;
   status: string;
   proofDocumentUrl: string | null;
+  notes?: string | null;
+  completedAt?: string | null;
+}
+
+const COMPLIANCE_OBLIGATION_LABEL_MAP: Record<string, string> = {
+  spay_neuter: 'Spay/Neuter Certificate',
+  rabies: 'Rabies Vaccination',
+  rabies_booster: 'Rabies Booster',
+  dhpp_booster: 'DHPP Booster',
+  vet_checkup: 'Vet Check-Up',
+  microchip_registration: 'Microchip Registration',
+  heartworm_test: 'Heartworm Test',
+  heartworm_prevention_proof: 'Heartworm Prevention Proof',
+  flea_tick_prevention: 'Flea & Tick Prevention',
+  fecal_test: 'Fecal Test',
+  obedience_training: 'Obedience Training',
+  ongoing_treatment: 'Ongoing Treatment',
+  custom: 'Requirement',
+};
+
+function obligationDisplayLabel(obl: ComplianceObligation): string {
+  if (obl.label) return obl.label;
+  if (COMPLIANCE_OBLIGATION_LABEL_MAP[obl.obligationType]) {
+    return COMPLIANCE_OBLIGATION_LABEL_MAP[obl.obligationType];
+  }
+  return (obl.obligationType || 'Requirement')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function obligationDaysOverdue(obl: ComplianceObligation): {
+  daysOverdue: number;
+  isOverdue: boolean;
+  isDueSoon: boolean;
+  dueDate: Date | null;
+} {
+  const dueDate = obl.contractualDueDate ? new Date(obl.contractualDueDate) : null;
+  if (!dueDate) {
+    return { daysOverdue: 0, isOverdue: false, isDueSoon: false, dueDate: null };
+  }
+  const todayMidnight = new Date();
+  todayMidnight.setHours(0, 0, 0, 0);
+  const dueMidnight = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate());
+  const daysOverdue = Math.floor(
+    (todayMidnight.getTime() - dueMidnight.getTime()) / (1000 * 60 * 60 * 24)
+  );
+  const isOverdue = daysOverdue > 0;
+  const isDueSoon = !isOverdue && daysOverdue >= -7;
+  return { daysOverdue, isOverdue, isDueSoon, dueDate };
 }
 
 interface HeartwormAppointment {
@@ -825,130 +875,73 @@ export default function AdopterPetDetailPage() {
             );
           })()}
 
-          {complianceObligations && complianceObligations.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <ClipboardCheck className="h-5 w-5" />
-                  Post-Adoption Requirements
-                </CardTitle>
-                <CardDescription>
-                  These are contractual obligations from your adoption agreement. Upload proof when completed — your rescue will verify and check them off automatically as records are logged.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {complianceObligations.map((obl) => {
-                  const labelMap: Record<string, string> = {
-                    spay_neuter: 'Spay/Neuter Certificate',
-                    rabies: 'Rabies Vaccination',
-                    rabies_booster: 'Rabies Booster',
-                    dhpp_booster: 'DHPP Booster',
-                    vet_checkup: 'Vet Check-Up',
-                    microchip_registration: 'Microchip Registration',
-                    heartworm_test: 'Heartworm Test',
-                    heartworm_prevention_proof: 'Heartworm Prevention Proof',
-                    flea_tick_prevention: 'Flea & Tick Prevention',
-                    fecal_test: 'Fecal Test',
-                    obedience_training: 'Obedience Training',
-                    ongoing_treatment: 'Ongoing Treatment',
-                    custom: 'Requirement',
-                  };
-                  const fallbackLabel = obl.obligationType
-                    ? obl.obligationType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
-                    : 'Requirement';
-                  const label = obl.label || labelMap[obl.obligationType] || fallbackLabel;
-                  // Live overdue computation against contractual_due_date so
-                  // the badge reflects today's date even if the staff
-                  // overdue-marker job hasn't flipped status='overdue' yet.
-                  const dueDate = obl.contractualDueDate ? new Date(obl.contractualDueDate) : null;
-                  const todayMidnight = new Date();
-                  todayMidnight.setHours(0, 0, 0, 0);
-                  const dueMidnight = dueDate ? new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate()) : null;
-                  const daysOverdue = dueMidnight
-                    ? Math.floor((todayMidnight.getTime() - dueMidnight.getTime()) / (1000 * 60 * 60 * 24))
-                    : 0;
-                  const isActionable = obl.status === 'pending' || obl.status === 'overdue';
-                  const isOverdueLive = isActionable && daysOverdue > 0;
-                  const isDueSoon = isActionable && !isOverdueLive && daysOverdue >= -7;
-                  return (
-                    <div
-                      key={obl.id}
-                      className={`flex items-center justify-between p-3 border rounded-lg flex-wrap gap-3 ${
-                        isOverdueLive
-                          ? 'border-destructive bg-destructive/5'
-                          : isDueSoon
-                            ? 'border-orange-500 bg-orange-50 dark:bg-orange-950'
-                            : ''
-                      }`}
-                      data-testid={`obligation-${obl.id}`}
-                    >
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium">{label}</p>
-                        {dueDate && (
-                          <p className="text-sm text-muted-foreground">
-                            {isOverdueLive ? (
-                              <span
-                                className="text-destructive font-medium"
-                                data-testid={`text-obligation-overdue-${obl.id}`}
-                              >
-                                {daysOverdue}d overdue (was due {dueDate.toLocaleDateString()})
-                              </span>
-                            ) : (
-                              <>Due by {dueDate.toLocaleDateString()}</>
-                            )}
-                          </p>
-                        )}
+          {(() => {
+            // Task #175: Non-actionable obligations (completed / waived /
+            // pending_review) live in a separate "Contract Requirements"
+            // history card. The actionable ones (pending / overdue) are
+            // rendered above in the merged "Action Required" card. This
+            // gives adopters a permanent record of every contract
+            // obligation regardless of state.
+            const historyObligations = (complianceObligations ?? []).filter(
+              o => o.status === 'completed' || o.status === 'waived' || o.status === 'pending_review'
+            );
+            if (historyObligations.length === 0) return null;
+            return (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <ClipboardCheck className="h-5 w-5" />
+                    Contract Requirements
+                  </CardTitle>
+                  <CardDescription>
+                    Verified or waived obligations from your adoption agreement.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {historyObligations.map((obl) => {
+                    const label = obligationDisplayLabel(obl);
+                    const { dueDate } = obligationDaysOverdue(obl);
+                    return (
+                      <div
+                        key={obl.id}
+                        className="flex items-center justify-between p-3 border rounded-lg flex-wrap gap-3"
+                        data-testid={`obligation-history-${obl.id}`}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium">{label}</p>
+                          {dueDate && (
+                            <p className="text-sm text-muted-foreground">
+                              Due by {dueDate.toLocaleDateString()}
+                              {obl.status === 'completed' && obl.completedAt && (
+                                <> · Verified {new Date(obl.completedAt).toLocaleDateString()}</>
+                              )}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {obl.status === 'completed' && (
+                            <Badge className="bg-green-500/10 text-green-700 border-green-500/20">
+                              <CheckCircle className="h-3 w-3 mr-1" />
+                              Verified
+                            </Badge>
+                          )}
+                          {obl.status === 'waived' && (
+                            <Badge variant="secondary">Waived</Badge>
+                          )}
+                          {obl.status === 'pending_review' && (
+                            <Badge variant="secondary" className="bg-blue-500/10 text-blue-700 border-blue-500/20">
+                              <Clock className="h-3 w-3 mr-1" />
+                              Under Review
+                            </Badge>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        {obl.status === 'completed' && (
-                          <Badge className="bg-green-500/10 text-green-700 border-green-500/20">
-                            <CheckCircle className="h-3 w-3 mr-1" />
-                            Verified
-                          </Badge>
-                        )}
-                        {obl.status === 'waived' && (
-                          <Badge variant="secondary">Waived</Badge>
-                        )}
-                        {obl.status === 'pending_review' && (
-                          <Badge variant="secondary" className="bg-blue-500/10 text-blue-700 border-blue-500/20">
-                            <Clock className="h-3 w-3 mr-1" />
-                            Under Review
-                          </Badge>
-                        )}
-                        {isActionable && (
-                          <>
-                            {isOverdueLive && (
-                              <Badge
-                                variant="destructive"
-                                className="text-xs"
-                                data-testid={`badge-obligation-overdue-${obl.id}`}
-                              >
-                                {daysOverdue}d overdue
-                              </Badge>
-                            )}
-                            <Button
-                              size="sm"
-                              variant={isOverdueLive ? 'default' : 'outline'}
-                              onClick={() => {
-                                setSelectedObligation(obl);
-                                setObligationReceiptFile(null);
-                                setObligationReceiptUrl(null);
-                                setShowObligationDialog(true);
-                              }}
-                              data-testid={`button-upload-proof-${obl.id}`}
-                            >
-                              <Upload className="h-4 w-4 mr-1" />
-                              Upload Proof
-                            </Button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </CardContent>
-            </Card>
-          )}
+                    );
+                  })}
+                </CardContent>
+              </Card>
+            );
+          })()}
 
           <Dialog open={showObligationDialog} onOpenChange={(open) => {
             setShowObligationDialog(open);
@@ -1047,7 +1040,21 @@ export default function AdopterPetDetailPage() {
             </DialogContent>
           </Dialog>
 
-          {pet.status !== 'deceased' && ((dueCareItems && dueCareItems.length > 0) || (complianceConfirmations && complianceConfirmations.some(c => c.status === 'pending_review'))) && (
+          {(() => {
+            // Task #175: Build a single merged actionable list of due-care
+            // items + actionable compliance_obligations + pending
+            // confirmations. The card shows whenever ANY of these is
+            // non-empty (so an adopter with only an overdue contract
+            // obligation still sees the Action Required card).
+            const actionableObligations = (complianceObligations ?? []).filter(
+              o => o.status === 'pending' || o.status === 'overdue'
+            );
+            const hasAnything =
+              (dueCareItems && dueCareItems.length > 0) ||
+              actionableObligations.length > 0 ||
+              (complianceConfirmations && complianceConfirmations.some(c => c.status === 'pending_review'));
+            if (pet.status === 'deceased' || !hasAnything) return null;
+            return (
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
@@ -1059,6 +1066,76 @@ export default function AdopterPetDetailPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
+                {actionableObligations.map((obl) => {
+                  const label = obligationDisplayLabel(obl);
+                  const { daysOverdue, isOverdue, isDueSoon, dueDate } = obligationDaysOverdue(obl);
+                  const isHeartwormType = obl.obligationType === 'heartworm_prevention_proof' || obl.obligationType === 'heartworm_test';
+                  const isParasiteType = isHeartwormType || obl.obligationType === 'flea_tick_prevention' || obl.obligationType === 'fecal_test';
+                  return (
+                    <div
+                      key={`obl-${obl.id}`}
+                      className={`flex items-center justify-between p-3 border rounded-lg flex-wrap gap-3 ${
+                        isOverdue
+                          ? 'border-destructive bg-destructive/5'
+                          : isDueSoon
+                            ? 'border-orange-500 bg-orange-50 dark:bg-orange-950'
+                            : ''
+                      }`}
+                      data-testid={`obligation-${obl.id}`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        {isParasiteType ? (
+                          <Bug className="h-5 w-5 text-muted-foreground" />
+                        ) : (
+                          <ClipboardCheck className="h-5 w-5 text-muted-foreground" />
+                        )}
+                        <div>
+                          <p className="font-medium">{label}</p>
+                          {dueDate && (
+                            <p className="text-sm text-muted-foreground">
+                              {isOverdue ? (
+                                <span
+                                  className="text-destructive font-medium"
+                                  data-testid={`text-obligation-overdue-${obl.id}`}
+                                >
+                                  {daysOverdue}d overdue (was due {dueDate.toLocaleDateString()})
+                                </span>
+                              ) : (
+                                <>Due by {dueDate.toLocaleDateString()}</>
+                              )}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {isOverdue && (
+                          <Badge
+                            variant="destructive"
+                            className="text-xs"
+                            data-testid={`badge-obligation-overdue-${obl.id}`}
+                          >
+                            {daysOverdue}d overdue
+                          </Badge>
+                        )}
+                        <Button
+                          size="sm"
+                          variant={isOverdue ? 'default' : 'outline'}
+                          onClick={() => {
+                            setSelectedObligation(obl);
+                            setObligationReceiptFile(null);
+                            setObligationReceiptUrl(null);
+                            setShowObligationDialog(true);
+                          }}
+                          data-testid={`button-upload-proof-${obl.id}`}
+                        >
+                          <Upload className="h-4 w-4 mr-1" />
+                          Upload Proof
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+
                 {dueCareItems && dueCareItems.map((item) => (
                   <div
                     key={item.id}
@@ -1136,7 +1213,8 @@ export default function AdopterPetDetailPage() {
                 )}
               </CardContent>
             </Card>
-          )}
+            );
+          })()}
 
           <Dialog open={showConfirmCareDialog} onOpenChange={(open) => {
             setShowConfirmCareDialog(open);
