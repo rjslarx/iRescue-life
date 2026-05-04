@@ -704,15 +704,18 @@ export async function autoCompletePendingObligations(
           : `${match.kind}:${match.eventId}`;
       const newNotes = `${obl.notes ? obl.notes + " | " : ""}Auto-completed by matching ${matchSummary}${noteSuffix}`;
 
-      // Proof URL precedence: explicit caller override > the file the
-      // matched confirmation pointed at > whatever the obligation already
-      // had on it. This way an approved adopter confirmation that closes a
-      // *different* obligation (because it satisfies the criteria) still
-      // attaches the right proof doc.
-      const matchedFileUrl =
-        match.kind === "confirmation" ? match.fileUrl : null;
+      // Proof URL precedence: only attach a proof URL when the obligation
+      // was matched via a confirmation. Use that confirmation's fileUrl
+      // when present, otherwise fall back to the caller-supplied URL
+      // (e.g. the just-approved confirmation's file). For non-confirmation
+      // matches (PCR / vaccine / exam / animal-field), preserve whatever
+      // proof URL the obligation already had — a coincident confirmation
+      // approval in the same run shouldn't retroactively attach its file
+      // to obligations actually closed by other evidence.
       const finalProofUrl =
-        opts.proofDocumentUrl ?? matchedFileUrl ?? obl.proofDocumentUrl;
+        match.kind === "confirmation"
+          ? (match.fileUrl ?? opts.proofDocumentUrl ?? obl.proofDocumentUrl)
+          : obl.proofDocumentUrl;
 
       await db
         .update(complianceObligations)
