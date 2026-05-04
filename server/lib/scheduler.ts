@@ -534,6 +534,27 @@ export function initializeScheduler() {
         escalateOverdueSpayNeuterForAllTenants,
       } = await import("./adopter-compliance-notifications");
 
+      // 0. Defense-in-depth sweep (Task #167): catch any adopted animals
+      // missing an adoptions row before the warning engine runs, so the
+      // heartworm/parasite-prevention compliance jobs below don't silently
+      // skip them. Idempotent — does nothing on quiet days.
+      try {
+        const { runAdoptionsOrphanSweep } = await import("./adoptions-orphan-sweep");
+        const sweepResult = await runAdoptionsOrphanSweep();
+        if (sweepResult.totalInserted > 0 || sweepResult.totalOrphans > 0) {
+          console.log(
+            `✓ Adoptions orphan sweep: inserted=${sweepResult.totalInserted}, orphansRemaining=${sweepResult.totalOrphans}`,
+          );
+        }
+        if (sweepResult.errors.length > 0) {
+          console.warn(`Adoptions orphan sweep errors: ${sweepResult.errors.slice(0, 3).join('; ')}`);
+        }
+      } catch (sweepErr) {
+        console.error(
+          `Adoptions orphan sweep failed: ${sweepErr instanceof Error ? sweepErr.message : 'Unknown error'}`,
+        );
+      }
+
       // 1. Core vaccine/preventative compliance reminders
       const result = await runAdopterComplianceForAllTenants();
       console.log(`Adopter compliance: ${result.tenantsProcessed} tenants, ${result.totalEmailsSent} emails, ${result.totalSmsSent} SMS sent`);
