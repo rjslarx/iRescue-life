@@ -8181,7 +8181,7 @@ Crawl-delay: 1
         }
       }
 
-      // Task #175: Sync compliance_obligations whenever staff edits a field
+      // Sync compliance_obligations whenever staff edits a field
       // that can satisfy an obligation — neuter status flipping to
       // spayed/neutered, a microchip number being assigned, or a status
       // change to 'adopted' (the adoption form may have just inserted
@@ -33288,7 +33288,7 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
         console.error('[MEDICAL BACKUP] Failed to initiate sync:', syncError);
       }
 
-      // Task #175: A completed wellness/recheck exam can satisfy a
+      // A completed wellness/recheck exam can satisfy a
       // vet_checkup compliance obligation. Skip future-dated (pending) exams.
       if (exam.status === 'completed') {
         try {
@@ -33554,7 +33554,7 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
         console.error('[Vaccine] Supersession of older same-family records failed:', supersedeErr);
       }
 
-      // Task #175: After logging a vaccine, close any compliance obligation
+      // After logging a vaccine, close any compliance obligation
       // (rabies, dhpp_booster, heartworm_test if it's an HW antigen, etc.)
       // that the new dose now satisfies.
       try {
@@ -33777,6 +33777,16 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
         })
         .returning();
 
+      // Auto-close any pending microchip_registration obligations.
+      try {
+        const { autoCompletePendingObligations } = await import('./services/compliance-obligation-matcher');
+        await autoCompletePendingObligations(req.tenant!.id, req.params.animalId, {
+          actorNote: `Microchip record added: ${microchip.microchipNumber}`,
+        });
+      } catch (matcherErr) {
+        console.error('[ComplianceMatcher] microchip POST hook failed:', matcherErr);
+      }
+
       res.json({ microchip });
     } catch (error) {
       next(error);
@@ -33832,6 +33842,17 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
           eq(microchipRecords.tenantId, req.tenant!.id)
         ))
         .returning();
+
+      // Auto-close any pending microchip_registration obligations
+      // (covers cases where a chip number was added/changed via PATCH).
+      try {
+        const { autoCompletePendingObligations } = await import('./services/compliance-obligation-matcher');
+        await autoCompletePendingObligations(req.tenant!.id, existingRecord.animalId, {
+          actorNote: `Microchip record updated: ${microchip.microchipNumber}`,
+        });
+      } catch (matcherErr) {
+        console.error('[ComplianceMatcher] microchip PATCH hook failed:', matcherErr);
+      }
 
       res.json({ microchip });
     } catch (error) {
@@ -36578,7 +36599,7 @@ Email: ${application.applicantEmail || ''}`
         return res.status(404).json({ error: 'Animal not found' });
       }
 
-      // Task #175: A neuter-status flip to spayed/neutered can satisfy a
+      // A neuter-status flip to spayed/neutered can satisfy a
       // spay_neuter compliance obligation.
       if (neuterStatus === 'spayed' || neuterStatus === 'neutered') {
         try {
@@ -37199,7 +37220,7 @@ Email: ${application.applicantEmail || ''}`
         console.error('[PreventativeCare] Supersession of older same-series records failed:', supersedeErr);
       }
 
-      // Task #175: Close any compliance obligation that this PCR satisfies
+      // Close any compliance obligation that this PCR satisfies
       // (heartworm_prevention_proof, flea_tick_prevention, fecal_test, etc.).
       // Combo-safe: a heartworm-only product won't close a flea/tick obligation.
       try {
@@ -37296,7 +37317,7 @@ Email: ${application.applicantEmail || ''}`
             } catch (supersedeErr) {
               console.error('[PreventativeCare] Follow-up supersession failed:', supersedeErr);
             }
-            // Task #175: A future-dated follow-up record can satisfy an
+            // A future-dated follow-up record can satisfy an
             // ongoing-prevention obligation if its next_due_date covers the
             // contractual due date.
             try {
@@ -38162,7 +38183,7 @@ Email: ${application.applicantEmail || ''}`
         }
       }
 
-      // Task #175: Sync compliance_obligations whenever staff approves an
+      // Sync compliance_obligations whenever staff approves an
       // adopter confirmation. Pass the confirmation's file_url so the closed
       // obligation row carries the actual proof document the adopter
       // uploaded. Only the obligations whose satisfaction criteria are met

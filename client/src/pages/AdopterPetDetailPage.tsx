@@ -167,10 +167,10 @@ function obligationDaysOverdue(obl: ComplianceObligation): {
   isDueSoon: boolean;
   dueDate: Date | null;
 } {
-  // Architect Task #175 review #3: contractual_due_date is a PG `date`
-  // column and arrives as a "YYYY-MM-DD" string. Parsing it with
-  // `new Date(s)` interprets it as UTC midnight which then shifts to the
-  // previous calendar day for any timezone west of UTC, producing
+  // contractual_due_date is a PG `date` column and arrives as a
+  // "YYYY-MM-DD" string. Parsing it with `new Date(s)` interprets it as
+  // UTC midnight which then shifts to the previous calendar day for any
+  // timezone west of UTC, producing
   // off-by-one overdue counts. Reuse the timezone-safe parseISODate
   // helper (function declarations are hoisted, so the forward reference
   // is safe).
@@ -887,7 +887,7 @@ export default function AdopterPetDetailPage() {
           })()}
 
           {(() => {
-            // Task #175: Non-actionable obligations (completed / waived /
+            // Non-actionable obligations (completed / waived /
             // pending_review) live in a separate "Contract Requirements"
             // history card. The actionable ones (pending / overdue) are
             // rendered above in the merged "Action Required" card. This
@@ -1052,9 +1052,9 @@ export default function AdopterPetDetailPage() {
           </Dialog>
 
           {(() => {
-            // Task #175: Build a single merged actionable list of due-care
-            // items + actionable compliance_obligations + pending
-            // confirmations. The card shows whenever ANY of these is
+            // Build a single merged actionable list of due-care items +
+            // actionable compliance_obligations + pending confirmations.
+            // The card shows whenever ANY of these is
             // non-empty (so an adopter with only an overdue contract
             // obligation still sees the Action Required card).
             const actionableObligations = (complianceObligations ?? []).filter(

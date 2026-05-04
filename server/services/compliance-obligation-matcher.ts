@@ -5,6 +5,7 @@ import {
   animals,
   complianceObligations,
   medicalExams,
+  microchipRecords,
   preventativeCareRecords,
   preventativeCareTypes,
   vaccineRecords,
@@ -38,6 +39,12 @@ type AnimalSnapshot = {
   status: string | null;
   neuterStatus: string | null;
   microchipNumber: string | null;
+  /** True when at least one row exists in microchip_records for this animal
+   *  with a non-empty microchipNumber. Some tenants record microchips via
+   *  the dedicated microchip_records table without also writing back the
+   *  denormalized animals.microchipNumber field, so the matcher treats
+   *  EITHER signal as satisfying a microchip_registration obligation. */
+  hasMicrochipRecord: boolean;
 };
 
 type PcrEvent = {
@@ -245,11 +252,9 @@ async function loadState(
 
   const confirmations: ConfirmationEvent[] = [];
   if (confirmationRows.length > 0) {
-    // Pull platform-default PCR types FIRST, then tenant-specific PCR
-    // types, so when both define the same name (e.g. tenant overrides
-    // "Bravecto" with custom coverage flags) the tenant row wins
-    // deterministically — last write to the Map for the same key
-    // overwrites prior values. (Architect Task #175 review #4.)
+    // Pull platform-default PCR types first, then tenant-specific PCR
+    // types, so tenant rows deterministically override platform defaults
+    // for the same name (last write to the Map wins).
     const platformTypes = await db
       .select({
         name: preventativeCareTypes.name,
@@ -316,12 +321,27 @@ async function loadState(
     }
   }
 
+  // microchip_records: any row with a non-empty number counts as a
+  // satisfying signal for microchip_registration obligations.
+  const [chipRow] = await db
+    .select({ count: sql<number>`COUNT(*)::int` })
+    .from(microchipRecords)
+    .where(
+      and(
+        eq(microchipRecords.tenantId, tenantId),
+        eq(microchipRecords.animalId, animalId),
+        sql`COALESCE(TRIM(${microchipRecords.microchipNumber}), '') <> ''`,
+      ),
+    );
+  const hasMicrochipRecord = (chipRow?.count ?? 0) > 0;
+
   return {
     animal: {
       id: animalRow.id,
       status: animalRow.status ?? null,
       neuterStatus: animalRow.neuterStatus ?? null,
       microchipNumber: animalRow.microchipNumber ?? null,
+      hasMicrochipRecord,
     },
     pcrs,
     vaccines,
@@ -343,9 +363,9 @@ function findCoveringPcrForOngoing(
   // When the obligation HAS a contractualDueDate, an ongoing-prevention dose
   // must come with a `next_due_date` that lands on/after the due date — a
   // dose with no follow-up scheduled is by definition not "ongoing", so it
-  // can't satisfy a prevention-by-X-date contract. (Architect feedback,
-  // Task #175 review.) When the obligation has no due-by, we accept any
-  // dose that covers the obligation type — the contract is open-ended.
+  // can't satisfy a prevention-by-X-date contract. When the obligation has
+  // no due-by, we accept any dose that covers the obligation type — the
+  // contract is open-ended.
   for (const e of state.pcrs) {
     if (!predicate(e)) continue;
     if (e.dateAdministered < floor) continue;
@@ -484,10 +504,13 @@ function obligationMatch(
     return null;
   }
 
-  // 2. microchip_registration — animal field, OR confirmation
+  // 2. microchip_registration — animal field OR microchip_records row OR
+  //    adopter confirmation. Some tenants record chips only via the
+  //    microchip_records table without back-filling animals.microchipNumber,
+  //    so either signal satisfies the obligation.
   if (type === "microchip_registration" || /microchip/.test(labelLower)) {
     const m = (state.animal.microchipNumber || "").trim();
-    if (m.length > 0) {
+    if (m.length > 0 || state.animal.hasMicrochipRecord) {
       return { kind: "animal", field: "microchipNumber" };
     }
     const c = findCoveringConfirmationOneShot(state, obl, (cf) =>
@@ -660,11 +683,9 @@ export async function autoCompletePendingObligations(
       return { completedCount: 0, completedIds: [] };
     }
 
-    // Architect Task #175 review #3 (non-blocking): explicitly gate on
-    // animals.status='adopted' to match the spec intent. Compliance
-    // obligations only apply to adopted animals; if an obligation row
-    // exists for a non-adopted animal (data drift), don't auto-close it
-    // here — let staff investigate.
+    // Compliance obligations only apply to adopted animals. If an
+    // obligation row exists for a non-adopted animal (data drift), don't
+    // auto-close it here — let staff investigate.
     if ((state.animal.status ?? "").toLowerCase() !== "adopted") {
       return { completedCount: 0, completedIds: [] };
     }
@@ -756,7 +777,7 @@ export async function runComplianceObligationBackfill(): Promise<{
   const perTenant: Record<string, number> = {};
   for (const p of pairs) {
     const res = await autoCompletePendingObligations(p.tenantId, p.animalId, {
-      actorNote: "Startup backfill (Task #175)",
+      actorNote: "Startup backfill: compliance obligations sync",
     });
     completed += res.completedCount;
     if (res.completedCount > 0) {

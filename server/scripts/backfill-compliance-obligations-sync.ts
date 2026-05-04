@@ -13,7 +13,7 @@ function hasAnyRows(result: unknown): boolean {
 }
 
 /**
- * One-time sync (Task #175): walk every pending/overdue compliance_obligations
+ * One-time sync: walk every pending/overdue compliance_obligations
  * row and close any that are already satisfied by existing PCR/vaccine/exam/
  * animal-field state. The runtime hooks in PATCH /api/animals/:id, vaccine
  * create, PCR create, exam create, and confirmation approve handle going
@@ -73,7 +73,7 @@ export async function backfillComplianceObligationsSync(): Promise<void> {
         VALUES (
           ${MARKER_KEY},
           ${sql.raw(`'${payload}'::jsonb`)},
-          'Marker: one-time sync of compliance_obligations against existing medical state (Task #175)',
+          'Marker: one-time sync of compliance_obligations against existing medical state',
           'general',
           false
         )
