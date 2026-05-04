@@ -167,12 +167,23 @@ function obligationDaysOverdue(obl: ComplianceObligation): {
   isDueSoon: boolean;
   dueDate: Date | null;
 } {
-  const dueDate = obl.contractualDueDate ? new Date(obl.contractualDueDate) : null;
+  // Architect Task #175 review #3: contractual_due_date is a PG `date`
+  // column and arrives as a "YYYY-MM-DD" string. Parsing it with
+  // `new Date(s)` interprets it as UTC midnight which then shifts to the
+  // previous calendar day for any timezone west of UTC, producing
+  // off-by-one overdue counts. Reuse the timezone-safe parseISODate
+  // helper (function declarations are hoisted, so the forward reference
+  // is safe).
+  const dueDate =
+    typeof obl.contractualDueDate === "string"
+      ? parseISODate(obl.contractualDueDate)
+      : obl.contractualDueDate
+        ? new Date(obl.contractualDueDate)
+        : null;
   if (!dueDate) {
     return { daysOverdue: 0, isOverdue: false, isDueSoon: false, dueDate: null };
   }
-  const todayMidnight = new Date();
-  todayMidnight.setHours(0, 0, 0, 0);
+  const todayMidnight = startOfToday();
   const dueMidnight = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate());
   const daysOverdue = Math.floor(
     (todayMidnight.getTime() - dueMidnight.getTime()) / (1000 * 60 * 60 * 24)

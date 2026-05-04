@@ -646,6 +646,15 @@ export async function autoCompletePendingObligations(
       return { completedCount: 0, completedIds: [] };
     }
 
+    // Architect Task #175 review #3 (non-blocking): explicitly gate on
+    // animals.status='adopted' to match the spec intent. Compliance
+    // obligations only apply to adopted animals; if an obligation row
+    // exists for a non-adopted animal (data drift), don't auto-close it
+    // here — let staff investigate.
+    if ((state.animal.status ?? "").toLowerCase() !== "adopted") {
+      return { completedCount: 0, completedIds: [] };
+    }
+
     const completedIds: string[] = [];
     const now = new Date();
     const noteSuffix = opts.actorNote ? ` — ${opts.actorNote}` : "";
