@@ -36722,7 +36722,13 @@ Email: ${application.applicantEmail || ''}`
       // series — a flea-only NexGard does NOT suppress a heartworm gap, and
       // vice versa. If the care-type info is missing we fall back to a
       // category + name key.
-      const seriesKeysForPcr = (record: any, careType: { coversHeartworm: boolean | null; coversFleaTick: boolean | null } | null): string[] => {
+      type PcrRecordShape = {
+        careCategory: string | null;
+        careTypeId: string | null;
+        careName: string | null;
+      };
+      type CareTypeShape = { coversHeartworm: boolean | null; coversFleaTick: boolean | null } | null;
+      const seriesKeysForPcr = (record: PcrRecordShape, careType: CareTypeShape): string[] => {
         const cat = (record.careCategory || 'other').toLowerCase();
         if (cat === 'parasite_prevention' && careType && (careType.coversHeartworm !== null || careType.coversFleaTick !== null)) {
           const keys: string[] = [];
@@ -36753,9 +36759,9 @@ Email: ${application.applicantEmail || ''}`
 
       for (const row of preventativeRows) {
         if (!row.record.nextDueDate) continue;
-        const nextDueMs = new Date(row.record.nextDueDate as any).getTime();
+        const nextDueMs = new Date(row.record.nextDueDate).getTime();
         const cand: Candidate = {
-          record: { ...(row.record as any), sourceTable: 'preventative_care_records' as const },
+          record: { ...row.record, sourceTable: 'preventative_care_records' as const },
           animal: row.animal,
           nextDueMs,
         };
@@ -36767,7 +36773,7 @@ Email: ${application.applicantEmail || ''}`
       for (const v of vaccineRows) {
         if (!v.dateDue) continue;
         const family = vaccineFamily(v.itemName);
-        const nextDueMs = new Date(v.dateDue as any).getTime();
+        const nextDueMs = new Date(v.dateDue).getTime();
         const cand: Candidate = {
           record: {
             id: v.id,
