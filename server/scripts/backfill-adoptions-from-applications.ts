@@ -49,10 +49,11 @@ export async function backfillAdoptionsFromApplications(): Promise<void> {
   let totalOrphans = 0;
 
   try {
-    // Per-tenant insert. We use DISTINCT ON to keep just the most-recently-
-    // updated application per animal. Filter to (adopted | approved | trial)
-    // so we still capture animals that flipped to adopted via Path C while
-    // their application stage lagged behind.
+    // Per-tenant insert. Per task spec, the backfill ONLY uses applications
+    // whose stage is exactly 'adopted' — this is the explicit signal of
+    // who took the animal home. Animals with only approved/trial apps
+    // (or no app at all) are left as orphans and listed in the warning
+    // log below so staff can resolve them via the Record Adoption form.
     const insertRes = await db.execute(sql`
       WITH candidates AS (
         SELECT DISTINCT ON (a.id)
@@ -67,7 +68,7 @@ export async function backfillAdoptionsFromApplications(): Promise<void> {
         JOIN applications app
           ON app.animal_id = a.id
          AND app.tenant_id = a.tenant_id
-         AND app.stage IN ('adopted','approved','trial')
+         AND app.stage = 'adopted'
         WHERE a.status = 'adopted'
           AND NOT EXISTS (
             SELECT 1 FROM adoptions ad

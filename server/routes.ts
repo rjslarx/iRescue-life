@@ -7929,12 +7929,19 @@ Crawl-delay: 1
 
       // Path C fix (Task #164): when transitioning an animal to 'adopted'
       // via direct PATCH (e.g. the edit-animal form), ensure we capture
-      // adopter contact info into the `adoptions` table — every reminder /
-      // warning / compliance engine inner-joins on that table. We split
-      // this into a pre-check (hard-fail BEFORE flipping status if no
-      // adopter info can be resolved) and a post-insert (only after
-      // updateAnimal succeeds), so we never leave an `adoptions` row for
-      // an animal whose status flip rolled back.
+      // adopter contact info into the `adoptions` table — every reminder
+      // / warning / compliance engine inner-joins on that table. The
+      // ordering is:
+      //   1. Pre-resolve the source (existing adoption OR exact candidate
+      //      application id, with stage-priority adopted > approved/trial).
+      //   2. If neither is available, hard-fail 400 BEFORE flipping status.
+      //   3. Insert the adoption row (using the resolved applicationId, so
+      //      it cannot fall back to "no_application" at insert time).
+      //   4. Then run updateAnimal to flip status.
+      // If updateAnimal fails after the insert, the leftover adoption row
+      // is harmless (the heartworm engine joins on animals.status='adopted'
+      // too) and is reused on the next attempt — better than allowing a
+      // status flip without adopter info, which is the explicit anti-goal.
       const isAdoptedTransition =
         data.status === 'adopted' &&
         existingAnimal &&
@@ -7942,12 +7949,15 @@ Crawl-delay: 1
 
       if (isAdoptedTransition) {
         try {
-          const { canResolveAdopterInfoForAnimal } = await import('./services/applications');
-          const canResolve = await canResolveAdopterInfoForAnimal(
+          const {
+            resolveAdopterSourceForAnimal,
+            ensureAdoptionRowForAnimal,
+          } = await import('./services/applications');
+          const source = await resolveAdopterSourceForAnimal(
             req.tenant!.id,
             req.params.id,
           );
-          if (!canResolve) {
+          if (!source.ok) {
             return res.status(400).json({
               error: 'Missing adopter information',
               code: 'ADOPTION_INFO_REQUIRED',
@@ -7955,47 +7965,47 @@ Crawl-delay: 1
                 'This animal has no adoption application on file — please use the Record Adoption form to capture adopter contact info before marking as adopted.',
             });
           }
-        } catch (preCheckErr) {
+          if (!source.alreadyExists) {
+            const result = await ensureAdoptionRowForAnimal(
+              req.tenant!.id,
+              req.params.id,
+              {
+                applicationId: source.applicationId,
+                adoptionDate: data.adoptionDate,
+              },
+            );
+            if (result.reason === 'no_application') {
+              // Should be impossible given the pre-resolved candidate id,
+              // but guard against a race where the application was deleted
+              // between resolve and insert. Hard-fail rather than flip
+              // status silently.
+              return res.status(409).json({
+                error: 'Adopter information disappeared',
+                code: 'ADOPTION_INFO_REQUIRED',
+                message:
+                  'The application linked to this animal was modified mid-update. Please reload and try again.',
+              });
+            }
+            if (result.created) {
+              console.log(
+                `[Adoption sync] Created adoptions row for animal ${req.params.id} via PATCH /api/animals/:id (Path C)`,
+              );
+            }
+          }
+        } catch (adoptionErr) {
           console.error(
-            `[Adoption sync] Pre-check failed for animal ${req.params.id}:`,
-            preCheckErr,
+            `[Adoption sync] Failed to ensure adoptions row for animal ${req.params.id} on PATCH:`,
+            adoptionErr,
           );
           return res.status(500).json({
-            error: 'Could not verify adopter information',
-            message: 'Please try again or use the Record Adoption form.',
+            error: 'Could not record adoption',
+            message:
+              'Failed to capture adopter information. Please use the Record Adoption form.',
           });
         }
       }
 
       const animal = await updateAnimal(req.tenant!.id, req.params.id, data);
-
-      // Now that the status flip has succeeded, insert the adoptions row.
-      // Failure here is logged but does not roll back the status — the
-      // startup backfill (and a future periodic sweep) will re-derive it.
-      if (isAdoptedTransition && animal) {
-        try {
-          const { ensureAdoptionRowForAnimal } = await import('./services/applications');
-          const result = await ensureAdoptionRowForAnimal(
-            req.tenant!.id,
-            req.params.id,
-            { adoptionDate: data.adoptionDate },
-          );
-          if (result.created) {
-            console.log(
-              `[Adoption sync] Created adoptions row for animal ${req.params.id} via PATCH /api/animals/:id (Path C)`,
-            );
-          } else if (result.reason === 'no_application') {
-            console.warn(
-              `[Adoption sync] Pre-check passed but no candidate application found for animal ${req.params.id} (Path C); status flipped without adoptions row — backfill will catch this`,
-            );
-          }
-        } catch (adoptionErr) {
-          console.error(
-            `[Adoption sync] Post-update insert failed for animal ${req.params.id} (Path C):`,
-            adoptionErr,
-          );
-        }
-      }
       
       if (!animal) {
         return res.status(404).json({ error: 'Animal not found' });

@@ -65,7 +65,13 @@ export async function ensureAdoptionRowForAnimal(
   }
 
   if (!candidateApp) {
-    const [latest] = await db
+    // Stage-priority lookup per task spec: prefer the most-recent
+    // application whose stage is exactly 'adopted'; only fall back to
+    // approved/trial if no adopted application exists for this animal.
+    // (A newer approved/trial must NOT win over an older adopted one,
+    // because the adopted row is the explicit signal of who took the
+    // animal home.)
+    const [latestAdopted] = await db
       .select({
         id: applications.id,
         applicantName: applications.applicantName,
@@ -76,11 +82,30 @@ export async function ensureAdoptionRowForAnimal(
       .where(and(
         eq(applications.tenantId, tenantId),
         eq(applications.animalId, animalId),
-        inArray(applications.stage, ['adopted', 'approved', 'trial']),
+        eq(applications.stage, 'adopted'),
       ))
       .orderBy(desc(applications.updatedAt))
       .limit(1);
-    if (latest) candidateApp = latest;
+    if (latestAdopted) {
+      candidateApp = latestAdopted;
+    } else {
+      const [latestPending] = await db
+        .select({
+          id: applications.id,
+          applicantName: applications.applicantName,
+          applicantEmail: applications.applicantEmail,
+          applicantPhone: applications.applicantPhone,
+        })
+        .from(applications)
+        .where(and(
+          eq(applications.tenantId, tenantId),
+          eq(applications.animalId, animalId),
+          inArray(applications.stage, ['approved', 'trial']),
+        ))
+        .orderBy(desc(applications.updatedAt))
+        .limit(1);
+      if (latestPending) candidateApp = latestPending;
+    }
   }
 
   if (!candidateApp) {
@@ -135,16 +160,24 @@ export async function ensureAdoptionRowForAnimal(
 }
 
 /**
- * Cheap pre-check used by Path C (PATCH /api/animals/:id) to decide whether
- * a status='adopted' transition can be allowed without hard-failing for
- * missing adopter info. Returns true if either an existing `adoptions` row
- * already covers (tenant, animal), OR a candidate application exists that
- * `ensureAdoptionRowForAnimal` would use. Tenant-scoped.
+ * Used by Path C (PATCH /api/animals/:id) to resolve adopter info BEFORE
+ * the status flip. Returns one of:
+ *   - { ok: true, alreadyExists: true } — adoptions row already present
+ *   - { ok: true, applicationId } — candidate application resolved
+ *   - { ok: false } — no adoption row and no candidate application; the
+ *     caller MUST hard-fail with 400 and not flip status to 'adopted'.
+ *
+ * Stage priority matches `ensureAdoptionRowForAnimal`: prefer latest
+ * 'adopted', fall back to latest 'approved'/'trial'. Tenant-scoped.
  */
-export async function canResolveAdopterInfoForAnimal(
+export async function resolveAdopterSourceForAnimal(
   tenantId: string,
   animalId: string,
-): Promise<boolean> {
+): Promise<
+  | { ok: true; alreadyExists: true }
+  | { ok: true; alreadyExists: false; applicationId: string }
+  | { ok: false }
+> {
   const [existing] = await db
     .select({ id: adoptions.id })
     .from(adoptions)
@@ -153,18 +186,37 @@ export async function canResolveAdopterInfoForAnimal(
       eq(adoptions.animalId, animalId),
     ))
     .limit(1);
-  if (existing) return true;
+  if (existing) return { ok: true, alreadyExists: true };
 
-  const [candidate] = await db
+  const [latestAdopted] = await db
     .select({ id: applications.id })
     .from(applications)
     .where(and(
       eq(applications.tenantId, tenantId),
       eq(applications.animalId, animalId),
-      inArray(applications.stage, ['adopted', 'approved', 'trial']),
+      eq(applications.stage, 'adopted'),
     ))
+    .orderBy(desc(applications.updatedAt))
     .limit(1);
-  return !!candidate;
+  if (latestAdopted) {
+    return { ok: true, alreadyExists: false, applicationId: latestAdopted.id };
+  }
+
+  const [latestPending] = await db
+    .select({ id: applications.id })
+    .from(applications)
+    .where(and(
+      eq(applications.tenantId, tenantId),
+      eq(applications.animalId, animalId),
+      inArray(applications.stage, ['approved', 'trial']),
+    ))
+    .orderBy(desc(applications.updatedAt))
+    .limit(1);
+  if (latestPending) {
+    return { ok: true, alreadyExists: false, applicationId: latestPending.id };
+  }
+
+  return { ok: false };
 }
 
 /**
