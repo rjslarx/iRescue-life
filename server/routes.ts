@@ -7927,7 +7927,75 @@ Crawl-delay: 1
         data.adoptionDate = new Date();
       }
 
+      // Path C fix (Task #164): when transitioning an animal to 'adopted'
+      // via direct PATCH (e.g. the edit-animal form), ensure we capture
+      // adopter contact info into the `adoptions` table — every reminder /
+      // warning / compliance engine inner-joins on that table. We split
+      // this into a pre-check (hard-fail BEFORE flipping status if no
+      // adopter info can be resolved) and a post-insert (only after
+      // updateAnimal succeeds), so we never leave an `adoptions` row for
+      // an animal whose status flip rolled back.
+      const isAdoptedTransition =
+        data.status === 'adopted' &&
+        existingAnimal &&
+        existingAnimal.status !== 'adopted';
+
+      if (isAdoptedTransition) {
+        try {
+          const { canResolveAdopterInfoForAnimal } = await import('./services/applications');
+          const canResolve = await canResolveAdopterInfoForAnimal(
+            req.tenant!.id,
+            req.params.id,
+          );
+          if (!canResolve) {
+            return res.status(400).json({
+              error: 'Missing adopter information',
+              code: 'ADOPTION_INFO_REQUIRED',
+              message:
+                'This animal has no adoption application on file — please use the Record Adoption form to capture adopter contact info before marking as adopted.',
+            });
+          }
+        } catch (preCheckErr) {
+          console.error(
+            `[Adoption sync] Pre-check failed for animal ${req.params.id}:`,
+            preCheckErr,
+          );
+          return res.status(500).json({
+            error: 'Could not verify adopter information',
+            message: 'Please try again or use the Record Adoption form.',
+          });
+        }
+      }
+
       const animal = await updateAnimal(req.tenant!.id, req.params.id, data);
+
+      // Now that the status flip has succeeded, insert the adoptions row.
+      // Failure here is logged but does not roll back the status — the
+      // startup backfill (and a future periodic sweep) will re-derive it.
+      if (isAdoptedTransition && animal) {
+        try {
+          const { ensureAdoptionRowForAnimal } = await import('./services/applications');
+          const result = await ensureAdoptionRowForAnimal(
+            req.tenant!.id,
+            req.params.id,
+            { adoptionDate: data.adoptionDate },
+          );
+          if (result.created) {
+            console.log(
+              `[Adoption sync] Created adoptions row for animal ${req.params.id} via PATCH /api/animals/:id (Path C)`,
+            );
+          } else if (result.reason === 'no_application') {
+            console.warn(
+              `[Adoption sync] Pre-check passed but no candidate application found for animal ${req.params.id} (Path C); status flipped without adoptions row — backfill will catch this`,
+            );
+          }
+        } catch (adoptionErr) {
+          console.error(
+            `[Adoption sync] Post-update insert failed for animal ${req.params.id} (Path C):`,
+            adoptionErr,
+          );
+        }
+      }
       
       if (!animal) {
         return res.status(404).json({ error: 'Animal not found' });

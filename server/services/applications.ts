@@ -1,6 +1,171 @@
 import { db } from '../db';
-import { applications, animals, dismissedWidgetItems, type InsertApplication, type Application } from '@shared/schema';
-import { eq, and, desc } from 'drizzle-orm';
+import { applications, animals, adoptions, dismissedWidgetItems, type InsertApplication, type Application } from '@shared/schema';
+import { eq, and, desc, inArray, sql } from 'drizzle-orm';
+
+/**
+ * Ensure an `adoptions` row exists for (tenant, animal). Source of truth for
+ * adopter contact info used by every reminder/warning/compliance engine.
+ *
+ * - If a row already exists for (tenant, animal): no-op (returns existing).
+ * - If `applicationId` is provided, copies adopter info from THAT application.
+ * - Otherwise looks up the most-recently-updated application for that animal
+ *   whose stage IN ('adopted','approved','trial') and copies from there.
+ * - Returns { adoption, created, reason }. `reason='no_application'` means
+ *   no candidate application was found and no row was created — caller MUST
+ *   hard-fail in that case (we never silently flip status to 'adopted'
+ *   without adopter contact info).
+ *
+ * Tenant-scoped on every read and write.
+ */
+export async function ensureAdoptionRowForAnimal(
+  tenantId: string,
+  animalId: string,
+  options: { applicationId?: string; adoptionDate?: Date } = {},
+): Promise<{
+  adoption: typeof adoptions.$inferSelect | null;
+  created: boolean;
+  reason?: 'already_exists' | 'created' | 'no_application';
+}> {
+  const [existing] = await db
+    .select()
+    .from(adoptions)
+    .where(and(
+      eq(adoptions.tenantId, tenantId),
+      eq(adoptions.animalId, animalId),
+    ))
+    .orderBy(desc(adoptions.adoptionDate))
+    .limit(1);
+
+  if (existing) {
+    return { adoption: existing, created: false, reason: 'already_exists' };
+  }
+
+  // Find a candidate application: explicit id wins, otherwise pick the most
+  // recently updated adopted/approved/trial application for this animal.
+  let candidateApp:
+    | { id: string; applicantName: string; applicantEmail: string; applicantPhone: string }
+    | null = null;
+
+  if (options.applicationId) {
+    const [byId] = await db
+      .select({
+        id: applications.id,
+        applicantName: applications.applicantName,
+        applicantEmail: applications.applicantEmail,
+        applicantPhone: applications.applicantPhone,
+      })
+      .from(applications)
+      .where(and(
+        eq(applications.tenantId, tenantId),
+        eq(applications.id, options.applicationId),
+        eq(applications.animalId, animalId),
+      ))
+      .limit(1);
+    if (byId) candidateApp = byId;
+  }
+
+  if (!candidateApp) {
+    const [latest] = await db
+      .select({
+        id: applications.id,
+        applicantName: applications.applicantName,
+        applicantEmail: applications.applicantEmail,
+        applicantPhone: applications.applicantPhone,
+      })
+      .from(applications)
+      .where(and(
+        eq(applications.tenantId, tenantId),
+        eq(applications.animalId, animalId),
+        inArray(applications.stage, ['adopted', 'approved', 'trial']),
+      ))
+      .orderBy(desc(applications.updatedAt))
+      .limit(1);
+    if (latest) candidateApp = latest;
+  }
+
+  if (!candidateApp) {
+    return { adoption: null, created: false, reason: 'no_application' };
+  }
+
+  // Race-safe insert: a single INSERT ... SELECT ... WHERE NOT EXISTS
+  // statement so we don't double-insert if two writers race on the same
+  // animal. (We deliberately do NOT add a unique constraint on
+  // (tenant_id, animal_id) — the adoptions table is intentionally
+  // multi-row per animal to support returns + re-adoptions.) If the guard
+  // sees an existing row, RETURNING yields zero rows and we re-read.
+  const adoptionDate = options.adoptionDate ?? new Date();
+  const insertRes = await db.execute(sql`
+    INSERT INTO adoptions (
+      tenant_id, animal_id, application_id,
+      adopter_name, adopter_email, adopter_phone, adoption_date
+    )
+    SELECT
+      ${tenantId}::uuid, ${animalId}::uuid, ${candidateApp.id}::uuid,
+      ${candidateApp.applicantName}, ${candidateApp.applicantEmail},
+      ${candidateApp.applicantPhone}, ${adoptionDate}
+    WHERE NOT EXISTS (
+      SELECT 1 FROM adoptions
+      WHERE tenant_id = ${tenantId}::uuid
+        AND animal_id = ${animalId}::uuid
+    )
+    RETURNING id
+  `);
+  const insertedRows = ((insertRes as { rows?: Array<{ id: string }> }).rows) ?? [];
+  if (insertedRows.length > 0) {
+    const [created] = await db
+      .select()
+      .from(adoptions)
+      .where(eq(adoptions.id, insertedRows[0].id))
+      .limit(1);
+    return { adoption: created, created: true, reason: 'created' };
+  }
+
+  // Race fallback: another writer inserted first (or NOT EXISTS guard
+  // matched a row that appeared between our initial check and the insert).
+  const [raceExisting] = await db
+    .select()
+    .from(adoptions)
+    .where(and(
+      eq(adoptions.tenantId, tenantId),
+      eq(adoptions.animalId, animalId),
+    ))
+    .orderBy(desc(adoptions.adoptionDate))
+    .limit(1);
+  return { adoption: raceExisting ?? null, created: false, reason: 'already_exists' };
+}
+
+/**
+ * Cheap pre-check used by Path C (PATCH /api/animals/:id) to decide whether
+ * a status='adopted' transition can be allowed without hard-failing for
+ * missing adopter info. Returns true if either an existing `adoptions` row
+ * already covers (tenant, animal), OR a candidate application exists that
+ * `ensureAdoptionRowForAnimal` would use. Tenant-scoped.
+ */
+export async function canResolveAdopterInfoForAnimal(
+  tenantId: string,
+  animalId: string,
+): Promise<boolean> {
+  const [existing] = await db
+    .select({ id: adoptions.id })
+    .from(adoptions)
+    .where(and(
+      eq(adoptions.tenantId, tenantId),
+      eq(adoptions.animalId, animalId),
+    ))
+    .limit(1);
+  if (existing) return true;
+
+  const [candidate] = await db
+    .select({ id: applications.id })
+    .from(applications)
+    .where(and(
+      eq(applications.tenantId, tenantId),
+      eq(applications.animalId, animalId),
+      inArray(applications.stage, ['adopted', 'approved', 'trial']),
+    ))
+    .limit(1);
+  return !!candidate;
+}
 
 /**
  * Get all applications for a tenant
@@ -217,6 +382,34 @@ export async function updateApplicationStage(
   
   // Sync animal status based on the new application stage
   await syncAnimalStatusFromApplicationStage(tenantId, animalId, stage, applicationId);
+
+  // Path B fix (Task #164): when transitioning to 'adopted', ensure an
+  // `adoptions` row exists so the adopter compliance/warning engines (which
+  // inner-join on `adoptions` for adopter contact info) can reach the
+  // adopter. Idempotent — if a row already exists for (tenant, animal) it's
+  // left alone. Skips the microchip-pending guard that POST /api/adoptions
+  // applies, on purpose: dragging a card to "Adopted" on the Kanban board
+  // should not be blocked by chip transfer state (staff use a different
+  // workflow to verify chips).
+  if (stage === 'adopted' && oldStage !== 'adopted') {
+    try {
+      const result = await ensureAdoptionRowForAnimal(tenantId, animalId, {
+        applicationId,
+      });
+      if (result.created) {
+        console.log(
+          `[Adoption sync] Created adoptions row for animal ${animalId} from application ${applicationId} (Kanban stage→adopted)`,
+        );
+      }
+    } catch (err) {
+      console.error(
+        `[Adoption sync] Failed to create adoptions row for animal ${animalId} from application ${applicationId}:`,
+        err,
+      );
+      // Don't throw — stage update already committed. The startup backfill
+      // and a future sweep will catch this.
+    }
+  }
   
   return application;
 }

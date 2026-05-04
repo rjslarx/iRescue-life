@@ -14,6 +14,7 @@ import { backfillNewPagePermissions } from "./services/page-permissions-seeding"
 import { seedPlatformPreventativeProtocols } from "./services/preventative-protocols-seeding";
 import { backfillSupersededPreventativeCare } from "./scripts/backfill-superseded-preventative-care";
 import { backfillTerminalAnimalMedicalCleanup } from "./scripts/backfill-terminal-animal-medical-cleanup";
+import { backfillAdoptionsFromApplications } from "./scripts/backfill-adoptions-from-applications";
 import { db } from "./db";
 import { medicalCatalog, medicalPrescriptions, medicalDoses } from "@shared/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
@@ -322,5 +323,11 @@ app.use((req, res, next) => {
     // already in a terminal status. Going forward the PATCH /api/animals/:id
     // and /api/animals/:id/deceased endpoints handle this at write time.
     backfillTerminalAnimalMedicalCleanup();
+
+    // Task #164: One-time backfill that creates adoptions rows for animals
+    // already in status='adopted' but missing from the adoptions table
+    // (Kanban-adopted or PATCH-adopted historically didn't insert). Without
+    // this row the adopter compliance/warning engine silently skips them.
+    backfillAdoptionsFromApplications();
   });
 })();
