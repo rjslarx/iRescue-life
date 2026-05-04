@@ -7982,6 +7982,7 @@ Crawl-delay: 1
             await db.update(medicationTasks)
               .set({ status: 'skipped', skipReason: `Animal status changed to ${data.status}` })
               .where(and(
+                eq(medicationTasks.tenantId, req.tenant!.id),
                 eq(medicationTasks.animalId, animal.id),
                 eq(medicationTasks.status, 'pending')
               ));
@@ -7989,13 +7990,60 @@ Crawl-delay: 1
             await db.update(medicationPlans)
               .set({ active: false })
               .where(and(
+                eq(medicationPlans.tenantId, req.tenant!.id),
                 eq(medicationPlans.animalId, animal.id),
                 eq(medicationPlans.active, true)
               ));
 
+            // Task #163: Also cancel pending medical_doses (CPOE doses), end
+            // active prescriptions, and clear next_due_date on pending PCRs so
+            // the daily briefing + coming-due dashboards stop surfacing them
+            // for animals that have left the rescue. medical_exams keep their
+            // status (the enum is "pending"|"completed" with no "cancelled"
+            // value); the read-time terminal-status filter in the briefing
+            // and similar consumers handles those.
+            try {
+              const { medicalDoses, medicalPrescriptions, preventativeCareRecords } = await import('@shared/schema');
+              const { isNull } = await import('drizzle-orm');
+              const skipNote = `Animal status changed to ${data.status}`;
+              await db.update(medicalDoses)
+                .set({ status: 'skipped', notes: skipNote })
+                .where(and(
+                  eq(medicalDoses.tenantId, req.tenant!.id),
+                  eq(medicalDoses.status, 'due'),
+                  inArray(
+                    medicalDoses.prescriptionId,
+                    db.select({ id: medicalPrescriptions.id })
+                      .from(medicalPrescriptions)
+                      .where(and(
+                        eq(medicalPrescriptions.tenantId, req.tenant!.id),
+                        eq(medicalPrescriptions.animalId, animal.id),
+                      ))
+                  ),
+                ));
+              await db.update(medicalPrescriptions)
+                .set({ nextScheduledDose: null, endDate: new Date() })
+                .where(and(
+                  eq(medicalPrescriptions.tenantId, req.tenant!.id),
+                  eq(medicalPrescriptions.animalId, animal.id),
+                  isNull(medicalPrescriptions.endDate),
+                ));
+              await db.update(preventativeCareRecords)
+                .set({ nextDueDate: null })
+                .where(and(
+                  eq(preventativeCareRecords.tenantId, req.tenant!.id),
+                  eq(preventativeCareRecords.animalId, animal.id),
+                  eq(preventativeCareRecords.status, 'pending'),
+                  isNotNull(preventativeCareRecords.nextDueDate),
+                ));
+            } catch (medCleanupErr) {
+              console.error('Failed to cancel pending medical doses/prescriptions/PCR for terminal-status animal:', medCleanupErr);
+            }
+
             await db.update(fosterAnimals)
               .set({ status: 'completed', endDate: new Date() })
               .where(and(
+                eq(fosterAnimals.tenantId, req.tenant!.id),
                 eq(fosterAnimals.animalId, animal.id),
                 eq(fosterAnimals.status, 'active')
               ));
@@ -8143,6 +8191,7 @@ Crawl-delay: 1
       await db.update(medicationTasks)
         .set({ status: 'skipped', skipReason: 'Animal deceased' })
         .where(and(
+          eq(medicationTasks.tenantId, req.tenant!.id),
           eq(medicationTasks.animalId, animal.id),
           eq(medicationTasks.status, 'pending')
         ));
@@ -8150,9 +8199,52 @@ Crawl-delay: 1
       await db.update(medicationPlans)
         .set({ active: false })
         .where(and(
+          eq(medicationPlans.tenantId, req.tenant!.id),
           eq(medicationPlans.animalId, animal.id),
           eq(medicationPlans.active, true)
         ));
+
+      // Task #163: same medical-record cleanup as PATCH /api/animals/:id —
+      // cancel pending CPOE doses, end open prescriptions, and clear pending
+      // PCR next_due_date so the daily briefing and coming-due dashboards
+      // stop surfacing them for the deceased animal.
+      try {
+        const { medicalDoses, medicalPrescriptions, preventativeCareRecords } = await import('@shared/schema');
+        const { isNull, isNotNull } = await import('drizzle-orm');
+        await db.update(medicalDoses)
+          .set({ status: 'skipped', notes: 'Animal deceased' })
+          .where(and(
+            eq(medicalDoses.tenantId, req.tenant!.id),
+            eq(medicalDoses.status, 'due'),
+            inArray(
+              medicalDoses.prescriptionId,
+              db.select({ id: medicalPrescriptions.id })
+                .from(medicalPrescriptions)
+                .where(and(
+                  eq(medicalPrescriptions.tenantId, req.tenant!.id),
+                  eq(medicalPrescriptions.animalId, animal.id),
+                ))
+            ),
+          ));
+        const effectiveEnd = data.deceasedDate ? new Date(data.deceasedDate) : new Date();
+        await db.update(medicalPrescriptions)
+          .set({ nextScheduledDose: null, endDate: effectiveEnd })
+          .where(and(
+            eq(medicalPrescriptions.tenantId, req.tenant!.id),
+            eq(medicalPrescriptions.animalId, animal.id),
+            isNull(medicalPrescriptions.endDate),
+          ));
+        await db.update(preventativeCareRecords)
+          .set({ nextDueDate: null })
+          .where(and(
+            eq(preventativeCareRecords.tenantId, req.tenant!.id),
+            eq(preventativeCareRecords.animalId, animal.id),
+            eq(preventativeCareRecords.status, 'pending'),
+            isNotNull(preventativeCareRecords.nextDueDate),
+          ));
+      } catch (medCleanupErr) {
+        console.error('Failed to cancel pending medical doses/prescriptions/PCR for deceased animal:', medCleanupErr);
+      }
 
       res.json({ success: true, animal });
     } catch (error) {

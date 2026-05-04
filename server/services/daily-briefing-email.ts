@@ -20,8 +20,9 @@ import {
   fosterUpdates,
   fosterPhotos,
   dailyBriefingLogs,
+  TERMINAL_STATUSES,
 } from '@shared/schema';
-import { eq, and, or, sql, inArray, lt, isNotNull } from 'drizzle-orm';
+import { eq, and, or, sql, inArray, lt, isNotNull, notInArray } from 'drizzle-orm';
 import { EmailService } from '../lib/email-service';
 
 function escapeHtml(str: string): string {
@@ -187,6 +188,24 @@ async function gatherBriefingData(tenantId: string): Promise<BriefingData | null
   const fosterAnimalIds = activeFosters.map(f => f.animalId);
   const fosterByAnimal = new Map(activeFosters.map(f => [f.animalId, f.fosterId]));
 
+  // Defense-in-depth: fetch the set of animals that have already left the
+  // rescue (adopted, deceased/euthanized, transported, returned_to_owner,
+  // returned_to_field). Every medical query below filters these out so the
+  // briefing never surfaces stale doses/tasks/exams/PCRs for animals that
+  // shouldn't appear. Cleanup-at-write-time also flips these rows to
+  // skipped/cancelled in the animal-status endpoints, but this read-time
+  // guard catches anything that slipped through (orphan rows from before
+  // the cleanup landed, or terminal-status changes that bypassed the
+  // standard endpoints).
+  const terminalAnimalRows = await db
+    .select({ id: animals.id })
+    .from(animals)
+    .where(and(
+      eq(animals.tenantId, tenantId),
+      inArray(animals.status, TERMINAL_STATUSES as unknown as string[])
+    ));
+  const terminalAnimalIds = new Set(terminalAnimalRows.map(r => r.id));
+
   const missedFosterMeds: MissedFosterMed[] = [];
 
   if (fosterAnimalIds.length > 0) {
@@ -202,7 +221,8 @@ async function gatherBriefingData(tenantId: string): Promise<BriefingData | null
         eq(medicationTasks.status, 'pending'),
         eq(medicationTasks.scheduledDate, yesterdayStr),
         inArray(medicationTasks.animalId, fosterAnimalIds)
-      ));
+      ))
+      .then(rows => rows.filter(r => !terminalAnimalIds.has(r.animalId)));
 
     if (missedTasks.length > 0) {
       const planIds = [...new Set(missedTasks.map(t => t.planId))];
@@ -266,7 +286,7 @@ async function gatherBriefingData(tenantId: string): Promise<BriefingData | null
         .from(medicalPrescriptions)
         .where(inArray(medicalPrescriptions.id, prescIds));
 
-      const fosterPrescriptions = prescRows.filter(p => fosterAnimalIds.includes(p.animalId));
+      const fosterPrescriptions = prescRows.filter(p => fosterAnimalIds.includes(p.animalId) && !terminalAnimalIds.has(p.animalId));
       const doseByPresc = new Map<string, Date | null>();
       for (const dose of missedDoses) {
         if (!doseByPresc.has(dose.prescriptionId)) {
@@ -344,7 +364,7 @@ async function gatherBriefingData(tenantId: string): Promise<BriefingData | null
       .from(medicalPrescriptions)
       .where(inArray(medicalPrescriptions.id, prescIds));
 
-    const shelterPrescriptions = prescRows.filter(p => !fosterAnimalIds.includes(p.animalId));
+    const shelterPrescriptions = prescRows.filter(p => !fosterAnimalIds.includes(p.animalId) && !terminalAnimalIds.has(p.animalId));
 
     if (shelterPrescriptions.length > 0) {
       const sAnimalIds = [...new Set(shelterPrescriptions.map(p => p.animalId))];
@@ -400,7 +420,7 @@ async function gatherBriefingData(tenantId: string): Promise<BriefingData | null
     ));
 
   if (shelterMissedTasks.length > 0) {
-    const nonFosterTasks = shelterMissedTasks.filter(t => !fosterAnimalIds.includes(t.animalId));
+    const nonFosterTasks = shelterMissedTasks.filter(t => !fosterAnimalIds.includes(t.animalId) && !terminalAnimalIds.has(t.animalId));
     if (nonFosterTasks.length > 0) {
       const planIds = [...new Set(nonFosterTasks.map(t => t.planId))];
       const plans = await db
@@ -462,6 +482,7 @@ async function gatherBriefingData(tenantId: string): Promise<BriefingData | null
     .where(and(
       eq(medicalExams.tenantId, tenantId),
       eq(medicalExams.status, 'pending'),
+      notInArray(animals.status, TERMINAL_STATUSES as unknown as string[]),
       sql`${medicalExams.examDate} >= ${todayStart}`,
       sql`${medicalExams.examDate} <= ${todayEnd}`
     ));
@@ -486,6 +507,7 @@ async function gatherBriefingData(tenantId: string): Promise<BriefingData | null
     .where(and(
       eq(medicalExams.tenantId, tenantId),
       eq(medicalExams.status, 'pending'),
+      notInArray(animals.status, TERMINAL_STATUSES as unknown as string[]),
       sql`${medicalExams.examDate} < ${todayStart}`
     ))
     .limit(20);
@@ -508,6 +530,7 @@ async function gatherBriefingData(tenantId: string): Promise<BriefingData | null
     .innerJoin(animals, eq(diagnosticTests.animalId, animals.id))
     .where(and(
       eq(diagnosticTests.tenantId, tenantId),
+      notInArray(animals.status, TERMINAL_STATUSES as unknown as string[]),
       sql`${diagnosticTests.testDate} >= ${todayStart}`,
       sql`${diagnosticTests.testDate} <= ${todayEnd}`
     ));
@@ -530,6 +553,7 @@ async function gatherBriefingData(tenantId: string): Promise<BriefingData | null
     .where(and(
       eq(procedureLogs.tenantId, tenantId),
       eq(procedureLogs.status, 'pending'),
+      notInArray(animals.status, TERMINAL_STATUSES as unknown as string[]),
       sql`${procedureLogs.procedureDate} >= ${todayStart}`,
       sql`${procedureLogs.procedureDate} <= ${todayEnd}`
     ));
@@ -553,6 +577,7 @@ async function gatherBriefingData(tenantId: string): Promise<BriefingData | null
     .where(and(
       eq(preventativeCareRecords.tenantId, tenantId),
       eq(preventativeCareRecords.status, 'pending'),
+      notInArray(animals.status, TERMINAL_STATUSES as unknown as string[]),
       isNotNull(preventativeCareRecords.nextDueDate),
       sql`${preventativeCareRecords.nextDueDate} < ${todayStart}`
     ))

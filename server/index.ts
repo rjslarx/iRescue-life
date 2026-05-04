@@ -13,6 +13,7 @@ import { initializeScheduler } from "./lib/scheduler";
 import { backfillNewPagePermissions } from "./services/page-permissions-seeding";
 import { seedPlatformPreventativeProtocols } from "./services/preventative-protocols-seeding";
 import { backfillSupersededPreventativeCare } from "./scripts/backfill-superseded-preventative-care";
+import { backfillTerminalAnimalMedicalCleanup } from "./scripts/backfill-terminal-animal-medical-cleanup";
 import { db } from "./db";
 import { medicalCatalog, medicalPrescriptions, medicalDoses } from "@shared/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
@@ -300,5 +301,11 @@ app.use((req, res, next) => {
     // same algorithm, but per-tenant scoped, typed, with self-tests and a
     // marker that's only written when every tenant succeeds.)
     backfillSupersededPreventativeCare();
+
+    // Task #163: One-time cleanup of pending medical work (CPOE doses, open
+    // prescriptions, pending PCRs, foster med plans/tasks) for animals
+    // already in a terminal status. Going forward the PATCH /api/animals/:id
+    // and /api/animals/:id/deceased endpoints handle this at write time.
+    backfillTerminalAnimalMedicalCleanup();
   });
 })();
