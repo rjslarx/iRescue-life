@@ -36588,7 +36588,7 @@ Email: ${application.applicantEmail || ''}`
    */
   app.get('/api/medical/preventative-care/coming-due', requireTenant, requireAuth, async (req, res, next) => {
     try {
-      const { preventativeCareRecords, vaccineRecords: vaccineRecordsTable, animals, TERMINAL_STATUSES: TERMINAL_STATUSES_PC } = await import('@shared/schema');
+      const { preventativeCareRecords, vaccineRecords: vaccineRecordsTable, animals, preventativeCareTypes, TERMINAL_STATUSES: TERMINAL_STATUSES_PC } = await import('@shared/schema');
       const locationFilter = req.query.location as string | undefined;
       const locationCondition = locationFilter === 'shelter' ? or(ne(animals.locationType, 'foster'), isNull(animals.locationType)) : locationFilter === 'foster' ? eq(animals.locationType, 'foster') : undefined;
 
@@ -36626,6 +36626,11 @@ Email: ${application.applicantEmail || ''}`
         };
       };
 
+      // NOTE: We pull ALL records (no upper-bound on next_due_date) so that a newer
+      // same-series record can suppress an older record whose next_due_date is in
+      // the past. Without this, every previous month's preventative would phantom
+      // as "overdue" forever once a new dose was logged. See the comment near
+      // `seriesKeysForPcr` / `vaccineFamily` for the supersession rules.
       const [preventativeRows, vaccineRows] = await Promise.all([
         db
           .select({
@@ -36642,6 +36647,10 @@ Email: ${application.applicantEmail || ''}`
               createdBy: preventativeCareRecords.createdBy,
               createdAt: preventativeCareRecords.createdAt,
             },
+            careType: {
+              coversHeartworm: preventativeCareTypes.coversHeartworm,
+              coversFleaTick: preventativeCareTypes.coversFleaTick,
+            },
             animal: {
               id: animals.id,
               name: animals.name,
@@ -36654,14 +36663,13 @@ Email: ${application.applicantEmail || ''}`
           })
           .from(preventativeCareRecords)
           .innerJoin(animals, eq(preventativeCareRecords.animalId, animals.id))
+          .leftJoin(preventativeCareTypes, eq(preventativeCareRecords.careTypeId, preventativeCareTypes.id))
           .where(and(
             eq(preventativeCareRecords.tenantId, req.tenant!.id),
             isNotNull(preventativeCareRecords.nextDueDate),
-            lte(preventativeCareRecords.nextDueDate, sevenDaysOut),
             notInArray(animals.status, TERMINAL_STATUSES_PC),
             ...(locationCondition ? [locationCondition] : [])
-          ))
-          .orderBy(asc(preventativeCareRecords.nextDueDate)),
+          )),
 
         db
           .select({
@@ -36669,6 +36677,7 @@ Email: ${application.applicantEmail || ''}`
             tenantId: vaccineRecordsTable.tenantId,
             animalId: vaccineRecordsTable.animalId,
             itemName: vaccineRecordsTable.itemName,
+            dateGiven: vaccineRecordsTable.dateGiven,
             dateDue: vaccineRecordsTable.dateDue,
             createdAt: vaccineRecordsTable.createdAt,
             animalId2: animals.id,
@@ -36684,54 +36693,129 @@ Email: ${application.applicantEmail || ''}`
           .where(and(
             eq(vaccineRecordsTable.tenantId, req.tenant!.id),
             isNotNull(vaccineRecordsTable.dateDue),
-            lte(vaccineRecordsTable.dateDue, sevenDaysOut),
             notInArray(animals.status, TERMINAL_STATUSES_PC),
             ...(locationCondition ? [locationCondition] : [])
           )),
       ]);
 
-      const vaccineMapped: ComingDueItem[] = vaccineRows.map(v => ({
-        record: {
-          id: v.id,
-          tenantId: v.tenantId,
-          animalId: v.animalId,
-          careTypeId: null,
-          careName: v.itemName,
-          careCategory: 'vaccine',
-          dateAdministered: null,
-          nextDueDate: v.dateDue,
-          notes: null,
-          createdBy: null,
-          createdAt: v.createdAt,
-          sourceTable: 'vaccine_records' as const,
-        },
-        animal: {
-          id: v.animalId2,
-          name: v.animalName,
-          species: v.animalSpecies,
-          breed: v.animalBreed,
-          photoUrls: v.animalPhotoUrls,
-          status: v.animalStatus,
-          locationName: v.animalLocation,
-        },
-      }));
+      // Normalize a vaccine product name into a "family" so that brand or naming
+      // variations (DAPPVL2, DAPPL-9, DA2PP, DHPP, Dapp+L4, etc.) collapse into
+      // the same series. The most-recent record in a family supersedes older ones.
+      const vaccineFamily = (raw: string | null | undefined): string => {
+        if (!raw) return 'unknown';
+        const n = raw.trim().toLowerCase();
+        if (/rabies/.test(n)) return 'rabies';
+        if (/bordet|bordat|brachy|kennel\s*cough/.test(n)) return 'bordetella';
+        if (/dapp|dhpp|da2p|distemper|parvo/.test(n)) return 'dhpp';
+        if (/lepto/.test(n)) return 'lepto';
+        if (/canine\s*influenza|civ\b|\bflu\b/.test(n)) return 'influenza';
+        if (/lyme/.test(n)) return 'lyme';
+        if (/fvrcp|hcp|panleuk/.test(n)) return 'fvrcp';
+        if (/felv|feline\s*leukemia/.test(n)) return 'felv';
+        if (/heartworm.*test|hw.*test|antigen/.test(n)) return 'hw_test';
+        return `other:${n.replace(/\s+/g, ' ')}`;
+      };
 
-      const preventativeMapped: ComingDueItem[] = preventativeRows.map(r => ({
-        record: { ...r.record, sourceTable: 'preventative_care_records' as const },
-        animal: r.animal,
-      }));
+      // Series keys for a PCR record. Most categories use a single key. For
+      // parasite_prevention we use the care-type's coverage flags so that a
+      // combo product (covers heartworm + flea/tick) participates in BOTH
+      // series — a flea-only NexGard does NOT suppress a heartworm gap, and
+      // vice versa. If the care-type info is missing we fall back to a
+      // category + name key.
+      const seriesKeysForPcr = (record: any, careType: { coversHeartworm: boolean | null; coversFleaTick: boolean | null } | null): string[] => {
+        const cat = (record.careCategory || 'other').toLowerCase();
+        if (cat === 'parasite_prevention' && careType && (careType.coversHeartworm !== null || careType.coversFleaTick !== null)) {
+          const keys: string[] = [];
+          if (careType.coversHeartworm) keys.push('pp|hw');
+          if (careType.coversFleaTick) keys.push('pp|ft');
+          if (keys.length === 0) keys.push('pp|other');
+          return keys;
+        }
+        if (record.careTypeId) {
+          return [`${cat}|type:${record.careTypeId}`];
+        }
+        const name = (record.careName || '').trim().toLowerCase().replace(/\s+/g, ' ');
+        return [`${cat}|name:${name}`];
+      };
 
-      const allRecords = [...preventativeMapped, ...vaccineMapped].sort((a, b) => {
-        const aDate = a.record.nextDueDate ? new Date(a.record.nextDueDate as string | Date).getTime() : 0;
-        const bDate = b.record.nextDueDate ? new Date(b.record.nextDueDate as string | Date).getTime() : 0;
-        return aDate - bDate;
-      });
+      // Within each (animal, series) bucket, keep the record with the LATEST
+      // next_due_date — that one defines the animal's current coverage status
+      // for that series. All older records in the same series are suppressed.
+      type Candidate = { record: ComingDueItem['record']; animal: ComingDueItem['animal']; nextDueMs: number };
+      const seriesWinners = new Map<string, Candidate>();
+
+      const consider = (bucketKey: string, cand: Candidate) => {
+        const existing = seriesWinners.get(bucketKey);
+        if (!existing || cand.nextDueMs > existing.nextDueMs) {
+          seriesWinners.set(bucketKey, cand);
+        }
+      };
+
+      for (const row of preventativeRows) {
+        if (!row.record.nextDueDate) continue;
+        const nextDueMs = new Date(row.record.nextDueDate as any).getTime();
+        const cand: Candidate = {
+          record: { ...(row.record as any), sourceTable: 'preventative_care_records' as const },
+          animal: row.animal,
+          nextDueMs,
+        };
+        for (const sk of seriesKeysForPcr(row.record, row.careType)) {
+          consider(`${row.animal.id}|pcr|${sk}`, cand);
+        }
+      }
+
+      for (const v of vaccineRows) {
+        if (!v.dateDue) continue;
+        const family = vaccineFamily(v.itemName);
+        const nextDueMs = new Date(v.dateDue as any).getTime();
+        const cand: Candidate = {
+          record: {
+            id: v.id,
+            tenantId: v.tenantId,
+            animalId: v.animalId,
+            careTypeId: null,
+            careName: v.itemName,
+            careCategory: 'vaccine',
+            dateAdministered: v.dateGiven ?? null,
+            nextDueDate: v.dateDue,
+            notes: null,
+            createdBy: null,
+            createdAt: v.createdAt,
+            sourceTable: 'vaccine_records' as const,
+          },
+          animal: {
+            id: v.animalId2,
+            name: v.animalName,
+            species: v.animalSpecies,
+            breed: v.animalBreed,
+            photoUrls: v.animalPhotoUrls,
+            status: v.animalStatus,
+            locationName: v.animalLocation,
+          },
+          nextDueMs,
+        };
+        consider(`${v.animalId}|vax|${family}`, cand);
+      }
+
+      // Dedupe by record id (a combo PCR can win both hw and ft buckets — we
+      // only want to surface it once) and filter to records whose effective
+      // next_due_date falls within the [past, +7 days] window.
+      const dedup = new Map<string, ComingDueItem>();
+      for (const cand of seriesWinners.values()) {
+        const dueDate = new Date(cand.nextDueMs);
+        dueDate.setHours(0, 0, 0, 0);
+        if (dueDate.getTime() > sevenDaysOut.getTime()) continue;
+        const key = `${cand.record.sourceTable}|${cand.record.id}`;
+        if (!dedup.has(key)) {
+          dedup.set(key, { record: cand.record, animal: cand.animal });
+        }
+      }
 
       const overdue: ComingDueItem[] = [];
       const dueToday: ComingDueItem[] = [];
       const comingSoon: ComingDueItem[] = [];
 
-      for (const item of allRecords) {
+      for (const item of dedup.values()) {
         const dueDate = new Date(item.record.nextDueDate as string | Date);
         dueDate.setHours(0, 0, 0, 0);
 
@@ -36743,6 +36827,15 @@ Email: ${application.applicantEmail || ''}`
           comingSoon.push(item);
         }
       }
+
+      const sortByDate = (a: ComingDueItem, b: ComingDueItem) => {
+        const ad = a.record.nextDueDate ? new Date(a.record.nextDueDate as string | Date).getTime() : 0;
+        const bd = b.record.nextDueDate ? new Date(b.record.nextDueDate as string | Date).getTime() : 0;
+        return ad - bd;
+      };
+      overdue.sort(sortByDate);
+      dueToday.sort(sortByDate);
+      comingSoon.sort(sortByDate);
 
       res.json({ overdue, dueToday, comingSoon });
     } catch (error) {
