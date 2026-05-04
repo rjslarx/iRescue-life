@@ -35330,10 +35330,23 @@ Email: ${application.applicantEmail || ''}`
             evening: req.tenant?.defaultEveningRounds || '17:00',
           };
           const nextDose = computeNextScheduledDose(givenAtDate, prescription.frequency, protocol);
-          if (nextDose && (!prescription.endDate || isSameDayOrMissing(prescription.endDate, prescription.startDate) || nextDose <= new Date(prescription.endDate))) {
+          const dailyDosing = isDailyDosingFrequency(prescription.frequency);
+          const pastEndDate = !!(nextDose && prescription.endDate && nextDose > new Date(prescription.endDate));
+          const shouldClear = (dailyDosing && !prescription.endDate) || pastEndDate;
+          // Advance if we have a valid next dose AND we're not in a terminate case.
+          // Only clear nextScheduledDose for the intended cases (daily-dosing without
+          // endDate → schedule terminates; or computed next is beyond endDate). Do NOT
+          // clear when nextDose is null for a recurring interval freq (e.g. Q3M) — that
+          // would silently break the schedule.
+          if (nextDose && !shouldClear) {
             await db
               .update(medicalPrescriptions)
               .set({ nextScheduledDose: nextDose })
+              .where(eq(medicalPrescriptions.id, prescription.id));
+          } else if (shouldClear && prescription.nextScheduledDose) {
+            await db
+              .update(medicalPrescriptions)
+              .set({ nextScheduledDose: null })
               .where(eq(medicalPrescriptions.id, prescription.id));
           }
         }
@@ -35421,6 +35434,20 @@ Email: ${application.applicantEmail || ''}`
     return d1.toISOString().split('T')[0] === d2.toISOString().split('T')[0];
   }
 
+  // Daily-dosing frequencies (SID/BID/TID/QID/HS/EOD and synonyms).
+  // For these, a prescription with no endDate must NOT keep advancing nextScheduledDose
+  // forever — that was the Panacur runaway-schedule bug. Caller must either set
+  // an endDate (Duration) or use "End Treatment".
+  function isDailyDosingFrequency(frequency: string | null | undefined): boolean {
+    if (!frequency) return false;
+    const f = frequency.toUpperCase();
+    return (
+      f === 'SID' || f === 'BID' || f === 'TID' || f === 'QID' || f === 'HS' || f === 'EOD' ||
+      f.includes('BEDTIME') || f.includes('TWICE') || f.includes('THREE') || f.includes('FOUR') ||
+      f.includes('2X') || f.includes('3X') || f.includes('4X') || f.includes('EVERY OTHER')
+    );
+  }
+
   function computeNextScheduledDose(
     lastGivenAt: Date,
     frequency: string,
@@ -35474,10 +35501,25 @@ Email: ${application.applicantEmail || ''}`
         next.setFullYear(next.getFullYear() + 1);
         return setTimeOnDate(next, protocol.morning);
       }
+      case 'Q3M': {
+        const next = new Date(now);
+        next.setMonth(next.getMonth() + 3);
+        return setTimeOnDate(next, protocol.morning);
+      }
       case 'Q6M': {
         const next = new Date(now);
         next.setMonth(next.getMonth() + 6);
         return setTimeOnDate(next, protocol.morning);
+      }
+      case 'Q8M': {
+        const next = new Date(now);
+        next.setMonth(next.getMonth() + 8);
+        return setTimeOnDate(next, protocol.morning);
+      }
+      case 'HS': {
+        const next = new Date(now);
+        next.setDate(next.getDate() + 1);
+        return setTimeOnDate(next, '21:00');
       }
       case 'PRN':
       case 'ONCE':
@@ -35560,10 +35602,18 @@ Email: ${application.applicantEmail || ''}`
           evening: req.tenant?.defaultEveningRounds || '17:00',
         };
         const nextDose = computeNextScheduledDose(givenAtDate, prescription.frequency, protocol);
-        if (nextDose && (!prescription.endDate || isSameDayOrMissing(prescription.endDate, prescription.startDate) || nextDose <= new Date(prescription.endDate))) {
+        const dailyDosing = isDailyDosingFrequency(prescription.frequency);
+        const pastEndDate = !!(nextDose && prescription.endDate && nextDose > new Date(prescription.endDate));
+        const shouldClear = (dailyDosing && !prescription.endDate) || pastEndDate;
+        if (nextDose && !shouldClear) {
           await db
             .update(medicalPrescriptions)
             .set({ nextScheduledDose: nextDose })
+            .where(eq(medicalPrescriptions.id, prescription.id));
+        } else if (shouldClear && prescription.nextScheduledDose) {
+          await db
+            .update(medicalPrescriptions)
+            .set({ nextScheduledDose: null })
             .where(eq(medicalPrescriptions.id, prescription.id));
         }
       }
@@ -35573,6 +35623,75 @@ Email: ${application.applicantEmail || ''}`
       next(error);
     }
   });
+
+  /**
+   * POST /api/medical/prescriptions/:prescriptionId/end-treatment
+   * End an active prescription: sets endDate=now, clears nextScheduledDose,
+   * deletes any remaining 'due' doses (tenant-scoped). Used to stop short-course
+   * meds (e.g., Panacur) from continuing to schedule future doses.
+   */
+  app.post('/api/medical/prescriptions/:prescriptionId/end-treatment', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { medicalPrescriptions, medicalDoses } = await import('@shared/schema');
+
+      // Permission check via animal ownership
+      const [prescription] = await db
+        .select()
+        .from(medicalPrescriptions)
+        .where(and(
+          eq(medicalPrescriptions.id, req.params.prescriptionId),
+          eq(medicalPrescriptions.tenantId, req.tenant!.id),
+        ));
+
+      if (!prescription) {
+        return res.status(404).json({ error: 'Prescription not found' });
+      }
+
+      const permissions = await checkMedicalRecordPermissions(
+        req.user!.id,
+        prescription.animalId,
+        req.tenant!.id,
+        req.user!.roles,
+      );
+      if (!permissions.canEdit) {
+        return res.status(403).json({
+          error: 'Access denied',
+          message: 'You do not have permission to edit medical records for this animal',
+        });
+      }
+
+      const now = new Date();
+
+      const [updated] = await db
+        .update(medicalPrescriptions)
+        .set({
+          endDate: now,
+          nextScheduledDose: null,
+          lastEditedAt: now,
+          lastEditedBy: req.user!.id,
+        })
+        .where(and(
+          eq(medicalPrescriptions.id, req.params.prescriptionId),
+          eq(medicalPrescriptions.tenantId, req.tenant!.id),
+        ))
+        .returning();
+
+      const deleteResult = await db
+        .delete(medicalDoses)
+        .where(and(
+          eq(medicalDoses.prescriptionId, req.params.prescriptionId),
+          eq(medicalDoses.tenantId, req.tenant!.id),
+          eq(medicalDoses.status, 'due'),
+        ));
+
+      const deletedDoses = (deleteResult as any).rowCount || 0;
+
+      res.json({ prescription: updated, deletedDoses });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   /**
    * PATCH /api/medical/doses/:doseId/unable
    * Mark a dose as unable to administer with reason

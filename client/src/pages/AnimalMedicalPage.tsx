@@ -514,16 +514,22 @@ export default function AnimalMedicalPage() {
 
   const markPrescriptionCompletedMutation = useMutation({
     mutationFn: async (prescriptionId: string) => {
-      await apiRequest('PATCH', `/api/medical/prescriptions/${prescriptionId}`, {
-        endDate: new Date().toISOString().split('T')[0],
+      const res = await apiRequest('POST', `/api/medical/prescriptions/${prescriptionId}/end-treatment`, {});
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: [`/api/animals/${animalId}/medical/prescriptions`] });
+      queryClient.invalidateQueries({ queryKey: ['/api/medical/doses/today'] });
+      const cleared = data?.deletedDoses ?? 0;
+      toast({
+        title: "Treatment ended",
+        description: cleared > 0
+          ? `Prescription ended and ${cleared} pending dose(s) removed.`
+          : "Prescription ended. No further doses will be scheduled.",
       });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/animals/${animalId}/medical/prescriptions`] });
-      toast({ title: "Prescription completed", description: "The medication has been marked as completed." });
-    },
     onError: () => {
-      toast({ title: "Error", description: "Failed to mark prescription as completed.", variant: "destructive" });
+      toast({ title: "Error", description: "Failed to end treatment.", variant: "destructive" });
     },
   });
 
@@ -1937,14 +1943,14 @@ export default function AnimalMedicalPage() {
                                   data-testid={`button-complete-prescription-${rx.id}`}
                                 >
                                   <CheckCircle2 className="w-4 h-4 mr-1" />
-                                  Complete
+                                  End Treatment
                                 </Button>
                               </AlertDialogTrigger>
                               <AlertDialogContent>
                                 <AlertDialogHeader>
-                                  <AlertDialogTitle>Mark Medication as Completed</AlertDialogTitle>
+                                  <AlertDialogTitle>End Treatment</AlertDialogTitle>
                                   <AlertDialogDescription>
-                                    This will set the end date for "{rx.medicationName}" to today and mark it as completed. No further doses will be scheduled.
+                                    This will set the end date for "{rx.medicationName}" to today, clear the next-scheduled dose, and remove any remaining pending doses. No further doses will be scheduled.
                                   </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
@@ -1953,7 +1959,7 @@ export default function AnimalMedicalPage() {
                                     onClick={() => markPrescriptionCompletedMutation.mutate(rx.id)}
                                     data-testid={`button-confirm-complete-prescription-${rx.id}`}
                                   >
-                                    Mark Completed
+                                    End Treatment
                                   </AlertDialogAction>
                                 </AlertDialogFooter>
                               </AlertDialogContent>

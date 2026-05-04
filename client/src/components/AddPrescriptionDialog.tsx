@@ -15,6 +15,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 
+const DAILY_DOSING_FREQS = new Set(["SID", "BID", "TID", "QID", "HS", "EOD"]);
+
 const prescriptionSchema = z.object({
   medicationName: z.string().min(1, "Medication name is required"),
   dosage: z.string().min(1, "Dosage is required"),
@@ -23,6 +25,7 @@ const prescriptionSchema = z.object({
   startDate: z.string().min(1, "Start date is required"),
   nextScheduledDose: z.string().optional(),
   endDate: z.string().optional(),
+  durationDays: z.string().optional(),
   isControlledSubstance: z.boolean().optional(),
   requiresRefill: z.boolean().optional(),
   notes: z.string().optional(),
@@ -33,7 +36,18 @@ const prescriptionSchema = z.object({
   billPaidAmount: z.string().optional(),
   billNotes: z.string().optional(),
   grantId: z.string().optional(),
-});
+}).refine(
+  (data) => {
+    // Daily-dosing freqs require either endDate or durationDays to prevent
+    // runaway schedules (Panacur bug). PRN/ONCE are exempt.
+    if (!DAILY_DOSING_FREQS.has(data.frequency)) return true;
+    return !!(data.endDate && data.endDate.length > 0) || !!(data.durationDays && data.durationDays.length > 0);
+  },
+  {
+    message: "Daily-dosing medications require a Duration or End Date so doses don't auto-extend forever. Use the Duration field below.",
+    path: ["durationDays"],
+  },
+);
 
 type PrescriptionFormData = z.infer<typeof prescriptionSchema>;
 
@@ -78,6 +92,13 @@ export function AddPrescriptionDialog({ animalId, open, onOpenChange, prescripti
     enabled: open,
   });
 
+  // Fetch medical catalog so we can pre-fill Duration from "x N days" / "x N-M days"
+  // patterns in defaultFrequency (e.g., Panacur SID x 3-5 days → duration 5).
+  const { data: catalogItems } = useQuery<any[]>({
+    queryKey: ['/api/medical-catalog'],
+    enabled: open,
+  });
+
   const form = useForm<PrescriptionFormData>({
     resolver: zodResolver(prescriptionSchema),
     defaultValues: {
@@ -88,6 +109,7 @@ export function AddPrescriptionDialog({ animalId, open, onOpenChange, prescripti
       startDate: new Date().toISOString().split('T')[0],
       nextScheduledDose: "",
       endDate: "",
+      durationDays: "",
       isControlledSubstance: false,
       requiresRefill: false,
       notes: "",
@@ -118,9 +140,20 @@ export function AddPrescriptionDialog({ animalId, open, onOpenChange, prescripti
     name: "medicationName",
     defaultValue: "",
   });
+  const watchedDurationDays = useWatch({
+    control: form.control,
+    name: "durationDays",
+    defaultValue: "",
+  });
+  const watchedEndDate = useWatch({
+    control: form.control,
+    name: "endDate",
+    defaultValue: "",
+  });
   const today = new Date().toISOString().split('T')[0];
   const isStartDateInPast = watchedStartDate && watchedStartDate < today;
   const isOneTime = watchedFrequency === "ONCE";
+  const isDailyDosingFreq = DAILY_DOSING_FREQS.has(watchedFrequency || "");
 
 
   // Reset form when prescription changes (for editing)
@@ -135,6 +168,7 @@ export function AddPrescriptionDialog({ animalId, open, onOpenChange, prescripti
         startDate: prescription.startDate ? new Date(prescription.startDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
         nextScheduledDose: prescription.nextScheduledDose ? new Date(prescription.nextScheduledDose).toISOString().split('T')[0] : "",
         endDate: prescription.endDate ? new Date(prescription.endDate).toISOString().split('T')[0] : "",
+        durationDays: "",
         isControlledSubstance: prescription.isControlledSubstance || false,
         requiresRefill: prescription.requiresRefill || false,
         notes: prescription.notes || "",
@@ -155,6 +189,7 @@ export function AddPrescriptionDialog({ animalId, open, onOpenChange, prescripti
         startDate: initialValues?.startDate || new Date().toISOString().split('T')[0],
         nextScheduledDose: "",
         endDate: "",
+        durationDays: "",
         isControlledSubstance: initialValues?.isControlledSubstance || false,
         requiresRefill: initialValues?.requiresRefill || false,
         notes: initialValues?.notes || "",
@@ -175,6 +210,44 @@ export function AddPrescriptionDialog({ animalId, open, onOpenChange, prescripti
       form.setValue("endDate", watchedStartDate);
     }
   }, [isOneTime, watchedStartDate, form]);
+
+  // Pre-fill Duration from catalog defaultFrequency for daily-dosing meds.
+  // Parses patterns like "SID x 3-5 days" / "TID x 7-10 days" — uses the upper
+  // bound (most conservative) so the schedule terminates predictably.
+  useEffect(() => {
+    if (isEditing) return; // never overwrite during edit
+    if (!isDailyDosingFreq) return;
+    if (!watchedMedicationName) return;
+    if (watchedDurationDays || watchedEndDate) return; // user already set a value
+    if (!Array.isArray(catalogItems)) return;
+    const match = catalogItems.find(
+      (c: any) =>
+        typeof c?.name === 'string' &&
+        c.name.toLowerCase() === watchedMedicationName.toLowerCase(),
+    );
+    const def = match?.defaultFrequency;
+    if (typeof def !== 'string') return;
+    const m = def.match(/x\s*(\d+)(?:\s*-\s*(\d+))?\s*days?/i);
+    if (!m) return;
+    const upper = parseInt(m[2] || m[1], 10);
+    if (Number.isFinite(upper) && upper > 0) {
+      form.setValue("durationDays", String(upper));
+    }
+  }, [isEditing, isDailyDosingFreq, watchedMedicationName, watchedDurationDays, watchedEndDate, catalogItems, form]);
+
+  // When the user enters a Duration, auto-compute endDate = startDate + (duration-1) days.
+  useEffect(() => {
+    if (!watchedDurationDays || !watchedStartDate) return;
+    const days = parseInt(watchedDurationDays, 10);
+    if (!Number.isFinite(days) || days < 1) return;
+    const start = new Date(watchedStartDate + "T00:00:00");
+    const end = new Date(start);
+    end.setDate(end.getDate() + (days - 1));
+    const endStr = end.toISOString().split('T')[0];
+    if (watchedEndDate !== endStr) {
+      form.setValue("endDate", endStr);
+    }
+  }, [watchedDurationDays, watchedStartDate, watchedEndDate, form]);
 
   const [userEditedNextDose, setUserEditedNextDose] = useState(false);
 
@@ -272,10 +345,11 @@ export function AddPrescriptionDialog({ animalId, open, onOpenChange, prescripti
   });
 
   const onSubmit = (data: PrescriptionFormData) => {
-    // Normalize grantId: convert empty string to undefined
+    // durationDays is a UI-only helper that auto-computes endDate; strip before sending.
+    const { durationDays: _omit, ...rest } = data;
     const payload = {
-      ...data,
-      grantId: data.grantId || undefined,
+      ...rest,
+      grantId: rest.grantId || undefined,
     };
     if (isEditing) {
       updateMutation.mutate(payload);
@@ -379,7 +453,7 @@ export function AddPrescriptionDialog({ animalId, open, onOpenChange, prescripti
                 name="endDate"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>{isOneTime ? "End Date (Auto-set)" : "End Date (Optional)"}</FormLabel>
+                    <FormLabel>{isOneTime ? "End Date (Auto-set)" : isDailyDosingFreq ? "End Date *" : "End Date (Optional)"}</FormLabel>
                     <FormControl>
                       <div className="flex gap-2">
                         <Input type="date" {...field} data-testid="input-end-date" className="flex-1" disabled={isOneTime} />
@@ -398,13 +472,43 @@ export function AddPrescriptionDialog({ animalId, open, onOpenChange, prescripti
                       </div>
                     </FormControl>
                     <FormDescription className="text-xs">
-                      {isOneTime ? "Automatically set to start date for one-time medications" : "Leave blank for ongoing medication"}
+                      {isOneTime
+                        ? "Automatically set to start date for one-time medications"
+                        : isDailyDosingFreq
+                        ? "Required for daily-dosing meds. Use the Duration field below for short courses (e.g., Panacur 5 days)."
+                        : "Leave blank for ongoing medication"}
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
               />
             </div>
+
+            {isDailyDosingFreq && !isOneTime && (
+              <FormField
+                control={form.control}
+                name="durationDays"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Duration (days)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={90}
+                        placeholder="e.g., 5 for a 5-day Panacur course"
+                        {...field}
+                        data-testid="input-duration-days"
+                      />
+                    </FormControl>
+                    <FormDescription className="text-xs">
+                      Auto-fills End Date = Start Date + (Duration − 1). Required for daily-dosing meds unless you set End Date directly. Pre-filled from the catalog when available (e.g., Panacur defaults to 5 days).
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             {(!isOneTime || !!prescription) && watchedFrequency !== "PRN" && (
               <FormField

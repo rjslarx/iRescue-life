@@ -44,10 +44,23 @@ export function generateDosesForPrescription(options: DoseGeneratorOptions): Gen
         : new Date(prescription.startDate));
   const start = doseStartDate;
   
+  // Determine if this is a daily-dosing frequency (SID/BID/TID/QID/HS/EOD).
+  // For these, an indefinite (no endDate) prescription must NOT silently fan out
+  // doses for 30 days — that caused the Panacur runaway-schedule bug.
+  const freqUpper = freq;
+  const isDailyDosingFreq =
+    freqUpper === 'SID' || freqUpper === 'BID' || freqUpper === 'TID' ||
+    freqUpper === 'QID' || freqUpper === 'HS' || freqUpper === 'EOD' ||
+    freqUpper.includes('BEDTIME') || freqUpper.includes('TWICE') ||
+    freqUpper.includes('THREE') || freqUpper.includes('FOUR') ||
+    freqUpper.includes('2X') || freqUpper.includes('3X') || freqUpper.includes('4X') ||
+    freqUpper.includes('EVERY OTHER');
+
   // Calculate end date:
   // - If endDate exists AND is after start, use it
   // - If endDate is before start (backlogged prescription with nextScheduledDose), generate single dose
-  // - If no endDate, default to start + 30 days
+  // - If no endDate AND daily-dosing freq, generate just the first day's dose(s) and warn
+  // - If no endDate (interval freq), default to start + 30 days (legacy behavior)
   let end: Date;
   let endDateIsBacklogged = false;  // Track if endDate was invalid (before start)
   if (prescription.endDate) {
@@ -55,16 +68,15 @@ export function generateDosesForPrescription(options: DoseGeneratorOptions): Gen
     if (prescEndDate >= start) {
       end = prescEndDate;
     } else {
-      // endDate is before start - this is a backlogged prescription
-      // For this scenario (e.g., monthly med with past endDate but future nextScheduledDose),
-      // we want to generate just one dose at nextScheduledDose
       console.log(`[DOSE-GEN]   Note: endDate ${prescEndDate.toISOString()} is before start ${start.toISOString()}, generating single dose (backlogged)`);
       endDateIsBacklogged = true;
-      // Set end = start so loop generates exactly one dose
       end = new Date(start.getTime());
     }
+  } else if (isDailyDosingFreq && !isOneTime) {
+    console.warn(`[DOSE-GEN]   WARNING: Daily-dosing prescription ${prescription.id} (${prescription.medicationName}, ${prescription.frequency}) has no endDate — generating only the first day's doses to avoid runaway schedule. Set a Duration / End Date or use "End Treatment".`);
+    end = new Date(start.getTime()); // limit to first day only
   } else {
-    end = new Date(start.getTime() + 30 * 24 * 60 * 60 * 1000); // Default 30 days
+    end = new Date(start.getTime() + 30 * 24 * 60 * 60 * 1000); // Default 30 days for interval freqs only
   }
   
   // Limit max duration to 90 days to prevent timeout from generating too many doses

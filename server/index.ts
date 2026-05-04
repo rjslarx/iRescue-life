@@ -31,6 +31,56 @@ async function patchBravectoPlusInterval() {
   }
 }
 
+async function backfillRunawayDailyDosingPrescriptions() {
+  // One-time idempotent backfill for the Panacur runaway-schedule bug.
+  // For prescriptions where frequency ∈ {SID,BID,TID,QID,HS,EOD} AND end_date IS NULL,
+  // cap end_date at start_date + 14 days and delete any 'due' doses past that cap.
+  // The WHERE end_date IS NULL guard makes this safe to run repeatedly.
+  try {
+    const capResult = await db.execute(sql`
+      UPDATE medical_prescriptions
+      SET end_date = start_date + INTERVAL '14 days'
+      WHERE end_date IS NULL
+        AND UPPER(frequency) IN ('SID','BID','TID','QID','HS','EOD')
+    `);
+    const capped = (capResult as any)?.rowCount || 0;
+    if (capped > 0) {
+      console.log(`[Startup] Capped end_date on ${capped} runaway daily-dosing prescription(s) (no endDate set)`);
+    }
+
+    const deleteResult = await db.execute(sql`
+      DELETE FROM medical_doses md
+      USING medical_prescriptions mp
+      WHERE md.prescription_id = mp.id
+        AND md.tenant_id = mp.tenant_id
+        AND md.status = 'due'
+        AND mp.end_date IS NOT NULL
+        AND md.due_date > mp.end_date
+        AND UPPER(mp.frequency) IN ('SID','BID','TID','QID','HS','EOD')
+    `);
+    const deleted = (deleteResult as any)?.rowCount || 0;
+    if (deleted > 0) {
+      console.log(`[Startup] Deleted ${deleted} orphan 'due' dose(s) past end_date for daily-dosing prescriptions`);
+    }
+
+    const clearResult = await db.execute(sql`
+      UPDATE medical_prescriptions
+      SET next_scheduled_dose = NULL
+      WHERE next_scheduled_dose IS NOT NULL
+        AND end_date IS NOT NULL
+        AND next_scheduled_dose > end_date
+        AND UPPER(frequency) IN ('SID','BID','TID','QID','HS','EOD')
+    `);
+    const cleared = (clearResult as any)?.rowCount || 0;
+    if (cleared > 0) {
+      console.log(`[Startup] Cleared next_scheduled_dose past end_date on ${cleared} daily-dosing prescription(s)`);
+    }
+    console.log('[Startup] Runaway daily-dosing prescription backfill complete');
+  } catch (err) {
+    console.error('[Startup] Runaway daily-dosing prescription backfill failed:', err);
+  }
+}
+
 async function backfillStaleNextScheduledDose() {
   try {
     const frequencyIntervals: Record<string, string> = {
@@ -209,5 +259,8 @@ app.use((req, res, next) => {
 
     // Backfill stale nextScheduledDose for prescriptions where it's behind the last given dose
     backfillStaleNextScheduledDose();
+
+    // Cap runaway daily-dosing prescriptions that were created without an endDate
+    backfillRunawayDailyDosingPrescriptions();
   });
 })();
