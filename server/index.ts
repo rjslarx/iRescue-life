@@ -108,6 +108,171 @@ async function backfillRunawayDailyDosingPrescriptions() {
   }
 }
 
+async function backfillSupersededNextDueDates() {
+  // One-time backfill that nulls `next_due_date` on any preventative-care or
+  // vaccine record that has been superseded by a newer same-series record for
+  // the same animal. Mirrors the canonical "latest-record-per-series-wins"
+  // logic used by GET /api/medical/preventative-care/coming-due (Task #158).
+  // Without this, downstream queries that hit the tables directly (grant
+  // reports, transfer packets, audit history) still see the phantom overdues.
+  // Idempotent: re-running on already-cleaned data is a no-op because nulled
+  // rows are excluded by `WHERE next_due_date IS NOT NULL`.
+  const MARKER_KEY = 'backfill:superseded_next_due_date_v1';
+  try {
+    const existing = await db.execute(sql`
+      SELECT 1 FROM platform_settings WHERE key = ${MARKER_KEY} LIMIT 1
+    `);
+    if ((existing as any)?.rows?.length || (existing as any)?.rowCount) {
+      console.log('[Startup] Superseded next-due backfill already applied (marker present); skipping');
+      return;
+    }
+  } catch (err) {
+    console.warn('[Startup] Could not read superseded backfill marker, proceeding:', (err as any)?.message);
+  }
+
+  // NOTE: Keep these two helpers in sync with the matching helpers inside
+  // the /api/medical/preventative-care/coming-due endpoint in server/routes.ts.
+  const vaccineFamily = (raw: string | null): string => {
+    if (!raw) return 'unknown';
+    const n = raw.trim().toLowerCase();
+    if (/rabies/.test(n)) return 'rabies';
+    if (/bordet|bordat|brachy|kennel\s*cough/.test(n)) return 'bordetella';
+    if (/dapp|dhpp|da2p|distemper|parvo/.test(n)) return 'dhpp';
+    if (/lepto/.test(n)) return 'lepto';
+    if (/canine\s*influenza|civ\b|\bflu\b/.test(n)) return 'influenza';
+    if (/lyme/.test(n)) return 'lyme';
+    if (/fvrcp|hcp|panleuk/.test(n)) return 'fvrcp';
+    if (/felv|feline\s*leukemia/.test(n)) return 'felv';
+    if (/heartworm.*test|hw.*test|antigen/.test(n)) return 'hw_test';
+    return `other:${n.replace(/\s+/g, ' ')}`;
+  };
+
+  type PcrRow = {
+    id: string;
+    animal_id: string;
+    care_type_id: string | null;
+    care_name: string | null;
+    care_category: string | null;
+    next_due_date: Date | string;
+    covers_heartworm: boolean | null;
+    covers_flea_tick: boolean | null;
+  };
+  const seriesKeysForPcr = (r: PcrRow): string[] => {
+    const cat = (r.care_category || 'other').toLowerCase();
+    if (cat === 'parasite_prevention' && (r.covers_heartworm !== null || r.covers_flea_tick !== null)) {
+      const keys: string[] = [];
+      if (r.covers_heartworm) keys.push('pp|hw');
+      if (r.covers_flea_tick) keys.push('pp|ft');
+      if (keys.length === 0) keys.push('pp|other');
+      return keys;
+    }
+    if (r.care_type_id) return [`${cat}|type:${r.care_type_id}`];
+    const name = (r.care_name || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    return [`${cat}|name:${name}`];
+  };
+
+  let pcrCleared = 0;
+  let vaxCleared = 0;
+  try {
+    // ---------- Preventative care records ----------
+    const pcrResult = await db.execute(sql`
+      SELECT pcr.id, pcr.animal_id, pcr.care_type_id, pcr.care_name, pcr.care_category, pcr.next_due_date,
+             pct.covers_heartworm, pct.covers_flea_tick
+      FROM preventative_care_records pcr
+      LEFT JOIN preventative_care_types pct ON pct.id = pcr.care_type_id
+      WHERE pcr.next_due_date IS NOT NULL
+    `);
+    const pcrRows = (((pcrResult as any).rows ?? pcrResult) as PcrRow[]) || [];
+
+    const pcrWinners = new Map<string, { id: string; ms: number }>();
+    for (const r of pcrRows) {
+      const ms = new Date(r.next_due_date as any).getTime();
+      for (const sk of seriesKeysForPcr(r)) {
+        const k = `${r.animal_id}|${sk}`;
+        const existing = pcrWinners.get(k);
+        if (!existing || ms > existing.ms) pcrWinners.set(k, { id: r.id, ms });
+      }
+    }
+
+    // A record survives if it wins ANY series it belongs to (combo product
+    // safe). Otherwise it has been superseded — clear its next_due_date.
+    const pcrToNull: string[] = [];
+    for (const r of pcrRows) {
+      const wins = seriesKeysForPcr(r).some(sk => {
+        const w = pcrWinners.get(`${r.animal_id}|${sk}`);
+        return w && w.id === r.id;
+      });
+      if (!wins) pcrToNull.push(r.id);
+    }
+
+    for (let i = 0; i < pcrToNull.length; i += 1000) {
+      const chunk = pcrToNull.slice(i, i + 1000);
+      const ids = chunk.map(id => sql`${id}::uuid`);
+      const upd = await db.execute(sql`
+        UPDATE preventative_care_records
+        SET next_due_date = NULL
+        WHERE id IN (${sql.join(ids, sql`, `)})
+      `);
+      pcrCleared += (upd as any)?.rowCount || 0;
+    }
+
+    // ---------- Vaccine records ----------
+    type VaxRow = { id: string; animal_id: string; item_name: string | null; date_due: Date | string };
+    const vaxResult = await db.execute(sql`
+      SELECT id, animal_id, item_name, date_due
+      FROM vaccine_records
+      WHERE date_due IS NOT NULL
+    `);
+    const vaxRows = (((vaxResult as any).rows ?? vaxResult) as VaxRow[]) || [];
+
+    const vaxWinners = new Map<string, { id: string; ms: number }>();
+    for (const r of vaxRows) {
+      const ms = new Date(r.date_due as any).getTime();
+      const k = `${r.animal_id}|${vaccineFamily(r.item_name)}`;
+      const existing = vaxWinners.get(k);
+      if (!existing || ms > existing.ms) vaxWinners.set(k, { id: r.id, ms });
+    }
+
+    const vaxToNull: string[] = [];
+    for (const r of vaxRows) {
+      const k = `${r.animal_id}|${vaccineFamily(r.item_name)}`;
+      const w = vaxWinners.get(k);
+      if (!w || w.id !== r.id) vaxToNull.push(r.id);
+    }
+
+    for (let i = 0; i < vaxToNull.length; i += 1000) {
+      const chunk = vaxToNull.slice(i, i + 1000);
+      const ids = chunk.map(id => sql`${id}::uuid`);
+      const upd = await db.execute(sql`
+        UPDATE vaccine_records
+        SET date_due = NULL
+        WHERE id IN (${sql.join(ids, sql`, `)})
+      `);
+      vaxCleared += (upd as any)?.rowCount || 0;
+    }
+
+    console.log(`[Startup] Superseded next-due backfill complete (pcrScanned=${pcrRows.length}, pcrCleared=${pcrCleared}, vaxScanned=${vaxRows.length}, vaxCleared=${vaxCleared})`);
+
+    try {
+      await db.execute(sql`
+        INSERT INTO platform_settings (key, value, description, category, is_public)
+        VALUES (
+          ${MARKER_KEY},
+          ${sql.raw(`'${JSON.stringify({ appliedAt: new Date().toISOString(), pcrCleared, vaxCleared, pcrScanned: pcrRows.length, vaxScanned: vaxRows.length }).replace(/'/g, "''")}'::jsonb`)},
+          'Marker: one-time backfill nulling next_due_date on superseded preventative-care + vaccine records (Task #159)',
+          'general',
+          false
+        )
+        ON CONFLICT (key) DO NOTHING
+      `);
+    } catch (markerErr) {
+      console.warn('[Startup] Could not write superseded backfill marker (will re-run, still idempotent):', (markerErr as any)?.message);
+    }
+  } catch (err) {
+    console.error('[Startup] Superseded next-due backfill failed:', err);
+  }
+}
+
 async function backfillStaleNextScheduledDose() {
   try {
     const frequencyIntervals: Record<string, string> = {
@@ -289,5 +454,10 @@ app.use((req, res, next) => {
 
     // Cap runaway daily-dosing prescriptions that were created without an endDate
     backfillRunawayDailyDosingPrescriptions();
+
+    // Null `next_due_date` on superseded preventative-care + vaccine records
+    // (Task #159) — mirror of the supersession logic used by the
+    // /api/medical/preventative-care/coming-due endpoint.
+    backfillSupersededNextDueDates();
   });
 })();
