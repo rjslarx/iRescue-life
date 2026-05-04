@@ -1,6 +1,7 @@
-import { and, asc, desc, eq, gte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, sql, isNull, or } from "drizzle-orm";
 import { db } from "../db";
 import {
+  adopterComplianceConfirmations,
   animals,
   complianceObligations,
   medicalExams,
@@ -62,11 +63,37 @@ type ExamEvent = {
   status: string | null;
 };
 
+/**
+ * Approved adopter-uploaded compliance confirmation. These rows live in
+ * `adopter_compliance_confirmations` and represent proof the adopter
+ * uploaded (e.g. a Bravecto receipt photo, a rabies certificate PDF).
+ *
+ * `coversHeartworm` / `coversFleaTick` are resolved at load time via a
+ * fuzzy match of `careName` against `preventative_care_types.name` so that
+ * combo-safety holds: an approved Bravecto confirmation (flea/tick only)
+ * MUST NOT close a heartworm obligation, even though the adopter uploaded
+ * "parasite_prevention" as the category.
+ */
+type ConfirmationEvent = {
+  id: string;
+  careCategory: "vaccine" | "parasite_prevention" | "test" | "other";
+  careName: string;
+  vaccineFamily: string;
+  dateAdministered: Date;
+  fileUrl: string | null;
+  reviewedAt: Date | null;
+  /** True only when careName resolves to a PCR type with covers_heartworm. */
+  coversHeartworm: boolean;
+  /** True only when careName resolves to a PCR type with covers_flea_tick. */
+  coversFleaTick: boolean;
+};
+
 type AnimalState = {
   animal: AnimalSnapshot;
   pcrs: PcrEvent[];
   vaccines: VaccineEvent[];
   exams: ExamEvent[];
+  confirmations: ConfirmationEvent[];
 };
 
 function toDate(value: Date | string | null | undefined): Date | null {
@@ -192,6 +219,100 @@ async function loadState(
     exams.push({ id: row.id, examDate: dt, status: row.status ?? null });
   }
 
+  // Load approved adopter compliance confirmations. These need their PCR
+  // coverage flags (heartworm / flea-tick) resolved by fuzzy-matching
+  // careName against preventativeCareTypes for combo-safety. We pull the
+  // tenant's PCR types AND platform defaults (tenantId IS NULL) once and
+  // build a lowercase-name lookup.
+  const confirmationRows = await db
+    .select({
+      id: adopterComplianceConfirmations.id,
+      careCategory: adopterComplianceConfirmations.careCategory,
+      careName: adopterComplianceConfirmations.careName,
+      dateAdministered: adopterComplianceConfirmations.dateAdministered,
+      fileUrl: adopterComplianceConfirmations.fileUrl,
+      reviewedAt: adopterComplianceConfirmations.reviewedAt,
+    })
+    .from(adopterComplianceConfirmations)
+    .where(
+      and(
+        eq(adopterComplianceConfirmations.tenantId, tenantId),
+        eq(adopterComplianceConfirmations.animalId, animalId),
+        eq(adopterComplianceConfirmations.status, "approved"),
+      ),
+    )
+    .orderBy(desc(adopterComplianceConfirmations.dateAdministered));
+
+  const confirmations: ConfirmationEvent[] = [];
+  if (confirmationRows.length > 0) {
+    // Pull PCR type name → coverage flags map (tenant + platform defaults).
+    const pcTypeRows = await db
+      .select({
+        name: preventativeCareTypes.name,
+        coversHeartworm: preventativeCareTypes.coversHeartworm,
+        coversFleaTick: preventativeCareTypes.coversFleaTick,
+      })
+      .from(preventativeCareTypes)
+      .where(
+        or(
+          eq(preventativeCareTypes.tenantId, tenantId),
+          isNull(preventativeCareTypes.tenantId),
+        ),
+      );
+    // Tokenise each PCR type name into lowercase brand keys; also record
+    // the original normalized name. We match a confirmation's careName by
+    // checking whether the PCR-type name (lowercased) appears as a
+    // substring of the confirmation careName, or vice versa. Tenant rows
+    // win over platform defaults if the same name appears twice.
+    type Coverage = { hw: boolean; ft: boolean };
+    const typeCoverage = new Map<string, Coverage>();
+    for (const t of pcTypeRows) {
+      const key = (t.name ?? "").trim().toLowerCase();
+      if (!key) continue;
+      typeCoverage.set(key, {
+        hw: t.coversHeartworm === true,
+        ft: t.coversFleaTick === true,
+      });
+    }
+    function resolveCoverage(careName: string): Coverage {
+      const cn = (careName ?? "").trim().toLowerCase();
+      if (!cn) return { hw: false, ft: false };
+      // Direct exact match first.
+      const direct = typeCoverage.get(cn);
+      if (direct) return direct;
+      // Then containment in either direction (handles "Bravecto Plus 500mg"
+      // matching the platform "Bravecto Plus" type, etc.).
+      let hw = false;
+      let ft = false;
+      for (const [k, cov] of typeCoverage) {
+        if (cn.includes(k) || k.includes(cn)) {
+          if (cov.hw) hw = true;
+          if (cov.ft) ft = true;
+        }
+      }
+      return { hw, ft };
+    }
+
+    for (const row of confirmationRows) {
+      const dt = toDate(row.dateAdministered);
+      if (!dt) continue;
+      const careName = row.careName ?? "";
+      const cat = (row.careCategory ?? "other") as ConfirmationEvent["careCategory"];
+      const coverage = cat === "parasite_prevention" ? resolveCoverage(careName) : { hw: false, ft: false };
+      confirmations.push({
+        id: row.id,
+        careCategory: cat,
+        careName,
+        vaccineFamily: vaccineFamily(careName),
+        dateAdministered: dt,
+        fileUrl: row.fileUrl ?? null,
+        reviewedAt: toDate(row.reviewedAt),
+        coversHeartworm: coverage.hw,
+        coversFleaTick: coverage.ft,
+      });
+    }
+  }
+
   return {
     animal: {
       id: animalRow.id,
@@ -202,6 +323,7 @@ async function loadState(
     pcrs,
     vaccines,
     exams,
+    confirmations,
   };
 }
 
@@ -279,10 +401,53 @@ function nameMatches(careName: string | null, regex: RegExp): boolean {
   return regex.test(careName.toLowerCase());
 }
 
+/**
+ * Find an approved adopter confirmation that satisfies an ongoing-prevention
+ * obligation. Same SLACK floor / due-by semantics as PCRs but confirmations
+ * have no `next_due_date`, so when the obligation has a `contractualDueDate`
+ * we accept a confirmation administered ON OR AFTER the due date — that is
+ * proof the adopter actually performed the prevention by the deadline. When
+ * there is no due-by, any confirmation past the floor counts.
+ */
+function findCoveringConfirmationOngoing(
+  state: AnimalState,
+  obl: ObligationRow,
+  predicate: (c: ConfirmationEvent) => boolean,
+): ConfirmationEvent | null {
+  const floor = obligationFloor(obl);
+  const dueBy = toDate(obl.contractualDueDate);
+  for (const c of state.confirmations) {
+    if (!predicate(c)) continue;
+    if (c.dateAdministered < floor) continue;
+    if (dueBy && c.dateAdministered < dueBy) {
+      // Administered before the contractual due date is fine — the
+      // obligation is "by X date", and X has passed but the proof was
+      // earlier. Accept it.
+    }
+    return c;
+  }
+  return null;
+}
+
+function findCoveringConfirmationOneShot(
+  state: AnimalState,
+  obl: ObligationRow,
+  predicate: (c: ConfirmationEvent) => boolean,
+): ConfirmationEvent | null {
+  const floor = obligationFloor(obl);
+  for (const c of state.confirmations) {
+    if (!predicate(c)) continue;
+    if (c.dateAdministered < floor) continue;
+    return c;
+  }
+  return null;
+}
+
 type Match =
   | { kind: "pcr"; eventId: string }
   | { kind: "vaccine"; eventId: string }
   | { kind: "exam"; eventId: string }
+  | { kind: "confirmation"; eventId: string; fileUrl: string | null }
   | { kind: "animal"; field: "neuterStatus" | "microchipNumber" };
 
 function obligationMatch(
@@ -292,25 +457,37 @@ function obligationMatch(
   const labelLower = (obl.label || "").toLowerCase();
   const type = (obl.obligationType || "").toLowerCase();
 
-  // 1. spay_neuter — animal field
+  // 1. spay_neuter — animal field, OR adopter confirmation w/ matching text
   if (type === "spay_neuter" || /spay|neuter/.test(labelLower)) {
     const ns = (state.animal.neuterStatus || "").toLowerCase();
     if (ns === "spayed" || ns === "neutered") {
       return { kind: "animal", field: "neuterStatus" };
     }
+    const c = findCoveringConfirmationOneShot(state, obl, (cf) =>
+      nameMatches(cf.careName, /spay|neuter|sterili[sz]/),
+    );
+    if (c) return { kind: "confirmation", eventId: c.id, fileUrl: c.fileUrl };
     return null;
   }
 
-  // 2. microchip_registration — animal field
+  // 2. microchip_registration — animal field, OR confirmation
   if (type === "microchip_registration" || /microchip/.test(labelLower)) {
     const m = (state.animal.microchipNumber || "").trim();
     if (m.length > 0) {
       return { kind: "animal", field: "microchipNumber" };
     }
+    const c = findCoveringConfirmationOneShot(state, obl, (cf) =>
+      nameMatches(cf.careName, /microchip|chip\b|registration/),
+    );
+    if (c) return { kind: "confirmation", eventId: c.id, fileUrl: c.fileUrl };
     return null;
   }
 
   // 3. heartworm_prevention_proof / flea_tick_prevention — ongoing PCR
+  //    Combo-safe: confirmation only counts if its careName resolves to a
+  //    PCR type whose `covers_heartworm` (or `covers_flea_tick`) is true.
+  //    A Bravecto confirmation (covers_flea_tick=true, covers_heartworm=false)
+  //    will NEVER close a heartworm obligation through this path.
   if (
     type === "heartworm_prevention_proof" ||
     /heartworm.*(prevent|preventative|prophyla)|hw.*prevent/.test(labelLower)
@@ -325,21 +502,41 @@ function obligationMatch(
       if (oneShot) return { kind: "pcr", eventId: oneShot.id };
       const vax = findCoveringVaccine(state, obl, "hw_test");
       if (vax) return { kind: "vaccine", eventId: vax.id };
+      const c = findCoveringConfirmationOneShot(state, obl, (cf) =>
+        cf.careCategory === "test" &&
+        nameMatches(cf.careName, /heartworm|hw.*test|antigen/),
+      );
+      if (c) return { kind: "confirmation", eventId: c.id, fileUrl: c.fileUrl };
       return null;
     }
     const e = findCoveringPcrForOngoing(state, obl, (p) => p.coversHeartworm);
-    return e ? { kind: "pcr", eventId: e.id } : null;
+    if (e) return { kind: "pcr", eventId: e.id };
+    const cf = findCoveringConfirmationOngoing(state, obl, (c) =>
+      c.careCategory === "parasite_prevention" && c.coversHeartworm,
+    );
+    if (cf) return { kind: "confirmation", eventId: cf.id, fileUrl: cf.fileUrl };
+    return null;
   }
 
   if (type === "flea_tick_prevention" || /flea.*tick|flea\b|tick\b/.test(labelLower)) {
     const e = findCoveringPcrForOngoing(state, obl, (p) => p.coversFleaTick);
-    return e ? { kind: "pcr", eventId: e.id } : null;
+    if (e) return { kind: "pcr", eventId: e.id };
+    const cf = findCoveringConfirmationOngoing(state, obl, (c) =>
+      c.careCategory === "parasite_prevention" && c.coversFleaTick,
+    );
+    if (cf) return { kind: "confirmation", eventId: cf.id, fileUrl: cf.fileUrl };
+    return null;
   }
 
   // 4. rabies (and rabies_booster legacy)
   if (type === "rabies" || type === "rabies_booster" || /rabies/.test(labelLower)) {
     const v = findCoveringVaccine(state, obl, "rabies");
-    return v ? { kind: "vaccine", eventId: v.id } : null;
+    if (v) return { kind: "vaccine", eventId: v.id };
+    const c = findCoveringConfirmationOneShot(state, obl, (cf) =>
+      cf.careCategory === "vaccine" && cf.vaccineFamily === "rabies",
+    );
+    if (c) return { kind: "confirmation", eventId: c.id, fileUrl: c.fileUrl };
+    return null;
   }
 
   // 5. dhpp_booster
@@ -348,7 +545,12 @@ function obligationMatch(
     /dhpp|dappv|da2pp|distemper|parvo/.test(labelLower)
   ) {
     const v = findCoveringVaccine(state, obl, "dhpp");
-    return v ? { kind: "vaccine", eventId: v.id } : null;
+    if (v) return { kind: "vaccine", eventId: v.id };
+    const c = findCoveringConfirmationOneShot(state, obl, (cf) =>
+      cf.careCategory === "vaccine" && cf.vaccineFamily === "dhpp",
+    );
+    if (c) return { kind: "confirmation", eventId: c.id, fileUrl: c.fileUrl };
+    return null;
   }
 
   // 6. heartworm_test (legacy / label-only)
@@ -361,6 +563,11 @@ function obligationMatch(
     if (oneShot) return { kind: "pcr", eventId: oneShot.id };
     const vax = findCoveringVaccine(state, obl, "hw_test");
     if (vax) return { kind: "vaccine", eventId: vax.id };
+    const c = findCoveringConfirmationOneShot(state, obl, (cf) =>
+      cf.careCategory === "test" &&
+      nameMatches(cf.careName, /heartworm|hw.*test|antigen/),
+    );
+    if (c) return { kind: "confirmation", eventId: c.id, fileUrl: c.fileUrl };
     return null;
   }
 
@@ -371,13 +578,24 @@ function obligationMatch(
       obl,
       (p) => nameMatches(p.careName, /fecal|stool|parasite.*screen/),
     );
-    return e ? { kind: "pcr", eventId: e.id } : null;
+    if (e) return { kind: "pcr", eventId: e.id };
+    const c = findCoveringConfirmationOneShot(state, obl, (cf) =>
+      cf.careCategory === "test" &&
+      nameMatches(cf.careName, /fecal|stool|parasite.*screen/),
+    );
+    if (c) return { kind: "confirmation", eventId: c.id, fileUrl: c.fileUrl };
+    return null;
   }
 
   // 8. vet_checkup
   if (type === "vet_checkup" || /vet.*check|wellness|check.?up/.test(labelLower)) {
     const e = findCoveringExam(state, obl);
-    return e ? { kind: "exam", eventId: e.id } : null;
+    if (e) return { kind: "exam", eventId: e.id };
+    const c = findCoveringConfirmationOneShot(state, obl, (cf) =>
+      nameMatches(cf.careName, /vet.*check|wellness|check.?up|exam|physical/),
+    );
+    if (c) return { kind: "confirmation", eventId: c.id, fileUrl: c.fileUrl };
+    return null;
   }
 
   // 9. obedience_training / ongoing_treatment / custom — no auto-detection.
@@ -442,13 +660,23 @@ export async function autoCompletePendingObligations(
           : `${match.kind}:${match.eventId}`;
       const newNotes = `${obl.notes ? obl.notes + " | " : ""}Auto-completed by matching ${matchSummary}${noteSuffix}`;
 
+      // Proof URL precedence: explicit caller override > the file the
+      // matched confirmation pointed at > whatever the obligation already
+      // had on it. This way an approved adopter confirmation that closes a
+      // *different* obligation (because it satisfies the criteria) still
+      // attaches the right proof doc.
+      const matchedFileUrl =
+        match.kind === "confirmation" ? match.fileUrl : null;
+      const finalProofUrl =
+        opts.proofDocumentUrl ?? matchedFileUrl ?? obl.proofDocumentUrl;
+
       await db
         .update(complianceObligations)
         .set({
           status: "completed" as const,
           completedAt: now,
           notes: newNotes,
-          proofDocumentUrl: opts.proofDocumentUrl ?? obl.proofDocumentUrl,
+          proofDocumentUrl: finalProofUrl,
           updatedAt: now,
         })
         .where(eq(complianceObligations.id, obl.id));
