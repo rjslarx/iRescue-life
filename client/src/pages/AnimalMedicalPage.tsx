@@ -520,6 +520,7 @@ export default function AnimalMedicalPage() {
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: [`/api/animals/${animalId}/medical/prescriptions`] });
       queryClient.invalidateQueries({ queryKey: ['/api/medical/doses/today'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/medical/doses/overdue'] });
       const cleared = data?.deletedDoses ?? 0;
       toast({
         title: "Treatment ended",
