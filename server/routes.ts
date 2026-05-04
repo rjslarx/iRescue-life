@@ -45774,6 +45774,206 @@ Use timestamps like [00:00] to help with pacing.`;
   });
 
   /**
+   * GET /api/applications/:type/:id/pdf
+   * Returns { downloadUrl } pointing at the printable HTML view of an
+   * application. Used by the Person Documents modal's eye icon.
+   * type ∈ { adoption | foster | volunteer }
+   */
+  app.get('/api/applications/:type/:id/pdf', requireTenant, requireAuth, requireRole('admin', 'owner', 'staff', 'board_member', 'intake_coordinator'), async (req, res, next) => {
+    try {
+      const { type, id } = req.params;
+      if (!['adoption', 'foster', 'volunteer'].includes(type)) {
+        return res.status(400).json({ error: 'Invalid application type' });
+      }
+      const disposition = (req.query.view as string) === 'inline' ? 'inline' : 'attachment';
+      const downloadUrl = `/api/applications/${type}/${id}/printable?disposition=${disposition}`;
+      res.json({ downloadUrl });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/applications/:type/:id/printable
+   * Renders a print-friendly HTML view of an application that the user
+   * can read in a new tab and Save-As-PDF / print from their browser.
+   * type ∈ { adoption | foster | volunteer }
+   */
+  app.get('/api/applications/:type/:id/printable', requireTenant, requireAuth, requireRole('admin', 'owner', 'staff', 'board_member', 'intake_coordinator'), async (req, res, next) => {
+    try {
+      const { type, id } = req.params;
+      const tenantId = req.tenant!.id;
+
+      const esc = (v: unknown): string => {
+        if (v === null || v === undefined || v === '') return '<span class="muted">—</span>';
+        const s = typeof v === 'string' ? v : (v instanceof Date ? v.toLocaleString() : String(v));
+        return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
+      };
+      const fmtBool = (v: unknown) => (v === true ? 'Yes' : v === false ? 'No' : esc(v));
+      const row = (label: string, value: string) =>
+        `<tr><th>${esc(label)}</th><td>${value}</td></tr>`;
+      const section = (title: string, rows: string[]) =>
+        rows.length === 0 ? '' : `<h2>${esc(title)}</h2><table>${rows.join('')}</table>`;
+
+      const renderCustom = (cr: Record<string, any> | null | undefined): string[] => {
+        if (!cr || typeof cr !== 'object') return [];
+        return Object.entries(cr).map(([k, v]) => {
+          const val = Array.isArray(v) ? v.map(esc).join(', ')
+            : (v && typeof v === 'object') ? `<pre>${esc(JSON.stringify(v, null, 2))}</pre>`
+            : esc(v);
+          return row(k.replace(/_/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase()), val);
+        });
+      };
+
+      let title = '';
+      let headerRows: string[] = [];
+      let detailRows: string[] = [];
+      let customRows: string[] = [];
+      let metaRows: string[] = [];
+
+      if (type === 'adoption') {
+        const { applications: applicationsTable, animals: animalsTable } = await import('@shared/schema');
+        const [app] = await db.select().from(applicationsTable)
+          .where(and(eq(applicationsTable.id, id), eq(applicationsTable.tenantId, tenantId)))
+          .limit(1);
+        if (!app) return res.status(404).send('Application not found');
+        const [animal] = await db.select({ name: animalsTable.name, species: animalsTable.species, breed: animalsTable.breed })
+          .from(animalsTable).where(eq(animalsTable.id, app.animalId)).limit(1);
+        title = `Adoption Application — ${animal?.name || 'Unknown Animal'}`;
+        headerRows = [
+          row('Applicant', esc(app.applicantName)),
+          row('Email', esc(app.applicantEmail)),
+          row('Phone', esc(app.applicantPhone)),
+          row('SMS Consent', fmtBool(app.smsConsent)),
+        ];
+        detailRows = [
+          row('Animal', esc(animal?.name || '—')),
+          row('Species', esc(animal?.species)),
+          row('Breed', esc(animal?.breed)),
+          row('Stage', esc(app.stage)),
+          row('Adoption Fee Status', esc(app.adoptionFeeStatus)),
+          row('Adoption Fee Amount', app.adoptionFeeAmount ? esc(`$${app.adoptionFeeAmount}`) : esc(null)),
+          row('Notes', esc(app.notes)),
+        ];
+        customRows = renderCustom(app.customResponses);
+        metaRows = [
+          row('Submitted', esc(new Date(app.createdAt).toLocaleString())),
+          row('Last Updated', esc(new Date(app.updatedAt).toLocaleString())),
+        ];
+      } else if (type === 'foster') {
+        const { fosterApplications: fosterAppsTable } = await import('@shared/schema');
+        const [app] = await db.select().from(fosterAppsTable)
+          .where(and(eq(fosterAppsTable.id, id), eq(fosterAppsTable.tenantId, tenantId)))
+          .limit(1);
+        if (!app) return res.status(404).send('Application not found');
+        title = 'Foster Application';
+        headerRows = [
+          row('Applicant', esc(app.applicantName)),
+          row('Email', esc(app.applicantEmail)),
+          row('Phone', esc(app.applicantPhone)),
+          row('Address', esc(app.address)),
+          row('SMS Consent', fmtBool(app.smsConsent)),
+        ];
+        detailRows = [
+          row('Housing Type', esc(app.housingType)),
+          row('Has Yard', fmtBool(app.hasYard)),
+          row('Has Other Pets', fmtBool(app.hasOtherPets)),
+          row('Other Pets Details', esc(app.otherPetsDetails)),
+          row('Experience', esc(app.experience)),
+          row('Availability', esc(app.availability)),
+          row('Preferences', esc(app.preferences)),
+          row('Vet Reference', esc(app.vetReference)),
+          row('Personal Reference', esc(app.personalReference)),
+          row('Status', esc(app.status)),
+          row('Pipeline Stage', esc(app.pipelineStatus)),
+          row('Notes', esc(app.notes)),
+        ];
+        customRows = renderCustom(app.customResponses);
+        metaRows = [
+          row('Submitted', esc(new Date(app.createdAt).toLocaleString())),
+          row('Last Updated', esc(new Date(app.updatedAt).toLocaleString())),
+        ];
+      } else if (type === 'volunteer') {
+        const { volunteerApplications: volAppsTable } = await import('@shared/schema');
+        const [app] = await db.select().from(volAppsTable)
+          .where(and(eq(volAppsTable.id, id), eq(volAppsTable.tenantId, tenantId)))
+          .limit(1);
+        if (!app) return res.status(404).send('Application not found');
+        title = 'Volunteer Application';
+        headerRows = [
+          row('Applicant', esc(app.applicantName)),
+          row('Email', esc(app.applicantEmail)),
+          row('Phone', esc(app.applicantPhone)),
+          row('Address', esc(app.address)),
+          row('SMS Consent', fmtBool(app.smsConsent)),
+        ];
+        detailRows = [
+          row('Experience', esc(app.experience)),
+          row('Availability', esc(app.availability)),
+          row('Interests', esc(app.interests)),
+          row('Skills', esc(app.skills)),
+          row('Emergency Contact Name', esc(app.emergencyContactName)),
+          row('Emergency Contact Phone', esc(app.emergencyContactPhone)),
+          row('Status', esc(app.status)),
+          row('Pipeline Stage', esc(app.pipelineStatus)),
+          row('Notes', esc(app.notes)),
+        ];
+        customRows = renderCustom(app.customResponses);
+        metaRows = [
+          row('Submitted', esc(new Date(app.createdAt).toLocaleString())),
+          row('Last Updated', esc(new Date(app.updatedAt).toLocaleString())),
+        ];
+      } else {
+        return res.status(400).send('Invalid application type');
+      }
+
+      const tenantName = req.tenant?.name || 'Rescue';
+      const html = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>${esc(title)}</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+  :root { color-scheme: light; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #111; background: #fff; max-width: 820px; margin: 0 auto; padding: 32px 24px; line-height: 1.45; }
+  header { border-bottom: 1px solid #e5e5e5; padding-bottom: 12px; margin-bottom: 18px; display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  header h1 { font-size: 20px; margin: 0; }
+  header .org { color: #666; font-size: 13px; }
+  h2 { font-size: 14px; text-transform: uppercase; letter-spacing: 0.04em; color: #444; margin: 22px 0 8px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; vertical-align: top; padding: 6px 8px; border-bottom: 1px solid #f0f0f0; font-size: 14px; }
+  th { width: 32%; color: #555; font-weight: 600; }
+  td { color: #111; }
+  td pre { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; white-space: pre-wrap; word-break: break-word; margin: 0; }
+  .muted { color: #999; }
+  .toolbar { margin-bottom: 14px; }
+  .toolbar button { background: #111; color: #fff; border: 0; padding: 8px 14px; border-radius: 6px; font-size: 13px; cursor: pointer; }
+  @media print { .toolbar { display: none; } body { padding: 0; } }
+</style>
+</head>
+<body>
+<div class="toolbar"><button onclick="window.print()">Print / Save as PDF</button></div>
+<header>
+  <h1>${esc(title)}</h1>
+  <div class="org">${esc(tenantName)}</div>
+</header>
+${section('Applicant', headerRows)}
+${section('Details', detailRows)}
+${section('Custom Responses', customRows)}
+${section('Metadata', metaRows)}
+</body>
+</html>`;
+
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.setHeader('Cache-Control', 'private, no-store');
+      res.send(html);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * POST /api/medical-orders/dispatch
    * Unified CPOE dispatch endpoint - routes catalog items to correct tables in a transaction
    */

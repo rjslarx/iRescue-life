@@ -166,13 +166,14 @@ export function PersonDocumentsModal({
 
   const handleViewApplication = async (appType: string, appId: string) => {
     try {
-      const response = await fetch(`/api/applications/${appType.replace("_application", "")}/${appId}/pdf?view=inline`, {
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Failed to generate PDF");
+      const shortType = appType.replace("_application", "");
+      const response = await fetch(
+        buildTenantUrl(`/api/applications/${shortType}/${appId}/pdf?view=inline`),
+        { credentials: "include", headers: getTenantHeaders() },
+      );
+      if (!response.ok) throw new Error("Failed to load application");
       const { downloadUrl } = await response.json();
-      // Open in new tab for inline viewing
-      window.open(downloadUrl, "_blank", "noopener,noreferrer");
+      window.open(buildTenantUrl(downloadUrl), "_blank", "noopener,noreferrer");
     } catch (error) {
       toast({ title: "Failed to view application", variant: "destructive" });
     }
