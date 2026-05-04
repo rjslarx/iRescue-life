@@ -19,27 +19,45 @@ export const pool = new Pool({
   allowExitOnIdle: false,
 });
 
+// Recoverable disconnects from Neon. The pool transparently re-creates
+// clients on the next checkout, so we must NOT crash the process for any
+// of these — they're routine for a serverless-style Postgres.
+const RECOVERABLE_DB_ERROR_PATTERNS = [
+  'terminating connection due to administrator command',
+  'Connection terminated unexpectedly',
+  'Connection terminated',
+  'Client has encountered a connection error and is not queryable',
+  'connection is closed',
+  'read ECONNRESET',
+  'socket hang up',
+];
+
+function isRecoverableDbError(message: string | undefined | null): boolean {
+  if (!message) return false;
+  return RECOVERABLE_DB_ERROR_PATTERNS.some((p) => message.includes(p));
+}
+
 pool.on('error', (err) => {
-  if (err.message?.includes('terminating connection due to administrator command')) {
-    console.warn('[DB] Connection terminated by server (Neon maintenance) - pool will reconnect automatically');
+  if (isRecoverableDbError(err.message)) {
+    console.warn('[DB] Recoverable pool disconnect - pool will reconnect automatically:', err.message);
   } else {
     console.error('[DB] Unexpected pool error:', err.message);
   }
 });
 
 process.on('uncaughtException', (err) => {
-  if (err.message?.includes('terminating connection due to administrator command')) {
-    console.warn('[DB] Caught uncaught exception from Neon maintenance disconnect - recovering gracefully');
+  if (isRecoverableDbError(err?.message)) {
+    console.warn('[DB] Caught uncaught exception from recoverable DB disconnect - recovering gracefully:', err.message);
     return;
   }
   console.error('[FATAL] Uncaught exception:', err);
   process.exit(1);
 });
 
-process.on('unhandledRejection', (reason, promise) => {
+process.on('unhandledRejection', (reason, _promise) => {
   const message = reason instanceof Error ? reason.message : String(reason);
-  if (message.includes('terminating connection due to administrator command')) {
-    console.warn('[DB] Caught unhandled rejection from Neon maintenance disconnect - recovering gracefully');
+  if (isRecoverableDbError(message)) {
+    console.warn('[DB] Caught unhandled rejection from recoverable DB disconnect - recovering gracefully:', message);
     return;
   }
   console.error('[FATAL] Unhandled rejection:', reason);

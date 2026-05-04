@@ -246,6 +246,21 @@ app.use((req, res, next) => {
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+    // Translate Zod validation errors → 400 (instead of leaking as 500s).
+    // Detect by name as well as instanceof so it works regardless of which
+    // copy of zod the throwing module imported.
+    const isZodError =
+      err?.name === 'ZodError' ||
+      (Array.isArray(err?.issues) && err?.issues?.[0]?.code) ||
+      (Array.isArray(err?.errors) && err?.errors?.[0]?.code);
+    if (isZodError) {
+      const issues = err.issues ?? err.errors ?? [];
+      console.warn(`[Validation] 400 — ZodError`, issues);
+      if (!res.headersSent) {
+        res.status(400).json({ message: 'Validation failed', issues });
+      }
+      return;
+    }
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
     console.error(`[Error] ${status} — ${message}`, err);
