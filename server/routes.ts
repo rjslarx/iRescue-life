@@ -8021,12 +8021,27 @@ Crawl-delay: 1
                       ))
                   ),
                 ));
+              // Always clear nextScheduledDose for the animal, and pull endDate
+              // back to NOW() for any prescription that's still active (open
+              // OR end_date in the future). Prescriptions whose endDate has
+              // already passed are left alone — they're historical.
+              const nowTs = new Date();
               await db.update(medicalPrescriptions)
-                .set({ nextScheduledDose: null, endDate: new Date() })
+                .set({ nextScheduledDose: null, endDate: nowTs })
                 .where(and(
                   eq(medicalPrescriptions.tenantId, req.tenant!.id),
                   eq(medicalPrescriptions.animalId, animal.id),
-                  isNull(medicalPrescriptions.endDate),
+                  or(
+                    isNull(medicalPrescriptions.endDate),
+                    sql`${medicalPrescriptions.endDate} > ${nowTs}`,
+                  ),
+                ));
+              await db.update(medicalPrescriptions)
+                .set({ nextScheduledDose: null })
+                .where(and(
+                  eq(medicalPrescriptions.tenantId, req.tenant!.id),
+                  eq(medicalPrescriptions.animalId, animal.id),
+                  isNotNull(medicalPrescriptions.nextScheduledDose),
                 ));
               await db.update(preventativeCareRecords)
                 .set({ nextDueDate: null })
@@ -8227,12 +8242,25 @@ Crawl-delay: 1
             ),
           ));
         const effectiveEnd = data.deceasedDate ? new Date(data.deceasedDate) : new Date();
+        // Pull endDate back to the deceased date for any prescription that's
+        // still active (open OR end_date in the future), and unconditionally
+        // clear nextScheduledDose so the dosing scheduler stops.
         await db.update(medicalPrescriptions)
           .set({ nextScheduledDose: null, endDate: effectiveEnd })
           .where(and(
             eq(medicalPrescriptions.tenantId, req.tenant!.id),
             eq(medicalPrescriptions.animalId, animal.id),
-            isNull(medicalPrescriptions.endDate),
+            or(
+              isNull(medicalPrescriptions.endDate),
+              sql`${medicalPrescriptions.endDate} > ${effectiveEnd}`,
+            ),
+          ));
+        await db.update(medicalPrescriptions)
+          .set({ nextScheduledDose: null })
+          .where(and(
+            eq(medicalPrescriptions.tenantId, req.tenant!.id),
+            eq(medicalPrescriptions.animalId, animal.id),
+            isNotNull(medicalPrescriptions.nextScheduledDose),
           ));
         await db.update(preventativeCareRecords)
           .set({ nextDueDate: null })

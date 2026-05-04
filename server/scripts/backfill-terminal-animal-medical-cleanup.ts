@@ -72,18 +72,27 @@ export async function backfillTerminalAnimalMedicalCleanup(): Promise<void> {
     `);
     dosesSkipped = rowCount(doseRes);
 
-    // 2. medical_prescriptions: open prescriptions for terminal animals →
-    // null next_scheduled_dose, set end_date = NOW() so the daily briefing
-    // and dosing scheduler stop generating new doses.
+    // 2. medical_prescriptions: prescriptions for terminal animals that are
+    // still active (end_date IS NULL or in the future) → pull end_date back
+    // to NOW() and null next_scheduled_dose. Also unconditionally null
+    // next_scheduled_dose if it's still set on any historical prescription
+    // for a terminal animal so the dosing scheduler stops.
     const prescRes = await db.execute(sql`
       UPDATE medical_prescriptions mp
       SET next_scheduled_dose = NULL,
-          end_date = COALESCE(mp.end_date, NOW())
+          end_date = CASE
+            WHEN mp.end_date IS NULL OR mp.end_date > NOW() THEN NOW()
+            ELSE mp.end_date
+          END
       FROM animals a
       WHERE a.id = mp.animal_id
         AND a.tenant_id = mp.tenant_id
         AND a.status IN ${TERMINAL_STATUSES_SQL}
-        AND (mp.end_date IS NULL OR mp.next_scheduled_dose IS NOT NULL)
+        AND (
+          mp.end_date IS NULL
+          OR mp.end_date > NOW()
+          OR mp.next_scheduled_dose IS NOT NULL
+        )
     `);
     prescriptionsEnded = rowCount(prescRes);
 
@@ -129,8 +138,29 @@ export async function backfillTerminalAnimalMedicalCleanup(): Promise<void> {
     `);
     medTasksSkipped = rowCount(taskRes);
 
+    // Per-tenant breakdown for visibility / auditability.
+    try {
+      const perTenant = await db.execute(sql`
+        SELECT a.tenant_id::text AS tenant_id, COUNT(*)::int AS terminal_animals
+        FROM animals a
+        WHERE a.status IN ${TERMINAL_STATUSES_SQL}
+        GROUP BY a.tenant_id
+        ORDER BY COUNT(*) DESC
+      `);
+      const rows = ((perTenant as { rows?: Array<{ tenant_id: string; terminal_animals: number }> }).rows) ?? [];
+      for (const r of rows) {
+        console.log(
+          `[Startup] Terminal-animal cleanup (tenant=${r.tenant_id}): ${r.terminal_animals} terminal animal(s) processed`,
+        );
+      }
+    } catch (perTenantErr) {
+      console.warn(
+        "[Startup] Could not produce per-tenant terminal-animal breakdown:",
+        (perTenantErr as { message?: string })?.message ?? String(perTenantErr),
+      );
+    }
     console.log(
-      `[Startup] Terminal-animal medical cleanup: dosesSkipped=${dosesSkipped}, prescriptionsEnded=${prescriptionsEnded}, pcrCleared=${pcrCleared}, plansDeactivated=${medPlansDeactivated}, tasksSkipped=${medTasksSkipped}`,
+      `[Startup] Terminal-animal medical cleanup TOTAL: dosesSkipped=${dosesSkipped}, prescriptionsEnded=${prescriptionsEnded}, pcrCleared=${pcrCleared}, plansDeactivated=${medPlansDeactivated}, tasksSkipped=${medTasksSkipped}`,
     );
 
     try {
