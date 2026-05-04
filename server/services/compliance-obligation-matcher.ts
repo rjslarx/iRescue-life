@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, sql, isNull, or } from "drizzle-orm";
+import { and, asc, desc, eq, gte, sql, isNull } from "drizzle-orm";
 import { db } from "../db";
 import {
   adopterComplianceConfirmations,
@@ -245,28 +245,31 @@ async function loadState(
 
   const confirmations: ConfirmationEvent[] = [];
   if (confirmationRows.length > 0) {
-    // Pull PCR type name → coverage flags map (tenant + platform defaults).
-    const pcTypeRows = await db
+    // Pull platform-default PCR types FIRST, then tenant-specific PCR
+    // types, so when both define the same name (e.g. tenant overrides
+    // "Bravecto" with custom coverage flags) the tenant row wins
+    // deterministically — last write to the Map for the same key
+    // overwrites prior values. (Architect Task #175 review #4.)
+    const platformTypes = await db
       .select({
         name: preventativeCareTypes.name,
         coversHeartworm: preventativeCareTypes.coversHeartworm,
         coversFleaTick: preventativeCareTypes.coversFleaTick,
       })
       .from(preventativeCareTypes)
-      .where(
-        or(
-          eq(preventativeCareTypes.tenantId, tenantId),
-          isNull(preventativeCareTypes.tenantId),
-        ),
-      );
-    // Tokenise each PCR type name into lowercase brand keys; also record
-    // the original normalized name. We match a confirmation's careName by
-    // checking whether the PCR-type name (lowercased) appears as a
-    // substring of the confirmation careName, or vice versa. Tenant rows
-    // win over platform defaults if the same name appears twice.
+      .where(isNull(preventativeCareTypes.tenantId));
+    const tenantTypes = await db
+      .select({
+        name: preventativeCareTypes.name,
+        coversHeartworm: preventativeCareTypes.coversHeartworm,
+        coversFleaTick: preventativeCareTypes.coversFleaTick,
+      })
+      .from(preventativeCareTypes)
+      .where(eq(preventativeCareTypes.tenantId, tenantId));
     type Coverage = { hw: boolean; ft: boolean };
     const typeCoverage = new Map<string, Coverage>();
-    for (const t of pcTypeRows) {
+    // Platform first, tenant overrides last — tenant wins on key collision.
+    for (const t of [...platformTypes, ...tenantTypes]) {
       const key = (t.name ?? "").trim().toLowerCase();
       if (!key) continue;
       typeCoverage.set(key, {
@@ -401,13 +404,24 @@ function nameMatches(careName: string | null, regex: RegExp): boolean {
   return regex.test(careName.toLowerCase());
 }
 
+/** Window during which a single dose's confirmation is treated as still
+ * "covering" an ongoing-prevention obligation, since adopter confirmations
+ * have no `next_due_date` to inspect. 90 days comfortably covers monthly
+ * (Heartgard, NexGard, Credelio) and 1-month/3-month products
+ * (Bravecto/ProHeart 6 are PCR-based not confirmation-based, so we don't
+ * need 6+ month windows here).
+ */
+const CONFIRMATION_ONGOING_WINDOW_DAYS = 90;
+
 /**
  * Find an approved adopter confirmation that satisfies an ongoing-prevention
- * obligation. Same SLACK floor / due-by semantics as PCRs but confirmations
- * have no `next_due_date`, so when the obligation has a `contractualDueDate`
- * we accept a confirmation administered ON OR AFTER the due date — that is
- * proof the adopter actually performed the prevention by the deadline. When
- * there is no due-by, any confirmation past the floor counts.
+ * obligation. Confirmations have no `next_due_date`, so when the obligation
+ * has a `contractualDueDate` we require the confirmation to fall within
+ * `dateAdministered + CONFIRMATION_ONGOING_WINDOW_DAYS >= dueBy`. This
+ * mirrors the PCR ongoing semantics ("prevention is in effect through the
+ * due date") instead of accepting any pre-deadline dose. When the
+ * obligation is open-ended (no due-by), any confirmation past the floor
+ * counts.
  */
 function findCoveringConfirmationOngoing(
   state: AnimalState,
@@ -419,10 +433,10 @@ function findCoveringConfirmationOngoing(
   for (const c of state.confirmations) {
     if (!predicate(c)) continue;
     if (c.dateAdministered < floor) continue;
-    if (dueBy && c.dateAdministered < dueBy) {
-      // Administered before the contractual due date is fine — the
-      // obligation is "by X date", and X has passed but the proof was
-      // earlier. Accept it.
+    if (dueBy) {
+      const inferredCoverEnd = new Date(c.dateAdministered.getTime());
+      inferredCoverEnd.setDate(inferredCoverEnd.getDate() + CONFIRMATION_ONGOING_WINDOW_DAYS);
+      if (inferredCoverEnd < dueBy) continue;
     }
     return c;
   }
