@@ -12,6 +12,16 @@ import type { ApplicationWithAnimal } from "@shared/schema";
 import { useAuth } from "@/contexts/AuthContext";
 import { ViewApplicationDialog } from "@/components/ViewApplicationDialog";
 import { ApproveAndSendAgreementDialog } from "@/components/ApproveAndSendAgreementDialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { format } from "date-fns";
 
 interface AdoptionAgreement {
@@ -53,6 +63,14 @@ export default function AnimalApplicationsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [showApprovalDialog, setShowApprovalDialog] = useState(false);
   const [applicationToApprove, setApplicationToApprove] = useState<ApplicationWithAnimal | null>(null);
+  // Task #168: shared microchip-pending warning state for the per-animal
+  // applications page. Mirrors the AdoptionDialog (Path A) override flow.
+  const [microchipWarning, setMicrochipWarning] = useState<{
+    applicationId: string;
+    stage: string;
+    message: string;
+    pendingMicrochips: Array<{ id: string; microchipNumber: string; registrationStatus: string }>;
+  } | null>(null);
 
   const { data: animalData, isLoading: animalLoading } = useQuery<any>({
     queryKey: [`/api/animals/${animalId}`],
@@ -120,18 +138,42 @@ export default function AnimalApplicationsPage() {
   });
 
   const updateStageMutation = useMutation({
-    mutationFn: async ({ id, stage }: { id: string; stage: string }) => {
-      const response = await apiRequest('PATCH', `/api/applications/${id}/stage`, { stage });
+    mutationFn: async ({ id, stage, confirmMicrochipPending }: { id: string; stage: string; confirmMicrochipPending?: boolean }) => {
+      const response = await apiRequest(
+        'PATCH',
+        `/api/applications/${id}/stage`,
+        confirmMicrochipPending ? { stage, confirmMicrochipPending: true } : { stage },
+      );
       return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/applications', animalId] });
+      queryClient.invalidateQueries({ queryKey: [`/api/animals/${animalId}`] });
+      setMicrochipWarning(null);
       toast({
         title: "Application updated",
         description: "The application stage has been updated successfully.",
       });
     },
-    onError: (error: any) => {
+    onError: (error: any, variables) => {
+      // Task #168: same 409 microchip-pending detection as ApplicationsPage.
+      const errorMessage = error?.message || '';
+      if (errorMessage.startsWith('409:')) {
+        try {
+          const errorData = JSON.parse(errorMessage.substring(4).trim());
+          if (errorData.code === 'MICROCHIP_TRANSFER_PENDING') {
+            setMicrochipWarning({
+              applicationId: variables.id,
+              stage: variables.stage,
+              message: errorData.message || 'Microchip transfer pending',
+              pendingMicrochips: errorData.pendingMicrochips || [],
+            });
+            return;
+          }
+        } catch {
+          // fall through
+        }
+      }
       toast({
         title: "Failed to update application",
         description: error.message || "Please try again later.",
@@ -516,6 +558,49 @@ export default function AnimalApplicationsPage() {
             setApplicationToApprove(null);
           }}
         />
+
+        <AlertDialog
+          open={microchipWarning !== null}
+          onOpenChange={(open) => {
+            if (!open) setMicrochipWarning(null);
+          }}
+        >
+          <AlertDialogContent data-testid="dialog-microchip-warning">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Microchip transfer pending</AlertDialogTitle>
+              <AlertDialogDescription>
+                {microchipWarning?.message}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            {microchipWarning && microchipWarning.pendingMicrochips.length > 0 && (
+              <ul className="text-sm space-y-1 max-h-40 overflow-y-auto rounded-md border p-3">
+                {microchipWarning.pendingMicrochips.map((chip) => (
+                  <li key={chip.id} data-testid={`text-pending-microchip-${chip.id}`}>
+                    <span className="font-mono">{chip.microchipNumber}</span>
+                    <span className="text-muted-foreground"> — {chip.registrationStatus.replace(/_/g, ' ')}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <AlertDialogFooter>
+              <AlertDialogCancel data-testid="button-cancel-microchip-override">Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                data-testid="button-confirm-microchip-override"
+                onClick={() => {
+                  if (microchipWarning) {
+                    updateStageMutation.mutate({
+                      id: microchipWarning.applicationId,
+                      stage: microchipWarning.stage,
+                      confirmMicrochipPending: true,
+                    });
+                  }
+                }}
+              >
+                Mark as adopted anyway
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>
   );

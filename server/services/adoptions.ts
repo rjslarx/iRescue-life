@@ -17,12 +17,19 @@ import { logAnimalAudit } from '../lib/animal-audit-logger';
  * adopter:
  *
  *   - 'block': hard-fail with MICROCHIP_TRANSFER_PENDING (caller may retry
- *             with confirmMicrochipPending=true to override).
+ *             with confirmMicrochipPending=true to override). This is the
+ *             aligned policy across all three adoption entry points
+ *             (Record Adoption form, Kanban stage drag, animal status
+ *             edit) — see the "Guardrail classification" comment on
+ *             {@link finalizeAdoption} below.
  *   - 'warn':  proceed, but report the pending chips back to the caller so
- *             it can surface a warning to staff.
- *   - 'skip':  ignore — no chip query, no warning. Used by entry points
- *             where staff explicitly know they're not in a chip-verification
- *             context (Kanban drag, animal edit-form save).
+ *             it can surface a warning to staff. Reserved for callers that
+ *             have already collected an explicit override out-of-band.
+ *   - 'skip':  ignore — no chip query, no warning. Reserved for system
+ *             writers that are not user-facing adoption flows (data
+ *             back-fill, automated test fixtures, etc.). New adoption
+ *             entry points should use 'block' so that staff get the same
+ *             override prompt regardless of which surface they used.
  */
 export type MicrochipPolicy = 'block' | 'warn' | 'skip';
 
@@ -101,6 +108,31 @@ export type FinalizeAdoptionResult =
  *   6. Emit an animal audit log entry with the pre-flip state.
  *
  * Tenant-scoped on every read and write.
+ *
+ * --- Guardrail classification (Task #168) ---
+ *
+ * MANDATORY (always hard-blocks, no override available on any path):
+ *   - ANIMAL_NOT_FOUND — the animal must exist in the tenant.
+ *   - ADOPTION_INFO_REQUIRED — adopter contact info must be resolvable
+ *     (either explicit `adopterInfo`, an application linked to this
+ *     animal, or an existing adoptions row). We never silently flip an
+ *     animal to 'adopted' without knowing who took it home.
+ *
+ * OVERRIDABLE WARNING (blocks by default but staff can confirm + retry):
+ *   - MICROCHIP_TRANSFER_PENDING — the animal has chip records still
+ *     marked unregistered / registered_rescue. All three entry points
+ *     pass `microchipPolicy: 'block'` and accept a
+ *     `confirmMicrochipPending` flag from their respective UI surface
+ *     (dialog checkbox on Path A, AlertDialog confirm on Paths B and C).
+ *     The override is recorded by virtue of the animal audit log noting
+ *     who completed the adoption and when; the resulting adoptions row
+ *     is the durable record of the decision.
+ *
+ * Future guardrails should be classified the same way: either added to
+ * the mandatory set (return a new `ok: false` code from this function)
+ * or wired in as another overridable warning that all three entry
+ * points propagate verbatim. Doing so here — instead of in each route
+ * handler — is the only way to keep the three paths aligned.
  */
 export async function finalizeAdoption(
   tenantId: string,

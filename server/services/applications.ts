@@ -11,10 +11,28 @@ import { eq, and, desc, inArray, sql } from 'drizzle-orm';
  */
 export class FinalizeAdoptionError extends Error {
   readonly code: string;
-  constructor(message: string, code: string) {
+  /**
+   * Populated for `code === 'MICROCHIP_TRANSFER_PENDING'` so the route
+   * handler can echo the same {code, pendingMicrochips, requiresConfirmation}
+   * shape that POST /api/adoptions returns. Keeping the response identical
+   * across all three adoption entry points is the whole point of the Task
+   * #168 alignment — UIs should never have to special-case which path they
+   * came from.
+   */
+  readonly pendingMicrochips?: Array<{
+    id: string;
+    microchipNumber: string;
+    registrationStatus: string;
+  }>;
+  constructor(
+    message: string,
+    code: string,
+    pendingMicrochips?: Array<{ id: string; microchipNumber: string; registrationStatus: string }>,
+  ) {
     super(message);
     this.name = 'FinalizeAdoptionError';
     this.code = code;
+    this.pendingMicrochips = pendingMicrochips;
   }
 }
 
@@ -367,7 +385,8 @@ export async function updateApplicationStage(
   tenantId: string,
   applicationId: string,
   stage: Application['stage'],
-  userId?: string
+  userId?: string,
+  options: { confirmMicrochipPending?: boolean } = {},
 ) {
   // Stages that appear in the pending applications widget
   const pendingStages = ['new', 'screening', 'vet_check', 'home_visit'];
@@ -399,22 +418,29 @@ export async function updateApplicationStage(
   // stage to 'adopted' itself. Doing it first means a finalize failure
   // throws BEFORE we update applications.stage, so we cannot leave the
   // application marked adopted with no adoption row / animal flip behind
-  // it. Microchip policy is 'skip' on purpose: dragging a card to "Adopted"
-  // on the Kanban board should not be blocked by chip transfer state
-  // (staff use a different workflow to verify chips).
+  // it.
   const isAdoptedTransition = stage === 'adopted' && oldStage !== 'adopted';
   if (isAdoptedTransition) {
+    // Task #168: align with Path A (POST /api/adoptions). Pass
+    // microchipPolicy: 'block' so the Kanban drag surfaces the same
+    // MICROCHIP_TRANSFER_PENDING guardrail as the Record Adoption form.
+    // Staff can override by re-issuing the stage change with
+    // confirmMicrochipPending=true (handled at the route layer).
     const { finalizeAdoption } = await import('./adoptions');
     const result = await finalizeAdoption(tenantId, animalId, {
       applicationId,
-      microchipPolicy: 'skip',
+      microchipPolicy: 'block',
+      confirmMicrochipPending: options.confirmMicrochipPending,
       actor: userId ? { id: userId } : undefined,
-      auditNote: 'Adopted via Kanban stage change',
+      auditNote: options.confirmMicrochipPending
+        ? 'Adopted via Kanban stage change (microchip pending acknowledged)'
+        : 'Adopted via Kanban stage change',
     });
     if (!result.ok) {
       throw new FinalizeAdoptionError(
         `finalizeAdoption failed for animal ${animalId} from application ${applicationId}: ${result.code}`,
         result.code,
+        result.code === 'MICROCHIP_TRANSFER_PENDING' ? result.pendingMicrochips : undefined,
       );
     }
   }

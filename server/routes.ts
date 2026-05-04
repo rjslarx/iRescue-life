@@ -7931,14 +7931,16 @@ Crawl-delay: 1
       // (e.g. the edit-animal form), funnel through the unified
       // finalizeAdoption() service so the adoption row, location-clearing,
       // application-stage sync, microchip transfer, and audit log all stay
-      // consistent with Paths A and B. Microchip policy is 'skip' here on
-      // purpose — staff editing the animal record are not in a chip
-      // verification flow (the Record Adoption form is). If no adopter
-      // info is on file, finalizeAdoption hard-fails BEFORE the flip.
+      // consistent with Paths A and B. Task #168: microchip policy is
+      // 'block' (with confirmMicrochipPending override) to mirror Path A —
+      // every adoption surface should ask staff the same question before
+      // bypassing pending chip transfers. If no adopter info is on file,
+      // finalizeAdoption hard-fails BEFORE the flip.
       const isAdoptedTransition =
         data.status === 'adopted' &&
         existingAnimal &&
         existingAnimal.status !== 'adopted';
+      const confirmMicrochipPendingFromBody = req.body?.confirmMicrochipPending === true;
 
       // Capture pre-delete status / locationType so the downstream
       // status-change side effects (audit log, terminal-status cleanup,
@@ -7952,14 +7954,26 @@ Crawl-delay: 1
           const { finalizeAdoption } = await import('./services/adoptions');
           const result = await finalizeAdoption(req.tenant!.id, req.params.id, {
             adoptionDate: data.adoptionDate,
-            microchipPolicy: 'skip',
+            microchipPolicy: 'block',
+            confirmMicrochipPending: confirmMicrochipPendingFromBody,
             actor: {
               id: req.user!.id,
               name: req.user!.fullName || req.user!.email,
             },
-            auditNote: 'Adopted via animal edit',
+            auditNote: confirmMicrochipPendingFromBody
+              ? 'Adopted via animal edit (microchip pending acknowledged)'
+              : 'Adopted via animal edit',
           });
           if (!result.ok) {
+            if (result.code === 'MICROCHIP_TRANSFER_PENDING') {
+              return res.status(409).json({
+                error: 'Microchip transfer pending',
+                code: 'MICROCHIP_TRANSFER_PENDING',
+                message: `This animal has ${result.pendingMicrochips.length} microchip(s) with pending registration transfer. Please verify transfer or confirm to proceed.`,
+                pendingMicrochips: result.pendingMicrochips,
+                requiresConfirmation: true,
+              });
+            }
             if (result.code === 'ANIMAL_NOT_FOUND') {
               return res.status(404).json({ error: 'Animal not found' });
             }
@@ -10286,13 +10300,51 @@ Crawl-delay: 1
    */
   app.patch('/api/applications/:id/stage', requireTenant, requireAuth, requireRoleOrPageAccess('applications', 'admin', 'staff'), async (req, res, next) => {
     try {
-      const { updateApplicationStage } = await import('./services/applications');
+      const { updateApplicationStage, FinalizeAdoptionError } = await import('./services/applications');
       const stageSchema = z.object({ stage: z.enum(['new', 'screening', 'vet_check', 'home_visit', 'approved', 'trial', 'adopted', 'denied', 'trial_failed']) });
-      
+
       const { stage } = stageSchema.parse(req.body);
-      // Pass user ID for auto-dismiss functionality
-      const application = await updateApplicationStage(req.tenant!.id, req.params.id, stage, req.user!.id);
-      
+      // Task #168: accept the same confirmMicrochipPending override that
+      // Path A (POST /api/adoptions) accepts so the Kanban surface can
+      // re-issue the request after staff acknowledge a chip-pending warning.
+      const confirmMicrochipPending = req.body.confirmMicrochipPending === true;
+      let application;
+      try {
+        application = await updateApplicationStage(
+          req.tenant!.id,
+          req.params.id,
+          stage,
+          req.user!.id,
+          { confirmMicrochipPending },
+        );
+      } catch (err) {
+        if (err instanceof FinalizeAdoptionError) {
+          if (err.code === 'MICROCHIP_TRANSFER_PENDING') {
+            const pending = err.pendingMicrochips ?? [];
+            return res.status(409).json({
+              error: 'Microchip transfer pending',
+              code: 'MICROCHIP_TRANSFER_PENDING',
+              message: `This animal has ${pending.length} microchip(s) with pending registration transfer. Please verify transfer or confirm to proceed.`,
+              pendingMicrochips: pending,
+              requiresConfirmation: true,
+            });
+          }
+          if (err.code === 'ANIMAL_NOT_FOUND') {
+            return res.status(404).json({ error: 'Animal not found' });
+          }
+          if (err.code === 'ADOPTION_INFO_REQUIRED' || err.code === 'no_application' || err.code === 'race_no_application') {
+            return res.status(400).json({
+              error: 'Missing adopter information',
+              code: 'ADOPTION_INFO_REQUIRED',
+              message:
+                'This animal has no adoption application on file — please use the Record Adoption form to capture adopter contact info before marking as adopted.',
+            });
+          }
+          return res.status(400).json({ error: 'Could not record adoption', code: err.code });
+        }
+        throw err;
+      }
+
       if (!application) {
         return res.status(404).json({ error: 'Application not found' });
       }
