@@ -451,13 +451,30 @@ export function AddPrescriptionDialog({ animalId, open, onOpenChange, prescripti
               <FormField
                 control={form.control}
                 name="endDate"
-                render={({ field }) => (
+                render={({ field }) => {
+                  const lockedByDuration = !!watchedDurationDays && !isOneTime;
+                  return (
                   <FormItem>
-                    <FormLabel>{isOneTime ? "End Date (Auto-set)" : isDailyDosingFreq ? "End Date *" : "End Date (Optional)"}</FormLabel>
+                    <FormLabel>
+                      {isOneTime
+                        ? "End Date (Auto-set)"
+                        : lockedByDuration
+                        ? "End Date (Locked by Duration)"
+                        : isDailyDosingFreq
+                        ? "End Date *"
+                        : "End Date (Optional)"}
+                    </FormLabel>
                     <FormControl>
                       <div className="flex gap-2">
-                        <Input type="date" {...field} data-testid="input-end-date" className="flex-1" disabled={isOneTime} />
-                        {field.value && !isOneTime && (
+                        <Input
+                          type="date"
+                          {...field}
+                          data-testid="input-end-date"
+                          className="flex-1"
+                          disabled={isOneTime || lockedByDuration}
+                          readOnly={lockedByDuration}
+                        />
+                        {field.value && !isOneTime && !lockedByDuration && (
                           <Button
                             type="button"
                             variant="ghost"
@@ -474,13 +491,16 @@ export function AddPrescriptionDialog({ animalId, open, onOpenChange, prescripti
                     <FormDescription className="text-xs">
                       {isOneTime
                         ? "Automatically set to start date for one-time medications"
+                        : lockedByDuration
+                        ? "Computed from Start Date + Duration. Clear the Duration field below to edit End Date directly."
                         : isDailyDosingFreq
                         ? "Required for daily-dosing meds. Use the Duration field below for short courses (e.g., Panacur 5 days)."
                         : "Leave blank for ongoing medication"}
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
-                )}
+                  );
+                }}
               />
             </div>
 
@@ -492,17 +512,32 @@ export function AddPrescriptionDialog({ animalId, open, onOpenChange, prescripti
                   <FormItem>
                     <FormLabel>Duration (days)</FormLabel>
                     <FormControl>
-                      <Input
-                        type="number"
-                        min={1}
-                        max={90}
-                        placeholder="e.g., 5 for a 5-day Panacur course"
-                        {...field}
-                        data-testid="input-duration-days"
-                      />
+                      <div className="flex gap-2">
+                        <Input
+                          type="number"
+                          min={1}
+                          max={90}
+                          placeholder="e.g., 5 for a 5-day Panacur course"
+                          {...field}
+                          data-testid="input-duration-days"
+                          className="flex-1"
+                        />
+                        {field.value && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => form.setValue("durationDays", "")}
+                            data-testid="button-clear-duration-days"
+                            title="Clear duration (unlocks End Date)"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
                     </FormControl>
                     <FormDescription className="text-xs">
-                      Auto-fills End Date = Start Date + (Duration − 1). Required for daily-dosing meds unless you set End Date directly. Pre-filled from the catalog when available (e.g., Panacur defaults to 5 days).
+                      Auto-fills End Date = Start Date + (Duration − 1) and locks the End Date field. Required for daily-dosing meds unless you set End Date directly. Pre-filled from the catalog when available (e.g., Panacur defaults to 5 days). Clear this field to unlock End Date.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

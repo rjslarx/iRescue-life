@@ -32,10 +32,22 @@ async function patchBravectoPlusInterval() {
 }
 
 async function backfillRunawayDailyDosingPrescriptions() {
-  // One-time idempotent backfill for the Panacur runaway-schedule bug.
-  // For prescriptions where frequency ∈ {SID,BID,TID,QID,HS,EOD} AND end_date IS NULL,
-  // cap end_date at start_date + 14 days and delete any 'due' doses past that cap.
-  // The WHERE end_date IS NULL guard makes this safe to run repeatedly.
+  // One-time backfill for the Panacur runaway-schedule bug, guarded by a
+  // platform_settings marker so it runs at most once per database. Idempotent
+  // SQL is still used as a safety net.
+  const MARKER_KEY = 'backfill:runaway_daily_dosing_v1';
+  try {
+    const existing = await db.execute(sql`
+      SELECT 1 FROM platform_settings WHERE key = ${MARKER_KEY} LIMIT 1
+    `);
+    if ((existing as any)?.rows?.length || (existing as any)?.rowCount) {
+      console.log('[Startup] Runaway daily-dosing backfill already applied (marker present); skipping');
+      return;
+    }
+  } catch (err) {
+    // If platform_settings doesn't exist yet (fresh DB), proceed and create marker after.
+    console.warn('[Startup] Could not read backfill marker, proceeding:', (err as any)?.message);
+  }
   try {
     const capResult = await db.execute(sql`
       UPDATE medical_prescriptions
@@ -75,7 +87,22 @@ async function backfillRunawayDailyDosingPrescriptions() {
     if (cleared > 0) {
       console.log(`[Startup] Cleared next_scheduled_dose past end_date on ${cleared} daily-dosing prescription(s)`);
     }
-    console.log('[Startup] Runaway daily-dosing prescription backfill complete');
+    console.log(`[Startup] Runaway daily-dosing prescription backfill complete (capped=${capped}, deletedDoses=${deleted}, clearedNext=${cleared})`);
+    try {
+      await db.execute(sql`
+        INSERT INTO platform_settings (key, value, description, category, is_public)
+        VALUES (
+          ${MARKER_KEY},
+          ${sql.raw(`'${JSON.stringify({ appliedAt: new Date().toISOString(), capped, deleted, cleared }).replace(/'/g, "''")}'::jsonb`)},
+          'Marker: one-time backfill for runaway daily-dosing prescription schedules (Task #157)',
+          'general',
+          false
+        )
+        ON CONFLICT (key) DO NOTHING
+      `);
+    } catch (markerErr) {
+      console.warn('[Startup] Could not write backfill marker (will re-run next boot, still idempotent):', (markerErr as any)?.message);
+    }
   } catch (err) {
     console.error('[Startup] Runaway daily-dosing prescription backfill failed:', err);
   }
